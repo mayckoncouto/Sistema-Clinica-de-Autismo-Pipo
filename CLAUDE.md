@@ -3,7 +3,7 @@
 Este arquivo existe para dar contexto a uma sessão do Claude Code (ou de qualquer
 outra ferramenta Claude) que for trabalhar neste repositório sem ter visto as
 conversas anteriores no Cowork/claude.ai onde o app foi construído. Leia isto
-inteiro antes de mexer em `agenda.html`.
+inteiro antes de mexer em `index.html`.
 
 ## O que é
 
@@ -22,112 +22,84 @@ que deveria ficar cinza e está branca, um texto que deveria dizer "Total" e diz
 "Especialidades"), não por causa raiz — cabe a quem for mexer no código
 investigar a causa real antes de aplicar a mudança.
 
-## Onde o app "mora"
+## Onde o app "mora" (desde 2026-09 — Vercel + Supabase)
 
-Isto **não é uma aplicação com servidor próprio**. É publicado como um **Claude
-Artifact**: uma página HTML/CSS/JS de arquivo único, publicada via Artifact tool
-do Claude, hospedada pela plataforma claude.ai. Não existe backend, banco de
-dados tradicional, nem deploy de infraestrutura — "publicar uma nova versão" é
-literalmente re-publicar o arquivo `agenda.html` através da ferramenta Artifact
-a partir de uma sessão Claude com acesso a esse artifact.
+O app saiu do Claude Artifact e hoje é um **site estático na Vercel com banco
+Supabase**:
 
-- **App publicado (produção):** https://claude.ai/artifact/C46pNNootZV5QNyjB4AS8o
-- Compartilhado como **"Anyone with the link"** (qualquer pessoa com o link) —
-  ver seção "Compartilhamento e permissões" abaixo, isso tem implicações reais.
-- Versão publicada no momento em que este arquivo foi escrito: **v27**.
+- **Código:** GitHub `mayckoncouto/Sistema-Clinica-de-Autismo-Pipo`, branch
+  `main`. A Vercel está ligada ao repositório: **todo push na `main` publica
+  automaticamente**. Não há passo de build.
+- **Front-end:** `index.html` (HTML + CSS + JS do app, arquivo único, igual ao
+  antigo `agenda.html`) + `js/pipo-supabase.js` (camada de dados/login) +
+  `js/usuarios.js` (aba Usuários).
+- **Funções serverless** (`api/`): `config.js` entrega URL + chave anon do
+  Supabase ao navegador; `admin-users.js` cria/exclui usuários, troca senha e
+  ativa/desativa (usa a service role key — só roda no servidor).
+- **Banco:** Supabase (Postgres + Auth + Realtime). Esquema completo em
+  `supabase/schema.sql`.
+- **Variáveis de ambiente na Vercel:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`.
+- O antigo artifact (https://claude.ai/artifact/C46pNNootZV5QNyjB4AS8o, v27)
+  ficou só como referência histórica; os dados foram migrados dele.
 
-Este repositório GitHub existe só como **espelho de código-fonte e histórico**
-(para revisão, diffs, backup, e para dar contexto ao Claude Code). Editar o
-`agenda.html` aqui e commitar **não atualiza o app ao vivo** — isso só acontece
-quando alguém (tipicamente eu, via ferramenta Artifact, dentro de uma sessão
-Claude) republica o arquivo no artifact acima.
+### Como o app fala com o banco
 
-## Plataforma: capabilities do Claude Artifact
+O código do app foi escrito para a API do Artifact —
+`window.claude.use("db")` → `db.doc(caminho).onSnapshot/get/set` e
+`window.claude.use("user")` → `can()`. **`js/pipo-supabase.js` implementa
+exatamente essa API em cima do Supabase**, por isso o app quase não mudou e os
+testes continuam usando o mesmo mock.
 
-O app declara as capabilities `db` (armazenamento compartilhado, tipo
-documento/coleção) e `user` (identidade do visitante, com `scopes:["profile"]`
-seria necessário para nomes/typeahead — hoje **não** está declarado, então
-`user.profiles()`/`user.search()` não funcionam ainda; isso é relevante para o
-sistema de permissões pendente, ver abaixo).
+- Tabela `public.documents (path, data jsonb)`: um registro por "documento",
+  com os mesmos caminhos de antes — `config/rooms`, `config/specialties`,
+  `config/convenios`, `config/professionals`, `patients/all` e
+  `schedule/<seg|ter|qua|qui|sex>-<1..4>`. Uma `check constraint` só aceita
+  esses caminhos.
+- `onSnapshot` = leitura inicial + um único canal Realtime (`postgres_changes`
+  na tabela `documents`) despachado por caminho; ao reconectar, relê tudo.
+- `set` = `upsert`. Se falhar, o adaptador relê o documento para desfazer a
+  mudança otimista da tela.
+- Agendamentos usam `ref.patchBookings(changes)` → RPC `patch_bookings`, que
+  aplica só as chaves alteradas numa transação com trava de linha (antes era
+  ler-alterar-gravar o dia inteiro, com risco de perder edição simultânea).
+  `applyBookingChanges` cai no caminho antigo `get`+`set` quando
+  `patchBookings` não existe (mock dos testes).
 
-- `db`: todos os dados reais (pacientes, profissionais, salas, agendamentos,
-  convênios, especialidades) ficam em documentos da capability `db`, **nunca**
-  hardcoded no HTML. Regra por padrão: quem tem nível `interact`
-  (Contribuidor) ou acima consegue escrever; `view` (Visualizador/Comentarista)
-  só lê. Isso é reforçado pela própria plataforma, não é só uma checagem de UI.
-- `user`: usado hoje só para `canEdit()`/`can("data.write")`, que definem
-  `state.writable` (mostra o banner de somente-leitura e desabilita edição na
-  UI). **Isso é calculado uma vez em `connectDb()`**, não é reativo — se a
-  permissão do visitante mudar enquanto a página está aberta, é preciso recarregar.
+## Login, usuários e permissões
 
-**Nunca** armazenar segredos/senhas reais no `db` — qualquer pessoa com acesso
-de leitura ao artifact consegue ler os documentos. Isso já foi decidido
-explicitamente com o usuário (ver "Sistema de login/permissões" abaixo).
-
-## Compartilhamento e permissões (armadilha conhecida)
-
-O usuário já teve o problema de convidar alguém como "Editor" pelo menu
-Compartilhar do claude.ai e essa pessoa continuar só conseguindo visualizar.
-Causa provável, documentada na própria plataforma: quando o artifact **também**
-está compartilhado como "qualquer pessoa com o link" (que é o caso aqui), um
-convite individual de Editor para alguém **de fora da organização** do dono não
-é aplicado — a pessoa cai para nível de Visualizador mesmo aparecendo como
-"Editor" na lista. Isso foi explicado ao usuário; a solução (desativar
-"qualquer pessoa com o link" e manter só convites individuais) depende de uma
-ação dele no menu Compartilhar da página — **isso não é algo que se resolve no
-código**.
-
-## Sistema de login/permissões — decisão de design (pendente, não implementado)
-
-O usuário pediu um sistema de "login e senha" com cadastro de usuários e
-permissão por módulo (Agenda, Pacientes, Profissionais, Salas) × ação
-(visualizar/incluir/editar/excluir).
-
-**Decisão já tomada e confirmada com o usuário:** não implementar senha
-própria (não é seguro nesta plataforma — sem backend, qualquer dado no `db` é
-legível por quem tem acesso). Em vez disso: usar a **conta Claude real de cada
-pessoa** (convidada pelo menu Compartilhar do claude.ai) como identidade, mais
-uma tela "Usuários" dentro do próprio app para atribuir permissões granulares
-por módulo/ação a cada pessoa.
-
-**Isso ainda não foi implementado.** Desenho já definido, para continuar depois:
-
-- Documento `config/permissions` no `db`: `{ entries: { "<userId>":
-  { agenda:{view,create,edit,delete}, pacientes:{...}, profissionais:{...},
-  salas:{...} } } }`.
-- Nova regra de acesso no `db` (via `capabilities.db.rules`):
-  `{path:"config/permissions", read:"view", write:"admin"}` — só quem tem
-  nível Editor/Owner real (do menu Compartilhar) pode escrever o cadastro de
-  permissões, fechando a brecha de auto-promoção que só esconder botões na UI
-  deixaria aberta (hoje qualquer Contribuidor já tem `interact` bruto em
-  qualquer caminho não declarado).
-- Mudar a declaração de `user` para `capabilities:{user:{scopes:["profile"]}}`
-  para liberar `user.profiles()` (nomes) e `user.search()` (busca de pessoas
-  para o seletor de usuário na tela de admin).
-- Nova aba "Usuários" (admin): lista de pessoas cadastradas (nome resolvido ao
-  vivo via `user.profiles()`, **nunca armazenado**), grade de checkboxes 4
-  módulos × 4 ações por pessoa, campo de busca (`user.search(query)`) para
-  adicionar, remover pessoa, botão Salvar com o `user.canEdit()` controlando a
-  UI (e a regra do `db` controlando de verdade).
-- Especialidades/Convênios (sub-cadastros dentro da aba Pacientes) ficam sob a
-  permissão do módulo **Pacientes**, não um módulo à parte.
-- O lápis de editar sala que aparece no cabeçalho da grade da Agenda
-  (`[data-room-edit]`, abre o mesmo `openRoomModal()` da aba Salas) fica sob a
-  permissão do módulo **Salas**, não Agenda — ele edita dado de Sala,
-  independente de onde foi acionado.
-- Botões de bloquear/liberar período na Agenda ficam sob `agenda.edit`.
-- Modal de agendamento: "Salvar" usa `agenda.create` (novo) ou `agenda.edit`
-  (existente); "Desmarcar" usa `agenda.delete`.
-- Copiar/mover só populam `state.clipboard` (não escrevem nada); a ação de
-  colar (`pasteToSlot`) que precisa de `agenda.create` (cópia) ou
-  `agenda.create` **e** `agenda.delete` (mover, que também limpa a origem).
-- **Não decidido ainda:** qual o nível padrão de permissão para alguém que
-  ainda não está em `config/permissions.entries` — a ideia até agora era
-  padrão "só visualizar", mas isso nunca foi confirmado com o usuário nem
-  implementado.
-- Ainda faltava mapear, antes de implementar: `pasteToSlot()` completo,
-  `openBookingModal()` completo, a função que abre o modal de profissional, e
-  os handlers de clique de `pDelete`/`pSave`/`profDelete`/`rmDelete`.
+- Login por **e-mail + senha (Supabase Auth)**. Tela de login montada pelo
+  `pipo-supabase.js` por cima do app; `window.claude.use("db")` só resolve
+  depois do login, então o app nem começa a carregar dados antes disso.
+- Cadastro público de contas deve ficar **desligado** no Supabase; quem cria
+  usuários é o administrador, na aba **Usuários** (nome, e-mail, senha
+  inicial, administrador, grade de permissões). A pessoa troca a senha depois
+  pelo botão "Trocar senha" no topo.
+- O **primeiro usuário criado no projeto vira administrador** (trigger
+  `handle_new_user`). O banco nunca deixa ficar sem administrador ativo
+  (trigger `profiles_guard`).
+- Tabela `public.profiles`: `full_name`, `is_admin`, `active`, `permissions`
+  (jsonb `{agenda|pacientes|profissionais|salas: {view,create,edit,delete}}`).
+  Padrão para usuário novo: **só visualizar** em tudo.
+- Mapeamento módulo ↔ dados: `schedule/*` → agenda; `patients/all`,
+  `config/specialties`, `config/convenios` → pacientes;
+  `config/professionals` → profissionais; `config/rooms` → salas. A aba
+  Relatório segue `agenda.view`. O lápis de sala no cabeçalho da grade grava
+  `config/rooms`, então vale a permissão de **Salas**.
+- **Leitura:** qualquer usuário ativo lê todos os documentos (a grade precisa
+  de salas/pacientes/profissionais). `view` controla quais abas aparecem.
+- **Escrita — conferida no banco**, trigger `documents_enforce`: compara o
+  documento antigo com o novo. Listas: item novo = `create`, removido =
+  `delete`, alterado ou reordenado = `edit`. Agenda: chave nova = `create`,
+  removida = `delete`, alterada = `edit`; bloquear/liberar horário
+  (`blocked:true`) = `edit`. Mover = `create` + `delete`.
+- No app, `can(module, action)`, `listPermDenied()` e `bookingPermDenied()`
+  (perto do topo do script) fazem a mesma conta antes de gravar, só para dar
+  uma mensagem clara sem ir ao servidor; `applyPermissionsUI()` esconde abas
+  e botões "+ Novo". Sem `window.pipoAuth` (testes) tudo isso vira no-op e
+  vale só o `state.writable` antigo.
+- Permissão alterada pelo admin chega ao vivo (Realtime em `profiles`);
+  usuário desativado é deslogado e tem o login bloqueado (`ban_duration`).
 
 ## O que já está implementado (por área)
 
@@ -221,12 +193,14 @@ usuário) foram deixadas como estavam, de propósito.
 Pasta `tests/`, usando **Playwright** com Chromium local (sem depender de
 serviço externo). `tests/test.html` é um harness com um `window.__STORE__` /
 `window.claude.use()` simulados (mock de `db`/`user`) e um placeholder
-`__PAGE_BODY__` onde o conteúdo de `agenda.html` é injetado.
+`__PAGE_BODY__` onde o app é injetado — `tests/build.js` copia só os trechos
+entre os marcadores `APP-HEAD` e `APP-BODY` do `index.html` (os scripts do
+Supabase ficam de fora, então os testes rodam 100% offline com o mock).
 
-Fluxo pra rodar/atualizar testes depois de mexer em `agenda.html`:
+Fluxo pra rodar/atualizar testes depois de mexer em `index.html`:
 
 ```bash
-node tests/build.js     # gera tests/page.html a partir do agenda.html atual
+node tests/build.js     # gera tests/page.html a partir do index.html atual
 node tests/run_dnd.js   # roda um teste específico, ou use `npm test` pra rodar tudo
 ```
 
@@ -257,18 +231,17 @@ para popular o `db` inicial) — esses arquivos foram **propositalmente
 excluídos** deste repositório. Os dados de teste em `tests/test.html` são
 100% fictícios ("Paciente Um", "Ana Azul" etc.) e devem continuar assim. Os
 dados reais só existem no `db` do artifact publicado, acessível apenas a quem
-tem permissão na página — nunca em arquivo de código.
+tem permissão — hoje no Supabase — nunca em arquivo de código. Os exports/SQL de
+importação da migração ficam fora do repositório (`.gitignore` bloqueia `export/` e
+`import*.sql`).
 
 ## Como publicar uma alteração
 
-1. Editar `agenda.html`.
-2. `node tests/build.js` e rodar a suíte relevante (idealmente tudo, com
-   `npm test`) — o app não tem tipos nem build step além disso, então os
-   testes são a principal rede de segurança.
-3. Publicar o arquivo via ferramenta Artifact do Claude, com `url` apontando
-   para o artifact de produção acima (isso **não** pode ser feito pelo Claude
-   Code sozinho — precisa de uma sessão Claude com acesso à ferramenta
-   Artifact; Claude Code pode preparar a mudança e os testes, mas a
-   publicação final é um passo separado, fora deste repositório).
-4. Commitar a mudança aqui também, pra manter o histórico do repositório
-   alinhado com o que está publicado.
+1. Editar `index.html` (e/ou `js/`, `api/`). Código novo do app vai **entre os
+   marcadores** `APP-HEAD`/`APP-BODY`, senão os testes não o enxergam.
+2. `node tests/build.js` e rodar a suíte (`npm test`) — o app não tem tipos
+   nem build step, os testes são a principal rede de segurança.
+3. Mudança no banco: criar um arquivo novo em `supabase/` (ex.:
+   `supabase/2026-10-xx-descricao.sql`) e rodar no SQL Editor do Supabase;
+   manter `schema.sql` como o retrato completo e atual.
+4. Commit + push na `main` → a Vercel publica sozinha em ~1 minuto.

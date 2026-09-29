@@ -1,39 +1,51 @@
 # Sistema Clínica de Autismo Pipo — Agenda Pipo
 
-Sistema web de agendamento de atendimentos para a Clínica de Autismo Pipo, substituindo a antiga planilha de controle. Publicado como um Claude Artifact (aplicação de página única, sem backend próprio — os dados ficam armazenados na capability `db` da plataforma Claude, compartilhados entre todas as pessoas com acesso à página).
+Sistema web de agendamento de atendimentos da Clínica de Autismo Pipo: grade semanal por sala/terapeuta/paciente, cadastros de pacientes, profissionais, salas, convênios e especialidades, e relatório de atendimentos. Login por e-mail e senha, com permissões por módulo.
 
-**App publicado:** https://claude.ai/artifact/C46pNNootZV5QNyjB4AS8o
+**Hospedagem:** Vercel (site estático + 2 funções serverless) · **Banco e login:** Supabase
 
 ## Estrutura
 
-- `agenda.html` — código-fonte completo do app (HTML + CSS + JS em um único arquivo, como exigido pelo formato de Claude Artifact). É este arquivo que é publicado via Artifact para atualizar o app ao vivo.
-- `tests/` — suíte de testes automatizados (Playwright) usando dados fictícios de exemplo, cobrindo agendamento por arrastar-e-soltar, cópia/movimentação, bloqueio de horários, cadastro de pacientes/profissionais/salas/convênios/especialidades, cores por especialidade, relatório de atendimentos, busca sem acento/maiúsculas, zoom e visualização "todos os dias/semanas", entre outros.
+| Caminho | O que é |
+|---|---|
+| `index.html` | O app inteiro (HTML + CSS + JS). |
+| `js/pipo-supabase.js` | Login, sessão, permissões e acesso ao banco (Supabase + Realtime). |
+| `js/usuarios.js` | Aba **Usuários** (só administradores). |
+| `api/config.js` | Entrega ao navegador a URL e a chave pública do Supabase. |
+| `api/admin-users.js` | Criar/excluir usuário, trocar senha, ativar/desativar (usa a chave secreta). |
+| `supabase/schema.sql` | Tabelas, regras de segurança (RLS), permissões e Realtime. |
+| `tests/` | Testes automatizados (Playwright) com dados fictícios. |
 
-## Como rodar os testes
+## Implantação (uma vez)
 
-Requer Node.js e o pacote `playwright` (com o Chromium baixado):
+### 1. Supabase
+1. Crie um projeto em [supabase.com](https://supabase.com) (região **South America (São Paulo)**).
+2. **SQL Editor → New query**: cole o conteúdo de `supabase/schema.sql` e clique em **Run**.
+3. (Migração) Rode também o arquivo de importação dos dados reais, que **não** fica no repositório.
+4. **Authentication → Sign In / Providers**: desligue **Allow new users to sign up** (só o administrador cria contas). Mantenha o provedor **Email** ligado.
+5. **Authentication → Users → Add user → Create new user**: crie a sua conta (marque *Auto Confirm User*). **O primeiro usuário criado vira administrador.**
+6. **Project Settings → API**: anote a *Project URL*, a chave **anon public** e a **service_role** (secreta).
+
+### 2. Vercel
+1. Em [vercel.com](https://vercel.com): **Add New → Project** → importe este repositório do GitHub.
+2. Framework Preset: **Other**. Não precisa de comando de build.
+3. **Environment Variables**:
+   - `SUPABASE_URL` = Project URL
+   - `SUPABASE_ANON_KEY` = chave anon public
+   - `SUPABASE_SERVICE_ROLE_KEY` = chave service_role (**nunca** exponha no navegador nem no código)
+4. **Deploy**. Depois disso, todo `git push` na branch `main` publica sozinho.
+5. No Supabase, em **Authentication → URL Configuration**, coloque o endereço da Vercel em *Site URL*.
+
+## Testes
+
+Precisam de Node.js e do Playwright:
 
 ```bash
 npm install
-npx playwright install chromium   # se ainda não tiver o Chromium do Playwright instalado
+npx playwright install chromium
 npm test
 ```
 
-Ou, para rodar um teste específico após qualquer alteração em `agenda.html`:
+## Dados
 
-```bash
-node tests/build.js        # gera tests/page.html com o agenda.html atual
-node tests/run_dnd.js       # roda só esse teste
-```
-
-## Funcionalidades
-
-- Grade semanal por sala/terapeuta/paciente, com 4 semanas e 5 dias, bloqueio de horários, reunião clínica semanal automática.
-- Cadastro de pacientes (convênio, plano, ABA, especialidades e carga horária), profissionais e salas, com cores personalizáveis.
-- Cópia, movimentação e desmarcação de agendamentos.
-- Relatório de atendimentos por profissional/especialidade, com busca (ignora acentos e maiúsculas/minúsculas).
-- Controle de acesso somente-leitura vs. edição, conforme a permissão do Compartilhamento do Claude Artifact.
-
-## Observação sobre dados
-
-Este repositório contém apenas o código do aplicativo e dados de teste fictícios. Nenhum dado real de pacientes é versionado aqui — os dados reais da clínica ficam apenas no armazenamento (`db`) do Artifact publicado, acessível apenas a quem tem permissão na página.
+Este repositório contém apenas código e dados de teste fictícios. Os dados reais da clínica ficam somente no Supabase.

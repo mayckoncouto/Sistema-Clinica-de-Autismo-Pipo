@@ -1,3 +1,10 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<!-- APP-HEAD:START -->
 <title>Agenda Pipo</title>
 <meta name="description" content="Sistema de agendas de atendimento da Clínica de Autismo Pipo — grade semanal por sala, terapeuta e paciente.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -119,6 +126,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .brand-mark{width:34px;height:34px;flex:none;border-radius:50%;box-shadow:var(--shadow-sm);display:block;object-fit:cover}
 .brand-text h1{font-size:18px;font-weight:800;letter-spacing:-.01em}
 .brand-text .sub{font-size:12px;color:var(--muted)}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .sync-pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface)}
 .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .sync-dot.off{background:var(--muted)}
@@ -444,6 +452,12 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .zoom-ctrl{right:10px;bottom:10px;padding:5px 8px 5px 10px}
 }
 </style>
+<!-- APP-HEAD:END -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="/js/pipo-supabase.js"></script>
+</head>
+<body>
+<!-- APP-BODY:START -->
 
 <div class="app">
 
@@ -455,7 +469,10 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <div class="sub">Sistema de atendimentos</div>
       </div>
     </div>
-    <div class="sync-pill" id="syncPill"><span class="sync-dot off" id="syncDot"></span><span id="syncText">conectando…</span></div>
+    <div class="topbar-right">
+      <div class="user-pill" id="userPill" hidden></div>
+      <div class="sync-pill" id="syncPill"><span class="sync-dot off" id="syncDot"></span><span id="syncText">conectando…</span></div>
+    </div>
   </div>
 
   <div class="maintabs" id="mainTabs">
@@ -464,6 +481,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
     <button data-tab="profissionais">Profissionais</button>
     <button data-tab="salas">Salas</button>
     <button data-tab="relatorio">Relatório</button>
+    <button data-tab="usuarios" hidden>Usuários</button>
   </div>
 
   <!-- AGENDA TAB -->
@@ -549,6 +567,9 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
     </div>
     <div id="reportHost"></div>
   </section>
+
+  <!-- USUÁRIOS TAB (só administradores; conteúdo montado por js/usuarios.js) -->
+  <section id="tab-usuarios" class="panel" hidden></section>
 
 </div>
 
@@ -874,6 +895,102 @@ var state = {
 var pendingSeqCounter = 0;
 
 var db = null, userCap = null;
+
+/* ---------------- permissões por módulo × ação ----------------
+ * Em produção (Vercel + Supabase), window.pipoAuth (js/pipo-supabase.js) traz
+ * a grade de permissões do usuário logado. O banco confere as mesmas regras
+ * (trigger documents_enforce em supabase/schema.sql) — as checagens aqui só
+ * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
+ * vale só o state.writable antigo.
+ */
+var PERM_MODULE_LABELS = {agenda:"Agenda", pacientes:"Pacientes", profissionais:"Profissionais", salas:"Salas"};
+var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
+function can(module, action){
+  if (action !== "view" && state.writable === false) return false;
+  return window.pipoAuth ? window.pipoAuth.can(module, action) : true;
+}
+function permDeniedMsg(module, action){
+  return "Você não tem permissão para " + PERM_ACTION_LABELS[action] + " em " + PERM_MODULE_LABELS[module] + ".";
+}
+function stableStr(v){
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(stableStr).join(",") + "]";
+  return "{" + Object.keys(v).sort().filter(function(k){ return v[k] !== undefined; }).map(function(k){
+    return JSON.stringify(k) + ":" + stableStr(v[k]);
+  }).join(",") + "}";
+}
+// Primeira ação exigida pela troca oldList → newList que o usuário não tem, ou null.
+function listPermDenied(module, oldList, newList){
+  if (!window.pipoAuth) return null;
+  var oldById = {}, newById = {}, need = {};
+  (oldList || []).forEach(function(x){ oldById[x.id] = x; });
+  (newList || []).forEach(function(x){ newById[x.id] = x; });
+  Object.keys(newById).forEach(function(id){
+    if (!Object.prototype.hasOwnProperty.call(oldById, id)) need.create = true;
+    else if (stableStr(oldById[id]) !== stableStr(newById[id])) need.edit = true;
+  });
+  Object.keys(oldById).forEach(function(id){
+    if (!Object.prototype.hasOwnProperty.call(newById, id)) need["delete"] = true;
+  });
+  if (!need.edit){
+    var oldOrder = (oldList || []).map(function(x){ return x.id; }).filter(function(id){ return newById.hasOwnProperty(id); });
+    var newOrder = (newList || []).map(function(x){ return x.id; }).filter(function(id){ return oldById.hasOwnProperty(id); });
+    if (oldOrder.join("\u0001") !== newOrder.join("\u0001")) need.edit = true;
+  }
+  var order = ["create","edit","delete"];
+  for (var i=0;i<order.length;i++){
+    if (need[order[i]] && !can(module, order[i])) return permDeniedMsg(module, order[i]);
+  }
+  return null;
+}
+// Mesma ideia para agendamentos: chave nova = incluir, removida = excluir,
+// alterada = editar; bloquear/liberar horário conta como editar.
+function bookingPermDenied(changesByDoc){
+  if (!window.pipoAuth) return null;
+  var need = {};
+  Object.keys(changesByDoc).forEach(function(docId){
+    var bk = (state.scheduleDocs[docId] && state.scheduleDocs[docId].bookings) || {};
+    var changes = changesByDoc[docId];
+    Object.keys(changes).forEach(function(k){
+      var prev = Object.prototype.hasOwnProperty.call(bk, k) ? bk[k] : null;
+      var next = changes[k];
+      if (stableStr(prev) === stableStr(next)) return;
+      if ((prev && prev.blocked) || (next && next.blocked)) need.edit = true;
+      else if (!prev) need.create = true;
+      else if (!next) need["delete"] = true;
+      else need.edit = true;
+    });
+  });
+  var order = ["create","edit","delete"];
+  for (var i=0;i<order.length;i++){
+    if (need[order[i]] && !can("agenda", order[i])) return permDeniedMsg("agenda", order[i]);
+  }
+  return null;
+}
+// Mostra/esconde abas e botões conforme as permissões do usuário logado.
+function applyPermissionsUI(){
+  if (!window.pipoAuth) return;
+  var tabModule = {agenda:"agenda", relatorio:"agenda", pacientes:"pacientes", profissionais:"profissionais", salas:"salas"};
+  var activeHidden = false;
+  Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button[data-tab]"), function(b){
+    var k = b.getAttribute("data-tab");
+    var visible = k === "usuarios" ? window.pipoAuth.isAdmin() : can(tabModule[k], "view");
+    b.hidden = !visible;
+    if (!visible && k === state.tab) activeHidden = true;
+  });
+  if (activeHidden){
+    var first = document.querySelector("#mainTabs button[data-tab]:not([hidden])");
+    if (first) first.click();
+  }
+  function show(id, on){ var el = document.getElementById(id); if (el) el.hidden = !on; }
+  show("addPatientBtn", can("pacientes","create"));
+  show("addProfessionalBtn", can("profissionais","create"));
+  show("addRoomBtn", can("salas","create"));
+  var agendaWrite = can("agenda","create") || can("agenda","edit") || can("agenda","delete");
+  var banner = document.getElementById("readonlyBanner");
+  if (banner) banner.textContent = "Modo somente leitura — você pode ver a agenda, mas não tem permissão para alterá-la.";
+  setReadonlyBanner(!agendaWrite);
+}
 var roomsLoaded = false, patientsLoaded = false, specialtiesLoaded = false, conveniosLoaded = false, professionalsLoaded = false;
 var reportSubs = {}; // docId -> {active, unsub}, independent of the Agenda tab's own day/week subscriptions
 
@@ -890,6 +1007,7 @@ function boot(){
   renderProfissionaisTab();
   renderSalasTab();
   renderRelatorioTab();
+  if (window.pipoAuth) window.pipoAuth.onProfile(applyPermissionsUI);
   connectDb();
   document.addEventListener("keydown", function(e){
     if (e.key === "Escape" && state.clipboard){
@@ -917,7 +1035,7 @@ function connectDb(){
     if (!db){
       setSync(false,"sem sincronização");
       setReadonlyBanner(true);
-      showToast("Não foi possível conectar: verifique se você está conectado com sua conta Claude.", true);
+      showToast("Não foi possível conectar ao servidor. Verifique sua internet e recarregue a página.", true);
       return;
     }
     setSync(true,"sincronizado");
@@ -925,6 +1043,7 @@ function connectDb(){
       userCap.can("data.write").then(function(can){
         state.writable = (can !== false);
         setReadonlyBanner(!state.writable);
+        if (window.pipoAuth) applyPermissionsUI();
       }).catch(function(){});
     }
     subscribeRooms();
@@ -937,7 +1056,7 @@ function connectDb(){
   }).catch(function(){
     setSync(false,"sem sincronização");
     setReadonlyBanner(true);
-    showToast("Não foi possível conectar: verifique se você está conectado com sua conta Claude.", true);
+    showToast("Não foi possível conectar ao servidor. Verifique sua internet e recarregue a página.", true);
   });
 }
 function setSync(on,text){
@@ -950,6 +1069,7 @@ function setReadonlyBanner(on){
   if (b) b.className = "readonly-banner" + (on ? " on" : "");
 }
 var toastTimer = null;
+window.showToast = function(msg, isErr){ showToast(msg, isErr); }; // usado por js/pipo-supabase.js e js/usuarios.js
 function showToast(msg, isErr){
   var el = document.getElementById("toastHost");
   if (!el) return;
@@ -1229,8 +1349,10 @@ function wireTabs(){
     Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button"), function(x){
       x.classList.toggle("active", x === b);
     });
-    ["agenda","pacientes","profissionais","salas","relatorio"].forEach(function(k){
-      document.getElementById("tab-"+k).hidden = (k !== state.tab);
+    Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button[data-tab]"), function(x){
+      var k = x.getAttribute("data-tab");
+      var sec = document.getElementById("tab-"+k);
+      if (sec) sec.hidden = (k !== state.tab);
     });
     var zc = document.getElementById("zoomCtrl");
     if (zc) zc.hidden = (state.tab !== "agenda");
@@ -1567,7 +1689,8 @@ function wireGridDelegatedEvents(){
         changes[key] = (action === "lock") ? {patient:"Bloqueado", note:"", blocked:true} : clearValueFor(dayKey, time);
       });
       var byDoc = {}; byDoc[docId] = changes;
-      applyBookingChanges(byDoc).then(function(){
+      applyBookingChanges(byDoc).then(function(ok){
+        if (ok === false) return;
         var who = name ? (" de "+name) : "";
         showToast(action === "lock" ? ("Atendimentos"+who+" pela "+label+" bloqueados.") : ("Atendimentos"+who+" pela "+label+" liberados."));
       });
@@ -1877,12 +2000,17 @@ function openBookingModal(ctx){
 function applyBookingChanges(changesByDoc){
   // changesByDoc: { docId: { key: {patient,note} | null, ... }, ... } — null clears that key
   if (!db){
-    showToast("Não salvo: sem conexão com o servidor. Verifique se você está conectado à sua conta Claude.", true);
+    showToast("Não salvo: sem conexão com o servidor. Verifique sua internet e recarregue a página.", true);
     return Promise.resolve();
   }
   if (state.writable === false){
     showToast("Você está em modo somente leitura e não pode editar esta agenda.", true);
-    return Promise.resolve();
+    return Promise.resolve(false);
+  }
+  var denied = bookingPermDenied(changesByDoc);
+  if (denied){
+    showToast(denied, true);
+    return Promise.resolve(false);
   }
   var seq = ++pendingSeqCounter;
   var prevByDoc = {};
@@ -1922,6 +2050,8 @@ function applyBookingChanges(changesByDoc){
   var writes = Object.keys(changesByDoc).map(function(docId){
     var changes = changesByDoc[docId];
     var ref = db.doc("schedule/" + docId);
+    // Supabase: grava só as chaves alteradas, de forma atômica no banco.
+    if (typeof ref.patchBookings === "function") return ref.patchBookings(changes);
     return ref.get().then(function(snap){
       var body = (snap.exists && snap.data()) ? Object.assign({}, snap.data()) : {};
       body.bookings = Object.assign({}, body.bookings || {});
@@ -1935,7 +2065,7 @@ function applyBookingChanges(changesByDoc){
 
   return Promise.all(writes).then(function(){
     clearPending();
-  }).catch(function(){
+  }).catch(function(err){
     // The write failed (permission, connectivity, etc.) — undo the optimistic
     // update so the grid reflects reality, and tell the user it wasn't saved.
     clearPending();
@@ -1948,7 +2078,10 @@ function applyBookingChanges(changesByDoc){
       });
     });
     renderScheduleDocsTargeted(Object.keys(changesByDoc));
-    showToast("Não foi possível salvar a alteração. Verifique sua conexão e tente novamente.", true);
+    showToast(err && err.code === "permission"
+      ? "Você não tem permissão para esta alteração na agenda."
+      : "Não foi possível salvar a alteração. Verifique sua conexão e tente novamente.", true);
+    return false;
   });
 }
 
@@ -2617,6 +2750,8 @@ function openPatientModal(p){
 }
 
 function writePatients(list){
+  var denied = listPermDenied("pacientes", state.patients, list);
+  if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.patients = list;
   renderPatientsTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
@@ -2771,6 +2906,8 @@ function openSpecialtiesModal(){
 }
 
 function writeSpecialties(list){
+  var denied = listPermDenied("pacientes", state.specialties, list);
+  if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.specialties = list;
   renderPatientsTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
@@ -2848,6 +2985,8 @@ function openConveniosModal(){
 }
 
 function writeConvenios(list){
+  var denied = listPermDenied("pacientes", state.convenios, list);
+  if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.convenios = list;
   renderPatientsTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
@@ -2942,6 +3081,8 @@ function openProfessionalModal(p){
 }
 
 function writeProfessionals(list){
+  var denied = listPermDenied("profissionais", state.professionals, list);
+  if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.professionals = list;
   renderProfissionaisTab();
   renderAgendaShell();
@@ -3136,6 +3277,8 @@ function openRoomModal(r){
 }
 
 function writeRooms(list){
+  var denied = listPermDenied("salas", state.rooms, list);
+  if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.rooms = list;
   renderAgendaShell();
   renderSalasTab();
@@ -3375,3 +3518,7 @@ function renderRelatorioTab(){
 
 })();
 </script>
+<!-- APP-BODY:END -->
+<script src="/js/usuarios.js"></script>
+</body>
+</html>
