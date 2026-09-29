@@ -14,12 +14,15 @@
 var SUPABASE_URL = process.env.SUPABASE_URL;
 var SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// Aceita os dois formatos de chave do Supabase:
+// - nova "secret key" (sb_secret_...): vai só no header apikey; o gateway do
+//   Supabase a troca por um token de service role. Ela não é um JWT, então
+//   não pode ir no Authorization.
+// - antiga "service_role" (JWT eyJ...): vai no apikey e no Authorization.
 function adminHeaders() {
-  return {
-    apikey: SERVICE_KEY,
-    Authorization: "Bearer " + SERVICE_KEY,
-    "Content-Type": "application/json"
-  };
+  var h = { apikey: SERVICE_KEY, "Content-Type": "application/json" };
+  if (!/^sb_/.test(SERVICE_KEY)) h.Authorization = "Bearer " + SERVICE_KEY;
+  return h;
 }
 
 async function call(path, opts) {

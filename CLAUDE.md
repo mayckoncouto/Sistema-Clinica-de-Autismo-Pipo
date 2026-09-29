@@ -39,7 +39,11 @@ Supabase**:
 - **Banco:** Supabase (Postgres + Auth + Realtime). Esquema completo em
   `supabase/schema.sql`.
 - **Variáveis de ambiente na Vercel:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY`.
+  `SUPABASE_SERVICE_ROLE_KEY`. O projeto usa o **formato novo de chaves**:
+  `SUPABASE_ANON_KEY` = *publishable key* (`sb_publishable_...`) e
+  `SUPABASE_SERVICE_ROLE_KEY` = *secret key* (`sb_secret_...`). A secret key
+  não é JWT: vai só no header `apikey`, nunca em `Authorization`
+  (`adminHeaders()` em `api/admin-users.js` trata os dois formatos).
 - O antigo artifact (https://claude.ai/artifact/C46pNNootZV5QNyjB4AS8o, v27)
   ficou só como referência histórica; os dados foram migrados dele.
 
