@@ -1,0 +1,92 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script>
+window.__STORE__ = {
+  "config/rooms": { list: [
+    { id:"r1", name:"Sala Teste", color:"teal", therapists:[ {id:"r1-t1", name:"Ana"}, {id:"r1-t2", name:"Bia"} ] }
+  ]},
+  "patients/all": { list: [] },
+  "schedule/seg-1": { bookings: {
+    "07:20|r1|r1-t1": {patient:"Paciente Um", note:""}
+  }}
+};
+window.__LOG__ = [];
+
+function makeDocRef(path){
+  var listeners = [];
+  function currentSnap(){
+    var data = window.__STORE__[path];
+    return {
+      exists: data !== undefined,
+      data: function(){ return data; }
+    };
+  }
+  return {
+    onSnapshot: function(cb, errCb){
+      listeners.push(cb);
+      setTimeout(function(){ cb(currentSnap()); }, 0);
+      return function(){ var i = listeners.indexOf(cb); if (i!==-1) listeners.splice(i,1); };
+    },
+    get: function(){
+      // Simulate real network latency on the read.
+      return new Promise(function(resolve){ setTimeout(function(){ resolve(currentSnap()); }, 60); });
+    },
+    set: function(obj){
+      window.__LOG__.push({op:"set", path:path, obj: JSON.parse(JSON.stringify(obj))});
+      // RACE SIMULATION: fire a stale snapshot (reflecting pre-write data) to all
+      // listeners shortly after set() is called but BEFORE the write has actually
+      // landed in the store — this reproduces "eventual consistency" lag from a
+      // real backend, where an unrelated/delayed snapshot event can arrive after
+      // the local optimistic update but before the server confirms the new value.
+      var staleSnap = currentSnap();
+      setTimeout(function(){ listeners.forEach(function(cb){ cb(staleSnap); }); }, 40);
+      return new Promise(function(resolve){
+        setTimeout(function(){
+          window.__STORE__[path] = obj;
+          var freshSnap = currentSnap();
+          listeners.forEach(function(cb){ cb(freshSnap); });
+          resolve();
+        }, 150);
+      });
+    },
+    update: function(obj){
+      window.__LOG__.push({op:"update", path:path, obj: JSON.parse(JSON.stringify(obj))});
+      var cur = window.__STORE__[path] || {};
+      var merged = Object.assign({}, cur, obj);
+      window.__STORE__[path] = merged;
+      listeners.forEach(function(cb){ cb(currentSnap()); });
+      return Promise.resolve();
+    },
+    delete: function(){
+      delete window.__STORE__[path];
+      listeners.forEach(function(cb){ cb(currentSnap()); });
+      return Promise.resolve();
+    }
+  };
+}
+
+window.claude = {
+  use: function(name){
+    if (name === "db"){
+      return Promise.resolve({
+        doc: function(path){ return makeDocRef(path); }
+      });
+    }
+    if (name === "user"){
+      return Promise.resolve({
+        isOwner: function(){ return true; },
+        canEdit: function(){ return true; },
+        can: function(){ return Promise.resolve(true); }
+      });
+    }
+    return Promise.resolve(null);
+  }
+};
+window.onerror = function(msg, src, line, col, err){
+  window.__LOG__.push({op:"error", msg: msg, line: line, col: col, stack: err && err.stack});
+};
+</script>
+</head>
+<body>
+__PAGE_BODY__
+</body></html>
