@@ -67,9 +67,8 @@ const path = require('path');
     (await page.locator('.rpt-spec-name').count()) < (await page.locator('.rpt-prof-name').count()));
   console.log('report has a header row of professional names (row 3)?', (await page.locator('.rpt-prof-name').count()) > 0);
   console.log('report has a header row of per-professional totals (row 4)?', (await page.locator('.rpt-prof-total').count()) > 0);
-  console.log('a "Pacientes" mid-row repeats the professional names right before the patient rows?',
-    (await page.locator('tr.rpt-mid .rpt-mid-label').innerText()).trim().toLowerCase() === 'pacientes' &&
-    (await page.locator('tr.rpt-mid .rpt-mid-name').count()) === (await page.locator('.rpt-prof-name').count()));
+  console.log('there is no "Pacientes" mid-row repeating the professional names (removed on request)?',
+    (await page.locator('tr.rpt-mid').count()) === 0);
 
   const anaColIdx = (await page.locator('.rpt-prof-name').allInnerTexts()).indexOf('Ana');
   const biaColIdx = (await page.locator('.rpt-prof-name').allInnerTexts()).indexOf('Bia');
@@ -131,7 +130,6 @@ const path = require('path');
   console.log('filtering by "Bruno" still shows his own row?', filteredBodyText.includes('Bruno Verde'));
   console.log('filtering by "Bruno" keeps the Coordenador and Aplicador ABA rows (they are never filtered out)?',
     filteredBodyText.includes('Coordenador') && filteredBodyText.includes('Aplicador ABA'));
-  console.log('filtering by "Bruno" keeps the "Pacientes" mid-row visible?', filteredBodyText.toLowerCase().includes('pacientes'));
 
   const anaTotalFiltered = (await page.locator('.rpt-prof-total').nth(anaColIdx).innerText()).trim();
   console.log('with the "Bruno" filter, Ana\'s header total drops to 1 (just Bruno\'s session, not all 4)?', anaTotalFiltered === '1');
@@ -169,11 +167,6 @@ const path = require('path');
     cornerLabels[1].toLowerCase() === 'total por especialidade' &&
     cornerLabels[2].toLowerCase() === 'profissionais' &&
     cornerLabels[3].toLowerCase() === 'total por profissional');
-
-  // ---- TEST: the "Pacientes" mid-row's own cell in the Total column reads "Total"
-  // (a label, not a number) — it marks where the individual patient totals begin ----
-  const midTotalLabel = (await page.locator('tr.rpt-mid .rpt-mid-total-label').innerText()).trim().toLowerCase();
-  console.log('the Pacientes row\'s Total-column cell reads "Total"?', midTotalLabel === 'total');
 
   // ---- TEST: every professional column is exactly the same width, wide enough to
   // fit "Andrelisa" (the fixture's longest professional name) without truncating it ----
