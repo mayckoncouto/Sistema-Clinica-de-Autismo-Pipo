@@ -11,8 +11,9 @@
 //   { action: "set_active", id, active }
 //   { action: "delete", id }
 
-var SUPABASE_URL = process.env.SUPABASE_URL;
-var SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Aceita a URL colada com sufixo (ex.: ".../rest/v1/") ou barra no fim.
+var SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/(rest|auth)\/v1\/?$/, "").replace(/\/+$/, "");
+var SERVICE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 
 // Aceita os dois formatos de chave do Supabase:
 // - nova "secret key" (sb_secret_...): vai só no header apikey; o gateway do
