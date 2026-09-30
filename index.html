@@ -286,6 +286,7 @@ th.timecol{z-index:5}
 .period-btn svg{width:10px;height:10px;display:block}
 .period-btn:hover{opacity:1;background:var(--surface-2);color:var(--ink-2)}
 .period-btn.period-btn-lock:hover{color:var(--danger);background:var(--danger-weak)}
+.period-btn.period-btn-clear:hover{color:var(--danger);background:var(--danger-weak)}
 .period-btn.confirm{opacity:1;background:var(--warn-weak);color:var(--warn)}
 
 /* ---------- toolbars ---------- */
@@ -662,6 +663,7 @@ var MOVE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 var UNDO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 var REDO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
 var LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+var ERASER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L11 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>';
 var UNLOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.9"/></svg>';
 
 function slugify(s){
@@ -1549,8 +1551,9 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
   function seatLockButtons(period, roomId, seatId, displayName){
     var label = period === "morning" ? "manhã" : "tarde";
     return '<div class="seat-lock-group">' +
-      '<button type="button" class="period-btn" data-period-action="unlock" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Liberar '+label+'" aria-label="Liberar '+label+'">'+UNLOCK_SVG+'</button>' +
-      '<button type="button" class="period-btn period-btn-lock" data-period-action="lock" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Bloquear '+label+'" aria-label="Bloquear '+label+'">'+LOCK_SVG+'</button>' +
+      '<button type="button" class="period-btn" data-period-action="unlock" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Liberar horários bloqueados da '+label+'" aria-label="Liberar horários bloqueados da '+label+'">'+UNLOCK_SVG+'</button>' +
+      '<button type="button" class="period-btn period-btn-lock" data-period-action="lock" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Bloquear horários livres da '+label+'" aria-label="Bloquear horários livres da '+label+'">'+LOCK_SVG+'</button>' +
+      '<button type="button" class="period-btn period-btn-clear" data-period-action="clear" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Limpar todos os agendamentos da '+label+'" aria-label="Limpar todos os agendamentos da '+label+'">'+ERASER_SVG+'</button>' +
     '</div>';
   }
 
@@ -1707,7 +1710,7 @@ function wireGridDelegatedEvents(){
       var period = periodBtn.getAttribute("data-period");
       var action = periodBtn.getAttribute("data-period-action");
       var label = period === "morning" ? "manhã" : "tarde";
-      var baseTitle = (action === "lock" ? "Bloquear " : "Liberar ") + label;
+      var baseTitle = (action === "lock" ? "Bloquear horários livres da " : action === "unlock" ? "Liberar horários bloqueados da " : "Limpar todos os agendamentos da ") + label;
       if (!periodBtn.__pbArmed){
         periodBtn.__pbArmed = true;
         periodBtn.classList.add("confirm");
@@ -1733,16 +1736,42 @@ function wireGridDelegatedEvents(){
       var seatId = periodBtn.getAttribute("data-seat");
       var name = periodBtn.getAttribute("data-name") || "";
       var times = periodTimes(dayKey, period);
-      var changes = {};
+      var slotBookings = (state.scheduleDocs[docId] && state.scheduleDocs[docId].bookings) || {};
+      var changes = {}, touched = 0, kept = 0;
+      // Bloquear: só horários livres (não mexe em paciente, sala ou reunião).
+      // Liberar: só horários bloqueados (idem).
+      // Limpar: apaga tudo o que houver no período (paciente, sala, bloqueio, reunião).
       times.forEach(function(time){
         var key = time+"|"+roomId+"|"+seatId;
-        changes[key] = (action === "lock") ? {patient:"Bloqueado", note:"", blocked:true} : clearValueFor(dayKey, time);
+        var cur = effectiveBooking(slotBookings, key, dayKey, time);
+        var isEmpty = !cur || !cur.patient;
+        // Bloqueio = marcação blocked ou o texto "Bloqueado" (dados antigos da planilha).
+        var isBlockedSlot = !!(cur && (cur.blocked || normText(cur.patient) === "bloqueado"));
+        if (action === "lock"){
+          if (isEmpty){ changes[key] = {patient:"Bloqueado", note:"", blocked:true}; touched++; }
+          else if (!isBlockedSlot) kept++;
+        } else if (action === "unlock"){
+          if (isBlockedSlot){ changes[key] = clearValueFor(dayKey, time); touched++; }
+          else if (!isEmpty) kept++;
+        } else if (action === "clear"){
+          if (!isEmpty){ changes[key] = clearValueFor(dayKey, time); touched++; }
+        }
       });
+      var who = name ? (" de "+name) : "";
+      if (!touched){
+        showToast(action === "lock" ? ("Nenhum horário livre"+who+" pela "+label+" para bloquear.")
+          : action === "unlock" ? ("Nenhum horário bloqueado"+who+" pela "+label+" para liberar.")
+          : ("Nenhum agendamento"+who+" pela "+label+" para limpar."));
+        return;
+      }
       var byDoc = {}; byDoc[docId] = changes;
       applyBookingChanges(byDoc).then(function(ok){
         if (ok === false) return;
-        var who = name ? (" de "+name) : "";
-        showToast(action === "lock" ? ("Atendimentos"+who+" pela "+label+" bloqueados.") : ("Atendimentos"+who+" pela "+label+" liberados."));
+        var n = touched + (touched === 1 ? " horário" : " horários");
+        var keptMsg = kept ? (" (" + kept + (kept === 1 ? " ocupado mantido)" : " ocupados mantidos)")) : "";
+        showToast(action === "lock" ? (n+who+" pela "+label+(touched === 1 ? " bloqueado" : " bloqueados")+keptMsg+".")
+          : action === "unlock" ? (n+who+" pela "+label+(touched === 1 ? " liberado" : " liberados")+keptMsg+".")
+          : (n+who+" pela "+label+(touched === 1 ? " limpo" : " limpos")+". Use desfazer (Ctrl+Z) se foi engano."));
       });
       return;
     }
@@ -2078,13 +2107,17 @@ function describeHistoryEntry(changes, prev){
     Object.keys(changes[docId]).forEach(function(k){
       var a = prev[docId] ? prev[docId][k] : null, b = changes[docId][k];
       if (stableStr(a) === stableStr(b)) return;
-      items.push({docId: docId, key: k, a: a || null, b: b || null});
+      // Sem registro gravado no horário da reunião de segunda = a reunião "virtual".
+      if (!a) a = effectiveBooking({}, k, docId.split("-")[0], k.split("|")[0]);
+      // Registro sem nome (ex.: reunião de segunda apagada) conta como vazio.
+      items.push({docId: docId, key: k, a: (a && a.patient) ? a : null, b: (b && b.patient) ? b : null});
     });
   });
   if (!items.length) return "Alteração";
   var isBlk = function(v){ return !!(v && v.blocked); };
   if (items.length > 1 && items.every(function(i){ return isBlk(i.b); })) return "Bloquear " + items.length + " horários";
-  if (items.length > 1 && items.every(function(i){ return isBlk(i.a) && !isBlk(i.b); })) return "Liberar " + items.length + " horários";
+  if (items.length > 1 && items.every(function(i){ return isBlk(i.a) && !i.b; })) return "Liberar " + items.length + " horários";
+  if (items.length > 1 && items.every(function(i){ return i.a && !i.b; })) return "Limpar " + items.length + " horários";
   if (items.length === 2){
     var from = items.filter(function(i){ return i.a && !i.b; })[0], to = items.filter(function(i){ return !i.a && i.b; })[0];
     if (from && to && from.a.patient === to.b.patient) return "Mover " + to.b.patient + " → " + describeSlot(to.docId, to.key);

@@ -113,8 +113,12 @@ testes continuam usando o mesmo mock.
   às 11:20 (toda segunda, valor padrão "virtual" até alguém sobrescrever).
 - Arrastar e soltar, copiar/mover (com barra de clipboard e clique para colar
   em qualquer dia/semana), desmarcar.
-- Bloqueio/liberação de período (manhã/tarde) por assento, com confirmação de
-  dois cliques.
+- Botões por período (manhã/tarde) e por assento, todos com confirmação de
+  dois cliques: **bloquear** só marca os horários *livres* (não mexe em
+  paciente, sala nem reunião); **liberar** só remove *bloqueios* (marcação
+  `blocked` ou texto "Bloqueado" de dados antigos); **limpar** (ícone de
+  borracha) apaga tudo do período, inclusive a reunião de segunda. Todos
+  entram no desfazer.
 - Cor de paciente por regra herdada da planilha VBA antiga: ABA="Não" → vermelho;
   senão por idade (0–4 azul, 5–9 verde, 10+ laranja); sem idade numérica e
   ABA≠"Não" → sem cor.
