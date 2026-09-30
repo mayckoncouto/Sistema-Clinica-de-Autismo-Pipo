@@ -25,7 +25,18 @@ const path = require('path');
   await page.waitForTimeout(150);
   console.log('Profissionais tab lists Ana?', (await page.locator('#profList').innerText()).includes('Ana'));
   console.log('Profissionais tab lists Bia?', (await page.locator('#profList').innerText()).includes('Bia'));
-  console.log('Ana row shows her specialty (Psicologia)?', (await page.locator('.prof-row', { hasText: 'Ana' }).innerText()).includes('Psicologia'));
+  const anaProfRow = page.locator('#profList tbody tr', { hasText: 'Ana' }).first();
+  console.log('Ana row shows her specialty (Psicologia)?', (await anaProfRow.innerText()).includes('Psicologia'));
+  console.log('Ana row lists the rooms she works in (Sala Teste, Coordenador)?',
+    (await anaProfRow.innerText()).includes('Sala Teste') && (await anaProfRow.innerText()).includes('Coordenador'));
+  await page.fill('#profListSearch', 'fono');
+  await page.waitForTimeout(100);
+  const fonoRows = await page.locator('#profList tbody tr').allInnerTexts();
+  console.log('searching "fono" (no accent, lowercase) finds only Bia (Fonoaudiologia)?',
+    fonoRows.length === 1 && fonoRows[0].includes('Bia'));
+  console.log('the counter shows "1 de 3 profissionais"?', (await page.locator('#profCount').innerText()).trim() === '1 de 3 profissionais');
+  await page.fill('#profListSearch', '');
+  await page.waitForTimeout(100);
 
   // Create a new professional.
   await page.click('#addProfessionalBtn');

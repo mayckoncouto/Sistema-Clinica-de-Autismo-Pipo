@@ -142,7 +142,8 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
    min-height:0 on every link in this flex chain is what lets the innermost
    scroll wrapper (.pat-table-wrap / .report-table-wrap) actually shrink/grow
    with the window instead of being pushed to its content's natural size. */
-#tab-pacientes,#tab-relatorio,#tab-usuarios{flex:1;min-height:0;display:flex;flex-direction:column}
+#tab-pacientes,#tab-relatorio,#tab-usuarios,#tab-profissionais{flex:1;min-height:0;display:flex;flex-direction:column}
+.prof-list-host{flex:1;min-height:0;display:flex;flex-direction:column}
 /* Qualquer regra "display:..." acima vence o [hidden] padrão do navegador —
    era o que fazia as abas inativas aparecerem umas por baixo das outras fora
    do Claude Artifact (que injetava esta regra por conta própria). */
@@ -559,14 +560,15 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   <!-- PROFISSIONAIS TAB -->
   <section id="tab-profissionais" class="panel" hidden>
     <div class="pat-toolbar">
-      <div>
-        <b style="font-size:13px">Profissionais</b>
-        <div class="pat-count" style="margin-top:2px">Cadastro central da equipe. Os terapeutas selecionáveis nas colunas das salas vêm desta lista.</div>
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="profListSearch" type="text" placeholder="Buscar por nome, especialidade ou sala…">
       </div>
+      <span class="pat-count" id="profCount"></span>
       <div class="spacer"></div>
       <button class="btn primary" id="addProfessionalBtn">+ Novo profissional</button>
     </div>
-    <div class="room-list" id="profList"></div>
+    <div id="profList" class="prof-list-host"></div>
   </section>
 
   <!-- SALAS TAB -->
@@ -923,6 +925,7 @@ var state = {
   zoomMode: "fixed",      // "fixed" | "dia"
   zoom: 100,               // percentage used when zoomMode === "fixed"
   patSort: {col: null, dir: null}, // patients-list column sort: col name + "asc"|"desc"|null
+  profSort: {col: null, dir: null}, // professionals-list column sort (nome|especialidade|salas)
   patColWidths: {} // patients-list column widths (px), by column key — user-resized, saved to localStorage;
                     // populated below, once PAT_COL_WIDTHS_STORAGE_KEY exists (see loadPatColWidths())
 };
@@ -1185,6 +1188,7 @@ function subscribeRooms(){
     renderClipboardBar();
     queueGridUpdate(); // full: room/seat structure changed, every table's columns may differ
     renderSalasTab();
+    renderProfissionaisTab(); // coluna "Salas onde atende"
     scheduleRelatorioRender();
   }, function(){ roomsLoaded = true; });
 }
@@ -1210,6 +1214,7 @@ function subscribeSpecialties(){
     }
     specialtiesLoaded = true;
     renderPatientsTab();
+    renderProfissionaisTab(); // coluna "Especialidade principal"
   }, function(){ specialtiesLoaded = true; });
 }
 
@@ -1494,6 +1499,7 @@ function wireControls(){
     renderGrid();
   });
   document.getElementById("patientListSearch").addEventListener("input", renderPatientsTab);
+  document.getElementById("profListSearch").addEventListener("input", renderProfissionaisTab);
   document.getElementById("reportSearch").addEventListener("input", renderRelatorioTab);
   document.getElementById("addPatientBtn").addEventListener("click", function(){ openPatientModal(null); });
   document.getElementById("manageSpecialtiesBtn").addEventListener("click", function(){ openSpecialtiesModal(); });
@@ -3418,24 +3424,82 @@ function writeConvenios(list){
 function renderProfissionaisTab(){
   var host = document.getElementById("profList");
   if (!host) return;
+  var countEl = document.getElementById("profCount");
   if (!professionalsLoaded){ host.innerHTML = '<div class="empty-state">Carregando profissionais…</div>'; return; }
   if (!state.professionals.length){
+    if (countEl) countEl.textContent = "";
     host.innerHTML = '<div class="empty-state"><b>Nenhum profissional cadastrado</b>Cadastre os profissionais para poder selecioná-los nas colunas das salas.</div>';
     return;
   }
-  var sorted = state.professionals.slice().sort(function(a,b){ return (a.name||"").localeCompare(b.name||"",'pt-BR'); });
-  host.innerHTML = sorted.map(function(p){
-    var specName = p.specialtyId ? specialtyName(p.specialtyId) : "";
-    return '<div class="prof-row" data-id="'+esc(p.id)+'">' +
-      '<div class="room-info"><div class="rn">'+esc(p.name)+'</div><div class="rs">'+(specName?esc(specName):'Sem especialidade principal')+'</div></div>' +
-      '<button class="btn ghost" data-edit="'+esc(p.id)+'">Editar</button>' +
-    '</div>';
-  }).join("");
-  host.querySelectorAll("[data-edit]").forEach(function(b){
-    b.addEventListener("click", function(){
-      var p = findProfessional(b.getAttribute("data-edit"));
-      if (p) openProfessionalModal(p);
+  // Salas onde cada profissional atende, a partir das colunas das salas.
+  var roomsByProf = {};
+  state.rooms.forEach(function(r){
+    (r.therapists || []).forEach(function(t){
+      if (!t.professionalId) return;
+      var arr = roomsByProf[t.professionalId] = roomsByProf[t.professionalId] || [];
+      if (arr.indexOf(r.name) === -1) arr.push(r.name);
     });
+  });
+  var rowsData = state.professionals.map(function(p){
+    return {p: p, spec: p.specialtyId ? specialtyName(p.specialtyId) : "", rooms: (roomsByProf[p.id] || []).join(", ")};
+  });
+  var searchEl = document.getElementById("profListSearch");
+  var q = normText(((searchEl && searchEl.value) || "").trim());
+  var list = rowsData.filter(function(d){
+    if (!q) return true;
+    return normText(d.p.name || "").indexOf(q) !== -1 || normText(d.spec).indexOf(q) !== -1 || normText(d.rooms).indexOf(q) !== -1;
+  });
+  var sort = state.profSort || {col: null, dir: null};
+  var keyOf = {nome: function(d){ return d.p.name || ""; }, especialidade: function(d){ return d.spec; }, salas: function(d){ return d.rooms; }};
+  var col = (sort.col && sort.dir) ? sort.col : "nome", dir = (sort.col && sort.dir) ? sort.dir : "asc";
+  list.sort(function(a, b){
+    var va = keyOf[col](a), vb = keyOf[col](b);
+    // Vazios sempre no fim; empate desempata pelo nome.
+    if (!va && vb) return 1;
+    if (va && !vb) return -1;
+    var c = va.localeCompare(vb, 'pt-BR', {sensitivity: "base"});
+    if (c) return dir === "desc" ? -c : c;
+    return (a.p.name || "").localeCompare(b.p.name || "", 'pt-BR');
+  });
+  if (countEl) countEl.textContent = list.length + " de " + state.professionals.length + " profissionais";
+  if (!list.length){
+    host.innerHTML = '<div class="empty-state"><b>Nenhum profissional encontrado</b>Ajuste a busca ou cadastre um novo profissional.</div>';
+    return;
+  }
+  var cols = [{key:"nome", label:"Nome", w:"34%"}, {key:"especialidade", label:"Especialidade principal", w:"26%"}, {key:"salas", label:"Salas onde atende", w:"40%"}];
+  var thead = '<tr>' + cols.map(function(c){
+    var active = sort.col === c.key ? sort.dir : null;
+    var glyph = active === "asc" ? SORT_ASC_SVG : (active === "desc" ? SORT_DESC_SVG : SORT_NONE_SVG);
+    return '<th><span class="th-label">'+c.label+'</span>' +
+      '<button type="button" class="sort-btn'+(active?' active':'')+'" data-prof-sort="'+c.key+'" title="Ordenar por '+c.label+'" aria-label="Ordenar por '+c.label+'">'+glyph+'</button></th>';
+  }).join("") + '</tr>';
+  var rows = list.map(function(d){
+    return '<tr data-id="'+esc(d.p.id)+'" tabindex="0">' +
+      '<td class="pt-nome">'+esc(d.p.name)+'</td>' +
+      '<td>'+(d.spec ? esc(d.spec) : '<span class="pt-muted">Sem especialidade</span>')+'</td>' +
+      '<td class="pt-muted" title="'+esc(d.rooms)+'">'+(d.rooms ? esc(d.rooms) : '—')+'</td>' +
+    '</tr>';
+  }).join("");
+  host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table">' +
+    '<colgroup>' + cols.map(function(c){ return '<col style="width:'+c.w+'">'; }).join("") + '</colgroup>' +
+    '<thead>'+thead+'</thead><tbody>'+rows+'</tbody></table></div>';
+  host.querySelectorAll("[data-prof-sort]").forEach(function(btn){
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      var c = btn.getAttribute("data-prof-sort");
+      if (sort.col !== c) state.profSort = {col: c, dir: "asc"};
+      else if (sort.dir === "asc") state.profSort = {col: c, dir: "desc"};
+      else state.profSort = {col: null, dir: null};
+      renderProfissionaisTab();
+    });
+  });
+  host.querySelectorAll("tbody tr").forEach(function(tr){
+    function open(){
+      var p = findProfessional(tr.getAttribute("data-id"));
+      if (p) openProfessionalModal(p);
+    }
+    tr.addEventListener("click", open);
+    tr.addEventListener("keydown", function(e){ if (e.key === "Enter") open(); });
   });
 }
 

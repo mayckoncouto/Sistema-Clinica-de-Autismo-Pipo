@@ -173,6 +173,14 @@ testes continuam usando o mesmo mock.
   existir" (também ignora acento/maiúscula na busca e na checagem de
   duplicidade).
 - Cores customizáveis por especialidade e por sala.
+- Profissionais em **tabela** igual à de Pacientes (`.pat-table`): busca
+  (`#profListSearch`, nome/especialidade/sala, sem acento), contador
+  "X de Y profissionais", ordenação por coluna (`state.profSort`) e coluna
+  "Salas onde atende" calculada das colunas das salas. Clique na linha edita.
+- **Toda exclusão pede confirmação** numa janela própria (`confirmDialog()`,
+  host `#confirmHost` por cima do cadastro aberto, foco inicial em Cancelar):
+  paciente, profissional, sala, e — na hora de salvar — colunas tiradas de
+  uma sala, especialidades e convênios removidos.
 
 ### Linhas estruturais cinza na grade
 A coluna de horário (sticky à esquerda) tinha um "risco branco" nas linhas que
