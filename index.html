@@ -161,6 +161,13 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
 .btn.primary:hover{filter:brightness(1.06)}
 .btn.danger{color:var(--danger);border-color:var(--danger-weak)}
+.btn.danger-solid{background:var(--danger);color:#fff;border-color:transparent}
+.btn.danger-solid:hover{filter:brightness(1.08);background:var(--danger)}
+.confirm-overlay{z-index:60}
+.confirm-msg{font-size:13px;line-height:1.5;color:var(--ink-2)}
+.confirm-msg b{color:var(--ink)}
+.confirm-list{margin:6px 0 0 18px;padding:0;max-height:160px;overflow:auto}
+.confirm-list li{font-weight:700;color:var(--ink)}
 .btn.ghost{border-color:transparent;background:transparent}
 .btn:disabled{opacity:.5;cursor:default}
 .spacer{flex:1}
@@ -1110,6 +1117,51 @@ function setReadonlyBanner(on){
   var b = document.getElementById("readonlyBanner");
   if (b) b.className = "readonly-banner" + (on ? " on" : "");
 }
+/* Janela de confirmação padrão para exclusões. Abre POR CIMA de qualquer
+ * janela de cadastro já aberta (host próprio, fora do #modalHost) e devolve
+ * uma Promise<boolean>. opts: {title, message (HTML já escapado), confirmLabel}.
+ * Enter confirma só se o foco estiver no botão; Esc e clique fora cancelam.
+ */
+function confirmDialog(opts){
+  return new Promise(function(resolve){
+    var host = document.getElementById("confirmHost");
+    if (!host){
+      host = document.createElement("div");
+      host.id = "confirmHost";
+      document.body.appendChild(host);
+    }
+    host.innerHTML =
+      '<div class="overlay confirm-overlay" id="ovConfirm" role="alertdialog" aria-modal="true" aria-labelledby="cfTitle">' +
+        '<div class="modal" style="max-width:400px">' +
+          '<div class="modal-head"><div><h3 id="cfTitle">'+esc(opts.title || "Confirmar exclusão")+'</h3></div></div>' +
+          '<div class="modal-body"><div class="confirm-msg">'+(opts.message || "")+'</div></div>' +
+          '<div class="modal-foot"><div class="spacer"></div>' +
+            '<button class="btn ghost" id="cfCancel">Cancelar</button>' +
+            '<button class="btn danger-solid" id="cfOk">'+esc(opts.confirmLabel || "Excluir")+'</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    var ov = document.getElementById("ovConfirm");
+    function done(v){
+      document.removeEventListener("keydown", onKey, true);
+      host.innerHTML = "";
+      resolve(v);
+    }
+    function onKey(e){
+      if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); done(false); }
+    }
+    document.addEventListener("keydown", onKey, true);
+    ov.addEventListener("mousedown", function(e){ if (e.target === ov) done(false); });
+    document.getElementById("cfCancel").addEventListener("click", function(){ done(false); });
+    document.getElementById("cfOk").addEventListener("click", function(){ done(true); });
+    // Foco em "Cancelar": um Enter distraído não exclui nada.
+    document.getElementById("cfCancel").focus();
+  });
+}
+function namesList(names){
+  return '<ul class="confirm-list">' + names.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join("") + '</ul>';
+}
+
 var toastTimer = null;
 window.showToast = function(msg, isErr){ showToast(msg, isErr); }; // usado por js/pipo-supabase.js e js/usuarios.js
 function showToast(msg, isErr){
@@ -3020,8 +3072,15 @@ function openPatientModal(p){
 
   if (!isNew){
     document.getElementById("pDelete").addEventListener("click", function(){
-      var list = state.patients.filter(function(x){ return x.id !== v.id; });
-      writePatients(list).then(close);
+      confirmDialog({
+        title: "Excluir paciente",
+        message: "Excluir o paciente <b>"+esc(v.nome || "")+"</b> do cadastro?<br>Os atendimentos já marcados na agenda não são apagados.",
+        confirmLabel: "Excluir paciente"
+      }).then(function(ok){
+        if (!ok) return;
+        var list = state.patients.filter(function(x){ return x.id !== v.id; });
+        writePatients(list).then(close);
+      });
     });
   }
   document.getElementById("pSave").addEventListener("click", function(){
@@ -3242,7 +3301,16 @@ function openSpecialtiesModal(){
       .map(function(s){ return {id:s.id, name:(s.name||"").trim(), sigla:(s.sigla||"").trim().toUpperCase(), color:s.color||"teal"}; })
       .filter(function(s){ return s.name; })
       .map(function(s){ return {id: s.id || uid(slugify(s.name) || "esp"), name: s.name, sigla: s.sigla, color: s.color}; });
-    writeSpecialties(clean).then(close);
+    var keptIds = clean.map(function(s){ return s.id; });
+    var removed = state.specialties.filter(function(s){ return keptIds.indexOf(s.id) === -1; });
+    (removed.length ? confirmDialog({
+      title: removed.length === 1 ? "Remover especialidade" : "Remover especialidades",
+      message: (removed.length === 1 ? "Esta especialidade será removida do cadastro:" : "Estas especialidades serão removidas do cadastro:") + namesList(removed.map(function(s){ return s.name; })) +
+        "As horas já preenchidas nos pacientes não são apagadas.",
+      confirmLabel: "Remover e salvar"
+    }) : Promise.resolve(true)).then(function(ok){
+      if (ok) writeSpecialties(clean).then(close);
+    });
   });
 }
 
@@ -3321,7 +3389,16 @@ function openConveniosModal(){
       .map(function(c){ return {id:c.id, name:(c.name||"").trim()}; })
       .filter(function(c){ return c.name; })
       .map(function(c){ return {id: c.id || uid(slugify(c.name) || "conv"), name: c.name}; });
-    writeConvenios(clean).then(close);
+    var keptIds = clean.map(function(c){ return c.id; });
+    var removed = state.convenios.filter(function(c){ return keptIds.indexOf(c.id) === -1; });
+    (removed.length ? confirmDialog({
+      title: removed.length === 1 ? "Remover convênio" : "Remover convênios",
+      message: (removed.length === 1 ? "Este convênio será removido do cadastro:" : "Estes convênios serão removidos do cadastro:") + namesList(removed.map(function(c){ return c.name; })) +
+        "Os pacientes já vinculados mantêm o convênio salvo.",
+      confirmLabel: "Remover e salvar"
+    }) : Promise.resolve(true)).then(function(ok){
+      if (ok) writeConvenios(clean).then(close);
+    });
   });
 }
 
@@ -3395,16 +3472,16 @@ function openProfessionalModal(p){
   document.getElementById("profCancel").addEventListener("click", close);
 
   if (!isNew){
-    var deleteArmed = false;
-    var deleteBtn = document.getElementById("profDelete");
-    deleteBtn.addEventListener("click", function(){
-      if (!deleteArmed){
-        deleteArmed = true;
-        deleteBtn.textContent = "Clique de novo para confirmar";
-        return;
-      }
-      var list = state.professionals.filter(function(x){ return x.id !== p.id; });
-      writeProfessionals(list).then(close);
+    document.getElementById("profDelete").addEventListener("click", function(){
+      confirmDialog({
+        title: "Excluir profissional",
+        message: "Excluir o profissional <b>"+esc(p.name || "")+"</b> do cadastro?<br>As colunas de sala onde ele atende continuam na agenda com o último nome salvo.",
+        confirmLabel: "Excluir profissional"
+      }).then(function(ok){
+        if (!ok) return;
+        var list = state.professionals.filter(function(x){ return x.id !== p.id; });
+        writeProfessionals(list).then(close);
+      });
     });
   }
 
@@ -3582,16 +3659,16 @@ function openRoomModal(r){
   });
 
   if (!isNew){
-    var deleteArmed = false;
-    var deleteBtn = document.getElementById("rmDelete");
-    deleteBtn.addEventListener("click", function(){
-      if (!deleteArmed){
-        deleteArmed = true;
-        deleteBtn.textContent = "Clique de novo para confirmar";
-        return;
-      }
-      var list = state.rooms.filter(function(x){ return x.id !== r.id; });
-      writeRooms(list).then(close);
+    document.getElementById("rmDelete").addEventListener("click", function(){
+      confirmDialog({
+        title: "Excluir sala",
+        message: "Excluir a sala <b>"+esc(r.name || "")+"</b>?<br>Ela some da agenda, e os atendimentos marcados nas colunas dela deixam de aparecer.",
+        confirmLabel: "Excluir sala"
+      }).then(function(ok){
+        if (!ok) return;
+        var list = state.rooms.filter(function(x){ return x.id !== r.id; });
+        writeRooms(list).then(close);
+      });
     });
   }
 
@@ -3613,7 +3690,18 @@ function openRoomModal(r){
     var list = state.rooms.slice();
     if (isNew){ list.push(rec); }
     else { list = list.map(function(x){ return x.id===rec.id ? rec : x; }); }
-    writeRooms(list).then(close);
+    // Colunas (profissionais) tiradas desta sala: pedir confirmação antes de salvar.
+    var keptSeatIds = cleanTherapists.map(function(t){ return t.id; });
+    var removedSeats = isNew ? [] : (r.therapists || []).filter(function(t){ return keptSeatIds.indexOf(t.id) === -1; });
+    (removedSeats.length ? confirmDialog({
+      title: removedSeats.length === 1 ? "Remover coluna da sala" : "Remover colunas da sala",
+      message: (removedSeats.length === 1 ? "Esta coluna será removida" : "Estas colunas serão removidas") +
+        " da sala <b>"+esc(name)+"</b>:" + namesList(removedSeats.map(therapistDisplayName)) +
+        (removedSeats.length === 1 ? "Os atendimentos marcados nela deixam de aparecer na agenda." : "Os atendimentos marcados nelas deixam de aparecer na agenda."),
+      confirmLabel: "Remover e salvar"
+    }) : Promise.resolve(true)).then(function(ok){
+      if (ok) writeRooms(list).then(close);
+    });
   });
 }
 
