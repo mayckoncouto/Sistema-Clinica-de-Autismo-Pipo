@@ -76,15 +76,26 @@ testes continuam usando o mesmo mock.
   `pipo-supabase.js` por cima do app; `window.claude.use("db")` só resolve
   depois do login, então o app nem começa a carregar dados antes disso.
 - Cadastro público de contas deve ficar **desligado** no Supabase; quem cria
-  usuários é o administrador, na aba **Usuários** (nome, e-mail, senha
-  inicial, administrador, grade de permissões). A pessoa troca a senha depois
-  pelo botão "Trocar senha" no topo.
-- O **primeiro usuário criado no projeto vira administrador** (trigger
-  `handle_new_user`). O banco nunca deixa ficar sem administrador ativo
-  (trigger `profiles_guard`).
-- Tabela `public.profiles`: `full_name`, `is_admin`, `active`, `permissions`
-  (jsonb `{agenda|pacientes|profissionais|salas: {view,create,edit,delete}}`).
-  Padrão para usuário novo: **só visualizar** em tudo.
+  usuários é o administrador. A pessoa troca a senha depois pelo botão
+  "Trocar senha" no topo.
+- **Permissão por NÍVEL, não por pessoa** (desde 2026-09-30, migração
+  `supabase/2026-09-30-niveis-de-permissao.sql`). Tabela `public.roles`
+  com 4 níveis fixos: `administrador` (is_admin, acesso total, não editável —
+  trigger `roles_guard`), `financeiro`, `profissional`, `secretaria`, cada um
+  com `permissions` jsonb `{agenda|pacientes|profissionais|salas:
+  {view,create,edit,delete}}`. `profiles.role_id` aponta o nível.
+  Usuários em 2026-09-30: Mayckon = Administrador, Lucas = Secretária.
+- Duas abas, **só para o nível Administrador**: **Usuários** (nome, e-mail,
+  senha, nível, ativar/desativar, excluir — ninguém muda o próprio nível) e
+  **Níveis de permissão** (grade por nível, salvar/descartar por cartão).
+  Código em `js/usuarios.js`; o app lê o nível via
+  `profiles.select("*, role:roles(*)")` em `pipo-supabase.js`.
+- O **primeiro usuário criado no projeto vira Administrador**; os seguintes
+  nascem Profissional (só ver) até o admin escolher o nível (trigger
+  `handle_new_user`; a API de criação já grava o nível escolhido). O banco
+  nunca deixa ficar sem administrador ativo (trigger `profiles_guard`).
+- As colunas antigas `profiles.is_admin`/`profiles.permissions` ficaram no
+  banco de produção sem uso (transição); podem ser removidas.
 - Mapeamento módulo ↔ dados: `schedule/*` → agenda; `patients/all`,
   `config/specialties`, `config/convenios` → pacientes;
   `config/professionals` → profissionais; `config/rooms` → salas. A aba
@@ -102,7 +113,8 @@ testes continuam usando o mesmo mock.
   uma mensagem clara sem ir ao servidor; `applyPermissionsUI()` esconde abas
   e botões "+ Novo". Sem `window.pipoAuth` (testes) tudo isso vira no-op e
   vale só o `state.writable` antigo.
-- Permissão alterada pelo admin chega ao vivo (Realtime em `profiles`);
+- Nível trocado ou permissões do nível alteradas chegam ao vivo (Realtime
+  em `profiles` e `roles` → `reloadProfile()`);
   usuário desativado é deslogado e tem o login bloqueado (`ban_duration`).
 
 ## O que já está implementado (por área)

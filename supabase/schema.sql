@@ -10,13 +10,57 @@
 --                usava no Claude Artifact: 6 tipos de caminho fixos
 --                (config/rooms, config/specialties, config/convenios,
 --                 config/professionals, patients/all, schedule/<dia>-<semana>).
---   profiles   — um por usuário do Supabase Auth: nome, admin, ativo e a
---                grade de permissões módulo × ação.
+--   roles      — níveis de permissão (Administrador, Financeiro, Profissional,
+--                Secretária), cada um com a grade módulo × ação.
+--   profiles   — um por usuário do Supabase Auth: nome, ativo e o nível.
 --
 -- Segurança: RLS em tudo. A leitura exige usuário logado e ativo; a escrita
 -- é conferida AÇÃO POR AÇÃO por um trigger (incluir / editar / excluir),
 -- então esconder botões na tela não é a única barreira.
+--
+-- Histórico: projetos criados antes de 2026-09-30 tinham permissão por
+-- pessoa; a migração está em 2026-09-30-niveis-de-permissao.sql.
 -- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- roles (níveis de permissão)
+-- ---------------------------------------------------------------------
+create table if not exists public.roles (
+  id          text primary key,
+  name        text not null,
+  is_admin    boolean not null default false,
+  permissions jsonb not null default '{}'::jsonb,
+  sort        int not null default 0,
+  updated_at  timestamptz not null default now()
+);
+alter table public.roles enable row level security;
+
+insert into public.roles (id, name, is_admin, sort, permissions) values
+  ('administrador', 'Administrador', true, 1, '{
+    "agenda":        {"view": true, "create": true, "edit": true, "delete": true},
+    "pacientes":     {"view": true, "create": true, "edit": true, "delete": true},
+    "profissionais": {"view": true, "create": true, "edit": true, "delete": true},
+    "salas":         {"view": true, "create": true, "edit": true, "delete": true}
+  }'),
+  ('financeiro', 'Financeiro', false, 2, '{
+    "agenda":        {"view": true, "create": false, "edit": false, "delete": false},
+    "pacientes":     {"view": true, "create": true,  "edit": true,  "delete": false},
+    "profissionais": {"view": true, "create": false, "edit": false, "delete": false},
+    "salas":         {"view": true, "create": false, "edit": false, "delete": false}
+  }'),
+  ('profissional', 'Profissional', false, 3, '{
+    "agenda":        {"view": true, "create": false, "edit": false, "delete": false},
+    "pacientes":     {"view": true, "create": false, "edit": false, "delete": false},
+    "profissionais": {"view": true, "create": false, "edit": false, "delete": false},
+    "salas":         {"view": true, "create": false, "edit": false, "delete": false}
+  }'),
+  ('secretaria', 'Secretária', false, 4, '{
+    "agenda":        {"view": true, "create": true,  "edit": true,  "delete": true},
+    "pacientes":     {"view": true, "create": true,  "edit": true,  "delete": false},
+    "profissionais": {"view": true, "create": false, "edit": false, "delete": false},
+    "salas":         {"view": true, "create": false, "edit": false, "delete": false}
+  }')
+on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------
 -- profiles
@@ -25,14 +69,8 @@ create table if not exists public.profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   email       text not null default '',
   full_name   text not null default '',
-  is_admin    boolean not null default false,
+  role_id     text not null default 'profissional' references public.roles(id),
   active      boolean not null default true,
-  permissions jsonb not null default '{
-    "agenda":        {"view": true, "create": false, "edit": false, "delete": false},
-    "pacientes":     {"view": true, "create": false, "edit": false, "delete": false},
-    "profissionais": {"view": true, "create": false, "edit": false, "delete": false},
-    "salas":         {"view": true, "create": false, "edit": false, "delete": false}
-  }'::jsonb,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -64,14 +102,19 @@ $$;
 
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce((select is_admin and active from public.profiles where id = auth.uid()), false);
+  select coalesce((
+    select p.active and r.is_admin
+    from public.profiles p join public.roles r on r.id = p.role_id
+    where p.id = auth.uid()
+  ), false);
 $$;
 
 create or replace function public.has_perm(p_module text, p_action text)
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce((
-    select p.active and (p.is_admin or coalesce((p.permissions -> p_module ->> p_action)::boolean, false))
-    from public.profiles p where p.id = auth.uid()
+    select p.active and (r.is_admin or coalesce((r.permissions -> p_module ->> p_action)::boolean, false))
+    from public.profiles p join public.roles r on r.id = p.role_id
+    where p.id = auth.uid()
   ), false);
 $$;
 
@@ -91,17 +134,18 @@ $$;
 
 -- ---------------------------------------------------------------------
 -- Perfil criado automaticamente para cada novo usuário do Auth.
--- O PRIMEIRO usuário criado no projeto vira administrador.
+-- O PRIMEIRO usuário criado no projeto vira Administrador; os demais nascem
+-- "Profissional" (só visualizar) e o administrador ajusta na tela.
 -- ---------------------------------------------------------------------
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.profiles (id, email, full_name, is_admin)
+  insert into public.profiles (id, email, full_name, role_id)
   values (
     new.id,
     coalesce(new.email, ''),
     coalesce(new.raw_user_meta_data ->> 'full_name', ''),
-    not exists (select 1 from public.profiles)
+    case when exists (select 1 from public.profiles) then 'profissional' else 'administrador' end
   )
   on conflict (id) do nothing;
   return new;
@@ -115,14 +159,19 @@ create trigger on_auth_user_created
 -- Nunca deixar o sistema sem nenhum administrador ativo.
 create or replace function public.profiles_guard()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_was_admin boolean;
+  v_is_admin  boolean;
 begin
   new.updated_at := now();
   new.id := old.id;
   new.email := old.email; -- e-mail só muda pelo Auth
-  if (old.is_admin and old.active) and not (new.is_admin and new.active) then
+  select is_admin into v_was_admin from public.roles where id = old.role_id;
+  select is_admin into v_is_admin  from public.roles where id = new.role_id;
+  if (coalesce(v_was_admin, false) and old.active) and not (coalesce(v_is_admin, false) and new.active) then
     if not exists (
-      select 1 from public.profiles
-      where is_admin and active and id <> old.id
+      select 1 from public.profiles p join public.roles r on r.id = p.role_id
+      where r.is_admin and p.active and p.id <> old.id
     ) then
       raise exception 'É preciso manter pelo menos um administrador ativo.'
         using errcode = '42501';
@@ -135,6 +184,26 @@ drop trigger if exists profiles_guard on public.profiles;
 create trigger profiles_guard
   before update on public.profiles
   for each row execute function public.profiles_guard();
+
+-- Níveis: o Administrador tem sempre acesso total (não editável); nenhum
+-- outro nível pode virar administrador pela tela.
+create or replace function public.roles_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.id := old.id;
+  new.is_admin := old.is_admin;
+  new.sort := old.sort;
+  if old.is_admin then
+    new.permissions := old.permissions;
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;
+
+drop trigger if exists roles_guard on public.roles;
+create trigger roles_guard
+  before update on public.roles
+  for each row execute function public.roles_guard();
 
 -- ---------------------------------------------------------------------
 -- Conferência de permissão por ação na escrita de documentos.
@@ -344,11 +413,26 @@ create policy profiles_update on public.profiles
   using (public.is_admin())
   with check (public.is_admin());
 
+-- roles: todo usuário ativo lê (precisa do próprio nível); só admin altera.
+-- Criar/apagar nível não existe pela tela — são os 4 níveis fixos.
+drop policy if exists roles_select on public.roles;
+create policy roles_select on public.roles
+  for select to authenticated
+  using (public.is_active_user());
+
+drop policy if exists roles_update on public.roles;
+create policy roles_update on public.roles
+  for update to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
 -- Privilégios: nada para anônimos.
 revoke all on public.documents from anon;
 revoke all on public.profiles  from anon;
+revoke all on public.roles     from anon;
 grant select, insert, update, delete on public.documents to authenticated;
 grant select, update on public.profiles to authenticated;
+grant select, update on public.roles to authenticated;
 grant execute on function public.patch_bookings(text, jsonb) to authenticated;
 revoke execute on function public.patch_bookings(text, jsonb) from anon;
 
@@ -368,5 +452,11 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'profiles'
   ) then
     alter publication supabase_realtime add table public.profiles;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'roles'
+  ) then
+    alter publication supabase_realtime add table public.roles;
   end if;
 end $$;

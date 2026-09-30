@@ -22,6 +22,7 @@
   var readyResolve;
   var ready = new Promise(function (r) { readyResolve = r; });
   var profileListeners = [];
+  var roleListeners = [];
 
   /* ---------------- documentos (substitui o db do Artifact) ---------------- */
   var docListeners = {};   // path -> [{cb, errCb}]
@@ -62,8 +63,14 @@
         lastData[row.path] = payload.eventType === "DELETE" ? undefined : row.data;
         emit(row.path);
       })
+      // Meu perfil (nível/ativo) ou meu nível (permissões) mudou: recarrega,
+      // porque o evento não traz o nível já juntado ao perfil.
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, function (payload) {
-        if (profile && payload.new && payload.new.id === profile.id) setProfile(payload.new);
+        if (profile && payload.new && payload.new.id === profile.id) reloadProfile();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "roles" }, function (payload) {
+        if (profile && payload.new && payload.new.id === profile.role_id) reloadProfile();
+        roleListeners.forEach(function (fn) { try { fn(payload.new); } catch (e) { console.error(e); } });
       })
       .subscribe(function (status) {
         if (status === "SUBSCRIBED") {
@@ -134,15 +141,17 @@
   }
 
   /* ---------------- permissões ---------------- */
+  // As permissões vêm do NÍVEL do usuário (profile.role, tabela roles).
+  function isAdmin() {
+    return !!(profile && profile.active && profile.role && profile.role.is_admin);
+  }
   function can(module, action) {
-    if (!profile || !profile.active) return false;
-    if (profile.is_admin) return true;
-    var p = profile.permissions || {};
+    if (!profile || !profile.active || !profile.role) return false;
+    if (profile.role.is_admin) return true;
+    var p = profile.role.permissions || {};
     return !!(p[module] && p[module][action]);
   }
   function canWriteAnything() {
-    if (!profile || !profile.active) return false;
-    if (profile.is_admin) return true;
     return MODULES.some(function (m) { return can(m, "create") || can(m, "edit") || can(m, "delete"); });
   }
 
@@ -158,11 +167,15 @@
   }
 
   function loadProfile() {
-    return client.from("profiles").select("*").eq("id", session.user.id).maybeSingle().then(function (r) {
+    return client.from("profiles").select("*, role:roles(*)").eq("id", session.user.id).maybeSingle().then(function (r) {
       if (r.error) throw r.error;
       if (!r.data) throw new Error("Perfil não encontrado para este usuário.");
       return r.data;
     });
+  }
+  function reloadProfile() {
+    if (!session) return;
+    loadProfile().then(setProfile).catch(function () {});
   }
 
   /* ---------------- login ---------------- */
@@ -188,7 +201,8 @@
       ".user-pill .user-name{font-weight:700;color:var(--ink,#182523);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
       ".user-pill button{font:inherit;font-size:12px;font-weight:600;padding:5px 9px;border:1px solid var(--line,#dde3e1);border-radius:7px;background:var(--surface,#fff);color:var(--ink-2,#465350);cursor:pointer}" +
       ".user-pill button:hover{border-color:var(--line-strong,#c7cfcc);color:var(--ink,#182523)}" +
-      "@media (max-width:640px){.user-pill .user-name{display:none}}";
+      ".user-pill .user-role{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--accent-weak,#e2f0ee);color:var(--accent,#2c7a72);white-space:nowrap}" +
+      "@media (max-width:640px){.user-pill .user-name,.user-pill .user-role{display:none}}";
     var st = document.createElement("style");
     st.textContent = css;
     document.head.appendChild(st);
@@ -255,6 +269,7 @@
     host.innerHTML =
       '<span class="user-name" title="' + escapeHtml(profile.email) + '">' +
         escapeHtml(profile.full_name || profile.email) + "</span>" +
+      (profile.role ? '<span class="user-role">' + escapeHtml(profile.role.name) + "</span>" : "") +
       '<button type="button" data-act="senha">Trocar senha</button>' +
       '<button type="button" data-act="sair">Sair</button>';
   }
@@ -380,7 +395,8 @@
     ACTIONS: ACTIONS,
     ready: ready,
     can: can,
-    isAdmin: function () { return !!(profile && profile.active && profile.is_admin); },
+    isAdmin: isAdmin,
+    onRoleChange: function (fn) { roleListeners.push(fn); },
     profile: function () { return profile; },
     session: function () { return session; },
     onProfile: function (fn) { profileListeners.push(fn); if (profile) fn(profile); },

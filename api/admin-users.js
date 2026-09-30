@@ -2,11 +2,11 @@
 //
 // Criar/remover usuário, trocar a senha de outra pessoa e bloquear o login
 // exigem a service role key do Supabase, que não pode ir para o navegador —
-// por isso estas ações passam por aqui. Editar nome/permissões é feito
-// direto pelo app (a política RLS de profiles só deixa admin alterar).
+// por isso estas ações passam por aqui. Editar nome/nível e as permissões dos
+// níveis é feito direto pelo app (as políticas RLS só deixam admin alterar).
 //
 // POST /api/admin-users   Authorization: Bearer <access_token do usuário>
-//   { action: "create", email, password, full_name, is_admin, permissions }
+//   { action: "create", email, password, full_name, role_id }
 //   { action: "set_password", id, password }
 //   { action: "set_active", id, active }
 //   { action: "delete", id }
@@ -48,11 +48,11 @@ async function currentAdmin(req) {
   });
   if (!me.ok || !me.body || !me.body.id) return null;
   var prof = await call(
-    "/rest/v1/profiles?select=id,is_admin,active&id=eq." + encodeURIComponent(me.body.id),
+    "/rest/v1/profiles?select=id,active,role:roles(is_admin)&id=eq." + encodeURIComponent(me.body.id),
     { headers: adminHeaders() }
   );
   var row = prof.ok && Array.isArray(prof.body) ? prof.body[0] : null;
-  if (!row || !row.is_admin || !row.active) return null;
+  if (!row || !row.active || !row.role || !row.role.is_admin) return null;
   return row;
 }
 
@@ -95,6 +95,11 @@ module.exports = async function handler(req, res) {
       if (!validPassword(body.password)) {
         res.status(400).json({ error: "A senha precisa ter pelo menos 8 caracteres." }); return;
       }
+      var roleId = String(body.role_id || "");
+      var roleCheck = await call("/rest/v1/roles?select=id&id=eq." + encodeURIComponent(roleId), { headers: adminHeaders() });
+      if (!roleId || !roleCheck.ok || !Array.isArray(roleCheck.body) || !roleCheck.body.length) {
+        res.status(400).json({ error: "Escolha um nível de permissão válido." }); return;
+      }
       var created = await call("/auth/v1/admin/users", {
         method: "POST",
         headers: adminHeaders(),
@@ -111,16 +116,15 @@ module.exports = async function handler(req, res) {
         res.status(400).json({ error: m }); return;
       }
       var newId = created.body.id || (created.body.user && created.body.user.id);
-      // O trigger handle_new_user já criou o perfil; completa nome/permissões.
-      var patch = { full_name: String(body.full_name || "").trim(), is_admin: !!body.is_admin };
-      if (body.permissions && typeof body.permissions === "object") patch.permissions = body.permissions;
+      // O trigger handle_new_user já criou o perfil; completa nome e nível.
+      var patch = { full_name: String(body.full_name || "").trim(), role_id: roleId };
       var upd = await call("/rest/v1/profiles?id=eq." + encodeURIComponent(newId), {
         method: "PATCH",
         headers: Object.assign(adminHeaders(), { Prefer: "return=representation" }),
         body: JSON.stringify(patch)
       });
       if (!upd.ok) {
-        res.status(500).json({ error: "Usuário criado, mas as permissões não foram salvas: " + errMsg(upd, "") }); return;
+        res.status(500).json({ error: "Usuário criado, mas o nível não foi salvo: " + errMsg(upd, "") }); return;
       }
       res.status(200).json({ ok: true, profile: Array.isArray(upd.body) ? upd.body[0] : null });
       return;
