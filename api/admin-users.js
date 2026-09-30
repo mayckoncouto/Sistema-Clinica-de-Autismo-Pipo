@@ -107,7 +107,8 @@ module.exports = async function handler(req, res) {
           email: email,
           password: body.password,
           email_confirm: true,
-          user_metadata: { full_name: String(body.full_name || "").trim() }
+          // role_id aqui faz o trigger handle_new_user já criar o perfil no nível certo.
+          user_metadata: { full_name: String(body.full_name || "").trim(), role_id: roleId }
         })
       });
       if (!created.ok) {

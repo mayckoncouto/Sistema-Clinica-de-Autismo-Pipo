@@ -68,9 +68,9 @@
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, function (payload) {
         if (profile && payload.new && payload.new.id === profile.id) reloadProfile();
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "roles" }, function (payload) {
+      .on("postgres_changes", { event: "*", schema: "public", table: "roles" }, function (payload) {
         if (profile && payload.new && payload.new.id === profile.role_id) reloadProfile();
-        roleListeners.forEach(function (fn) { try { fn(payload.new); } catch (e) { console.error(e); } });
+        roleListeners.forEach(function (fn) { try { fn(payload); } catch (e) { console.error(e); } });
       })
       .subscribe(function (status) {
         if (status === "SUBSCRIBED") {

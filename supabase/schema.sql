@@ -31,9 +31,12 @@ create table if not exists public.roles (
   is_admin    boolean not null default false,
   permissions jsonb not null default '{}'::jsonb,
   sort        int not null default 0,
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  constraint roles_id_format check (id ~ '^[a-z0-9][a-z0-9-]{0,62}$'),
+  constraint roles_name_not_blank check (length(btrim(name)) > 0)
 );
 alter table public.roles enable row level security;
+create unique index if not exists roles_name_unique on public.roles (lower(btrim(name)));
 
 insert into public.roles (id, name, is_admin, sort, permissions) values
   ('administrador', 'Administrador', true, 1, '{
@@ -69,7 +72,7 @@ create table if not exists public.profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   email       text not null default '',
   full_name   text not null default '',
-  role_id     text not null default 'profissional' references public.roles(id),
+  role_id     text not null references public.roles(id),
   active      boolean not null default true,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
@@ -134,19 +137,32 @@ $$;
 
 -- ---------------------------------------------------------------------
 -- Perfil criado automaticamente para cada novo usuário do Auth.
--- O PRIMEIRO usuário criado no projeto vira Administrador; os demais nascem
--- "Profissional" (só visualizar) e o administrador ajusta na tela.
+-- O PRIMEIRO usuário criado no projeto vira Administrador. Os demais recebem
+-- o nível escolhido pelo administrador (a API manda em user_metadata.role_id),
+-- com reserva para "Profissional" ou o primeiro nível não-administrador.
 -- ---------------------------------------------------------------------
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_role text;
 begin
+  if not exists (select 1 from public.profiles) then
+    v_role := (select id from public.roles where is_admin order by sort limit 1);
+  else
+    select id into v_role from public.roles
+      where id = new.raw_user_meta_data ->> 'role_id' and not is_admin;
+    if v_role is null then
+      select id into v_role from public.roles where id = 'profissional';
+    end if;
+    if v_role is null then
+      select id into v_role from public.roles where not is_admin order by sort limit 1;
+    end if;
+    if v_role is null then
+      raise exception 'Crie um nível de permissão antes de cadastrar usuários.';
+    end if;
+  end if;
   insert into public.profiles (id, email, full_name, role_id)
-  values (
-    new.id,
-    coalesce(new.email, ''),
-    coalesce(new.raw_user_meta_data ->> 'full_name', ''),
-    case when exists (select 1 from public.profiles) then 'profissional' else 'administrador' end
-  )
+  values (new.id, coalesce(new.email, ''), coalesce(new.raw_user_meta_data ->> 'full_name', ''), v_role)
   on conflict (id) do nothing;
   return new;
 end $$;
@@ -185,17 +201,34 @@ create trigger profiles_guard
   before update on public.profiles
   for each row execute function public.profiles_guard();
 
--- Níveis: o Administrador tem sempre acesso total (não editável); nenhum
--- outro nível pode virar administrador pela tela.
+-- Níveis: o Administrador fica totalmente travado (acesso total, não pode
+-- ser alterado nem excluído). Os demais: nome e permissões editáveis, nunca
+-- viram administrador; nível com usuários não pode ser excluído.
+create or replace function public.roles_before_insert()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.is_admin := false;
+  new.name := btrim(new.name);
+  new.sort := coalesce((select max(sort) from public.roles), 0) + 1;
+  new.updated_at := now();
+  return new;
+end $$;
+
+drop trigger if exists roles_before_insert on public.roles;
+create trigger roles_before_insert
+  before insert on public.roles
+  for each row execute function public.roles_before_insert();
+
 create or replace function public.roles_guard()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  new.id := old.id;
-  new.is_admin := old.is_admin;
-  new.sort := old.sort;
   if old.is_admin then
-    new.permissions := old.permissions;
+    return old;
   end if;
+  new.id := old.id;
+  new.is_admin := false;
+  new.sort := old.sort;
+  new.name := btrim(new.name);
   new.updated_at := now();
   return new;
 end $$;
@@ -204,6 +237,26 @@ drop trigger if exists roles_guard on public.roles;
 create trigger roles_guard
   before update on public.roles
   for each row execute function public.roles_guard();
+
+create or replace function public.roles_before_delete()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  n int;
+begin
+  if old.is_admin then
+    raise exception 'O nível Administrador não pode ser excluído.' using errcode = '42501';
+  end if;
+  select count(*) into n from public.profiles where role_id = old.id;
+  if n > 0 then
+    raise exception 'Este nível ainda tem % usuário(s). Mude-os de nível antes de excluir.', n using errcode = '23503';
+  end if;
+  return old;
+end $$;
+
+drop trigger if exists roles_before_delete on public.roles;
+create trigger roles_before_delete
+  before delete on public.roles
+  for each row execute function public.roles_before_delete();
 
 -- ---------------------------------------------------------------------
 -- Conferência de permissão por ação na escrita de documentos.
@@ -413,12 +466,17 @@ create policy profiles_update on public.profiles
   using (public.is_admin())
   with check (public.is_admin());
 
--- roles: todo usuário ativo lê (precisa do próprio nível); só admin altera.
--- Criar/apagar nível não existe pela tela — são os 4 níveis fixos.
+-- roles: todo usuário ativo lê (precisa do próprio nível); só admin cria,
+-- altera e exclui (os triggers acima protegem o nível Administrador).
 drop policy if exists roles_select on public.roles;
 create policy roles_select on public.roles
   for select to authenticated
   using (public.is_active_user());
+
+drop policy if exists roles_insert on public.roles;
+create policy roles_insert on public.roles
+  for insert to authenticated
+  with check (public.is_admin());
 
 drop policy if exists roles_update on public.roles;
 create policy roles_update on public.roles
@@ -426,13 +484,18 @@ create policy roles_update on public.roles
   using (public.is_admin())
   with check (public.is_admin());
 
+drop policy if exists roles_delete on public.roles;
+create policy roles_delete on public.roles
+  for delete to authenticated
+  using (public.is_admin());
+
 -- Privilégios: nada para anônimos.
 revoke all on public.documents from anon;
 revoke all on public.profiles  from anon;
 revoke all on public.roles     from anon;
 grant select, insert, update, delete on public.documents to authenticated;
 grant select, update on public.profiles to authenticated;
-grant select, update on public.roles to authenticated;
+grant select, insert, update, delete on public.roles to authenticated;
 grant execute on function public.patch_bookings(text, jsonb) to authenticated;
 revoke execute on function public.patch_bookings(text, jsonb) from anon;
 

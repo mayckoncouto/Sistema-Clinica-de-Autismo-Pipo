@@ -28,7 +28,6 @@
 
   var users = [], roles = [];
   var loaded = { users: false, roles: false };
-  var dirtyRoles = {}; // roleId -> permissões ainda não salvas na tela de níveis
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -66,17 +65,6 @@
       ".perm-grid td small{display:block;color:var(--muted);font-size:10.5px;font-weight:500}" +
       ".perm-grid input{width:16px;height:16px;cursor:pointer}" +
       ".perm-grid input:disabled{cursor:default}" +
-      ".role-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;padding:0 14px 14px;overflow:auto;flex:1;align-content:start}" +
-      ".role-card{border:1px solid var(--line);border-radius:10px;background:var(--surface);display:flex;flex-direction:column}" +
-      ".role-card-head{display:flex;align-items:center;gap:8px;padding:12px 14px 6px}" +
-      ".role-card-head h4{margin:0;font-size:14px;font-weight:800;color:var(--ink)}" +
-      ".role-card-head .spacer{flex:1}" +
-      ".role-card-body{padding:0 14px 6px}" +
-      ".role-card-note{font-size:11.5px;color:var(--muted);padding:0 14px 8px}" +
-      ".role-card-foot{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}" +
-      ".role-card-foot .spacer{flex:1}" +
-      ".role-card.dirty{border-color:var(--warn)}" +
-      ".role-dirty-note{font-size:11.5px;font-weight:700;color:var(--warn)}" +
       ".role-pick{display:flex;flex-direction:column;gap:6px}" +
       ".role-pick label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:12.5px}" +
       ".role-pick label:has(input:checked){border-color:var(--accent);background:var(--accent-weak)}" +
@@ -308,22 +296,18 @@
   }
 
   /* ================= Tela: Níveis de permissão ================= */
-  function permsOf(role) { return dirtyRoles[role.id] || role.permissions || {}; }
-
-  function roleGridHtml(role) {
-    var perms = permsOf(role);
-    return '<table class="perm-grid" data-role="' + esc(role.id) + '"><thead><tr><th>Tela</th>' +
-      ACTIONS.map(function (a) { return "<th>" + a.label + "</th>"; }).join("") +
-      "</tr></thead><tbody>" +
-      MODULES.map(function (m) {
-        return "<tr><td><b>" + m.label + "</b>" + (m.hint ? "<small>" + m.hint + "</small>" : "") + "</td>" +
-          ACTIONS.map(function (a) {
-            var on = role.is_admin || !!(perms[m.key] && perms[m.key][a.key]);
-            return '<td><input type="checkbox" data-m="' + m.key + '" data-a="' + a.key + '"' + (on ? " checked" : "") +
-              (role.is_admin ? " disabled" : "") + ' aria-label="' + a.label + " em " + m.label + " (" + esc(role.name) + ')"></td>';
-          }).join("") + "</tr>";
-      }).join("") +
-      "</tbody></table>";
+  function normalizePerms(p) {
+    var out = {};
+    p = p || {};
+    MODULES.forEach(function (m) {
+      out[m.key] = {};
+      ACTIONS.forEach(function (a) { out[m.key][a.key] = !!(p[m.key] && p[m.key][a.key]); });
+    });
+    return out;
+  }
+  function slugify(s) {
+    return String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "nivel";
   }
 
   function renderRoles() {
@@ -335,85 +319,152 @@
       '<div class="pat-toolbar">' +
         '<div><b style="font-size:13px">Níveis de permissão</b>' +
           '<div class="pat-count" style="margin-top:2px">O que cada nível pode fazer em cada tela. ' +
-          'A mudança vale na hora para todos os usuários daquele nível.</div></div>' +
+          'Uma mudança vale na hora para todos os usuários daquele nível.</div></div>' +
+        '<div class="spacer"></div>' +
+        '<button class="btn primary" id="addRoleBtn">+ Novo nível</button>' +
       "</div>" +
-      (!(loaded.users && loaded.roles) ? '<div class="pat-count" style="padding:12px 14px">Carregando…</div>' :
-      '<div class="role-cards">' + roles.map(function (r) {
-        var n = counts[r.id] || 0;
-        var dirty = !!dirtyRoles[r.id];
-        return '<div class="role-card' + (dirty ? " dirty" : "") + '" data-role-card="' + esc(r.id) + '">' +
-          '<div class="role-card-head"><h4>' + esc(r.name) + "</h4>" +
-            (r.is_admin ? '<span class="u-badge admin">Acesso total</span>' : "") +
-            '<div class="spacer"></div><span class="u-badge">' + n + (n === 1 ? " usuário" : " usuários") + "</span></div>" +
-          (r.is_admin ? '<div class="role-card-note">Único nível com acesso às telas de Usuários e Níveis de permissão. Não pode ser alterado.</div>' : "") +
-          '<div class="role-card-body">' + roleGridHtml(r) + "</div>" +
-          (r.is_admin ? "" :
-            '<div class="role-card-foot">' +
-              (dirty ? '<span class="role-dirty-note">Alterações não salvas</span>' : "") +
-              '<div class="spacer"></div>' +
-              '<button type="button" class="btn ghost" data-role-undo="' + esc(r.id) + '"' + (dirty ? "" : " disabled") + ">Descartar</button>" +
-              '<button type="button" class="btn primary" data-role-save="' + esc(r.id) + '"' + (dirty ? "" : " disabled") + ">Salvar</button>" +
-            "</div>") +
-        "</div>";
-      }).join("") + "</div>");
-
-    h.querySelectorAll("table.perm-grid").forEach(function (tbl) {
-      tbl.addEventListener("change", function (e) {
-        var c = e.target;
-        var role = roleById(tbl.getAttribute("data-role"));
-        if (!role || role.is_admin) return;
-        var m = c.getAttribute("data-m"), a = c.getAttribute("data-a");
-        // Incluir/editar/excluir sem "ver" não faz sentido: marca "ver" junto;
-        // desmarcar "ver" tira tudo daquela tela.
-        if (a !== "view" && c.checked) {
-          var v = tbl.querySelector('input[data-m="' + m + '"][data-a="view"]');
-          if (v) v.checked = true;
-        }
-        if (a === "view" && !c.checked) {
-          tbl.querySelectorAll('input[data-m="' + m + '"]').forEach(function (x) { x.checked = false; });
-        }
-        var p = {};
-        MODULES.forEach(function (mm) {
-          p[mm.key] = {};
-          ACTIONS.forEach(function (aa) {
-            var box = tbl.querySelector('input[data-m="' + mm.key + '"][data-a="' + aa.key + '"]');
-            p[mm.key][aa.key] = !!(box && box.checked);
-          });
-        });
-        if (JSON.stringify(p) === JSON.stringify(normalizePerms(role.permissions))) delete dirtyRoles[role.id];
-        else dirtyRoles[role.id] = p;
-        renderRoles();
-      });
-    });
-    h.querySelectorAll("[data-role-undo]").forEach(function (b) {
-      b.addEventListener("click", function () { delete dirtyRoles[b.getAttribute("data-role-undo")]; renderRoles(); });
-    });
-    h.querySelectorAll("[data-role-save]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var id = b.getAttribute("data-role-save");
-        var role = roleById(id);
-        var perms = dirtyRoles[id];
-        if (!role || !perms) return;
-        b.disabled = true;
-        auth.client.from("roles").update({ permissions: perms }).eq("id", id).then(function (r) {
-          if (r.error) { b.disabled = false; toast("Não foi possível salvar: " + friendlyDbError(r.error), true); return; }
-          role.permissions = perms;
-          delete dirtyRoles[id];
-          toast("Permissões do nível " + role.name + " salvas.");
-          renderRoles();
-        });
-      });
+      '<div class="adm-wrap">' +
+        (!(loaded.users && loaded.roles) ? '<div class="pat-count" style="padding:12px">Carregando…</div>' :
+        '<table class="adm-table"><thead><tr><th style="width:22%">Nível</th><th>Permissões</th><th style="width:12%">Usuários</th></tr></thead><tbody>' +
+          roles.map(function (r) {
+            var n = counts[r.id] || 0;
+            return '<tr data-role-id="' + esc(r.id) + '" tabindex="0">' +
+              '<td class="u-name">' + esc(r.name) + (r.is_admin ? ' <span class="u-badge admin">Acesso total</span>' : "") + "</td>" +
+              '<td class="pt-muted">' + esc(roleSummary(r)) + "</td>" +
+              '<td><span class="u-badge">' + n + (n === 1 ? " usuário" : " usuários") + "</span></td>" +
+            "</tr>";
+          }).join("") +
+        "</tbody></table>") +
+      "</div>";
+    document.getElementById("addRoleBtn").addEventListener("click", function () { openRoleModal(null); });
+    h.querySelectorAll("tbody tr[data-role-id]").forEach(function (tr) {
+      function open() { var r = roleById(tr.getAttribute("data-role-id")); if (r) openRoleModal(r); }
+      tr.addEventListener("click", open);
+      tr.addEventListener("keydown", function (e) { if (e.key === "Enter") open(); });
     });
   }
 
-  function normalizePerms(p) {
-    var out = {};
-    p = p || {};
-    MODULES.forEach(function (m) {
-      out[m.key] = {};
-      ACTIONS.forEach(function (a) { out[m.key][a.key] = !!(p[m.key] && p[m.key][a.key]); });
+  function roleGridHtml(perms, locked) {
+    return '<table class="perm-grid" id="rPermGrid"><thead><tr><th>Tela</th>' +
+      ACTIONS.map(function (a) { return "<th>" + a.label + "</th>"; }).join("") +
+      "</tr></thead><tbody>" +
+      MODULES.map(function (m) {
+        return "<tr><td><b>" + m.label + "</b>" + (m.hint ? "<small>" + m.hint + "</small>" : "") + "</td>" +
+          ACTIONS.map(function (a) {
+            var on = locked || !!(perms[m.key] && perms[m.key][a.key]);
+            return '<td><input type="checkbox" data-m="' + m.key + '" data-a="' + a.key + '"' + (on ? " checked" : "") +
+              (locked ? " disabled" : "") + ' aria-label="' + a.label + " em " + m.label + '"></td>';
+          }).join("") + "</tr>";
+      }).join("") +
+      "</tbody></table>";
+  }
+
+  function openRoleModal(role) {
+    var isNew = !role;
+    var locked = !!(role && role.is_admin);
+    var n = role ? users.filter(function (u) { return u.role_id === role.id; }).length : 0;
+    var mh = document.getElementById("modalHost");
+    mh.innerHTML =
+      '<div class="overlay" id="ovRole"><div class="modal wide" style="max-width:560px">' +
+        '<div class="modal-head"><div><h3>' + (isNew ? "Novo nível de permissão" : locked ? "Nível Administrador" : "Editar nível de permissão") + "</h3>" +
+          '<div class="modal-sub">' + (locked
+            ? "Acesso total, inclusive às telas de Usuários e Níveis de permissão. Este nível não pode ser alterado nem excluído."
+            : "Marque o que este nível pode fazer em cada tela. Incluir, editar ou excluir marcam \"Ver\" junto.") + "</div></div>" +
+          '<button class="modal-close" id="rClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-body">' +
+          '<div class="field"><label for="rName">Nome do nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
+          roleGridHtml(role ? (role.permissions || {}) : { agenda: { view: true }, pacientes: { view: true }, profissionais: { view: true }, salas: { view: true } }, locked) +
+          (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +
+        "</div>" +
+        '<div class="modal-foot">' +
+          (!isNew && !locked ? '<button class="btn danger" id="rDelete">Excluir nível</button>' : "<span></span>") +
+          '<div class="spacer"></div>' +
+          '<button class="btn ghost" id="rCancel">' + (locked ? "Fechar" : "Cancelar") + "</button>" +
+          (locked ? "" : '<button class="btn primary" id="rSave">' + (isNew ? "Criar nível" : "Salvar") + "</button>") +
+        "</div>" +
+      "</div></div>";
+
+    var ov = document.getElementById("ovRole");
+    function close() { mh.innerHTML = ""; }
+    ov.addEventListener("mousedown", function (e) { if (e.target === ov) close(); });
+    document.getElementById("rClose").addEventListener("click", close);
+    document.getElementById("rCancel").addEventListener("click", close);
+    if (locked) return;
+
+    var grid = document.getElementById("rPermGrid");
+    grid.addEventListener("change", function (e) {
+      var c = e.target;
+      var m = c.getAttribute("data-m"), a = c.getAttribute("data-a");
+      // Incluir/editar/excluir sem "ver" não faz sentido: marca "ver" junto;
+      // desmarcar "ver" tira tudo daquela tela.
+      if (a !== "view" && c.checked) {
+        var v = grid.querySelector('input[data-m="' + m + '"][data-a="view"]');
+        if (v) v.checked = true;
+      }
+      if (a === "view" && !c.checked) {
+        grid.querySelectorAll('input[data-m="' + m + '"]').forEach(function (x) { x.checked = false; });
+      }
     });
-    return out;
+    function readPerms() {
+      var p = normalizePerms({});
+      grid.querySelectorAll("input[type=checkbox]").forEach(function (c) {
+        p[c.getAttribute("data-m")][c.getAttribute("data-a")] = c.checked;
+      });
+      return p;
+    }
+
+    var saveBtn = document.getElementById("rSave");
+    saveBtn.addEventListener("click", function () {
+      var name = document.getElementById("rName").value.trim();
+      if (!name) { toast("Informe o nome do nível.", true); document.getElementById("rName").focus(); return; }
+      var clash = roles.filter(function (r) {
+        return (!role || r.id !== role.id) && r.name.trim().toLowerCase() === name.toLowerCase();
+      })[0];
+      if (clash) { toast("Já existe um nível com esse nome.", true); return; }
+      saveBtn.disabled = true;
+      var q;
+      if (isNew) {
+        var base = slugify(name), id = base, i = 2;
+        while (roleById(id)) id = base + "-" + (i++);
+        q = auth.client.from("roles").insert({ id: id, name: name, permissions: readPerms() });
+      } else {
+        q = auth.client.from("roles").update({ name: name, permissions: readPerms() }).eq("id", role.id);
+      }
+      q.then(function (r) {
+        if (r.error) {
+          saveBtn.disabled = false;
+          var m = /duplicate|unique|roles_name_unique/i.test(r.error.message || "") ? "Já existe um nível com esse nome." : friendlyDbError(r.error);
+          toast("Não foi possível salvar: " + m, true);
+          return;
+        }
+        toast(isNew ? "Nível \"" + name + "\" criado." : "Nível \"" + name + "\" salvo.");
+        close();
+        reloadAll();
+      });
+    });
+
+    var delBtn = document.getElementById("rDelete");
+    if (delBtn) delBtn.addEventListener("click", function () {
+      if (n > 0) {
+        toast("Este nível ainda tem " + n + (n === 1 ? " usuário. Mude-o" : " usuários. Mude-os") + " de nível na aba Usuários antes de excluir.", true);
+        return;
+      }
+      confirmBox({
+        title: "Excluir nível",
+        message: "Excluir o nível de permissão <b>" + esc(role.name) + "</b>? Isso não pode ser desfeito.",
+        confirmLabel: "Excluir nível"
+      }).then(function (ok) {
+        if (!ok) return;
+        auth.client.from("roles").delete().eq("id", role.id).then(function (r) {
+          if (r.error) { toast("Não foi possível excluir: " + friendlyDbError(r.error), true); return; }
+          toast("Nível \"" + role.name + "\" excluído.");
+          close();
+          reloadAll();
+        });
+      });
+    });
+
+    document.getElementById("rName").focus();
   }
 
   function renderAll() { renderUsers(); renderRoles(); }
@@ -428,12 +479,9 @@
       if (!(loaded.users && loaded.roles)) renderAll();
       reloadAll();
     });
-    // Outro administrador mudou um nível: atualiza a tela (sem apagar o que
-    // estou editando e ainda não salvei).
-    if (auth.onRoleChange) auth.onRoleChange(function (row) {
-      if (!row || !loaded.roles) return;
-      roles = roles.map(function (r) { return r.id === row.id ? row : r; });
-      renderAll();
+    // Outro administrador criou/mudou/excluiu um nível: atualiza as listas.
+    if (auth.onRoleChange) auth.onRoleChange(function () {
+      if (loaded.roles && auth.isAdmin()) reloadAll();
     });
   }
 

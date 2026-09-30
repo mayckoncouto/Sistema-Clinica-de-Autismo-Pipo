@@ -80,14 +80,21 @@ testes continuam usando o mesmo mock.
   "Trocar senha" no topo.
 - **Permissão por NÍVEL, não por pessoa** (desde 2026-09-30, migração
   `supabase/2026-09-30-niveis-de-permissao.sql`). Tabela `public.roles`
-  com 4 níveis fixos: `administrador` (is_admin, acesso total, não editável —
-  trigger `roles_guard`), `financeiro`, `profissional`, `secretaria`, cada um
-  com `permissions` jsonb `{agenda|pacientes|profissionais|salas:
-  {view,create,edit,delete}}`. `profiles.role_id` aponta o nível.
+  começou com 4 níveis: `administrador` (is_admin, acesso total, **travado**:
+  não pode ser alterado nem excluído — triggers `roles_guard` /
+  `roles_before_delete`), `financeiro`, `profissional`, `secretaria`. O
+  administrador **cria, renomeia e exclui** níveis (migração
+  `2026-09-30b-niveis-editaveis.sql`): nível novo nunca vira admin
+  (`roles_before_insert`), nome único sem diferenciar maiúsculas, nível com
+  usuários não pode ser excluído. Cada nível tem `permissions` jsonb
+  `{agenda|pacientes|profissionais|salas: {view,create,edit,delete}}`;
+  `profiles.role_id` aponta o nível.
   Usuários em 2026-09-30: Mayckon = Administrador, Lucas = Secretária.
-- Duas abas, **só para o nível Administrador**: **Usuários** (nome, e-mail,
-  senha, nível, ativar/desativar, excluir — ninguém muda o próprio nível) e
-  **Níveis de permissão** (grade por nível, salvar/descartar por cartão).
+- Duas abas, **só para o nível Administrador**, ambas em lista (`.adm-table`)
+  com cadastro em janela: **Usuários** (nome, e-mail, senha, nível,
+  ativar/desativar, excluir — ninguém muda o próprio nível) e **Níveis de
+  permissão** (+ Novo nível; clicar abre nome + grade; excluir pede
+  confirmação).
   Código em `js/usuarios.js`; o app lê o nível via
   `profiles.select("*, role:roles(*)")` em `pipo-supabase.js`.
 - O **primeiro usuário criado no projeto vira Administrador**; os seguintes
