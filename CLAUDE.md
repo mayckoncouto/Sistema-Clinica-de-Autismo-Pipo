@@ -125,6 +125,17 @@ testes continuam usando o mesmo mock.
 - Visualização "todos os dias" / "todas as semanas" combinável (`day=todos`,
   `week=todos`).
 - Controle de zoom da grade.
+- **Desfazer / refazer** (só células da agenda): botões no canto da grade
+  (`th.corner` da 1ª linha, fixo no topo e à esquerda) e atalhos Ctrl+Z /
+  Ctrl+Y / Ctrl+Shift+Z (ignorados dentro de campos de texto e com janela
+  aberta). Implementado em `applyBookingChanges(changes, {history})` +
+  `runHistory()`: cada gravação vira `{changes, prev}`; até 50 passos, por
+  aba do navegador (some ao recarregar). Antes de desfazer, confere se a
+  célula ainda está como deixamos — se outra pessoa mexeu, recusa em vez de
+  sobrescrever. Teste: `tests/run_undo.js`.
+- Busca de paciente na grade: resultado com célula e quadro preenchidos em
+  amarelo (`.search-hit` / `.book-main.match`) e os demais atendimentos
+  esmaecidos (`.search-dim`).
 - App usa 100% da largura e altura disponíveis da janela do usuário (não fica
   limitado a `max-width`), inclusive nas abas Pacientes e Relatório.
 

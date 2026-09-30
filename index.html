@@ -197,6 +197,12 @@ th.timecol{z-index:5}
 .seathead-name{font-size:11.5px;font-weight:700;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .timecell{padding:8px 12px;font-family:"IBM Plex Mono";font-size:12px;font-weight:600;color:var(--ink-2);white-space:nowrap;background:var(--surface);vertical-align:top}
 .corner{width:78px;background:var(--surface-2)}
+/* Desfazer / refazer no canto da grade (fixo no topo e à esquerda ao rolar). */
+.hist-btns{display:flex;align-items:center;justify-content:center;gap:4px;padding:3px 4px}
+.hist-btn{width:28px;height:24px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.hist-btn svg{width:14px;height:14px;display:block}
+.hist-btn:hover:not(:disabled){color:var(--accent);border-color:var(--accent);background:var(--accent-weak)}
+.hist-btn:disabled{opacity:.35;cursor:default}
 
 .slotcell{padding:4px;vertical-align:top;width:130px;min-width:130px;max-width:130px;height:44px;transition:background .1s,outline .1s}
 .slotcell.drag-over{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-weak)}
@@ -643,6 +649,8 @@ function swatchVar(k){
 var PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 var COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 var MOVE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>';
+var UNDO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
+var REDO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
 var LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 var UNLOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.9"/></svg>';
 
@@ -1017,6 +1025,21 @@ function boot(){
   if (window.pipoAuth) window.pipoAuth.onProfile(applyPermissionsUI);
   connectDb();
   document.addEventListener("keydown", function(e){
+    // Ctrl+Z desfaz / Ctrl+Y (ou Ctrl+Shift+Z) refaz — só na aba Agenda, sem
+    // janela aberta e fora de campos de texto (lá o Ctrl+Z é do próprio campo).
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && state.tab === "agenda"){
+      var k = (e.key || "").toLowerCase();
+      var isUndo = k === "z" && !e.shiftKey;
+      var isRedo = k === "y" || (k === "z" && e.shiftKey);
+      var t = e.target;
+      var typing = t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
+      var modalOpen = !!document.querySelector("#modalHost .overlay");
+      if ((isUndo || isRedo) && !typing && !modalOpen){
+        e.preventDefault();
+        runHistory(isUndo ? "undo" : "redo");
+        return;
+      }
+    }
     if (e.key === "Escape" && state.clipboard){
       state.clipboard = null;
       renderClipboardBar();
@@ -1522,7 +1545,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
   }
 
   // header row 1: rooms
-  html += '<thead><tr><th class="corner"></th>';
+  html += '<thead><tr><th class="corner">'+historyButtonsHtml()+'</th>';
   rooms.forEach(function(r){
     html += '<th class="grouphead" colspan="'+r.therapists.length+'"><div class="grouphead-cell" style="background:'+swatchVar(r.color)+'">' +
       '<span class="ghtext">'+esc(r.name)+'</span>' +
@@ -1650,6 +1673,11 @@ function wireGridDelegatedEvents(){
   host.__gridWired = true;
 
   host.addEventListener("click", function(e){
+    var histBtn = e.target.closest("[data-hist]");
+    if (histBtn){
+      runHistory(histBtn.getAttribute("data-hist"));
+      return;
+    }
     var roomEditBtn = e.target.closest("[data-room-edit]");
     if (roomEditBtn){
       e.stopPropagation();
@@ -2004,8 +2032,89 @@ function openBookingModal(ctx){
   });
 }
 
-function applyBookingChanges(changesByDoc){
+/* ---------------- desfazer / refazer (só células da agenda) ----------------
+ * Toda alteração de célula passa por applyBookingChanges, que já sabe o valor
+ * anterior de cada chave — cada chamada vira uma entrada {changes, prev}.
+ * Desfazer = reaplicar "prev"; refazer = reaplicar "changes". O histórico vale
+ * só para esta aba do navegador (some ao recarregar) e é por pessoa.
+ * Antes de desfazer/refazer, confere se a célula ainda está como deixamos; se
+ * outra pessoa mexeu nela nesse meio-tempo, não sobrescreve o trabalho dela.
+ */
+var HISTORY_LIMIT = 50;
+var bookingHistory = {undo: [], redo: []};
+var historyBusy = false;
+
+function cloneJson(v){ return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+
+function historyButtonsHtml(){
+  return '<div class="hist-btns">' +
+    '<button type="button" class="hist-btn" data-hist="undo" title="Desfazer (Ctrl+Z)" aria-label="Desfazer"'+(bookingHistory.undo.length?'':' disabled')+'>'+UNDO_SVG+'</button>' +
+    '<button type="button" class="hist-btn" data-hist="redo" title="Refazer (Ctrl+Y)" aria-label="Refazer"'+(bookingHistory.redo.length?'':' disabled')+'>'+REDO_SVG+'</button>' +
+  '</div>';
+}
+function refreshHistoryButtons(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-hist]"), function(b){
+    var stack = bookingHistory[b.getAttribute("data-hist")];
+    b.disabled = historyBusy || !stack.length;
+  });
+}
+
+// Valor atual de cada chave tocada por uma entrada: do estado local quando o dia
+// está carregado na tela (inclui edições ainda não confirmadas), senão do banco.
+function currentBookingsFor(docIds){
+  return Promise.all(docIds.map(function(docId){
+    if (state.scheduleSubs[docId] && state.scheduleSubs[docId].active && state.scheduleDocs[docId]){
+      return Promise.resolve([docId, state.scheduleDocs[docId].bookings || {}]);
+    }
+    return db.doc("schedule/" + docId).get().then(function(snap){
+      var d = (snap.exists && snap.data()) ? snap.data() : {};
+      return [docId, d.bookings || {}];
+    });
+  })).then(function(pairs){
+    var out = {};
+    pairs.forEach(function(p){ out[p[0]] = p[1]; });
+    return out;
+  });
+}
+
+function runHistory(direction){
+  var from = direction === "undo" ? bookingHistory.undo : bookingHistory.redo;
+  if (historyBusy || !from.length || !db) return;
+  var entry = from[from.length - 1];
+  // Desfazer: a célula deve estar com "changes" e volta para "prev". Refazer: o contrário.
+  var expected = direction === "undo" ? entry.changes : entry.prev;
+  var target = direction === "undo" ? entry.prev : entry.changes;
+  historyBusy = true;
+  refreshHistoryButtons();
+  currentBookingsFor(Object.keys(target)).then(function(current){
+    var conflict = Object.keys(expected).some(function(docId){
+      return Object.keys(expected[docId]).some(function(k){
+        var cur = Object.prototype.hasOwnProperty.call(current[docId], k) ? current[docId][k] : null;
+        return stableStr(cur) !== stableStr(expected[docId][k]);
+      });
+    });
+    if (conflict){
+      from.pop();
+      showToast("Não foi possível " + (direction === "undo" ? "desfazer" : "refazer") +
+        ": esse horário foi alterado depois (talvez por outra pessoa).", true);
+      return;
+    }
+    return applyBookingChanges(cloneJson(target), {history: direction}).then(function(ok){
+      if (ok === false) return;
+      showToast(direction === "undo" ? "Alteração desfeita." : "Alteração refeita.");
+    });
+  }).catch(function(){
+    showToast("Não foi possível " + (direction === "undo" ? "desfazer" : "refazer") + " agora. Tente de novo.", true);
+  }).then(function(){
+    historyBusy = false;
+    refreshHistoryButtons();
+  });
+}
+
+function applyBookingChanges(changesByDoc, opts){
   // changesByDoc: { docId: { key: {patient,note} | null, ... }, ... } — null clears that key
+  // opts.history: "undo" | "redo" quando a chamada vem do desfazer/refazer.
+  opts = opts || {};
   if (!db){
     showToast("Não salvo: sem conexão com o servidor. Verifique sua internet e recarregue a página.", true);
     return Promise.resolve();
@@ -2039,6 +2148,31 @@ function applyBookingChanges(changesByDoc){
     });
     prevByDoc[docId] = prev;
   });
+
+  // Histórico de desfazer/refazer. Registrado já na atualização otimista (para um
+  // Ctrl+Z logo em seguida funcionar) e retirado de novo se a gravação falhar.
+  var histEntry = null, histStack = null;
+  var changedSomething = Object.keys(changesByDoc).some(function(docId){
+    return Object.keys(changesByDoc[docId]).some(function(k){
+      return stableStr(changesByDoc[docId][k]) !== stableStr(prevByDoc[docId][k]);
+    });
+  });
+  if (opts.history === "undo"){
+    // A entrada desfeita sai do "desfazer" e vai para o "refazer".
+    histEntry = bookingHistory.undo.pop();
+    if (histEntry){ histStack = bookingHistory.redo; histStack.push(histEntry); }
+  } else if (opts.history === "redo"){
+    histEntry = bookingHistory.redo.pop();
+    if (histEntry){ histStack = bookingHistory.undo; histStack.push(histEntry); }
+  } else if (changedSomething){
+    histEntry = {changes: cloneJson(changesByDoc), prev: cloneJson(prevByDoc)};
+    histStack = bookingHistory.undo;
+    histStack.push(histEntry);
+    if (histStack.length > HISTORY_LIMIT) histStack.shift();
+    bookingHistory.redo = [];
+  }
+  if (histEntry) refreshHistoryButtons();
+
   // Optimistic update: render immediately (not through the batched queue — this is
   // a direct result of the user's own click/drag/paste and should feel instant),
   // but only the doc(s) actually touched rather than the whole grid.
@@ -2076,6 +2210,14 @@ function applyBookingChanges(changesByDoc){
     // The write failed (permission, connectivity, etc.) — undo the optimistic
     // update so the grid reflects reality, and tell the user it wasn't saved.
     clearPending();
+    if (histEntry && histStack){
+      // Devolve o histórico ao estado de antes desta tentativa.
+      var at = histStack.lastIndexOf(histEntry);
+      if (at !== -1) histStack.splice(at, 1);
+      if (opts.history === "undo") bookingHistory.undo.push(histEntry);
+      else if (opts.history === "redo") bookingHistory.redo.push(histEntry);
+      refreshHistoryButtons();
+    }
     Object.keys(changesByDoc).forEach(function(docId){
       if (!state.scheduleDocs[docId]) return;
       var prev = prevByDoc[docId];
