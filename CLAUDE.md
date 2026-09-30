@@ -177,6 +177,10 @@ testes continuam usando o mesmo mock.
   (`#profListSearch`, nome/especialidade/sala, sem acento), contador
   "X de Y profissionais", ordenação por coluna (`state.profSort`) e coluna
   "Salas onde atende" calculada das colunas das salas. Clique na linha edita.
+  Colunas redimensionáveis como em Pacientes — o mesmo
+  `patColResizeStart`/`wirePatColResize`, recebendo uma config por tabela
+  (`patResizeCfg()` / `profResizeCfg()`); larguras salvas no navegador em
+  `agendaPipo:profColWidths`; duplo clique no divisor volta ao padrão.
 - **Toda exclusão pede confirmação** numa janela própria (`confirmDialog()`,
   host `#confirmHost` por cima do cadastro aberto, foco inicial em Cancelar):
   paciente, profissional, sala, e — na hora de salvar — colunas tiradas de

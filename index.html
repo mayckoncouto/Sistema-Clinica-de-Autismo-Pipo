@@ -2636,24 +2636,63 @@ function patTableWidthPx(){
 // touches that column's own <col> element plus the table's own total width —
 // it never re-renders the table, so an in-flight drag survives unrelated
 // state updates (search typing, live snapshot updates) without being reset.
-function patColResizeStart(col, host, startClientX){
-  var startWidth = patColWidth(col);
+// Configuração de redimensionamento por tabela (funções, não variáveis: são
+// usadas em renders que podem rodar antes desta parte do script ser avaliada).
+function patResizeCfg(){
+  return {width: patColWidth, min: PAT_COL_MIN_WIDTH, total: patTableWidthPx,
+          set: function(k, w){ state.patColWidths[k] = w; },
+          reset: function(k){ delete state.patColWidths[k]; },
+          save: savePatColWidths, render: renderPatientsTab};
+}
+
+// ---- professionals-list column widths: same mechanism, own storage key ----
+var PROF_COL_KEYS = ["nome", "especialidade", "salas"];
+var PROF_COL_DEFAULT_WIDTH = {nome:260, especialidade:220, salas:420};
+var PROF_COL_MIN_WIDTH = {nome:120, especialidade:110, salas:140};
+var PROF_COL_WIDTHS_STORAGE_KEY = "agendaPipo:profColWidths";
+function profColWidths(){
+  if (!state.profColWidths){
+    try {
+      var parsed = JSON.parse(localStorage.getItem(PROF_COL_WIDTHS_STORAGE_KEY) || "{}");
+      state.profColWidths = (parsed && typeof parsed === "object") ? parsed : {};
+    } catch(e){ state.profColWidths = {}; }
+  }
+  return state.profColWidths;
+}
+function profColWidth(key){
+  var w = profColWidths()[key];
+  return (typeof w === "number" && isFinite(w) && w > 0) ? w : PROF_COL_DEFAULT_WIDTH[key];
+}
+function profTableWidthPx(){
+  return PROF_COL_KEYS.reduce(function(t, k){ return t + profColWidth(k); }, 0);
+}
+function profResizeCfg(){
+  return {width: profColWidth, min: PROF_COL_MIN_WIDTH, total: profTableWidthPx,
+          set: function(k, w){ profColWidths()[k] = w; },
+          reset: function(k){ delete profColWidths()[k]; },
+          save: function(){ try { localStorage.setItem(PROF_COL_WIDTHS_STORAGE_KEY, JSON.stringify(profColWidths())); } catch(e){} },
+          render: renderProfissionaisTab};
+}
+
+function patColResizeStart(col, host, startClientX, cfg){
+  cfg = cfg || patResizeCfg();
+  var startWidth = cfg.width(col);
   var colEl = host.querySelector('col[data-col="'+col+'"]');
   var tableEl = host.querySelector("table.pat-table");
   var handleEl = host.querySelector('.pat-col-resizer[data-col="'+col+'"]');
   document.body.classList.add("pat-col-resizing");
   if (handleEl) handleEl.classList.add("resizing");
   function apply(clientX){
-    var min = PAT_COL_MIN_WIDTH[col] || 50;
+    var min = cfg.min[col] || 50;
     var w = Math.max(min, Math.round(startWidth + (clientX - startClientX)));
-    state.patColWidths[col] = w;
+    cfg.set(col, w);
     if (colEl) colEl.style.width = w + "px";
     // min-width (not width): with table-layout:fixed + width:100% in CSS, the table
     // stretches to fill the wrapper when there's extra room (columns share it
     // proportionally to their own widths) but never shrinks below the sum of the
     // configured column widths — that's what keeps horizontal scroll available on
     // narrower screens instead of squashing columns past their set size.
-    if (tableEl) tableEl.style.minWidth = patTableWidthPx() + "px";
+    if (tableEl) tableEl.style.minWidth = cfg.total() + "px";
   }
   function onMouseMove(e){ apply(e.clientX); }
   function onTouchMove(e){ if (e.touches && e.touches[0]){ e.preventDefault(); apply(e.touches[0].clientX); } }
@@ -2664,32 +2703,33 @@ function patColResizeStart(col, host, startClientX){
     document.removeEventListener("touchend", finish);
     document.body.classList.remove("pat-col-resizing");
     if (handleEl) handleEl.classList.remove("resizing");
-    savePatColWidths();
+    cfg.save();
   }
   document.addEventListener("mousemove", onMouseMove);
   document.addEventListener("mouseup", finish);
   document.addEventListener("touchmove", onTouchMove, {passive:false});
   document.addEventListener("touchend", finish);
 }
-function wirePatColResize(host){
+function wirePatColResize(host, cfg){
+  cfg = cfg || patResizeCfg();
   host.querySelectorAll(".pat-col-resizer").forEach(function(handle){
     var col = handle.getAttribute("data-col");
     handle.addEventListener("mousedown", function(e){
       e.preventDefault(); e.stopPropagation();
-      patColResizeStart(col, host, e.clientX);
+      patColResizeStart(col, host, e.clientX, cfg);
     });
     handle.addEventListener("touchstart", function(e){
       if (!e.touches || !e.touches[0]) return;
       e.preventDefault(); e.stopPropagation();
-      patColResizeStart(col, host, e.touches[0].clientX);
+      patColResizeStart(col, host, e.touches[0].clientX, cfg);
     }, {passive:false});
     handle.addEventListener("click", function(e){ e.stopPropagation(); });
     // Double-click/tap a handle to reset that column back to its default width.
     handle.addEventListener("dblclick", function(e){
       e.preventDefault(); e.stopPropagation();
-      delete state.patColWidths[col];
-      savePatColWidths();
-      renderPatientsTab();
+      cfg.reset(col);
+      cfg.save();
+      cfg.render();
     });
   });
 }
@@ -3466,12 +3506,13 @@ function renderProfissionaisTab(){
     host.innerHTML = '<div class="empty-state"><b>Nenhum profissional encontrado</b>Ajuste a busca ou cadastre um novo profissional.</div>';
     return;
   }
-  var cols = [{key:"nome", label:"Nome", w:"34%"}, {key:"especialidade", label:"Especialidade principal", w:"26%"}, {key:"salas", label:"Salas onde atende", w:"40%"}];
+  var cols = [{key:"nome", label:"Nome"}, {key:"especialidade", label:"Especialidade principal"}, {key:"salas", label:"Salas onde atende"}];
   var thead = '<tr>' + cols.map(function(c){
     var active = sort.col === c.key ? sort.dir : null;
     var glyph = active === "asc" ? SORT_ASC_SVG : (active === "desc" ? SORT_DESC_SVG : SORT_NONE_SVG);
     return '<th><span class="th-label">'+c.label+'</span>' +
-      '<button type="button" class="sort-btn'+(active?' active':'')+'" data-prof-sort="'+c.key+'" title="Ordenar por '+c.label+'" aria-label="Ordenar por '+c.label+'">'+glyph+'</button></th>';
+      '<button type="button" class="sort-btn'+(active?' active':'')+'" data-prof-sort="'+c.key+'" title="Ordenar por '+c.label+'" aria-label="Ordenar por '+c.label+'">'+glyph+'</button>' +
+      '<span class="pat-col-resizer" data-col="'+c.key+'" title="Arrastar para ajustar a largura" aria-hidden="true"></span></th>';
   }).join("") + '</tr>';
   var rows = list.map(function(d){
     return '<tr data-id="'+esc(d.p.id)+'" tabindex="0">' +
@@ -3480,9 +3521,10 @@ function renderProfissionaisTab(){
       '<td class="pt-muted" title="'+esc(d.rooms)+'">'+(d.rooms ? esc(d.rooms) : '—')+'</td>' +
     '</tr>';
   }).join("");
-  host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table">' +
-    '<colgroup>' + cols.map(function(c){ return '<col style="width:'+c.w+'">'; }).join("") + '</colgroup>' +
+  host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table" style="min-width:'+profTableWidthPx()+'px">' +
+    '<colgroup>' + cols.map(function(c){ return '<col data-col="'+c.key+'" style="width:'+profColWidth(c.key)+'px">'; }).join("") + '</colgroup>' +
     '<thead>'+thead+'</thead><tbody>'+rows+'</tbody></table></div>';
+  wirePatColResize(host, profResizeCfg());
   host.querySelectorAll("[data-prof-sort]").forEach(function(btn){
     btn.addEventListener("click", function(e){
       e.stopPropagation();
