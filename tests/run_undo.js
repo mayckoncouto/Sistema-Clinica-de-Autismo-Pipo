@@ -76,6 +76,39 @@ const path = require('path');
   console.log('Ctrl+Z inside a text field leaves the agenda alone?',
     before === await page.evaluate(() => JSON.stringify(window.__STORE__['schedule/seg-1'])));
 
+  // Setinha ▾: lista das ações e desfazer várias de uma vez
+  await page.reload();
+  await page.waitForSelector('[data-hist="undo"]');
+  const book = async (k, name) => {
+    await cell(k).locator('.book-main').click();
+    await page.fill('#bkPatient', name);
+    await page.click('#bkSave');
+    await page.waitForTimeout(200);
+  };
+  await book('08:00|r1|r1-t1', 'Ana Azul');
+  await book('08:40|r1|r1-t1', 'Bruno Verde');
+  await cell('07:20|r1|r1-t1').locator('.book-main').click();
+  await page.click('#bkClear');
+  await page.waitForTimeout(200);
+  await page.locator('[data-hist-menu="undo"]').first().click();
+  const labels = await page.locator('.hist-menu .hist-menu-item').allInnerTexts();
+  console.log('undo list shows the 3 actions, newest first, with readable labels?',
+    labels.length === 3 && labels[0].startsWith('Desmarcar Paciente Um') &&
+    labels[1].startsWith('Agendar Bruno Verde') && labels[2].startsWith('Agendar Ana Azul'));
+  await page.locator('.hist-menu .hist-menu-item').nth(1).hover();
+  console.log('hovering the 2nd item marks 2 and the footer says "Desfazer 2 ações"?',
+    (await page.locator('.hist-menu .hist-menu-item.on').count()) === 2 &&
+    (await page.locator('.hist-menu-foot').innerText()).trim() === 'Desfazer 2 ações');
+  await page.locator('.hist-menu .hist-menu-item').nth(1).click();
+  await page.waitForTimeout(600);
+  console.log('choosing the 2nd item undoes the last 2 actions and keeps the 1st?',
+    (await S('07:20|r1|r1-t1'))?.patient === 'Paciente Um' && (await S('08:40|r1|r1-t1')) === null &&
+    (await S('08:00|r1|r1-t1'))?.patient === 'Ana Azul');
+  await page.locator('[data-hist-menu="redo"]').first().click();
+  console.log('redo list now holds those 2 actions?', (await page.locator('.hist-menu .hist-menu-item').count()) === 2);
+  await page.keyboard.press('Escape');
+  console.log('Esc closes the list?', (await page.locator('.hist-menu').count()) === 0);
+
   const errors = await page.evaluate(() => window.__LOG__.filter(x => x.op === 'error'));
   console.log('no JS errors?', errors.length === 0, errors.length ? JSON.stringify(errors) : '');
   await browser.close();

@@ -198,11 +198,21 @@ th.timecol{z-index:5}
 .timecell{padding:8px 12px;font-family:"IBM Plex Mono";font-size:12px;font-weight:600;color:var(--ink-2);white-space:nowrap;background:var(--surface);vertical-align:top}
 .corner{width:78px;background:var(--surface-2)}
 /* Desfazer / refazer no canto da grade (fixo no topo e à esquerda ao rolar). */
-.hist-btns{display:flex;align-items:center;justify-content:center;gap:4px;padding:3px 4px}
-.hist-btn{width:28px;height:24px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
-.hist-btn svg{width:14px;height:14px;display:block}
-.hist-btn:hover:not(:disabled){color:var(--accent);border-color:var(--accent);background:var(--accent-weak)}
-.hist-btn:disabled{opacity:.35;cursor:default}
+.hist-btns{display:flex;align-items:center;justify-content:center;gap:3px;padding:3px}
+.hist-split{display:inline-flex;border:1px solid var(--line);border-radius:6px;background:var(--surface);overflow:hidden}
+.hist-btn,.hist-caret{height:22px;border:0;background:transparent;color:var(--ink-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.hist-btn{width:23px}
+.hist-caret{width:13px;border-left:1px solid var(--line)}
+.hist-btn svg{width:13px;height:13px;display:block}
+.hist-caret svg{width:9px;height:9px;display:block}
+.hist-btn:hover:not(:disabled),.hist-caret:hover:not(:disabled){color:var(--accent);background:var(--accent-weak)}
+.hist-btn:disabled,.hist-caret:disabled{opacity:.35;cursor:default}
+.hist-menu{position:fixed;z-index:1000;min-width:240px;max-width:min(420px,calc(100vw - 16px));background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:var(--shadow-md);overflow:hidden;font-size:12.5px}
+.hist-menu-list{max-height:320px;overflow-y:auto;padding:4px 0}
+.hist-menu-item{display:block;width:100%;text-align:left;border:0;background:transparent;padding:6px 12px;font:inherit;color:var(--ink);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist-menu-item.on{background:var(--accent-weak);color:var(--ink)}
+.hist-menu-item:focus{outline:none}
+.hist-menu-foot{padding:6px 12px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px;font-weight:600;background:var(--surface-2)}
 
 .slotcell{padding:4px;vertical-align:top;width:130px;min-width:130px;max-width:130px;height:44px;transition:background .1s,outline .1s}
 .slotcell.drag-over{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-weak)}
@@ -1673,6 +1683,11 @@ function wireGridDelegatedEvents(){
   host.__gridWired = true;
 
   host.addEventListener("click", function(e){
+    var histMenuBtn = e.target.closest("[data-hist-menu]");
+    if (histMenuBtn){
+      openHistoryMenu(histMenuBtn.getAttribute("data-hist-menu"), histMenuBtn);
+      return;
+    }
     var histBtn = e.target.closest("[data-hist]");
     if (histBtn){
       runHistory(histBtn.getAttribute("data-hist"));
@@ -2046,15 +2061,67 @@ var historyBusy = false;
 
 function cloneJson(v){ return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
 
+// "seg-1" + "08:00|r1|r1-t1" → "Seg 1ª sem · 08:00 · Sala Teste (Ana)"
+function describeSlot(docId, key){
+  var dp = docId.split("-"), kp = key.split("|");
+  var day = findDayObj(dp[0]);
+  var room = state.rooms.filter(function(r){ return r.id === kp[1]; })[0];
+  var seat = room ? (room.therapists || []).filter(function(t){ return t.id === kp[2]; })[0] : null;
+  var where = room ? room.name + (seat && therapistDisplayName(seat) ? " (" + therapistDisplayName(seat) + ")" : "") : "";
+  return day.name.slice(0,3) + " " + dp[1] + "ª sem · " + kp[0] + (where ? " · " + where : "");
+}
+
+// Texto curto de uma entrada do histórico, para a lista das setinhas ▾.
+function describeHistoryEntry(changes, prev){
+  var items = [];
+  Object.keys(changes).forEach(function(docId){
+    Object.keys(changes[docId]).forEach(function(k){
+      var a = prev[docId] ? prev[docId][k] : null, b = changes[docId][k];
+      if (stableStr(a) === stableStr(b)) return;
+      items.push({docId: docId, key: k, a: a || null, b: b || null});
+    });
+  });
+  if (!items.length) return "Alteração";
+  var isBlk = function(v){ return !!(v && v.blocked); };
+  if (items.length > 1 && items.every(function(i){ return isBlk(i.b); })) return "Bloquear " + items.length + " horários";
+  if (items.length > 1 && items.every(function(i){ return isBlk(i.a) && !isBlk(i.b); })) return "Liberar " + items.length + " horários";
+  if (items.length === 2){
+    var from = items.filter(function(i){ return i.a && !i.b; })[0], to = items.filter(function(i){ return !i.a && i.b; })[0];
+    if (from && to && from.a.patient === to.b.patient) return "Mover " + to.b.patient + " → " + describeSlot(to.docId, to.key);
+    if (items[0].a && items[0].b && items[1].a && items[1].b &&
+        items[0].a.patient === items[1].b.patient && items[1].a.patient === items[0].b.patient){
+      return "Trocar " + items[0].a.patient + " ↔ " + items[1].a.patient;
+    }
+  }
+  if (items.length === 1){
+    var i = items[0], where = describeSlot(i.docId, i.key);
+    if (isBlk(i.b)) return "Bloquear · " + where;
+    if (isBlk(i.a) && !i.b) return "Liberar · " + where;
+    if (!i.a) return "Agendar " + i.b.patient + " · " + where;
+    if (!i.b) return "Desmarcar " + i.a.patient + " · " + where;
+    if (i.a.patient !== i.b.patient) return "Trocar " + i.a.patient + " → " + i.b.patient + " · " + where;
+    return "Editar " + i.b.patient + " · " + where;
+  }
+  return items.length + " alterações";
+}
+
+var CARET_SVG = '<svg viewBox="0 0 10 10" fill="currentColor"><path d="M2 3.5h6L5 7z"/></svg>';
 function historyButtonsHtml(){
+  function pair(dir, title, label, icon){
+    var off = bookingHistory[dir].length ? '' : ' disabled';
+    return '<div class="hist-split">' +
+      '<button type="button" class="hist-btn" data-hist="'+dir+'" title="'+title+'" aria-label="'+label+'"'+off+'>'+icon+'</button>' +
+      '<button type="button" class="hist-caret" data-hist-menu="'+dir+'" title="Escolher até qual ação '+label.toLowerCase()+'" aria-label="Lista de ações para '+label.toLowerCase()+'" aria-haspopup="menu"'+off+'>'+CARET_SVG+'</button>' +
+    '</div>';
+  }
   return '<div class="hist-btns">' +
-    '<button type="button" class="hist-btn" data-hist="undo" title="Desfazer (Ctrl+Z)" aria-label="Desfazer"'+(bookingHistory.undo.length?'':' disabled')+'>'+UNDO_SVG+'</button>' +
-    '<button type="button" class="hist-btn" data-hist="redo" title="Refazer (Ctrl+Y)" aria-label="Refazer"'+(bookingHistory.redo.length?'':' disabled')+'>'+REDO_SVG+'</button>' +
+    pair("undo", "Desfazer (Ctrl+Z)", "Desfazer", UNDO_SVG) +
+    pair("redo", "Refazer (Ctrl+Y)", "Refazer", REDO_SVG) +
   '</div>';
 }
 function refreshHistoryButtons(){
-  Array.prototype.forEach.call(document.querySelectorAll("[data-hist]"), function(b){
-    var stack = bookingHistory[b.getAttribute("data-hist")];
+  Array.prototype.forEach.call(document.querySelectorAll("[data-hist],[data-hist-menu]"), function(b){
+    var stack = bookingHistory[b.getAttribute("data-hist") || b.getAttribute("data-hist-menu")];
     b.disabled = historyBusy || !stack.length;
   });
 }
@@ -2077,16 +2144,17 @@ function currentBookingsFor(docIds){
   });
 }
 
-function runHistory(direction){
+// Um passo de desfazer/refazer. Resolve true se aplicou, false se parou
+// (conflito, sem permissão, erro) — já avisando a pessoa do motivo.
+function historyStep(direction){
   var from = direction === "undo" ? bookingHistory.undo : bookingHistory.redo;
-  if (historyBusy || !from.length || !db) return;
+  var verb = direction === "undo" ? "desfazer" : "refazer";
+  if (!from.length) return Promise.resolve(false);
   var entry = from[from.length - 1];
   // Desfazer: a célula deve estar com "changes" e volta para "prev". Refazer: o contrário.
   var expected = direction === "undo" ? entry.changes : entry.prev;
   var target = direction === "undo" ? entry.prev : entry.changes;
-  historyBusy = true;
-  refreshHistoryButtons();
-  currentBookingsFor(Object.keys(target)).then(function(current){
+  return currentBookingsFor(Object.keys(target)).then(function(current){
     var conflict = Object.keys(expected).some(function(docId){
       return Object.keys(expected[docId]).some(function(k){
         var cur = Object.prototype.hasOwnProperty.call(current[docId], k) ? current[docId][k] : null;
@@ -2095,21 +2163,112 @@ function runHistory(direction){
     });
     if (conflict){
       from.pop();
-      showToast("Não foi possível " + (direction === "undo" ? "desfazer" : "refazer") +
-        ": esse horário foi alterado depois (talvez por outra pessoa).", true);
-      return;
+      showToast("Não foi possível " + verb + " \"" + (entry.label || "alteração") +
+        "\": esse horário foi alterado depois (talvez por outra pessoa).", true);
+      return false;
     }
-    return applyBookingChanges(cloneJson(target), {history: direction}).then(function(ok){
-      if (ok === false) return;
-      showToast(direction === "undo" ? "Alteração desfeita." : "Alteração refeita.");
-    });
+    return applyBookingChanges(cloneJson(target), {history: direction}).then(function(ok){ return ok !== false; });
   }).catch(function(){
-    showToast("Não foi possível " + (direction === "undo" ? "desfazer" : "refazer") + " agora. Tente de novo.", true);
-  }).then(function(){
-    historyBusy = false;
-    refreshHistoryButtons();
+    showToast("Não foi possível " + verb + " agora. Tente de novo.", true);
+    return false;
   });
 }
+
+// Desfaz/refaz "steps" ações seguidas (1 = só a última), uma de cada vez e
+// parando na primeira que não puder ser aplicada.
+function runHistory(direction, steps){
+  steps = steps || 1;
+  var from = direction === "undo" ? bookingHistory.undo : bookingHistory.redo;
+  if (historyBusy || !from.length || !db) return;
+  closeHistoryMenu();
+  historyBusy = true;
+  refreshHistoryButtons();
+  var done = 0;
+  function next(){
+    if (done >= steps) return Promise.resolve();
+    return historyStep(direction).then(function(ok){
+      if (!ok) return;
+      done++;
+      return next();
+    });
+  }
+  next().then(function(){
+    historyBusy = false;
+    refreshHistoryButtons();
+    if (done){
+      var what = done === 1 ? "Alteração" : done + " alterações";
+      showToast(what + (direction === "undo" ? (done === 1 ? " desfeita." : " desfeitas.") : (done === 1 ? " refeita." : " refeitas.")));
+    }
+  });
+}
+
+/* Lista das setinhas ▾ (como no Excel): a ação mais recente em cima; passar o
+   mouse num item marca ele e todos acima; clicar aplica todos até ali. */
+var historyMenuEl = null;
+function closeHistoryMenu(){
+  if (historyMenuEl){ historyMenuEl.remove(); historyMenuEl = null; }
+}
+function openHistoryMenu(direction, anchor){
+  if (historyMenuEl && historyMenuEl.getAttribute("data-dir") === direction){ closeHistoryMenu(); return; }
+  closeHistoryMenu();
+  var stack = direction === "undo" ? bookingHistory.undo : bookingHistory.redo;
+  if (!stack.length || historyBusy) return;
+  var verb = direction === "undo" ? "Desfazer" : "Refazer";
+  var list = stack.slice().reverse();
+  var el = document.createElement("div");
+  el.className = "hist-menu";
+  el.setAttribute("data-dir", direction);
+  el.setAttribute("role", "menu");
+  el.innerHTML =
+    '<div class="hist-menu-list">' + list.map(function(e, i){
+      return '<button type="button" class="hist-menu-item" role="menuitem" data-steps="'+(i+1)+'">'+esc(e.label || "Alteração")+'</button>';
+    }).join("") + '</div>' +
+    '<div class="hist-menu-foot">'+verb+' 1 ação</div>';
+  document.body.appendChild(el);
+  historyMenuEl = el;
+  // Posiciona logo abaixo da setinha, sem sair da tela.
+  var r = anchor.getBoundingClientRect();
+  var left = Math.min(r.left, window.innerWidth - el.offsetWidth - 8);
+  el.style.left = Math.max(8, left) + "px";
+  el.style.top = (r.bottom + 4) + "px";
+  var items = el.querySelectorAll(".hist-menu-item");
+  var foot = el.querySelector(".hist-menu-foot");
+  function mark(n){
+    Array.prototype.forEach.call(items, function(it, i){ it.classList.toggle("on", i < n); });
+    foot.textContent = verb + " " + n + (n === 1 ? " ação" : " ações");
+  }
+  mark(1);
+  el.addEventListener("mouseover", function(e){
+    var it = e.target.closest(".hist-menu-item");
+    if (it) mark(parseInt(it.getAttribute("data-steps"), 10));
+  });
+  el.addEventListener("focusin", function(e){
+    var it = e.target.closest(".hist-menu-item");
+    if (it) mark(parseInt(it.getAttribute("data-steps"), 10));
+  });
+  el.addEventListener("click", function(e){
+    var it = e.target.closest(".hist-menu-item");
+    if (it) runHistory(direction, parseInt(it.getAttribute("data-steps"), 10));
+  });
+  el.addEventListener("keydown", function(e){
+    var cur = document.activeElement;
+    var idx = Array.prototype.indexOf.call(items, cur);
+    if (e.key === "ArrowDown" && idx < items.length - 1){ e.preventDefault(); items[idx + 1].focus(); }
+    else if (e.key === "ArrowUp" && idx > 0){ e.preventDefault(); items[idx - 1].focus(); }
+  });
+  items[0].focus();
+}
+document.addEventListener("mousedown", function(e){
+  if (historyMenuEl && !historyMenuEl.contains(e.target) && !e.target.closest("[data-hist-menu]")) closeHistoryMenu();
+});
+document.addEventListener("keydown", function(e){
+  if (e.key === "Escape" && historyMenuEl) closeHistoryMenu();
+});
+window.addEventListener("resize", closeHistoryMenu);
+document.addEventListener("scroll", function(e){
+  // Rolar a própria lista não fecha; rolar a grade/página fecha (a setinha saiu do lugar).
+  if (historyMenuEl && !(e.target instanceof Node && historyMenuEl.contains(e.target))) closeHistoryMenu();
+}, true);
 
 function applyBookingChanges(changesByDoc, opts){
   // changesByDoc: { docId: { key: {patient,note} | null, ... }, ... } — null clears that key
@@ -2165,7 +2324,7 @@ function applyBookingChanges(changesByDoc, opts){
     histEntry = bookingHistory.redo.pop();
     if (histEntry){ histStack = bookingHistory.undo; histStack.push(histEntry); }
   } else if (changedSomething){
-    histEntry = {changes: cloneJson(changesByDoc), prev: cloneJson(prevByDoc)};
+    histEntry = {changes: cloneJson(changesByDoc), prev: cloneJson(prevByDoc), label: describeHistoryEntry(changesByDoc, prevByDoc)};
     histStack = bookingHistory.undo;
     histStack.push(histEntry);
     if (histStack.length > HISTORY_LIMIT) histStack.shift();

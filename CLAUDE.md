@@ -132,7 +132,12 @@ testes continuam usando o mesmo mock.
   `runHistory()`: cada gravação vira `{changes, prev}`; até 50 passos, por
   aba do navegador (some ao recarregar). Antes de desfazer, confere se a
   célula ainda está como deixamos — se outra pessoa mexeu, recusa em vez de
-  sobrescrever. Teste: `tests/run_undo.js`.
+  sobrescrever. Ao lado de cada botão há uma setinha ▾ (como no Excel) que
+  abre a lista das ações (`openHistoryMenu`, texto gerado por
+  `describeHistoryEntry` na hora da gravação): passar o mouse marca o item e
+  todos acima, clicar aplica todos até ali (`runHistory(dir, steps)`, um
+  passo de cada vez, parando no primeiro conflito). Teste:
+  `tests/run_undo.js`.
 - Busca de paciente na grade: resultado com célula e quadro preenchidos em
   amarelo (`.search-hit` / `.book-main.match`) e os demais atendimentos
   esmaecidos (`.search-dim`).
