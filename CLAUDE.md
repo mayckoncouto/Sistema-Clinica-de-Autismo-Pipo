@@ -228,7 +228,8 @@ testes continuam usando o mesmo mock.
   ABA≠"Não" → sem cor.
 - Cor customizável por especialidade e por sala (aplicada nos agendamentos e no
   cabeçalho da sala).
-- Filtro por sala (chips) e busca de paciente na grade (ignora acento e
+- Filtro por sala em **menu suspenso** antes da busca (`#roomChips`,
+  `.rf-btn`/`.rf-panel`, "Todas as salas" + cada sala com sua cor) e busca de paciente na grade (ignora acento e
   maiúscula/minúscula — ver seção de busca abaixo).
 - Visualização "todos os dias" / "todas as semanas" combinável (`day=todos`,
   `week=todos`).

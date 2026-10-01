@@ -260,6 +260,17 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .spacer{flex:1}
 
 .chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 12px}
+/* Filtro de salas do Planner (menu suspenso). */
+.room-filter{position:relative;flex:none}
+.rf-btn{display:inline-flex;align-items:center;gap:8px;min-width:200px;max-width:280px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.rf-btn:hover,.rf-btn[aria-expanded=true]{border-color:var(--accent)}
+.rf-btn .rf-name{flex:1;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rf-caret{color:var(--muted);font-size:11px}
+.room-filter .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.rf-panel{position:absolute;left:0;top:calc(100% + 4px);z-index:30;min-width:100%;max-height:360px;overflow:auto;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:var(--shadow-md);padding:4px 0}
+.rf-opt{display:flex;align-items:center;gap:9px;width:100%;border:0;background:transparent;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;text-align:left;white-space:nowrap}
+.rf-opt:hover,.rf-opt:focus{background:var(--surface-2);outline:none}
+.rf-opt.on{background:var(--accent-weak);color:var(--accent)}
 .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:4px 10px 4px 8px;border-radius:999px;font-size:11.5px;font-weight:700;color:var(--ink-2);cursor:pointer}
 .chip .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .chip.off{opacity:.4}
@@ -610,6 +621,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
     <div class="controls">
       <div class="seg" id="daySeg"></div>
       <div class="seg" id="weekSeg"></div>
+      <!-- Filtro de salas (menu suspenso), antes da busca -->
+      <div class="room-filter" id="roomChips"></div>
       <div class="search-wrap">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
         <input id="patientSearch" type="text" placeholder="Buscar paciente na grade…">
@@ -618,7 +631,6 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <span class="pat-count" id="matchCount"></span>
     </div>
     <div class="readonly-banner" id="readonlyBanner">Modo somente leitura — você está vendo esta agenda mas as alterações não serão salvas. Verifique se está conectado com uma conta que tem permissão de edição.</div>
-    <div class="chips" id="roomChips"></div>
     <div class="clipboard-bar" id="clipboardBar"></div>
     <div class="grid-scroll"><div id="gridHost"></div></div>
     <div class="color-legend">
@@ -1773,22 +1785,54 @@ function renderClipboardBar(){
     renderGrid();
   });
 }
+// Filtro de salas do Planner: menu suspenso (antes da busca) com "Todas as
+// salas" + cada sala com a bolinha da sua cor. Uma sala por vez, como antes.
 function renderRoomChips(){
   var host = document.getElementById("roomChips");
   if (!state.rooms.length){ host.innerHTML = ""; return; }
-  host.innerHTML = '<span class="chip" data-room="" style="'+(state.activeRoomFilter?'opacity:.55':'')+'"><span class="dot" style="background:var(--ink-2)"></span>Todas</span>' +
-    state.rooms.map(function(r){
-      var off = state.activeRoomFilter && state.activeRoomFilter!==r.id;
-      return '<span class="chip'+(off?' off':'')+'" data-room="'+esc(r.id)+'"><span class="dot" style="background:'+swatchVar(r.color)+'"></span>'+esc(r.name)+'</span>';
-    }).join("");
-  host.querySelectorAll(".chip").forEach(function(c){
-    c.addEventListener("click", function(){
-      var r = c.getAttribute("data-room");
-      state.activeRoomFilter = r ? r : null;
-      renderAgendaShell();
-    });
+  var sel = state.activeRoomFilter ? state.rooms.filter(function(r){ return r.id === state.activeRoomFilter; })[0] : null;
+  function opt(id, name, color){
+    var on = (id || null) === (state.activeRoomFilter || null);
+    return '<button type="button" class="rf-opt'+(on?' on':'')+'" role="option" aria-selected="'+on+'" data-room="'+esc(id)+'">' +
+      '<span class="dot" style="background:'+color+'"></span><span class="rf-name">'+esc(name)+'</span></button>';
+  }
+  host.innerHTML =
+    '<button type="button" class="rf-btn" aria-haspopup="listbox" aria-expanded="false" title="Filtrar por sala">' +
+      '<span class="dot" style="background:'+(sel ? swatchVar(sel.color) : 'var(--ink-2)')+'"></span>' +
+      '<span class="rf-name">'+esc(sel ? sel.name : "Todas as salas")+'</span><span class="rf-caret">▾</span></button>' +
+    '<div class="rf-panel" role="listbox" hidden>' +
+      opt("", "Todas as salas", "var(--ink-2)") +
+      state.rooms.map(function(r){ return opt(r.id, r.name, swatchVar(r.color)); }).join("") +
+    '</div>';
+  var btn = host.querySelector(".rf-btn"), panel = host.querySelector(".rf-panel");
+  function open(on){
+    panel.hidden = !on;
+    btn.setAttribute("aria-expanded", on ? "true" : "false");
+    if (on){ var cur = panel.querySelector(".rf-opt.on") || panel.querySelector(".rf-opt"); if (cur) cur.focus(); }
+  }
+  btn.addEventListener("click", function(){ open(panel.hidden); });
+  panel.addEventListener("click", function(e){
+    var o = e.target.closest(".rf-opt"); if (!o) return;
+    var r = o.getAttribute("data-room");
+    state.activeRoomFilter = r ? r : null;
+    open(false);
+    renderAgendaShell();
+  });
+  panel.addEventListener("keydown", function(e){
+    var items = Array.prototype.slice.call(panel.querySelectorAll(".rf-opt"));
+    var i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown"){ e.preventDefault(); items[Math.min(items.length-1, i+1)].focus(); }
+    else if (e.key === "ArrowUp"){ e.preventDefault(); items[Math.max(0, i-1)].focus(); }
+    else if (e.key === "Escape"){ e.stopPropagation(); open(false); btn.focus(); }
   });
 }
+// Fecha o menu de salas ao clicar fora dele.
+document.addEventListener("mousedown", function(e){
+  var host = document.getElementById("roomChips");
+  if (!host || host.contains(e.target)) return;
+  var panel = host.querySelector(".rf-panel"), btn = host.querySelector(".rf-btn");
+  if (panel && !panel.hidden){ panel.hidden = true; if (btn) btn.setAttribute("aria-expanded", "false"); }
+});
 
 // Sessions are 40 minutes long, so a period's end time is its last slot's start + 40min.
 var SESSION_MINUTES = 40;
