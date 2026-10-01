@@ -477,3 +477,13 @@ Bloqueado / Reunião Clínica / Treinamento não entram nas regras.
 - Agenda: `agdConflictIn(rows, rec)` (síncrono) e `agdConflictsFor(recs,
   ignoreIds)` (consulta o banco pelas datas) — na janela, colar/mover/trocar e
   no envio do Planner (pula com o motivo "Profissional ou paciente já ocupado").
+
+## Liberar / bloquear por linha (2026-10-02)
+Ao lado de cada horário (coluna de horários) há dois botões `.row-lock`
+(liberar / bloquear), 2 cliques via `armTwoClick(btn, title)`. Planner:
+`plannerRowAction(action, docId, dayKey, time)` em todas as colunas visíveis
+da tabela (respeita o filtro de sala). Agenda: `agdRowAction(action, time)` —
+Semana = os 5 dias do profissional/sala selecionado; Dia = todas as colunas.
+Bloquear só preenche livres (dentro do horário do profissional); liberar só
+remove bloqueios. Os botões novos (Enviar / Limpar semana) também são
+mostrados/ocultados em `applyPermissionsUI` (o perfil chega depois do 1º desenho).
