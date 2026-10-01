@@ -369,7 +369,6 @@ th.timecol{z-index:5}
 .book-copy:hover{color:var(--accent);background:var(--accent-weak)}
 .book-move:hover{color:var(--warn);background:var(--warn-weak)}
 .book-del:hover{color:var(--danger);background:var(--danger-weak)}
-.book-del.confirm{opacity:1;color:#fff;background:var(--danger)}
 .book-copy svg,.book-move svg,.book-del svg{width:10px;height:10px;display:block}
 
 .clipboard-bar{display:none;align-items:center;gap:8px;padding:8px 14px;background:var(--warn-weak);border-top:1px solid var(--line);font-size:12px;color:var(--ink-2);flex-wrap:wrap}
@@ -1387,22 +1386,6 @@ function setReadonlyBanner(on){
   var b = document.getElementById("readonlyBanner");
   if (b) b.className = "readonly-banner" + (on ? " on" : "");
 }
-/* Botão lixeira das células (Planner e Agenda): dupla confirmação. O 1º clique
- * deixa o botão vermelho ("clique de novo") por 4s; o 2º abre a janela de
- * confirmação. Devolve true só quando o 2º clique aconteceu. */
-function armCellDelete(btn){
-  if (btn.__armed){
-    clearTimeout(btn.__timer);
-    btn.__armed = false; btn.classList.remove("confirm"); btn.title = "Excluir agendamento";
-    return true;
-  }
-  btn.__armed = true;
-  btn.classList.add("confirm");
-  btn.title = "Clique de novo para excluir";
-  btn.__timer = setTimeout(function(){ btn.__armed = false; btn.classList.remove("confirm"); btn.title = "Excluir agendamento"; }, 4000);
-  return false;
-}
-
 /* Janela de confirmação padrão para exclusões. Abre POR CIMA de qualquer
  * janela de cadastro já aberta (host próprio, fora do #modalHost) e devolve
  * uma Promise<boolean>. opts: {title, message (HTML já escapado), confirmLabel}.
@@ -2207,7 +2190,6 @@ function wireGridDelegatedEvents(){
       e.stopPropagation();
       var bd = effectiveBooking(bookings, key, dayKey2, time2);
       if (!bd || !bd.patient) return;
-      if (!armCellDelete(delBtn)) return;
       var dayD = DAYS.filter(function(d){ return d.key === dayKey2; })[0];
       confirmDialog({
         title: "Excluir agendamento",
@@ -5344,12 +5326,11 @@ function wireAgendaDia(){
     var td = e.target.closest("td.agd-slot"); if (!td) return;
     var id = td.getAttribute("data-id");
     var row = id ? AD.rows[id] : null;
-    // Lixeira: dupla confirmação (botão vermelho + janela).
+    // Lixeira: abre direto a janela de confirmação.
     var delBtn = e.target.closest(".book-del");
     if (delBtn && row){
       e.stopPropagation();
       if (!can("agendamentos","delete")){ showToast(permDeniedMsg("agendamentos","delete"), true); return; }
-      if (!armCellDelete(delBtn)) return;
       confirmDialog({
         title: "Excluir agendamento",
         message: "Excluir <b>"+esc(row.blocked ? "o bloqueio" : row.patient)+"</b> em "+agdBrDate(row.date)+" às "+esc(row.time)+"?",
