@@ -271,6 +271,8 @@ testes continuam usando o mesmo mock.
 - Logo real da clínica (imagem fornecida pelo usuário — puzzle-globo colorido),
   recortada e embutida como `data:` URI, substituindo o antigo badge de texto
   "PP".
+- Ícone da aba do navegador: `favicon.png` (mesma logo, 128px) na raiz, ligado
+  no `<head>` (`rel="icon"` e `apple-touch-icon`).
 - Título "Clínica de Autismo Pipo" / subtítulo "Sistema de atendimentos".
 
 ### Relatório de atendimentos
