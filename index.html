@@ -206,6 +206,7 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .send-skip{margin:4px 0;font-size:12.5px}
 .send-skip summary{cursor:pointer;color:var(--ink-2)}
 .send-skip ul{margin:4px 0 6px 18px;padding:0;max-height:140px;overflow:auto;color:var(--ink-2)}
+.agd-status{position:absolute;right:3px;bottom:3px;max-width:calc(100% - 6px);font-size:9px;font-weight:800;line-height:14px;color:#fff;border-radius:999px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 .agd-multi{display:flex;gap:3px;height:100%}
 .agd-multi > .book{flex:1 1 0;min-width:0}
 .agd-add{flex:none;width:16px;border:1px dashed var(--line);border-radius:6px;background:transparent;color:var(--muted);font:inherit;font-weight:800;cursor:pointer;opacity:0;padding:0}
@@ -1014,6 +1015,15 @@ var SLOT_KINDS = [
   {key:"reuniao",     label:MEETING_LABEL, color:MEETING_COLOR,  ink:"#182523"},
   {key:"treinamento", label:TRAINING_LABEL, color:TRAINING_COLOR, ink:"#182523"}
 ];
+/* Status dos atendimentos da Agenda (config/statuses: {list:[{id,name,color}]}).
+ * Cadastro pelo menu "Acesso" (só Administrador). Quem pode usar cada status
+ * vem do nível de permissão: roles.permissions.status[id] (pipoAuth.can("status", id)).
+ */
+function statusesList(){ return (state.statuses || []).slice(); }
+function statusById(id){ return statusesList().filter(function(s){ return s.id === id; })[0] || null; }
+// Direto no pipoAuth: o Profissional não escreve em nada (state.writable = false),
+// mas pode marcar os status liberados para o nível dele.
+function canUseStatus(id){ return !id || (window.pipoAuth ? window.pipoAuth.can("status", id) : true); }
 /* Serviço do atendimento (Planner e Agenda): id de config/services, padrão
  * "Sessão" (id "sessao", travado no cadastro de serviços). Horários especiais
  * (Bloqueado / Reunião / Treinamento) não têm serviço. */
@@ -1431,6 +1441,7 @@ function connectDb(){
     subscribeSpecialties();
     subscribeConvenios();
     subscribeServices();
+    subscribeStatuses();
     subscribeProfessionals();
     subscribeSchedule();
     subscribeReportDocs();
@@ -1492,6 +1503,8 @@ function confirmDialog(opts){
 }
 window.pipoConfirm = confirmDialog; // usado por js/usuarios.js
 window.pipoProfessionals = function(){ return state.professionals.slice(); }; // idem (criar acessos)
+window.pipoStatuses = function(){ return statusesList(); }; // níveis de permissão (js/usuarios.js)
+window.pipoOpenStatuses = function(){ openStatusesModal(); }; // menu Acesso (js/pipo-supabase.js)
 function namesList(names){
   return '<ul class="confirm-list">' + names.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join("") + '</ul>';
 }
@@ -1551,6 +1564,12 @@ function subscribeSpecialties(){
   }, function(){ specialtiesLoaded = true; });
 }
 
+function subscribeStatuses(){
+  db.doc("config/statuses").onSnapshot(function(snap){
+    state.statuses = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
+    if (typeof agdRender === "function" && state.tab === "agendadia") agdRender();
+  }, function(){});
+}
 function subscribeServices(){
   db.doc("config/services").onSnapshot(function(snap){
     state.services = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
@@ -4149,6 +4168,79 @@ function openServicesModal(){
   });
 }
 
+function openStatusesModal(){
+  if (!(window.pipoAuth && window.pipoAuth.isAdmin())){ showToast("Só o Administrador altera o cadastro de status.", true); return; }
+  var host = document.getElementById("modalHost");
+  var draft = statusesList().map(function(s){ return {id: s.id, name: s.name, color: s.color || "#5b6b68"}; });
+  host.innerHTML =
+    '<div class="overlay" id="ovStatus"><div class="modal">' +
+      '<div class="modal-head"><div><h3>Status dos atendimentos</h3>' +
+        '<div class="modal-sub">Situações marcadas nos atendimentos da Agenda (ex.: Finalizado, Não compareceu). Quem pode usar cada status é definido nos Níveis de permissão.</div>' +
+      '</div><button class="modal-close" id="closeStatus" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="therapist-rows" id="statusRows"></div>' +
+        '<button type="button" class="btn ghost add-row-btn" id="statusAdd">+ status</button>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div>' +
+        '<button class="btn ghost" id="statusCancel">Cancelar</button>' +
+        '<button class="btn primary" id="statusSave">Salvar</button>' +
+      '</div>' +
+    '</div></div>';
+  var overlay = document.getElementById("ovStatus");
+  function close(){ host.innerHTML = ""; }
+  overlay.addEventListener("mousedown", function(e){ if (e.target === overlay) close(); });
+  document.getElementById("closeStatus").addEventListener("click", close);
+  document.getElementById("statusCancel").addEventListener("click", close);
+  var rowsHost = document.getElementById("statusRows");
+  function syncFromDom(){
+    rowsHost.querySelectorAll(".therapist-row").forEach(function(row, i){
+      if (!draft[i]) return;
+      draft[i].name = row.querySelector("input[type=text]").value;
+      draft[i].color = row.querySelector("input[type=color]").value;
+    });
+  }
+  function renderRows(){
+    rowsHost.innerHTML = draft.length ? draft.map(function(s, i){
+      return '<div class="therapist-row" data-i="'+i+'">' +
+        '<input type="color" value="'+esc(s.color)+'" title="Cor do status" style="width:38px;flex:none;padding:2px">' +
+        '<input type="text" value="'+esc(s.name)+'" placeholder="Nome do status">' +
+        '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover status">✕</button>' +
+      '</div>';
+    }).join("") : '<div class="hours-empty">Nenhum status ainda.</div>';
+    rowsHost.querySelectorAll(".rm").forEach(function(b){
+      b.addEventListener("click", function(){ syncFromDom(); draft.splice(parseInt(b.getAttribute("data-rm"), 10), 1); renderRows(); });
+    });
+  }
+  renderRows();
+  document.getElementById("statusAdd").addEventListener("click", function(){
+    syncFromDom(); draft.push({id: null, name: "", color: "#5b6b68"}); renderRows();
+    var inputs = rowsHost.querySelectorAll("input[type=text]"); if (inputs.length) inputs[inputs.length-1].focus();
+  });
+  document.getElementById("statusSave").addEventListener("click", function(){
+    syncFromDom();
+    var clean = draft.map(function(s){ return {id: s.id, name: (s.name || "").trim(), color: s.color}; })
+      .filter(function(s){ return s.name; })
+      .map(function(s){ return {id: s.id || uid(slugify(s.name) || "status"), name: s.name, color: s.color}; });
+    var seen = {}, dup = null;
+    clean.forEach(function(s){ var k = normText(s.name); if (seen[k]) dup = dup || s.name; seen[k] = true; });
+    if (dup){ showToast('O status "'+dup+'" aparece mais de uma vez.', true); return; }
+    var keptIds = clean.map(function(s){ return s.id; });
+    var removed = statusesList().filter(function(s){ return keptIds.indexOf(s.id) === -1; });
+    (removed.length ? confirmDialog({
+      title: removed.length === 1 ? "Excluir status" : "Excluir status",
+      message: (removed.length === 1 ? "Este status será excluído do cadastro:" : "Estes status serão excluídos do cadastro:") + namesList(removed.map(function(s){ return s.name; })) +
+        "Atendimentos que já estão com ele ficam sem status na tela.",
+      confirmLabel: "Excluir e salvar"
+    }) : Promise.resolve(true)).then(function(ok){
+      if (!ok) return;
+      if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return; }
+      db.doc("config/statuses").set({list: clean}).then(function(){
+        state.statuses = clean; close(); showToast("Status salvos."); if (state.tab === "agendadia") agdRender();
+      }).catch(function(){ showToast("Não foi possível salvar os status.", true); });
+    });
+  });
+}
+
 function writeServices(list){
   var denied = listPermDenied("profissionais", state.services, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
@@ -5178,6 +5270,7 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   // observação, mostra o profissional (senão não daria para saber de quem é).
   var sub = row.note || (AD.mode === "sala" ? label : "");
   var serv = bookingServiceName(row);
+  var st = row.status ? statusById(row.status) : null;
   // Grupo de suporte: nome do grupo / sala / observação (a sala no lugar do serviço).
   if (!kind && room && isGroup(room)){
     var gRoom = row.room_id ? findRoom(row.room_id) : null;
@@ -5187,6 +5280,7 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
     '<button type="button" class="book-main'+cls+'" style="border-left-color:'+color+(fill ? ';background:'+fill : '')+'"'+(canDrag ? ' draggable="true"' : '')+
       ' title="'+esc(name + (sub ? " — " + sub : ""))+'">' +
       '<span class="pname">'+esc(name)+'</span>' + (serv ? '<span class="pserv">'+esc(serv)+'</span>' : '') + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
+      (st ? '<span class="agd-status" style="background:'+esc(st.color || "#5b6b68")+'" title="Status: '+esc(st.name)+'">'+esc(st.name)+'</span>' : '') +
     '</button>' +
     (can("agendamentos","delete") ? '<button type="button" class="book-del" title="Excluir agendamento" aria-label="Excluir agendamento">'+DEL_SVG+'</button>' : "") +
     '<button type="button" class="book-move" title="Mover" aria-label="Mover">'+MOVE_SVG+'</button>' +
@@ -5194,6 +5288,25 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   '</div>';
 }
 
+// Troca só o status (função set_appointment_status no banco: confere o nível,
+// e funciona também para quem não tem "editar" na Agenda). Promise<boolean>.
+function agdSetStatus(row, statusId){
+  return agdClient().rpc("set_appointment_status", {p_id: row.id, p_status: statusId || null}).then(function(r){
+    if (r.error){
+      var m = (r.error.message || "");
+      showToast(/set_appointment_status|function|status/i.test(m) && /does not exist|not find|schema cache/i.test(m)
+        ? "Falta rodar a atualização do banco (status dos atendimentos)."
+        : "Não foi possível mudar o status: " + agdErr(r.error), true);
+      return false;
+    }
+    var updated = r.data && r.data.id ? r.data : Object.assign({}, row, {status: statusId || null});
+    if (can("agendamentos", "edit")) agdRecord("Status " + agdRowLabel(updated), [row], [updated]);
+    if (AD.rows[row.id]) AD.rows[row.id] = updated;
+    var st = statusById(statusId);
+    showToast(st ? "Status: " + st.name + "." : "Status removido.");
+    return true;
+  });
+}
 // Exclui um atendimento da Agenda (com desfazer). Promise<boolean>.
 function agdDeleteRow(row, okMsg){
   return agdClient().from("appointments").delete().eq("id", row.id).then(function(r){
@@ -5382,6 +5495,17 @@ function agdOpenModal(opts){
   var roomId = row ? (row.room_id || "") : (opts.roomId || "");
   if (isNew && profId && !roomId){ var pr = agdProfRoom(profId); if (pr) roomId = pr.id; }
 
+  // Status (só em atendimento já marcado, não em bloqueio/reunião/treinamento).
+  var curStatus = (row && row.status) || "";
+  var showStatus = !!row && !rowKind && statusesList().length > 0;
+  var canChangeStatus = showStatus && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
+  var statusHtml = !showStatus ? "" :
+    '<div class="field"><label for="agdStatus">Status</label><select id="agdStatus"'+(canChangeStatus ? '' : ' disabled')+'>' +
+      '<option value="">Sem status</option>' +
+      statusesList().map(function(s){
+        var ok = canUseStatus(s.id) || s.id === curStatus;
+        return '<option value="'+esc(s.id)+'"'+(s.id === curStatus ? ' selected' : '')+(ok ? '' : ' disabled')+'>'+esc(s.name)+(ok ? '' : ' (sem permissão)')+'</option>';
+      }).join("") + '</select></div>';
   var profs = state.professionals.slice().sort(function(a,b){ return (a.name||"").localeCompare(b.name||"", "pt-BR"); });
   var host = document.getElementById("modalHost");
   host.innerHTML =
@@ -5390,6 +5514,7 @@ function agdOpenModal(opts){
         '<div class="modal-sub">'+agdBrDate(date)+(time ? ' às '+time : '')+'</div></div>' +
         '<button class="modal-close" id="agdClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
+        statusHtml +
         '<div class="field"><label for="agdPac">Paciente ou grupo de suporte</label><input id="agdPac" type="text" autocomplete="off" placeholder="Nome do paciente ou do grupo…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'><div class="autolist" id="agdSuggest" hidden></div></div>' +
         '<div class="field"><label for="agdServ">Serviço</label><select id="agdServ"'+(canSave && !rowKind?'':' disabled')+'>' +
           serviceOptionsHtml((row && row.service) || DEFAULT_SERVICE_ID, profId) + '</select></div>' +
@@ -5408,7 +5533,7 @@ function agdOpenModal(opts){
         (canDel ? '<button class="btn danger" id="agdDelete">Desmarcar</button>' : '<span></span>') +
         '<div class="spacer"></div>' +
         '<button class="btn ghost" id="agdCancel">'+(canSave ? "Cancelar" : "Fechar")+'</button>' +
-        (canSave ? '<button class="btn primary" id="agdSave">Salvar</button>' : '') +
+        (canSave ? '<button class="btn primary" id="agdSave">Salvar</button>' : (canChangeStatus ? '<button class="btn primary" id="agdSaveStatus">Salvar status</button>' : '')) +
       '</div>' +
     '</div></div>';
 
@@ -5417,6 +5542,18 @@ function agdOpenModal(opts){
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("agdClose").addEventListener("click", close);
   document.getElementById("agdCancel").addEventListener("click", close);
+  // Status escolhido diferente do atual? (null = não mudou)
+  function statusChoice(){
+    var el = document.getElementById("agdStatus");
+    return (el && !el.disabled && el.value !== curStatus) ? el.value : null;
+  }
+  var stOnly = document.getElementById("agdSaveStatus");
+  if (stOnly) stOnly.addEventListener("click", function(){
+    var v = statusChoice();
+    if (v === null){ close(); return; }
+    stOnly.disabled = true;
+    agdSetStatus(row, v).then(function(ok){ stOnly.disabled = false; if (ok){ close(); agdRender(); } });
+  });
   // Trocar o profissional sugere a sala onde ele atende.
   var profSel = document.getElementById("agdProf");
   var servSel = document.getElementById("agdServ");
@@ -5515,8 +5652,11 @@ function agdOpenModal(opts){
           if (r.data.date >= AD.rangeFrom && r.data.date <= AD.rangeTo) AD.rows[r.data.id] = r.data;
           else delete AD.rows[r.data.id];
         }
-        close(); agdRender();
-        showToast(isNew ? "Atendimento marcado." : "Atendimento atualizado.");
+        var stV = isNew ? null : statusChoice();
+        (stV === null ? Promise.resolve(true) : agdSetStatus(r.data || row, stV)).then(function(){
+          close(); agdRender();
+          showToast(isNew ? "Atendimento marcado." : "Atendimento atualizado.");
+        });
       });
     }
     // Aviso se a sala já estiver ocupada por outro profissional nesse horário (só a semana carregada).
@@ -5787,6 +5927,7 @@ function agdRowCore(r){
   // "source" (origem: "planner" quando veio do botão Enviar) só existe depois da
   // migração 2026-10-02c; sem a coluna, fica de fora para não quebrar o desfazer.
   if (r.source !== undefined) o.source = r.source;
+  if (r.status !== undefined) o.status = r.status;
   return o;
 }
 // Busca/apaga por id em lotes (listas grandes, ex. Limpar semana, estourariam a URL).

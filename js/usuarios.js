@@ -136,6 +136,8 @@
       if (mp["delete"]) w.push("excluir");
       return m.label + (w.length ? " (ver, " + w.join(", ") + ")" : " (só ver)");
     }).filter(Boolean);
+    var st = statusNames(p.status);
+    if (st.length) parts.push("Status: " + st.join(", "));
     return parts.length ? parts.join(" · ") : "Sem acesso a nenhuma aba";
   }
 
@@ -345,7 +347,29 @@
       out[m.key] = {};
       ACTIONS.forEach(function (a) { out[m.key][a.key] = !!(p[m.key] && p[m.key][a.key]); });
     });
+    // Status dos atendimentos que o nível pode usar na Agenda: {id: true}.
+    out.status = {};
+    Object.keys(p.status || {}).forEach(function (k) { if (p.status[k]) out.status[k] = true; });
     return out;
+  }
+  // Status cadastrados (config/statuses, vêm do app).
+  function statusList() { return window.pipoStatuses ? window.pipoStatuses() : []; }
+  function statusNames(map) {
+    map = map || {};
+    return statusList().filter(function (s) { return map[s.id]; }).map(function (s) { return s.name; });
+  }
+  function statusPermsHtml(perms, locked) {
+    var list = statusList();
+    if (!list.length) return "";
+    var map = (perms && perms.status) || {};
+    return '<div class="field" id="rStatusPerms" style="margin-top:12px"><label>Status dos atendimentos (Agenda)</label>' +
+      '<div class="pat-count" style="margin-bottom:6px">Quais status este nível pode marcar nos atendimentos.</div>' +
+      list.map(function (s) {
+        var on = locked || !!map[s.id];
+        return '<label class="role-status-opt" style="display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:500">' +
+          '<input type="checkbox" data-status="' + esc(s.id) + '"' + (on ? " checked" : "") + (locked ? " disabled" : "") + ">" +
+          '<span style="width:10px;height:10px;border-radius:50%;background:' + esc(s.color || "#5b6b68") + '"></span>' + esc(s.name) + "</label>";
+      }).join("") + "</div>";
   }
   function slugify(s) {
     return String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
@@ -425,6 +449,7 @@
         '<div class="modal-body">' +
           '<div class="field"><label for="rName">Nome do nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
           roleGridHtml(role ? (role.permissions || {}) : { agendamentos: { view: true }, agenda: { view: true }, pacientes: { view: true }, profissionais: { view: true }, salas: { view: true } }, locked) +
+          statusPermsHtml(role ? (role.permissions || {}) : {}, locked) +
           (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +
         "</div>" +
         '<div class="modal-foot">' +
@@ -462,6 +487,13 @@
       grid.querySelectorAll("input[type=checkbox]").forEach(function (c) {
         p[c.getAttribute("data-m")][c.getAttribute("data-a")] = c.checked;
       });
+      document.querySelectorAll("#rStatusPerms input[data-status]").forEach(function (c) {
+        if (c.checked) p.status[c.getAttribute("data-status")] = true;
+      });
+      // Status que existiam no nível mas não estão mais no cadastro: mantém como estava.
+      var prev = (role && role.permissions && role.permissions.status) || {};
+      var known = statusList().map(function (s) { return s.id; });
+      Object.keys(prev).forEach(function (k) { if (prev[k] && known.indexOf(k) === -1) p.status[k] = true; });
       return p;
     }
 

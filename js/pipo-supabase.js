@@ -281,13 +281,14 @@
           '<svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
         '<div class="acesso-menu" id="acessoMenu" role="menu" hidden>' +
           (isAdmin() ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : "") +
+          (isAdmin() ? '<button type="button" role="menuitem" data-act="status">Status</button>' : "") +
           '<button type="button" role="menuitem" data-act="senha">Trocar senha</button>' +
           '<button type="button" role="menuitem" data-act="sair">Sair</button>' +
         "</div>" +
       "</div>";
   }
 
-  // Menu "Acesso" (topo): Usuários (só Administrador), Trocar senha, Sair.
+  // Menu "Acesso" (topo): Usuários e Status (só Administrador), Trocar senha, Sair.
   function setAcessoMenu(open) {
     var menu = document.getElementById("acessoMenu"), btn = document.getElementById("acessoBtn");
     if (!menu || !btn) return;
@@ -310,6 +311,8 @@
       var act = b.getAttribute("data-act");
       if (act === "sair") {
         client.auth.signOut().then(function () { location.reload(); });
+      } else if (act === "status") {
+        if (window.pipoOpenStatuses) window.pipoOpenStatuses();
       } else if (act === "usuarios") {
         var tabBtn = document.querySelector('#mainTabs button[data-tab="usuarios"]');
         if (tabBtn) tabBtn.click();

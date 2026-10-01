@@ -500,3 +500,20 @@ física não é aceita na Agenda (no Planner, só nas colunas de grupo).
   por profissional/sala (os sem resultado ficam apagados).
 - Visão Dia mostra só o profissional/sala selecionado (uma coluna), igual à
   Semana; trocar na lista da esquerda.
+
+## Status dos atendimentos (2026-10-02)
+- Cadastro `config/statuses` ({list:[{id,name,color}]}) — `openStatusesModal()`,
+  aberto pelo menu "Acesso" → "Status" (só Administrador; no banco o caminho
+  usa o módulo `cadastro_status`, que nenhum nível tem). Pré-cadastrados:
+  finalizado, nao-compareceu, falta-justificada.
+- `appointments.status` = id do status. Etiqueta colorida `.agd-status` no canto
+  da célula. Campo "Status" na janela da Agenda (só atendimento já marcado, não
+  em bloqueio/reunião/treinamento).
+- Quem pode usar cada status: `roles.permissions.status[id]` (tela Níveis de
+  permissão, seção "Status dos atendimentos"); `canUseStatus(id)` usa
+  `pipoAuth.can("status", id)` direto (o Profissional é "somente leitura" mas
+  pode marcar status). Só troca de um status permitido para outro permitido.
+- Gravação pela função `set_appointment_status(p_id, p_status)` (security
+  definer; serve para quem não tem "editar"). Trigger
+  `appointments_status_guard` confere no banco. Migração
+  `supabase/2026-10-02d-status.sql`.

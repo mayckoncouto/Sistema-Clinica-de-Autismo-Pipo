@@ -58,17 +58,20 @@ insert into public.roles (id, name, is_admin, sort, permissions) values
     "pacientes":     {"view": true, "create": false, "edit": false, "delete": false},
     "profissionais": {"view": true, "create": false, "edit": false, "delete": false},
     "salas":         {"view": true, "create": false, "edit": false, "delete": false},
-    "agendamentos":  {"view": true, "create": false, "edit": false, "delete": false}
+    "agendamentos":  {"view": true, "create": false, "edit": false, "delete": false},
+    "status":        {"finalizado": true, "nao-compareceu": true}
   }'),
   ('secretaria', 'Secretária', false, 4, '{
     "agenda":        {"view": true, "create": true,  "edit": true,  "delete": true},
     "pacientes":     {"view": true, "create": true,  "edit": true,  "delete": false},
     "profissionais": {"view": true, "create": false, "edit": false, "delete": false},
     "salas":         {"view": true, "create": false, "edit": false, "delete": false},
-    "agendamentos":  {"view": true, "create": true,  "edit": true,  "delete": true}
+    "agendamentos":  {"view": true, "create": true,  "edit": true,  "delete": true},
+    "status":        {"finalizado": true, "nao-compareceu": true, "falta-justificada": true}
   }')
 on conflict (id) do nothing;
 -- Permissões: "agenda" = Planner (grade de 4 semanas); "agendamentos" = Agenda por data.
+-- "status" = quais status de atendimento (config/statuses) o nível pode usar na Agenda.
 
 -- ---------------------------------------------------------------------
 -- profiles
@@ -95,7 +98,7 @@ create table if not exists public.documents (
   updated_at  timestamptz not null default now(),
   updated_by  uuid references auth.users(id) on delete set null,
   constraint documents_path_valid check (
-    path ~ '^(config/(rooms|specialties|convenios|professionals|services)|patients/all|schedule/(seg|ter|qua|qui|sex)-[1-4])$'
+    path ~ '^(config/(rooms|specialties|convenios|professionals|services|statuses)|patients/all|schedule/(seg|ter|qua|qui|sex)-[1-4])$'
   )
 );
 
@@ -139,6 +142,7 @@ returns text language sql immutable as $$
     when p_path = 'config/professionals'   then 'profissionais'
     when p_path = 'config/services'        then 'profissionais'
     when p_path = 'config/rooms'           then 'salas'
+    when p_path = 'config/statuses'        then 'cadastro_status' -- nenhum nível tem: só Administrador
   end;
 $$;
 
@@ -546,6 +550,7 @@ create table if not exists public.appointments (
   blocked          boolean not null default false,
   service          text,               -- id do serviço (config/services); padrão "sessao"
   source           text,               -- "planner" quando veio do botão Enviar para a Agenda
+  status           text,               -- id do status (config/statuses): Finalizado, Não compareceu...
   created_by       uuid references auth.users(id) on delete set null,
   updated_by       uuid references auth.users(id) on delete set null,
   created_at       timestamptz not null default now(),
@@ -618,3 +623,67 @@ insert into public.documents (path, data) values ('config/services', '{"list": [
   {"id": "orientacao-escolar",         "name": "Orientação Escolar"}
 ]}'::jsonb)
 on conflict (path) do nothing;
+
+-- ---------------------------------------------------------------------
+-- Status dos atendimentos (ver 2026-10-02d-status.sql)
+-- ---------------------------------------------------------------------
+insert into public.documents (path, data) values ('config/statuses', '{"list": [
+  {"id": "finalizado",        "name": "Finalizado",        "color": "#2e7d4f"},
+  {"id": "nao-compareceu",    "name": "Não compareceu",    "color": "#b6403a"},
+  {"id": "falta-justificada", "name": "Falta Justificada", "color": "#c77d14"}
+]}'::jsonb)
+on conflict (path) do nothing;
+
+create or replace function public.can_set_status(p_status text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_status is null or btrim(p_status) = '' or coalesce((
+    select p.active and (r.is_admin or coalesce((r.permissions -> 'status' ->> p_status)::boolean, false))
+    from public.profiles p join public.roles r on r.id = p.role_id
+    where p.id = auth.uid()
+  ), false);
+$$;
+
+-- 4. Guarda: criar/alterar status só entre status permitidos ao nível.
+create or replace function public.appointments_status_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return new; end if; -- SQL Editor / scripts
+  if tg_op = 'INSERT' then
+    if new.status is not null and not public.can_set_status(new.status) then
+      raise exception 'Seu nível não pode usar o status "%".', new.status using errcode = '42501';
+    end if;
+  elsif new.status is distinct from old.status then
+    if not (public.can_set_status(old.status) and public.can_set_status(new.status)) then
+      raise exception 'Seu nível não pode trocar este status.' using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists appointments_status_guard on public.appointments;
+create trigger appointments_status_guard
+  before insert or update on public.appointments
+  for each row execute function public.appointments_status_guard();
+
+-- 5. Trocar só o status (para quem pode ver a Agenda, mesmo sem "editar").
+create or replace function public.set_appointment_status(p_id uuid, p_status text)
+returns public.appointments language plpgsql security definer set search_path = public as $$
+declare
+  r public.appointments;
+begin
+  if not public.has_perm('agendamentos', 'view') then
+    raise exception 'Sem permissão.' using errcode = '42501';
+  end if;
+  update public.appointments set status = nullif(btrim(coalesce(p_status, '')), '')
+  where id = p_id
+  returning * into r;
+  if not found then
+    raise exception 'Atendimento não encontrado (talvez já tenha sido apagado).';
+  end if;
+  return r;
+end;
+$$;
+
+revoke all on function public.set_appointment_status(uuid, text) from public, anon;
+grant execute on function public.set_appointment_status(uuid, text) to authenticated;
