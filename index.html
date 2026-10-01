@@ -226,6 +226,15 @@ table.ad-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout:
 .field .kind-opt.on{border-color:var(--accent);background:var(--accent-weak);color:var(--ink)}
 .field .kind-opt input{width:15px;height:15px;margin:0;padding:0;accent-color:var(--accent);flex:none}
 .field .kind-opt i{display:inline-block;width:12px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.12)}
+.prof-section{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.prof-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.prof-section-head .ph-copy{padding:3px 8px;font-size:11.5px}
+table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
+.prof-hours th{text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted);padding:4px 6px;border-bottom:1px solid var(--line)}
+.prof-hours td{padding:4px 6px;border-bottom:1px solid var(--line)}
+.prof-hours td.ph-day{font-weight:700;color:var(--ink);width:38%}
+.prof-hours select{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:inherit;font-size:12.5px;color:var(--ink)}
+.prof-hours select:disabled{opacity:.45}
 .prof-access{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
 .prof-access-title{font-size:12px;font-weight:800;color:var(--ink);text-transform:uppercase;letter-spacing:.03em}
 .confirm-msg{font-size:13px;line-height:1.5;color:var(--ink-2)}
@@ -3841,9 +3850,19 @@ function openProfessionalModal(p){
     return '<option value="'+esc(s.id)+'"'+(s.id===draftSpecialtyId?' selected':'')+'>'+esc(s.name)+'</option>';
   }).join("");
   var v = p || {};
-  var startSel = v.horaInicio || PROF_DAY_START, endSel = v.horaFim || PROF_DAY_END;
-  var startOpts = PROF_START_TIMES.map(function(t){ return '<option'+(t===startSel?' selected':'')+'>'+t+'</option>'; }).join("");
-  var endOpts = PROF_END_TIMES.map(function(t){ return '<option'+(t===endSel?' selected':'')+'>'+t+'</option>'; }).join("");
+  // Horário por dia da semana (seg–sex); dia sem início = não atende.
+  var dayHours = {};
+  PROF_WEEKDAYS.forEach(function(d){ dayHours[d.key] = profDayHours(v, d.key); });
+  function timeOpts(list, sel, withNone){
+    return (withNone ? '<option value=""'+(!sel?' selected':'')+'>Não atende</option>' : '') +
+      list.map(function(t){ return '<option'+(t===sel?' selected':'')+'>'+t+'</option>'; }).join("");
+  }
+  var hoursRows = PROF_WEEKDAYS.map(function(d){
+    var h = dayHours[d.key];
+    return '<tr data-day="'+d.key+'"><td class="ph-day">'+d.label+'</td>' +
+      '<td><select class="ph-start" aria-label="Início '+d.label+'">'+timeOpts(PROF_START_TIMES, h ? h.start : "", true)+'</select></td>' +
+      '<td><select class="ph-end" aria-label="Fim '+d.label+'"'+(h?'':' disabled')+'>'+timeOpts(PROF_END_TIMES, h ? h.end : PROF_DAY_END, false)+'</select></td></tr>';
+  }).join("");
   // Usuário e senha: só o Administrador cria/ajusta acesso (e só ele enxerga os usuários).
   var canManageUser = !!(window.pipoAuth && window.pipoAuth.isAdmin());
 
@@ -3852,25 +3871,28 @@ function openProfessionalModal(p){
       '<div class="modal-head"><div><h3>'+(isNew?"Novo profissional":"Editar profissional")+'</h3></div>' +
         '<button class="modal-close" id="closeProf" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
-        '<div class="field"><label for="profName">Nome do profissional</label><input id="profName" type="text" placeholder="Nome" value="'+esc(draftName)+'"></div>' +
+        '<div class="field-row">' +
+          '<div class="field" style="flex:2"><label for="profName">Nome do profissional</label><input id="profName" type="text" placeholder="Nome" value="'+esc(draftName)+'"></div>' +
+          '<div class="field"><label for="profCpf">CPF</label><input id="profCpf" type="text" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" value="'+esc(v.cpf||"")+'"></div>' +
+        '</div>' +
         '<div class="field-row">' +
           '<div class="field" style="flex:2"><label for="profSpecialty">Especialidade principal</label><select id="profSpecialty">'+specOptions+'</select></div>' +
-          '<div class="field"><label for="profStart">Horário inicial</label><select id="profStart">'+startOpts+'</select></div>' +
-          '<div class="field"><label for="profEnd">Horário final</label><select id="profEnd">'+endOpts+'</select></div>' +
+          '<div class="field"><label for="profCbos">CBOS</label><input id="profCbos" type="text" list="cbosList" placeholder="Ex.: 2515-10" value="'+esc(v.cbos||"")+'"></div>' +
         '</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="profConselho">Conselho</label><input id="profConselho" type="text" list="conselhoList" placeholder="Ex.: CRP" value="'+esc(v.conselho||"")+'"></div>' +
           '<div class="field"><label for="profRegistro">Registro</label><input id="profRegistro" type="text" placeholder="Nº do registro" value="'+esc(v.registro||"")+'"></div>' +
         '</div>' +
-        '<div class="field-row">' +
-          '<div class="field"><label for="profCpf">CPF</label><input id="profCpf" type="text" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" value="'+esc(v.cpf||"")+'"></div>' +
-          '<div class="field"><label for="profCbos">CBOS</label><input id="profCbos" type="text" list="cbosList" placeholder="Ex.: 2515-10" value="'+esc(v.cbos||"")+'"></div>' +
-        '</div>' +
         '<datalist id="conselhoList">' + ["CRP","CRFa","CREFITO","CRN","CRM","CREF","CRESS","ABPp"].map(function(c){ return '<option value="'+c+'">'; }).join("") + '</datalist>' +
         '<datalist id="cbosList">' + CBOS_SUGGESTIONS.map(function(c){ return '<option value="'+c[0]+'">'+c[1]+'</option>'; }).join("") + '</datalist>' +
+        '<div class="prof-section">' +
+          '<div class="prof-section-head"><span class="prof-access-title">Horários</span>' +
+            '<button type="button" class="btn ghost ph-copy" id="profHoursCopy">Copiar segunda para todos</button></div>' +
+          '<table class="prof-hours" id="profHours"><thead><tr><th>Dia</th><th>Início</th><th>Fim</th></tr></thead><tbody>'+hoursRows+'</tbody></table>' +
+        '</div>' +
         (canManageUser ?
           '<div class="prof-access" id="profAccess">' +
-            '<div class="prof-access-title">Acesso ao sistema</div>' +
+            '<div class="prof-access-title">Usuário</div>' +
             '<div class="pat-count" id="profAccessInfo">'+(isNew ? 'Preencha para criar o usuário deste profissional (nível "Profissional"). Pode deixar em branco e criar depois.' : 'Carregando…')+'</div>' +
             '<div class="field-row" id="profAccessFields"'+(isNew?'':' hidden')+'>' +
               '<div class="field"><label for="profUser">Usuário (e-mail)</label><input id="profUser" type="email" autocomplete="off" placeholder="nome@clinicapipo.com"></div>' +
@@ -3906,6 +3928,28 @@ function openProfessionalModal(p){
     });
   }
 
+  // Horários: "Não atende" desativa o fim; copiar segunda para os demais dias.
+  var hoursTable = document.getElementById("profHours");
+  hoursTable.addEventListener("change", function(e){
+    if (!e.target.classList.contains("ph-start")) return;
+    var tr = e.target.closest("tr"), end = tr.querySelector(".ph-end");
+    end.disabled = !e.target.value;
+    if (e.target.value && end.value <= e.target.value){
+      var next = PROF_END_TIMES.filter(function(t){ return t > e.target.value; });
+      end.value = next.length ? next[next.length-1] : end.value;
+    }
+  });
+  document.getElementById("profHoursCopy").addEventListener("click", function(){
+    var rows = hoursTable.querySelectorAll("tbody tr");
+    var s = rows[0].querySelector(".ph-start").value, e = rows[0].querySelector(".ph-end").value;
+    Array.prototype.forEach.call(rows, function(tr, i){
+      if (!i) return;
+      tr.querySelector(".ph-start").value = s;
+      tr.querySelector(".ph-end").value = e;
+      tr.querySelector(".ph-end").disabled = !s;
+    });
+  });
+
   // CPF: só números, formatado enquanto digita (000.000.000-00).
   var cpfEl = document.getElementById("profCpf");
   cpfEl.addEventListener("input", function(){ cpfEl.value = formatCpf(cpfEl.value); });
@@ -3934,8 +3978,18 @@ function openProfessionalModal(p){
     var name = document.getElementById("profName").value.trim();
     if (!name){ document.getElementById("profName").focus(); return; }
     var specialtyId = document.getElementById("profSpecialty").value || null;
-    var horaInicio = document.getElementById("profStart").value, horaFim = document.getElementById("profEnd").value;
-    if (horaFim <= horaInicio){ showToast("O horário final precisa ser depois do inicial.", true); return; }
+    // Horários por dia: {seg:{inicio,fim}, ...}; dia "Não atende" fica {inicio:"",fim:""}.
+    var horarios = {}, badDay = null;
+    Array.prototype.forEach.call(document.querySelectorAll("#profHours tbody tr"), function(tr){
+      var s = tr.querySelector(".ph-start").value, e = tr.querySelector(".ph-end").value;
+      if (s && e <= s) badDay = badDay || tr;
+      horarios[tr.getAttribute("data-day")] = s ? {inicio: s, fim: e} : {inicio: "", fim: ""};
+    });
+    if (badDay){
+      showToast("Em "+badDay.querySelector(".ph-day").textContent+", o horário final precisa ser depois do inicial.", true);
+      badDay.querySelector(".ph-end").focus();
+      return;
+    }
     var cpf = formatCpf(cpfEl.value);
     if (cpf && !cpfValido(cpf)){ showToast("CPF inválido. Confira os números.", true); cpfEl.focus(); return; }
 
@@ -3953,7 +4007,8 @@ function openProfessionalModal(p){
     // Mantém campos que esta tela não mostra (Object.assign sobre o registro antigo).
     var rec = Object.assign({}, p || {}, {
       id: profId, name: name, specialtyId: specialtyId,
-      horaInicio: horaInicio, horaFim: horaFim,
+      horarios: horarios,
+      horaInicio: undefined, horaFim: undefined, // formato antigo (um horário só), substituído por "horarios"
       conselho: document.getElementById("profConselho").value.trim(),
       registro: document.getElementById("profRegistro").value.trim(),
       cpf: cpf,
@@ -3985,6 +4040,17 @@ var PROF_DAY_START = "07:20", PROF_DAY_END = "18:10";
 // Inícios possíveis = horários do Planner; fins = início + 40 min.
 var PROF_START_TIMES = ["07:20","08:00","08:40","09:20","10:00","10:40","11:20","13:30","14:10","14:50","15:30","16:10","16:50","17:30"];
 var PROF_END_TIMES = ["08:00","08:40","09:20","10:00","10:40","11:20","12:00","14:10","14:50","15:30","16:10","16:50","17:30","18:10"];
+var PROF_WEEKDAYS = [
+  {key:"seg", label:"Segunda-feira"}, {key:"ter", label:"Terça-feira"}, {key:"qua", label:"Quarta-feira"},
+  {key:"qui", label:"Quinta-feira"}, {key:"sex", label:"Sexta-feira"}
+];
+// Horário do profissional num dia ("seg".."sex"): {start,end} ou null se não atende.
+// Cadastros antigos (horaInicio/horaFim únicos, ou nada) valem para todos os dias.
+function profDayHours(p, dayKey){
+  var h = p && p.horarios && p.horarios[dayKey];
+  if (h) return h.inicio ? {start: h.inicio, end: h.fim || PROF_DAY_END} : null;
+  return {start: (p && p.horaInicio) || PROF_DAY_START, end: (p && p.horaFim) || PROF_DAY_END};
+}
 var CBOS_SUGGESTIONS = [
   ["2515-10","Psicólogo clínico"], ["2238-10","Fonoaudiólogo"], ["2239-05","Terapeuta ocupacional"],
   ["2236-05","Fisioterapeuta geral"], ["2237-10","Nutricionista"], ["2263-05","Musicoterapeuta"],
@@ -4520,8 +4586,10 @@ function adFindRes(id){ return adResources().filter(function(r){ return r.id ===
 function adProfRoom(profId){
   return state.rooms.filter(function(r){ return (r.therapists||[]).some(function(t){ return t.professionalId === profId; }); })[0] || null;
 }
-function adProfHours(p){ return {start: (p && p.horaInicio) || PROF_DAY_START, end: (p && p.horaFim) || PROF_DAY_END}; }
-function adInHours(p, t){ var h = adProfHours(p); return t >= h.start && adPlus40(t) <= h.end; }
+// Horário do profissional na data (cada dia da semana tem o seu); null = não atende.
+function adProfHours(p, date){ return profDayHours(p, AD_WEEKDAY_KEYS[(date || AD.date).getDay()]); }
+function adHoursText(h){ return h ? h.start + " às " + h.end : "Não atende"; }
+function adInHours(p, t, date){ var h = adProfHours(p, date); return !!h && t >= h.start && adPlus40(t) <= h.end; }
 function adResColor(r){
   if (AD.mode === "sala") return swatchVar(r.color || "teal");
   var s = r.specialtyId ? state.specialties.filter(function(x){ return x.id === r.specialtyId; })[0] : null;
@@ -4637,7 +4705,7 @@ function adRender(){
   function cell(dateIso, t, res){
     var off = false, row = null, extra = 0, label = "", color = adResColor(res);
     if (AD.mode === "prof"){
-      off = !adInHours(res, t);
+      off = !adInHours(res, t, adParse(dateIso));
       row = idx.byProf[dateIso+"|"+t+"|"+res.id] || null;
       var room = row && row.room_id ? findRoom(row.room_id) : null;
       label = room ? (/^sala\b/i.test(room.name) ? room.name : "Sala " + room.name) : "";
@@ -4658,8 +4726,7 @@ function adRender(){
   if (AD.view === "semana"){
     var res = adFindRes(AD.sel) || resources[0];
     AD.sel = res.id;
-    var h = AD.mode === "prof" ? adProfHours(res) : null;
-    whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(res.name)+"</b>" + (h ? " · "+h.start+" às "+h.end : "");
+    whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(res.name)+"</b>";
     html += '<thead><tr><th class="ad-tcol"></th>' + days.map(function(d){
       return '<th class="'+(adSameDay(d, today) ? "today" : "")+'">'+adDayObj(d).name.slice(0,3).toLowerCase()+' <span class="ad-dnum">'+d.getDate()+'/'+(d.getMonth()+1)+'</span></th>';
     }).join("") + '</tr></thead><tbody>';
@@ -4720,8 +4787,9 @@ function adRenderSide(){
   host.innerHTML = list.map(function(r){
     var sub;
     if (AD.mode === "prof"){
-      var h = adProfHours(r);
-      sub = h.start + " às " + h.end + (r.specialtyId ? " · " + specialtyName(r.specialtyId) : "");
+      // Horário do dia selecionado (cada dia da semana pode ser diferente).
+      sub = adDayObj(adClampWeekday(AD.date)).name.slice(0,3) + " " + adHoursText(adProfHours(r, adClampWeekday(AD.date))) +
+        (r.specialtyId ? " · " + specialtyName(r.specialtyId) : "");
     } else {
       sub = (r.therapists || []).length + ((r.therapists || []).length === 1 ? " profissional" : " profissionais");
     }

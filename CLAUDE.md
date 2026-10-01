@@ -145,17 +145,21 @@ testes continuam usando o mesmo mock.
   - Visões **Semana** (5 dias do profissional/sala selecionado) e **Dia**
     (uma coluna por profissional ou sala). Painel à direita: Profissionais |
     Salas, filtro, contagem da semana. Data, ‹ Hoje ›.
-  - Horário de cada profissional (`horaInicio`/`horaFim` no cadastro):
-    fora dele a célula fica hachurada e não aceita marcação.
+  - Horário de cada profissional **por dia da semana** (`horarios:
+    {seg:{inicio,fim},…}` no cadastro; `inicio:""` = não atende; cadastros
+    antigos com `horaInicio`/`horaFim` únicos valem para todos os dias —
+    `profDayHours()`): fora dele a célula fica hachurada e não aceita marcação.
   - Banco garante 1 atendimento por profissional/data/horário (unique);
     sala ocupada por outro profissional gera só um aviso (pode confirmar).
   - Código: bloco "Nova Agenda por data real" no fim do script (`AD`,
     `adLoadWeek`, `adRender`, `adOpenModal`…). Carrega a semana inteira de
     todos e aplica mudanças do Realtime. Sem `window.pipoAuth` (testes) mostra
     "Agenda indisponível".
-- **Cadastro de profissional** ganhou: horário inicial/final, conselho,
-  registro, CPF (máscara + dígito verificador), CBOS (sugestões) e, só para
-  Administrador, **Usuário (e-mail) e Senha**: cria um usuário no nível
+- **Cadastro de profissional**, nesta ordem: Nome, CPF (máscara + dígito
+  verificador), Especialidade principal, CBOS (sugestões), Conselho, Registro,
+  **Horários** (início/fim de segunda a sexta, "Não atende", botão "Copiar
+  segunda para todos") e, só para Administrador, a seção **Usuário**
+  (e-mail e senha): cria um usuário no nível
   "Profissional" ligado ao profissional (`profiles.professional_id`); se já
   houver usuário ligado, o campo vira "Nova senha". O salvar usa
   `Object.assign` sobre o registro antigo para não perder campos.
