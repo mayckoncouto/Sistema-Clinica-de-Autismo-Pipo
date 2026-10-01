@@ -276,15 +276,7 @@ table.rp-table{border-collapse:collapse;width:100%;font-size:12.5px}
 .rp-table td.n{text-align:right;font-variant-numeric:tabular-nums}
 .rp-table tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
 .rp-table tfoot td{font-weight:800;background:var(--surface-2);border-top:2px solid var(--line)}
- (max-width:900px){#tab-relatorios{flex-direction:column}.rp-form{width:auto;border-right:0;border-bottom:1px solid var(--line)}}
- print{
-  body.rp-printing *{visibility:hidden}
-  body.rp-printing #rpOut,body.rp-printing #rpOut *{visibility:visible}
-  body.rp-printing #rpOut{position:absolute;left:0;top:0;width:100%;overflow:visible;padding:0}
-  body.rp-printing .rp-noprint{display:none!important}
-  body.rp-printing .rp-table-wrap{overflow:visible;border:0}
-  body.rp-printing .rp-table th{position:static}
-}
+@media (max-width:900px){#tab-relatorios{flex-direction:column}.rp-form{width:auto;border-right:0;border-bottom:1px solid var(--line)}}
 .agd-multi{display:flex;gap:3px;height:100%}
 .agd-multi > .book{flex:1 1 0;min-width:0}
 .agd-add{flex:none;width:16px;border:1px dashed var(--line);border-radius:6px;background:transparent;color:var(--muted);font:inherit;font-weight:800;cursor:pointer;opacity:0;padding:0}
@@ -7315,8 +7307,56 @@ function rpRender(){
       '</table></div>';
   });
   out.innerHTML = html;
-  document.getElementById("rpPrint").addEventListener("click", function(){ document.body.classList.add("rp-printing"); window.print(); setTimeout(function(){ document.body.classList.remove("rp-printing"); }, 500); });
+  document.getElementById("rpPrint").addEventListener("click", rpPrint);
   document.getElementById("rpCsv").addEventListener("click", rpExportCsv);
+}
+// Imprimir / PDF: monta uma página só com o relatório (cabeçalho da clínica,
+// filtros e tabelas na largura toda) num iframe escondido e imprime ela —
+// nada da tela do sistema entra. Tabelas largas saem em paisagem.
+function rpPrint(){
+  var L = RP.last; if (!L) return;
+  var t = RP_TYPES.filter(function(x){ return x.id === L.type; })[0];
+  var sub = (document.querySelector(".rp-head .rp-sub") || {}).textContent || "";
+  var logo = (document.querySelector(".brand-mark") || {}).src || "";
+  var wide = L.rep.sections.some(function(s){ return s.head.length > 6; });
+  function cells(r, tag){ return r.map(function(v){ return "<" + tag + (typeof v === "number" ? ' class="n"' : "") + ">" + esc(v == null ? "" : String(v)) + "</" + tag + ">"; }).join(""); }
+  var body = '<header><div class="brand">' + (logo ? '<img src="' + logo + '" alt="">' : "") +
+    '<div><div class="clinic">Clínica de Autismo Pipo</div><div class="rname">' + esc(t.name) + '</div></div></div>' +
+    '<div class="sub">' + esc(sub) + '</div></header>' +
+    (L.rep.note ? '<div class="note">' + esc(L.rep.note) + '</div>' : "");
+  L.rep.sections.forEach(function(s){
+    body += '<h3>' + esc(s.title) + '</h3>';
+    if (!s.rows.length){ body += '<div class="empty">' + esc(s.empty || "Nada encontrado no período.") + '</div>'; return; }
+    body += "<table><thead><tr>" + s.head.map(function(h){ return "<th>" + esc(h) + "</th>"; }).join("") + "</tr></thead><tbody>" +
+      s.rows.map(function(r){ return "<tr>" + cells(r, "td") + "</tr>"; }).join("") + "</tbody>" +
+      (s.foot ? "<tfoot><tr>" + cells(s.foot, "td") + "</tr></tfoot>" : "") + "</table>";
+  });
+  var css = "@page{size:A4 " + (wide ? "landscape" : "portrait") + ";margin:12mm}" +
+    "*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+    "body{font-family:Inter,'Segoe UI',Arial,sans-serif;color:#1f2b29;margin:0;font-size:11px}" +
+    "header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:2px solid #2f7a6d;padding-bottom:8px;margin-bottom:10px}" +
+    ".brand{display:flex;align-items:center;gap:10px}.brand img{width:38px;height:38px}" +
+    ".clinic{font-size:16px;font-weight:800}.rname{font-size:13px;font-weight:700;color:#2f7a6d;margin-top:2px}" +
+    ".sub{font-size:10px;color:#5b6b68;text-align:right}" +
+    ".note{font-size:10px;color:#3d4a47;background:#f1f4f3;border-radius:6px;padding:6px 8px;margin:6px 0 4px}" +
+    "h3{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#3d4a47;margin:12px 0 5px}" +
+    ".empty{color:#7a8885;font-size:10.5px}" +
+    "table{border-collapse:collapse;width:100%}thead{display:table-header-group}tr{page-break-inside:avoid}" +
+    "th{background:#eef1f0;text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;color:#5b6b68;padding:6px 8px;border-bottom:1px solid #c9d1cf}" +
+    "td{padding:5px 8px;border-bottom:1px solid #e3e8e6;vertical-align:top}td.n{text-align:right}" +
+    "tbody tr:nth-child(even) td{background:#f7f9f8}tfoot td{font-weight:800;background:#eef1f0;border-top:2px solid #c9d1cf}";
+  var f = document.createElement("iframe");
+  f.setAttribute("aria-hidden", "true");
+  f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+  document.body.appendChild(f);
+  var d = f.contentWindow.document;
+  d.open();
+  d.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>" + esc(t.name) + " - Clínica de Autismo Pipo</title><style>" + css + "</style></head><body>" + body + "</body></html>");
+  d.close();
+  setTimeout(function(){
+    try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e){ showToast("Não foi possível abrir a impressão.", true); }
+    setTimeout(function(){ f.remove(); }, 2000);
+  }, 250);
 }
 function rpExportCsv(){
   var L = RP.last; if (!L) return;
