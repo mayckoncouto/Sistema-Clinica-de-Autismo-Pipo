@@ -361,13 +361,16 @@ th.timecol{z-index:5}
 .book .book-main.match .pnote{color:#3d4a47}
 .book .book-main .empty-plus{color:var(--muted);font-size:16px;text-align:center;opacity:0}
 .book .book-main:hover .empty-plus{opacity:1}
-.book-copy,.book-move{position:absolute;top:2px;width:17px;height:17px;border:0;border-radius:5px;background:var(--surface);box-shadow:var(--shadow-sm);color:var(--ink-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;padding:0}
+.book-copy,.book-move,.book-del{position:absolute;top:2px;width:17px;height:17px;border:0;border-radius:5px;background:var(--surface);box-shadow:var(--shadow-sm);color:var(--ink-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;padding:0}
 .book-copy{right:2px}
 .book-move{right:21px}
-.book:hover .book-copy,.book:hover .book-move{opacity:1}
+.book-del{right:40px}
+.book:hover .book-copy,.book:hover .book-move,.book:hover .book-del{opacity:1}
 .book-copy:hover{color:var(--accent);background:var(--accent-weak)}
 .book-move:hover{color:var(--warn);background:var(--warn-weak)}
-.book-copy svg,.book-move svg{width:10px;height:10px;display:block}
+.book-del:hover{color:var(--danger);background:var(--danger-weak)}
+.book-del.confirm{opacity:1;color:#fff;background:var(--danger)}
+.book-copy svg,.book-move svg,.book-del svg{width:10px;height:10px;display:block}
 
 .clipboard-bar{display:none;align-items:center;gap:8px;padding:8px 14px;background:var(--warn-weak);border-top:1px solid var(--line);font-size:12px;color:var(--ink-2);flex-wrap:wrap}
 .clipboard-bar.on{display:flex}
@@ -820,6 +823,7 @@ function swatchVar(k){
 var PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 var COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 var MOVE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>';
+var DEL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
 var UNDO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 var REDO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
 var LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
@@ -1383,6 +1387,22 @@ function setReadonlyBanner(on){
   var b = document.getElementById("readonlyBanner");
   if (b) b.className = "readonly-banner" + (on ? " on" : "");
 }
+/* Botão lixeira das células (Planner e Agenda): dupla confirmação. O 1º clique
+ * deixa o botão vermelho ("clique de novo") por 4s; o 2º abre a janela de
+ * confirmação. Devolve true só quando o 2º clique aconteceu. */
+function armCellDelete(btn){
+  if (btn.__armed){
+    clearTimeout(btn.__timer);
+    btn.__armed = false; btn.classList.remove("confirm"); btn.title = "Excluir agendamento";
+    return true;
+  }
+  btn.__armed = true;
+  btn.classList.add("confirm");
+  btn.title = "Clique de novo para excluir";
+  btn.__timer = setTimeout(function(){ btn.__armed = false; btn.classList.remove("confirm"); btn.title = "Excluir agendamento"; }, 4000);
+  return false;
+}
+
 /* Janela de confirmação padrão para exclusões. Abre POR CIMA de qualquer
  * janela de cadastro já aberta (host próprio, fora do #modalHost) e devolve
  * uma Promise<boolean>. opts: {title, message (HTML já escapado), confirmLabel}.
@@ -2037,6 +2057,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
               (bookingServiceName(b) ? '<span class="pserv">'+esc(bookingServiceName(b))+'</span>' : '') +
               (b.note ? '<span class="pnote">'+esc(b.note)+'</span>' : '') +
             '</button>' +
+            (can("agenda","delete") ? '<button type="button" class="book-del" title="Excluir agendamento" aria-label="Excluir agendamento">'+DEL_SVG+'</button>' : "") +
             '<button type="button" class="book-move" title="Mover paciente" aria-label="Mover paciente">'+MOVE_SVG+'</button>' +
             '<button type="button" class="book-copy" title="Copiar paciente" aria-label="Copiar paciente">'+COPY_SVG+'</button>' +
           '</div>';
@@ -2180,6 +2201,26 @@ function wireGridDelegatedEvents(){
     var dayKey2 = td.getAttribute("data-day");
     var time2 = td.getAttribute("data-time");
     var bookings = (state.scheduleDocs[docId2] && state.scheduleDocs[docId2].bookings) || {};
+
+    var delBtn = e.target.closest(".book-del");
+    if (delBtn){
+      e.stopPropagation();
+      var bd = effectiveBooking(bookings, key, dayKey2, time2);
+      if (!bd || !bd.patient) return;
+      if (!armCellDelete(delBtn)) return;
+      var dayD = DAYS.filter(function(d){ return d.key === dayKey2; })[0];
+      confirmDialog({
+        title: "Excluir agendamento",
+        message: "Excluir <b>"+esc(bd.blocked ? "o bloqueio" : bd.patient)+"</b> de "+esc(dayD ? dayD.full : dayKey2)+" às "+esc(time2)+"?",
+        confirmLabel: "Excluir"
+      }).then(function(ok){
+        if (!ok) return;
+        writeBooking(docId2, key, clearValueFor(dayKey2, time2)).then(function(r){
+          if (r !== false) showToast("Agendamento excluído. Use desfazer (Ctrl+Z) se foi engano.");
+        });
+      });
+      return;
+    }
 
     if (copyBtn){
       e.stopPropagation();
@@ -4927,9 +4968,22 @@ function agdEventHtml(row, t, label, color, extraCount, isMoveSource, canDrag){
       (extraCount ? '<span class="agd-more" title="Mais atendimentos nesta sala e horário">+'+extraCount+'</span>' : '') +
       '<span class="pname">'+esc(name)+'</span>' + (serv ? '<span class="pserv">'+esc(serv)+'</span>' : '') + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
     '</button>' +
+    (can("agendamentos","delete") ? '<button type="button" class="book-del" title="Excluir agendamento" aria-label="Excluir agendamento">'+DEL_SVG+'</button>' : "") +
     '<button type="button" class="book-move" title="Mover" aria-label="Mover">'+MOVE_SVG+'</button>' +
     '<button type="button" class="book-copy" title="Copiar" aria-label="Copiar">'+COPY_SVG+'</button>' +
   '</div>';
+}
+
+// Exclui um atendimento da Agenda (com desfazer). Promise<boolean>.
+function agdDeleteRow(row, okMsg){
+  return agdClient().from("appointments").delete().eq("id", row.id).then(function(r){
+    if (r.error){ showToast("Não foi possível excluir: " + agdErr(r.error), true); return false; }
+    agdRecord("Desmarcar " + agdRowLabel(row), [row], []);
+    delete AD.rows[row.id];
+    agdRender();
+    showToast(okMsg);
+    return true;
+  });
 }
 
 function agdRender(){
@@ -5123,13 +5177,7 @@ function agdOpenModal(opts){
       confirmLabel: "Desmarcar"
     }).then(function(ok){
       if (!ok) return;
-      agdClient().from("appointments").delete().eq("id", row.id).then(function(r){
-        if (r.error){ showToast("Não foi possível desmarcar: " + agdErr(r.error), true); return; }
-        agdRecord("Desmarcar " + agdRowLabel(row), [row], []);
-        delete AD.rows[row.id];
-        close(); agdRender();
-        showToast("Atendimento desmarcado.");
-      });
+      agdDeleteRow(row, "Atendimento desmarcado.").then(function(done){ if (done) close(); });
     });
   });
 
@@ -5296,6 +5344,21 @@ function wireAgendaDia(){
     var td = e.target.closest("td.agd-slot"); if (!td) return;
     var id = td.getAttribute("data-id");
     var row = id ? AD.rows[id] : null;
+    // Lixeira: dupla confirmação (botão vermelho + janela).
+    var delBtn = e.target.closest(".book-del");
+    if (delBtn && row){
+      e.stopPropagation();
+      if (!can("agendamentos","delete")){ showToast(permDeniedMsg("agendamentos","delete"), true); return; }
+      if (!armCellDelete(delBtn)) return;
+      confirmDialog({
+        title: "Excluir agendamento",
+        message: "Excluir <b>"+esc(row.blocked ? "o bloqueio" : row.patient)+"</b> em "+agdBrDate(row.date)+" às "+esc(row.time)+"?",
+        confirmLabel: "Excluir"
+      }).then(function(ok){
+        if (ok) agdDeleteRow(row, "Agendamento excluído. Use desfazer (Ctrl+Z) se foi engano.");
+      });
+      return;
+    }
     // Ícones mover / copiar (iguais aos do Planner).
     var copyBtn = e.target.closest(".book-copy"), moveBtn = !copyBtn && e.target.closest(".book-move");
     if ((copyBtn || moveBtn) && row){

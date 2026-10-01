@@ -415,3 +415,12 @@ Bloqueadores de anúncio (AdBlock, uBlock etc.) escondem elementos chamados
 só no Chrome de um usuário por isso. Os nomes da Agenda usam o prefixo `agd`
 (`.agd-panel`, `#agdGrid`, `agdRender()`…). Não criar nomes começando com `ad`,
 `ads`, `advert`, `banner`, `sponsor`, `promo`.
+
+## Lixeira nas células (Planner e Agenda)
+Cada célula com agendamento tem os ícones Excluir (`.book-del`, lixeira), Mover e
+Copiar, nessa ordem. Só aparece para quem tem permissão de excluir no módulo
+(`agenda` no Planner, `agendamentos` na Agenda). Dupla confirmação via
+`armCellDelete(btn)`: o 1º clique deixa o ícone vermelho por 4s, o 2º abre o
+`confirmDialog`. Na Agenda a exclusão usa `agdDeleteRow(row, msg)` (o mesmo do
+botão Desmarcar da janela); no Planner, `writeBooking(..., clearValueFor(...))`.
+As duas entram no desfazer (Ctrl+Z).
