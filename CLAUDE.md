@@ -562,8 +562,7 @@ edita; o nível Profissional não tem "excluir".
   `RP_TYPES` / `RP_BUILDERS`): formulário à esquerda (tipo, De/Até + atalhos,
   profissional, filtros extras por tipo) e resultado à direita, com
   Imprimir/PDF (`rpPrint`: página própria num iframe, com logo, "Clínica de Autismo Pipo", título e filtros; A4 paisagem quando a tabela tem mais de 6 colunas) e Exportar Excel (CSV ";"
-  com BOM). Ordenação: "Ordenar por" (coluna + crescente/decrescente) ou clique no
-  título da coluna (`RP.last.sort`, `rpRows`); vale para tela, impressão e Excel. Lê `appointments` do período (o Profissional fica preso ao próprio
+  com BOM). Ordenação: clique no título da coluna (▲/▼) (`RP.last.sort`, `rpRows`); vale para tela, impressão e Excel. Lê `appointments` do período (o Profissional fica preso ao próprio
   `agdOwnProfId`). Tipos: lista, produtividade, frequencia, convenios, pacote,
   pendentes, ocupacao, bloqueios, sem-atendimento.
 - Permissão por tipo: `roles.permissions.relatorios[tipo]` (+ `view` quando há
