@@ -928,7 +928,8 @@ function servicesList(){
 // tiver escolha salva); o valor atual e "Sessão" sempre aparecem.
 function serviceOptionsHtml(selected, profId){
   var prof = profId ? findProfessional(profId) : null;
-  var allowed = prof && Array.isArray(prof.servicos) ? prof.servicos : null;
+  // Lista vazia = sem escolha (cadastros salvos antes de existirem serviços): todos.
+  var allowed = prof && Array.isArray(prof.servicos) && prof.servicos.length ? prof.servicos : null;
   return servicesList().filter(function(s){
     return !allowed || allowed.indexOf(s.id) !== -1 || s.id === selected || s.id === DEFAULT_SERVICE_ID;
   }).map(function(s){
@@ -3964,7 +3965,7 @@ function openProfessionalModal(p){
             '<div class="ms-panel" hidden role="listbox" aria-multiselectable="true">' +
               (state.services.length ? state.services.map(function(s){
                 // Sem escolha salva (cadastros antigos e novos): todos os serviços marcados.
-                var on = !Array.isArray(v.servicos) || v.servicos.indexOf(s.id) !== -1;
+                var on = !Array.isArray(v.servicos) || !v.servicos.length || v.servicos.indexOf(s.id) !== -1;
                 return '<label class="ms-opt"><input type="checkbox" value="'+esc(s.id)+'"'+(on?' checked':'')+'><span>'+esc(s.name)+'</span></label>';
               }).join("") : '<div class="ms-empty">Nenhum serviço cadastrado. Cadastre em Profissionais › Serviços.</div>') +
             '</div>' +
@@ -4118,7 +4119,9 @@ function openProfessionalModal(p){
     var rec = Object.assign({}, p || {}, {
       id: profId, name: name, specialtyId: specialtyId,
       horarios: horarios,
-      servicos: msSelected(), // ids de config/services que este profissional atende
+      // ids de config/services que este profissional atende; sem serviços cadastrados
+      // (ou nenhum marcado) não grava lista vazia — vale como "atende todos".
+      servicos: (state.services.length && msSelected().length) ? msSelected() : undefined,
       horaInicio: undefined, horaFim: undefined, // formato antigo (um horário só), substituído por "horarios"
       conselho: document.getElementById("profConselho").value.trim(),
       registro: document.getElementById("profRegistro").value.trim(),
