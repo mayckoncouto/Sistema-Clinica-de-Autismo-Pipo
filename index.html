@@ -562,10 +562,10 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
 .room-info{flex:1;min-width:0}
 .room-info .rn{font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .room-info .rs{font-size:11.5px;color:var(--muted)}
-.move-col{display:flex;flex-direction:column;gap:2px;flex:none}
-.move-col button{width:22px;height:16px;border:0;background:var(--surface-2);color:var(--ink-2);border-radius:4px;font-size:9px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.move-col button:hover{background:var(--line)}
-.move-col button:disabled{opacity:.3;cursor:default;background:var(--surface-2)}
+.move-col,.col-move{display:flex;flex-direction:column;gap:2px;flex:none}
+.move-col button,.col-move button{width:22px;height:16px;border:0;background:var(--surface-2);color:var(--ink-2);border-radius:4px;font-size:9px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.move-col button:hover,.col-move button:hover{background:var(--line)}
+.move-col button:disabled,.col-move button:disabled{opacity:.3;cursor:default;background:var(--surface-2)}
 
 .empty-state{padding:40px 20px;text-align:center;color:var(--muted);font-size:13px}
 .empty-state b{color:var(--ink-2);display:block;margin-bottom:4px;font-size:14px}
@@ -1268,9 +1268,16 @@ function applyPermissionsUI(){
     b.hidden = !visible;
     if (!visible && k === state.tab) activeHidden = true;
   });
-  if (activeHidden){
+  // Aba atual sem permissão (ou sem conteúdo visível): vai para a primeira permitida.
+  var curSec = document.getElementById("tab-" + state.tab);
+  if (activeHidden || !curSec){
     var first = document.querySelector("#mainTabs button[data-tab]:not([hidden])");
     if (first) first.click();
+    else {
+      // Nível sem acesso a nenhuma tela: esconde tudo e avisa.
+      Array.prototype.forEach.call(document.querySelectorAll("section.panel[id^='tab-']"), function(s){ s.hidden = true; });
+      showToast("Seu nível de permissão não dá acesso a nenhuma tela. Fale com o administrador.", true);
+    }
   }
   function show(id, on){ var el = document.getElementById(id); if (el) el.hidden = !on; }
   show("addPatientBtn", can("pacientes","create"));
@@ -1725,11 +1732,25 @@ function wireTabs(){
     // Renders for this tab were skipped while it was hidden (see flushGridUpdate /
     // scheduleRelatorioRender) — the underlying state is current, only the DOM
     // wasn't repainted, so force one fresh render now that it's visible again.
-    if (state.tab === "agenda") queueGridUpdate();
-    else if (state.tab === "relatorio") renderRelatorioTab();
-    else if (state.tab === "agendadia") adOnShow();
+    // Qualquer erro aqui vira aviso na tela (nunca uma aba em branco sem explicação).
+    try {
+      if (state.tab === "agenda") queueGridUpdate();
+      else if (state.tab === "relatorio") renderRelatorioTab();
+      else if (state.tab === "agendadia") adOnShow();
+    } catch(err){
+      reportAppError(err, "ao abrir a aba");
+    }
   });
 }
+
+// Mostra na tela (e no console) um erro inesperado, para a pessoa poder mandar print.
+function reportAppError(err, where){
+  var msg = (err && (err.message || err.reason && err.reason.message)) || String(err || "erro desconhecido");
+  try { console.error("[Agenda Pipo] " + (where || ""), err); } catch(e){}
+  showToast("Erro " + (where ? where + " " : "") + "— " + msg + ". Recarregue a página (Ctrl+Shift+R); se continuar, mande um print para o suporte.", true);
+}
+window.addEventListener("error", function(e){ if (e && e.error) reportAppError(e.error, ""); });
+window.addEventListener("unhandledrejection", function(e){ reportAppError(e && e.reason, ""); });
 
 function buildDaySeg(){
   var host = document.getElementById("daySeg");
@@ -4442,12 +4463,30 @@ function openRoomModal(r){
     });
   }
   function renderTherapists(){
+    var n = draftTherapists.length;
     thHost.innerHTML = draftTherapists.map(function(t, i){
+      // ▲▼ mudam a ordem da coluna na grade (a coluna leva junto os atendimentos dela).
       return '<div class="therapist-row" data-i="'+i+'">' +
+        '<div class="col-move">' +
+          '<button type="button" data-colmove="up" data-i="'+i+'"'+(i===0?' disabled':'')+' title="Subir (coluna mais à esquerda)" aria-label="Subir coluna">▲</button>' +
+          '<button type="button" data-colmove="down" data-i="'+i+'"'+(i===n-1?' disabled':'')+' title="Descer (coluna mais à direita)" aria-label="Descer coluna">▼</button>' +
+        '</div>' +
         '<select class="rm-prof-select">'+professionalSelectOptions(t.professionalId)+'</select>' +
-        '<button type="button" class="rm" data-rm="'+i+'" '+(draftTherapists.length<=1?'disabled':'')+' aria-label="Remover coluna">✕</button>' +
+        '<button type="button" class="rm" data-rm="'+i+'" '+(n<=1?'disabled':'')+' aria-label="Remover coluna">✕</button>' +
       '</div>';
     }).join("");
+    thHost.querySelectorAll("[data-colmove]").forEach(function(b){
+      b.addEventListener("click", function(){
+        syncFromDom();
+        var i = parseInt(b.getAttribute("data-i"),10);
+        var j = b.getAttribute("data-colmove") === "up" ? i-1 : i+1;
+        if (j < 0 || j >= draftTherapists.length) return;
+        var tmp = draftTherapists[i]; draftTherapists[i] = draftTherapists[j]; draftTherapists[j] = tmp;
+        renderTherapists();
+        var again = thHost.querySelector('[data-colmove="'+b.getAttribute("data-colmove")+'"][data-i="'+j+'"]');
+        if (again && !again.disabled) again.focus();
+      });
+    });
     thHost.querySelectorAll(".rm").forEach(function(b){
       b.addEventListener("click", function(){
         syncFromDom();

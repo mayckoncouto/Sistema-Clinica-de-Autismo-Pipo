@@ -296,6 +296,11 @@ testes continuam usando o mesmo mock.
   (`#profListSearch`, nome/especialidade/sala, sem acento), contador
   "X de Y profissionais", ordenação por coluna (`state.profSort`) e coluna
   "Salas onde atende" calculada das colunas das salas. Clique na linha edita.
+- Editor da sala: setas ▲▼ em cada coluna (terapeuta) para mudar a ordem das
+  colunas na grade; a coluna mantém o id, então os atendimentos vão junto.
+- Troca de abas protegida: erro ao abrir uma aba vira aviso na tela
+  (`reportAppError`, também para erros não tratados); aba atual sem permissão
+  ou sem seção vai para a primeira permitida.
 - Salas: busca por nome da sala ou de profissional (`#roomListSearch`) e
   contador; com busca ativa as setas de reordenar somem (reordenar só com a
   lista completa).
