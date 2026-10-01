@@ -153,6 +153,13 @@ testes continuam usando o mesmo mock.
     {seg:{inicio,fim},…}` no cadastro; `inicio:""` = não atende; cadastros
     antigos com `horaInicio`/`horaFim` únicos valem para todos os dias —
     `profDayHours()`): fora dele a célula fica hachurada e não aceita marcação.
+  - Células no **mesmo visual do Planner** (`.book`/`.book-main`, "+" nas
+    vazias, ícones mover/copiar no hover) e as mesmas funções: **copiar**
+    (cola quantas vezes quiser até Esc/Cancelar), **mover** (barra
+    `#adClipboardBar`), **arrastar** (solta em vazio = move; sobre outro
+    atendimento = troca os dois). Na visão Dia a coluna de destino define o
+    profissional (ou a sala, no modo Salas). Nada disso entra em horário fora do
+    expediente. Código: `adPlace()`, `adTargetFor()`, `adRenderClipboardBar()`.
   - Banco garante 1 atendimento por profissional/data/horário (unique);
     sala ocupada por outro profissional gera só um aviso (pode confirmar).
   - Código: bloco "Nova Agenda por data real" no fim do script (`AD`,

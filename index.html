@@ -189,18 +189,15 @@ table.ad-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout:
 .ad-grid th.ad-tcol{z-index:4}
 .ad-grid td.ad-tcol{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;font-weight:600;color:var(--ink-2);vertical-align:top;padding:6px 8px;border-right:1px solid var(--line)}
 /* Altura da linha calculada para o dia inteiro caber na janela (adFitRows), com mínimo de 38px. */
-.ad-grid td.ad-slot{height:var(--ad-row-h,50px);border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:3px;vertical-align:top;cursor:pointer}
-.ad-grid td.ad-slot:hover{background:#f7faf9}
+.ad-grid td.ad-slot{height:var(--ad-row-h,50px);border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:4px;vertical-align:top}
+.ad-grid td.ad-slot.drag-over{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-weak)}
+.ad-grid td.ad-slot.paste-target:hover{outline:2px dashed var(--warn);outline-offset:-2px}
+.ad-grid td.ad-slot .book{min-height:0}
+.ad-grid td.ad-slot .book .book-main{min-height:0}
 .ad-grid td.ad-slot.ad-off{background:var(--off-bg);cursor:not-allowed}
 .ad-grid td.ad-slot.ad-ro{cursor:default}
 .ad-grid tr.ad-lunch td{height:22px;background:var(--surface-2);font-size:10.5px;color:var(--muted);text-align:center;font-weight:700;cursor:default;border-bottom:1px solid var(--line)}
-.ad-ev{border-radius:7px;border-left:3px solid var(--accent);padding:4px 6px;height:100%;font-size:11.5px;line-height:1.25;overflow:hidden;background:var(--surface-2);position:relative}
-.ad-ev .t{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;font-weight:600;color:#3d4a47}
-.ad-ev .p{font-weight:700;color:#182523;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ad-ev .s{color:#3d4a47;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ad-ev.blocked{background:#4a5150}
-.ad-ev.blocked .p,.ad-ev.blocked .t,.ad-ev.blocked .s{color:#eef1f0}
-.ad-ev .ad-more{position:absolute;right:4px;top:3px;font-size:10px;font-weight:800;background:var(--danger);color:#fff;border-radius:999px;padding:0 5px}
+.ad-more{position:absolute;right:4px;bottom:3px;font-size:10px;font-weight:800;background:var(--danger);color:#fff;border-radius:999px;padding:0 5px}
 .ad-legend{padding:8px 12px;border-top:1px solid var(--line)}
 .ad-off-swatch{background:var(--off-bg)!important;border:1px solid var(--line-strong)}
 /* Planner: horário fora do expediente do profissional da coluna (cinza, inativo). */
@@ -644,6 +641,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <span class="ad-who" id="adWho"></span>
         <button class="btn primary" id="adNewBtn">+ Novo atendimento</button>
       </div>
+      <div class="clipboard-bar" id="adClipboardBar"></div>
       <div class="ad-scroll"><div id="adGrid"></div></div>
       <div class="color-legend ad-legend">
         <span><i style="background:#F4B7B7"></i>Não faz ABA</span>
@@ -4593,6 +4591,8 @@ var AD = {
   rows: {},            // id -> atendimento da semana carregada
   rangeFrom: "", rangeTo: "",
   loadSeq: 0, loaded: false, error: "",
+  clipboard: null,     // {mode:"copy"|"move", id, row} enquanto copia/move (igual ao Planner)
+  dragId: null,        // id do atendimento sendo arrastado
   channel: null
 };
 
@@ -4683,23 +4683,32 @@ function adOnShow(){
   adLoadWeek();
 }
 
-function adEventHtml(row, t, label, color, extraCount){
-  var range = t + " - " + adPlus40(t);
+// Célula no MESMO visual do Planner (.book / .book-main / ícones mover e copiar):
+// nome em cima, observação (ou a sala/profissional) embaixo, borda esquerda na
+// cor da sala, fundo pela regra de cores do paciente ou do tipo especial.
+function adEventHtml(row, t, label, color, extraCount, isMoveSource, canDrag){
   var kind = bookingKind(row);
-  if (kind === "bloqueado"){
-    return '<div class="ad-ev blocked" style="border-left-color:#2b302f"><div class="t">'+range+'</div><div class="p">Bloqueado</div>' +
-      (row.note ? '<div class="s">'+esc(row.note)+'</div>' : '') + '</div>';
+  var fill = null, cls = "";
+  if (kind === "bloqueado"){ fill = BLOCKED_COLOR; cls = " blocked"; }
+  else if (kind === "reuniao"){ fill = MEETING_COLOR; cls = " pcolor"; }
+  else if (kind === "treinamento"){ fill = TRAINING_COLOR; cls = " pcolor"; }
+  else {
+    var pRec = findPatientByName(row.patient);
+    var room = !pRec ? findRoomByName(row.patient) : null;
+    fill = pRec ? patientColor(pRec) : (room ? roomFillColor(room) : null);
+    if (fill) cls = " pcolor";
   }
-  if (kind === "reuniao" || kind === "treinamento"){
-    var k = SLOT_KINDS.filter(function(x){ return x.key === kind; })[0];
-    return '<div class="ad-ev" style="background:'+k.color+';border-left-color:'+color+'"><div class="t">'+range+'</div><div class="p">'+esc(k.label)+'</div>' +
-      (row.note ? '<div class="s">'+esc(row.note)+'</div>' : '') + '</div>';
-  }
-  var pRec = findPatientByName(row.patient);
-  var fill = pRec ? patientColor(pRec) : null;
-  return '<div class="ad-ev" style="'+(fill ? 'background:'+fill+';' : '')+'border-left-color:'+color+'" title="'+esc(row.patient + (row.note ? " — " + row.note : ""))+'">' +
-    (extraCount ? '<span class="ad-more" title="Mais atendimentos nesta sala e horário">+'+extraCount+'</span>' : '') +
-    '<div class="t">'+range+'</div><div class="p">'+esc(row.patient)+'</div><div class="s">'+esc(label)+'</div></div>';
+  var name = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : row.patient;
+  var sub = row.note || label;
+  return '<div class="book filled'+(isMoveSource ? ' move-source' : '')+'">' +
+    '<button type="button" class="book-main'+cls+'" style="border-left-color:'+color+(fill ? ';background:'+fill : '')+'"'+(canDrag ? ' draggable="true"' : '')+
+      ' title="'+esc(name + (sub ? " — " + sub : ""))+'">' +
+      (extraCount ? '<span class="ad-more" title="Mais atendimentos nesta sala e horário">+'+extraCount+'</span>' : '') +
+      '<span class="pname">'+esc(name)+'</span>' + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
+    '</button>' +
+    '<button type="button" class="book-move" title="Mover" aria-label="Mover">'+MOVE_SVG+'</button>' +
+    '<button type="button" class="book-copy" title="Copiar" aria-label="Copiar">'+COPY_SVG+'</button>' +
+  '</div>';
 }
 
 function adRender(){
@@ -4750,10 +4759,13 @@ function adRender(){
       label = prof ? prof.name : "";
       if (prof) color = adResColor(prof);
     }
-    var cls = "ad-slot" + (off && !row ? " ad-off" : "") + (!row && !canCreate ? " ad-ro" : "") + (row && !canEdit ? " ad-ro" : "");
+    var isOff = off && !row;
+    var cls = "ad-slot" + (isOff ? " ad-off" : (AD.clipboard ? " paste-target" : "")) + (!row && !canCreate ? " ad-ro" : "") + (row && !canEdit ? " ad-ro" : "");
+    var isMoveSource = !!(row && AD.clipboard && AD.clipboard.mode === "move" && AD.clipboard.id === row.id);
     return '<td class="'+cls+'" data-d="'+dateIso+'" data-t="'+t+'" data-r="'+esc(res.id)+'"'+(row ? ' data-id="'+row.id+'"' : '')+
-      (off && !row ? ' title="Fora do horário do profissional"' : '')+'>' +
-      (row ? adEventHtml(row, t, label, color, extra) : '') + '</td>';
+      (isOff ? ' title="Fora do horário do profissional"' : '')+'>' +
+      (row ? adEventHtml(row, t, label, color, extra, isMoveSource, canEdit)
+           : (isOff ? '' : '<div class="book"><button type="button" class="book-main"><span class="empty-plus">+</span></button></div>')) + '</td>';
   }
 
   if (AD.view === "semana"){
@@ -5033,16 +5045,161 @@ function wireAgendaDia(){
   document.getElementById("adNewBtn").addEventListener("click", function(){
     adOpenModal({date: adIso(adClampWeekday(AD.date)), profId: AD.mode === "prof" ? AD.sel : "", roomId: AD.mode === "sala" ? AD.sel : ""});
   });
-  document.getElementById("adGrid").addEventListener("click", function(e){
+  var grid = document.getElementById("adGrid");
+  grid.addEventListener("click", function(e){
     var td = e.target.closest("td.ad-slot"); if (!td) return;
     var id = td.getAttribute("data-id");
-    if (id && AD.rows[id]){ adOpenModal({row: AD.rows[id]}); return; }
-    if (td.classList.contains("ad-off")){ showToast("Horário fora do expediente deste profissional.", true); return; }
+    var row = id ? AD.rows[id] : null;
+    // Ícones mover / copiar (iguais aos do Planner).
+    var copyBtn = e.target.closest(".book-copy"), moveBtn = !copyBtn && e.target.closest(".book-move");
+    if ((copyBtn || moveBtn) && row){
+      e.stopPropagation();
+      if (copyBtn && !can("agendamentos","create")){ showToast(permDeniedMsg("agendamentos","create"), true); return; }
+      if (moveBtn && !can("agendamentos","edit")){ showToast(permDeniedMsg("agendamentos","edit"), true); return; }
+      AD.clipboard = {mode: copyBtn ? "copy" : "move", id: row.id, row: JSON.parse(JSON.stringify(row))};
+      adRenderClipboardBar(); adRender();
+      return;
+    }
+    if (td.classList.contains("ad-off")){ showToast("Fora do horário de atendimento do profissional.", true); return; }
+    // Com algo copiado/movendo, o clique cola naquele horário.
+    if (AD.clipboard){ adPasteTo(td); return; }
+    if (row){ adOpenModal({row: row}); return; }
     if (!can("agendamentos", "create")) return;
     var resId = td.getAttribute("data-r");
     adOpenModal({date: td.getAttribute("data-d"), time: td.getAttribute("data-t"),
       profId: AD.mode === "prof" ? resId : "", roomId: AD.mode === "sala" ? resId : ""});
   });
+  // Arrastar e soltar (igual ao Planner): solta num horário vazio = move;
+  // solta sobre outro atendimento = troca os dois de lugar.
+  grid.addEventListener("dragstart", function(e){
+    var main = e.target.closest(".book-main"); if (!main || main.getAttribute("draggable") !== "true") return;
+    var td = main.closest("td.ad-slot"); if (!td) return;
+    AD.dragId = td.getAttribute("data-id");
+    var book = td.querySelector(".book"); if (book) book.classList.add("dragging");
+    try { e.dataTransfer.setData("text/plain", AD.dragId); } catch(err){}
+    e.dataTransfer.effectAllowed = "move";
+  });
+  grid.addEventListener("dragend", function(e){
+    AD.dragId = null;
+    Array.prototype.forEach.call(grid.querySelectorAll(".book.dragging"), function(b){ b.classList.remove("dragging"); });
+    Array.prototype.forEach.call(grid.querySelectorAll(".drag-over"), function(t){ t.classList.remove("drag-over"); });
+  });
+  grid.addEventListener("dragover", function(e){
+    if (!AD.dragId) return;
+    var td = e.target.closest("td.ad-slot");
+    if (!td || td.classList.contains("ad-off")) return; // sem preventDefault = não aceita soltar
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    td.classList.add("drag-over");
+  });
+  grid.addEventListener("dragleave", function(e){
+    var td = e.target.closest("td.ad-slot"); if (td) td.classList.remove("drag-over");
+  });
+  grid.addEventListener("drop", function(e){
+    var td = e.target.closest("td.ad-slot"); if (!td) return;
+    e.preventDefault();
+    td.classList.remove("drag-over");
+    var row = AD.dragId ? AD.rows[AD.dragId] : null;
+    AD.dragId = null;
+    if (!row) return;
+    if (td.classList.contains("ad-off")){ showToast("Fora do horário de atendimento do profissional.", true); return; }
+    if (td.getAttribute("data-id") === row.id) return;
+    adPlace(row, td, "drag");
+  });
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Escape" && AD.clipboard && state.tab === "agendadia"){ AD.clipboard = null; adRenderClipboardBar(); adRender(); }
+  });
+}
+
+/* ---- copiar / mover / arrastar na Agenda ---- */
+function adRenderClipboardBar(){
+  var bar = document.getElementById("adClipboardBar");
+  if (!bar) return;
+  if (!AD.clipboard){ bar.className = "clipboard-bar"; bar.innerHTML = ""; return; }
+  var isMove = AD.clipboard.mode === "move";
+  var icon = (isMove ? MOVE_SVG : COPY_SVG).replace('viewBox="0 0 24 24"','viewBox="0 0 24 24" width="14" height="14"');
+  var kind = bookingKind(AD.clipboard.row);
+  var name = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : AD.clipboard.row.patient;
+  bar.className = "clipboard-bar on";
+  bar.innerHTML = icon + '<span>'+(isMove ? "Movendo" : "Copiado")+': <b>'+esc(name)+'</b> — clique em um horário (em qualquer dia ou semana) para '+(isMove ? 'mover para lá' : 'colar')+'.</span>' +
+    '<button type="button" class="btn ghost" id="adClipboardCancel">Cancelar</button>';
+  document.getElementById("adClipboardCancel").addEventListener("click", function(){ AD.clipboard = null; adRenderClipboardBar(); adRender(); });
+}
+// Para onde vai um atendimento solto/colado numa célula: data/horário da célula;
+// em "Profissionais" a coluna define o profissional (e a sala dele, se mudou de
+// profissional); em "Salas" a coluna define a sala e o profissional continua.
+function adTargetFor(row, d, t, resId){
+  var target = {date: d, time: t, professional_id: row.professional_id, room_id: row.room_id || null};
+  if (AD.mode === "prof"){
+    if (resId && resId !== row.professional_id){
+      target.professional_id = resId;
+      var pr = adProfRoom(resId); target.room_id = pr ? pr.id : null;
+    }
+  } else if (resId){
+    target.room_id = resId;
+  }
+  return target;
+}
+function adPasteTo(td){ adPlace(AD.clipboard.row, td, AD.clipboard.mode); }
+// mode: "copy" (cola uma cópia), "move" (muda de lugar) ou "drag" (move; se o
+// destino estiver ocupado, troca os dois).
+function adPlace(row, td, mode){
+  var c = adClient(); if (!c) return;
+  var target = adTargetFor(row, td.getAttribute("data-d"), td.getAttribute("data-t"), td.getAttribute("data-r"));
+  var prof = findProfessional(target.professional_id);
+  if (prof && !adInHours(prof, target.time, adParse(target.date))){ showToast("Fora do horário de atendimento do profissional.", true); return; }
+  var occupant = null;
+  Object.keys(AD.rows).some(function(id){
+    var o = AD.rows[id];
+    if (o.id !== row.id && o.date === target.date && o.time === target.time && o.professional_id === target.professional_id){ occupant = o; return true; }
+    return false;
+  });
+  var isCopy = mode === "copy";
+  if (isCopy && !can("agendamentos","create")){ showToast(permDeniedMsg("agendamentos","create"), true); return; }
+  if (!isCopy && !can("agendamentos","edit")){ showToast(permDeniedMsg("agendamentos","edit"), true); return; }
+  if (!isCopy && row.date === target.date && row.time === target.time && row.professional_id === target.professional_id && (row.room_id||null) === target.room_id) return;
+
+  function fail(r){ showToast("Não foi possível salvar: " + (r.error.code === "23505" ? "esse profissional já tem atendimento nesse horário." : adErr(r.error)), true); adLoadWeek(); }
+  function done(msg){ if (mode === "move") AD.clipboard = null; adRenderClipboardBar(); showToast(msg); adLoadWeek(); }
+  var payload = {patient: row.patient, note: row.note || "", blocked: !!row.blocked,
+    professional_id: target.professional_id, room_id: target.room_id, date: target.date, time: target.time};
+
+  // Destino ocupado ao arrastar: troca os dois (o outro vai para o lugar de origem).
+  if (occupant && mode === "drag"){
+    if (!can("agendamentos","delete") || !can("agendamentos","create")){ showToast("Você não tem permissão para trocar atendimentos de lugar.", true); return; }
+    var back = adTargetFor(occupant, row.date, row.time, AD.mode === "prof" ? row.professional_id : (row.room_id || ""));
+    var occPayload = {patient: occupant.patient, note: occupant.note || "", blocked: !!occupant.blocked,
+      professional_id: back.professional_id, room_id: back.room_id, date: back.date, time: back.time};
+    c.from("appointments").delete().eq("id", occupant.id).then(function(r1){
+      if (r1.error) return fail(r1);
+      return c.from("appointments").update(payload).eq("id", row.id).then(function(r2){
+        if (r2.error){ c.from("appointments").insert(Object.assign({}, occupant, {id: undefined})).then(function(){ fail(r2); }); return; }
+        return c.from("appointments").insert(occPayload).then(function(r3){
+          if (r3.error) return fail(r3);
+          done("Atendimentos trocados de lugar.");
+        });
+      });
+    });
+    return;
+  }
+  function write(){
+    var q = isCopy ? c.from("appointments").insert(payload) : c.from("appointments").update(payload).eq("id", row.id);
+    q.then(function(r){ if (r.error) return fail(r); done(isCopy ? "Atendimento colado." : "Atendimento movido."); });
+  }
+  if (occupant){
+    if (!can("agendamentos","delete")){ showToast("Esse horário já está ocupado.", true); return; }
+    var oKind = bookingKind(occupant);
+    confirmDialog({
+      title: "Substituir atendimento",
+      message: "Esse horário já tem <b>"+esc(oKind ? SLOT_KINDS.filter(function(x){ return x.key === oKind; })[0].label : occupant.patient)+"</b>. Substituir?",
+      confirmLabel: "Substituir"
+    }).then(function(ok){
+      if (!ok) return;
+      c.from("appointments").delete().eq("id", occupant.id).then(function(r){ if (r.error) return fail(r); write(); });
+    });
+    return;
+  }
+  write();
 }
 
 })();
