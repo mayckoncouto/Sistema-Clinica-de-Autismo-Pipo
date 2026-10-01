@@ -199,8 +199,14 @@
       ".user-pill{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2,#465350)}" +
       ".user-pill[hidden]{display:none}" +
       ".user-pill .user-name{font-weight:700;color:var(--ink,#182523);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
-      ".user-pill button{font:inherit;font-size:12px;font-weight:600;padding:5px 9px;border:1px solid var(--line,#dde3e1);border-radius:7px;background:var(--surface,#fff);color:var(--ink-2,#465350);cursor:pointer}" +
-      ".user-pill button:hover{border-color:var(--line-strong,#c7cfcc);color:var(--ink,#182523)}" +
+      ".acesso-wrap{position:relative}" +
+      ".acesso-btn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;font-weight:700;padding:5px 10px;border:1px solid var(--line,#dde3e1);border-radius:7px;background:var(--surface,#fff);color:var(--ink-2,#465350);cursor:pointer}" +
+      ".acesso-btn:hover,.acesso-btn[aria-expanded=true]{border-color:var(--accent,#2c7a72);color:var(--accent,#2c7a72)}" +
+      ".acesso-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:70;min-width:170px;background:var(--surface,#fff);border:1px solid var(--line-strong,#c7cfcc);border-radius:8px;box-shadow:0 6px 20px rgba(20,30,28,.12);padding:4px 0;display:flex;flex-direction:column}" +
+      ".acesso-menu[hidden]{display:none}" +
+      ".acesso-menu button{text-align:left;border:0;background:transparent;padding:8px 14px;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink,#182523);cursor:pointer}" +
+      ".acesso-menu button:hover,.acesso-menu button:focus{background:var(--accent-weak,#e2f0ee);outline:none}" +
+      ".acesso-menu button[data-act=sair]{border-top:1px solid var(--line,#dde3e1);color:var(--danger,#b6403a)}" +
       ".user-pill .user-role{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--accent-weak,#e2f0ee);color:var(--accent,#2c7a72);white-space:nowrap}" +
       "@media (max-width:640px){.user-pill .user-name,.user-pill .user-role{display:none}}";
     var st = document.createElement("style");
@@ -270,20 +276,60 @@
       '<span class="user-name" title="' + escapeHtml(profile.email) + '">' +
         escapeHtml(profile.full_name || profile.email) + "</span>" +
       (profile.role ? '<span class="user-role">' + escapeHtml(profile.role.name) + "</span>" : "") +
-      '<button type="button" data-act="senha">Trocar senha</button>' +
-      '<button type="button" data-act="sair">Sair</button>';
+      '<div class="acesso-wrap">' +
+        '<button type="button" class="acesso-btn" id="acessoBtn" aria-haspopup="menu" aria-expanded="false">Acesso ' +
+          '<svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+        '<div class="acesso-menu" id="acessoMenu" role="menu" hidden>' +
+          (isAdmin() ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : "") +
+          '<button type="button" role="menuitem" data-act="senha">Trocar senha</button>' +
+          '<button type="button" role="menuitem" data-act="sair">Sair</button>' +
+        "</div>" +
+      "</div>";
   }
 
+  // Menu "Acesso" (topo): Usuários (só Administrador), Trocar senha, Sair.
+  function setAcessoMenu(open) {
+    var menu = document.getElementById("acessoMenu"), btn = document.getElementById("acessoBtn");
+    if (!menu || !btn) return;
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) { var first = menu.querySelector("button"); if (first) first.focus(); }
+  }
   function wireUserPill() {
     var host = document.getElementById("userPill");
     if (!host) return;
     host.addEventListener("click", function (e) {
+      if (e.target.closest("#acessoBtn")) {
+        var menu = document.getElementById("acessoMenu");
+        setAcessoMenu(menu && menu.hidden);
+        return;
+      }
       var b = e.target.closest("button[data-act]");
       if (!b) return;
-      if (b.getAttribute("data-act") === "sair") {
+      setAcessoMenu(false);
+      var act = b.getAttribute("data-act");
+      if (act === "sair") {
         client.auth.signOut().then(function () { location.reload(); });
+      } else if (act === "usuarios") {
+        var tabBtn = document.querySelector('#mainTabs button[data-tab="usuarios"]');
+        if (tabBtn) tabBtn.click();
       } else {
         openChangePassword();
+      }
+    });
+    document.addEventListener("mousedown", function (e) {
+      if (!e.target.closest(".acesso-wrap")) setAcessoMenu(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      var menu = document.getElementById("acessoMenu");
+      if (!menu || menu.hidden) return;
+      if (e.key === "Escape") { setAcessoMenu(false); var b = document.getElementById("acessoBtn"); if (b) b.focus(); return; }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        var items = Array.prototype.slice.call(menu.querySelectorAll("button"));
+        var i = items.indexOf(document.activeElement);
+        i = e.key === "ArrowDown" ? Math.min(items.length - 1, i + 1) : Math.max(0, i - 1);
+        items[i].focus();
       }
     });
   }

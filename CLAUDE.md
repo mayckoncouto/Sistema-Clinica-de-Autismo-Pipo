@@ -90,11 +90,17 @@ testes continuam usando o mesmo mock.
   `{agenda|pacientes|profissionais|salas: {view,create,edit,delete}}`;
   `profiles.role_id` aponta o nível.
   Usuários em 2026-09-30: Mayckon = Administrador, Lucas = Secretária.
-- Duas abas, **só para o nível Administrador**, ambas em lista (`.adm-table`)
-  com cadastro em janela: **Usuários** (nome, e-mail, senha, nível,
-  ativar/desativar, excluir — ninguém muda o próprio nível) e **Níveis de
-  permissão** (+ Novo nível; clicar abre nome + grade; excluir pede
-  confirmação).
+- No topo, ao lado do nome e do nível, o botão **Acesso ▾** (menu em
+  `pipo-supabase.js`): **Usuários** (só Administrador), **Trocar senha**,
+  **Sair**. A tela de Usuários NÃO tem botão nas abas principais: o menu
+  clica no botão sempre oculto `#mainTabs [data-tab="usuarios"]`.
+- Tela **Usuários** (só Administrador): busca por nome/e-mail/nível,
+  contador, lista (`.adm-table`), cadastro em janela (nome, e-mail, senha,
+  nível, ativar/desativar, excluir — ninguém muda o próprio nível). O botão
+  **Níveis de permissão** na barra (igual a "Especialidades" em Pacientes)
+  abre a janela com a lista de níveis (`openRolesModal`); clicar num nível
+  abre o cadastro dele (nome + grade; excluir pede confirmação) e fechar
+  volta para a lista.
   Código em `js/usuarios.js`; o app lê o nível via
   `profiles.select("*, role:roles(*)")` em `pipo-supabase.js`.
 - O **primeiro usuário criado no projeto vira Administrador**; os seguintes
@@ -196,6 +202,9 @@ testes continuam usando o mesmo mock.
   (`#profListSearch`, nome/especialidade/sala, sem acento), contador
   "X de Y profissionais", ordenação por coluna (`state.profSort`) e coluna
   "Salas onde atende" calculada das colunas das salas. Clique na linha edita.
+- Salas: busca por nome da sala ou de profissional (`#roomListSearch`) e
+  contador; com busca ativa as setas de reordenar somem (reordenar só com a
+  lista completa).
   Colunas redimensionáveis como em Pacientes — o mesmo
   `patColResizeStart`/`wirePatColResize`, recebendo uma config por tabela
   (`patResizeCfg()` / `profResizeCfg()`); larguras salvas no navegador em

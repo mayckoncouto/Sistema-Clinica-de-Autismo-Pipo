@@ -34,6 +34,10 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
+  // Busca sem acento e sem diferenciar maiúsculas (igual ao normText do app).
+  function normText(s) {
+    return String(s == null ? "" : s).normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  }
   function toast(msg, isErr) { if (typeof window.showToast === "function") window.showToast(msg, isErr); }
   function confirmBox(opts) { return window.pipoConfirm ? window.pipoConfirm(opts) : Promise.resolve(window.confirm(opts.title)); }
   function roleById(id) { return roles.filter(function (r) { return r.id === id; })[0] || null; }
@@ -130,22 +134,50 @@
   }
 
   /* ================= Tela: Usuários ================= */
+  // Barra de ferramentas montada uma vez só (para a busca não perder o foco a
+  // cada tecla); a lista embaixo é que é refeita.
   function renderUsers() {
     var h = document.getElementById("tab-usuarios");
     if (!h) return;
+    if (!document.getElementById("userSearch")) {
+      h.innerHTML =
+        '<div class="pat-toolbar">' +
+          '<div class="search-wrap" style="max-width:280px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>' +
+            '<input id="userSearch" type="text" placeholder="Buscar por nome, e-mail ou nível…">' +
+          "</div>" +
+          '<span class="pat-count" id="userCount"></span>' +
+          '<div class="spacer"></div>' +
+          '<button class="btn ghost" id="rolesBtn">Níveis de permissão</button>' +
+          '<button class="btn primary" id="addUserBtn">+ Novo usuário</button>' +
+        "</div>" +
+        '<div class="adm-wrap" id="usersListHost"></div>';
+      document.getElementById("userSearch").addEventListener("input", renderUsers);
+      document.getElementById("addUserBtn").addEventListener("click", function () { openUserModal(null); });
+      document.getElementById("rolesBtn").addEventListener("click", function () { openRolesModal(); });
+    }
+    var host = document.getElementById("usersListHost");
+    var countEl = document.getElementById("userCount");
+    if (!(loaded.users && loaded.roles)) {
+      host.innerHTML = '<div class="pat-count" style="padding:12px">Carregando…</div>';
+      return;
+    }
     var me = auth.profile();
-    h.innerHTML =
-      '<div class="pat-toolbar">' +
-        '<div><b style="font-size:13px">Cadastro de usuários</b>' +
-          '<div class="pat-count" style="margin-top:2px">Quem pode entrar no sistema e em qual nível de permissão. ' +
-          'O que cada nível pode fazer é definido na aba "Níveis de permissão".</div></div>' +
-        '<div class="spacer"></div>' +
-        '<button class="btn primary" id="addUserBtn">+ Novo usuário</button>' +
-      "</div>" +
-      '<div class="adm-wrap">' +
-        (!(loaded.users && loaded.roles) ? '<div class="pat-count" style="padding:12px">Carregando…</div>' :
+    var q = normText(document.getElementById("userSearch").value.trim());
+    var list = users.filter(function (u) {
+      if (!q) return true;
+      var role = roleById(u.role_id);
+      return normText(u.full_name).indexOf(q) !== -1 || normText(u.email).indexOf(q) !== -1 ||
+        normText(role ? role.name : "").indexOf(q) !== -1;
+    });
+    countEl.textContent = list.length + " de " + users.length + (users.length === 1 ? " usuário" : " usuários");
+    if (!list.length) {
+      host.innerHTML = '<div class="empty-state"><b>Nenhum usuário encontrado</b>Ajuste a busca ou cadastre um novo usuário.</div>';
+      return;
+    }
+    host.innerHTML =
         '<table class="adm-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Nível de permissão</th><th>Situação</th></tr></thead><tbody>' +
-          users.map(function (u) {
+          list.map(function (u) {
             var role = roleById(u.role_id);
             return '<tr data-uid="' + esc(u.id) + '" class="' + (u.active ? "" : "inactive") + '" tabindex="0">' +
               '<td class="u-name">' + esc(u.full_name || "(sem nome)") + (me && me.id === u.id ? ' <span class="u-badge">você</span>' : "") + "</td>" +
@@ -154,10 +186,8 @@
               "<td>" + (u.active ? '<span class="u-badge ok">Ativo</span>' : '<span class="u-badge off">Desativado</span>') + "</td>" +
             "</tr>";
           }).join("") +
-        "</tbody></table>") +
-      "</div>";
-    document.getElementById("addUserBtn").addEventListener("click", function () { openUserModal(null); });
-    h.querySelectorAll("tbody tr[data-uid]").forEach(function (tr) {
+        "</tbody></table>";
+    host.querySelectorAll("tbody tr[data-uid]").forEach(function (tr) {
       function open() {
         var u = users.filter(function (x) { return x.id === tr.getAttribute("data-uid"); })[0];
         if (u) openUserModal(u);
@@ -185,7 +215,7 @@
       '<div class="overlay" id="ovUser"><div class="modal wide" style="max-width:560px">' +
         '<div class="modal-head"><div><h3>' + (isNew ? "Novo usuário" : "Editar usuário") + "</h3>" +
           '<div class="modal-sub">' + (isNew
-            ? "A pessoa entra com este e-mail e a senha inicial, e pode trocar a senha depois pelo botão \"Trocar senha\" no topo."
+            ? "A pessoa entra com este e-mail e a senha inicial, e pode trocar a senha depois no menu \"Acesso\" do topo."
             : esc(u.email)) + "</div></div>" +
           '<button class="modal-close" id="uClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
@@ -310,34 +340,43 @@
       .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "nivel";
   }
 
-  function renderRoles() {
-    var h = document.getElementById("tab-niveis");
-    if (!h) return;
+  // Janela "Níveis de permissão" (aberta pelo botão na tela de Usuários, como
+  // "Especialidades" em Pacientes): lista dos níveis + "Novo nível".
+  function openRolesModal() {
     var counts = {};
     users.forEach(function (u) { counts[u.role_id] = (counts[u.role_id] || 0) + 1; });
-    h.innerHTML =
-      '<div class="pat-toolbar">' +
-        '<div><b style="font-size:13px">Níveis de permissão</b>' +
-          '<div class="pat-count" style="margin-top:2px">O que cada nível pode fazer em cada tela. ' +
+    var mh = document.getElementById("modalHost");
+    mh.innerHTML =
+      '<div class="overlay" id="ovRoles"><div class="modal wide" style="max-width:760px">' +
+        '<div class="modal-head"><div><h3>Níveis de permissão</h3>' +
+          '<div class="modal-sub">O que cada nível pode fazer em cada tela. Clique num nível para editar. ' +
           'Uma mudança vale na hora para todos os usuários daquele nível.</div></div>' +
-        '<div class="spacer"></div>' +
-        '<button class="btn primary" id="addRoleBtn">+ Novo nível</button>' +
-      "</div>" +
-      '<div class="adm-wrap">' +
-        (!(loaded.users && loaded.roles) ? '<div class="pat-count" style="padding:12px">Carregando…</div>' :
-        '<table class="adm-table"><thead><tr><th style="width:22%">Nível</th><th>Permissões</th><th style="width:12%">Usuários</th></tr></thead><tbody>' +
-          roles.map(function (r) {
-            var n = counts[r.id] || 0;
-            return '<tr data-role-id="' + esc(r.id) + '" tabindex="0">' +
-              '<td class="u-name">' + esc(r.name) + (r.is_admin ? ' <span class="u-badge admin">Acesso total</span>' : "") + "</td>" +
-              '<td class="pt-muted">' + esc(roleSummary(r)) + "</td>" +
-              '<td><span class="u-badge">' + n + (n === 1 ? " usuário" : " usuários") + "</span></td>" +
-            "</tr>";
-          }).join("") +
-        "</tbody></table>") +
-      "</div>";
+          '<button class="modal-close" id="rlClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-body">' +
+          '<table class="adm-table"><thead><tr><th style="width:24%">Nível</th><th>Permissões</th><th style="width:16%">Usuários</th></tr></thead><tbody>' +
+            roles.map(function (r) {
+              var n = counts[r.id] || 0;
+              return '<tr data-role-id="' + esc(r.id) + '" tabindex="0">' +
+                '<td class="u-name">' + esc(r.name) + (r.is_admin ? ' <span class="u-badge admin">Acesso total</span>' : "") + "</td>" +
+                '<td class="pt-muted">' + esc(roleSummary(r)) + "</td>" +
+                '<td><span class="u-badge">' + n + (n === 1 ? " usuário" : " usuários") + "</span></td>" +
+              "</tr>";
+            }).join("") +
+          "</tbody></table>" +
+        "</div>" +
+        '<div class="modal-foot">' +
+          '<button class="btn primary" id="addRoleBtn">+ Novo nível</button>' +
+          '<div class="spacer"></div>' +
+          '<button class="btn ghost" id="rlDone">Fechar</button>' +
+        "</div>" +
+      "</div></div>";
+    var ov = document.getElementById("ovRoles");
+    function close() { mh.innerHTML = ""; }
+    ov.addEventListener("mousedown", function (e) { if (e.target === ov) close(); });
+    document.getElementById("rlClose").addEventListener("click", close);
+    document.getElementById("rlDone").addEventListener("click", close);
     document.getElementById("addRoleBtn").addEventListener("click", function () { openRoleModal(null); });
-    h.querySelectorAll("tbody tr[data-role-id]").forEach(function (tr) {
+    ov.querySelectorAll("tbody tr[data-role-id]").forEach(function (tr) {
       function open() { var r = roleById(tr.getAttribute("data-role-id")); if (r) openRoleModal(r); }
       tr.addEventListener("click", open);
       tr.addEventListener("keydown", function (e) { if (e.key === "Enter") open(); });
@@ -385,7 +424,8 @@
       "</div></div>";
 
     var ov = document.getElementById("ovRole");
-    function close() { mh.innerHTML = ""; }
+    // Fechar o cadastro de um nível volta para a lista de níveis.
+    function close() { openRolesModal(); }
     ov.addEventListener("mousedown", function (e) { if (e.target === ov) close(); });
     document.getElementById("rClose").addEventListener("click", close);
     document.getElementById("rCancel").addEventListener("click", close);
@@ -438,15 +478,14 @@
           return;
         }
         toast(isNew ? "Nível \"" + name + "\" criado." : "Nível \"" + name + "\" salvo.");
-        close();
-        reloadAll();
+        reloadAll().then(openRolesModal);
       });
     });
 
     var delBtn = document.getElementById("rDelete");
     if (delBtn) delBtn.addEventListener("click", function () {
       if (n > 0) {
-        toast("Este nível ainda tem " + n + (n === 1 ? " usuário. Mude-o" : " usuários. Mude-os") + " de nível na aba Usuários antes de excluir.", true);
+        toast("Este nível ainda tem " + n + (n === 1 ? " usuário. Mude-o" : " usuários. Mude-os") + " de nível no cadastro de usuários antes de excluir.", true);
         return;
       }
       confirmBox({
@@ -458,8 +497,7 @@
         auth.client.from("roles").delete().eq("id", role.id).then(function (r) {
           if (r.error) { toast("Não foi possível excluir: " + friendlyDbError(r.error), true); return; }
           toast("Nível \"" + role.name + "\" excluído.");
-          close();
-          reloadAll();
+          reloadAll().then(openRolesModal);
         });
       });
     });
@@ -467,19 +505,21 @@
     document.getElementById("rName").focus();
   }
 
-  function renderAll() { renderUsers(); renderRoles(); }
+  function renderAll() { renderUsers(); }
 
   /* ---------------- ligação com as abas ---------------- */
   function init() {
     injectStyles();
+    // A tela de Usuários abre pelo menu "Acesso" do topo, que clica no botão
+    // (oculto) da aba "usuarios" — ouvimos esse clique para carregar os dados.
     var tabs = document.getElementById("mainTabs");
     if (tabs) tabs.addEventListener("click", function (e) {
-      var b = e.target.closest('button[data-tab="usuarios"],button[data-tab="niveis"]');
+      var b = e.target.closest('button[data-tab="usuarios"]');
       if (!b || !auth.isAdmin()) return;
       if (!(loaded.users && loaded.roles)) renderAll();
       reloadAll();
     });
-    // Outro administrador criou/mudou/excluiu um nível: atualiza as listas.
+    // Outro administrador criou/mudou/excluiu um nível: atualiza a lista.
     if (auth.onRoleChange) auth.onRoleChange(function () {
       if (loaded.roles && auth.isAdmin()) reloadAll();
     });
