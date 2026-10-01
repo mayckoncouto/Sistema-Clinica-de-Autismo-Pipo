@@ -273,6 +273,10 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 table.rp-table{border-collapse:collapse;width:100%;font-size:12.5px}
 .rp-table th{position:sticky;top:0;background:var(--surface-2);text-align:left;padding:7px 10px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--line);white-space:nowrap}
 .rp-table td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.rp-th{cursor:pointer;user-select:none}
+.rp-th:hover,.rp-th.on{color:var(--accent)!important}
+.rp-sort{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.rp-sort select{padding:4px 6px;font-size:12px;width:auto}
 .rp-table td.n{text-align:right;font-variant-numeric:tabular-nums}
 .rp-table tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
 .rp-table tfoot td{font-weight:800;background:var(--surface-2);border-top:2px solid var(--line)}
@@ -7283,6 +7287,55 @@ var RP_BUILDERS = {
   }
 };
 
+// Ordenação dos relatórios: RP.last.sort = {col: "Nome da coluna", dir: 1|-1}.
+// Vale para toda seção que tiver essa coluna (tela, impressão e Excel).
+// Entende data dd/mm/aaaa, horas "1h20", porcentagem, número e texto.
+function rpSortKey(v){
+  if (typeof v === "number") return {n: v};
+  var s = v == null ? "" : String(v).trim();
+  var m;
+  if (s === "" || s === "—") return {n: -Infinity};
+  if ((m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/))) return {n: +(m[3] + m[2] + m[1])};
+  if ((m = s.match(/^(\d+)h(\d{2})?$/))) return {n: (+m[1]) * 60 + (+(m[2] || 0))};
+  if ((m = s.match(/^(-?\d+)%$/))) return {n: +m[1]};
+  if (/^-?\d+(,\d+)?$/.test(s)) return {n: +s.replace(",", ".")};
+  return {s: s};
+}
+function rpRows(sec){
+  var L = RP.last, so = L && L.sort;
+  if (!so || !so.col) return sec.rows;
+  var idx = sec.head.indexOf(so.col);
+  if (idx === -1) return sec.rows;
+  return sec.rows.map(function(r, i){ return {r: r, i: i, k: rpSortKey(r[idx])}; }).sort(function(a, b){
+    var c;
+    if (a.k.n !== undefined && b.k.n !== undefined) c = a.k.n - b.k.n;
+    else if (a.k.s !== undefined && b.k.s !== undefined) c = a.k.s.localeCompare(b.k.s, "pt-BR", {numeric: true, sensitivity: "base"});
+    else c = a.k.n !== undefined ? -1 : 1;
+    return c * so.dir || a.i - b.i;
+  }).map(function(x){ return x.r; });
+}
+function rpSortColumns(){
+  var L = RP.last, seen = {}, out = [];
+  if (!L) return out;
+  L.rep.sections.forEach(function(s){ if (s.rows.length) s.head.forEach(function(h){ if (!seen[h]){ seen[h] = 1; out.push(h); } }); });
+  return out;
+}
+function rpSetSort(col, dir){
+  if (!RP.last) return;
+  RP.last.sort = col ? {col: col, dir: dir || 1} : null;
+  rpRender();
+}
+function rpSortControlsHtml(){
+  var cols = rpSortColumns(), so = RP.last && RP.last.sort;
+  if (!cols.length) return "";
+  return '<label class="rp-sort rp-noprint">Ordenar por <select id="rpSortCol"><option value="">Padrão</option>' +
+    cols.map(function(c){ return '<option value="' + esc(c) + '"' + (so && so.col === c ? " selected" : "") + '>' + esc(c) + '</option>'; }).join("") + '</select>' +
+    '<select id="rpSortDir"><option value="1"' + (so && so.dir < 0 ? "" : " selected") + '>Crescente</option><option value="-1"' + (so && so.dir < 0 ? " selected" : "") + '>Decrescente</option></select></label>';
+}
+function rpThHtml(h){
+  var so = RP.last && RP.last.sort, on = so && so.col === h;
+  return '<th class="rp-th' + (on ? " on" : "") + '" data-sort="' + esc(h) + '" title="Clique para ordenar">' + esc(h) + (on ? (so.dir > 0 ? " ▲" : " ▼") : "") + '</th>';
+}
 function rpRender(){
   var out = document.getElementById("rpOut"), L = RP.last;
   if (!L) return;
@@ -7296,18 +7349,27 @@ function rpRender(){
   if (t.filters.indexOf("paciente") !== -1 && o.pac) filt.push("Paciente: " + document.getElementById("rpPac").value.trim());
   if (t.filters.indexOf("convenio") !== -1 && o.conv) filt.push("Convênio: " + o.conv);
   var html = '<div class="rp-head"><div><h2>' + esc(t.name) + '</h2><div class="rp-sub">' + esc(filt.join(" · ")) + ' · gerado em ' + esc(prStamp(new Date().toISOString())) + '</div></div>' +
-    '<div class="spacer"></div><button class="btn ghost rp-noprint" id="rpPrint">Imprimir / PDF</button><button class="btn ghost rp-noprint" id="rpCsv">Exportar Excel</button></div>';
+    '<div class="spacer"></div>' + rpSortControlsHtml() + '<button class="btn ghost rp-noprint" id="rpPrint">Imprimir / PDF</button><button class="btn ghost rp-noprint" id="rpCsv">Exportar Excel</button></div>';
   if (L.rep.note) html += '<div class="rp-note">' + esc(L.rep.note) + '</div>';
   L.rep.sections.forEach(function(s){
     html += '<h3 class="rp-sec">' + esc(s.title) + '</h3>';
     if (!s.rows.length){ html += '<div class="rp-empty">' + esc(s.empty || "Nada encontrado no período.") + '</div>'; return; }
-    html += '<div class="rp-table-wrap"><table class="rp-table"><thead><tr>' + s.head.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join("") + '</tr></thead><tbody>' +
-      s.rows.map(function(r){ return '<tr>' + r.map(function(v){ return '<td' + (typeof v === "number" ? ' class="n"' : '') + '>' + esc(v == null ? "" : String(v)) + '</td>'; }).join("") + '</tr>'; }).join("") +
+    html += '<div class="rp-table-wrap"><table class="rp-table"><thead><tr>' + s.head.map(rpThHtml).join("") + '</tr></thead><tbody>' +
+      rpRows(s).map(function(r){ return '<tr>' + r.map(function(v){ return '<td' + (typeof v === "number" ? ' class="n"' : '') + '>' + esc(v == null ? "" : String(v)) + '</td>'; }).join("") + '</tr>'; }).join("") +
       '</tbody>' + (s.foot ? '<tfoot><tr>' + s.foot.map(function(v){ return '<td' + (typeof v === "number" ? ' class="n"' : '') + '>' + esc(v == null ? "" : String(v)) + '</td>'; }).join("") + '</tr></tfoot>' : '') +
       '</table></div>';
   });
   out.innerHTML = html;
   document.getElementById("rpPrint").addEventListener("click", rpPrint);
+  var sc = document.getElementById("rpSortCol"), sd = document.getElementById("rpSortDir");
+  if (sc) sc.addEventListener("change", function(){ rpSetSort(sc.value, +sd.value); });
+  if (sd) sd.addEventListener("change", function(){ if (sc.value) rpSetSort(sc.value, +sd.value); });
+  out.querySelectorAll("th[data-sort]").forEach(function(th){
+    th.addEventListener("click", function(){
+      var col = th.getAttribute("data-sort"), cur = RP.last.sort;
+      rpSetSort(col, cur && cur.col === col ? -cur.dir : 1);
+    });
+  });
   document.getElementById("rpCsv").addEventListener("click", rpExportCsv);
 }
 // Imprimir / PDF: monta uma página só com o relatório (cabeçalho da clínica,
@@ -7328,7 +7390,7 @@ function rpPrint(){
     body += '<h3>' + esc(s.title) + '</h3>';
     if (!s.rows.length){ body += '<div class="empty">' + esc(s.empty || "Nada encontrado no período.") + '</div>'; return; }
     body += "<table><thead><tr>" + s.head.map(function(h){ return "<th>" + esc(h) + "</th>"; }).join("") + "</tr></thead><tbody>" +
-      s.rows.map(function(r){ return "<tr>" + cells(r, "td") + "</tr>"; }).join("") + "</tbody>" +
+      rpRows(s).map(function(r){ return "<tr>" + cells(r, "td") + "</tr>"; }).join("") + "</tbody>" +
       (s.foot ? "<tfoot><tr>" + cells(s.foot, "td") + "</tr></tfoot>" : "") + "</table>";
   });
   var css = "@page{size:A4 " + (wide ? "landscape" : "portrait") + ";margin:12mm}" +
@@ -7366,7 +7428,7 @@ function rpExportCsv(){
   L.rep.sections.forEach(function(s){
     lines.push(cell(s.title));
     lines.push(s.head.map(cell).join(";"));
-    s.rows.forEach(function(r){ lines.push(r.map(cell).join(";")); });
+    rpRows(s).forEach(function(r){ lines.push(r.map(cell).join(";")); });
     if (s.foot) lines.push(s.foot.map(cell).join(";"));
     lines.push("");
   });
