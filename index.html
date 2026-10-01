@@ -5341,7 +5341,7 @@ function agdOpenModal(opts){
         '<div class="modal-sub">'+agdBrDate(date)+(time ? ' às '+time : '')+'</div></div>' +
         '<button class="modal-close" id="agdClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
-        '<div class="field"><label for="agdPac">Paciente</label><input id="agdPac" type="text" autocomplete="off" placeholder="Digite o nome do paciente…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'><div class="autolist" id="agdSuggest" hidden></div></div>' +
+        '<div class="field"><label for="agdPac">Paciente ou grupo de suporte</label><input id="agdPac" type="text" autocomplete="off" placeholder="Nome do paciente ou do grupo…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'><div class="autolist" id="agdSuggest" hidden></div></div>' +
         '<div class="field"><label for="agdServ">Serviço</label><select id="agdServ"'+(canSave && !rowKind?'':' disabled')+'>' +
           serviceOptionsHtml((row && row.service) || DEFAULT_SERVICE_ID, profId) + '</select></div>' +
         '<div class="field-row">' +
@@ -5401,8 +5401,11 @@ function agdOpenModal(opts){
     if (!q){ pacSuggest.hidden = true; return; }
     var matches = state.patients.filter(function(p){ return normText(p.nome).indexOf(q) !== -1; })
       .slice(0,8).map(function(p){ return {name:p.nome, kind:"Paciente", p:p}; });
+    // Grupos de suporte também podem ser agendados na Agenda (bolinha na cor do grupo).
+    matches = matches.concat(supportGroups().filter(function(g){ return normText(g.name).indexOf(q) !== -1; })
+      .slice(0,4).map(function(g){ return {name:g.name, kind:"Sala", color:g.color}; }));
     pacSuggest.innerHTML = matches.length ? matches.map(bookingSuggestHtml).join("")
-      : '<div class="none">Nenhum paciente cadastrado com esse nome — cadastre em Pacientes antes de agendar.</div>';
+      : '<div class="none">Nenhum paciente ou grupo cadastrado com esse nome — cadastre em Pacientes antes de agendar.</div>';
     pacSuggest.hidden = false;
   });
   pacEl.addEventListener("focus", function(){ if (pacEl.value.trim()) pacEl.dispatchEvent(new Event("input")); });
@@ -5439,10 +5442,10 @@ function agdOpenModal(opts){
     if (!rec.date){ showToast("Escolha a data.", true); return; }
     var wd = agdParse(rec.date).getDay();
     if (wd === 0 || wd === 6){ showToast("A agenda funciona de segunda a sexta.", true); return; }
-    if (!kind && !rec.patient){ showToast("Informe o paciente.", true); pacEl.focus(); return; }
+    if (!kind && !rec.patient){ showToast("Informe o paciente ou o grupo.", true); pacEl.focus(); return; }
     if (!kind){
-      var regName = registeredBookingName(rec.patient);
-      if (!regName){ showToast(NOT_REGISTERED_MSG, true); pacEl.focus(); return; }
+      var regName = agdBookingName(rec.patient);
+      if (!regName){ showToast("Paciente ou grupo não cadastrado. Escolha um nome da lista (pacientes do cadastro ou grupos de suporte).", true); pacEl.focus(); return; }
       rec.patient = regName;
     }
     if (!isNew && !can("agendamentos","edit")){ showToast(permDeniedMsg("agendamentos","edit"), true); return; }
@@ -5538,6 +5541,14 @@ function agdConflictsFor(recs, ignoreIds){
 // Erro de "um atendimento por horário": só acontece enquanto o banco não recebe
 // supabase/2026-10-02b-varios-atendimentos.sql.
 var DUP_SLOT_MSG = "o banco ainda não aceita dois atendimentos no mesmo horário do profissional (falta rodar a atualização do banco).";
+// Agenda aceita paciente do cadastro ou grupo de suporte; devolve o nome como está no cadastro.
+function agdBookingName(text){
+  var n = normText(String(text || "").trim());
+  if (!n) return null;
+  var pool = state.patients.map(function(p){ return p.nome; }).concat(supportGroups().map(function(g){ return g.name; }));
+  for (var i=0;i<pool.length;i++){ if (normText(String(pool[i] || "").trim()) === n) return pool[i]; }
+  return null;
+}
 function agdErr(e){
   var m = (e && e.message) || String(e || "");
   return /permission|row-level|42501/i.test(m) ? "sem permissão." : m;

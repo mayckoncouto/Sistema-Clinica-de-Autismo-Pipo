@@ -487,3 +487,8 @@ Semana = os 5 dias do profissional/sala selecionado; Dia = todas as colunas.
 Bloquear só preenche livres (dentro do horário do profissional); liberar só
 remove bloqueios. Os botões novos (Enviar / Limpar semana) também são
 mostrados/ocultados em `applyPermissionsUI` (o perfil chega depois do 1º desenho).
+
+## Agenda: paciente ou grupo de suporte (2026-10-02)
+O campo da janela da Agenda aceita paciente do cadastro OU nome de grupo de
+suporte (`agdBookingName`); sugestões mostram os dois com bolinha de cor. Sala
+física não é aceita na Agenda (no Planner, só nas colunas de grupo).
