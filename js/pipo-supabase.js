@@ -222,7 +222,7 @@
       loginEl.innerHTML =
         '<form autocomplete="on">' +
           '<div class="brand">' + (logo ? '<img alt="" src="' + logo.getAttribute("src") + '">' : "") +
-            '<div><h2>Agenda Pipo</h2></div></div>' +
+            '<div><h2>Clínica de Autismo Pipo</h2></div></div>' +
           '<p class="sub">Clínica de Autismo Pipo — entre com seu e-mail e senha.</p>' +
           '<label>E-mail<input type="email" name="email" autocomplete="username" required></label>' +
           '<label>Senha<input type="password" name="password" autocomplete="current-password" required></label>' +
