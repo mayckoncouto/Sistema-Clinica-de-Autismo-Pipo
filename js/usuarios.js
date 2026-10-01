@@ -41,6 +41,18 @@
     return String(s == null ? "" : s).normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
   }
   function toast(msg, isErr) { if (typeof window.showToast === "function") window.showToast(msg, isErr); }
+  // Relatórios da aba "Relatórios" (ids iguais a RP_TYPES no index.html).
+  var REPORTS = [
+    { key: "lista", label: "Lista de atendimentos" },
+    { key: "produtividade", label: "Produtividade por profissional" },
+    { key: "frequencia", label: "Frequência por paciente" },
+    { key: "convenios", label: "Atendimentos por convênio" },
+    { key: "pacote", label: "Pacote contratado × realizado" },
+    { key: "pendentes", label: "Evoluções pendentes" },
+    { key: "ocupacao", label: "Ocupação" },
+    { key: "bloqueios", label: "Bloqueios, reuniões e treinamentos" },
+    { key: "sem-atendimento", label: "Pacientes sem atendimento" }
+  ];
   function confirmBox(opts) { return window.pipoConfirm ? window.pipoConfirm(opts) : Promise.resolve(window.confirm(opts.title)); }
   function roleById(id) { return roles.filter(function (r) { return r.id === id; })[0] || null; }
   function friendlyDbError(e) {
@@ -139,6 +151,8 @@
     }).filter(Boolean);
     var st = statusNames(p.status);
     if (st.length) parts.push("Status: " + st.join(", "));
+    var rp = REPORTS.filter(function (x) { return p.relatorios && p.relatorios[x.key]; }).length;
+    if (rp) parts.push("Relatórios: " + rp + " de " + REPORTS.length);
     return parts.length ? parts.join(" · ") : "Sem acesso a nenhuma aba";
   }
 
@@ -351,6 +365,9 @@
     // Status dos atendimentos que o nível pode usar na Agenda: {id: true}.
     out.status = {};
     Object.keys(p.status || {}).forEach(function (k) { if (p.status[k]) out.status[k] = true; });
+    out.relatorios = {};
+    REPORTS.forEach(function (x) { if (p.relatorios && p.relatorios[x.key]) out.relatorios[x.key] = true; });
+    if (Object.keys(out.relatorios).length) out.relatorios.view = true;
     return out;
   }
   // Status cadastrados (config/statuses, vêm do app).
@@ -370,6 +387,16 @@
         return '<label class="role-status-opt" style="display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:500">' +
           '<input type="checkbox" data-status="' + esc(s.id) + '"' + (on ? " checked" : "") + (locked ? " disabled" : "") + ">" +
           '<span style="width:10px;height:10px;border-radius:50%;background:' + esc(s.color || "#5b6b68") + '"></span>' + esc(s.name) + "</label>";
+      }).join("") + "</div>";
+  }
+  function reportPermsHtml(perms, locked) {
+    var map = (perms && perms.relatorios) || {};
+    return '<div class="field" id="rReportPerms" style="margin-top:12px"><label>Relatórios</label>' +
+      '<div class="pat-count" style="margin-bottom:6px">Quais relatórios este nível pode gerar na aba Relatórios. O Profissional só vê os dados dele.</div>' +
+      REPORTS.map(function (x) {
+        var on = locked || !!map[x.key];
+        return '<label style="display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:500">' +
+          '<input type="checkbox" data-report="' + x.key + '"' + (on ? " checked" : "") + (locked ? " disabled" : "") + ">" + esc(x.label) + "</label>";
       }).join("") + "</div>";
   }
   function slugify(s) {
@@ -451,6 +478,7 @@
           '<div class="field"><label for="rName">Nome do nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
           roleGridHtml(role ? (role.permissions || {}) : { agendamentos: { view: true }, agenda: { view: true }, pacientes: { view: true }, profissionais: { view: true }, salas: { view: true } }, locked) +
           statusPermsHtml(role ? (role.permissions || {}) : {}, locked) +
+          reportPermsHtml(role ? (role.permissions || {}) : {}, locked) +
           (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +
         "</div>" +
         '<div class="modal-foot">' +
@@ -491,6 +519,11 @@
       document.querySelectorAll("#rStatusPerms input[data-status]").forEach(function (c) {
         if (c.checked) p.status[c.getAttribute("data-status")] = true;
       });
+      p.relatorios = {};
+      document.querySelectorAll("#rReportPerms input[data-report]").forEach(function (c) {
+        if (c.checked) p.relatorios[c.getAttribute("data-report")] = true;
+      });
+      if (Object.keys(p.relatorios).length) p.relatorios.view = true;
       // Status que existiam no nível mas não estão mais no cadastro: mantém como estava.
       var prev = (role && role.permissions && role.permissions.status) || {};
       var known = statusList().map(function (s) { return s.id; });

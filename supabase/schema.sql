@@ -73,6 +73,7 @@ on conflict (id) do nothing;
 -- Permissões: "agenda" = Planner (grade de 4 semanas); "agendamentos" = Agenda por data.
 -- "status" = quais status de atendimento (config/statuses) o nível pode usar na Agenda.
 -- "prontuario" = evoluções dos atendimentos (tabela clinical_records; ver o fim do arquivo).
+-- "relatorios" = quais relatórios (aba Relatórios) o nível pode usar; ver o fim do arquivo.
 
 -- ---------------------------------------------------------------------
 -- profiles
@@ -808,3 +809,43 @@ $$;
 
 revoke all on function public.set_appointment_status(uuid, text) from public, anon;
 grant execute on function public.set_appointment_status(uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Relatórios (ver 2026-10-02g-relatorios.sql)
+-- ---------------------------------------------------------------------
+update public.roles set permissions = permissions || '{"relatorios": {"view": true, "lista": true, "produtividade": true, "frequencia": true, "convenios": true, "pacote": true, "pendentes": true, "ocupacao": true, "bloqueios": true, "sem-atendimento": true}}'::jsonb
+  where id = 'secretaria' and not (permissions ? 'relatorios');
+update public.roles set permissions = permissions || '{"relatorios": {"view": true, "lista": true, "produtividade": true, "frequencia": true, "convenios": true, "pacote": true, "sem-atendimento": true}}'::jsonb
+  where id = 'financeiro' and not (permissions ? 'relatorios');
+update public.roles set permissions = permissions || '{"relatorios": {"view": true, "lista": true, "produtividade": true, "frequencia": true, "pendentes": true, "bloqueios": true}}'::jsonb
+  where id = 'profissional' and not (permissions ? 'relatorios');
+
+create or replace function public.has_report(p_type text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select p.active and (r.is_admin or coalesce((r.permissions -> 'relatorios' ->> p_type)::boolean, false))
+    from public.profiles p join public.roles r on r.id = p.role_id
+    where p.id = auth.uid()
+  ), false);
+$$;
+
+-- Ids dos atendimentos do período que já têm evolução no prontuário.
+create or replace function public.report_appointments_with_records(p_from date, p_to date)
+returns setof uuid language plpgsql stable security definer set search_path = public as $$
+declare
+  v_scope text := public.agenda_scope_professional();
+begin
+  if not public.has_report('pendentes') then
+    raise exception 'Sem permissão para este relatório.' using errcode = '42501';
+  end if;
+  return query
+    select distinct cr.appointment_id
+    from public.clinical_records cr
+    join public.appointments a on a.id = cr.appointment_id
+    where a.date between p_from and p_to
+      and (v_scope is null or a.professional_id = v_scope);
+end;
+$$;
+
+revoke all on function public.report_appointments_with_records(date, date) from public, anon;
+grant execute on function public.report_appointments_with_records(date, date) to authenticated;

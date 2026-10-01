@@ -552,3 +552,18 @@ profissional (Dia e Semana). No banco, `agenda_scope_professional()` limita o
 SELECT de appointments e o `set_appointment_status` aos atendimentos dele
 (migração `2026-10-02f-agenda-do-profissional.sql`). Prontuário: só o autor
 edita; o nível Profissional não tem "excluir".
+
+## Relatórios (2026-10-02)
+- A aba antiga "Relatório" (Planner, 4 ciclos) agora se chama "Atendimentos"
+  (data-tab continua `relatorio`).
+- Nova aba "Relatórios" (`#tab-relatorios`, bloco "Relatórios" do script,
+  `RP_TYPES` / `RP_BUILDERS`): formulário à esquerda (tipo, De/Até + atalhos,
+  profissional, filtros extras por tipo) e resultado à direita, com
+  Imprimir/PDF (`body.rp-printing` + @media print) e Exportar Excel (CSV ";"
+  com BOM). Lê `appointments` do período (o Profissional fica preso ao próprio
+  `agdOwnProfId`). Tipos: lista, produtividade, frequencia, convenios, pacote,
+  pendentes, ocupacao, bloqueios, sem-atendimento.
+- Permissão por tipo: `roles.permissions.relatorios[tipo]` (+ `view` quando há
+  algum), seção "Relatórios" em Níveis de permissão. "Evoluções pendentes" usa a
+  função `report_appointments_with_records(p_from, p_to)` (não expõe o texto do
+  prontuário). Migração `supabase/2026-10-02g-relatorios.sql`.
