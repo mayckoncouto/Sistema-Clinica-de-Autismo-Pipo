@@ -534,3 +534,11 @@ física não é aceita na Agenda (no Planner, só nas colunas de grupo).
 - Agenda: botão "Atendimento" na janela do atendimento (paciente cadastrado e
   permissão de ver) → `prFromAppointment(row)`: abre a evolução daquele
   atendimento do próprio usuário, ou uma nova ligada a ele.
+
+## Agenda: "Detalhes do Agendamento" e "Iniciar Atendimento" (2026-10-02)
+- Quem não tem "editar" na Agenda, ao clicar num atendimento, vê o popup
+  `agdOpenDetails(row)` (só leitura): nome, serviço (ou "Grupo de suporte"),
+  profissional, observação, sala, data/hora "até", e o Status (grava ao mudar).
+- O botão do prontuário chama "Iniciar Atendimento" e fica no TOPO da janela
+  (popup e janela de edição). Evoluções também podem ser lançadas direto no
+  Prontuário ("+ Nova evolução"), sem atendimento.
