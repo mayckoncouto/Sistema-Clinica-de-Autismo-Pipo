@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var MODULES = ["agenda", "pacientes", "profissionais", "salas"];
+  var MODULES = ["agendamentos", "agenda", "pacientes", "profissionais", "salas"];
   var ACTIONS = ["view", "create", "edit", "delete"];
 
   var client = null;
@@ -443,6 +443,25 @@
     can: can,
     isAdmin: isAdmin,
     onRoleChange: function (fn) { roleListeners.push(fn); },
+    // Chamada à função /api/admin-users (só funciona para Administrador).
+    adminApi: function (payload) {
+      return fetch("/api/admin-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") },
+        body: JSON.stringify(payload)
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (b) {
+          if (!r.ok) throw new Error(b.error || ("Erro " + r.status));
+          return b;
+        });
+      });
+    },
+    // Usuário ligado a um profissional (ou null). Só administrador enxerga todos os perfis.
+    userForProfessional: function (profId) {
+      if (!client || !profId) return Promise.resolve(null);
+      return client.from("profiles").select("id,email,full_name,active,role_id").eq("professional_id", profId).maybeSingle()
+        .then(function (r) { return r.error ? null : r.data; });
+    },
     profile: function () { return profile; },
     session: function () { return session; },
     onProfile: function (fn) { profileListeners.push(fn); if (profile) fn(profile); },

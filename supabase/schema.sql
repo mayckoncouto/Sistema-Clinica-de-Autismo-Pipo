@@ -43,27 +43,32 @@ insert into public.roles (id, name, is_admin, sort, permissions) values
     "agenda":        {"view": true, "create": true, "edit": true, "delete": true},
     "pacientes":     {"view": true, "create": true, "edit": true, "delete": true},
     "profissionais": {"view": true, "create": true, "edit": true, "delete": true},
-    "salas":         {"view": true, "create": true, "edit": true, "delete": true}
+    "salas":         {"view": true, "create": true, "edit": true, "delete": true},
+    "agendamentos":  {"view": true, "create": true, "edit": true, "delete": true}
   }'),
   ('financeiro', 'Financeiro', false, 2, '{
     "agenda":        {"view": true, "create": false, "edit": false, "delete": false},
     "pacientes":     {"view": true, "create": true,  "edit": true,  "delete": false},
     "profissionais": {"view": true, "create": false, "edit": false, "delete": false},
-    "salas":         {"view": true, "create": false, "edit": false, "delete": false}
+    "salas":         {"view": true, "create": false, "edit": false, "delete": false},
+    "agendamentos":  {"view": true, "create": false, "edit": false, "delete": false}
   }'),
   ('profissional', 'Profissional', false, 3, '{
     "agenda":        {"view": true, "create": false, "edit": false, "delete": false},
     "pacientes":     {"view": true, "create": false, "edit": false, "delete": false},
     "profissionais": {"view": true, "create": false, "edit": false, "delete": false},
-    "salas":         {"view": true, "create": false, "edit": false, "delete": false}
+    "salas":         {"view": true, "create": false, "edit": false, "delete": false},
+    "agendamentos":  {"view": true, "create": false, "edit": false, "delete": false}
   }'),
   ('secretaria', 'Secretária', false, 4, '{
     "agenda":        {"view": true, "create": true,  "edit": true,  "delete": true},
     "pacientes":     {"view": true, "create": true,  "edit": true,  "delete": false},
     "profissionais": {"view": true, "create": false, "edit": false, "delete": false},
-    "salas":         {"view": true, "create": false, "edit": false, "delete": false}
+    "salas":         {"view": true, "create": false, "edit": false, "delete": false},
+    "agendamentos":  {"view": true, "create": true,  "edit": true,  "delete": true}
   }')
 on conflict (id) do nothing;
+-- Permissões: "agenda" = Planner (grade de 4 semanas); "agendamentos" = Agenda por data.
 
 -- ---------------------------------------------------------------------
 -- profiles
@@ -74,6 +79,7 @@ create table if not exists public.profiles (
   full_name   text not null default '',
   role_id     text not null references public.roles(id),
   active      boolean not null default true,
+  professional_id text, -- cadastro de profissional ligado a este usuário (opcional)
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -523,3 +529,78 @@ begin
     alter publication supabase_realtime add table public.roles;
   end if;
 end $$;
+
+-- =====================================================================
+-- Nova Agenda (por data real) — um registro por atendimento
+-- =====================================================================
+-- ---------------------------------------------------------------------
+create table if not exists public.appointments (
+  id               uuid primary key default gen_random_uuid(),
+  date             date not null,
+  time             text not null check (time ~ '^[0-2][0-9]:[0-5][0-9]$'),
+  professional_id  text not null,
+  room_id          text,
+  patient          text not null default '',
+  note             text not null default '',
+  blocked          boolean not null default false,
+  created_by       uuid references auth.users(id) on delete set null,
+  updated_by       uuid references auth.users(id) on delete set null,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  -- Um profissional não atende dois pacientes no mesmo horário.
+  constraint appointments_one_per_slot unique (date, time, professional_id)
+);
+create index if not exists appointments_date_idx on public.appointments (date);
+alter table public.appointments enable row level security;
+
+create or replace function public.appointments_stamp()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid();
+    new.created_at := now();
+  else
+    new.id := old.id;
+    new.created_by := old.created_by;
+    new.created_at := old.created_at;
+  end if;
+  new.updated_by := auth.uid();
+  new.updated_at := now();
+  return new;
+end $$;
+
+drop trigger if exists appointments_stamp on public.appointments;
+create trigger appointments_stamp
+  before insert or update on public.appointments
+  for each row execute function public.appointments_stamp();
+
+drop policy if exists appointments_select on public.appointments;
+create policy appointments_select on public.appointments
+  for select to authenticated using (public.has_perm('agendamentos', 'view'));
+drop policy if exists appointments_insert on public.appointments;
+create policy appointments_insert on public.appointments
+  for insert to authenticated with check (public.has_perm('agendamentos', 'create'));
+drop policy if exists appointments_update on public.appointments;
+create policy appointments_update on public.appointments
+  for update to authenticated
+  using (public.has_perm('agendamentos', 'edit'))
+  with check (public.has_perm('agendamentos', 'edit'));
+drop policy if exists appointments_delete on public.appointments;
+create policy appointments_delete on public.appointments
+  for delete to authenticated using (public.has_perm('agendamentos', 'delete'));
+
+revoke all on public.appointments from anon;
+grant select, insert, update, delete on public.appointments to authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'appointments'
+  ) then
+    alter publication supabase_realtime add table public.appointments;
+  end if;
+end $$;
+
+create unique index if not exists profiles_professional_unique
+  on public.profiles (professional_id) where professional_id is not null;

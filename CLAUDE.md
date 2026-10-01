@@ -130,6 +130,43 @@ testes continuam usando o mesmo mock.
   em `profiles` e `roles` → `reloadProfile()`);
   usuário desativado é deslogado e tem o login bloqueado (`ban_duration`).
 
+## Planner × Agenda (desde 2026-10-01)
+
+- **Planner** = a grade original de 4 semanas que se repetem (aba
+  `data-tab="agenda"`, documentos `schedule/*`, permissão `agenda`). Só o
+  rótulo mudou; o identificador interno continua `agenda` (testes dependem).
+- **Agenda** (nova, aba `data-tab="agendadia"`) = atendimentos em **datas
+  reais**, tabela própria `public.appointments` (uma linha por atendimento:
+  date, time, professional_id, room_id, patient, note, blocked), permissão
+  própria **`agendamentos`** (item "Agenda" nos Níveis). Migração
+  `supabase/2026-10-01-agenda-por-data.sql`. Começou vazia (não copia nada
+  do Planner).
+  - Seg–sex, mesmos horários de 40 min do Planner (vêm de `DAYS`), almoço.
+  - Visões **Semana** (5 dias do profissional/sala selecionado) e **Dia**
+    (uma coluna por profissional ou sala). Painel à direita: Profissionais |
+    Salas, filtro, contagem da semana. Data, ‹ Hoje ›.
+  - Horário de cada profissional (`horaInicio`/`horaFim` no cadastro):
+    fora dele a célula fica hachurada e não aceita marcação.
+  - Banco garante 1 atendimento por profissional/data/horário (unique);
+    sala ocupada por outro profissional gera só um aviso (pode confirmar).
+  - Código: bloco "Nova Agenda por data real" no fim do script (`AD`,
+    `adLoadWeek`, `adRender`, `adOpenModal`…). Carrega a semana inteira de
+    todos e aplica mudanças do Realtime. Sem `window.pipoAuth` (testes) mostra
+    "Agenda indisponível".
+- **Cadastro de profissional** ganhou: horário inicial/final, conselho,
+  registro, CPF (máscara + dígito verificador), CBOS (sugestões) e, só para
+  Administrador, **Usuário (e-mail) e Senha**: cria um usuário no nível
+  "Profissional" ligado ao profissional (`profiles.professional_id`); se já
+  houver usuário ligado, o campo vira "Nova senha". O salvar usa
+  `Object.assign` sobre o registro antigo para não perder campos.
+- Tela Usuários tem o botão temporário **"Criar acessos dos profissionais"**
+  (some quando todos têm usuário): sugere `primeironome@clinicapipo.com`
+  (sem acento; nome repetido vira `primeiro.segundo@`), senha `Pipo1234!`,
+  lista editável antes de criar. Não é regra do sistema — foi pedido só para
+  os profissionais que já existiam em 2026-10-01; pode ser removido depois.
+- CPF fica no documento `config/professionals`, legível por qualquer usuário
+  ativo (mesma regra de leitura dos outros cadastros).
+
 ## O que já está implementado (por área)
 
 ### Grade da Agenda

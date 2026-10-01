@@ -14,7 +14,8 @@
 
   var auth = window.pipoAuth;
   var MODULES = [
-    { key: "agenda", label: "Agenda", hint: "também dá acesso ao Relatório" },
+    { key: "agendamentos", label: "Agenda", hint: "atendimentos por data" },
+    { key: "agenda", label: "Planner", hint: "grade de 4 semanas; também dá acesso ao Relatório" },
     { key: "pacientes", label: "Pacientes", hint: "inclui Convênios e Especialidades" },
     { key: "profissionais", label: "Profissionais", hint: "" },
     { key: "salas", label: "Salas", hint: "" }
@@ -153,6 +154,7 @@
           "</div>" +
           '<span class="pat-count" id="userCount"></span>' +
           '<div class="spacer"></div>' +
+          '<button class="btn ghost" id="bulkProfBtn" hidden>Criar acessos dos profissionais</button>' +
           '<button class="btn ghost" id="rolesBtn">Níveis de permissão</button>' +
           '<button class="btn primary" id="addUserBtn">+ Novo usuário</button>' +
         "</div>" +
@@ -160,7 +162,10 @@
       document.getElementById("userSearch").addEventListener("input", renderUsers);
       document.getElementById("addUserBtn").addEventListener("click", function () { openUserModal(null); });
       document.getElementById("rolesBtn").addEventListener("click", function () { openRolesModal(); });
+      document.getElementById("bulkProfBtn").addEventListener("click", function () { openBulkProfModal(); });
     }
+    // Só aparece enquanto houver profissional sem usuário ligado.
+    document.getElementById("bulkProfBtn").hidden = !(loaded.users && profsWithoutUser().length);
     var host = document.getElementById("usersListHost");
     var countEl = document.getElementById("userCount");
     if (!(loaded.users && loaded.roles)) {
@@ -419,7 +424,7 @@
           '<button class="modal-close" id="rClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
           '<div class="field"><label for="rName">Nome do nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
-          roleGridHtml(role ? (role.permissions || {}) : { agenda: { view: true }, pacientes: { view: true }, profissionais: { view: true }, salas: { view: true } }, locked) +
+          roleGridHtml(role ? (role.permissions || {}) : { agendamentos: { view: true }, agenda: { view: true }, pacientes: { view: true }, profissionais: { view: true }, salas: { view: true } }, locked) +
           (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +
         "</div>" +
         '<div class="modal-foot">' +
@@ -510,6 +515,107 @@
     });
 
     document.getElementById("rName").focus();
+  }
+
+  /* ======== Criar acessos dos profissionais (uso pontual) ========
+   * Gera, para cada profissional sem usuário, um usuário no nível
+   * "Profissional": primeiro nome sem acento @clinicapipo.com e a senha
+   * informada. Tudo aparece numa lista para revisar (dá para mudar o e-mail
+   * ou desmarcar alguém) antes de criar. Não é regra do sistema: o padrão do
+   * e-mail é só uma sugestão para os profissionais já cadastrados.
+   */
+  var BULK_DOMAIN = "clinicapipo.com";
+  var BULK_PASSWORD = "Pipo1234!";
+  function profsWithoutUser() {
+    var linked = {};
+    users.forEach(function (u) { if (u.professional_id) linked[u.professional_id] = true; });
+    var all = window.pipoProfessionals ? window.pipoProfessionals() : [];
+    return all.filter(function (p) { return !linked[p.id]; })
+      .sort(function (a, b) { return (a.name || "").localeCompare(b.name || "", "pt-BR"); });
+  }
+  function emailPart(s) { return normText(s).replace(/[^a-z0-9]/g, ""); }
+  function suggestEmails(profs) {
+    var taken = {};
+    users.forEach(function (u) { taken[String(u.email || "").toLowerCase()] = true; });
+    return profs.map(function (p) {
+      var parts = String(p.name || "").trim().split(/\s+/).map(emailPart).filter(Boolean);
+      var base = parts[0] || "profissional";
+      var email = base + "@" + BULK_DOMAIN;
+      // Nome repetido: primeiro.segundo nome, depois número.
+      if (taken[email] && parts[1]) email = base + "." + parts[1] + "@" + BULK_DOMAIN;
+      var n = 2;
+      while (taken[email]) email = base + n++ + "@" + BULK_DOMAIN;
+      taken[email] = true;
+      return { prof: p, email: email };
+    });
+  }
+  function openBulkProfModal() {
+    var rows = suggestEmails(profsWithoutUser());
+    if (!rows.length) { toast("Todos os profissionais já têm usuário."); return; }
+    var mh = document.getElementById("modalHost");
+    mh.innerHTML =
+      '<div class="overlay" id="ovBulk"><div class="modal wide" style="max-width:640px">' +
+        '<div class="modal-head"><div><h3>Criar acessos dos profissionais</h3>' +
+          '<div class="modal-sub">' + rows.length + (rows.length === 1 ? " profissional ainda não tem" : " profissionais ainda não têm") +
+          ' usuário. Confira os e-mails (dá para editar) e desmarque quem não deve ter acesso. Todos entram no nível "Profissional".</div></div>' +
+          '<button class="modal-close" id="bkClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-body">' +
+          '<div class="field"><label for="bkPass">Senha inicial (a mesma para todos)</label><input id="bkPass" type="text" value="' + esc(BULK_PASSWORD) + '"></div>' +
+          '<table class="adm-table"><thead><tr><th style="width:36px"></th><th>Profissional</th><th>Usuário (e-mail)</th><th style="width:90px">Situação</th></tr></thead><tbody>' +
+            rows.map(function (r, i) {
+              return '<tr data-i="' + i + '"><td><input type="checkbox" class="bk-on" checked aria-label="Criar acesso"></td>' +
+                '<td class="u-name">' + esc(r.prof.name) + "</td>" +
+                '<td><input type="email" class="bk-email" value="' + esc(r.email) + '" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font:inherit;font-size:12.5px"></td>' +
+                '<td class="bk-status pt-muted">—</td></tr>';
+            }).join("") +
+          "</tbody></table>" +
+          '<div class="pat-count">Depois, peça para cada profissional trocar a senha no menu "Acesso › Trocar senha".</div>' +
+        "</div>" +
+        '<div class="modal-foot"><div class="spacer"></div>' +
+          '<button class="btn ghost" id="bkCancel">Cancelar</button>' +
+          '<button class="btn primary" id="bkGo">Criar acessos</button></div>' +
+      "</div></div>";
+    var ov = document.getElementById("ovBulk");
+    var running = false;
+    function close() { if (!running) mh.innerHTML = ""; }
+    ov.addEventListener("mousedown", function (e) { if (e.target === ov) close(); });
+    document.getElementById("bkClose").addEventListener("click", close);
+    document.getElementById("bkCancel").addEventListener("click", close);
+    var go = document.getElementById("bkGo");
+    go.addEventListener("click", function () {
+      var pass = document.getElementById("bkPass").value;
+      if (pass.length < 8) { toast("A senha precisa ter pelo menos 8 caracteres.", true); return; }
+      var trs = Array.prototype.slice.call(ov.querySelectorAll("tbody tr"));
+      var todo = trs.filter(function (tr) { return tr.querySelector(".bk-on").checked && tr.getAttribute("data-done") !== "1"; });
+      var seen = {}, bad = null;
+      todo.forEach(function (tr) {
+        var e = tr.querySelector(".bk-email").value.trim().toLowerCase();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) || seen[e]) bad = bad || tr;
+        seen[e] = true;
+      });
+      if (bad) { toast("Confira os e-mails: há algum inválido ou repetido.", true); bad.querySelector(".bk-email").focus(); return; }
+      if (!todo.length) { toast("Nenhum profissional marcado.", true); return; }
+      running = true; go.disabled = true; go.textContent = "Criando…";
+      var ok = 0, fail = 0;
+      // Um de cada vez, mostrando o resultado em cada linha.
+      todo.reduce(function (chain, tr) {
+        return chain.then(function () {
+          var r = rows[+tr.getAttribute("data-i")];
+          var email = tr.querySelector(".bk-email").value.trim().toLowerCase();
+          var st = tr.querySelector(".bk-status");
+          st.textContent = "criando…";
+          return adminApi({ action: "create", email: email, password: pass, full_name: r.prof.name, role_id: "profissional", professional_id: r.prof.id })
+            .then(function () { ok++; tr.setAttribute("data-done", "1"); st.innerHTML = '<span class="u-badge ok">Criado</span>'; tr.querySelector(".bk-on").disabled = true; })
+            .catch(function (e) { fail++; st.innerHTML = '<span class="u-badge off" title="' + esc(e.message) + '">Erro</span>'; });
+        });
+      }, Promise.resolve()).then(function () {
+        running = false;
+        go.disabled = false; go.textContent = fail ? "Tentar de novo os que falharam" : "Criar acessos";
+        toast(ok + (ok === 1 ? " acesso criado" : " acessos criados") + (fail ? ", " + fail + " com erro (passe o mouse em \"Erro\" para ver o motivo)." : "."), !!fail);
+        loadUsers().then(function () { renderUsers(); });
+        if (!fail) document.getElementById("bkCancel").textContent = "Fechar";
+      });
+    });
   }
 
   function renderAll() { renderUsers(); }
