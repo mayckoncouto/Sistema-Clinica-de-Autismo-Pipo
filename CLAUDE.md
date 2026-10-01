@@ -483,7 +483,7 @@ Ao lado de cada horário (coluna de horários) há dois botões `.row-lock`
 (liberar / bloquear), 2 cliques via `armTwoClick(btn, title)`. Planner:
 `plannerRowAction(action, docId, dayKey, time)` em todas as colunas visíveis
 da tabela (respeita o filtro de sala). Agenda: `agdRowAction(action, time)` —
-Semana = os 5 dias do profissional/sala selecionado; Dia = todas as colunas.
+Semana = os 5 dias do profissional/sala selecionado; Dia = só o selecionado.
 Bloquear só preenche livres (dentro do horário do profissional); liberar só
 remove bloqueios. Os botões novos (Enviar / Limpar semana) também são
 mostrados/ocultados em `applyPermissionsUI` (o perfil chega depois do 1º desenho).
@@ -492,3 +492,11 @@ mostrados/ocultados em `applyPermissionsUI` (o perfil chega depois do 1º desenh
 O campo da janela da Agenda aceita paciente do cadastro OU nome de grupo de
 suporte (`agdBookingName`); sugestões mostram os dois com bolinha de cor. Sala
 física não é aceita na Agenda (no Planner, só nas colunas de grupo).
+
+## Agenda: busca e visão Dia (2026-10-02)
+- Busca `#agdSearch` (`AD.search`, `agdSearchHit(row)`): destaca em amarelo os
+  atendimentos cujo nome (paciente/grupo/tipo) contém o texto, apaga os outros,
+  mostra "N na tela · M na semana" e, na lista da esquerda, quantos encontrados
+  por profissional/sala (os sem resultado ficam apagados).
+- Visão Dia mostra só o profissional/sala selecionado (uma coluna), igual à
+  Semana; trocar na lista da esquerda.

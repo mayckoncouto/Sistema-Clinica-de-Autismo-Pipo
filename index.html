@@ -231,6 +231,11 @@ td.agd-slot:hover .agd-add{opacity:1}
 .agd-res .h{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .agd-res .n{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .agd-res .cnt{margin-left:auto;font-size:10.5px;font-weight:800;color:var(--ink-2);background:var(--surface-2);border-radius:999px;padding:2px 7px;flex:none}
+.agd-search{min-width:160px;max-width:240px}
+.agd-res .cnt.hit{background:#ffe14d;color:#182523}
+.agd-res.no-hit{opacity:.45}
+.agd-grid td.agd-slot.search-hit{background:#fff1b8}
+.agd-grid .book.search-dim-item .book-main{opacity:.28}
 .agd-res .n{font-size:12.5px}
 .agd-legend{padding:5px 12px}
 @media (max-width:900px){.agd-panel{flex-direction:column}.agd-side{width:auto;max-height:240px;border-right:0;border-bottom:1px solid var(--line)}}
@@ -692,6 +697,11 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <div class="seg" id="agdViewSeg"><button data-v="dia">Dia</button><button data-v="semana" class="active">Semana</button></div>
         <div class="agd-nav"><button id="agdPrev" title="Anterior" aria-label="Anterior">‹</button><button id="agdToday">Hoje</button><button id="agdNext" title="Próximo" aria-label="Próximo">›</button></div>
         <span class="agd-title" id="agdTitle"></span>
+        <div class="search-wrap agd-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+          <input id="agdSearch" type="text" placeholder="Buscar paciente ou grupo…">
+        </div>
+        <span class="pat-count" id="agdMatchCount"></span>
         <div class="spacer"></div>
         <span class="agd-who" id="agdWho"></span>
         <button class="btn ghost" id="agdClearWeekBtn" title="Apaga todos os registros da semana aberta" hidden>Limpar semana</button>
@@ -5050,6 +5060,7 @@ var AD_WEEKDAY_KEYS = ["dom","seg","ter","qua","qui","sex","sab"];
 var AD_MONTHS = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 var AD = {
   view: "semana", mode: "prof", sel: null, filter: "",
+  search: "",          // busca de paciente/grupo (destaca na grade e conta por profissional/sala)
   date: agdStartOfDay(new Date()),
   rows: {},            // id -> atendimento da semana carregada
   rangeFrom: "", rangeTo: "",
@@ -5226,6 +5237,7 @@ function agdRender(){
   }
 
   var idx = agdIndex(), html = '<table class="agd-grid">';
+  var shownHits = 0;
   var whoEl = document.getElementById("agdWho");
 
   // Conteúdo de uma célula: todos os atendimentos daquele horário, lado a lado,
@@ -5239,8 +5251,11 @@ function agdRender(){
       list = idx.byRoom[dateIso+"|"+t+"|"+res.id] || [];
     }
     var has = list.length > 0;
+    var searching = !!(AD.search || "").trim();
+    var anyHit = searching && list.some(agdSearchHit);
+    if (anyHit) shownHits += list.filter(agdSearchHit).length;
     var isOff = off && !has;
-    var cls = "agd-slot" + (isOff ? " agd-off" : (AD.clipboard ? " paste-target" : "")) + (!has && !canCreate ? " agd-ro" : "") + (has && !canEdit ? " agd-ro" : "");
+    var cls = "agd-slot" + (isOff ? " agd-off" : (AD.clipboard ? " paste-target" : "")) + (anyHit ? " search-hit" : "") + (!has && !canCreate ? " agd-ro" : "") + (has && !canEdit ? " agd-ro" : "");
     var items = list.map(function(row){
       var label = "", color = agdResColor(res);
       if (AD.mode === "prof"){
@@ -5253,7 +5268,12 @@ function agdRender(){
         if (prof) color = agdResColor(prof);
       }
       var isMoveSource = !!(AD.clipboard && AD.clipboard.mode === "move" && AD.clipboard.id === row.id);
-      return agdEventHtml(row, t, label, color, isMoveSource, canEdit);
+      var html1 = agdEventHtml(row, t, label, color, isMoveSource, canEdit);
+      if (searching){
+        html1 = agdSearchHit(row) ? html1.replace('class="book-main', 'class="book-main match')
+                                  : html1.replace('<div class="book filled', '<div class="book filled search-dim-item');
+      }
+      return html1;
     }).join("");
     return '<td class="'+cls+'" data-d="'+dateIso+'" data-t="'+t+'" data-r="'+esc(res.id)+'"'+
       (isOff ? ' title="Fora do horário do profissional"' : '')+'>' +
@@ -5275,10 +5295,12 @@ function agdRender(){
       html += '<tr><td class="agd-tcol">'+agdRowTimeHtml(t)+'</td>' + days.map(function(d){ return cell(agdIso(d), t, res); }).join("") + '</tr>';
     });
   } else {
-    // Dia: uma coluna por profissional (ou sala); o selecionado vem primeiro.
+    // Dia: só o profissional (ou a sala) selecionado na lista da esquerda.
     var dIso = agdIso(AD.date);
-    var cols = resources.slice().sort(function(x, y){ return (x.id === AD.sel ? -1 : 0) - (y.id === AD.sel ? -1 : 0); });
-    whoEl.innerHTML = "Todos os " + (AD.mode === "prof" ? "profissionais" : "salas");
+    var selRes = agdFindRes(AD.sel) || resources[0];
+    AD.sel = selRes.id;
+    var cols = [selRes];
+    whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(selRes.name)+"</b>";
     html += '<thead><tr><th class="agd-tcol">'+agdHistoryButtonsHtml()+'</th>' + cols.map(function(r){
       var sub = AD.mode === "prof" ? (r.specialtyId ? specialtyName(r.specialtyId) : "") : "Sala";
       return '<th style="width:130px;'+(r.id === AD.sel ? 'color:var(--accent)' : '')+'" title="'+esc(r.name)+'">'+esc(r.name)+'<span class="agd-hsub">'+esc(sub || " ")+'</span></th>';
@@ -5291,8 +5313,20 @@ function agdRender(){
     html = html.replace('<table class="agd-grid">', '<table class="agd-grid" style="min-width:'+(70 + cols.length*130)+'px">');
   }
   gridHost.innerHTML = html + '</tbody></table>';
+  var mcEl = document.getElementById("agdMatchCount");
+  if (mcEl){
+    var weekHits = (AD.search || "").trim() ? Object.keys(AD.rows).filter(function(id){ return agdSearchHit(AD.rows[id]); }).length : 0;
+    mcEl.textContent = (AD.search || "").trim()
+      ? (shownHits + " na tela · " + weekHits + " na semana")
+      : "";
+  }
 }
 
+// Busca da Agenda: nome do paciente/grupo (ou do tipo especial) contém o texto, sem acento/maiúscula.
+function agdSearchHit(row){
+  var q = normText((AD.search || "").trim());
+  return !!q && normText(row.patient || "").indexOf(q) !== -1;
+}
 function agdRenderSide(){
   var host = document.getElementById("agdResList");
   if (!host) return;
@@ -5303,6 +5337,13 @@ function agdRenderSide(){
     if (bookingKind(r)) return; // bloqueio/reunião/treinamento não contam como atendimento
     var k = AD.mode === "prof" ? r.professional_id : r.room_id;
     if (k) counts[k] = (counts[k] || 0) + 1;
+  });
+  var searching = !!(AD.search || "").trim(), hits = {};
+  if (searching) Object.keys(AD.rows).forEach(function(id){
+    var r = AD.rows[id];
+    if (!agdSearchHit(r)) return;
+    var k = AD.mode === "prof" ? r.professional_id : r.room_id;
+    if (k) hits[k] = (hits[k] || 0) + 1;
   });
   var list = agdResources().filter(function(r){
     if (!q) return true;
@@ -5318,10 +5359,12 @@ function agdRenderSide(){
     } else {
       sub = (r.therapists || []).length + ((r.therapists || []).length === 1 ? " profissional" : " profissionais");
     }
-    return '<div class="agd-res'+(r.id === AD.sel ? " sel" : "")+'" data-id="'+esc(r.id)+'" tabindex="0">' +
+    return '<div class="agd-res'+(r.id === AD.sel ? " sel" : "")+(searching && !hits[r.id] ? " no-hit" : "")+'" data-id="'+esc(r.id)+'" tabindex="0">' +
       '<div class="agd-av" style="background:'+agdResColor(r)+'">'+esc(agdInitials(r.name))+'</div>' +
       '<div class="meta"><div class="h">'+esc(sub)+'</div><div class="n">'+esc(r.name)+'</div></div>' +
-      '<span class="cnt" title="Atendimentos nesta semana">'+(counts[r.id] || 0)+'</span></div>';
+      (searching
+        ? '<span class="cnt'+(hits[r.id] ? ' hit' : '')+'" title="Encontrados nesta semana">'+(hits[r.id] || 0)+'</span></div>'
+        : '<span class="cnt" title="Atendimentos nesta semana">'+(counts[r.id] || 0)+'</span></div>');
   }).join("") || '<div class="empty-state" style="padding:16px">Nada encontrado.</div>';
 }
 
@@ -5602,6 +5645,7 @@ function wireAgendaDia(){
     if (agdIso(agdMonday(AD.date)) !== before) agdLoadWeek(); else agdRender();
   });
   document.getElementById("agdFilter").addEventListener("input", function(e){ AD.filter = e.target.value; agdRenderSide(); });
+  document.getElementById("agdSearch").addEventListener("input", function(e){ AD.search = e.target.value; agdRender(); });
   document.getElementById("agdResList").addEventListener("click", function(e){
     var r = e.target.closest(".agd-res"); if (!r) return;
     AD.sel = r.getAttribute("data-id"); agdRender();
@@ -5868,7 +5912,7 @@ function agdRowTimeHtml(t){
   return '<div class="timecell has-row-btns" style="padding:0;background:transparent"><span>'+t+'</span>' + rowLockButtonsHtml('data-agd-row="'+t+'"').replace(/data-row-action=/g, 'data-agd-row-action=') + '</div>';
 }
 // Linha inteira da Agenda (um horário): na Semana, os 5 dias do profissional/sala
-// selecionado; no Dia, todas as colunas. Bloquear só os livres; liberar só os bloqueados.
+// selecionado; no Dia, só o dia do selecionado. Bloquear só os livres; liberar só os bloqueados.
 function agdRowAction(action, time){
   var c = agdClient(); if (!c) return;
   var pairs = [];
@@ -5876,7 +5920,8 @@ function agdRowAction(action, time){
     var res = agdFindRes(AD.sel) || agdResources()[0];
     if (res) agdWeekDays().forEach(function(d){ pairs.push({date: d, res: res}); });
   } else {
-    agdResources().forEach(function(r){ pairs.push({date: AD.date, res: r}); });
+    var selDay = agdFindRes(AD.sel) || agdResources()[0];
+    if (selDay) pairs.push({date: AD.date, res: selDay});
   }
   var all = Object.keys(AD.rows).map(function(id){ return AD.rows[id]; });
   if (action === "lock"){
