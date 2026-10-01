@@ -463,6 +463,8 @@ body.pat-col-resizing *{user-select:none}
 .autolist .none{padding:8px 10px;font-size:12px;color:var(--muted)}
 .autolist-kind{flex:none;font-size:9.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;padding:2px 6px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
 .autolist-kind.sala{color:#fff}
+.autolist .pcolor-dot{width:10px;height:10px;margin-right:0}
+.pcolor-dot.none{background:transparent;border:1px solid var(--line)}
 .autolist-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .autolist button.autolist-new{color:var(--accent)}
 .autolist.floating{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:12;background:var(--surface);box-shadow:var(--shadow-md)}
@@ -2448,6 +2450,16 @@ function findTherapist(room, id){
   for (var i=0;i<room.therapists.length;i++) if (room.therapists[i].id===id) return room.therapists[i];
   return null;
 }
+// Item da lista de sugestões ao agendar (Planner e Agenda): paciente com a
+// bolinha da cor (igual ao cadastro de Pacientes); sala com a etiqueta colorida.
+function bookingSuggestHtml(m){
+  if (m.kind === "Sala"){
+    return '<button type="button" data-name="'+esc(m.name)+'"><span class="autolist-kind sala" style="background:'+swatchVar(m.color)+'">Sala</span><span class="autolist-name">'+esc(m.name)+'</span></button>';
+  }
+  var col = patientColor(m.p);
+  return '<button type="button" data-name="'+esc(m.name)+'"><span class="pcolor-dot'+(col ? '' : ' none')+'"'+(col ? ' style="background:'+col+'"' : '')+'></span><span class="autolist-name">'+esc(m.name)+'</span></button>';
+}
+
 function openBookingModal(ctx){
   var room = findRoom(ctx.roomId);
   var ther = findTherapist(room, ctx.therapistId);
@@ -2501,7 +2513,7 @@ function openBookingModal(ctx){
     // Coluna de grupo de suporte: só salas. Coluna de sala: só pacientes.
     var patientMatches = groupCell ? [] : state.patients.filter(function(p){
       return normText(p.nome).indexOf(q) !== -1;
-    }).slice(0,8).map(function(p){ return {name:p.nome, kind:"Paciente"}; });
+    }).slice(0,8).map(function(p){ return {name:p.nome, kind:"Paciente", p:p}; });
     var roomMatches = !groupCell ? [] : physicalRooms().filter(function(r){
       return normText(r.name).indexOf(q) !== -1;
     }).slice(0,8).map(function(r){ return {name:r.name, kind:"Sala", color:r.color}; });
@@ -2511,12 +2523,7 @@ function openBookingModal(ctx){
         ? '<div class="none">Nenhuma sala cadastrada com esse nome.</div>'
         : '<div class="none">Nenhum paciente cadastrado com esse nome — cadastre em Pacientes antes de agendar.</div>';
     } else {
-      suggest.innerHTML = matches.map(function(m){
-        var tag = m.kind === "Sala" ?
-          '<span class="autolist-kind sala" style="background:'+swatchVar(m.color)+'">Sala</span>' :
-          '<span class="autolist-kind">Paciente</span>';
-        return '<button type="button" data-name="'+esc(m.name)+'">'+tag+'<span class="autolist-name">'+esc(m.name)+'</span></button>';
-      }).join("");
+      suggest.innerHTML = matches.map(bookingSuggestHtml).join("");
     }
     suggest.hidden = false;
   });
@@ -5182,8 +5189,7 @@ function agdOpenModal(opts){
         '<div class="modal-sub">'+agdBrDate(date)+(time ? ' às '+time : '')+'</div></div>' +
         '<button class="modal-close" id="agdClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
-        '<div class="field"><label for="agdPac">Paciente</label><input id="agdPac" type="text" list="agdPacList" autocomplete="off" placeholder="Digite o nome do paciente…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'></div>' +
-        '<datalist id="agdPacList">'+state.patients.map(function(p){ return '<option value="'+esc(p.nome)+'">'; }).join("")+'</datalist>' +
+        '<div class="field"><label for="agdPac">Paciente</label><input id="agdPac" type="text" autocomplete="off" placeholder="Digite o nome do paciente…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'><div class="autolist" id="agdSuggest" hidden></div></div>' +
         '<div class="field"><label for="agdServ">Serviço</label><select id="agdServ"'+(canSave && !rowKind?'':' disabled')+'>' +
           serviceOptionsHtml((row && row.service) || DEFAULT_SERVICE_ID, profId) + '</select></div>' +
         '<div class="field-row">' +
@@ -5237,9 +5243,29 @@ function agdOpenModal(opts){
   // Bloqueado / Reunião Clínica / Treinamento desativam o campo Paciente.
   var kindField = document.getElementById("agdKindField");
   var pacEl = document.getElementById("agdPac"), typedPac = pacEl.value;
+  var pacSuggest = document.getElementById("agdSuggest");
+  pacEl.addEventListener("input", function(){
+    var q = normText(pacEl.value.trim());
+    if (!q){ pacSuggest.hidden = true; return; }
+    var matches = state.patients.filter(function(p){ return normText(p.nome).indexOf(q) !== -1; })
+      .slice(0,8).map(function(p){ return {name:p.nome, kind:"Paciente", p:p}; });
+    pacSuggest.innerHTML = matches.length ? matches.map(bookingSuggestHtml).join("")
+      : '<div class="none">Nenhum paciente cadastrado com esse nome — cadastre em Pacientes antes de agendar.</div>';
+    pacSuggest.hidden = false;
+  });
+  pacEl.addEventListener("focus", function(){ if (pacEl.value.trim()) pacEl.dispatchEvent(new Event("input")); });
+  pacSuggest.addEventListener("click", function(e){
+    var b = e.target.closest("button[data-name]"); if (!b) return;
+    pacEl.value = b.getAttribute("data-name");
+    pacSuggest.hidden = true;
+  });
+  document.addEventListener("mousedown", function outside(e){
+    if (!document.body.contains(pacEl)){ document.removeEventListener("mousedown", outside); return; }
+    if (!pacSuggest.contains(e.target) && e.target !== pacEl) pacSuggest.hidden = true;
+  });
   wireSlotKindPicker(kindField, function(kind){
     servSel.disabled = !!kind;
-    if (kind){ if (!pacEl.disabled) typedPac = pacEl.value; pacEl.value = ""; pacEl.disabled = true; }
+    if (kind){ if (!pacEl.disabled) typedPac = pacEl.value; pacEl.value = ""; pacEl.disabled = true; pacSuggest.hidden = true; }
     else { pacEl.disabled = false; pacEl.value = typedPac; pacEl.focus(); }
   });
 
