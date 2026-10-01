@@ -184,6 +184,14 @@ testes continuam usando o mesmo mock.
   os profissionais que já existiam em 2026-10-01; pode ser removido depois.
 - CPF fica no documento `config/professionals`, legível por qualquer usuário
   ativo (mesma regra de leitura dos outros cadastros).
+- **Serviço do atendimento** (Planner e Agenda): campo "Serviço" na janela,
+  padrão **Sessão** (`DEFAULT_SERVICE_ID = "sessao"`, travada no cadastro de
+  Serviços: não renomeia nem exclui). Opções = serviços que o profissional
+  atende (`serviceOptionsHtml`). Gravado em `service` (Planner: no registro
+  do booking; Agenda: coluna `appointments.service`, migração
+  `2026-10-01c-servico-no-atendimento.sql`, que também pôs "sessao" nos
+  atendimentos já existentes). Horários especiais não têm serviço. Copiar/colar
+  do Planner agora leva o registro inteiro (`state.clipboard.rec`).
 - **Tipos especiais de horário** (Planner e Agenda): na janela do atendimento,
   três opções exclusivas — **Bloqueado** (cinza escuro, `blocked:true`),
   **Reunião Clínica** (amarelo, `patient:"Reunião Clínica"`) e **Treinamento**

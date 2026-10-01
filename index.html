@@ -221,6 +221,7 @@ table.ad-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout:
 @media (max-width:900px){.ad-panel{flex-direction:column}.ad-side{width:auto;max-height:240px;border-right:0;border-bottom:1px solid var(--line)}}
 /* Seletor Bloqueado / Reunião Clínica / Treinamento. Os seletores levam ".field"
    para vencer ".field label{display:block}" e ".field input{width:100%}". */
+.serv-lock{flex:none;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--accent);background:var(--accent-weak);border-radius:999px;padding:3px 8px}
 .field .kind-pick{display:flex;gap:6px;flex-wrap:wrap}
 .field .kind-opt{display:inline-flex;align-items:center;gap:7px;margin:0;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:700;color:var(--ink-2);cursor:pointer;user-select:none;white-space:nowrap}
 .field .kind-opt:hover{border-color:var(--line-strong)}
@@ -914,6 +915,26 @@ var SLOT_KINDS = [
   {key:"reuniao",     label:MEETING_LABEL, color:MEETING_COLOR,  ink:"#182523"},
   {key:"treinamento", label:TRAINING_LABEL, color:TRAINING_COLOR, ink:"#182523"}
 ];
+/* Serviço do atendimento (Planner e Agenda): id de config/services, padrão
+ * "Sessão" (id "sessao", travado no cadastro de serviços). Horários especiais
+ * (Bloqueado / Reunião / Treinamento) não têm serviço. */
+var DEFAULT_SERVICE_ID = "sessao";
+function servicesList(){
+  var list = state.services.slice();
+  if (!list.some(function(s){ return s.id === DEFAULT_SERVICE_ID; })) list.unshift({id: DEFAULT_SERVICE_ID, name: "Sessão"});
+  return list;
+}
+// Opções do seletor: os serviços que o profissional atende (todos, se ele não
+// tiver escolha salva); o valor atual e "Sessão" sempre aparecem.
+function serviceOptionsHtml(selected, profId){
+  var prof = profId ? findProfessional(profId) : null;
+  var allowed = prof && Array.isArray(prof.servicos) ? prof.servicos : null;
+  return servicesList().filter(function(s){
+    return !allowed || allowed.indexOf(s.id) !== -1 || s.id === selected || s.id === DEFAULT_SERVICE_ID;
+  }).map(function(s){
+    return '<option value="'+esc(s.id)+'"'+(s.id === selected ? ' selected' : '')+'>'+esc(s.name)+'</option>';
+  }).join("");
+}
 function bookingKind(b){
   if (!b || !b.patient) return "";
   if (b.blocked || normText(b.patient) === "bloqueado") return "bloqueado";
@@ -2064,7 +2085,7 @@ function wireGridDelegatedEvents(){
       e.stopPropagation();
       var b1 = effectiveBooking(bookings, key, dayKey2, time2);
       if (!b1) return;
-      state.clipboard = {patient: b1.patient, note: b1.note || "", blocked: !!b1.blocked, mode: "copy"};
+      state.clipboard = {patient: b1.patient, note: b1.note || "", blocked: !!b1.blocked, mode: "copy", rec: JSON.parse(JSON.stringify(b1))};
       renderClipboardBar();
       renderGrid();
       return;
@@ -2073,7 +2094,7 @@ function wireGridDelegatedEvents(){
       e.stopPropagation();
       var b2 = effectiveBooking(bookings, key, dayKey2, time2);
       if (!b2) return;
-      state.clipboard = {patient: b2.patient, note: b2.note || "", blocked: !!b2.blocked, mode: "move", sourceKey: key, sourceDocId: docId2};
+      state.clipboard = {patient: b2.patient, note: b2.note || "", blocked: !!b2.blocked, mode: "move", sourceKey: key, sourceDocId: docId2, rec: JSON.parse(JSON.stringify(b2))};
       renderClipboardBar();
       renderGrid();
       return;
@@ -2291,6 +2312,8 @@ function openBookingModal(ctx){
             '<input id="bkPatient" type="text" autocomplete="off" placeholder="Nome do paciente ou da sala…" value="'+esc(existing && !existingKind ? existing.patient : "")+'"'+(existingKind?' disabled':'')+'>' +
             '<div class="autolist" id="bkSuggest" hidden></div>' +
           '</div>' +
+          '<div class="field"><label for="bkService">Serviço</label><select id="bkService"'+(existingKind?' disabled':'')+'>' +
+            serviceOptionsHtml((existing && existing.service) || DEFAULT_SERVICE_ID, ther && ther.professionalId) + '</select></div>' +
           '<div class="field"><label for="bkNote">Observação (opcional)</label>' +
             '<input id="bkNote" type="text" placeholder="ex: Avaliação Neuropsicológica, Acolhimento…" value="'+esc(existing?existing.note:"")+'"></div>' +
           '<div class="field" id="bkKindField"><label>Ou marque o horário como</label>' + slotKindPickerHtml(existingKind) + '</div>' +
@@ -2354,7 +2377,9 @@ function openBookingModal(ctx){
   // não tem paciente — o campo fica desativado (e volta ao desmarcar).
   var kindField = document.getElementById("bkKindField");
   var typedName = input.value;
+  var serviceSel = document.getElementById("bkService");
   wireSlotKindPicker(kindField, function(kind){
+    serviceSel.disabled = !!kind;
     if (kind){ if (!input.disabled) typedName = input.value; input.value = ""; input.disabled = true; suggest.hidden = true; }
     else { input.disabled = false; input.value = typedName; input.focus(); }
   });
@@ -2364,7 +2389,7 @@ function openBookingModal(ctx){
     var note = document.getElementById("bkNote").value.trim();
     var kind = selectedSlotKind(kindField);
     if (!name && !kind){ input.focus(); return; }
-    var rec = kind ? slotKindRecord(kind, note) : {patient: name, note: note};
+    var rec = kind ? slotKindRecord(kind, note) : {patient: name, note: note, service: serviceSel.value || DEFAULT_SERVICE_ID};
     writeBooking(ctx.docId, ctx.key, rec).then(close);
   });
 }
@@ -2757,7 +2782,10 @@ function moveBooking(fromDocId, fromKey, toDocId, toKey){
 function buildPasteChanges(toDocId, toKey){
   var changesByDoc = {};
   changesByDoc[toDocId] = {};
-  changesByDoc[toDocId][toKey] = {patient: state.clipboard.patient, note: state.clipboard.note || ""};
+  // Copia o registro inteiro (serviço, treinamento etc.), não só nome e observação.
+  changesByDoc[toDocId][toKey] = state.clipboard.rec
+    ? JSON.parse(JSON.stringify(state.clipboard.rec))
+    : {patient: state.clipboard.patient, note: state.clipboard.note || ""};
   if (state.clipboard.blocked) changesByDoc[toDocId][toKey].blocked = true;
   if (state.clipboard.mode === "move" && state.clipboard.sourceKey &&
       (state.clipboard.sourceDocId !== toDocId || state.clipboard.sourceKey !== toKey)){
@@ -3689,7 +3717,7 @@ function openConveniosModal(){
  */
 function openServicesModal(){
   var host = document.getElementById("modalHost");
-  var draft = state.services.map(function(s){ return {id:s.id, name:s.name}; });
+  var draft = servicesList().map(function(s){ return {id:s.id, name: s.id === DEFAULT_SERVICE_ID ? "Sessão" : s.name}; });
 
   host.innerHTML =
     '<div class="overlay" id="ovServ"><div class="modal">' +
@@ -3722,6 +3750,13 @@ function openServicesModal(){
   }
   function renderRows(){
     rowsHost.innerHTML = draft.length ? draft.map(function(s, i){
+      // "Sessão" é o serviço padrão dos atendimentos: não pode ser renomeado nem excluído.
+      if (s.id === DEFAULT_SERVICE_ID){
+        return '<div class="therapist-row" data-i="'+i+'">' +
+          '<input type="text" value="'+esc(s.name)+'" readonly title="Serviço padrão — não pode ser alterado nem excluído">' +
+          '<span class="serv-lock" title="Serviço padrão — não pode ser alterado nem excluído">padrão</span>' +
+        '</div>';
+      }
       return '<div class="therapist-row" data-i="'+i+'">' +
         '<input type="text" value="'+esc(s.name)+'" placeholder="Nome do serviço">' +
         '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover serviço">✕</button>' +
@@ -3751,6 +3786,9 @@ function openServicesModal(){
       .map(function(s){ return {id:s.id, name:(s.name||"").trim()}; })
       .filter(function(s){ return s.name; })
       .map(function(s){ return {id: s.id || uid(slugify(s.name) || "serv"), name: s.name}; });
+    // "Sessão" sempre fica, com esse nome.
+    clean = clean.filter(function(s){ return s.id !== DEFAULT_SERVICE_ID; });
+    clean.unshift({id: DEFAULT_SERVICE_ID, name: "Sessão"});
     // Nome repetido (sem diferenciar acento/maiúscula) não entra duas vezes.
     var seen = {}, dup = null;
     clean.forEach(function(s){ var k = normText(s.name); if (seen[k]) dup = dup || s.name; seen[k] = true; });
@@ -4905,6 +4943,8 @@ function adOpenModal(opts){
       '<div class="modal-body">' +
         '<div class="field"><label for="adPac">Paciente</label><input id="adPac" type="text" list="adPacList" autocomplete="off" placeholder="Digite o nome do paciente…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'></div>' +
         '<datalist id="adPacList">'+state.patients.map(function(p){ return '<option value="'+esc(p.nome)+'">'; }).join("")+'</datalist>' +
+        '<div class="field"><label for="adServ">Serviço</label><select id="adServ"'+(canSave && !rowKind?'':' disabled')+'>' +
+          serviceOptionsHtml((row && row.service) || DEFAULT_SERVICE_ID, profId) + '</select></div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="adProf">Profissional</label><select id="adProf"'+(canSave?'':' disabled')+'><option value="">Escolha…</option>'+profs.map(function(p){ return '<option value="'+esc(p.id)+'"'+(p.id===profId?' selected':'')+'>'+esc(p.name)+'</option>'; }).join("")+'</select></div>' +
           '<div class="field"><label for="adSala">Sala</label><select id="adSala"'+(canSave?'':' disabled')+'><option value="">Sem sala</option>'+state.rooms.map(function(r){ return '<option value="'+esc(r.id)+'"'+(r.id===roomId?' selected':'')+'>'+esc(r.name)+'</option>'; }).join("")+'</select></div>' +
@@ -4931,9 +4971,14 @@ function adOpenModal(opts){
   document.getElementById("adCancel").addEventListener("click", close);
   // Trocar o profissional sugere a sala onde ele atende.
   var profSel = document.getElementById("adProf");
+  var servSel = document.getElementById("adServ");
   profSel.addEventListener("change", function(){
     var pr = adProfRoom(profSel.value);
     if (pr) document.getElementById("adSala").value = pr.id;
+    // Serviços disponíveis dependem do profissional; mantém a escolha se ele também atende.
+    var keep = servSel.value;
+    servSel.innerHTML = serviceOptionsHtml(keep, profSel.value);
+    if (!servSel.value) servSel.value = DEFAULT_SERVICE_ID;
   });
 
   var del = document.getElementById("adDelete");
@@ -4957,6 +5002,7 @@ function adOpenModal(opts){
   var kindField = document.getElementById("adKindField");
   var pacEl = document.getElementById("adPac"), typedPac = pacEl.value;
   wireSlotKindPicker(kindField, function(kind){
+    servSel.disabled = !!kind;
     if (kind){ if (!pacEl.disabled) typedPac = pacEl.value; pacEl.value = ""; pacEl.disabled = true; }
     else { pacEl.disabled = false; pacEl.value = typedPac; pacEl.focus(); }
   });
@@ -4967,6 +5013,7 @@ function adOpenModal(opts){
     var blocked = kind === "bloqueado";
     var rec = {
       patient: kind ? slotKindRecord(kind).patient : pacEl.value.trim(),
+      service: kind ? null : (servSel.value || DEFAULT_SERVICE_ID),
       professional_id: profSel.value,
       room_id: document.getElementById("adSala").value || null,
       date: document.getElementById("adData").value,
@@ -5197,14 +5244,14 @@ function adPlace(row, td, mode){
 
   function fail(r){ showToast("Não foi possível salvar: " + (r.error.code === "23505" ? "esse profissional já tem atendimento nesse horário." : adErr(r.error)), true); adLoadWeek(); }
   function done(msg){ if (mode === "move") AD.clipboard = null; adRenderClipboardBar(); showToast(msg); adLoadWeek(); }
-  var payload = {patient: row.patient, note: row.note || "", blocked: !!row.blocked,
+  var payload = {patient: row.patient, note: row.note || "", blocked: !!row.blocked, service: row.service || (bookingKind(row) ? null : DEFAULT_SERVICE_ID),
     professional_id: target.professional_id, room_id: target.room_id, date: target.date, time: target.time};
 
   // Destino ocupado ao arrastar: troca os dois (o outro vai para o lugar de origem).
   if (occupant && mode === "drag"){
     if (!can("agendamentos","delete") || !can("agendamentos","create")){ showToast("Você não tem permissão para trocar atendimentos de lugar.", true); return; }
     var back = adTargetFor(occupant, row.date, row.time, AD.mode === "prof" ? row.professional_id : (row.room_id || ""));
-    var occPayload = {patient: occupant.patient, note: occupant.note || "", blocked: !!occupant.blocked,
+    var occPayload = {patient: occupant.patient, note: occupant.note || "", blocked: !!occupant.blocked, service: occupant.service || null,
       professional_id: back.professional_id, room_id: back.room_id, date: back.date, time: back.time};
     c.from("appointments").delete().eq("id", occupant.id).then(function(r1){
       if (r1.error) return fail(r1);

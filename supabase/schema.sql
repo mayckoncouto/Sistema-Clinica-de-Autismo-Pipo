@@ -544,6 +544,7 @@ create table if not exists public.appointments (
   patient          text not null default '',
   note             text not null default '',
   blocked          boolean not null default false,
+  service          text,               -- id do serviço (config/services); padrão "sessao"
   created_by       uuid references auth.users(id) on delete set null,
   updated_by       uuid references auth.users(id) on delete set null,
   created_at       timestamptz not null default now(),
