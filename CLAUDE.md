@@ -422,3 +422,20 @@ Copiar, nessa ordem. Só aparece para quem tem permissão de excluir no módulo
 (`agenda` no Planner, `agendamentos` na Agenda). O clique abre direto o `confirmDialog`. Na Agenda a exclusão usa `agdDeleteRow(row, msg)` (o mesmo do
 botão Desmarcar da janela); no Planner, `writeBooking(..., clearValueFor(...))`.
 As duas entram no desfazer (Ctrl+Z).
+
+## Grupos de suporte (2026-10-02)
+Ficam no mesmo cadastro das salas (`config/rooms`), com `group: true`, então as
+chaves de agendamento do Planner (`hora|roomId|seatId`) não mudam. Helpers:
+`isGroup`, `physicalRooms()`, `supportGroups()`, `plannerRooms()` (grupos
+primeiro, depois salas — usado por `visibleRooms()` e pelo filtro de salas).
+- Tela Salas: botão "Grupos de suporte" alterna `state.salasView` entre
+  "salas" e "grupos" (vira "← Voltar para salas"; "+ Nova sala" vira
+  "+ Novo grupo"). As setas trocam só com o vizinho do mesmo tipo.
+  `openRoomModal(r, asGroup)` serve aos dois.
+- Regras do Planner: célula de grupo só aceita SALA; célula de sala só aceita
+  PACIENTE; Bloqueado / Reunião Clínica / Treinamento valem nos dois.
+  `slotBookingName(room, text)` na janela, `slotRefusal(roomId, rec)` ao
+  colar/mover/arrastar (na troca, os dois lados são checados).
+- Agenda (por data): grupos não aparecem como sala (`physicalRooms()`).
+- Migração: `supabase/2026-10-02-grupos-de-suporte.sql` marca Coordenador e
+  Aplicador ABA como grupos.

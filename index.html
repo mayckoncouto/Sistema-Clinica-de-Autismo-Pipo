@@ -731,6 +731,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <span class="pat-count" id="roomCount"></span>
       <div class="spacer"></div>
+      <button class="btn ghost" id="toggleGroupsBtn">Grupos de suporte</button>
       <button class="btn primary" id="addRoomBtn">+ Nova sala</button>
     </div>
     <div class="pat-count" id="roomHint" style="padding:0 14px 10px">Cada sala vira um grupo de colunas na grade. Use as setas para reordenar e "Editar" para mudar nome, cor e profissionais.</div>
@@ -900,6 +901,34 @@ function findPatientByName(name){
   }
   return null;
 }
+// Grupos de suporte: ficam no mesmo cadastro das salas (config/rooms), marcados
+// com group:true. No Planner as colunas dos grupos vêm sempre antes das salas.
+// Célula de grupo só aceita agendar uma SALA; célula de sala só aceita PACIENTE
+// (Bloqueado / Reunião Clínica / Treinamento valem nos dois).
+function isGroup(r){ return !!(r && r.group); }
+function physicalRooms(){ return state.rooms.filter(function(r){ return !r.group; }); }
+function supportGroups(){ return state.rooms.filter(isGroup); }
+function plannerRooms(){ return supportGroups().concat(physicalRooms()); }
+var GROUP_ONLY_ROOMS_MSG = "Nos grupos de suporte só é possível agendar salas.";
+var ROOM_ONLY_PATIENTS_MSG = "Nas salas só é possível agendar pacientes cadastrados.";
+// Nome do cadastro que pode ir nesta coluna (sala p/ grupo, paciente p/ sala), ou null.
+function slotBookingName(room, text){
+  var n = normText(String(text || "").trim());
+  if (!n) return null;
+  var pool = isGroup(room) ? physicalRooms().map(function(r){ return r.name; })
+                           : state.patients.map(function(p){ return p.nome; });
+  for (var i=0;i<pool.length;i++){
+    if (normText(String(pool[i] || "").trim()) === n) return pool[i];
+  }
+  return null;
+}
+// Para colar/mover/arrastar: mensagem de recusa, ou null se o registro pode ir nesta coluna.
+function slotRefusal(roomId, rec){
+  if (!rec || !rec.patient || bookingKind(rec)) return null;
+  var room = findRoom(roomId);
+  if (!room || slotBookingName(room, rec.patient)) return null;
+  return isGroup(room) ? GROUP_ONLY_ROOMS_MSG : ROOM_ONLY_PATIENTS_MSG;
+}
 // Só é possível agendar quem está cadastrado: paciente (cadastro de Pacientes) ou
 // sala (o Planner aceita sala no lugar do paciente). Compara sem acento/maiúscula
 // e devolve o nome exatamente como está no cadastro, ou null se não existir.
@@ -909,8 +938,9 @@ function registeredBookingName(text){
   for (var i=0;i<state.patients.length;i++){
     if (normText(String(state.patients[i].nome || "").trim()) === n) return state.patients[i].nome;
   }
-  for (var j=0;j<state.rooms.length;j++){
-    if (normText(String(state.rooms[j].name || "").trim()) === n) return state.rooms[j].name;
+  var rooms = physicalRooms();
+  for (var j=0;j<rooms.length;j++){
+    if (normText(String(rooms[j].name || "").trim()) === n) return rooms[j].name;
   }
   return null;
 }
@@ -1798,7 +1828,13 @@ function wireControls(){
   document.getElementById("manageSpecialtiesBtn").addEventListener("click", function(){ openSpecialtiesModal(); });
   document.getElementById("manageConveniosBtn").addEventListener("click", function(){ openConveniosModal(); });
   document.getElementById("manageServicesBtn").addEventListener("click", function(){ openServicesModal(); });
-  document.getElementById("addRoomBtn").addEventListener("click", function(){ openRoomModal(null); });
+  document.getElementById("addRoomBtn").addEventListener("click", function(){ openRoomModal(null, state.salasView === "grupos"); });
+  // Salas <-> Grupos de suporte: a mesma tela mostra um cadastro ou o outro.
+  document.getElementById("toggleGroupsBtn").addEventListener("click", function(){
+    state.salasView = state.salasView === "grupos" ? "salas" : "grupos";
+    var s = document.getElementById("roomListSearch"); if (s) s.value = "";
+    renderSalasTab();
+  });
   document.getElementById("addProfessionalBtn").addEventListener("click", function(){ openProfessionalModal(null); });
 }
 
@@ -1807,7 +1843,7 @@ function currentDayObj(){
   return findDayObj(state.day === "todos" ? DAYS[0].key : state.day);
 }
 function visibleRooms(){
-  var rs = state.rooms.slice();
+  var rs = plannerRooms();
   if (state.activeRoomFilter){
     rs = rs.filter(function(r){ return r.id===state.activeRoomFilter; });
   }
@@ -1858,7 +1894,7 @@ function renderRoomChips(){
       '<span class="rf-name">'+esc(sel ? sel.name : "Todas as salas")+'</span><span class="rf-caret">▾</span></button>' +
     '<div class="rf-panel" role="listbox" hidden>' +
       opt("", "Todas as salas", "var(--ink-2)") +
-      state.rooms.map(function(r){ return opt(r.id, r.name, swatchVar(r.color)); }).join("") +
+      plannerRooms().map(function(r){ return opt(r.id, r.name, swatchVar(r.color)); }).join("") +
     '</div>';
   var btn = host.querySelector(".rf-btn"), panel = host.querySelector(".rf-panel");
   function open(on){
@@ -2420,6 +2456,7 @@ function openBookingModal(ctx){
   var bookings = (state.scheduleDocs[ctx.docId] && state.scheduleDocs[ctx.docId].bookings) || {};
   var existing = effectiveBooking(bookings, ctx.key, ctx.dayKey, ctx.time);
   var existingKind = bookingKind(existing);
+  var groupCell = isGroup(room);
 
   var host = document.getElementById("modalHost");
   host.innerHTML =
@@ -2431,8 +2468,8 @@ function openBookingModal(ctx){
         '</div>' +
         '<button class="modal-close" id="closeBook" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
-          '<div class="field"><label for="bkPatient">Paciente ou sala</label>' +
-            '<input id="bkPatient" type="text" autocomplete="off" placeholder="Nome do paciente ou da sala…" value="'+esc(existing && !existingKind ? existing.patient : "")+'"'+(existingKind?' disabled':'')+'>' +
+          '<div class="field"><label for="bkPatient">'+(groupCell ? "Sala" : "Paciente")+'</label>' +
+            '<input id="bkPatient" type="text" autocomplete="off" placeholder="'+(groupCell ? "Nome da sala…" : "Nome do paciente…")+'" value="'+esc(existing && !existingKind ? existing.patient : "")+'"'+(existingKind?' disabled':'')+'>' +
             '<div class="autolist" id="bkSuggest" hidden></div>' +
           '</div>' +
           '<div class="field"><label for="bkService">Serviço</label><select id="bkService"'+(existingKind?' disabled':'')+'>' +
@@ -2461,15 +2498,18 @@ function openBookingModal(ctx){
   input.addEventListener("input", function(){
     var q = normText(input.value.trim());
     if (!q){ suggest.hidden = true; return; }
-    var patientMatches = state.patients.filter(function(p){
+    // Coluna de grupo de suporte: só salas. Coluna de sala: só pacientes.
+    var patientMatches = groupCell ? [] : state.patients.filter(function(p){
       return normText(p.nome).indexOf(q) !== -1;
-    }).slice(0,6).map(function(p){ return {name:p.nome, kind:"Paciente"}; });
-    var roomMatches = state.rooms.filter(function(r){
+    }).slice(0,8).map(function(p){ return {name:p.nome, kind:"Paciente"}; });
+    var roomMatches = !groupCell ? [] : physicalRooms().filter(function(r){
       return normText(r.name).indexOf(q) !== -1;
-    }).slice(0,4).map(function(r){ return {name:r.name, kind:"Sala", color:r.color}; });
+    }).slice(0,8).map(function(r){ return {name:r.name, kind:"Sala", color:r.color}; });
     var matches = patientMatches.concat(roomMatches);
     if (!matches.length){
-      suggest.innerHTML = '<div class="none">Nenhum paciente ou sala cadastrada com esse nome — cadastre em Pacientes antes de agendar.</div>';
+      suggest.innerHTML = groupCell
+        ? '<div class="none">Nenhuma sala cadastrada com esse nome.</div>'
+        : '<div class="none">Nenhum paciente cadastrado com esse nome — cadastre em Pacientes antes de agendar.</div>';
     } else {
       suggest.innerHTML = matches.map(function(m){
         var tag = m.kind === "Sala" ?
@@ -2513,8 +2553,8 @@ function openBookingModal(ctx){
     var kind = selectedSlotKind(kindField);
     if (!name && !kind){ input.focus(); return; }
     if (!kind){
-      var regName = registeredBookingName(name);
-      if (!regName){ showToast(NOT_REGISTERED_MSG, true); input.focus(); return; }
+      var regName = slotBookingName(room, name);
+      if (!regName){ showToast(groupCell ? GROUP_ONLY_ROOMS_MSG : (findRoomByName(name) ? ROOM_ONLY_PATIENTS_MSG : NOT_REGISTERED_MSG), true); input.focus(); return; }
       name = regName;
     }
     var rec = kind ? slotKindRecord(kind, note) : {patient: name, note: note, service: serviceSel.value || DEFAULT_SERVICE_ID};
@@ -2890,6 +2930,14 @@ function moveBooking(fromDocId, fromKey, toDocId, toKey){
   var fromTime = fromKey.split("|")[0];
   var src = effectiveBooking(srcBookings, fromKey, fromDayKey, fromTime);
   if (!src) return Promise.resolve();
+  var toRoomId = toKey.split("|")[1], fromRoomId = fromKey.split("|")[1];
+  var refused = slotRefusal(toRoomId, src);
+  if (!refused && toRoomId !== fromRoomId){
+    // Se o destino estiver ocupado os dois trocam de lugar: o outro também precisa caber na origem.
+    var dstDoc = (state.scheduleDocs[toDocId] && state.scheduleDocs[toDocId].bookings) || {};
+    refused = slotRefusal(fromRoomId, effectiveBooking(dstDoc, toKey, toDocId.split("-")[0], toKey.split("|")[0]));
+  }
+  if (refused){ showToast(refused, true); return Promise.resolve(false); }
   if (fromDocId === toDocId){
     var toTime = toKey.split("|")[0];
     var dst = effectiveBooking(srcBookings, toKey, fromDayKey, toTime);
@@ -2943,6 +2991,8 @@ function finishPaste(){
 
 function pasteToSlot(toDocId, toKey){
   if (!state.clipboard) return;
+  var refused = slotRefusal(toKey.split("|")[1], state.clipboard.rec || {patient: state.clipboard.patient, blocked: state.clipboard.blocked});
+  if (refused){ showToast(refused, true); return; }
   if (state.clipboard.mode === "move" && toDocId === state.clipboard.sourceDocId && toKey === state.clipboard.sourceKey){
     // Dropping/clicking back onto its own source cell is a no-op cancel.
     state.clipboard = null;
@@ -4347,11 +4397,23 @@ function writeProfessionals(list){
 /* ---------------- salas (rooms) admin tab ---------------- */
 function renderSalasTab(){
   var host = document.getElementById("roomList");
+  var groupsView = state.salasView === "grupos";
+  var toggleBtn = document.getElementById("toggleGroupsBtn"), addBtn = document.getElementById("addRoomBtn");
+  if (toggleBtn) toggleBtn.textContent = groupsView ? "← Voltar para salas" : "Grupos de suporte";
+  if (addBtn) addBtn.textContent = groupsView ? "+ Novo grupo" : "+ Nova sala";
+  var searchInput = document.getElementById("roomListSearch");
+  if (searchInput) searchInput.placeholder = groupsView ? "Buscar grupo ou profissional…" : "Buscar sala ou profissional…";
   if (!roomsLoaded){ host.innerHTML = '<div class="empty-state">Carregando salas…</div>'; return; }
   var countEl = document.getElementById("roomCount"), hintEl = document.getElementById("roomHint");
-  if (!state.rooms.length){
+  // Lista do cadastro aberto (salas ou grupos); as setas trocam com o vizinho do mesmo tipo.
+  var all = groupsView ? supportGroups() : physicalRooms();
+  var noun = groupsView ? ["grupo", "grupos"] : ["sala", "salas"];
+  if (!all.length){
     if (countEl) countEl.textContent = "";
-    host.innerHTML = '<div class="empty-state"><b>Nenhuma sala cadastrada</b>Crie salas para montar a grade da agenda.</div>';
+    if (hintEl) hintEl.textContent = groupsView ? "Grupos de suporte: colunas que aparecem antes das salas no Planner e recebem agendamentos de salas." : "";
+    host.innerHTML = groupsView
+      ? '<div class="empty-state"><b>Nenhum grupo de suporte cadastrado</b>Crie um grupo para ter colunas antes das salas no Planner.</div>'
+      : '<div class="empty-state"><b>Nenhuma sala cadastrada</b>Crie salas para montar a grade da agenda.</div>';
     return;
   }
   // Busca por nome da sala ou de profissional (sem acento/maiúscula). Com busca
@@ -4359,21 +4421,25 @@ function renderSalasTab(){
   // confundiria (o vizinho real pode estar escondido).
   var searchEl = document.getElementById("roomListSearch");
   var q = normText(((searchEl && searchEl.value) || "").trim());
-  var shown = state.rooms.filter(function(r){
+  var shown = all.filter(function(r){
     if (!q) return true;
     if (normText(r.name).indexOf(q) !== -1) return true;
     return (r.therapists || []).some(function(t){ return normText(therapistDisplayName(t)).indexOf(q) !== -1; });
   });
-  if (countEl) countEl.textContent = shown.length + " de " + state.rooms.length + (state.rooms.length === 1 ? " sala" : " salas");
+  if (countEl) countEl.textContent = shown.length + " de " + all.length + " " + (all.length === 1 ? noun[0] : noun[1]);
   if (hintEl) hintEl.textContent = q
-    ? "Para reordenar as salas, limpe a busca."
-    : "Cada sala vira um grupo de colunas na grade. Use as setas para reordenar e \"Editar\" para mudar nome, cor e profissionais.";
+    ? "Para reordenar, limpe a busca."
+    : groupsView
+      ? "Grupos de suporte: colunas que aparecem antes das salas no Planner e recebem agendamentos de salas. Use as setas para reordenar e \"Editar\" para mudar nome, cor e profissionais."
+      : "Cada sala vira um grupo de colunas na grade e recebe agendamentos de pacientes. Use as setas para reordenar e \"Editar\" para mudar nome, cor e profissionais.";
   if (!shown.length){
-    host.innerHTML = '<div class="empty-state"><b>Nenhuma sala encontrada</b>Ajuste a busca ou cadastre uma nova sala.</div>';
+    host.innerHTML = groupsView
+      ? '<div class="empty-state"><b>Nenhum grupo encontrado</b>Ajuste a busca ou cadastre um novo grupo.</div>'
+      : '<div class="empty-state"><b>Nenhuma sala encontrada</b>Ajuste a busca ou cadastre uma nova sala.</div>';
     return;
   }
   host.innerHTML = shown.map(function(r){
-    var i = state.rooms.indexOf(r), n = state.rooms.length;
+    var i = all.indexOf(r), n = all.length;
     return '<div class="room-row" data-id="'+esc(r.id)+'">' +
       (q ? '' : '<div class="move-col">' +
         '<button type="button" data-move="up" '+(i===0?'disabled':'')+' aria-label="Mover para cima">▲</button>' +
@@ -4395,20 +4461,24 @@ function renderSalasTab(){
     b.addEventListener("click", function(){
       var row = b.closest(".room-row");
       var id = row.getAttribute("data-id");
-      var idx = state.rooms.findIndex(function(x){ return x.id===id; });
-      if (idx === -1) return;
+      var pos = all.findIndex(function(x){ return x.id===id; });
+      if (pos === -1) return;
       var dir = b.getAttribute("data-move");
-      var swapWith = dir === "up" ? idx-1 : idx+1;
-      if (swapWith < 0 || swapWith >= state.rooms.length) return;
+      var other = all[dir === "up" ? pos-1 : pos+1];
+      if (!other) return;
+      // Troca as duas posições na lista completa (salas e grupos ficam no mesmo cadastro).
       var list = state.rooms.slice();
+      var idx = list.indexOf(all[pos]), swapWith = list.indexOf(other);
       var tmp = list[idx]; list[idx] = list[swapWith]; list[swapWith] = tmp;
       writeRooms(list);
     });
   });
 }
 
-function openRoomModal(r){
+function openRoomModal(r, asGroup){
   var isNew = !r;
+  var grp = r ? isGroup(r) : !!asGroup;
+  var noun = grp ? "grupo" : "sala";
   var host = document.getElementById("modalHost");
   var draftName = r ? r.name : "";
   var draftColor = (r && r.color) ? r.color : "teal";
@@ -4416,10 +4486,10 @@ function openRoomModal(r){
 
   host.innerHTML =
     '<div class="overlay" id="ovRoom"><div class="modal">' +
-      '<div class="modal-head"><div><h3>'+(isNew?"Nova sala":"Editar sala")+'</h3></div>' +
+      '<div class="modal-head"><div><h3>'+(isNew ? (grp ? "Novo grupo de suporte" : "Nova sala") : (grp ? "Editar grupo de suporte" : "Editar sala"))+'</h3></div>' +
         '<button class="modal-close" id="closeRoom" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
-        '<div class="field"><label for="rmName">Nome da sala</label><input id="rmName" type="text" placeholder="ex: Fonoaudiologia ABA" value="'+esc(draftName)+'"></div>' +
+        '<div class="field"><label for="rmName">Nome '+(grp ? "do grupo" : "da sala")+'</label><input id="rmName" type="text" placeholder="'+(grp ? "ex: Coordenador" : "ex: Fonoaudiologia ABA")+'" value="'+esc(draftName)+'"></div>' +
         '<div class="field"><label>Cor</label><div class="swatch-picker" id="rmSwatches"></div>' +
           '<div class="color-hex-row"><span class="color-hex-preview" id="rmHexPreview"></span>' +
             '<input id="rmHexInput" type="text" placeholder="#RRGGBB" maxlength="7">' +
@@ -4431,7 +4501,7 @@ function openRoomModal(r){
         '</div>' +
       '</div>' +
       '<div class="modal-foot">' +
-        (isNew ? '<span></span>' : '<button class="btn danger" id="rmDelete">Remover sala</button>') +
+        (isNew ? '<span></span>' : '<button class="btn danger" id="rmDelete">Remover '+noun+'</button>') +
         '<div class="spacer"></div>' +
         '<button class="btn ghost" id="rmCancel">Cancelar</button>' +
         '<button class="btn primary" id="rmSave">Salvar</button>' +
@@ -4531,9 +4601,9 @@ function openRoomModal(r){
   if (!isNew){
     document.getElementById("rmDelete").addEventListener("click", function(){
       confirmDialog({
-        title: "Excluir sala",
-        message: "Excluir a sala <b>"+esc(r.name || "")+"</b>?<br>Ela some da agenda, e os atendimentos marcados nas colunas dela deixam de aparecer.",
-        confirmLabel: "Excluir sala"
+        title: "Excluir " + noun,
+        message: "Excluir "+(grp ? "o grupo" : "a sala")+" <b>"+esc(r.name || "")+"</b>?<br>"+(grp ? "Ele some" : "Ela some")+" da agenda, e os atendimentos marcados nas colunas "+(grp ? "dele" : "dela")+" deixam de aparecer.",
+        confirmLabel: "Excluir " + noun
       }).then(function(ok){
         if (!ok) return;
         var list = state.rooms.filter(function(x){ return x.id !== r.id; });
@@ -4547,8 +4617,8 @@ function openRoomModal(r){
     var name = document.getElementById("rmName").value.trim();
     if (!name){ document.getElementById("rmName").focus(); return; }
     var cleanTherapists = draftTherapists.filter(function(t){ return t.professionalId; });
-    if (!cleanTherapists.length){ showToast("Selecione ao menos um profissional para a sala.", true); return; }
-    var roomId = isNew ? uid(slugify(name) || "sala") : r.id;
+    if (!cleanTherapists.length){ showToast("Selecione ao menos um profissional para "+(grp ? "o grupo." : "a sala."), true); return; }
+    var roomId = isNew ? uid(slugify(name) || noun) : r.id;
     cleanTherapists = cleanTherapists.map(function(t, i){
       return {
         id: t.id || (roomId + "-t" + (i+1) + "-" + Math.random().toString(36).slice(2,5)),
@@ -4557,6 +4627,7 @@ function openRoomModal(r){
       };
     });
     var rec = {id: roomId, name: name, color: draftColor, therapists: cleanTherapists};
+    if (grp) rec.group = true;
     var list = state.rooms.slice();
     if (isNew){ list.push(rec); }
     else { list = list.map(function(x){ return x.id===rec.id ? rec : x; }); }
@@ -4564,9 +4635,9 @@ function openRoomModal(r){
     var keptSeatIds = cleanTherapists.map(function(t){ return t.id; });
     var removedSeats = isNew ? [] : (r.therapists || []).filter(function(t){ return keptSeatIds.indexOf(t.id) === -1; });
     (removedSeats.length ? confirmDialog({
-      title: removedSeats.length === 1 ? "Remover coluna da sala" : "Remover colunas da sala",
+      title: removedSeats.length === 1 ? "Remover coluna d"+(grp ? "o grupo" : "a sala") : "Remover colunas d"+(grp ? "o grupo" : "a sala"),
       message: (removedSeats.length === 1 ? "Esta coluna será removida" : "Estas colunas serão removidas") +
-        " da sala <b>"+esc(name)+"</b>:" + namesList(removedSeats.map(therapistDisplayName)) +
+        " d"+(grp ? "o grupo" : "a sala")+" <b>"+esc(name)+"</b>:" + namesList(removedSeats.map(therapistDisplayName)) +
         (removedSeats.length === 1 ? "Os atendimentos marcados nela deixam de aparecer na agenda." : "Os atendimentos marcados nelas deixam de aparecer na agenda."),
       confirmLabel: "Remover e salvar"
     }) : Promise.resolve(true)).then(function(ok){
@@ -4854,11 +4925,11 @@ function agdSlots(d){ var o = agdDayObj(d); return o.morning.concat(["ALMOCO"], 
 function agdAllTimes(){ var o = DAYS[0]; return o.morning.concat(o.afternoon); }
 function agdResources(){
   if (AD.mode === "prof") return state.professionals.slice().sort(function(a,b){ return (a.name||"").localeCompare(b.name||"", "pt-BR"); });
-  return state.rooms.slice();
+  return physicalRooms();
 }
 function agdFindRes(id){ return agdResources().filter(function(r){ return r.id === id; })[0] || null; }
 function agdProfRoom(profId){
-  return state.rooms.filter(function(r){ return (r.therapists||[]).some(function(t){ return t.professionalId === profId; }); })[0] || null;
+  return physicalRooms().filter(function(r){ return (r.therapists||[]).some(function(t){ return t.professionalId === profId; }); })[0] || null;
 }
 // Horário do profissional na data (cada dia da semana tem o seu); null = não atende.
 function agdProfHours(p, date){ return profDayHours(p, AD_WEEKDAY_KEYS[(date || AD.date).getDay()]); }
@@ -5117,7 +5188,7 @@ function agdOpenModal(opts){
           serviceOptionsHtml((row && row.service) || DEFAULT_SERVICE_ID, profId) + '</select></div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="agdProf">Profissional</label><select id="agdProf"'+(canSave?'':' disabled')+'><option value="">Escolha…</option>'+profs.map(function(p){ return '<option value="'+esc(p.id)+'"'+(p.id===profId?' selected':'')+'>'+esc(p.name)+'</option>'; }).join("")+'</select></div>' +
-          '<div class="field"><label for="agdSala">Sala</label><select id="agdSala"'+(canSave?'':' disabled')+'><option value="">Sem sala</option>'+state.rooms.map(function(r){ return '<option value="'+esc(r.id)+'"'+(r.id===roomId?' selected':'')+'>'+esc(r.name)+'</option>'; }).join("")+'</select></div>' +
+          '<div class="field"><label for="agdSala">Sala</label><select id="agdSala"'+(canSave?'':' disabled')+'><option value="">Sem sala</option>'+state.rooms.filter(function(r){ return !r.group || r.id === roomId; }).map(function(r){ return '<option value="'+esc(r.id)+'"'+(r.id===roomId?' selected':'')+'>'+esc(r.name)+'</option>'; }).join("")+'</select></div>' +
         '</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="agdData">Data</label><input id="agdData" type="date" value="'+date+'"'+(canSave?'':' disabled')+'></div>' +
