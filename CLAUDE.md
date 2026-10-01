@@ -145,6 +145,10 @@ testes continuam usando o mesmo mock.
   - Visões **Semana** (5 dias do profissional/sala selecionado) e **Dia**
     (uma coluna por profissional ou sala). Painel à direita: Profissionais |
     Salas, filtro, contagem da semana. Data, ‹ Hoje ›.
+  - O **Planner** segue a mesma regra: célula vazia fora do horário do
+    profissional da coluna fica cinza (`.slot-off`, `seatAvailable()`), sem
+    clique/colar/soltar; "bloquear período" a ignora; algo já marcado ali
+    continua visível. Teste: `tests/run_prof_hours.js`.
   - Horário de cada profissional **por dia da semana** (`horarios:
     {seg:{inicio,fim},…}` no cadastro; `inicio:""` = não atende; cadastros
     antigos com `horaInicio`/`horaFim` únicos valem para todos os dias —

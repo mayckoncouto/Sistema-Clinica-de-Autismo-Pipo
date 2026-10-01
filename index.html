@@ -15,6 +15,7 @@
   --bg:#f3f5f4;
   --surface:#ffffff;
   --surface-2:#eef1f0;
+  --off-bg:#dde2e0; /* horário fora do expediente do profissional */
   --line:#dde3e1;
   --line-strong:#c7cfcc;
   --ink:#182523;
@@ -46,7 +47,7 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#14201d; --surface:#1a2724; --surface-2:#20302c;
+    --bg:#14201d; --surface:#1a2724; --surface-2:#20302c; --off-bg:#2b3935;
     --line:#2b3c37; --line-strong:#3a4d47;
     --ink:#eef3f1; --ink-2:#b9c6c2; --muted:#8a9995;
     --accent:#57bcae; --accent-ink:#0b1815; --accent-weak:#1f3a35;
@@ -69,7 +70,7 @@
   }
 }
 :root[data-theme="dark"]{
-  --bg:#14201d; --surface:#1a2724; --surface-2:#20302c;
+  --bg:#14201d; --surface:#1a2724; --surface-2:#20302c; --off-bg:#2b3935;
   --line:#2b3c37; --line-strong:#3a4d47;
   --ink:#eef3f1; --ink-2:#b9c6c2; --muted:#8a9995;
   --accent:#57bcae; --accent-ink:#0b1815; --accent-weak:#1f3a35;
@@ -190,7 +191,7 @@ table.ad-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout:
 /* Altura da linha calculada para o dia inteiro caber na janela (adFitRows), com mínimo de 38px. */
 .ad-grid td.ad-slot{height:var(--ad-row-h,50px);border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:3px;vertical-align:top;cursor:pointer}
 .ad-grid td.ad-slot:hover{background:#f7faf9}
-.ad-grid td.ad-slot.ad-off{background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 5px,var(--surface) 5px,var(--surface) 10px);cursor:not-allowed}
+.ad-grid td.ad-slot.ad-off{background:var(--off-bg);cursor:not-allowed}
 .ad-grid td.ad-slot.ad-ro{cursor:default}
 .ad-grid tr.ad-lunch td{height:22px;background:var(--surface-2);font-size:10.5px;color:var(--muted);text-align:center;font-weight:700;cursor:default;border-bottom:1px solid var(--line)}
 .ad-ev{border-radius:7px;border-left:3px solid var(--accent);padding:4px 6px;height:100%;font-size:11.5px;line-height:1.25;overflow:hidden;background:var(--surface-2);position:relative}
@@ -201,7 +202,10 @@ table.ad-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout:
 .ad-ev.blocked .p,.ad-ev.blocked .t,.ad-ev.blocked .s{color:#eef1f0}
 .ad-ev .ad-more{position:absolute;right:4px;top:3px;font-size:10px;font-weight:800;background:var(--danger);color:#fff;border-radius:999px;padding:0 5px}
 .ad-legend{padding:8px 12px;border-top:1px solid var(--line)}
-.ad-off-swatch{background:repeating-linear-gradient(45deg,#dfe4e2,#dfe4e2 2px,#fff 2px,#fff 4px)!important;border:1px solid var(--line)}
+.ad-off-swatch{background:var(--off-bg)!important;border:1px solid var(--line-strong)}
+/* Planner: horário fora do expediente do profissional da coluna (cinza, inativo). */
+.slotcell.slot-off{background:var(--off-bg);cursor:not-allowed}
+.slotcell.slot-off .book{min-height:36px}
 .ad-side{width:250px;flex:none;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
 .ad-mode{margin:10px 10px 8px}
 .ad-mode button{flex:1}
@@ -615,6 +619,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
       <span><i style="background:#8FD3F4"></i>Treinamento</span>
       <span><i style="background:#4a5257"></i>Bloqueado</span>
+      <span><i style="background:var(--off-bg);border:1px solid var(--line-strong)"></i>Fora do horário do profissional</span>
     </div>
     <div class="foot-note">Clique numa célula para agendar, editar ou desmarcar. Arraste um atendimento para outro horário para movê-lo (solte sobre uma célula ocupada para trocar os dois). Use o ícone de cópia para colar em outro dia ou semana. Clique no lápis no cabeçalho de uma sala para editar nome, cor e terapeutas. Alterações são sincronizadas automaticamente para toda a equipe.</div>
   </section>
@@ -1877,8 +1882,14 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         // Baked directly into the markup (rather than a post-render DOM class pass)
         // so a targeted single-table rebuild (see renderScheduleDocsTargeted) never
         // needs a separate "re-apply paste mode" step.
-        html += '<td class="slotcell'+(state.clipboard?' paste-target':'')+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'">';
-        if (b && b.patient){
+        // Fora do horário do profissional desta coluna: célula cinza e inativa
+        // (sem clique, sem colar, sem soltar). Se já houver algo marcado ali, continua
+        // aparecendo normalmente para poder ser movido ou desmarcado.
+        var isOff = !(b && b.patient) && !seatAvailable(t, dayObj.key, row.time);
+        html += '<td class="slotcell'+(isOff ? ' slot-off' : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="Fora do horário do profissional"':'')+'>';
+        if (isOff){
+          html += '<div class="book off"></div>';
+        } else if (b && b.patient){
           var isBlocked = !!b.blocked;
           var isMeetingDefault = !isBlocked && b.patient === MEETING_LABEL;
           var isTraining = !isBlocked && bookingKind(b) === "treinamento";
@@ -1986,6 +1997,8 @@ function wireGridDelegatedEvents(){
       var name = periodBtn.getAttribute("data-name") || "";
       var times = periodTimes(dayKey, period);
       var slotBookings = (state.scheduleDocs[docId] && state.scheduleDocs[docId].bookings) || {};
+      var seatRoom = findRoom(roomId);
+      var seatT = seatRoom ? (seatRoom.therapists || []).filter(function(x){ return x.id === seatId; })[0] : null;
       var changes = {}, touched = 0, kept = 0;
       // Bloquear: só horários livres (não mexe em paciente, sala ou reunião).
       // Liberar: só horários bloqueados (idem).
@@ -1997,6 +2010,8 @@ function wireGridDelegatedEvents(){
         // Bloqueio = marcação blocked ou o texto "Bloqueado" (dados antigos da planilha).
         var isBlockedSlot = !!(cur && (cur.blocked || normText(cur.patient) === "bloqueado"));
         if (action === "lock"){
+          // Horário fora do expediente do profissional já é inativo: não precisa bloquear.
+          if (isEmpty && !seatAvailable(seatT, dayKey, time)) return;
           if (isEmpty){ changes[key] = {patient:"Bloqueado", note:"", blocked:true}; touched++; }
           else if (!isBlockedSlot) kept++;
         } else if (action === "unlock"){
@@ -2053,6 +2068,10 @@ function wireGridDelegatedEvents(){
       renderGrid();
       return;
     }
+    if (td.classList.contains("slot-off")){
+      showToast("Fora do horário de atendimento do profissional.", true);
+      return;
+    }
     if (!e.target.closest(".book-main")) return;
     if (state.clipboard){
       pasteToSlot(docId2, key);
@@ -2092,7 +2111,7 @@ function wireGridDelegatedEvents(){
   host.addEventListener("dragover", function(e){
     if (!state.dragKey) return;
     var td = e.target.closest(".slotcell");
-    if (!td) return;
+    if (!td || td.classList.contains("slot-off")) return; // sem preventDefault = não aceita soltar
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     td.classList.add("drag-over");
@@ -2104,6 +2123,12 @@ function wireGridDelegatedEvents(){
   host.addEventListener("drop", function(e){
     var td = e.target.closest(".slotcell");
     if (!td) return;
+    if (td.classList.contains("slot-off")){
+      e.preventDefault();
+      state.dragKey = null; state.dragDocId = null;
+      showToast("Fora do horário de atendimento do profissional.", true);
+      return;
+    }
     e.preventDefault();
     td.classList.remove("drag-over");
     var fromKey = state.dragKey;
@@ -4046,6 +4071,14 @@ var PROF_WEEKDAYS = [
 ];
 // Horário do profissional num dia ("seg".."sex"): {start,end} ou null se não atende.
 // Cadastros antigos (horaInicio/horaFim únicos, ou nada) valem para todos os dias.
+// A coluna (assento) de uma sala está disponível nesse dia/horário? Segue o
+// horário do profissional ligado a ela; coluna sem profissional = sempre disponível.
+function seatAvailable(t, dayKey, time){
+  var prof = t && t.professionalId ? findProfessional(t.professionalId) : null;
+  if (!prof) return true;
+  var h = profDayHours(prof, dayKey);
+  return !!h && time >= h.start && adPlus40(time) <= h.end;
+}
 function profDayHours(p, dayKey){
   var h = p && p.horarios && p.horarios[dayKey];
   if (h) return h.inicio ? {start: h.inicio, end: h.fim || PROF_DAY_END} : null;
