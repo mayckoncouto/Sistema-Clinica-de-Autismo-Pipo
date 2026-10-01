@@ -742,6 +742,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <div class="spacer"></div>
       <span class="pat-count" id="matchCount"></span>
       <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do dia e semana abertos para uma data da Agenda" hidden>Enviar para a Agenda</button>
+      <button class="btn ghost" id="plClearWeekBtn" title="Apaga todos os agendamentos da semana escolhida (segunda a sexta)" hidden>Limpar semana</button>
     </div>
     <div class="readonly-banner" id="readonlyBanner">Modo somente leitura — você está vendo esta agenda mas as alterações não serão salvas. Verifique se está conectado com uma conta que tem permissão de edição.</div>
     <div class="clipboard-bar" id="clipboardBar"></div>
@@ -1468,6 +1469,7 @@ function applyPermissionsUI(){
   show("addProfessionalBtn", can("profissionais","create"));
   show("addRoomBtn", can("salas","create"));
   show("sendToAgendaBtn", can("agendamentos","create"));
+  show("plClearWeekBtn", can("agenda","delete"));
   show("agdClearWeekBtn", can("agendamentos","delete"));
   var agendaWrite = can("agenda","create") || can("agenda","edit") || can("agenda","delete");
   var banner = document.getElementById("readonlyBanner");
@@ -1995,6 +1997,7 @@ function wireControls(){
   document.getElementById("addRoomBtn").addEventListener("click", function(){ openRoomModal(null, state.salasView === "grupos"); });
   // Salas <-> Grupos de suporte: a mesma tela mostra um cadastro ou o outro.
   document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
+  document.getElementById("plClearWeekBtn").addEventListener("click", function(){ plannerClearWeek(); });
   document.getElementById("toggleGroupsBtn").addEventListener("click", function(){
     state.salasView = state.salasView === "grupos" ? "salas" : "grupos";
     var s = document.getElementById("roomListSearch"); if (s) s.value = "";
@@ -2017,6 +2020,8 @@ function visibleRooms(){
 function renderAgendaShell(){
   var sendBtn = document.getElementById("sendToAgendaBtn");
   if (sendBtn) sendBtn.hidden = !can("agendamentos", "create");
+  var clrBtn = document.getElementById("plClearWeekBtn");
+  if (clrBtn) clrBtn.hidden = !can("agenda", "delete");
   renderRoomChips();
   renderClipboardBar();
   renderGrid();
@@ -6439,6 +6444,56 @@ function agdPlace(row, td, mode, swapWith){
     if (conflict){ showToast(conflict, true); return; }
     write();
   }).catch(function(err){ showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
+}
+
+// Planner: "Limpar semana" — apaga tudo o que estiver gravado na semana escolhida
+// (1ª a 4ª), de segunda a sexta, em todas as salas e grupos. Dupla confirmação,
+// entra no desfazer. A Reunião Clínica padrão de segunda 11:20 volta ao normal
+// (a chave gravada é removida, então o padrão "virtual" reaparece).
+function plannerClearWeek(){
+  if (!can("agenda", "delete")){ showToast(permDeniedMsg("agenda", "delete"), true); return; }
+  if (state.week === "todos"){ showToast("Escolha uma semana (1ª a 4ª) para limpar.", true); return; }
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var week = state.week;
+  var docIds = DAYS.map(function(d){ return d.key + "-" + week; });
+  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+    var changesByDoc = {}, n = 0;
+    snaps.forEach(function(snap, i){
+      var docId = docIds[i];
+      var data = snap && snap.exists ? snap.data() : null;
+      var bookings = (data && data.bookings) || {};
+      // Garante o "antes" certo para o desfazer mesmo se o dia não estiver na tela.
+      if (!state.scheduleDocs[docId]) state.scheduleDocs[docId] = {bookings: JSON.parse(JSON.stringify(bookings))};
+      var ch = {};
+      Object.keys(bookings).forEach(function(k){
+        var b = bookings[k];
+        if (b && b.patient){ ch[k] = null; n++; }
+      });
+      if (Object.keys(ch).length) changesByDoc[docId] = ch;
+    });
+    var label = WEEK_LABEL[week];
+    if (!n){ showToast("A " + label + " do Planner já está vazia."); return; }
+    var qtd = n + (n === 1 ? " agendamento" : " agendamentos");
+    confirmDialog({
+      title: "Limpar semana do Planner",
+      message: "Apagar <b>" + qtd + "</b> da <b>" + esc(label) + "</b> (segunda a sexta)?<br>Inclui pacientes, salas, bloqueios, reuniões e treinamentos de todas as salas e grupos.",
+      confirmLabel: "Continuar"
+    }).then(function(ok){
+      if (!ok) return false;
+      return confirmDialog({
+        title: "Tem certeza?",
+        message: "Os <b>" + qtd + "</b> da " + esc(label) + " serão apagados.<br>Se foi engano, use desfazer (Ctrl+Z) logo em seguida.",
+        confirmLabel: "Apagar semana"
+      });
+    }).then(function(ok){
+      if (!ok) return;
+      applyBookingChanges(changesByDoc).then(function(res){
+        if (res === false) return;
+        renderGrid();
+        showToast(label.charAt(0).toUpperCase() + label.slice(1) + " do Planner limpa (" + qtd + "). Use desfazer (Ctrl+Z) se foi engano.");
+      });
+    });
+  }).catch(function(){ showToast("Não foi possível ler a semana do Planner.", true); });
 }
 
 /* ---- Planner -> Agenda: botão "Enviar para a Agenda" ----

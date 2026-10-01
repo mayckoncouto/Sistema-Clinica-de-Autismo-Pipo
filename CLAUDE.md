@@ -571,3 +571,10 @@ edita; o nível Profissional não tem "excluir".
   algum), seção "Relatórios" em Níveis de permissão. "Evoluções pendentes" usa a
   função `report_appointments_with_records(p_from, p_to)` (não expõe o texto do
   prontuário). Migração `supabase/2026-10-02g-relatorios.sql`.
+
+## Planner: "Limpar semana" (2026-10-02)
+Botão `#plClearWeekBtn` na barra do Planner (precisa de excluir em `agenda`):
+`plannerClearWeek()` lê os 5 documentos `schedule/<dia>-<semana>` da semana
+escolhida (com "Todos" pede para escolher uma), remove toda chave gravada com
+conteúdo (a Reunião Clínica padrão de segunda 11:20 volta), dupla confirmação,
+um único `applyBookingChanges` (entra no desfazer).
