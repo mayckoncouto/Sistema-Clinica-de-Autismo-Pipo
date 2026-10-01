@@ -162,6 +162,10 @@ testes continuam usando o mesmo mock.
     atendimento = troca os dois). Na visão Dia a coluna de destino define o
     profissional (ou a sala, no modo Salas). Nada disso entra em horário fora do
     expediente. Código: `adPlace()`, `adTargetFor()`, `adRenderClipboardBar()`.
+  - Botões **liberar / bloquear / limpar** por coluna, na linha antes das
+    07:20 (manhã) e na do almoço (tarde), dois cliques para confirmar, mesmas
+    regras do Planner (`adPeriodCell`, `adPeriodAction`). No modo Salas,
+    bloquear vale para cada profissional que atende naquela sala.
   - Banco garante 1 atendimento por profissional/data/horário (unique);
     sala ocupada por outro profissional gera só um aviso (pode confirmar).
   - Código: bloco "Nova Agenda por data real" no fim do script (`AD`,

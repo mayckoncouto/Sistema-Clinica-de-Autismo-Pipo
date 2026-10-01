@@ -189,6 +189,9 @@ table.ad-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout:
 .ad-grid th.ad-tcol{z-index:4;background:var(--surface-2);border-right:1px solid var(--line)}
 .ad-grid td.ad-tcol{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;font-weight:600;color:var(--ink-2);vertical-align:top;padding:9px 13px;white-space:nowrap;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
 /* Coluna de horários igual à do Planner (linhas, canto cinza, 12:00 no mesmo estilo). */
+/* Linhas dos botões liberar/bloquear/limpar (antes das 07:20 e no almoço), cinza como no Planner. */
+.ad-grid tr.ad-periodrow td{background:var(--surface-2);border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:4px 6px;height:auto;vertical-align:middle}
+.ad-grid tr.ad-periodrow td.ad-period-cell{text-align:center}
 .ad-grid tr.ad-lunch td.ad-tcol{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;font-weight:600;color:var(--ink-2);text-align:left;padding:4px 13px;vertical-align:middle}
 /* Mesma altura de célula do Planner (.slotcell: 44px); o dia rola se não couber. */
 .ad-grid td.ad-slot{height:44px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:4px;vertical-align:top}
@@ -4914,8 +4917,10 @@ function adRender(){
     html += '<thead><tr><th class="ad-tcol"></th>' + days.map(function(d){
       return '<th class="'+(adSameDay(d, today) ? "today" : "")+'">'+adDayObj(d).name.slice(0,3).toLowerCase()+' <span class="ad-dnum">'+d.getDate()+'/'+(d.getMonth()+1)+'</span></th>';
     }).join("") + '</tr></thead><tbody>';
+    // Linha antes das 07:20 com os botões da manhã; a do almoço leva os da tarde (igual ao Planner).
+    html += '<tr class="ad-periodrow"><td class="ad-tcol"></td>' + days.map(function(d){ return adPeriodCell("morning", adIso(d), res.id); }).join("") + '</tr>';
     adSlots(days[0]).forEach(function(t){
-      if (t === "ALMOCO"){ html += '<tr class="ad-lunch"><td class="ad-tcol">12:00</td><td colspan="5"></td></tr>'; return; }
+      if (t === "ALMOCO"){ html += '<tr class="ad-lunch ad-periodrow"><td class="ad-tcol">12:00</td>' + days.map(function(d){ return adPeriodCell("afternoon", adIso(d), res.id); }).join("") + '</tr>'; return; }
       html += '<tr><td class="ad-tcol">'+t+'</td>' + days.map(function(d){ return cell(adIso(d), t, res); }).join("") + '</tr>';
     });
   } else {
@@ -4927,8 +4932,9 @@ function adRender(){
       var sub = AD.mode === "prof" ? (r.specialtyId ? specialtyName(r.specialtyId) : "") : "Sala";
       return '<th style="width:130px;'+(r.id === AD.sel ? 'color:var(--accent)' : '')+'" title="'+esc(r.name)+'">'+esc(r.name)+'<span class="ad-hsub">'+esc(sub || " ")+'</span></th>';
     }).join("") + '</tr></thead><tbody>';
+    html += '<tr class="ad-periodrow"><td class="ad-tcol"></td>' + cols.map(function(r){ return adPeriodCell("morning", dIso, r.id); }).join("") + '</tr>';
     adSlots(AD.date).forEach(function(t){
-      if (t === "ALMOCO"){ html += '<tr class="ad-lunch"><td class="ad-tcol">12:00</td><td colspan="'+cols.length+'"></td></tr>'; return; }
+      if (t === "ALMOCO"){ html += '<tr class="ad-lunch ad-periodrow"><td class="ad-tcol">12:00</td>' + cols.map(function(r){ return adPeriodCell("afternoon", dIso, r.id); }).join("") + '</tr>'; return; }
       html += '<tr><td class="ad-tcol">'+t+'</td>' + cols.map(function(r){ return cell(dIso, t, r); }).join("") + '</tr>';
     });
     html = html.replace('<table class="ad-grid">', '<table class="ad-grid" style="min-width:'+(87 + cols.length*130)+'px">');
@@ -5179,6 +5185,23 @@ function wireAgendaDia(){
   });
   var grid = document.getElementById("adGrid");
   grid.addEventListener("click", function(e){
+    // Botões liberar/bloquear/limpar: primeiro clique arma, segundo confirma (como no Planner).
+    var pb = e.target.closest(".ad-period-btn");
+    if (pb){
+      e.stopPropagation();
+      if (!pb.__armed){
+        pb.__armed = true;
+        pb.classList.add("confirm");
+        pb.__title = pb.title;
+        pb.title = "Clique de novo para confirmar";
+        pb.__timer = setTimeout(function(){ pb.__armed = false; pb.classList.remove("confirm"); pb.title = pb.__title; }, 4000);
+        return;
+      }
+      clearTimeout(pb.__timer);
+      pb.__armed = false; pb.classList.remove("confirm"); pb.title = pb.__title;
+      adPeriodAction(pb.getAttribute("data-ad-action"), pb.getAttribute("data-period"), pb.getAttribute("data-d"), pb.getAttribute("data-r"));
+      return;
+    }
     var td = e.target.closest("td.ad-slot"); if (!td) return;
     var id = td.getAttribute("data-id");
     var row = id ? AD.rows[id] : null;
@@ -5240,6 +5263,70 @@ function wireAgendaDia(){
   });
   document.addEventListener("keydown", function(e){
     if (e.key === "Escape" && AD.clipboard && state.tab === "agendadia"){ AD.clipboard = null; adRenderClipboardBar(); adRender(); }
+  });
+}
+
+/* ---- liberar / bloquear / limpar período na Agenda (iguais aos do Planner) ----
+ * Um trio de botões por coluna: na linha antes das 07:20 (manhã) e na do almoço
+ * (tarde). Dois cliques para confirmar. Bloquear = só horários livres dentro do
+ * expediente; Liberar = só bloqueios; Limpar = tudo do período.
+ * Coluna = (data, profissional) no modo Profissionais; (data, sala) no modo Salas
+ * — aí bloquear vale para cada profissional que atende naquela sala. */
+function adPeriodCell(period, dateIso, resId){
+  var label = period === "morning" ? "manhã" : "tarde";
+  function btn(action, cls, title, svg){
+    return '<button type="button" class="period-btn ad-period-btn'+cls+'" data-ad-action="'+action+'" data-period="'+period+'" data-d="'+dateIso+'" data-r="'+esc(resId)+'" title="'+title+' '+label+'" aria-label="'+title+' '+label+'">'+svg+'</button>';
+  }
+  return '<td class="ad-period-cell"><div class="seat-lock-group">' +
+    btn("unlock", "", "Liberar horários bloqueados da", UNLOCK_SVG) +
+    btn("lock", " period-btn-lock", "Bloquear horários livres da", LOCK_SVG) +
+    btn("clear", " period-btn-clear", "Limpar todos os atendimentos da", ERASER_SVG) +
+  '</div></td>';
+}
+function adPeriodAction(action, period, dateIso, resId){
+  var c = adClient(); if (!c) return;
+  var date = adParse(dateIso), day = adDayObj(date);
+  var times = (period === "morning" ? day.morning : day.afternoon).slice();
+  var label = period === "morning" ? "manhã" : "tarde";
+  var res = AD.mode === "prof" ? findProfessional(resId) : findRoom(resId);
+  var who = res ? " de " + res.name : "";
+  var all = Object.keys(AD.rows).map(function(id){ return AD.rows[id]; });
+  var inPeriod = all.filter(function(r){
+    return r.date === dateIso && times.indexOf(r.time) !== -1 && (AD.mode === "prof" ? r.professional_id === resId : r.room_id === resId);
+  });
+  function finish(n, verb){
+    showToast(n ? (n + (n === 1 ? " horário" : " horários") + who + " pela " + label + " " + verb + (n === 1 ? "." : "s.")) :
+      ("Nada para " + {bloqueado:"bloquear", liberado:"liberar", limpo:"limpar"}[verb] + who + " pela " + label + "."));
+    adLoadWeek();
+  }
+  if (action === "lock"){
+    if (!can("agendamentos", "create")){ showToast(permDeniedMsg("agendamentos", "create"), true); return; }
+    var profIds = AD.mode === "prof" ? [resId] :
+      ((res && res.therapists) || []).map(function(t){ return t.professionalId; }).filter(function(id, i, a){ return id && a.indexOf(id) === i; });
+    var inserts = [];
+    profIds.forEach(function(pid){
+      var prof = findProfessional(pid);
+      var roomId = AD.mode === "sala" ? resId : ((adProfRoom(pid) || {}).id || null);
+      times.forEach(function(t){
+        if (!adInHours(prof, t, date)) return; // fora do expediente já é inativo
+        var taken = all.some(function(r){ return r.date === dateIso && r.time === t && r.professional_id === pid; });
+        if (!taken) inserts.push({date: dateIso, time: t, professional_id: pid, room_id: roomId, patient: "Bloqueado", note: "", blocked: true, service: null});
+      });
+    });
+    if (!inserts.length){ finish(0, "bloqueado"); return; }
+    c.from("appointments").insert(inserts).then(function(r){
+      if (r.error){ showToast("Não foi possível bloquear: " + adErr(r.error), true); adLoadWeek(); return; }
+      finish(inserts.length, "bloqueado");
+    });
+    return;
+  }
+  if (!can("agendamentos", "delete")){ showToast(permDeniedMsg("agendamentos", "delete"), true); return; }
+  var targets = action === "unlock" ? inPeriod.filter(function(r){ return bookingKind(r) === "bloqueado"; }) : inPeriod;
+  var verb = action === "unlock" ? "liberado" : "limpo";
+  if (!targets.length){ finish(0, verb); return; }
+  c.from("appointments").delete().in("id", targets.map(function(r){ return r.id; })).then(function(r){
+    if (r.error){ showToast("Não foi possível " + (action === "unlock" ? "liberar" : "limpar") + ": " + adErr(r.error), true); adLoadWeek(); return; }
+    finish(targets.length, verb);
   });
 }
 
