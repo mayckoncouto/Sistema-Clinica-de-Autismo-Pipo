@@ -266,6 +266,7 @@ td.agd-slot:hover .agd-add{opacity:1}
    bem claro e sem reação ao mouse (Planner e Agenda). */
 .book .book-main.off-box,.book .book-main.off-box:hover{background:var(--off-bg);border-color:var(--line);cursor:not-allowed;box-shadow:none}
 .agd-side{width:250px;flex:none;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
+.agd-panel.agd-solo .agd-side{display:none}
 .agd-mode{margin:10px 10px 8px}
 .agd-mode button{flex:1}
 .agd-filter{margin:0 10px 8px;max-width:none;flex:none}
@@ -5241,7 +5242,18 @@ function agdDayObj(d){ return findDayObj(AD_WEEKDAY_KEYS[d.getDay()]); }
 // Horários do dia = os mesmos do Planner (manhã, almoço, tarde).
 function agdSlots(d){ var o = agdDayObj(d); return o.morning.concat(["ALMOCO"], o.afternoon); }
 function agdAllTimes(){ var o = DAYS[0]; return o.morning.concat(o.afternoon); }
+// Profissional (usuário ligado a um profissional, não Administrador e sem "editar"
+// na Agenda): vê só a própria agenda, sem a lista lateral. O banco aplica a mesma
+// regra (agenda_scope_professional, migração 2026-10-02f).
+function agdOwnProfId(){
+  var a = window.pipoAuth; if (!a || !a.profile) return null;
+  var me = a.profile();
+  if (!me || !me.professional_id || a.isAdmin() || a.can("agendamentos", "edit")) return null;
+  return me.professional_id;
+}
 function agdResources(){
+  var own = agdOwnProfId();
+  if (own) return state.professionals.filter(function(p){ return p.id === own; });
   if (AD.mode === "prof") return state.professionals.slice().sort(function(a,b){ return (a.name||"").localeCompare(b.name||"", "pt-BR"); });
   return physicalRooms();
 }
@@ -5386,6 +5398,10 @@ function agdDeleteRow(row, okMsg){
 function agdRender(){
   var gridHost = document.getElementById("agdGrid");
   if (!gridHost) return;
+  var ownProf = agdOwnProfId();
+  if (ownProf){ AD.mode = "prof"; AD.sel = ownProf; }
+  var panelEl = document.getElementById("tab-agendadia");
+  if (panelEl) panelEl.classList.toggle("agd-solo", !!ownProf);
   var canCreate = can("agendamentos", "create"), canEdit = can("agendamentos", "edit");
   document.getElementById("agdNewBtn").hidden = !canCreate;
   document.getElementById("agdClearWeekBtn").hidden = !can("agendamentos", "delete");

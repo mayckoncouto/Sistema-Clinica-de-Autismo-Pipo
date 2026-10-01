@@ -543,3 +543,12 @@ física não é aceita na Agenda (no Planner, só nas colunas de grupo).
   direito (cabeçalho, ao lado do ✕), no popup e na janela de edição; as duas
   abrem no centro. Na edição, Status fica abaixo de "Ou marque o horário como". Evoluções também podem ser lançadas direto no
   Prontuário ("+ Nova evolução"), sem atendimento.
+
+## Profissional vê só a própria agenda (2026-10-02)
+Usuário ligado a um profissional (`profiles.professional_id`), não
+Administrador e sem "editar" na Agenda: `agdOwnProfId()` esconde a lista
+lateral (`.agd-panel.agd-solo`), força modo Profissional no próprio
+profissional (Dia e Semana). No banco, `agenda_scope_professional()` limita o
+SELECT de appointments e o `set_appointment_status` aos atendimentos dele
+(migração `2026-10-02f-agenda-do-profissional.sql`). Prontuário: só o autor
+edita; o nível Profissional não tem "excluir".
