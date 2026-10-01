@@ -641,7 +641,6 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <span class="pat-count" id="patCount"></span>
       <div class="spacer"></div>
       <button class="btn ghost" id="manageConveniosBtn">Convênios</button>
-      <button class="btn ghost" id="manageSpecialtiesBtn">Especialidades</button>
       <button class="btn primary" id="addPatientBtn">+ Novo paciente</button>
     </div>
     <div id="patListHost"></div>
@@ -656,6 +655,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <span class="pat-count" id="profCount"></span>
       <div class="spacer"></div>
+      <button class="btn ghost" id="manageServicesBtn">Serviços</button>
+      <button class="btn ghost" id="manageSpecialtiesBtn">Especialidades</button>
       <button class="btn primary" id="addProfessionalBtn">+ Novo profissional</button>
     </div>
     <div id="profList" class="prof-list-host"></div>
@@ -1002,6 +1003,7 @@ var state = {
   patients: [],          // patient directory, from db
   specialties: [],       // specialty registry [{id,name}], from db
   convenios: [],         // convênio registry [{id,name}], from db
+  services: [],          // serviços [{id,name}] (Sessão, Triagem…), from db — tela Profissionais › Serviços
   professionals: [],     // staff registry [{id,name,specialtyId}], from db
   reportDocs: {},         // docId -> {bookings:{...}} for ALL 20 day/week docs, for the Relatório tab
   activeRoomFilter: null, // null = all
@@ -1201,6 +1203,7 @@ function connectDb(){
     subscribePatients();
     subscribeSpecialties();
     subscribeConvenios();
+    subscribeServices();
     subscribeProfessionals();
     subscribeSchedule();
     subscribeReportDocs();
@@ -1319,6 +1322,12 @@ function subscribeSpecialties(){
     renderPatientsTab();
     renderProfissionaisTab(); // coluna "Especialidade principal"
   }, function(){ specialtiesLoaded = true; });
+}
+
+function subscribeServices(){
+  db.doc("config/services").onSnapshot(function(snap){
+    state.services = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
+  }, function(){});
 }
 
 function subscribeConvenios(){
@@ -1610,6 +1619,7 @@ function wireControls(){
   document.getElementById("addPatientBtn").addEventListener("click", function(){ openPatientModal(null); });
   document.getElementById("manageSpecialtiesBtn").addEventListener("click", function(){ openSpecialtiesModal(); });
   document.getElementById("manageConveniosBtn").addEventListener("click", function(){ openConveniosModal(); });
+  document.getElementById("manageServicesBtn").addEventListener("click", function(){ openServicesModal(); });
   document.getElementById("addRoomBtn").addEventListener("click", function(){ openRoomModal(null); });
   document.getElementById("addProfessionalBtn").addEventListener("click", function(){ openProfessionalModal(null); });
 }
@@ -3551,6 +3561,101 @@ function openConveniosModal(){
     }) : Promise.resolve(true)).then(function(ok){
       if (ok) writeConvenios(clean).then(close);
     });
+  });
+}
+
+/* ---------------- serviços (modal, tela Profissionais) ----------------
+ * Cadastro simples {id,name}: Sessão, Triagem, Avaliação… Mesmo padrão do
+ * cadastro de Convênios. Permissão do módulo "profissionais".
+ */
+function openServicesModal(){
+  var host = document.getElementById("modalHost");
+  var draft = state.services.map(function(s){ return {id:s.id, name:s.name}; });
+
+  host.innerHTML =
+    '<div class="overlay" id="ovServ"><div class="modal">' +
+      '<div class="modal-head"><div><h3>Serviços</h3>' +
+        '<div class="modal-sub">Tipos de atendimento oferecidos pela clínica (ex.: Sessão, Triagem, Avaliação). Renomear mantém o mesmo serviço.</div>' +
+      '</div><button class="modal-close" id="closeServ" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="therapist-rows" id="servRows"></div>' +
+        '<button type="button" class="btn ghost add-row-btn" id="servAdd">+ serviço</button>' +
+      '</div>' +
+      '<div class="modal-foot">' +
+        '<div class="spacer"></div>' +
+        '<button class="btn ghost" id="servCancel">Cancelar</button>' +
+        '<button class="btn primary" id="servSave">Salvar</button>' +
+      '</div>' +
+    '</div></div>';
+
+  var overlay = document.getElementById("ovServ");
+  function close(){ host.innerHTML = ""; }
+  overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
+  document.getElementById("closeServ").addEventListener("click", close);
+  document.getElementById("servCancel").addEventListener("click", close);
+
+  var rowsHost = document.getElementById("servRows");
+  function syncFromDom(){
+    rowsHost.querySelectorAll(".therapist-row").forEach(function(row, i){
+      var inp = row.querySelector("input");
+      if (draft[i]) draft[i].name = inp.value;
+    });
+  }
+  function renderRows(){
+    rowsHost.innerHTML = draft.length ? draft.map(function(s, i){
+      return '<div class="therapist-row" data-i="'+i+'">' +
+        '<input type="text" value="'+esc(s.name)+'" placeholder="Nome do serviço">' +
+        '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover serviço">✕</button>' +
+      '</div>';
+    }).join("") : '<div class="hours-empty">Nenhum serviço ainda.</div>';
+    rowsHost.querySelectorAll(".rm").forEach(function(b){
+      b.addEventListener("click", function(){
+        syncFromDom();
+        draft.splice(parseInt(b.getAttribute("data-rm"),10), 1);
+        renderRows();
+      });
+    });
+  }
+  renderRows();
+
+  document.getElementById("servAdd").addEventListener("click", function(){
+    syncFromDom();
+    draft.push({id:null, name:""});
+    renderRows();
+    var inputs = rowsHost.querySelectorAll("input");
+    if (inputs.length) inputs[inputs.length-1].focus();
+  });
+
+  document.getElementById("servSave").addEventListener("click", function(){
+    syncFromDom();
+    var clean = draft
+      .map(function(s){ return {id:s.id, name:(s.name||"").trim()}; })
+      .filter(function(s){ return s.name; })
+      .map(function(s){ return {id: s.id || uid(slugify(s.name) || "serv"), name: s.name}; });
+    // Nome repetido (sem diferenciar acento/maiúscula) não entra duas vezes.
+    var seen = {}, dup = null;
+    clean.forEach(function(s){ var k = normText(s.name); if (seen[k]) dup = dup || s.name; seen[k] = true; });
+    if (dup){ showToast('O serviço "'+dup+'" aparece mais de uma vez.', true); return; }
+    var keptIds = clean.map(function(s){ return s.id; });
+    var removed = state.services.filter(function(s){ return keptIds.indexOf(s.id) === -1; });
+    (removed.length ? confirmDialog({
+      title: removed.length === 1 ? "Excluir serviço" : "Excluir serviços",
+      message: (removed.length === 1 ? "Este serviço será excluído do cadastro:" : "Estes serviços serão excluídos do cadastro:") + namesList(removed.map(function(s){ return s.name; })),
+      confirmLabel: "Excluir e salvar"
+    }) : Promise.resolve(true)).then(function(ok){
+      if (ok) writeServices(clean).then(close);
+    });
+  });
+}
+
+function writeServices(list){
+  var denied = listPermDenied("profissionais", state.services, list);
+  if (denied){ showToast(denied, true); return Promise.resolve(); }
+  state.services = list;
+  if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
+  if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
+  return db.doc("config/services").set({list:list}).catch(function(){
+    showToast("Não foi possível salvar os serviços.", true);
   });
 }
 

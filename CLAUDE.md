@@ -166,6 +166,16 @@ testes continuam usando o mesmo mock.
   os profissionais que já existiam em 2026-10-01; pode ser removido depois.
 - CPF fica no documento `config/professionals`, legível por qualquer usuário
   ativo (mesma regra de leitura dos outros cadastros).
+- **Serviços** (desde 2026-10-01): documento `config/services`
+  `{list:[{id,name}]}` (Sessão, Triagem, Avaliação, Avaliação
+  Neuropsicológica, Orientação Familiar, Orientação Escolar — semeados pela
+  migração `2026-10-01b-servicos.sql`). Cadastro em janela
+  (`openServicesModal`, mesmo padrão de Convênios), permissão do módulo
+  `profissionais`. Ainda não é usado em outro lugar.
+- Os botões **Serviços** e **Especialidades** ficam na tela de
+  **Profissionais**; Pacientes ficou só com **Convênios**. A permissão de
+  Especialidades continua sendo a de `pacientes` (o cadastro de paciente
+  ainda cria especialidade "na hora").
 
 ## O que já está implementado (por área)
 

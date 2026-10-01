@@ -66,6 +66,8 @@ const path = require('path');
   console.log('Carla Laranja (no specialty hours) shows placeholder?', (await rowCarla.locator('.pt-especialidades').innerText()).trim() === '—');
 
   // ---- TEST: Sigla field in the Especialidades registry modal ----
+  // (o botão Especialidades fica na tela de Profissionais desde 2026-10-01)
+  await page.click('button[data-tab="profissionais"]');
   await page.click('#manageSpecialtiesBtn');
   await page.waitForSelector('#ovSpec');
   console.log('specialties modal has a sigla input per row?', (await page.locator('#specRows .sigla-input').count()) === 2);
@@ -81,6 +83,7 @@ const path = require('path');
   const specStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['config/specialties'])));
   console.log('saved sigla is upper-cased?', specStore.list.filter(s => s.id === 'psico')[0].sigla === 'PS');
 
+  await page.click('button[data-tab="pacientes"]');
   await page.waitForTimeout(100);
   console.log('after save, Bruno Verde summary still "FN 3 - PS 2" (now from an explicit sigla)?',
     (await rowBruno.locator('.pt-especialidades').innerText()).trim() === 'FN 3 - PS 2');

@@ -113,6 +113,7 @@ const path = require('path');
 
   // ---- TEST: dedicated Convênios registry modal (rename/add/remove) ----
   await page.click('#manageConveniosBtn');
+  // (Convênios continua na tela de Pacientes; Serviços e Especialidades ficam em Profissionais.)
   await page.waitForSelector('#ovConv');
   const convRowValues = await page.locator('#convRows .therapist-row input').evaluateAll(els => els.map(el => el.value));
   console.log('Convênios registry modal lists Unimed and Bradesco Saúde?', convRowValues.includes('Unimed') && convRowValues.includes('Bradesco Saúde'));

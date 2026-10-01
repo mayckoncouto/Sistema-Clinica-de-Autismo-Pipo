@@ -95,7 +95,7 @@ create table if not exists public.documents (
   updated_at  timestamptz not null default now(),
   updated_by  uuid references auth.users(id) on delete set null,
   constraint documents_path_valid check (
-    path ~ '^(config/(rooms|specialties|convenios|professionals)|patients/all|schedule/(seg|ter|qua|qui|sex)-[1-4])$'
+    path ~ '^(config/(rooms|specialties|convenios|professionals|services)|patients/all|schedule/(seg|ter|qua|qui|sex)-[1-4])$'
   )
 );
 
@@ -137,6 +137,7 @@ returns text language sql immutable as $$
     when p_path = 'config/specialties'     then 'pacientes'
     when p_path = 'config/convenios'       then 'pacientes'
     when p_path = 'config/professionals'   then 'profissionais'
+    when p_path = 'config/services'        then 'profissionais'
     when p_path = 'config/rooms'           then 'salas'
   end;
 $$;
@@ -604,3 +605,14 @@ end $$;
 
 create unique index if not exists profiles_professional_unique
   on public.profiles (professional_id) where professional_id is not null;
+
+-- Serviços iniciais (cadastro na tela de Profissionais › Serviços).
+insert into public.documents (path, data) values ('config/services', '{"list": [
+  {"id": "sessao",                     "name": "Sessão"},
+  {"id": "triagem",                    "name": "Triagem"},
+  {"id": "avaliacao",                  "name": "Avaliação"},
+  {"id": "avaliacao-neuropsicologica", "name": "Avaliação Neuropsicológica"},
+  {"id": "orientacao-familiar",        "name": "Orientação Familiar"},
+  {"id": "orientacao-escolar",         "name": "Orientação Escolar"}
+]}'::jsonb)
+on conflict (path) do nothing;

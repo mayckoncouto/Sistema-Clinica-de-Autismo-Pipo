@@ -25,8 +25,11 @@ const path = require('path');
     }, cssValue);
   }
 
-  await page.click('button[data-tab="pacientes"]');
+  // O botão Especialidades fica na tela de Profissionais (desde 2026-10-01).
+  await page.click('button[data-tab="profissionais"]');
   await page.waitForTimeout(150);
+  console.log('Especialidades button is no longer on the Pacientes screen?',
+    (await page.locator('#tab-pacientes #manageSpecialtiesBtn').count()) === 0);
 
   // ---- TEST: opening Especialidades shows a color swatch button per row, default teal ----
   await page.click('#manageSpecialtiesBtn');
