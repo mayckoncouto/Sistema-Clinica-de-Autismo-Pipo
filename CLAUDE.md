@@ -170,7 +170,8 @@ testes continuam usando o mesmo mock.
     "Agenda indisponível".
 - **Cadastro de profissional**, nesta ordem: Nome, CPF (máscara + dígito
   verificador), Especialidade principal, CBOS (sugestões), Conselho, Registro,
-  **Horários** (início/fim de segunda a sexta, "Não atende", botão "Copiar
+  **Serviços** (seleção múltipla flutuante dos serviços cadastrados, salvo em
+  `servicos: [ids]`),   **Horários** (início/fim de segunda a sexta, "Não atende", botão "Copiar
   segunda para todos") e, só para Administrador, a seção **Usuário**
   (e-mail e senha): cria um usuário no nível
   "Profissional" ligado ao profissional (`profiles.professional_id`); se já
