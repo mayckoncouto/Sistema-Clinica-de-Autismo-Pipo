@@ -539,6 +539,7 @@ física não é aceita na Agenda (no Planner, só nas colunas de grupo).
 - Quem não tem "editar" na Agenda, ao clicar num atendimento, vê o popup
   `agdOpenDetails(row)` (só leitura): nome, serviço (ou "Grupo de suporte"),
   profissional, observação, sala, data/hora "até", e o Status (grava ao mudar).
-- O botão do prontuário chama "Iniciar Atendimento" e fica no TOPO da janela
-  (popup e janela de edição). Evoluções também podem ser lançadas direto no
+- O botão do prontuário chama "Iniciar Atendimento" e fica no canto superior
+  direito (cabeçalho, ao lado do ✕), no popup e na janela de edição; as duas
+  abrem no centro. Na edição, Status fica abaixo de "Ou marque o horário como". Evoluções também podem ser lançadas direto no
   Prontuário ("+ Nova evolução"), sem atendimento.
