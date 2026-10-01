@@ -2465,6 +2465,50 @@ function findTherapist(room, id){
   for (var i=0;i<room.therapists.length;i++) if (room.therapists[i].id===id) return room.therapists[i];
   return null;
 }
+/* Regras de horário (Planner e Agenda) — Bloqueado / Reunião Clínica /
+ * Treinamento não entram nas regras:
+ *  1. O mesmo profissional não pode estar em dois lugares (salas ou grupos
+ *     diferentes) no mesmo horário.
+ *  2. O mesmo paciente não pode ter o mesmo serviço em dois lugares no mesmo
+ *     horário.
+ */
+function profBusyMsg(profName, time, place){
+  return (profName || "Esse profissional") + " já tem agendamento às " + time + (place ? " em " + place : "") + ". Um profissional não pode estar em duas salas ou grupos no mesmo horário.";
+}
+function patientBusyMsg(patient, service, time, place){
+  return patient + " já tem " + (service || "esse serviço") + " às " + time + (place ? " em " + place : "") + ". O mesmo paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.";
+}
+// Planner: confere se rec pode ir na célula key do docId (dia-semana).
+// ignoreKeys: células que vão ficar vazias (origem de um mover); extra: {key: rec}
+// com o que vai ocupar outras células na mesma operação (troca de lugar).
+function plannerConflict(docId, key, rec, ignoreKeys, extra){
+  if (!rec || !rec.patient || bookingKind(rec)) return null;
+  ignoreKeys = ignoreKeys || []; extra = extra || {};
+  var p = key.split("|"), time = p[0], room = findRoom(p[1]);
+  if (!room) return null;
+  var ther = findTherapist(room, p[2]), profId = ther && ther.professionalId;
+  var dayKey = docId.split("-")[0];
+  var doc = state.scheduleDocs[docId] || state.reportDocs[docId];
+  var bookings = (doc && doc.bookings) || {};
+  var patientRule = !isGroup(room) && !!findPatientByName(rec.patient);
+  var svc = rec.service || DEFAULT_SERVICE_ID;
+  var rooms = plannerRooms();
+  for (var i=0;i<rooms.length;i++){
+    var r = rooms[i], seats = r.therapists || [];
+    for (var j=0;j<seats.length;j++){
+      var t = seats[j], k = time + "|" + r.id + "|" + t.id;
+      if (k === key || ignoreKeys.indexOf(k) !== -1) continue;
+      var b = Object.prototype.hasOwnProperty.call(extra, k) ? extra[k] : effectiveBooking(bookings, k, dayKey, time);
+      if (!b || !b.patient || bookingKind(b)) continue;
+      if (profId && t.professionalId === profId && r.id !== room.id) return profBusyMsg(professionalName(profId), time, r.name);
+      if (patientRule && !isGroup(r) && normText(b.patient) === normText(rec.patient) && (b.service || DEFAULT_SERVICE_ID) === svc){
+        return patientBusyMsg(rec.patient, bookingServiceName(b), time, r.name + " (" + therapistDisplayName(t) + ")");
+      }
+    }
+  }
+  return null;
+}
+
 // Item da lista de sugestões ao agendar (Planner e Agenda): paciente com a
 // bolinha da cor (igual ao cadastro de Pacientes); sala com a bolinha da cor da sala.
 function bookingSuggestHtml(m){
@@ -2580,6 +2624,8 @@ function openBookingModal(ctx){
       name = regName;
     }
     var rec = kind ? slotKindRecord(kind, note) : {patient: name, note: note, service: serviceSel.value || DEFAULT_SERVICE_ID};
+    var conflict = plannerConflict(ctx.docId, ctx.key, rec);
+    if (conflict){ showToast(conflict, true); return; }
     writeBooking(ctx.docId, ctx.key, rec).then(close);
   });
 }
@@ -2960,6 +3006,14 @@ function moveBooking(fromDocId, fromKey, toDocId, toKey){
     refused = slotRefusal(fromRoomId, effectiveBooking(dstDoc, toKey, toDocId.split("-")[0], toKey.split("|")[0]));
   }
   if (refused){ showToast(refused, true); return Promise.resolve(false); }
+  // Regras de horário: o que vai para o destino, e (na troca) o que volta para a origem.
+  var toBk = (state.scheduleDocs[toDocId] && state.scheduleDocs[toDocId].bookings) || {};
+  var dstNow = effectiveBooking(toBk, toKey, toDocId.split("-")[0], toKey.split("|")[0]);
+  var sameDoc = fromDocId === toDocId, ex1 = {}, ex2 = {};
+  if (sameDoc){ ex1[fromKey] = dstNow || null; ex2[toKey] = src; }
+  var conflict = plannerConflict(toDocId, toKey, src, sameDoc ? [fromKey] : [], ex1) ||
+    (dstNow ? plannerConflict(fromDocId, fromKey, dstNow, sameDoc ? [toKey] : [], ex2) : null);
+  if (conflict){ showToast(conflict, true); return Promise.resolve(false); }
   if (fromDocId === toDocId){
     var toTime = toKey.split("|")[0];
     var dst = effectiveBooking(srcBookings, toKey, fromDayKey, toTime);
@@ -3015,6 +3069,10 @@ function pasteToSlot(toDocId, toKey){
   if (!state.clipboard) return;
   var refused = slotRefusal(toKey.split("|")[1], state.clipboard.rec || {patient: state.clipboard.patient, blocked: state.clipboard.blocked});
   if (refused){ showToast(refused, true); return; }
+  var clipRec = state.clipboard.rec || {patient: state.clipboard.patient, blocked: state.clipboard.blocked};
+  var conflict = plannerConflict(toDocId, toKey, clipRec,
+    (state.clipboard.mode === "move" && state.clipboard.sourceDocId === toDocId) ? [state.clipboard.sourceKey] : []);
+  if (conflict){ showToast(conflict, true); return; }
   if (state.clipboard.mode === "move" && toDocId === state.clipboard.sourceDocId && toKey === state.clipboard.sourceKey){
     // Dropping/clicking back onto its own source cell is a no-op cancel.
     state.clipboard = null;
@@ -5340,6 +5398,7 @@ function agdOpenModal(opts){
       });
     }
     // Aviso se a sala já estiver ocupada por outro profissional nesse horário (só a semana carregada).
+    function checkRoomThenSave(){
     var clash = null;
     if (rec.room_id && !kind){
       Object.keys(AD.rows).some(function(id){
@@ -5358,9 +5417,53 @@ function agdOpenModal(opts){
     } else {
       doSave();
     }
+    }
+    // Regras de horário (profissional em dois lugares / paciente com o mesmo serviço).
+    saveBtn.disabled = true;
+    agdConflictsFor([rec], row ? [row.id] : []).then(function(conflict){
+      saveBtn.disabled = false;
+      if (conflict){ showToast(conflict, true); return; }
+      checkRoomThenSave();
+    }).catch(function(err){ saveBtn.disabled = false; showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
   });
   var first = document.getElementById(canSave && !rowKind ? "agdPac" : "agdCancel");
   if (first) first.focus();
+}
+// Agenda: regras de horário (ver profBusyMsg / patientBusyMsg). rows = outras linhas
+// (do banco e/ou da mesma operação); rec = a linha que vai ser gravada.
+function agdConflictIn(rows, rec){
+  if (!rec || !rec.patient || bookingKind(rec)) return null;
+  var isPatient = !!findPatientByName(rec.patient);
+  for (var i=0;i<rows.length;i++){
+    var o = rows[i];
+    if (!o || o === rec || !o.patient || bookingKind(o) || o.date !== rec.date || o.time !== rec.time) continue;
+    var oRoom = o.room_id ? findRoom(o.room_id) : null;
+    if (o.professional_id === rec.professional_id && (o.room_id || "") !== (rec.room_id || "")){
+      var p = findProfessional(rec.professional_id);
+      return profBusyMsg(p ? p.name : "", rec.time, oRoom ? oRoom.name : (o.patient || ""));
+    }
+    if (isPatient && normText(o.patient) === normText(rec.patient) && (o.service || "") === (rec.service || "")){
+      var op = findProfessional(o.professional_id);
+      return patientBusyMsg(rec.patient, bookingServiceName(o), rec.time, (oRoom ? oRoom.name : "") + (op ? " (" + op.name + ")" : ""));
+    }
+  }
+  return null;
+}
+// Confere no banco (todas as linhas das datas envolvidas). ignoreIds = linhas que
+// vão mudar de lugar nesta operação. Promise<mensagem|null>.
+function agdConflictsFor(recs, ignoreIds){
+  var ign = (ignoreIds || []).map(String);
+  var dates = recs.map(function(r){ return r.date; }).filter(function(d, i, a){ return d && a.indexOf(d) === i; });
+  return Promise.all(dates.map(function(d){ return agdClient().from("appointments").select("*").eq("date", d); })).then(function(rs){
+    var err = rs.filter(function(r){ return r.error; })[0];
+    if (err) throw err.error;
+    var rows = [].concat.apply([], rs.map(function(r){ return r.data || []; })).filter(function(o){ return ign.indexOf(String(o.id)) === -1; });
+    for (var i=0;i<recs.length;i++){
+      var msg = agdConflictIn(rows.concat(recs.filter(function(x, j){ return j !== i; })), recs[i]);
+      if (msg) return msg;
+    }
+    return null;
+  });
 }
 // Erro de "um atendimento por horário": só acontece enquanto o banco não recebe
 // supabase/2026-10-02b-varios-atendimentos.sql.
@@ -5780,6 +5883,8 @@ function agdPlace(row, td, mode, swapWith){
     var back = agdTargetFor(occupant, row.date, row.time, AD.mode === "prof" ? row.professional_id : (row.room_id || ""));
     var occPayload = {patient: occupant.patient, note: occupant.note || "", blocked: !!occupant.blocked, service: occupant.service || null,
       professional_id: back.professional_id, room_id: back.room_id, date: back.date, time: back.time};
+    agdConflictsFor([payload, occPayload], [row.id, occupant.id]).then(function(conflict){
+    if (conflict){ showToast(conflict, true); return; }
     c.from("appointments").delete().eq("id", occupant.id).then(function(r1){
       if (r1.error) return fail(r1);
       return c.from("appointments").update(payload).eq("id", row.id).select().single().then(function(r2){
@@ -5791,6 +5896,7 @@ function agdPlace(row, td, mode, swapWith){
         });
       });
     });
+    }).catch(function(err){ showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
     return;
   }
   function write(){
@@ -5802,7 +5908,10 @@ function agdPlace(row, td, mode, swapWith){
       done(isCopy ? "Atendimento colado." : "Atendimento movido.");
     });
   }
-  write();
+  agdConflictsFor([payload], isCopy ? [] : [row.id]).then(function(conflict){
+    if (conflict){ showToast(conflict, true); return; }
+    write();
+  }).catch(function(err){ showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
 }
 
 /* ---- Planner -> Agenda: botão "Enviar para a Agenda" ----
@@ -5817,6 +5926,7 @@ var SEND_SKIP_LABELS = {
   dup: "Já estão na Agenda",
   blockedThere: "Horário bloqueado na Agenda",
   busy: "Bloqueio em horário que já tem atendimento",
+  conflict: "Profissional ou paciente já ocupado nesse horário",
   off: "Fora do horário do profissional",
   noProf: "Coluna sem profissional"
 };
@@ -5867,6 +5977,8 @@ function plannerSendPlan(dayKey, week, dateIso){
           }
           if (here.some(function(a){ return bookingKind(a) === "bloqueado"; })){ plan.skipped.push(Object.assign(info, {why: "blockedThere"})); return; }
           if (rec.blocked && here.length){ plan.skipped.push(Object.assign(info, {why: "busy"})); return; }
+          var conflictMsg = agdConflictIn(taken, rec);
+          if (conflictMsg){ plan.skipped.push(Object.assign(info, {why: "conflict", detail: conflictMsg})); return; }
           taken.push(rec);
           plan.send.push(rec);
         });
@@ -5934,7 +6046,7 @@ function openSendToAgendaModal(){
       Object.keys(SEND_SKIP_LABELS).forEach(function(k){
         var list = byWhy[k]; if (!list) return;
         html += '<details class="send-skip"><summary>'+list.length+' '+(list.length === 1 ? 'pulado' : 'pulados')+' — '+esc(SEND_SKIP_LABELS[k])+'</summary><ul>' +
-          list.map(function(s){ return '<li><span class="mono">'+esc(s.time)+'</span> '+esc(s.what)+' · '+esc(s.who)+' · '+esc(s.where)+'</li>'; }).join("") + '</ul></details>';
+          list.map(function(s){ return '<li'+(s.detail ? ' title="'+esc(s.detail)+'"' : '')+'><span class="mono">'+esc(s.time)+'</span> '+esc(s.what)+' · '+esc(s.who)+' · '+esc(s.where)+'</li>'; }).join("") + '</ul></details>';
       });
       prev.innerHTML = html;
       okBtn.disabled = !plan.send.length;

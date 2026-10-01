@@ -464,3 +464,16 @@ atendimento troca os dois (`agdPlace(row, td, mode, swapWith)`).
 - Agenda, botão `#agdClearWeekBtn` (precisa de excluir): `agdClearWeek()` apaga
   TUDO de segunda a sexta da semana aberta, com dupla confirmação; desfazível.
 - `agdSelectByIds` / `agdDeleteByIds` trabalham em lotes de 100 ids (URL).
+
+## Regras de horário (Planner e Agenda) (2026-10-02)
+Bloqueado / Reunião Clínica / Treinamento não entram nas regras.
+1. Profissional não pode estar em dois lugares (salas/grupos diferentes) no
+   mesmo horário. Na Agenda, vários atendimentos do mesmo profissional na
+   MESMA sala continuam permitidos (lado a lado).
+2. Paciente não pode ter o MESMO serviço em dois lugares no mesmo horário
+   (serviço diferente pode).
+- Planner: `plannerConflict(docId, key, rec, ignoreKeys, extra)` — na janela,
+  ao colar e ao mover/arrastar (na troca confere os dois lados).
+- Agenda: `agdConflictIn(rows, rec)` (síncrono) e `agdConflictsFor(recs,
+  ignoreIds)` (consulta o banco pelas datas) — na janela, colar/mover/trocar e
+  no envio do Planner (pula com o motivo "Profissional ou paciente já ocupado").
