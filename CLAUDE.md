@@ -439,3 +439,12 @@ primeiro, depois salas — usado por `visibleRooms()` e pelo filtro de salas).
 - Agenda (por data): grupos não aparecem como sala (`physicalRooms()`).
 - Migração: `supabase/2026-10-02-grupos-de-suporte.sql` marca Coordenador e
   Aplicador ABA como grupos.
+
+## Agenda: vários atendimentos no mesmo horário (2026-10-02)
+Sem a regra única (date, time, professional_id) — migração
+`supabase/2026-10-02b-varios-atendimentos.sql`. `agdIndex()` devolve listas em
+`byProf` e `byRoom`. Cada atendimento da célula é um `.book[data-id]` dentro de
+`.agd-multi` (lado a lado) + botão `.agd-add` ("+") para marcar mais um. Cliques,
+lixeira, mover/copiar e arrastar usam o `data-id` do `.book`, não do `td`.
+Colar/mover para um horário ocupado coloca ao lado; arrastar em cima de outro
+atendimento troca os dois (`agdPlace(row, td, mode, swapWith)`).

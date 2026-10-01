@@ -200,7 +200,11 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .agd-grid td.agd-slot.agd-off{cursor:not-allowed}
 .agd-grid td.agd-slot.agd-ro{cursor:default}
 .agd-grid tr.agd-lunch td{height:22px;background:var(--surface-2);font-size:10.5px;color:var(--muted);text-align:center;font-weight:700;cursor:default;border-bottom:1px solid var(--line)}
-.agd-more{position:absolute;right:4px;bottom:3px;font-size:10px;font-weight:800;background:var(--danger);color:#fff;border-radius:999px;padding:0 5px}
+.agd-multi{display:flex;gap:3px;height:100%}
+.agd-multi > .book{flex:1 1 0;min-width:0}
+.agd-add{flex:none;width:16px;border:1px dashed var(--line);border-radius:6px;background:transparent;color:var(--muted);font:inherit;font-weight:800;cursor:pointer;opacity:0;padding:0}
+td.agd-slot:hover .agd-add{opacity:1}
+.agd-add:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-weak)}
 .agd-legend{padding:8px 12px;border-top:1px solid var(--line)}
 .agd-off-swatch{background:var(--off-bg)!important;border:1px dashed var(--line-strong)}
 /* Planner: horário fora do expediente do profissional da coluna (cinza, inativo). */
@@ -4950,12 +4954,13 @@ function agdResColor(r){
 function agdInitials(n){ var p = String(n||"?").trim().split(/\s+/); return ((p[0]||"?")[0] + (p[1] ? p[1][0] : (p[0][1]||""))).toUpperCase(); }
 function agdClient(){ return window.pipoAuth && window.pipoAuth.client; }
 
-// Índices da semana carregada: data|hora|profissional -> linha; data|hora|sala -> [linhas]
+// Índices da semana carregada: data|hora|profissional -> [linhas]; data|hora|sala -> [linhas]
+// (pode haver mais de um atendimento no mesmo horário).
 function agdIndex(){
   var byProf = {}, byRoom = {};
   Object.keys(AD.rows).forEach(function(id){
     var r = AD.rows[id];
-    byProf[r.date+"|"+r.time+"|"+r.professional_id] = r;
+    var kp = r.date+"|"+r.time+"|"+r.professional_id; (byProf[kp] = byProf[kp] || []).push(r);
     if (r.room_id){ var k = r.date+"|"+r.time+"|"+r.room_id; (byRoom[k] = byRoom[k] || []).push(r); }
   });
   return {byProf: byProf, byRoom: byRoom};
@@ -5005,7 +5010,7 @@ function agdOnShow(){
 // Célula no MESMO visual do Planner (.book / .book-main / ícones mover e copiar):
 // nome em cima, observação (ou a sala/profissional) embaixo, borda esquerda na
 // cor da sala, fundo pela regra de cores do paciente ou do tipo especial.
-function agdEventHtml(row, t, label, color, extraCount, isMoveSource, canDrag){
+function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   var kind = bookingKind(row);
   var fill = null, cls = "";
   if (kind === "bloqueado"){ fill = BLOCKED_COLOR; cls = " blocked"; }
@@ -5022,10 +5027,9 @@ function agdEventHtml(row, t, label, color, extraCount, isMoveSource, canDrag){
   // observação, mostra o profissional (senão não daria para saber de quem é).
   var sub = row.note || (AD.mode === "sala" ? label : "");
   var serv = bookingServiceName(row);
-  return '<div class="book filled'+(isMoveSource ? ' move-source' : '')+'">' +
+  return '<div class="book filled'+(isMoveSource ? ' move-source' : '')+'" data-id="'+esc(row.id)+'">' +
     '<button type="button" class="book-main'+cls+'" style="border-left-color:'+color+(fill ? ';background:'+fill : '')+'"'+(canDrag ? ' draggable="true"' : '')+
       ' title="'+esc(name + (sub ? " — " + sub : ""))+'">' +
-      (extraCount ? '<span class="agd-more" title="Mais atendimentos nesta sala e horário">+'+extraCount+'</span>' : '') +
       '<span class="pname">'+esc(name)+'</span>' + (serv ? '<span class="pserv">'+esc(serv)+'</span>' : '') + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
     '</button>' +
     (can("agendamentos","delete") ? '<button type="button" class="book-del" title="Excluir agendamento" aria-label="Excluir agendamento">'+DEL_SVG+'</button>' : "") +
@@ -5078,28 +5082,36 @@ function agdRender(){
   var idx = agdIndex(), html = '<table class="agd-grid">';
   var whoEl = document.getElementById("agdWho");
 
-  // Conteúdo de uma célula: profissional (um atendimento) ou sala (pode haver mais de um).
+  // Conteúdo de uma célula: todos os atendimentos daquele horário, lado a lado,
+  // e um "+" para marcar mais um.
   function cell(dateIso, t, res){
-    var off = false, row = null, extra = 0, label = "", color = agdResColor(res);
+    var list, off = false;
     if (AD.mode === "prof"){
       off = !agdInHours(res, t, agdParse(dateIso));
-      row = idx.byProf[dateIso+"|"+t+"|"+res.id] || null;
-      var room = row && row.room_id ? findRoom(row.room_id) : null;
-      label = room ? (/^sala\b/i.test(room.name) ? room.name : "Sala " + room.name) : "";
-      if (room) color = swatchVar(room.color || "teal");
+      list = idx.byProf[dateIso+"|"+t+"|"+res.id] || [];
     } else {
-      var list = idx.byRoom[dateIso+"|"+t+"|"+res.id] || [];
-      row = list[0] || null; extra = Math.max(0, list.length - 1);
-      var prof = row ? findProfessional(row.professional_id) : null;
-      label = prof ? prof.name : "";
-      if (prof) color = agdResColor(prof);
+      list = idx.byRoom[dateIso+"|"+t+"|"+res.id] || [];
     }
-    var isOff = off && !row;
-    var cls = "agd-slot" + (isOff ? " agd-off" : (AD.clipboard ? " paste-target" : "")) + (!row && !canCreate ? " agd-ro" : "") + (row && !canEdit ? " agd-ro" : "");
-    var isMoveSource = !!(row && AD.clipboard && AD.clipboard.mode === "move" && AD.clipboard.id === row.id);
-    return '<td class="'+cls+'" data-d="'+dateIso+'" data-t="'+t+'" data-r="'+esc(res.id)+'"'+(row ? ' data-id="'+row.id+'"' : '')+
+    var has = list.length > 0;
+    var isOff = off && !has;
+    var cls = "agd-slot" + (isOff ? " agd-off" : (AD.clipboard ? " paste-target" : "")) + (!has && !canCreate ? " agd-ro" : "") + (has && !canEdit ? " agd-ro" : "");
+    var items = list.map(function(row){
+      var label = "", color = agdResColor(res);
+      if (AD.mode === "prof"){
+        var room = row.room_id ? findRoom(row.room_id) : null;
+        label = room ? (/^sala/i.test(room.name) ? room.name : "Sala " + room.name) : "";
+        if (room) color = swatchVar(room.color || "teal");
+      } else {
+        var prof = findProfessional(row.professional_id);
+        label = prof ? prof.name : "";
+        if (prof) color = agdResColor(prof);
+      }
+      var isMoveSource = !!(AD.clipboard && AD.clipboard.mode === "move" && AD.clipboard.id === row.id);
+      return agdEventHtml(row, t, label, color, isMoveSource, canEdit);
+    }).join("");
+    return '<td class="'+cls+'" data-d="'+dateIso+'" data-t="'+t+'" data-r="'+esc(res.id)+'"'+
       (isOff ? ' title="Fora do horário do profissional"' : '')+'>' +
-      (row ? agdEventHtml(row, t, label, color, extra, isMoveSource, canEdit)
+      (has ? '<div class="agd-multi">' + items + (canCreate && !off ? '<button type="button" class="agd-add" title="Marcar mais um atendimento neste horário" aria-label="Marcar mais um atendimento">+</button>' : '') + '</div>'
            : (isOff ? '<div class="book"><div class="book-main off-box" aria-hidden="true"></div></div>' : '<div class="book"><button type="button" class="book-main"><span class="empty-plus">+</span></button></div>')) + '</td>';
   }
 
@@ -5303,7 +5315,7 @@ function agdOpenModal(opts){
         if (r.error){
           saveBtn.disabled = false;
           var dup = r.error.code === "23505" || /appointments_one_per_slot|duplicate/i.test(r.error.message || "");
-          showToast(dup ? "Esse profissional já tem um atendimento nesse dia e horário." : "Não foi possível salvar: " + agdErr(r.error), true);
+          showToast(dup ? DUP_SLOT_MSG : "Não foi possível salvar: " + agdErr(r.error), true);
           return;
         }
         if (r.data){
@@ -5338,6 +5350,9 @@ function agdOpenModal(opts){
   var first = document.getElementById(canSave && !rowKind ? "agdPac" : "agdCancel");
   if (first) first.focus();
 }
+// Erro de "um atendimento por horário": só acontece enquanto o banco não recebe
+// supabase/2026-10-02b-varios-atendimentos.sql.
+var DUP_SLOT_MSG = "o banco ainda não aceita dois atendimentos no mesmo horário do profissional (falta rodar a atualização do banco).";
 function agdErr(e){
   var m = (e && e.message) || String(e || "");
   return /permission|row-level|42501/i.test(m) ? "sem permissão." : m;
@@ -5421,8 +5436,9 @@ function wireAgendaDia(){
       return;
     }
     var td = e.target.closest("td.agd-slot"); if (!td) return;
-    var id = td.getAttribute("data-id");
-    var row = id ? AD.rows[id] : null;
+    // Cada atendimento da célula é um ".book" com o próprio data-id.
+    var item = e.target.closest(".book[data-id]");
+    var row = item ? AD.rows[item.getAttribute("data-id")] || null : null;
     // Lixeira: abre direto a janela de confirmação.
     var delBtn = e.target.closest(".book-del");
     if (delBtn && row){
@@ -5450,19 +5466,19 @@ function wireAgendaDia(){
     if (td.classList.contains("agd-off")){ showToast("Fora do horário de atendimento do profissional.", true); return; }
     // Com algo copiado/movendo, o clique cola naquele horário.
     if (AD.clipboard){ agdPasteTo(td); return; }
-    if (row){ agdOpenModal({row: row}); return; }
+    if (row && !e.target.closest(".agd-add")){ agdOpenModal({row: row}); return; }
     if (!can("agendamentos", "create")) return;
     var resId = td.getAttribute("data-r");
     agdOpenModal({date: td.getAttribute("data-d"), time: td.getAttribute("data-t"),
       profId: AD.mode === "prof" ? resId : "", roomId: AD.mode === "sala" ? resId : ""});
   });
-  // Arrastar e soltar (igual ao Planner): solta num horário vazio = move;
-  // solta sobre outro atendimento = troca os dois de lugar.
+  // Arrastar e soltar: solta num horário (vazio ou não) = move para lá;
+  // solta em cima de outro atendimento = troca os dois de lugar.
   grid.addEventListener("dragstart", function(e){
     var main = e.target.closest(".book-main"); if (!main || main.getAttribute("draggable") !== "true") return;
-    var td = main.closest("td.agd-slot"); if (!td) return;
-    AD.dragId = td.getAttribute("data-id");
-    var book = td.querySelector(".book"); if (book) book.classList.add("dragging");
+    var book = main.closest(".book[data-id]"); if (!book) return;
+    AD.dragId = book.getAttribute("data-id");
+    book.classList.add("dragging");
     try { e.dataTransfer.setData("text/plain", AD.dragId); } catch(err){}
     e.dataTransfer.effectAllowed = "move";
   });
@@ -5490,8 +5506,10 @@ function wireAgendaDia(){
     AD.dragId = null;
     if (!row) return;
     if (td.classList.contains("agd-off")){ showToast("Fora do horário de atendimento do profissional.", true); return; }
-    if (td.getAttribute("data-id") === row.id) return;
-    agdPlace(row, td, "drag");
+    // Soltou em cima de outro atendimento: troca os dois. Em espaço livre da célula: vai junto.
+    var onItem = e.target.closest(".book[data-id]");
+    if (onItem && onItem.getAttribute("data-id") === String(row.id)) return;
+    agdPlace(row, td, "drag", onItem ? AD.rows[onItem.getAttribute("data-id")] : null);
   });
   document.addEventListener("keydown", function(e){
     if (e.key === "Escape" && AD.clipboard && state.tab === "agendadia"){ AD.clipboard = null; agdRenderClipboardBar(); agdRender(); }
@@ -5704,25 +5722,21 @@ function agdTargetFor(row, d, t, resId){
   return target;
 }
 function agdPasteTo(td){ agdPlace(AD.clipboard.row, td, AD.clipboard.mode); }
-// mode: "copy" (cola uma cópia), "move" (muda de lugar) ou "drag" (move; se o
-// destino estiver ocupado, troca os dois).
-function agdPlace(row, td, mode){
+// mode: "copy" (cola uma cópia), "move" (muda de lugar) ou "drag" (move; com
+// swapWith = atendimento onde foi solto, troca os dois). Se o horário já tiver
+// atendimentos, o novo fica ao lado deles.
+function agdPlace(row, td, mode, swapWith){
   var c = agdClient(); if (!c) return;
   var target = agdTargetFor(row, td.getAttribute("data-d"), td.getAttribute("data-t"), td.getAttribute("data-r"));
   var prof = findProfessional(target.professional_id);
   if (prof && !agdInHours(prof, target.time, agdParse(target.date))){ showToast("Fora do horário de atendimento do profissional.", true); return; }
-  var occupant = null;
-  Object.keys(AD.rows).some(function(id){
-    var o = AD.rows[id];
-    if (o.id !== row.id && o.date === target.date && o.time === target.time && o.professional_id === target.professional_id){ occupant = o; return true; }
-    return false;
-  });
+  var occupant = (mode === "drag" && swapWith && swapWith.id !== row.id) ? swapWith : null;
   var isCopy = mode === "copy";
   if (isCopy && !can("agendamentos","create")){ showToast(permDeniedMsg("agendamentos","create"), true); return; }
   if (!isCopy && !can("agendamentos","edit")){ showToast(permDeniedMsg("agendamentos","edit"), true); return; }
   if (!isCopy && row.date === target.date && row.time === target.time && row.professional_id === target.professional_id && (row.room_id||null) === target.room_id) return;
 
-  function fail(r){ showToast("Não foi possível salvar: " + (r.error.code === "23505" ? "esse profissional já tem atendimento nesse horário." : agdErr(r.error)), true); agdLoadWeek(); }
+  function fail(r){ showToast("Não foi possível salvar: " + (r.error.code === "23505" ? DUP_SLOT_MSG : agdErr(r.error)), true); agdLoadWeek(); }
   function done(msg){ if (mode === "move") AD.clipboard = null; agdRenderClipboardBar(); showToast(msg); agdLoadWeek(); }
   var payload = {patient: row.patient, note: row.note || "", blocked: !!row.blocked, service: row.service || (bookingKind(row) ? null : DEFAULT_SERVICE_ID),
     professional_id: target.professional_id, room_id: target.room_id, date: target.date, time: target.time};
@@ -5746,27 +5760,14 @@ function agdPlace(row, td, mode){
     });
     return;
   }
-  function write(replaced){
+  function write(){
     var q = isCopy ? c.from("appointments").insert(payload).select().single() : c.from("appointments").update(payload).eq("id", row.id).select().single();
     q.then(function(r){
       if (r.error) return fail(r);
-      // Histórico: antes = origem (se moveu) + o que foi substituído; depois = o novo.
-      agdRecord((isCopy ? "Colar " : "Mover ") + agdRowLabel(r.data), (isCopy ? [] : [row]).concat(replaced ? [replaced] : []), [r.data]);
+      // Histórico: antes = origem (se moveu); depois = o novo.
+      agdRecord((isCopy ? "Colar " : "Mover ") + agdRowLabel(r.data), isCopy ? [] : [row], [r.data]);
       done(isCopy ? "Atendimento colado." : "Atendimento movido.");
     });
-  }
-  if (occupant){
-    if (!can("agendamentos","delete")){ showToast("Esse horário já está ocupado.", true); return; }
-    var oKind = bookingKind(occupant);
-    confirmDialog({
-      title: "Substituir atendimento",
-      message: "Esse horário já tem <b>"+esc(oKind ? SLOT_KINDS.filter(function(x){ return x.key === oKind; })[0].label : occupant.patient)+"</b>. Substituir?",
-      confirmLabel: "Substituir"
-    }).then(function(ok){
-      if (!ok) return;
-      c.from("appointments").delete().eq("id", occupant.id).then(function(r){ if (r.error) return fail(r); write(occupant); });
-    });
-    return;
   }
   write();
 }

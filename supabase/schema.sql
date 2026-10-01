@@ -548,11 +548,11 @@ create table if not exists public.appointments (
   created_by       uuid references auth.users(id) on delete set null,
   updated_by       uuid references auth.users(id) on delete set null,
   created_at       timestamptz not null default now(),
-  updated_at       timestamptz not null default now(),
-  -- Um profissional não atende dois pacientes no mesmo horário.
-  constraint appointments_one_per_slot unique (date, time, professional_id)
+  updated_at       timestamptz not null default now()
+  -- Pode haver mais de um atendimento no mesmo horário (aparecem lado a lado).
 );
 create index if not exists appointments_date_idx on public.appointments (date);
+create index if not exists appointments_slot_idx on public.appointments (date, time, professional_id);
 alter table public.appointments enable row level security;
 
 create or replace function public.appointments_stamp()
