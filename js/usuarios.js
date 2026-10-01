@@ -69,13 +69,18 @@
       ".perm-grid td small{display:block;color:var(--muted);font-size:10.5px;font-weight:500}" +
       ".perm-grid input{width:16px;height:16px;cursor:pointer}" +
       ".perm-grid input:disabled{cursor:default}" +
-      ".role-pick{display:flex;flex-direction:column;gap:6px}" +
-      ".role-pick label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:12.5px}" +
-      ".role-pick label:has(input:checked){border-color:var(--accent);background:var(--accent-weak)}" +
-      ".role-pick label.disabled{opacity:.6;cursor:default}" +
-      ".role-pick input{margin-top:2px}" +
-      ".role-pick b{display:block;color:var(--ink)}" +
-      ".role-pick span{color:var(--muted);font-size:11.5px}" +
+      // Um nível por linha: bolinha · nome · resumo (cortado com "…", texto inteiro no title).
+      // Os seletores levam ".field" para vencer as regras gerais ".field label"/".field input"
+      // do app (que esticam todo input a 100% e quebram o radio).
+      ".field .role-pick{display:flex;flex-direction:column;gap:4px}" +
+      ".field .role-pick label{display:grid;grid-template-columns:auto 130px minmax(0,1fr);align-items:center;column-gap:10px;" +
+        "margin:0;border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--ink-2)}" +
+      ".field .role-pick label:hover{border-color:var(--line-strong)}" +
+      ".field .role-pick label:has(input:checked){border-color:var(--accent);background:var(--accent-weak)}" +
+      ".field .role-pick label.disabled{opacity:.6;cursor:default}" +
+      ".field .role-pick input{width:16px;height:16px;margin:0;padding:0;accent-color:var(--accent);cursor:inherit}" +
+      ".field .role-pick b{color:var(--ink);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+      ".field .role-pick span{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
       ".u-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end}" +
       ".u-actions .field{flex:1;min-width:160px;margin:0}";
     var st = document.createElement("style");
@@ -199,9 +204,11 @@
 
   function rolePickerHtml(selectedId, disabled) {
     return '<div class="role-pick" id="uRolePick">' + roles.map(function (r) {
-      return '<label class="' + (disabled ? "disabled" : "") + '"><input type="radio" name="uRole" value="' + esc(r.id) + '"' +
+      var sum = roleSummary(r);
+      return '<label class="' + (disabled ? "disabled" : "") + '" title="' + esc(r.name + " — " + sum) + '">' +
+        '<input type="radio" name="uRole" value="' + esc(r.id) + '"' +
         (r.id === selectedId ? " checked" : "") + (disabled ? " disabled" : "") + ">" +
-        "<div><b>" + esc(r.name) + "</b><span>" + esc(roleSummary(r)) + "</span></div></label>";
+        "<b>" + esc(r.name) + "</b><span>" + esc(sum) + "</span></label>";
     }).join("") + "</div>";
   }
 
