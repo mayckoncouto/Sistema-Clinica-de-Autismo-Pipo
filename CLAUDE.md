@@ -194,6 +194,10 @@ testes continuam usando o mesmo mock.
   ativo (mesma regra de leitura dos outros cadastros).
 - Células do Planner e da Agenda com **3 linhas** (58px de altura, quadro de
   50px): paciente, serviço (`.pserv`, `bookingServiceName`) e observação.
+- **Só agenda quem está cadastrado** (Planner e Agenda): o nome digitado
+  precisa ser de um paciente do cadastro (ou de uma sala, no Planner);
+  compara sem acento/maiúscula e grava o nome do cadastro
+  (`registeredBookingName`). Horários especiais não passam por essa regra.
 - **Serviço do atendimento** (Planner e Agenda): campo "Serviço" na janela,
   padrão **Sessão** (`DEFAULT_SERVICE_ID = "sessao"`, travada no cadastro de
   Serviços: não renomeia nem exclui). Opções = serviços que o profissional

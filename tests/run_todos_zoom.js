@@ -38,16 +38,23 @@ const path = require('path');
   await page.waitForSelector('#ovBook');
   const modalSub = await page.locator('.modal-sub').first().innerText();
   console.log('modal shows Terça-feira as the day for that cell?', modalSub.includes('Terça'));
+  // Nome que não está no cadastro de Pacientes não pode ser agendado (desde 2026-10-01).
   await page.fill('#bkPatient', 'Novo Na Terca');
-  // Typing an unmatched name opens the "none found" suggestion box, which reflows
-  // the modal; blur onto another field first so its layout is settled before we
-  // click Save (otherwise the Save button can shift out from under the click).
+  await page.click('#bkNote');
+  await page.waitForTimeout(50);
+  await page.click('#bkSave');
+  await page.waitForTimeout(150);
+  const storeRefused = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/ter-1'])));
+  console.log('unregistered patient name is refused (nothing written, window stays open)?',
+    !storeRefused.bookings['08:00|r1|r1-t1'] && (await page.locator('#ovBook').count()) === 1);
+  // Nome cadastrado, digitado sem acento/maiúscula, grava o nome do cadastro.
+  await page.fill('#bkPatient', 'carla laranja');
   await page.click('#bkNote');
   await page.waitForTimeout(50);
   await page.click('#bkSave');
   await page.waitForTimeout(150);
   const storeAfterTer = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/ter-1'])));
-  console.log('booking written to ter-1 doc (not seg-1)?', storeAfterTer.bookings['08:00|r1|r1-t1'].patient === 'Novo Na Terca');
+  console.log('booking written to ter-1 doc (not seg-1) with the registered name?', storeAfterTer.bookings['08:00|r1|r1-t1'].patient === 'Carla Laranja');
   const storeSegUnaffected = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/seg-1'])));
   console.log('seg-1 doc unaffected by the ter-1 booking?', !storeSegUnaffected.bookings['08:00|r1|r1-t1']);
 

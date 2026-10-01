@@ -897,6 +897,21 @@ function findPatientByName(name){
   }
   return null;
 }
+// Só é possível agendar quem está cadastrado: paciente (cadastro de Pacientes) ou
+// sala (o Planner aceita sala no lugar do paciente). Compara sem acento/maiúscula
+// e devolve o nome exatamente como está no cadastro, ou null se não existir.
+function registeredBookingName(text){
+  var n = normText(String(text || "").trim());
+  if (!n) return null;
+  for (var i=0;i<state.patients.length;i++){
+    if (normText(String(state.patients[i].nome || "").trim()) === n) return state.patients[i].nome;
+  }
+  for (var j=0;j<state.rooms.length;j++){
+    if (normText(String(state.rooms[j].name || "").trim()) === n) return state.rooms[j].name;
+  }
+  return null;
+}
+var NOT_REGISTERED_MSG = "Paciente não cadastrado. Cadastre em Pacientes antes de agendar (ou escolha um nome da lista).";
 function findRoomByName(name){
   if (!name) return null;
   var n = String(name).trim().toLowerCase();
@@ -2410,7 +2425,7 @@ function openBookingModal(ctx){
     }).slice(0,4).map(function(r){ return {name:r.name, kind:"Sala", color:r.color}; });
     var matches = patientMatches.concat(roomMatches);
     if (!matches.length){
-      suggest.innerHTML = '<div class="none">Nenhum paciente ou sala cadastrada com esse nome — será salvo assim mesmo.</div>';
+      suggest.innerHTML = '<div class="none">Nenhum paciente ou sala cadastrada com esse nome — cadastre em Pacientes antes de agendar.</div>';
     } else {
       suggest.innerHTML = matches.map(function(m){
         var tag = m.kind === "Sala" ?
@@ -2453,6 +2468,11 @@ function openBookingModal(ctx){
     var note = document.getElementById("bkNote").value.trim();
     var kind = selectedSlotKind(kindField);
     if (!name && !kind){ input.focus(); return; }
+    if (!kind){
+      var regName = registeredBookingName(name);
+      if (!regName){ showToast(NOT_REGISTERED_MSG, true); input.focus(); return; }
+      name = regName;
+    }
     var rec = kind ? slotKindRecord(kind, note) : {patient: name, note: note, service: serviceSel.value || DEFAULT_SERVICE_ID};
     writeBooking(ctx.docId, ctx.key, rec).then(close);
   });
@@ -5102,6 +5122,11 @@ function adOpenModal(opts){
     var wd = adParse(rec.date).getDay();
     if (wd === 0 || wd === 6){ showToast("A agenda funciona de segunda a sexta.", true); return; }
     if (!kind && !rec.patient){ showToast("Informe o paciente.", true); pacEl.focus(); return; }
+    if (!kind){
+      var regName = registeredBookingName(rec.patient);
+      if (!regName){ showToast(NOT_REGISTERED_MSG, true); pacEl.focus(); return; }
+      rec.patient = regName;
+    }
     if (!isNew && !can("agendamentos","edit")){ showToast(permDeniedMsg("agendamentos","edit"), true); return; }
 
     function doSave(){
