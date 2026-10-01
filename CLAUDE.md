@@ -158,22 +158,22 @@ testes continuam usando o mesmo mock.
   - Células no **mesmo visual do Planner** (`.book`/`.book-main`, "+" nas
     vazias, ícones mover/copiar no hover) e as mesmas funções: **copiar**
     (cola quantas vezes quiser até Esc/Cancelar), **mover** (barra
-    `#adClipboardBar`), **arrastar** (solta em vazio = move; sobre outro
+    `#agdClipboardBar`), **arrastar** (solta em vazio = move; sobre outro
     atendimento = troca os dois). Na visão Dia a coluna de destino define o
     profissional (ou a sala, no modo Salas). Nada disso entra em horário fora do
-    expediente. Código: `adPlace()`, `adTargetFor()`, `adRenderClipboardBar()`.
+    expediente. Código: `agdPlace()`, `agdTargetFor()`, `agdRenderClipboardBar()`.
   - Botões **liberar / bloquear / limpar** por coluna, na linha antes das
     07:20 (manhã) e na do almoço (tarde), dois cliques para confirmar, mesmas
-    regras do Planner (`adPeriodCell`, `adPeriodAction`). No modo Salas,
+    regras do Planner (`agdPeriodCell`, `agdPeriodAction`). No modo Salas,
     bloquear vale para cada profissional que atende naquela sala.
   - **Desfazer / refazer** igual ao Planner: botões no canto acima dos
     horários (`data-ad-hist`), Ctrl+Z / Ctrl+Y, lista ▾ (`openHistoryMenu` com
-    `AD_HISTORY_API`). Cada ação grava as linhas antes/depois (`adRecord`);
-    desfazer reaplica o "antes" (`adApplyState`) se ninguém mexeu nelas.
+    `AD_HISTORY_API`). Cada ação grava as linhas antes/depois (`agdRecord`);
+    desfazer reaplica o "antes" (`agdApplyState`) se ninguém mexeu nelas.
   - Banco garante 1 atendimento por profissional/data/horário (unique);
     sala ocupada por outro profissional gera só um aviso (pode confirmar).
   - Código: bloco "Nova Agenda por data real" no fim do script (`AD`,
-    `adLoadWeek`, `adRender`, `adOpenModal`…). Carrega a semana inteira de
+    `agdLoadWeek`, `agdRender`, `agdOpenModal`…). Carrega a semana inteira de
     todos e aplica mudanças do Realtime. Sem `window.pipoAuth` (testes) mostra
     "Agenda indisponível".
 - **Cadastro de profissional**, nesta ordem: Nome, CPF (máscara + dígito
@@ -408,3 +408,10 @@ importação da migração ficam fora do repositório (`.gitignore` bloqueia `ex
    `supabase/2026-10-xx-descricao.sql`) e rodar no SQL Editor do Supabase;
    manter `schema.sql` como o retrato completo e atual.
 4. Commit + push na `main` → a Vercel publica sozinha em ~1 minuto.
+
+## Nunca usar prefixo `ad` / `ad-` em classes, ids ou atributos
+Bloqueadores de anúncio (AdBlock, uBlock etc.) escondem elementos chamados
+`ad-*`, `#ad…`, `.ad-panel` e parecidos. Em 2026-10-01 a Agenda ficou em branco
+só no Chrome de um usuário por isso. Os nomes da Agenda usam o prefixo `agd`
+(`.agd-panel`, `#agdGrid`, `agdRender()`…). Não criar nomes começando com `ad`,
+`ads`, `advert`, `banner`, `sponsor`, `promo`.
