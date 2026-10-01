@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var MODULES = ["agendamentos", "agenda", "pacientes", "profissionais", "salas"];
+  var MODULES = ["agendamentos", "agenda", "pacientes", "profissionais", "salas", "prontuario"];
   var ACTIONS = ["view", "create", "edit", "delete"];
 
   var client = null;

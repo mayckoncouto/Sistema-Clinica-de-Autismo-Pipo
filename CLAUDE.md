@@ -517,3 +517,20 @@ física não é aceita na Agenda (no Planner, só nas colunas de grupo).
   definer; serve para quem não tem "editar"). Trigger
   `appointments_status_guard` confere no banco. Migração
   `supabase/2026-10-02d-status.sql`.
+
+## Prontuário (2026-10-02)
+- Tabela `clinical_records` (migração `supabase/2026-10-02e-prontuario.sql`):
+  patient_id, patient_name, appointment_id, appointment_date/time,
+  professional_id, author_id (sempre auth.uid(), trigger), author_name,
+  content (HTML), created_at/updated_at. Módulo de permissão `prontuario`
+  (ver/incluir/editar/excluir). RLS: editar só o AUTOR; excluir autor com
+  permissão ou Administrador. Dados de saúde: nunca versionar conteúdo real.
+- Aba "Prontuário" (`#tab-prontuario`, código no bloco "Prontuário" do script,
+  estado `PR`): lista de pacientes (registros, último atendimento,
+  profissionais) → linha do tempo do paciente → editor `prOpenEditor` (barra
+  com negrito/itálico/sublinhado, título, listas, tabela com + linha/+ coluna,
+  desfazer). `prSanitize` limpa o HTML (só tags de texto e tabela, sem
+  atributos além de colspan/rowspan) ao salvar E ao mostrar.
+- Agenda: botão "Atendimento" na janela do atendimento (paciente cadastrado e
+  permissão de ver) → `prFromAppointment(row)`: abre a evolução daquele
+  atendimento do próprio usuário, ou uma nova ligada a ele.

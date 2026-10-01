@@ -18,7 +18,8 @@
     { key: "agenda", label: "Planner", hint: "grade de 4 semanas; também dá acesso ao Relatório" },
     { key: "pacientes", label: "Pacientes", hint: "inclui Convênios e Especialidades" },
     { key: "profissionais", label: "Profissionais", hint: "" },
-    { key: "salas", label: "Salas", hint: "" }
+    { key: "salas", label: "Salas", hint: "" },
+    { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)" }
   ];
   var ACTIONS = [
     { key: "view", label: "Ver" },
