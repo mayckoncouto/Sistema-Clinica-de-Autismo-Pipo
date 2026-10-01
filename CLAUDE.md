@@ -142,6 +142,8 @@ testes continuam usando o mesmo mock.
   `supabase/2026-10-01-agenda-por-data.sql`. Começou vazia (não copia nada
   do Planner).
   - Seg–sex, mesmos horários de 40 min do Planner (vêm de `DAYS`), almoço.
+  - Mesma altura de célula do Planner (44px; quadradinho de 36px); a grade
+    rola quando o dia não cabe na tela.
   - Visões **Semana** (5 dias do profissional/sala selecionado) e **Dia**
     (uma coluna por profissional ou sala). Painel à direita: Profissionais |
     Salas, filtro, contagem da semana. Data, ‹ Hoje ›.
