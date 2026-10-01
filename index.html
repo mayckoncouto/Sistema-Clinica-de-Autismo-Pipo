@@ -194,7 +194,7 @@ table.ad-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout:
 .ad-grid tr.ad-periodrow td.ad-period-cell{text-align:center}
 .ad-grid tr.ad-lunch td.ad-tcol{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;font-weight:600;color:var(--ink-2);text-align:left;padding:4px 13px;vertical-align:middle}
 /* Mesma altura de célula do Planner (.slotcell: 44px); o dia rola se não couber. */
-.ad-grid td.ad-slot{height:44px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:4px;vertical-align:top}
+.ad-grid td.ad-slot{height:58px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:4px;vertical-align:top}
 .ad-grid td.ad-slot.drag-over{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-weak)}
 .ad-grid td.ad-slot.paste-target:hover{outline:2px dashed var(--warn);outline-offset:-2px}
 .ad-grid td.ad-slot.ad-off{cursor:not-allowed}
@@ -324,11 +324,11 @@ th.timecol{z-index:5}
 .hist-menu-item:focus{outline:none}
 .hist-menu-foot{padding:6px 12px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px;font-weight:600;background:var(--surface-2)}
 
-.slotcell{padding:4px;vertical-align:top;width:130px;min-width:130px;max-width:130px;height:44px;transition:background .1s,outline .1s}
+.slotcell{padding:4px;vertical-align:top;width:130px;min-width:130px;max-width:130px;height:58px;transition:background .1s,outline .1s}
 .slotcell.drag-over{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-weak)}
 .slotcell.paste-target:hover{outline:2px dashed var(--warn);outline-offset:-2px}
-.book{position:relative;width:100%;height:100%;min-height:36px}
-.book .book-main{width:100%;height:100%;min-height:36px;border-radius:7px;border:1px dashed var(--line);background:transparent;display:flex;flex-direction:column;justify-content:center;align-items:stretch;padding:5px 7px;cursor:pointer;text-align:left;font:inherit;-webkit-user-drag:element;user-select:none;touch-action:none}
+.book{position:relative;width:100%;height:100%;min-height:50px}
+.book .book-main{width:100%;height:100%;min-height:50px;border-radius:7px;border:1px dashed var(--line);background:transparent;display:flex;flex-direction:column;justify-content:center;align-items:stretch;padding:5px 7px;cursor:pointer;text-align:left;font:inherit;-webkit-user-drag:element;user-select:none;touch-action:none}
 .book .book-main:hover{border-color:var(--accent);background:var(--accent-weak)}
 .book .book-main.pcolor:hover{box-shadow:inset 0 0 0 2px var(--accent)}
 .book.filled .book-main{border-style:solid;border-width:0 0 0 3px}
@@ -336,6 +336,9 @@ th.timecol{z-index:5}
 .book.move-source .book-main{opacity:.45;outline:2px dashed var(--warn);outline-offset:-2px}
 .book .book-main .pname{font-size:12px;font-weight:700;color:var(--ink);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .book .book-main .pnote{font-size:10.5px;color:var(--muted);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.book .book-main .pserv{font-size:10.5px;font-weight:600;color:var(--ink-2);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.book-main.pcolor .pserv{color:#2d3a37}
+.book-main.blocked .pserv{color:#dde2e0}
 /* Patient age/ABA colors are fixed pastel hex values (ported from the clinic's
    spreadsheet), not theme tokens, so force dark text on them in both themes. */
 .book-main.pcolor .pname{color:#182523}
@@ -953,6 +956,14 @@ function serviceOptionsHtml(selected, profId){
     return '<option value="'+esc(s.id)+'"'+(s.id === selected ? ' selected' : '')+'>'+esc(s.name)+'</option>';
   }).join("");
 }
+// Nome do serviço para mostrar na célula (atendimento sem serviço salvo = Sessão;
+// Bloqueado/Reunião/Treinamento não têm serviço).
+function bookingServiceName(b){
+  if (!b || !b.patient || bookingKind(b)) return "";
+  var id = b.service || DEFAULT_SERVICE_ID;
+  var s = servicesList().filter(function(x){ return x.id === id; })[0];
+  return s ? s.name : "";
+}
 function bookingKind(b){
   if (!b || !b.patient) return "";
   if (b.blocked || normText(b.patient) === "bloqueado") return "bloqueado";
@@ -1277,7 +1288,7 @@ function boot(){
   document.addEventListener("keydown", function(e){
     // Ctrl+Z desfaz / Ctrl+Y (ou Ctrl+Shift+Z) refaz — só na aba Agenda, sem
     // janela aberta e fora de campos de texto (lá o Ctrl+Z é do próprio campo).
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && state.tab === "agenda"){
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (state.tab === "agenda" || state.tab === "agendadia")){
       var k = (e.key || "").toLowerCase();
       var isUndo = k === "z" && !e.shiftKey;
       var isRedo = k === "y" || (k === "z" && e.shiftKey);
@@ -1286,7 +1297,8 @@ function boot(){
       var modalOpen = !!document.querySelector("#modalHost .overlay");
       if ((isUndo || isRedo) && !typing && !modalOpen){
         e.preventDefault();
-        runHistory(isUndo ? "undo" : "redo");
+        if (state.tab === "agendadia") adRunHistory(isUndo ? "undo" : "redo");
+        else runHistory(isUndo ? "undo" : "redo");
         return;
       }
     }
@@ -1984,7 +1996,9 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
           var fillClass = isBlocked ? ' blocked' : ((isMeetingDefault || isTraining || pCol || roomCol) ? ' pcolor' : '');
           html += '<div class="book filled'+(isMoveSource?' move-source':'')+'">' +
             '<button type="button" class="book-main'+(isMatch?' match':'')+fillClass+'" style="'+mainStyle+'" draggable="true">' +
+              // 3 linhas: paciente / serviço / observação.
               '<span class="pname">'+esc(b.patient)+'</span>' +
+              (bookingServiceName(b) ? '<span class="pserv">'+esc(bookingServiceName(b))+'</span>' : '') +
               (b.note ? '<span class="pnote">'+esc(b.note)+'</span>' : '') +
             '</button>' +
             '<button type="button" class="book-move" title="Mover paciente" aria-label="Mover paciente">'+MOVE_SVG+'</button>' +
@@ -2609,11 +2623,15 @@ var historyMenuEl = null;
 function closeHistoryMenu(){
   if (historyMenuEl){ historyMenuEl.remove(); historyMenuEl = null; }
 }
-function openHistoryMenu(direction, anchor){
-  if (historyMenuEl && historyMenuEl.getAttribute("data-dir") === direction){ closeHistoryMenu(); return; }
+// api (opcional): {history:{undo,redo}, run:function(dir,steps), busy:function()} —
+// sem ele, usa o histórico do Planner; a Agenda passa o dela (AD_HISTORY_API).
+function openHistoryMenu(direction, anchor, api){
+  api = api || {history: bookingHistory, run: runHistory, busy: function(){ return historyBusy; }};
+  var runHistory_ = api.run;
+  if (historyMenuEl && historyMenuEl.getAttribute("data-dir") === direction && historyMenuEl.__api === api){ closeHistoryMenu(); return; }
   closeHistoryMenu();
-  var stack = direction === "undo" ? bookingHistory.undo : bookingHistory.redo;
-  if (!stack.length || historyBusy) return;
+  var stack = direction === "undo" ? api.history.undo : api.history.redo;
+  if (!stack.length || api.busy()) return;
   var verb = direction === "undo" ? "Desfazer" : "Refazer";
   var list = stack.slice().reverse();
   var el = document.createElement("div");
@@ -2627,6 +2645,7 @@ function openHistoryMenu(direction, anchor){
     '<div class="hist-menu-foot">'+verb+' 1 ação</div>';
   document.body.appendChild(el);
   historyMenuEl = el;
+  el.__api = api;
   // Posiciona logo abaixo da setinha, sem sair da tela.
   var r = anchor.getBoundingClientRect();
   var left = Math.min(r.left, window.innerWidth - el.offsetWidth - 8);
@@ -2649,7 +2668,7 @@ function openHistoryMenu(direction, anchor){
   });
   el.addEventListener("click", function(e){
     var it = e.target.closest(".hist-menu-item");
-    if (it) runHistory(direction, parseInt(it.getAttribute("data-steps"), 10));
+    if (it) runHistory_(direction, parseInt(it.getAttribute("data-steps"), 10));
   });
   el.addEventListener("keydown", function(e){
     var cur = document.activeElement;
@@ -2660,7 +2679,7 @@ function openHistoryMenu(direction, anchor){
   items[0].focus();
 }
 document.addEventListener("mousedown", function(e){
-  if (historyMenuEl && !historyMenuEl.contains(e.target) && !e.target.closest("[data-hist-menu]")) closeHistoryMenu();
+  if (historyMenuEl && !historyMenuEl.contains(e.target) && !e.target.closest("[data-hist-menu],[data-ad-hist-menu]")) closeHistoryMenu();
 });
 document.addEventListener("keydown", function(e){
   if (e.key === "Escape" && historyMenuEl) closeHistoryMenu();
@@ -4842,11 +4861,12 @@ function adEventHtml(row, t, label, color, extraCount, isMoveSource, canDrag){
   // Igual ao Planner: embaixo do nome vai só a observação. No modo Salas, sem
   // observação, mostra o profissional (senão não daria para saber de quem é).
   var sub = row.note || (AD.mode === "sala" ? label : "");
+  var serv = bookingServiceName(row);
   return '<div class="book filled'+(isMoveSource ? ' move-source' : '')+'">' +
     '<button type="button" class="book-main'+cls+'" style="border-left-color:'+color+(fill ? ';background:'+fill : '')+'"'+(canDrag ? ' draggable="true"' : '')+
       ' title="'+esc(name + (sub ? " — " + sub : ""))+'">' +
       (extraCount ? '<span class="ad-more" title="Mais atendimentos nesta sala e horário">+'+extraCount+'</span>' : '') +
-      '<span class="pname">'+esc(name)+'</span>' + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
+      '<span class="pname">'+esc(name)+'</span>' + (serv ? '<span class="pserv">'+esc(serv)+'</span>' : '') + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
     '</button>' +
     '<button type="button" class="book-move" title="Mover" aria-label="Mover">'+MOVE_SVG+'</button>' +
     '<button type="button" class="book-copy" title="Copiar" aria-label="Copiar">'+COPY_SVG+'</button>' +
@@ -4914,7 +4934,7 @@ function adRender(){
     var res = adFindRes(AD.sel) || resources[0];
     AD.sel = res.id;
     whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(res.name)+"</b>";
-    html += '<thead><tr><th class="ad-tcol"></th>' + days.map(function(d){
+    html += '<thead><tr><th class="ad-tcol">'+adHistoryButtonsHtml()+'</th>' + days.map(function(d){
       return '<th class="'+(adSameDay(d, today) ? "today" : "")+'">'+adDayObj(d).name.slice(0,3).toLowerCase()+' <span class="ad-dnum">'+d.getDate()+'/'+(d.getMonth()+1)+'</span></th>';
     }).join("") + '</tr></thead><tbody>';
     // Linha antes das 07:20 com os botões da manhã; a do almoço leva os da tarde (igual ao Planner).
@@ -4928,7 +4948,7 @@ function adRender(){
     var dIso = adIso(AD.date);
     var cols = resources.slice().sort(function(x, y){ return (x.id === AD.sel ? -1 : 0) - (y.id === AD.sel ? -1 : 0); });
     whoEl.innerHTML = "Todos os " + (AD.mode === "prof" ? "profissionais" : "salas");
-    html += '<thead><tr><th class="ad-tcol"></th>' + cols.map(function(r){
+    html += '<thead><tr><th class="ad-tcol">'+adHistoryButtonsHtml()+'</th>' + cols.map(function(r){
       var sub = AD.mode === "prof" ? (r.specialtyId ? specialtyName(r.specialtyId) : "") : "Sala";
       return '<th style="width:130px;'+(r.id === AD.sel ? 'color:var(--accent)' : '')+'" title="'+esc(r.name)+'">'+esc(r.name)+'<span class="ad-hsub">'+esc(sub || " ")+'</span></th>';
     }).join("") + '</tr></thead><tbody>';
@@ -5046,6 +5066,7 @@ function adOpenModal(opts){
       if (!ok) return;
       adClient().from("appointments").delete().eq("id", row.id).then(function(r){
         if (r.error){ showToast("Não foi possível desmarcar: " + adErr(r.error), true); return; }
+        adRecord("Desmarcar " + adRowLabel(row), [row], []);
         delete AD.rows[row.id];
         close(); adRender();
         showToast("Atendimento desmarcado.");
@@ -5095,6 +5116,7 @@ function adOpenModal(opts){
           return;
         }
         if (r.data){
+          adRecord((isNew ? "Agendar " : "Editar ") + adRowLabel(r.data), isNew ? [] : [row], [r.data]);
           if (r.data.date >= AD.rangeFrom && r.data.date <= AD.rangeTo) AD.rows[r.data.id] = r.data;
           else delete AD.rows[r.data.id];
         }
@@ -5185,6 +5207,11 @@ function wireAgendaDia(){
   });
   var grid = document.getElementById("adGrid");
   grid.addEventListener("click", function(e){
+    // Desfazer / refazer (canto acima da coluna de horários).
+    var hm = e.target.closest("[data-ad-hist-menu]");
+    if (hm){ openHistoryMenu(hm.getAttribute("data-ad-hist-menu"), hm, AD_HISTORY_API); return; }
+    var hb = e.target.closest("[data-ad-hist]");
+    if (hb){ adRunHistory(hb.getAttribute("data-ad-hist")); return; }
     // Botões liberar/bloquear/limpar: primeiro clique arma, segundo confirma (como no Planner).
     var pb = e.target.closest(".ad-period-btn");
     if (pb){
@@ -5266,6 +5293,116 @@ function wireAgendaDia(){
   });
 }
 
+/* ---- desfazer / refazer na Agenda (Ctrl+Z / Ctrl+Y + botões no canto) ----
+ * Cada ação guarda as linhas como estavam ANTES e DEPOIS (por id). Desfazer
+ * volta para o "antes": apaga o que foi criado, devolve os valores alterados e
+ * recria o que foi apagado (com o mesmo id). Refazer faz o contrário. Antes de
+ * aplicar, confere no banco se as linhas ainda estão como deixamos — se outra
+ * pessoa mexeu, recusa em vez de sobrescrever. Até 50 passos, por aba.
+ */
+var AD_HISTORY = {undo: [], redo: []};
+var adHistoryBusy = false;
+var AD_ROW_FIELDS = ["date","time","professional_id","room_id","patient","note","blocked","service"];
+function adRowCore(r){ var o = {id: r.id}; AD_ROW_FIELDS.forEach(function(k){ o[k] = r[k] === undefined ? null : r[k]; }); return o; }
+function adRecord(label, before, after){
+  before = (before || []).filter(Boolean).map(adRowCore);
+  after = (after || []).filter(Boolean).map(adRowCore);
+  if (!before.length && !after.length) return;
+  AD_HISTORY.undo.push({label: label, before: before, after: after});
+  if (AD_HISTORY.undo.length > HISTORY_LIMIT) AD_HISTORY.undo.shift();
+  AD_HISTORY.redo = [];
+  adRefreshHistoryButtons();
+}
+function adRowLabel(r){
+  var k = bookingKind(r);
+  var who = k ? SLOT_KINDS.filter(function(x){ return x.key === k; })[0].label : r.patient;
+  var d = adParse(r.date);
+  return who + " · " + adDayObj(d).name.slice(0,3) + " " + d.getDate() + "/" + (d.getMonth()+1) + " " + r.time;
+}
+function adHistoryButtonsHtml(){
+  function pair(dir, title, label, icon){
+    var off = (AD_HISTORY[dir].length && !adHistoryBusy) ? '' : ' disabled';
+    return '<div class="hist-split">' +
+      '<button type="button" class="hist-btn" data-ad-hist="'+dir+'" title="'+title+'" aria-label="'+label+'"'+off+'>'+icon+'</button>' +
+      '<button type="button" class="hist-caret" data-ad-hist-menu="'+dir+'" title="Escolher até qual ação '+label.toLowerCase()+'" aria-label="Lista de ações para '+label.toLowerCase()+'" aria-haspopup="menu"'+off+'>'+CARET_SVG+'</button>' +
+    '</div>';
+  }
+  return '<div class="hist-btns">' + pair("undo", "Desfazer (Ctrl+Z)", "Desfazer", UNDO_SVG) + pair("redo", "Refazer (Ctrl+Y)", "Refazer", REDO_SVG) + '</div>';
+}
+function adRefreshHistoryButtons(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-ad-hist],[data-ad-hist-menu]"), function(b){
+    b.disabled = adHistoryBusy || !AD_HISTORY[b.getAttribute("data-ad-hist") || b.getAttribute("data-ad-hist-menu")].length;
+  });
+}
+// Leva o banco do estado "from" para o estado "to" (listas de linhas por id).
+function adApplyState(fromRows, toRows){
+  var c = adClient();
+  var fromIds = fromRows.map(function(r){ return r.id; }), toById = {};
+  toRows.forEach(function(r){ toById[r.id] = r; });
+  var dels = fromIds.filter(function(id){ return !toById[id]; });
+  var upd = toRows.filter(function(r){ return fromIds.indexOf(r.id) !== -1; });
+  var ins = toRows.filter(function(r){ return fromIds.indexOf(r.id) === -1; });
+  function chk(r){ if (r && r.error) throw r.error; return r; }
+  // Apaga primeiro (libera horários), depois atualiza um a um, depois recria.
+  return (dels.length ? c.from("appointments").delete().in("id", dels).then(chk) : Promise.resolve())
+    .then(function(){
+      return upd.reduce(function(p, r){
+        return p.then(function(){ var v = Object.assign({}, r); delete v.id; return c.from("appointments").update(v).eq("id", r.id).then(chk); });
+      }, Promise.resolve());
+    })
+    .then(function(){ return ins.length ? c.from("appointments").insert(ins).then(chk) : null; });
+}
+function adHistoryStep(direction){
+  var from = AD_HISTORY[direction];
+  var verb = direction === "undo" ? "desfazer" : "refazer";
+  if (!from.length) return Promise.resolve(false);
+  var entry = from[from.length - 1];
+  var expected = direction === "undo" ? entry.after : entry.before;
+  var target = direction === "undo" ? entry.before : entry.after;
+  var ids = expected.concat(target).map(function(r){ return r.id; }).filter(function(id, i, a){ return a.indexOf(id) === i; });
+  return adClient().from("appointments").select("*").in("id", ids).then(function(r){
+    if (r.error) throw r.error;
+    var cur = {}; (r.data || []).forEach(function(x){ cur[x.id] = adRowCore(x); });
+    var expById = {}; expected.forEach(function(x){ expById[x.id] = x; });
+    var conflict = ids.some(function(id){
+      if (expById[id]) return !cur[id] || stableStr(cur[id]) !== stableStr(expById[id]);
+      return !!cur[id]; // não devia existir
+    });
+    if (conflict){
+      from.pop();
+      showToast("Não foi possível " + verb + " \"" + entry.label + "\": esses horários foram alterados depois (talvez por outra pessoa).", true);
+      return false;
+    }
+    // Permissões: o banco confere cada apagar/alterar/criar (erro cai no catch abaixo).
+    return adApplyState(expected, target).then(function(){
+      from.pop();
+      AD_HISTORY[direction === "undo" ? "redo" : "undo"].push(entry);
+      return true;
+    });
+  }).catch(function(e){
+    showToast("Não foi possível " + verb + ": " + adErr(e), true);
+    adLoadWeek();
+    return false;
+  });
+}
+function adRunHistory(direction, steps){
+  steps = steps || 1;
+  if (adHistoryBusy || !AD_HISTORY[direction].length || !adClient()) return;
+  closeHistoryMenu();
+  adHistoryBusy = true; adRefreshHistoryButtons();
+  var done = 0;
+  function next(){
+    if (done >= steps) return Promise.resolve();
+    return adHistoryStep(direction).then(function(ok){ if (!ok) return; done++; return next(); });
+  }
+  next().then(function(){
+    adHistoryBusy = false;
+    adLoadWeek();
+    if (done) showToast((done === 1 ? "Alteração" : done + " alterações") + (direction === "undo" ? (done === 1 ? " desfeita." : " desfeitas.") : (done === 1 ? " refeita." : " refeitas.")));
+  });
+}
+var AD_HISTORY_API = {history: AD_HISTORY, run: adRunHistory, busy: function(){ return adHistoryBusy; }};
+
 /* ---- liberar / bloquear / limpar período na Agenda (iguais aos do Planner) ----
  * Um trio de botões por coluna: na linha antes das 07:20 (manhã) e na do almoço
  * (tarde). Dois cliques para confirmar. Bloquear = só horários livres dentro do
@@ -5314,8 +5451,9 @@ function adPeriodAction(action, period, dateIso, resId){
       });
     });
     if (!inserts.length){ finish(0, "bloqueado"); return; }
-    c.from("appointments").insert(inserts).then(function(r){
+    c.from("appointments").insert(inserts).select().then(function(r){
       if (r.error){ showToast("Não foi possível bloquear: " + adErr(r.error), true); adLoadWeek(); return; }
+      adRecord("Bloquear " + inserts.length + (inserts.length === 1 ? " horário" : " horários") + who + " · " + label, [], r.data || []);
       finish(inserts.length, "bloqueado");
     });
     return;
@@ -5326,6 +5464,7 @@ function adPeriodAction(action, period, dateIso, resId){
   if (!targets.length){ finish(0, verb); return; }
   c.from("appointments").delete().in("id", targets.map(function(r){ return r.id; })).then(function(r){
     if (r.error){ showToast("Não foi possível " + (action === "unlock" ? "liberar" : "limpar") + ": " + adErr(r.error), true); adLoadWeek(); return; }
+    adRecord((action === "unlock" ? "Liberar " : "Limpar ") + targets.length + (targets.length === 1 ? " horário" : " horários") + who + " · " + label, targets, []);
     finish(targets.length, verb);
   });
 }
@@ -5391,19 +5530,25 @@ function adPlace(row, td, mode){
       professional_id: back.professional_id, room_id: back.room_id, date: back.date, time: back.time};
     c.from("appointments").delete().eq("id", occupant.id).then(function(r1){
       if (r1.error) return fail(r1);
-      return c.from("appointments").update(payload).eq("id", row.id).then(function(r2){
+      return c.from("appointments").update(payload).eq("id", row.id).select().single().then(function(r2){
         if (r2.error){ c.from("appointments").insert(Object.assign({}, occupant, {id: undefined})).then(function(){ fail(r2); }); return; }
-        return c.from("appointments").insert(occPayload).then(function(r3){
+        return c.from("appointments").insert(occPayload).select().single().then(function(r3){
           if (r3.error) return fail(r3);
+          adRecord("Trocar " + adRowLabel(row) + " ↔ " + adRowLabel(occupant), [row, occupant], [r2.data, r3.data]);
           done("Atendimentos trocados de lugar.");
         });
       });
     });
     return;
   }
-  function write(){
-    var q = isCopy ? c.from("appointments").insert(payload) : c.from("appointments").update(payload).eq("id", row.id);
-    q.then(function(r){ if (r.error) return fail(r); done(isCopy ? "Atendimento colado." : "Atendimento movido."); });
+  function write(replaced){
+    var q = isCopy ? c.from("appointments").insert(payload).select().single() : c.from("appointments").update(payload).eq("id", row.id).select().single();
+    q.then(function(r){
+      if (r.error) return fail(r);
+      // Histórico: antes = origem (se moveu) + o que foi substituído; depois = o novo.
+      adRecord((isCopy ? "Colar " : "Mover ") + adRowLabel(r.data), (isCopy ? [] : [row]).concat(replaced ? [replaced] : []), [r.data]);
+      done(isCopy ? "Atendimento colado." : "Atendimento movido.");
+    });
   }
   if (occupant){
     if (!can("agendamentos","delete")){ showToast("Esse horário já está ocupado.", true); return; }
@@ -5414,7 +5559,7 @@ function adPlace(row, td, mode){
       confirmLabel: "Substituir"
     }).then(function(ok){
       if (!ok) return;
-      c.from("appointments").delete().eq("id", occupant.id).then(function(r){ if (r.error) return fail(r); write(); });
+      c.from("appointments").delete().eq("id", occupant.id).then(function(r){ if (r.error) return fail(r); write(occupant); });
     });
     return;
   }

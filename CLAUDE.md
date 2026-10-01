@@ -166,6 +166,10 @@ testes continuam usando o mesmo mock.
     07:20 (manhã) e na do almoço (tarde), dois cliques para confirmar, mesmas
     regras do Planner (`adPeriodCell`, `adPeriodAction`). No modo Salas,
     bloquear vale para cada profissional que atende naquela sala.
+  - **Desfazer / refazer** igual ao Planner: botões no canto acima dos
+    horários (`data-ad-hist`), Ctrl+Z / Ctrl+Y, lista ▾ (`openHistoryMenu` com
+    `AD_HISTORY_API`). Cada ação grava as linhas antes/depois (`adRecord`);
+    desfazer reaplica o "antes" (`adApplyState`) se ninguém mexeu nelas.
   - Banco garante 1 atendimento por profissional/data/horário (unique);
     sala ocupada por outro profissional gera só um aviso (pode confirmar).
   - Código: bloco "Nova Agenda por data real" no fim do script (`AD`,
@@ -188,6 +192,8 @@ testes continuam usando o mesmo mock.
   os profissionais que já existiam em 2026-10-01; pode ser removido depois.
 - CPF fica no documento `config/professionals`, legível por qualquer usuário
   ativo (mesma regra de leitura dos outros cadastros).
+- Células do Planner e da Agenda com **3 linhas** (58px de altura, quadro de
+  50px): paciente, serviço (`.pserv`, `bookingServiceName`) e observação.
 - **Serviço do atendimento** (Planner e Agenda): campo "Serviço" na janela,
   padrão **Sessão** (`DEFAULT_SERVICE_ID = "sessao"`, travada no cadastro de
   Serviços: não renomeia nem exclui). Opções = serviços que o profissional
