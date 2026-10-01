@@ -545,6 +545,7 @@ create table if not exists public.appointments (
   note             text not null default '',
   blocked          boolean not null default false,
   service          text,               -- id do serviço (config/services); padrão "sessao"
+  source           text,               -- "planner" quando veio do botão Enviar para a Agenda
   created_by       uuid references auth.users(id) on delete set null,
   updated_by       uuid references auth.users(id) on delete set null,
   created_at       timestamptz not null default now(),

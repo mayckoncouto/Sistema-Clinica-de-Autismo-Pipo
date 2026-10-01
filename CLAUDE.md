@@ -448,3 +448,19 @@ Sem a regra única (date, time, professional_id) — migração
 lixeira, mover/copiar e arrastar usam o `data-id` do `.book`, não do `td`.
 Colar/mover para um horário ocupado coloca ao lado; arrastar em cima de outro
 atendimento troca os dois (`agdPlace(row, td, mode, swapWith)`).
+
+## Planner → Agenda: "Enviar para a Agenda" e "Limpar semana" (2026-10-02)
+- Planner, botão `#sendToAgendaBtn` (precisa de criar em `agendamentos`):
+  `openSendToAgendaModal()` escolhe dia + semana do Planner e a data real
+  (precisa ser o mesmo dia da semana, hoje ou futura). `plannerSendPlan()` monta
+  a prévia: paciente/sala/serviço/observação; coluna de grupo vai com o NOME DO
+  GRUPO no lugar do paciente e a sala agendada como `room_id`; Bloqueado,
+  Reunião Clínica e Treinamento também vão. Só acrescenta (nunca altera nem
+  apaga). Pula: já existe (mesmo profissional/horário/nome e sala), horário
+  bloqueado na Agenda, bloqueio onde já há atendimento, fora do horário do
+  profissional, coluna sem profissional. Repetido dentro do envio vai uma vez.
+  Cada linha leva `source: "planner"` (coluna da migração
+  `2026-10-02c-origem-planner.sql`). Entra no desfazer da Agenda.
+- Agenda, botão `#agdClearWeekBtn` (precisa de excluir): `agdClearWeek()` apaga
+  TUDO de segunda a sexta da semana aberta, com dupla confirmação; desfazível.
+- `agdSelectByIds` / `agdDeleteByIds` trabalham em lotes de 100 ids (URL).

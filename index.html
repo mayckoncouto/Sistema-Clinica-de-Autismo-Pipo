@@ -200,6 +200,12 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .agd-grid td.agd-slot.agd-off{cursor:not-allowed}
 .agd-grid td.agd-slot.agd-ro{cursor:default}
 .agd-grid tr.agd-lunch td{height:22px;background:var(--surface-2);font-size:10.5px;color:var(--muted);text-align:center;font-weight:700;cursor:default;border-bottom:1px solid var(--line)}
+.send-preview{font-size:13px;line-height:1.5;margin-top:4px}
+.send-total{padding:8px 10px;border-radius:8px;background:var(--accent-weak);margin-bottom:8px}
+.send-warn{padding:8px 10px;border-radius:8px;background:var(--warn-weak);color:var(--warn)}
+.send-skip{margin:4px 0;font-size:12.5px}
+.send-skip summary{cursor:pointer;color:var(--ink-2)}
+.send-skip ul{margin:4px 0 6px 18px;padding:0;max-height:140px;overflow:auto;color:var(--ink-2)}
 .agd-multi{display:flex;gap:3px;height:100%}
 .agd-multi > .book{flex:1 1 0;min-width:0}
 .agd-add{flex:none;width:16px;border:1px dashed var(--line);border-radius:6px;background:transparent;color:var(--muted);font:inherit;font-weight:800;cursor:pointer;opacity:0;padding:0}
@@ -645,6 +651,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <div class="spacer"></div>
       <span class="pat-count" id="matchCount"></span>
+      <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do dia e semana abertos para uma data da Agenda" hidden>Enviar para a Agenda</button>
     </div>
     <div class="readonly-banner" id="readonlyBanner">Modo somente leitura — você está vendo esta agenda mas as alterações não serão salvas. Verifique se está conectado com uma conta que tem permissão de edição.</div>
     <div class="clipboard-bar" id="clipboardBar"></div>
@@ -680,6 +687,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <span class="agd-title" id="agdTitle"></span>
         <div class="spacer"></div>
         <span class="agd-who" id="agdWho"></span>
+        <button class="btn ghost" id="agdClearWeekBtn" title="Apaga todos os registros da semana aberta" hidden>Limpar semana</button>
         <button class="btn primary" id="agdNewBtn">+ Novo atendimento</button>
       </div>
       <div class="clipboard-bar" id="agdClipboardBar"></div>
@@ -1836,6 +1844,7 @@ function wireControls(){
   document.getElementById("manageServicesBtn").addEventListener("click", function(){ openServicesModal(); });
   document.getElementById("addRoomBtn").addEventListener("click", function(){ openRoomModal(null, state.salasView === "grupos"); });
   // Salas <-> Grupos de suporte: a mesma tela mostra um cadastro ou o outro.
+  document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
   document.getElementById("toggleGroupsBtn").addEventListener("click", function(){
     state.salasView = state.salasView === "grupos" ? "salas" : "grupos";
     var s = document.getElementById("roomListSearch"); if (s) s.value = "";
@@ -1856,6 +1865,8 @@ function visibleRooms(){
   return rs;
 }
 function renderAgendaShell(){
+  var sendBtn = document.getElementById("sendToAgendaBtn");
+  if (sendBtn) sendBtn.hidden = !can("agendamentos", "create");
   renderRoomChips();
   renderClipboardBar();
   renderGrid();
@@ -5055,6 +5066,7 @@ function agdRender(){
   if (!gridHost) return;
   var canCreate = can("agendamentos", "create"), canEdit = can("agendamentos", "edit");
   document.getElementById("agdNewBtn").hidden = !canCreate;
+  document.getElementById("agdClearWeekBtn").hidden = !can("agendamentos", "delete");
   document.getElementById("agdDate").value = agdIso(AD.date);
   Array.prototype.forEach.call(document.querySelectorAll("#agdViewSeg button"), function(b){ b.classList.toggle("active", b.getAttribute("data-v") === AD.view); });
   Array.prototype.forEach.call(document.querySelectorAll("#agdModeSeg button"), function(b){ b.classList.toggle("active", b.getAttribute("data-m") === AD.mode); });
@@ -5411,6 +5423,7 @@ function wireAgendaDia(){
   document.getElementById("agdNewBtn").addEventListener("click", function(){
     agdOpenModal({date: agdIso(agdClampWeekday(AD.date)), profId: AD.mode === "prof" ? AD.sel : "", roomId: AD.mode === "sala" ? AD.sel : ""});
   });
+  document.getElementById("agdClearWeekBtn").addEventListener("click", function(){ agdClearWeek(); });
   var grid = document.getElementById("agdGrid");
   grid.addEventListener("click", function(e){
     // Desfazer / refazer (canto acima da coluna de horários).
@@ -5526,7 +5539,27 @@ function wireAgendaDia(){
 var AD_HISTORY = {undo: [], redo: []};
 var agdHistoryBusy = false;
 var AD_ROW_FIELDS = ["date","time","professional_id","room_id","patient","note","blocked","service"];
-function agdRowCore(r){ var o = {id: r.id}; AD_ROW_FIELDS.forEach(function(k){ o[k] = r[k] === undefined ? null : r[k]; }); return o; }
+function agdRowCore(r){
+  var o = {id: r.id}; AD_ROW_FIELDS.forEach(function(k){ o[k] = r[k] === undefined ? null : r[k]; });
+  // "source" (origem: "planner" quando veio do botão Enviar) só existe depois da
+  // migração 2026-10-02c; sem a coluna, fica de fora para não quebrar o desfazer.
+  if (r.source !== undefined) o.source = r.source;
+  return o;
+}
+// Busca/apaga por id em lotes (listas grandes, ex. Limpar semana, estourariam a URL).
+function agdChunks(arr, n){ var out = []; for (var i=0;i<arr.length;i+=n) out.push(arr.slice(i, i+n)); return out; }
+function agdSelectByIds(ids){
+  return Promise.all(agdChunks(ids, 100).map(function(part){ return agdClient().from("appointments").select("*").in("id", part); }))
+    .then(function(rs){
+      var err = rs.filter(function(r){ return r.error; })[0];
+      return err ? {error: err.error} : {data: [].concat.apply([], rs.map(function(r){ return r.data || []; }))};
+    });
+}
+function agdDeleteByIds(ids){
+  return agdChunks(ids, 100).reduce(function(p, part){
+    return p.then(function(prev){ return prev && prev.error ? prev : agdClient().from("appointments").delete().in("id", part); });
+  }, Promise.resolve(null));
+}
 function agdRecord(label, before, after){
   before = (before || []).filter(Boolean).map(agdRowCore);
   after = (after || []).filter(Boolean).map(agdRowCore);
@@ -5567,7 +5600,7 @@ function agdApplyState(fromRows, toRows){
   var ins = toRows.filter(function(r){ return fromIds.indexOf(r.id) === -1; });
   function chk(r){ if (r && r.error) throw r.error; return r; }
   // Apaga primeiro (libera horários), depois atualiza um a um, depois recria.
-  return (dels.length ? c.from("appointments").delete().in("id", dels).then(chk) : Promise.resolve())
+  return (dels.length ? agdDeleteByIds(dels).then(chk) : Promise.resolve())
     .then(function(){
       return upd.reduce(function(p, r){
         return p.then(function(){ var v = Object.assign({}, r); delete v.id; return c.from("appointments").update(v).eq("id", r.id).then(chk); });
@@ -5583,7 +5616,7 @@ function agdHistoryStep(direction){
   var expected = direction === "undo" ? entry.after : entry.before;
   var target = direction === "undo" ? entry.before : entry.after;
   var ids = expected.concat(target).map(function(r){ return r.id; }).filter(function(id, i, a){ return a.indexOf(id) === i; });
-  return agdClient().from("appointments").select("*").in("id", ids).then(function(r){
+  return agdSelectByIds(ids).then(function(r){
     if (r.error) throw r.error;
     var cur = {}; (r.data || []).forEach(function(x){ cur[x.id] = agdRowCore(x); });
     var expById = {}; expected.forEach(function(x){ expById[x.id] = x; });
@@ -5770,6 +5803,214 @@ function agdPlace(row, td, mode, swapWith){
     });
   }
   write();
+}
+
+/* ---- Planner -> Agenda: botão "Enviar para a Agenda" ----
+ * Leva os agendamentos de UM dia/semana do Planner (ex.: Segunda · 1ª semana)
+ * para uma data real da Agenda escolhida pelo usuário. Só acrescenta: nunca
+ * apaga nem altera o que já está na Agenda. Cada linha enviada leva
+ * source = "planner". Coluna de grupo de suporte: vai com o NOME DO GRUPO no
+ * lugar do paciente e a sala agendada como sala do atendimento. Bloqueado,
+ * Reunião Clínica e Treinamento também vão.
+ */
+var SEND_SKIP_LABELS = {
+  dup: "Já estão na Agenda",
+  blockedThere: "Horário bloqueado na Agenda",
+  busy: "Bloqueio em horário que já tem atendimento",
+  off: "Fora do horário do profissional",
+  noProf: "Coluna sem profissional"
+};
+function plannerSendPlan(dayKey, week, dateIso){
+  var c = agdClient();
+  var snapP = db ? db.doc("schedule/" + dayKey + "-" + week).get() : Promise.resolve(null);
+  return Promise.all([snapP, c.from("appointments").select("*").eq("date", dateIso)]).then(function(res){
+    var snap = res[0], r = res[1];
+    if (r.error) throw r.error;
+    var data = snap && snap.exists ? snap.data() : null;
+    var bookings = (data && data.bookings) || {};
+    var date = agdParse(dateIso), day = findDayObj(dayKey);
+    var times = day.morning.concat(day.afternoon);
+    var taken = (r.data || []).slice(); // o que já existe + o que este envio vai criar
+    var plan = {send: [], skipped: []};
+    function sameSlot(a, rec){ return a.time === rec.time && a.professional_id === rec.professional_id; }
+    plannerRooms().forEach(function(room){
+      (room.therapists || []).forEach(function(t){
+        times.forEach(function(time){
+          var b = effectiveBooking(bookings, time + "|" + room.id + "|" + t.id, dayKey, time);
+          if (!b || !b.patient) return;
+          var kind = bookingKind(b);
+          var prof = t.professionalId ? findProfessional(t.professionalId) : null;
+          var shown = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : b.patient;
+          var info = {time: time, what: shown, where: room.name, who: prof ? prof.name : therapistDisplayName(t)};
+          if (!prof){ plan.skipped.push(Object.assign(info, {why: "noProf"})); return; }
+          var rec = {date: dateIso, time: time, professional_id: prof.id, note: b.note || "", source: "planner"};
+          if (kind){
+            rec.patient = slotKindRecord(kind).patient; rec.blocked = kind === "bloqueado"; rec.service = null;
+            rec.room_id = isGroup(room) ? null : room.id;
+          } else if (isGroup(room)){
+            var target = findRoomByName(b.patient);
+            rec.patient = room.name; rec.blocked = false; rec.service = b.service || null;
+            rec.room_id = target && !isGroup(target) ? target.id : null;
+            info.what = room.name + " (" + b.patient + ")";
+          } else {
+            rec.patient = b.patient; rec.blocked = false; rec.service = b.service || DEFAULT_SERVICE_ID;
+            rec.room_id = room.id;
+          }
+          if (!agdInHours(prof, time, date)){ plan.skipped.push(Object.assign(info, {why: "off"})); return; }
+          var here = taken.filter(function(a){ return sameSlot(a, rec); });
+          var twin = here.filter(function(a){ return normText(a.patient) === normText(rec.patient) && (kind || (a.room_id || null) === (rec.room_id || null)); })[0];
+          if (twin){
+            // Repetido dentro do próprio envio (ex.: Reunião Clínica do mesmo profissional
+            // em duas salas): vai uma vez só, sem aviso. Já existente na Agenda: avisa.
+            if (plan.send.indexOf(twin) === -1) plan.skipped.push(Object.assign(info, {why: "dup"}));
+            return;
+          }
+          if (here.some(function(a){ return bookingKind(a) === "bloqueado"; })){ plan.skipped.push(Object.assign(info, {why: "blockedThere"})); return; }
+          if (rec.blocked && here.length){ plan.skipped.push(Object.assign(info, {why: "busy"})); return; }
+          taken.push(rec);
+          plan.send.push(rec);
+        });
+      });
+    });
+    return plan;
+  });
+}
+function openSendToAgendaModal(){
+  if (!agdClient()){ showToast("O envio para a Agenda funciona no sistema online.", true); return; }
+  if (!can("agendamentos", "create")){ showToast(permDeniedMsg("agendamentos", "create"), true); return; }
+  var dayKey = state.day === "todos" ? DAYS[0].key : state.day;
+  var week = state.week === "todos" ? WEEKS[0] : state.week;
+  // Data sugerida: o próximo dia (a partir de hoje) com o mesmo dia da semana.
+  function nextDateFor(key){
+    var d = agdStartOfDay(new Date());
+    for (var i=0;i<7;i++){ if (AD_WEEKDAY_KEYS[d.getDay()] === key) return agdIso(d); d = agdAddDays(d, 1); }
+    return agdIso(d);
+  }
+  var host = document.getElementById("modalHost");
+  host.innerHTML =
+    '<div class="overlay" id="ovSend"><div class="modal" style="max-width:520px">' +
+      '<div class="modal-head"><div><h3>Enviar para a Agenda</h3>' +
+        '<div class="modal-sub">Copia os agendamentos de um dia do Planner para uma data da Agenda. Nada que já está na Agenda é apagado ou substituído.</div></div>' +
+        '<button class="modal-close" id="closeSend" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="field-row" style="display:flex;gap:10px">' +
+          '<div class="field" style="flex:1"><label for="sendDay">Dia do Planner</label><select id="sendDay">' +
+            DAYS.map(function(d){ return '<option value="'+d.key+'"'+(d.key === dayKey ? ' selected' : '')+'>'+esc(d.full)+'</option>'; }).join("") + '</select></div>' +
+          '<div class="field" style="flex:1"><label for="sendWeek">Semana</label><select id="sendWeek">' +
+            WEEKS.map(function(w){ return '<option value="'+w+'"'+(String(w) === String(week) ? ' selected' : '')+'>'+esc(WEEK_LABEL[w])+'</option>'; }).join("") + '</select></div>' +
+          '<div class="field" style="flex:1"><label for="sendDate">Data na Agenda</label><input type="date" id="sendDate" value="'+nextDateFor(dayKey)+'"></div>' +
+        '</div>' +
+        '<div class="send-preview" id="sendPreview">Calculando…</div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div>' +
+        '<button class="btn ghost" id="sendCancel">Cancelar</button>' +
+        '<button class="btn primary" id="sendOk" disabled>Enviar</button>' +
+      '</div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovSend");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("closeSend").addEventListener("click", close);
+  document.getElementById("sendCancel").addEventListener("click", close);
+  var daySel = document.getElementById("sendDay"), weekSel = document.getElementById("sendWeek"), dateEl = document.getElementById("sendDate");
+  var okBtn = document.getElementById("sendOk"), prev = document.getElementById("sendPreview");
+  var current = null, seq = 0;
+  function refresh(){
+    var my = ++seq; current = null; okBtn.disabled = true;
+    var dk = daySel.value, wk = weekSel.value, iso = dateEl.value;
+    var dayObj = findDayObj(dk);
+    if (!iso){ prev.innerHTML = '<div class="send-warn">Escolha a data.</div>'; return; }
+    if (iso < agdIso(agdStartOfDay(new Date()))){ prev.innerHTML = '<div class="send-warn">Escolha hoje ou uma data futura (datas que já passaram não recebem envio).</div>'; return; }
+    if (AD_WEEKDAY_KEYS[agdParse(iso).getDay()] !== dk){
+      prev.innerHTML = '<div class="send-warn">A data escolhida não é '+esc(dayObj.full.toLowerCase())+'. Escolha uma '+esc(dayObj.full.toLowerCase())+' ou troque o dia do Planner.</div>'; return;
+    }
+    prev.innerHTML = "Calculando…";
+    plannerSendPlan(dk, wk, iso).then(function(plan){
+      if (my !== seq) return;
+      current = {plan: plan, dk: dk, wk: wk, iso: iso};
+      var html = '<div class="send-total"><b>'+plan.send.length+'</b> '+(plan.send.length === 1 ? 'agendamento será enviado' : 'agendamentos serão enviados')+' para <b>'+esc(dayObj.name.toLowerCase())+' '+agdBrDate(iso)+'</b>.</div>';
+      var byWhy = {};
+      plan.skipped.forEach(function(s){ (byWhy[s.why] = byWhy[s.why] || []).push(s); });
+      Object.keys(SEND_SKIP_LABELS).forEach(function(k){
+        var list = byWhy[k]; if (!list) return;
+        html += '<details class="send-skip"><summary>'+list.length+' '+(list.length === 1 ? 'pulado' : 'pulados')+' — '+esc(SEND_SKIP_LABELS[k])+'</summary><ul>' +
+          list.map(function(s){ return '<li><span class="mono">'+esc(s.time)+'</span> '+esc(s.what)+' · '+esc(s.who)+' · '+esc(s.where)+'</li>'; }).join("") + '</ul></details>';
+      });
+      prev.innerHTML = html;
+      okBtn.disabled = !plan.send.length;
+    }).catch(function(err){
+      if (my !== seq) return;
+      prev.innerHTML = '<div class="send-warn">Não foi possível calcular: '+esc(agdErr(err))+'</div>';
+    });
+  }
+  daySel.addEventListener("change", function(){ dateEl.value = nextDateFor(daySel.value); refresh(); });
+  weekSel.addEventListener("change", refresh);
+  dateEl.addEventListener("change", refresh);
+  okBtn.addEventListener("click", function(){
+    if (!current || !current.plan.send.length) return;
+    var cur = current, c = agdClient();
+    okBtn.disabled = true; okBtn.textContent = "Enviando…";
+    agdChunks(cur.plan.send, 200).reduce(function(p, part){
+      return p.then(function(acc){
+        return c.from("appointments").insert(part).select().then(function(r){
+          if (r.error) throw r.error;
+          return acc.concat(r.data || []);
+        });
+      });
+    }, Promise.resolve([])).then(function(created){
+      var dayObj = findDayObj(cur.dk);
+      agdRecord("Enviar do Planner · " + dayObj.name + " " + WEEK_LABEL[cur.wk] + " → " + agdBrDate(cur.iso), [], created);
+      close();
+      showToast(created.length + (created.length === 1 ? " agendamento enviado" : " agendamentos enviados") + " para a Agenda (" + agdBrDate(cur.iso) + ")" +
+        (cur.plan.skipped.length ? ", " + cur.plan.skipped.length + (cur.plan.skipped.length === 1 ? " pulado." : " pulados.") : "."));
+      if (AD.loaded && cur.iso >= AD.rangeFrom && cur.iso <= AD.rangeTo) agdLoadWeek();
+    }).catch(function(err){
+      okBtn.textContent = "Enviar"; okBtn.disabled = false;
+      var m = (err && err.message) || "";
+      showToast(/source/i.test(m) ? "Falta rodar a atualização do banco (origem do Planner) antes de enviar." : "Não foi possível enviar: " + agdErr(err), true);
+      agdLoadWeek();
+    });
+  });
+  refresh();
+}
+
+/* ---- Agenda: botão "Limpar semana" ----
+ * Apaga TODOS os registros (atendimentos, bloqueios, reuniões, treinamentos)
+ * de segunda a sexta da semana aberta, de todos os profissionais e salas.
+ * Dupla confirmação; dá para desfazer com Ctrl+Z.
+ */
+function agdClearWeek(){
+  var c = agdClient();
+  if (!c){ showToast("A Agenda funciona no sistema online.", true); return; }
+  if (!can("agendamentos", "delete")){ showToast(permDeniedMsg("agendamentos", "delete"), true); return; }
+  var days = agdWeekDays(), from = agdIso(days[0]), to = agdIso(days[4]);
+  var period = agdBrDate(from).slice(0, 5) + " a " + agdBrDate(to);
+  c.from("appointments").select("*").gte("date", from).lte("date", to).then(function(r){
+    if (r.error){ showToast("Não foi possível ler a semana: " + agdErr(r.error), true); return; }
+    var rows = r.data || [];
+    if (!rows.length){ showToast("A semana de " + period + " já está vazia."); return; }
+    var n = rows.length + (rows.length === 1 ? " registro" : " registros");
+    confirmDialog({
+      title: "Limpar semana",
+      message: "Apagar <b>" + n + "</b> da semana de <b>" + period + "</b>?<br>Inclui atendimentos, bloqueios, reuniões e treinamentos de todos os profissionais e salas.",
+      confirmLabel: "Continuar"
+    }).then(function(ok){
+      if (!ok) return false;
+      return confirmDialog({
+        title: "Tem certeza?",
+        message: "Os <b>" + n + "</b> de " + period + " serão apagados.<br>Se foi engano, use desfazer (Ctrl+Z) logo em seguida.",
+        confirmLabel: "Apagar semana"
+      });
+    }).then(function(ok){
+      if (!ok) return;
+      agdDeleteByIds(rows.map(function(x){ return x.id; })).then(function(d){
+        if (d && d.error){ showToast("Não foi possível limpar: " + agdErr(d.error), true); agdLoadWeek(); return; }
+        agdRecord("Limpar semana " + period, rows, []);
+        showToast("Semana de " + period + " limpa (" + n + "). Use desfazer (Ctrl+Z) se foi engano.");
+        agdLoadWeek();
+      });
+    });
+  });
 }
 
 })();
