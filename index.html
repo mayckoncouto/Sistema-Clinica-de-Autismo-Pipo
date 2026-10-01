@@ -218,6 +218,14 @@ table.ad-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout:
 .ad-res .n{font-size:12.5px}
 .ad-legend{padding:5px 12px}
 @media (max-width:900px){.ad-panel{flex-direction:column}.ad-side{width:auto;max-height:240px;border-right:0;border-bottom:1px solid var(--line)}}
+/* Seletor Bloqueado / Reunião Clínica / Treinamento. Os seletores levam ".field"
+   para vencer ".field label{display:block}" e ".field input{width:100%}". */
+.field .kind-pick{display:flex;gap:6px;flex-wrap:wrap}
+.field .kind-opt{display:inline-flex;align-items:center;gap:7px;margin:0;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:700;color:var(--ink-2);cursor:pointer;user-select:none;white-space:nowrap}
+.field .kind-opt:hover{border-color:var(--line-strong)}
+.field .kind-opt.on{border-color:var(--accent);background:var(--accent-weak);color:var(--ink)}
+.field .kind-opt input{width:15px;height:15px;margin:0;padding:0;accent-color:var(--accent);flex:none}
+.field .kind-opt i{display:inline-block;width:12px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.12)}
 .prof-access{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
 .prof-access-title{font-size:12px;font-weight:800;color:var(--ink);text-transform:uppercase;letter-spacing:.03em}
 .confirm-msg{font-size:13px;line-height:1.5;color:var(--ink-2)}
@@ -595,6 +603,9 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <span><i style="background:#AECCE5"></i>0–4 anos</span>
       <span><i style="background:#C4DCA9"></i>5–9 anos</span>
       <span><i style="background:#F4CC99"></i>10+ anos</span>
+      <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
+      <span><i style="background:#8FD3F4"></i>Treinamento</span>
+      <span><i style="background:#4a5257"></i>Bloqueado</span>
     </div>
     <div class="foot-note">Clique numa célula para agendar, editar ou desmarcar. Arraste um atendimento para outro horário para movê-lo (solte sobre uma célula ocupada para trocar os dois). Use o ícone de cópia para colar em outro dia ou semana. Clique no lápis no cabeçalho de uma sala para editar nome, cor e terapeutas. Alterações são sincronizadas automaticamente para toda a equipe.</div>
   </section>
@@ -625,7 +636,9 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <span><i style="background:#AECCE5"></i>0–4 anos</span>
         <span><i style="background:#C4DCA9"></i>5–9 anos</span>
         <span><i style="background:#F4CC99"></i>10+ anos</span>
-        <span><i style="background:#4a5150"></i>Bloqueado</span>
+        <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
+        <span><i style="background:#8FD3F4"></i>Treinamento</span>
+        <span><i style="background:#4a5257"></i>Bloqueado</span>
         <span><i class="ad-off-swatch"></i>Fora do horário do profissional</span>
       </div>
     </div>
@@ -862,6 +875,57 @@ var BLOCKED_COLOR = "#4a5257";
 // over it — see effectiveBooking().
 var MEETING_LABEL = "Reunião Clínica";
 var MEETING_COLOR = "#F5E27A";
+var TRAINING_LABEL = "Treinamento";
+var TRAINING_COLOR = "#8FD3F4"; // azul-claro mais vivo que o azul da faixa 0–4 anos (#AECCE5)
+
+/* Tipos especiais de horário (não são atendimento de paciente): escolhidos
+ * nas janelas de atendimento do Planner e da Agenda, um de cada vez.
+ *   bloqueado   → {patient:"Bloqueado", blocked:true}   cinza escuro
+ *   reuniao     → {patient:"Reunião Clínica"}            amarelo
+ *   treinamento → {patient:"Treinamento", training:true} azul-claro
+ * Nenhum deles conta como atendimento no Relatório.
+ */
+var SLOT_KINDS = [
+  {key:"bloqueado",   label:"Bloqueado",   color:BLOCKED_COLOR,  ink:"#f4f5f4"},
+  {key:"reuniao",     label:MEETING_LABEL, color:MEETING_COLOR,  ink:"#182523"},
+  {key:"treinamento", label:TRAINING_LABEL, color:TRAINING_COLOR, ink:"#182523"}
+];
+function bookingKind(b){
+  if (!b || !b.patient) return "";
+  if (b.blocked || normText(b.patient) === "bloqueado") return "bloqueado";
+  if (b.patient === MEETING_LABEL) return "reuniao";
+  if (b.training || normText(b.patient) === normText(TRAINING_LABEL)) return "treinamento";
+  return "";
+}
+function slotKindRecord(kind, note){
+  var k = SLOT_KINDS.filter(function(x){ return x.key === kind; })[0];
+  var rec = {patient: k.label, note: note || ""};
+  if (kind === "bloqueado") rec.blocked = true;
+  if (kind === "treinamento") rec.training = true;
+  return rec;
+}
+// Três opções lado a lado; marcar uma desmarca as outras (pode ficar nenhuma).
+function slotKindPickerHtml(current, disabled){
+  return '<div class="kind-pick" role="group" aria-label="Tipo de horário">' + SLOT_KINDS.map(function(k){
+    return '<label class="kind-opt'+(current===k.key?' on':'')+'">' +
+      '<input type="checkbox" value="'+k.key+'"'+(current===k.key?' checked':'')+(disabled?' disabled':'')+'>' +
+      '<i style="background:'+k.color+'"></i>'+esc(k.label)+'</label>';
+  }).join("") + '</div>';
+}
+function wireSlotKindPicker(root, onChange){
+  var boxes = root.querySelectorAll('.kind-pick input[type="checkbox"]');
+  Array.prototype.forEach.call(boxes, function(cb){
+    cb.addEventListener("change", function(){
+      Array.prototype.forEach.call(boxes, function(o){ if (o !== cb) o.checked = false; });
+      Array.prototype.forEach.call(boxes, function(o){ o.closest(".kind-opt").classList.toggle("on", o.checked); });
+      if (onChange) onChange(cb.checked ? cb.value : "");
+    });
+  });
+}
+function selectedSlotKind(root){
+  var c = root.querySelector('.kind-pick input:checked');
+  return c ? c.value : "";
+}
 function isMondayMeetingSlot(dayKey, time){
   return dayKey === "seg" && time === "11:20";
 }
@@ -1808,13 +1872,15 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         if (b && b.patient){
           var isBlocked = !!b.blocked;
           var isMeetingDefault = !isBlocked && b.patient === MEETING_LABEL;
-          var pRec = (isBlocked || isMeetingDefault) ? null : findPatientByName(b.patient);
+          var isTraining = !isBlocked && bookingKind(b) === "treinamento";
+          var isSpecialKind = isBlocked || isMeetingDefault || isTraining;
+          var pRec = isSpecialKind ? null : findPatientByName(b.patient);
           var pCol = pRec ? patientColor(pRec) : null;
-          var roomMatch = (!isBlocked && !isMeetingDefault && !pRec) ? findRoomByName(b.patient) : null;
+          var roomMatch = (!isSpecialKind && !pRec) ? findRoomByName(b.patient) : null;
           var roomCol = roomMatch ? roomFillColor(roomMatch) : null;
-          var fillCol = isBlocked ? BLOCKED_COLOR : (isMeetingDefault ? MEETING_COLOR : (pCol || roomCol));
+          var fillCol = isBlocked ? BLOCKED_COLOR : (isMeetingDefault ? MEETING_COLOR : (isTraining ? TRAINING_COLOR : (pCol || roomCol)));
           var mainStyle = 'border-left-color:'+swatchVar(r.color)+(fillCol ? ';background:'+fillCol : '');
-          var fillClass = isBlocked ? ' blocked' : ((isMeetingDefault || pCol || roomCol) ? ' pcolor' : '');
+          var fillClass = isBlocked ? ' blocked' : ((isMeetingDefault || isTraining || pCol || roomCol) ? ' pcolor' : '');
           html += '<div class="book filled'+(isMoveSource?' move-source':'')+'">' +
             '<button type="button" class="book-main'+(isMatch?' match':'')+fillClass+'" style="'+mainStyle+'" draggable="true">' +
               '<span class="pname">'+esc(b.patient)+'</span>' +
@@ -2165,11 +2231,12 @@ function openBookingModal(ctx){
   var day = findDayObj(ctx.dayKey);
   var bookings = (state.scheduleDocs[ctx.docId] && state.scheduleDocs[ctx.docId].bookings) || {};
   var existing = effectiveBooking(bookings, ctx.key, ctx.dayKey, ctx.time);
+  var existingKind = bookingKind(existing);
 
   var host = document.getElementById("modalHost");
   host.innerHTML =
     '<div class="overlay" id="ovBook">' +
-      '<div class="modal">' +
+      '<div class="modal" style="max-width:500px">' +
         '<div class="modal-head"><div><h3>'+ (existing?"Editar atendimento":"Agendar atendimento") +'</h3>' +
           '<div class="modal-sub">'+esc(day.full)+' &middot; '+WEEK_LABEL[ctx.week]+' &middot; <span class="mono">'+ctx.time+'</span></div>' +
           '<div class="modal-sub">'+esc(room.name)+' — '+esc(therapistDisplayName(ther))+'</div>' +
@@ -2177,12 +2244,12 @@ function openBookingModal(ctx){
         '<button class="modal-close" id="closeBook" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
           '<div class="field"><label for="bkPatient">Paciente ou sala</label>' +
-            '<input id="bkPatient" type="text" autocomplete="off" placeholder="Nome do paciente ou da sala…" value="'+esc(existing?existing.patient:"")+'">' +
+            '<input id="bkPatient" type="text" autocomplete="off" placeholder="Nome do paciente ou da sala…" value="'+esc(existing && !existingKind ? existing.patient : "")+'"'+(existingKind?' disabled':'')+'>' +
             '<div class="autolist" id="bkSuggest" hidden></div>' +
           '</div>' +
           '<div class="field"><label for="bkNote">Observação (opcional)</label>' +
             '<input id="bkNote" type="text" placeholder="ex: Avaliação Neuropsicológica, Acolhimento…" value="'+esc(existing?existing.note:"")+'"></div>' +
-          '<label class="field-check"><input type="checkbox" id="bkBlocked"'+(existing&&existing.blocked?' checked':'')+'> Bloqueado — o quadro fica cinza escuro e indisponível</label>' +
+          '<div class="field" id="bkKindField"><label>Ou marque o horário como</label>' + slotKindPickerHtml(existingKind) + '</div>' +
         '</div>' +
         '<div class="modal-foot">' +
           (existing ? '<button class="btn danger" id="bkClear">Desmarcar</button>' : '<span></span>') +
@@ -2239,13 +2306,21 @@ function openBookingModal(ctx){
       writeBooking(ctx.docId, ctx.key, clearValueFor(ctx.dayKey, ctx.time)).then(close);
     });
   }
+  // Bloqueado / Reunião Clínica / Treinamento: com um deles marcado o horário
+  // não tem paciente — o campo fica desativado (e volta ao desmarcar).
+  var kindField = document.getElementById("bkKindField");
+  var typedName = input.value;
+  wireSlotKindPicker(kindField, function(kind){
+    if (kind){ if (!input.disabled) typedName = input.value; input.value = ""; input.disabled = true; suggest.hidden = true; }
+    else { input.disabled = false; input.value = typedName; input.focus(); }
+  });
+
   document.getElementById("bkSave").addEventListener("click", function(){
     var name = input.value.trim();
     var note = document.getElementById("bkNote").value.trim();
-    var blocked = document.getElementById("bkBlocked").checked;
-    if (!name && !blocked){ input.focus(); return; }
-    var rec = {patient: name || "Bloqueado", note: note};
-    if (blocked) rec.blocked = true;
+    var kind = selectedSlotKind(kindField);
+    if (!name && !kind){ input.focus(); return; }
+    var rec = kind ? slotKindRecord(kind, note) : {patient: name, note: note};
     writeBooking(ctx.docId, ctx.key, rec).then(close);
   });
 }
@@ -4212,6 +4287,7 @@ function reportAggregate(){
       // Never count the weekly team meeting placeholder or a "Bloqueado" label that
       // somehow got saved as real patient text without the blocked flag set.
       if (patientText === MEETING_LABEL || patientText.toLowerCase() === "bloqueado") return;
+      if (bookingKind(b) === "treinamento") return; // treinamento também não é atendimento
       var parts = key.split("|");
       var seat = seatMap[parts[1]+"|"+parts[2]];
       if (!seat) return; // seat no longer exists in the current Salas registry (stale data)
@@ -4508,8 +4584,14 @@ function adOnShow(){
 
 function adEventHtml(row, t, label, color, extraCount){
   var range = t + " - " + adPlus40(t);
-  if (row.blocked){
+  var kind = bookingKind(row);
+  if (kind === "bloqueado"){
     return '<div class="ad-ev blocked" style="border-left-color:#2b302f"><div class="t">'+range+'</div><div class="p">Bloqueado</div>' +
+      (row.note ? '<div class="s">'+esc(row.note)+'</div>' : '') + '</div>';
+  }
+  if (kind === "reuniao" || kind === "treinamento"){
+    var k = SLOT_KINDS.filter(function(x){ return x.key === kind; })[0];
+    return '<div class="ad-ev" style="background:'+k.color+';border-left-color:'+color+'"><div class="t">'+range+'</div><div class="p">'+esc(k.label)+'</div>' +
       (row.note ? '<div class="s">'+esc(row.note)+'</div>' : '') + '</div>';
   }
   var pRec = findPatientByName(row.patient);
@@ -4626,7 +4708,7 @@ function adRenderSide(){
   var counts = {};
   Object.keys(AD.rows).forEach(function(id){
     var r = AD.rows[id];
-    if (r.blocked) return;
+    if (bookingKind(r)) return; // bloqueio/reunião/treinamento não contam como atendimento
     var k = AD.mode === "prof" ? r.professional_id : r.room_id;
     if (k) counts[k] = (counts[k] || 0) + 1;
   });
@@ -4654,6 +4736,7 @@ function adRenderSide(){
 function adOpenModal(opts){
   // opts: {row} para editar; ou {date, time, profId, roomId} para novo
   var row = opts.row || null, isNew = !row;
+  var rowKind = bookingKind(row);
   if (isNew && !can("agendamentos", "create")){ showToast(permDeniedMsg("agendamentos", "create"), true); return; }
   var canSave = isNew ? true : can("agendamentos", "edit");
   var canDel = !isNew && can("agendamentos", "delete");
@@ -4671,7 +4754,7 @@ function adOpenModal(opts){
         '<div class="modal-sub">'+adBrDate(date)+(time ? ' às '+time : '')+'</div></div>' +
         '<button class="modal-close" id="adClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
-        '<div class="field"><label for="adPac">Paciente</label><input id="adPac" type="text" list="adPacList" autocomplete="off" placeholder="Digite o nome do paciente…" value="'+esc(row && !row.blocked ? row.patient : "")+'"'+(canSave?'':' disabled')+'></div>' +
+        '<div class="field"><label for="adPac">Paciente</label><input id="adPac" type="text" list="adPacList" autocomplete="off" placeholder="Digite o nome do paciente…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'></div>' +
         '<datalist id="adPacList">'+state.patients.map(function(p){ return '<option value="'+esc(p.nome)+'">'; }).join("")+'</datalist>' +
         '<div class="field-row">' +
           '<div class="field"><label for="adProf">Profissional</label><select id="adProf"'+(canSave?'':' disabled')+'><option value="">Escolha…</option>'+profs.map(function(p){ return '<option value="'+esc(p.id)+'"'+(p.id===profId?' selected':'')+'>'+esc(p.name)+'</option>'; }).join("")+'</select></div>' +
@@ -4682,7 +4765,7 @@ function adOpenModal(opts){
           '<div class="field"><label for="adHora">Horário</label><select id="adHora"'+(canSave?'':' disabled')+'>'+adAllTimes().map(function(t){ return '<option value="'+t+'"'+(t===time?' selected':'')+'>'+t+' - '+adPlus40(t)+'</option>'; }).join("")+'</select></div>' +
         '</div>' +
         '<div class="field"><label for="adNote">Observação (opcional)</label><input id="adNote" type="text" value="'+esc(row ? row.note : "")+'"'+(canSave?'':' disabled')+'></div>' +
-        '<label class="field-check"><input type="checkbox" id="adBlocked"'+(row && row.blocked ? ' checked' : '')+(canSave?'':' disabled')+'> Bloqueado — o horário fica indisponível</label>' +
+        '<div class="field" id="adKindField"><label>Ou marque o horário como</label>' + slotKindPickerHtml(rowKind, !canSave) + '</div>' +
       '</div>' +
       '<div class="modal-foot">' +
         (canDel ? '<button class="btn danger" id="adDelete">Desmarcar</button>' : '<span></span>') +
@@ -4721,11 +4804,20 @@ function adOpenModal(opts){
     });
   });
 
+  // Bloqueado / Reunião Clínica / Treinamento desativam o campo Paciente.
+  var kindField = document.getElementById("adKindField");
+  var pacEl = document.getElementById("adPac"), typedPac = pacEl.value;
+  wireSlotKindPicker(kindField, function(kind){
+    if (kind){ if (!pacEl.disabled) typedPac = pacEl.value; pacEl.value = ""; pacEl.disabled = true; }
+    else { pacEl.disabled = false; pacEl.value = typedPac; pacEl.focus(); }
+  });
+
   var saveBtn = document.getElementById("adSave");
   if (saveBtn) saveBtn.addEventListener("click", function(){
-    var blocked = document.getElementById("adBlocked").checked;
+    var kind = selectedSlotKind(kindField);
+    var blocked = kind === "bloqueado";
     var rec = {
-      patient: blocked ? "Bloqueado" : document.getElementById("adPac").value.trim(),
+      patient: kind ? slotKindRecord(kind).patient : pacEl.value.trim(),
       professional_id: profSel.value,
       room_id: document.getElementById("adSala").value || null,
       date: document.getElementById("adData").value,
@@ -4737,7 +4829,7 @@ function adOpenModal(opts){
     if (!rec.date){ showToast("Escolha a data.", true); return; }
     var wd = adParse(rec.date).getDay();
     if (wd === 0 || wd === 6){ showToast("A agenda funciona de segunda a sexta.", true); return; }
-    if (!blocked && !rec.patient){ showToast("Informe o paciente.", true); document.getElementById("adPac").focus(); return; }
+    if (!kind && !rec.patient){ showToast("Informe o paciente.", true); pacEl.focus(); return; }
     if (!isNew && !can("agendamentos","edit")){ showToast(permDeniedMsg("agendamentos","edit"), true); return; }
 
     function doSave(){
@@ -4761,10 +4853,10 @@ function adOpenModal(opts){
     }
     // Aviso se a sala já estiver ocupada por outro profissional nesse horário (só a semana carregada).
     var clash = null;
-    if (rec.room_id && !blocked){
+    if (rec.room_id && !kind){
       Object.keys(AD.rows).some(function(id){
         var o = AD.rows[id];
-        if ((!row || o.id !== row.id) && !o.blocked && o.room_id === rec.room_id && o.date === rec.date && o.time === rec.time && o.professional_id !== rec.professional_id){ clash = o; return true; }
+        if ((!row || o.id !== row.id) && !bookingKind(o) && o.room_id === rec.room_id && o.date === rec.date && o.time === rec.time && o.professional_id !== rec.professional_id){ clash = o; return true; }
         return false;
       });
     }
@@ -4779,7 +4871,7 @@ function adOpenModal(opts){
       doSave();
     }
   });
-  var first = document.getElementById(canSave ? "adPac" : "adCancel");
+  var first = document.getElementById(canSave && !rowKind ? "adPac" : "adCancel");
   if (first) first.focus();
 }
 function adErr(e){

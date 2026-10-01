@@ -35,7 +35,8 @@ const path = require('path');
   await td2.locator('.book-main').click();
   await page.waitForSelector('#ovBook');
   // Leave the patient field empty, just check "Bloqueado" and save.
-  await page.check('#bkBlocked');
+  // (Desde 2026-10-01: opções Bloqueado / Reunião Clínica / Treinamento.)
+  await page.check('#bkKindField input[value="bloqueado"]');
   await page.click('#bkSave');
   await page.waitForTimeout(150);
   const blockedText = await td2.innerText();
@@ -49,9 +50,24 @@ const path = require('path');
   // ---- TEST: reopening a blocked slot shows the checkbox pre-checked ----
   await td2.locator('.book-main').click();
   await page.waitForSelector('#ovBook');
-  console.log('reopened blocked slot has checkbox checked?', await page.locator('#bkBlocked').isChecked());
+  console.log('reopened blocked slot has checkbox checked?', await page.locator('#bkKindField input[value="bloqueado"]').isChecked());
+  console.log('patient field is disabled while "Bloqueado" is checked?', await page.locator('#bkPatient').isDisabled());
   await page.click('#bkCancel');
   await page.waitForTimeout(100);
+
+  // ---- TEST: Reunião Clínica (amarelo) e Treinamento (azul-claro) ----
+  for (const [key, kind, rgb, label] of [['14:50|r1|r1-t2','reuniao','rgb(245,226,122)','Reunião Clínica'], ['15:30|r1|r1-t2','treinamento','rgb(143,211,244)','Treinamento']]) {
+    const td = page.locator('td.slotcell[data-key="'+key+'"]');
+    await td.locator('.book-main').click();
+    await page.waitForSelector('#ovBook');
+    await page.check('#bkKindField input[value="'+kind+'"]');
+    console.log('only one kind checked at a time ('+kind+')?', (await page.locator('#bkKindField input:checked').count()) === 1);
+    await page.click('#bkSave');
+    await page.waitForTimeout(150);
+    console.log(label+' slot shows its label and color?', (await td.innerText()).includes(label) && (await bg(key)).replace(/\s/g,'') === rgb);
+  }
+  const storeKinds = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/seg-1'])));
+  console.log('treinamento saved with training:true?', storeKinds.bookings['15:30|r1|r1-t2'].training === true);
 
   // ---- TEST: copying a blocked slot to another cell preserves blocked status ----
   await td2.hover();
