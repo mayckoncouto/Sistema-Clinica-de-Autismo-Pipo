@@ -882,3 +882,5 @@ paciente escolhido (select com busca), mostra:
   reabre "Editar agendamento" com o mesmo paciente e período
   (`state.fixReturn`, `openFixPatientModal(back)`; não age com janela/menu aberto
   ou com copiar/mover em andamento).
+- `profWhere` é calculado sobre `plannerRooms()` (todas as salas e grupos), não só
+  as visíveis: com o filtro de salas os bloqueios continuam valendo.
