@@ -865,3 +865,16 @@ Grupos de Suporte (`isGroup(r) || r.id === filtro`).
   A gravação mantém os campos de "Sessão" (antes era recriada só com id/nome). Sigla da Sessão: "SS".
 - Relatório "Pacote contratado × realizado": linha de serviço conta os
   Finalizados com aquele `service`.
+
+## Planner: "Corrigir paciente" (2026-10-02)
+Botão `#fixPatientBtn` na barra do Planner (antes de "Enviar para a Agenda") →
+`openFixPatientModal()`: lê os documentos `schedule/<dia>-<1..4>` e, para o
+paciente escolhido (select com busca), mostra:
+- tabela por especialidade (do profissional da coluna) × semana + total;
+- **Apagar** (precisa de excluir em `agenda`): do dia / da semana / do mês (4
+  semanas), confirmação dupla, `clearValueFor`, entra no desfazer;
+- **Trocar por outro paciente** (precisa de editar) no mesmo período: mantém
+  sala/profissional/serviço/observação; os que dariam conflito
+  (`plannerConflict`) ficam como estão;
+- lista detalhada (semana, dia, hora, sala, profissional, especialidade); clicar
+  abre o dia/semana no Planner e preenche a busca com o paciente.

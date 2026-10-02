@@ -391,6 +391,17 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 #profHours td.ph-count,#profHours th.ph-count-h{text-align:center}
 #profHours td.ph-total-label{text-align:right;white-space:normal}
 .cl-cards{display:flex;flex-direction:column;gap:12px;margin:2px 0 4px}
+.fx-report{margin:4px 0 12px}
+.fx-table{width:100%;border-collapse:collapse;font-size:13px}
+.fx-table th,.fx-table td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:center}
+.fx-table th:first-child,.fx-table td:first-child{text-align:left}
+.fx-table th{font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted)}
+.fx-table tfoot td{font-weight:700;border-bottom:0}
+.fx-del-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fx-list{display:flex;flex-direction:column;max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.fx-item{border:0;border-bottom:1px solid var(--line);background:var(--surface);text-align:left;padding:8px 12px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
+.fx-item:last-child{border-bottom:0}
+.fx-item:hover{background:var(--surface-2)}
 .cl-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:32px}
 .cl-row .cl-color-label{white-space:nowrap}
 /* primeira etiqueta de cada linha com a mesma largura: cor, prévia e logo alinhadas */
@@ -917,6 +928,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <div class="spacer"></div>
       <span class="pat-count" id="matchCount"></span>
+      <button class="btn ghost" id="fixPatientBtn" title="Ver e apagar os agendamentos de um paciente no Planner">Corrigir paciente</button>
       <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do dia e semana abertos para uma data da Agenda" hidden>Enviar para a Agenda</button>
       <button class="btn ghost" id="plClearWeekBtn" title="Apaga todos os agendamentos da semana escolhida (segunda a sexta)" hidden>Limpar semana</button>
     </div>
@@ -2670,6 +2682,7 @@ function wireControls(){
   // Salas <-> Grupos de suporte: a mesma tela mostra um cadastro ou o outro.
   document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
   document.getElementById("plClearWeekBtn").addEventListener("click", function(){ plannerClearWeek(); });
+  document.getElementById("fixPatientBtn").addEventListener("click", function(){ openFixPatientModal(); });
   document.getElementById("toggleGroupsBtn").addEventListener("click", function(){
     state.salasView = state.salasView === "grupos" ? "salas" : "grupos";
     var s = document.getElementById("roomListSearch"); if (s) s.value = "";
@@ -7512,6 +7525,172 @@ function plannerClearWeek(){
       });
     });
   }).catch(function(){ showToast("Não foi possível ler a semana do Planner.", true); });
+}
+
+/* ---- Planner: botão "Corrigir paciente" ----
+ * Janela para escolher um paciente, ver quantos agendamentos ele tem no Planner
+ * (por especialidade do profissional da coluna × semana) e apagar os dele de um
+ * dia, de uma semana ou do mês inteiro (as 4 semanas). Confirmação dupla; entra
+ * no desfazer (Ctrl+Z).
+ */
+function openFixPatientModal(){
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var host = document.getElementById("modalHost");
+  var pats = state.patients.slice().sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); });
+  var weeks = [1, 2, 3, 4];
+  var curWeek = state.week === "todos" ? 1 : +state.week, curDay = state.day === "todos" ? DAYS[0].key : state.day;
+  host.innerHTML =
+    '<div class="overlay" id="ovFix"><div class="modal wide" style="max-width:720px">' +
+      '<div class="modal-head"><div><h3>Corrigir paciente</h3><div class="modal-sub">Agendamentos do paciente no Planner (as 4 semanas).</div></div>' +
+        '<button class="modal-close" id="fxClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="field"><label for="fxPat">Paciente</label><select id="fxPat"><option value="">Selecione um paciente…</option>' +
+          pats.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div>' +
+        '<div id="fxReport" class="fx-report"><div class="pat-count">Escolha um paciente para ver os agendamentos.</div></div>' +
+        '<div class="prof-section" id="fxDelBox" hidden><div class="prof-section-head"><span class="prof-access-title">Apagar agendamentos do paciente</span></div>' +
+          '<div class="fx-del-row">' +
+            '<select id="fxScope" style="width:170px"><option value="dia">Do dia</option><option value="semana">Da semana</option><option value="mes">Do mês (4 semanas)</option></select>' +
+            '<select id="fxWeek" style="width:140px">' + weeks.map(function(w){ return '<option value="' + w + '"' + (w === curWeek ? ' selected' : '') + '>' + WEEK_LABEL[w] + '</option>'; }).join("") + '</select>' +
+            '<select id="fxDay" style="width:160px">' + DAYS.map(function(d){ return '<option value="' + d.key + '"' + (d.key === curDay ? ' selected' : '') + '>' + esc(d.full) + '</option>'; }).join("") + '</select>' +
+            '<button type="button" class="btn danger" id="fxDel">Apagar</button>' +
+          '</div><div class="pat-count" id="fxDelInfo" style="margin-top:6px"></div></div>' +
+        '<div class="prof-section" id="fxSwapBox" hidden><div class="prof-section-head"><span class="prof-access-title">Trocar por outro paciente (no mesmo período acima)</span></div>' +
+          '<div class="fx-del-row"><select id="fxNew" style="width:280px"><option value="">Escolha o paciente certo…</option>' +
+            pats.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select>' +
+          '<button type="button" class="btn" id="fxSwap" disabled>Trocar</button></div>' +
+          '<div class="pat-count" style="margin-top:6px">Útil para corrigir agendamentos feitos no paciente errado. Mantém sala, profissional, serviço e observação; os que dariam conflito ficam como estão.</div></div>' +
+        '<div class="prof-section" id="fxListBox" hidden><div class="prof-section-head"><span class="prof-access-title">Agendamentos</span><span class="pat-count">Clique para ir até o horário no Planner</span></div><div id="fxList" class="fx-list"></div></div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="fxCancel">Fechar</button></div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovFix");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("fxClose").addEventListener("click", close);
+  document.getElementById("fxCancel").addEventListener("click", close);
+  var docIds = [];
+  weeks.forEach(function(w){ DAYS.forEach(function(d){ docIds.push(d.key + "-" + w); }); });
+  var docs = null; // docId -> bookings (lidos do banco ao abrir)
+  var reportEl = document.getElementById("fxReport");
+  reportEl.innerHTML = '<div class="pat-count">Carregando o Planner…</div>';
+  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+    docs = {};
+    snaps.forEach(function(snap, i){
+      var data = snap && snap.exists ? snap.data() : null;
+      docs[docIds[i]] = (data && data.bookings) || {};
+      if (!state.scheduleDocs[docIds[i]]) state.scheduleDocs[docIds[i]] = {bookings: JSON.parse(JSON.stringify(docs[docIds[i]]))};
+    });
+    refresh();
+  }).catch(function(){ reportEl.innerHTML = '<div class="pat-count">Não foi possível ler o Planner.</div>'; });
+  // Agendamentos do paciente: [{docId, key, week, dayKey, time, spec}]
+  function patientBookings(p){
+    var out = [], n = normText(p.nome);
+    docIds.forEach(function(docId){
+      var bk = docs[docId] || {}, parts = docId.split("-");
+      Object.keys(bk).forEach(function(k){
+        var b = bk[k];
+        if (!b || !b.patient || bookingKind(b) || normText(b.patient) !== n) return;
+        var kp = k.split("|"), room = findRoom(kp[1]), ther = room ? findTherapist(room, kp[2]) : null;
+        var prof = ther && ther.professionalId ? findProfessional(ther.professionalId) : null;
+        var dO = DAYS.filter(function(d){ return d.key === parts[0]; })[0];
+        out.push({docId: docId, key: k, week: +parts[1], dayKey: parts[0], time: kp[0],
+          room: room ? room.name : "", prof: prof ? (profShortName(prof) || prof.name) : (ther ? therapistDisplayName(ther) : ""), dayName: dO ? dO.full : parts[0], rec: b,
+          spec: prof && prof.specialtyId ? specialtyName(prof.specialtyId) : "Sem especialidade"});
+      });
+    });
+    return out;
+  }
+  function selected(){ var id = document.getElementById("fxPat").value; return state.patients.filter(function(p){ return p.id === id; })[0] || null; }
+  function inScope(list){
+    var sc = document.getElementById("fxScope").value, w = +document.getElementById("fxWeek").value, d = document.getElementById("fxDay").value;
+    return list.filter(function(x){ return sc === "mes" || (x.week === w && (sc === "semana" || x.dayKey === d)); });
+  }
+  function refresh(){
+    var p = selected(), box = document.getElementById("fxDelBox");
+    if (!p || !docs){ if (docs) reportEl.innerHTML = '<div class="pat-count">Escolha um paciente para ver os agendamentos.</div>'; box.hidden = true; return; }
+    var list = patientBookings(p), by = {};
+    list.forEach(function(x){ by[x.spec] = by[x.spec] || {1: 0, 2: 0, 3: 0, 4: 0, t: 0}; by[x.spec][x.week]++; by[x.spec].t++; });
+    var specs = Object.keys(by).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+    var tot = {1: 0, 2: 0, 3: 0, 4: 0, t: 0};
+    specs.forEach(function(s){ weeks.concat(["t"]).forEach(function(w){ tot[w] += by[s][w]; }); });
+    reportEl.innerHTML = list.length
+      ? '<table class="fx-table"><thead><tr><th>Especialidade</th>' + weeks.map(function(w){ return '<th>' + w + 'ª sem.</th>'; }).join("") + '<th>Total</th></tr></thead><tbody>' +
+          specs.map(function(s){ return '<tr><td>' + esc(s) + '</td>' + weeks.map(function(w){ return '<td>' + (by[s][w] || "—") + '</td>'; }).join("") + '<td><b>' + by[s].t + '</b></td></tr>'; }).join("") +
+        '</tbody><tfoot><tr><td>Total</td>' + weeks.map(function(w){ return '<td>' + tot[w] + '</td>'; }).join("") + '<td><b>' + tot.t + '</b></td></tr></tfoot></table>'
+      : '<div class="pat-count"><b>' + esc(p.nome) + '</b> não tem agendamentos no Planner.</div>';
+    box.hidden = !list.length || !can("agenda", "delete");
+    document.getElementById("fxSwapBox").hidden = !list.length || !can("agenda", "edit");
+    var lb = document.getElementById("fxListBox"); lb.hidden = !list.length;
+    var dayIdx = {}; DAYS.forEach(function(d, i){ dayIdx[d.key] = i; });
+    document.getElementById("fxList").innerHTML = list.slice().sort(function(a, b){ return a.week - b.week || dayIdx[a.dayKey] - dayIdx[b.dayKey] || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0); })
+      .map(function(x){ return '<button type="button" class="fx-item" data-w="' + x.week + '" data-d="' + x.dayKey + '"><b>' + x.week + 'ª</b> ' + esc(x.dayName) + ' <span class="mono">' + x.time + '</span> · ' + esc(x.room) + (x.prof ? ' · ' + esc(x.prof) : "") + ' · ' + esc(x.spec) + '</button>'; }).join("");
+    scopeUI();
+  }
+  function scopeUI(){
+    var sc = document.getElementById("fxScope").value;
+    document.querySelector('[data-dp-for="fxWeek"]') && (document.querySelector('[data-dp-for="fxWeek"]').hidden = sc === "mes");
+    document.querySelector('[data-dp-for="fxDay"]') && (document.querySelector('[data-dp-for="fxDay"]').hidden = sc !== "dia");
+    var p = selected(); if (!p || !docs) return;
+    var n = inScope(patientBookings(p)).length;
+    document.getElementById("fxDelInfo").textContent = n ? n + (n === 1 ? " agendamento será apagado." : " agendamentos serão apagados.") : "Nenhum agendamento do paciente neste período.";
+    document.getElementById("fxDel").disabled = !n;
+  }
+  document.getElementById("fxPat").addEventListener("change", refresh);
+  // Ir até o horário: abre o dia e a semana no Planner e destaca o paciente.
+  document.getElementById("fxList").addEventListener("click", function(e){
+    var it = e.target.closest(".fx-item"); if (!it) return;
+    var p = selected(); close();
+    var db1 = document.querySelector('#daySeg button[data-day="' + it.getAttribute("data-d") + '"]'); if (db1) db1.click();
+    var wb = document.querySelector('#weekSeg button[data-week="' + it.getAttribute("data-w") + '"]'); if (wb) wb.click();
+    var s = document.getElementById("patientSearch"); if (s && p){ s.value = p.nome; s.dispatchEvent(new Event("input", {bubbles: true})); }
+  });
+  document.getElementById("fxNew").addEventListener("change", function(){ document.getElementById("fxSwap").disabled = !document.getElementById("fxNew").value; });
+  document.getElementById("fxSwap").addEventListener("click", function(){
+    var p = selected(), np = state.patients.filter(function(x){ return x.id === document.getElementById("fxNew").value; })[0];
+    if (!p || !np) return;
+    if (np.id === p.id){ showToast("Escolha um paciente diferente.", true); return; }
+    var list = inScope(patientBookings(p)); if (!list.length){ showToast("Nenhum agendamento do paciente neste período."); return; }
+    var changes = {}, ok = 0, skipped = 0;
+    list.forEach(function(x){
+      var rec = Object.assign({}, x.rec, {patient: np.nome});
+      if (plannerConflict(x.docId, x.key, rec)){ skipped++; return; }
+      (changes[x.docId] = changes[x.docId] || {})[x.key] = rec; ok++;
+    });
+    if (!ok){ showToast("Nenhum agendamento pôde ser trocado: todos dariam conflito de horário para " + np.nome + ".", true); return; }
+    confirmDialog({title: "Trocar paciente", message: "Trocar <b>" + esc(p.nome) + "</b> por <b>" + esc(np.nome) + "</b> em " + ok + (ok === 1 ? " agendamento" : " agendamentos") + "?" + (skipped ? "<br>" + skipped + (skipped === 1 ? " fica como está" : " ficam como estão") + " por conflito de horário." : ""), confirmLabel: "Trocar"})
+      .then(function(go){
+        if (!go) return;
+        applyBookingChanges(changes).then(function(res){
+          if (res === false) return;
+          Object.keys(changes).forEach(function(d){ Object.keys(changes[d]).forEach(function(k){ docs[d][k] = changes[d][k]; }); });
+          renderGrid(); refresh();
+          showToast(ok + (ok === 1 ? " agendamento trocado" : " agendamentos trocados") + " para " + np.nome + (skipped ? " (" + skipped + " com conflito ficaram como estavam)" : "") + ".");
+        });
+      });
+  });
+  ["fxScope", "fxWeek", "fxDay"].forEach(function(id){ document.getElementById(id).addEventListener("change", scopeUI); });
+  document.getElementById("fxDel").addEventListener("click", function(){
+    var p = selected(); if (!p) return;
+    var list = inScope(patientBookings(p)); if (!list.length) return;
+    var sc = document.getElementById("fxScope").value, w = +document.getElementById("fxWeek").value, dk = document.getElementById("fxDay").value;
+    var dObj = DAYS.filter(function(d){ return d.key === dk; })[0];
+    var when = sc === "mes" ? "do mês (4 semanas)" : sc === "semana" ? "da " + WEEK_LABEL[w] : "de " + (dObj ? dObj.full : dk) + " da " + WEEK_LABEL[w];
+    var qtd = list.length + (list.length === 1 ? " agendamento" : " agendamentos");
+    confirmDialog({title: "Apagar agendamentos do paciente", message: "Apagar <b>" + qtd + "</b> de <b>" + esc(p.nome) + "</b> " + when + "?", confirmLabel: "Continuar"})
+      .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: (list.length === 1 ? "O agendamento" : "Os <b>" + qtd + "</b>") + " de " + esc(p.nome) + (list.length === 1 ? " será apagado" : " serão apagados") + ".<br>Se foi engano, use desfazer (Ctrl+Z) logo em seguida.", confirmLabel: "Apagar"}); })
+      .then(function(ok){
+        if (!ok) return;
+        var changes = {};
+        list.forEach(function(x){ (changes[x.docId] = changes[x.docId] || {})[x.key] = clearValueFor(x.dayKey, x.time); });
+        applyBookingChanges(changes).then(function(res){
+          if (res === false) return;
+          list.forEach(function(x){ delete docs[x.docId][x.key]; });
+          renderGrid();
+          refresh();
+          showToast(qtd + " de " + p.nome + (list.length === 1 ? " apagado" : " apagados") + ". Use desfazer (Ctrl+Z) se foi engano.");
+        });
+      });
+  });
 }
 
 /* ---- Planner -> Agenda: botão "Enviar para a Agenda" ----
