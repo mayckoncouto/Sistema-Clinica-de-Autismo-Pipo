@@ -543,7 +543,9 @@ física não é aceita na Agenda (no Planner, só nas colunas de grupo).
 - Quem não tem "editar" na Agenda, ao clicar num atendimento, vê o popup
   `agdOpenDetails(row)` (só leitura): nome, serviço (ou "Grupo de suporte"),
   profissional, observação, sala, data/hora "até", e o Status (grava ao mudar).
-- O botão do prontuário chama "Iniciar Atendimento" e fica no canto superior
+- O botão do prontuário chama "Registrar Atendimento" (ou "Editar Atendimento"
+  quando o usuário já lançou a evolução deste atendimento — `prLabelApptButton`)
+  e fica no canto superior
   direito (cabeçalho, ao lado do ✕), no popup e na janela de edição; as duas
   abrem no centro. Na edição, Status fica abaixo de "Ou marque o horário como". Evoluções também podem ser lançadas direto no
   Prontuário ("+ Nova evolução"), sem atendimento.
@@ -657,3 +659,7 @@ Campos ao lado da duração, com prévia e botão "Padrão".
 - Desfazer/refazer saíram do cabeçalho: no Planner ficam na linha
   `periodrow-pre` (`.timecell-hist`), na Agenda na primeira `agd-periodrow`
   (`.agd-tcol-hist`) — a mesma linha dos botões de bloquear/liberar.
+- Evolução lançada a partir de um atendimento mostra o ícone de agenda
+  (`.pr-appt-link`, `CAL_SVG`) antes da data: `prGoToAppointment(rec)` abre a
+  Agenda na data e no profissional e abre a janela do atendimento (avisa se ele
+  foi apagado).
