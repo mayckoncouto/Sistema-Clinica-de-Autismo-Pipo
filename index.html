@@ -1887,6 +1887,13 @@ function professionalSpecialtyId(id){
 // name is still stored on the seat (from before the Profissionais registry existed).
 // Só o primeiro nome do profissional (cabeçalhos do Planner e do Resumo).
 function firstName(n){ return String(n || "").trim().split(/\s+/)[0] || ""; }
+// Nome curto do profissional nas telas (Planner, Resumo): o "Nome social" do
+// cadastro; sem ele, o primeiro nome.
+function profShortName(p){ return (p && String(p.nomeSocial || "").trim()) || firstName(p ? p.name : ""); }
+function seatShortName(t){
+  var p = t && t.professionalId ? findProfessional(t.professionalId) : null;
+  return p ? profShortName(p) : firstName(therapistDisplayName(t));
+}
 function therapistDisplayName(t){
   if (!t) return "";
   if (t.professionalId){
@@ -2787,7 +2794,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
   rooms.forEach(function(r){
     r.therapists.forEach(function(t){
       html += '<th class="seathead"><div class="seathead-cell">' +
-        '<span class="seathead-name" title="'+esc(therapistDisplayName(t))+'">'+esc(firstName(therapistDisplayName(t)))+'</span>' +
+        '<span class="seathead-name" title="'+esc(therapistDisplayName(t))+'">'+esc(seatShortName(t))+'</span>' +
       '</div></th>';
     });
   });
@@ -2816,7 +2823,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         rooms.forEach(function(r){
           r.therapists.forEach(function(t){
             html += '<td class="periodrow-seat">' +
-              '<div class="periodrow-seatname">'+esc(firstName(therapistDisplayName(t)))+'</div>' +
+              '<div class="periodrow-seatname">'+esc(seatShortName(t))+'</div>' +
               seatLockButtons("afternoon", r.id, t.id, therapistDisplayName(t)) +
             '</td>';
           });
@@ -5143,6 +5150,7 @@ function openProfessionalModal(p){
       '<div class="modal-body">' +
         '<div class="field-row">' +
           '<div class="field" style="flex:2"><label for="profName">Nome do profissional</label><input id="profName" type="text" placeholder="Nome" value="'+esc(draftName)+'"></div>' +
+          '<div class="field"><label for="profSocial">Nome social</label><input id="profSocial" type="text" placeholder="Nome nas telas" title="Nome curto mostrado no Planner e no Resumo. Vazio = primeiro nome." value="'+esc(v.nomeSocial||"")+'"></div>' +
           '<div class="field"><label for="profCpf">CPF</label><input id="profCpf" type="text" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" value="'+esc(v.cpf||"")+'"></div>' +
         '</div>' +
         '<div class="field-row">' +
@@ -5350,6 +5358,7 @@ function openProfessionalModal(p){
       conselho: document.getElementById("profConselho").value.trim(),
       registro: document.getElementById("profRegistro").value.trim(),
       cpf: cpf,
+      nomeSocial: document.getElementById("profSocial").value.trim(),
       cbos: document.getElementById("profCbos").value.trim()
     });
     var list = state.professionals.slice();
@@ -5870,7 +5879,7 @@ function renderRelatorioTab(){
   // Header row 3: row title ("Profissionais") + professional name.
   var row3 = '<th class="rpt-corner">Profissionais</th>';
   groups.forEach(function(g){
-    g.professionals.forEach(function(p){ row3 += '<th class="rpt-prof-name" title="'+esc(p.name)+'">'+esc(firstName(p.name))+'</th>'; });
+    g.professionals.forEach(function(p){ row3 += '<th class="rpt-prof-name" title="'+esc(p.name)+'">'+esc(profShortName(p))+'</th>'; });
   });
   row3 += '<th class="rpt-total-head">Profissionais</th>';
 

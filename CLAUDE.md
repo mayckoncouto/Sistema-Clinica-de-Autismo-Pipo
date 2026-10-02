@@ -741,3 +741,9 @@ dia abreviado ("Seg", nome completo no `title`), seletores sem ícone de relógi
 coluna "Atend." só com o número (texto completo no `title`), rodapé numa linha só
 ("Total: N atendimentos por semana · M por mês (4 semanas)", colspan 6 — antes
 somava 7 colunas e empurrava a tabela para fora da janela).
+
+## Nome social do profissional (2026-10-02)
+Campo "Nome social" no cadastro do profissional (`#profSocial` → `nomeSocial`).
+`profShortName(p)` = nome social ou, sem ele, `firstName(p.name)`;
+`seatShortName(t)` para as colunas do Planner. Usado no cabeçalho das colunas e
+na linha do almoço do Planner e no cabeçalho de profissionais do Resumo.
