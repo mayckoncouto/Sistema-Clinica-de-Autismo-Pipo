@@ -314,6 +314,8 @@ td.agd-slot:hover .agd-add{opacity:1}
 .agd-off-swatch{background:var(--off-bg)!important;border:1px dashed var(--line-strong)}
 /* Planner: horário fora do expediente do profissional da coluna (cinza, inativo). */
 .slotcell.slot-off{cursor:not-allowed}
+/* sala ocupada por paciente que não faz intervenção ABA: listras rosadas (cor da legenda) */
+.slotcell.aba-lock .book .book-main.off-box,.slotcell.aba-lock .book .book-main.off-box:hover{background:repeating-linear-gradient(135deg,rgba(244,183,183,.75) 0 6px,var(--off-bg) 6px 12px)}
 /* Fora do horário: mesmo quadrinho tracejado da célula livre, preenchido de cinza
    bem claro e sem reação ao mouse (Planner e Agenda). */
 .book .book-main.off-box,.book .book-main.off-box:hover{background:var(--off-bg);border-color:var(--line);cursor:not-allowed;box-shadow:none}
@@ -2866,6 +2868,9 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
     html += '<tr><td class="timecol"><div class="timecell has-row-btns"><span>'+row.time+'</span>' +
       rowLockButtonsHtml('data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-time="'+row.time+'"') + '</div></td>';
     rooms.forEach(function(r){
+      // Paciente que não faz intervenção ABA nesta sala e horário: as outras colunas ficam bloqueadas.
+      var abaHolder = null;
+      if (!isGroup(r)) r.therapists.some(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2)){ abaHolder = b2.patient; return true; } return false; });
       r.therapists.forEach(function(t){
         var key = row.time+"|"+r.id+"|"+t.id;
         var b = effectiveBooking(bookings, key, dayObj.key, row.time);
@@ -2881,8 +2886,10 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         // Fora do horário do profissional desta coluna: célula cinza e inativa
         // (sem clique, sem colar, sem soltar). Se já houver algo marcado ali, continua
         // aparecendo normalmente para poder ser movido ou desmarcado.
-        var isOff = !(b && b.patient) && !seatAvailable(t, dayObj.key, row.time);
-        html += '<td class="slotcell'+(isOff ? ' slot-off' : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="Fora do horário do profissional"':'')+'>';
+        var abaLock = !(b && b.patient) && !!abaHolder;
+        var isOff = abaLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
+        var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time) : "Fora do horário do profissional";
+        html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock' : '') : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
         if (isOff){
           html += '<div class="book"><div class="book-main off-box" aria-hidden="true"></div></div>';
         } else if (b && b.patient){
@@ -3148,7 +3155,7 @@ function wireGridDelegatedEvents(){
       return;
     }
     if (td.classList.contains("slot-off")){
-      showToast("Fora do horário de atendimento do profissional.", true);
+      showToast(td.classList.contains("aba-lock") ? td.title : "Fora do horário de atendimento do profissional.", true);
       return;
     }
     if (!e.target.closest(".book-main")) return;
@@ -3205,7 +3212,7 @@ function wireGridDelegatedEvents(){
     if (td.classList.contains("slot-off")){
       e.preventDefault();
       state.dragKey = null; state.dragDocId = null;
-      showToast("Fora do horário de atendimento do profissional.", true);
+      showToast(td.classList.contains("aba-lock") ? td.title : "Fora do horário de atendimento do profissional.", true);
       return;
     }
     e.preventDefault();
@@ -3350,6 +3357,16 @@ function profBusyMsg(profName, time, place){
 function patientBusyMsg(patient, service, time, place){
   return patient + " já tem " + (service || "esse serviço") + " às " + time + (place ? " em " + place : "") + ". O mesmo paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.";
 }
+// Paciente que não faz intervenção ABA ocupa a SALA inteira no horário: as outras
+// colunas da mesma sala ficam bloqueadas (só no Planner, só em sala — não em grupo).
+function isNaoABABooking(b){
+  if (!b || !b.patient || bookingKind(b)) return false;
+  var p = findPatientByName(b.patient);
+  return !!(p && patientIsNaoABA(p));
+}
+function abaRoomMsg(holder, roomName, time){
+  return roomName + " às " + time + " está ocupada por " + holder + ", que não faz intervenção ABA (ocupa a sala toda).";
+}
 // Planner: confere se rec pode ir na célula key do docId (dia-semana).
 // ignoreKeys: células que vão ficar vazias (origem de um mover); extra: {key: rec}
 // com o que vai ocupar outras células na mesma operação (troca de lugar).
@@ -3364,6 +3381,7 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
   var bookings = (doc && doc.bookings) || {};
   var patientRule = !isGroup(room) && !!findPatientByName(rec.patient);
   var svc = rec.service || DEFAULT_SERVICE_ID;
+  var recNaoABA = !isGroup(room) && isNaoABABooking(rec);
   var rooms = plannerRooms();
   for (var i=0;i<rooms.length;i++){
     var r = rooms[i], seats = r.therapists || [];
@@ -3372,6 +3390,10 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       if (k === key || ignoreKeys.indexOf(k) !== -1) continue;
       var b = Object.prototype.hasOwnProperty.call(extra, k) ? extra[k] : effectiveBooking(bookings, k, dayKey, time);
       if (!b || !b.patient || bookingKind(b)) continue;
+      if (r.id === room.id && !isGroup(room)){
+        if (recNaoABA) return "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + ".";
+        if (isNaoABABooking(b)) return abaRoomMsg(b.patient, room.name, time);
+      }
       if (profId && t.professionalId === profId && r.id !== room.id) return profBusyMsg(professionalName(profId), time, r.name);
       if (patientRule && !isGroup(r) && normText(b.patient) === normText(rec.patient) && (b.service || DEFAULT_SERVICE_ID) === svc){
         return patientBusyMsg(rec.patient, bookingServiceName(b), time, r.name + " (" + therapistDisplayName(t) + ")");

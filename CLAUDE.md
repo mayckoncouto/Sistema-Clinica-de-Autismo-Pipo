@@ -784,3 +784,12 @@ Planner: `table.sched` com `width:max-content` (sem `min-width:100%`): com o
 filtro de salas (poucas ou nenhuma coluna) a coluna de horários fica nos 87px em
 vez de esticar até a largura da tela. Agenda (visão Dia): sem nenhuma coluna a
 tabela recebe `width:87px` (com `table-layout:fixed` a única coluna esticava).
+
+## Paciente que não faz intervenção ABA ocupa a sala toda (Planner, 2026-10-02)
+Paciente com ABA = "Não" numa coluna de SALA (não grupo) bloqueia as outras
+colunas da mesma sala no mesmo horário. Regra derivada (nada é gravado): tirar o
+paciente libera as células. `isNaoABABooking(b)`, `abaRoomMsg()`. Na grade a célula
+vazia vira `.slot-off.aba-lock` (listras rosadas, `title` com o motivo; clique e
+soltar mostram o motivo). `plannerConflict` recusa: (a) paciente "não ABA" onde a
+sala já tem alguém no horário; (b) qualquer paciente numa sala ocupada por um
+"não ABA". Bloqueado / Reunião / Treinamento não entram na regra.
