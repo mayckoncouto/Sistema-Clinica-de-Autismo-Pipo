@@ -364,6 +364,7 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .prof-hours td.ph-total{color:var(--ink);font-size:12px}
 .prof-hours select{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:inherit;font-size:12.5px;color:var(--ink)}
 .prof-hours select:disabled{opacity:.45}
+.cl-preview{display:inline-flex;align-items:center;padding:6px 14px;border-radius:8px;font-weight:800;font-size:12.5px}
 .cl-hours input.cl-time{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:inherit;font-size:12.5px;color:var(--ink)}
 .cl-hours input.cl-time:disabled{opacity:.4}
 .cl-hours td.cl-on{text-align:center}
@@ -1115,8 +1116,27 @@ function subscribeClinic(){
     onClinicChange();
   }, function(){});
 }
+// Cores dos botões (cadastro da clínica): "corBotoes" vira --accent (botões
+// selecionados, destaque) e "corTexto" vira --accent-ink (texto em cima dela;
+// vazio = automático, branco ou escuro, o que tiver mais contraste). Sem cor
+// escolhida = verde padrão do sistema.
+function clinicTextAuto(hex){
+  var L = cpLum(hex);
+  return (1.05 / (L + 0.05)) >= ((L + 0.05) / (cpLum("#1f2b29") + 0.05)) ? "#ffffff" : "#1f2b29";
+}
+function applyClinicTheme(){
+  var root = document.documentElement.style;
+  var c = state.clinic && isHexColor(state.clinic.corBotoes) ? state.clinic.corBotoes : null;
+  if (!c){ ["--accent", "--accent-ink", "--accent-weak", "--ring"].forEach(function(v){ root.removeProperty(v); }); return; }
+  var ink = isHexColor(state.clinic.corTexto) ? state.clinic.corTexto : clinicTextAuto(c);
+  root.setProperty("--accent", c);
+  root.setProperty("--accent-ink", ink);
+  root.setProperty("--accent-weak", "color-mix(in srgb, " + c + " 16%, var(--surface))");
+  root.setProperty("--ring", "0 0 0 2px color-mix(in srgb, " + c + " 16%, var(--surface)), 0 0 0 3.5px " + c);
+}
 function onClinicChange(){
   rebuildDays();
+  applyClinicTheme();
   if (state.day !== "todos" && !dayEnabled(state.day)) state.day = DAYS[0].key;
   try {
     buildDaySeg();
@@ -1149,7 +1169,10 @@ function openClinicModal(){
         '<div class="field-row">' + f("clEnd", "Endereço", c.endereco, "Rua, número, bairro", true) + f("clCidade", "Cidade / UF", c.cidade, "Blumenau / SC") + '</div>' +
         '<div class="field-row"><div class="field"><label for="clDur">Duração padrão do atendimento</label><select id="clDur">' +
           CLINIC_DURATIONS.map(function(m){ return '<option value="'+m+'"'+(m === clinicDuration() ? ' selected' : '')+'>'+m+' minutos</option>'; }).join("") + '</select></div>' +
-          '<div class="field" style="flex:2"><label>&nbsp;</label><div class="pat-count">Define os horários do Planner e da Agenda: cada linha da grade = um atendimento.</div></div></div>' +
+          '<div class="field"><label>Cor dos botões</label><div class="color-pick-row"><button type="button" class="color-trigger" id="clCorBtn" aria-label="Cor dos botões"></button><span class="color-pick-code mono" id="clCorCode"></span></div></div>' +
+          '<div class="field"><label>Cor do texto dos botões</label><div class="color-pick-row"><button type="button" class="color-trigger" id="clTxtBtn" aria-label="Cor do texto dos botões"></button><span class="color-pick-code mono" id="clTxtCode"></span></div></div>' +
+          '<div class="field"><label>Prévia</label><div class="color-pick-row"><span class="cl-preview" id="clPreview">Selecionado</span><button type="button" class="btn ghost" id="clCorReset" title="Voltar ao verde padrão">Padrão</button></div></div></div>' +
+          '<div class="pat-count" style="margin-top:-4px">A duração define os horários do Planner e da Agenda (cada linha da grade = um atendimento). As cores valem para os botões selecionados e destaques do sistema.</div>' +
         '<div class="prof-section"><div class="prof-section-head"><span class="prof-access-title">Horário de atendimento</span>' +
           '<button type="button" class="btn ghost ph-copy" id="clCopy">Copiar segunda para os dias úteis</button></div>' +
           '<table class="prof-hours cl-hours" id="clHours"><thead>' +
@@ -1165,6 +1188,26 @@ function openClinicModal(){
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("clClose").addEventListener("click", close);
   document.getElementById("clCancel").addEventListener("click", close);
+  // Cores dos botões (vazio = verde padrão; texto vazio = automático).
+  var corBtn = (c.corBotoes && isHexColor(c.corBotoes)) ? c.corBotoes : "";
+  var corTxt = (c.corTexto && isHexColor(c.corTexto)) ? c.corTexto : "";
+  function themeUI(){
+    var base = corBtn || "#2c7a72"; // verde padrão do sistema
+    var txt = corTxt || clinicTextAuto(base);
+    document.getElementById("clCorBtn").style.background = base;
+    document.getElementById("clCorCode").textContent = corBtn ? corBtn.toUpperCase() : "Padrão (verde)";
+    document.getElementById("clTxtBtn").style.background = txt;
+    document.getElementById("clTxtCode").textContent = corTxt ? corTxt.toUpperCase() : "Automático";
+    var pv = document.getElementById("clPreview"); pv.style.background = base; pv.style.color = txt;
+  }
+  themeUI();
+  document.getElementById("clCorBtn").addEventListener("click", function(e){
+    openColorPicker(e.currentTarget, corBtn || "#2c7a72", function(hex){ corBtn = hex; themeUI(); });
+  });
+  document.getElementById("clTxtBtn").addEventListener("click", function(e){
+    openColorPicker(e.currentTarget, corTxt || clinicTextAuto(corBtn || "#2c7a72"), function(hex){ corTxt = hex; themeUI(); });
+  });
+  document.getElementById("clCorReset").addEventListener("click", function(){ corBtn = ""; corTxt = ""; themeUI(); });
   var tbl = document.getElementById("clHours");
   function v(id){ var el = document.getElementById(id); return el ? el.value : ""; }
   function readDay(key){
@@ -1217,7 +1260,9 @@ function openClinicModal(){
       telefone: document.getElementById("clFone").value.trim(), email: document.getElementById("clEmail").value.trim(),
       endereco: document.getElementById("clEnd").value.trim(), cidade: document.getElementById("clCidade").value.trim(),
       horarios: horarios,
-      duracao: dur
+      duracao: dur,
+      corBotoes: corBtn,
+      corTexto: corTxt
     };
     if (!db){ showToast("Sem conexão com o servidor.", true); return; }
     db.doc("config/clinic").set(rec).then(function(){

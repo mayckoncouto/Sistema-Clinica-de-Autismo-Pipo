@@ -637,3 +637,11 @@ formato antigo ao abrir; "Copiar segunda para todos" copia os 4 campos.
   `SESSION_MINUTES`); `agdPlus40(t)` agora = início + duração. Mudar a duração
   pede confirmação (horários que deixam de existir somem da grade, os
   agendamentos ficam guardados).
+
+## Cores dos botões (cadastro da Clínica) (2026-10-02)
+`config/clinic.corBotoes` (#rrggbb ou vazio = verde padrão) e `corTexto`
+(vazio = automático, branco ou escuro por contraste — `clinicTextAuto`).
+`applyClinicTheme()` (chamado em `onClinicChange`) põe no `:root` as variáveis
+`--accent`, `--accent-ink`, `--accent-weak` (color-mix 16% com a superfície) e
+`--ring`; sem cor escolhida remove e volta ao tema padrão (inclusive o escuro).
+Campos ao lado da duração, com prévia e botão "Padrão".
