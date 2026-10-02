@@ -598,6 +598,8 @@ faixa) — usados por `seatAvailable` (Planner), `agdInHours` (Agenda, envio,
 relatórios) e `agdHoursText` ("08:00–12:00 e 13:30–17:30"). Cadastro: tabela
 Dia | Manhã (Início, Fim) | Tarde (Início, Fim), `profDayPeriods` converte o
 formato antigo ao abrir; "Copiar segunda para todos" copia os 4 campos.
+  Coluna "Atendimentos" por dia (horários da clínica dentro da manhã/tarde do
+  profissional) e rodapé com total da semana e do mês (4 semanas): `hoursCounts`.
 
 ## Cadastro da Clínica: dias e horários do Planner e da Agenda (2026-10-02)
 - Documento `config/clinic` {nome, cnpj, telefone, email, endereco, cidade,

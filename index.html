@@ -358,6 +358,10 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .prof-hours td{padding:4px 6px;border-bottom:1px solid var(--line)}
 .prof-hours td.ph-day{font-weight:700;color:var(--ink);width:24%}
 .prof-hours th.ph-per{text-align:center;color:var(--ink-2);border-bottom:1px dashed var(--line)}
+.prof-hours td.ph-count{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.prof-hours tfoot td{border-bottom:0;padding-top:8px}
+.prof-hours td.ph-total-label{text-align:right;font-weight:700;color:var(--ink-2);font-size:12px}
+.prof-hours td.ph-total{color:var(--ink);font-size:12px}
 .prof-hours select{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:inherit;font-size:12.5px;color:var(--ink)}
 .prof-hours select:disabled{opacity:.45}
 .cl-hours input.cl-time{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:inherit;font-size:12.5px;color:var(--ink)}
@@ -4866,13 +4870,13 @@ function openProfessionalModal(p){
   var hoursRows = profWeekdays().map(function(d){
     var pp = profDayPeriods(v, d.key);
     return '<tr data-day="'+d.key+'"><td class="ph-day">'+d.label+'</td>' +
-      periodCells("m", pp.m, "manhã "+d.label) + periodCells("t", pp.t, "tarde "+d.label) + '</tr>';
+      periodCells("m", pp.m, "manhã "+d.label) + periodCells("t", pp.t, "tarde "+d.label) + '<td class="ph-count" data-count="'+d.key+'"></td></tr>';
   }).join("");
   // Usuário e senha: só o Administrador cria/ajusta acesso (e só ele enxerga os usuários).
   var canManageUser = !!(window.pipoAuth && window.pipoAuth.isAdmin());
 
   host.innerHTML =
-    '<div class="overlay" id="ovProf"><div class="modal wide" style="max-width:600px">' +
+    '<div class="overlay" id="ovProf"><div class="modal wide" style="max-width:720px">' +
       '<div class="modal-head"><div><h3>'+(isNew?"Novo profissional":"Editar profissional")+'</h3></div>' +
         '<button class="modal-close" id="closeProf" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
@@ -4905,7 +4909,8 @@ function openProfessionalModal(p){
         '<div class="prof-section">' +
           '<div class="prof-section-head"><span class="prof-access-title">Horários</span>' +
             '<button type="button" class="btn ghost ph-copy" id="profHoursCopy">Copiar segunda para todos</button></div>' +
-          '<table class="prof-hours" id="profHours"><thead><tr><th rowspan="2">Dia</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th></tr><tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>'+hoursRows+'</tbody></table>' +
+          '<table class="prof-hours" id="profHours"><thead><tr><th rowspan="2">Dia</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th><th rowspan="2">Atendimentos</th></tr><tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>'+hoursRows+'</tbody>' +
+            '<tfoot><tr><td colspan="6" class="ph-total-label">Total na semana · no mês (4 semanas)</td><td class="ph-count ph-total" id="profHoursTotal"></td></tr></tfoot></table>' +
         '</div>' +
         (canManageUser ?
           '<div class="prof-access" id="profAccess">' +
@@ -4972,6 +4977,23 @@ function openProfessionalModal(p){
 
   // Horários: "Não atende" desativa o fim; copiar segunda para os demais dias.
   var hoursTable = document.getElementById("profHours");
+  // Atendimentos por dia (horários da clínica dentro da manhã e da tarde do profissional),
+  // total da semana e do mês (4 semanas). Atualiza a cada mudança.
+  function hoursCounts(){
+    var week = 0;
+    Array.prototype.forEach.call(hoursTable.querySelectorAll("tbody tr"), function(tr){
+      var day = findDayObj(tr.getAttribute("data-day")), n = 0;
+      [["m", day.morning], ["t", day.afternoon]].forEach(function(pp){
+        var s = tr.querySelector('.ph-start[data-p="'+pp[0]+'"]').value, e = tr.querySelector('.ph-end[data-p="'+pp[0]+'"]').value;
+        if (!s || !e) return;
+        n += day.morning.concat(day.afternoon).filter(function(t){ return t >= s && addMinutes(t, CLINIC_SLOT_MIN) <= e; }).length;
+      });
+      week += n;
+      tr.querySelector(".ph-count").textContent = n ? n + (n === 1 ? " atendimento" : " atendimentos") : "Não atende";
+    });
+    document.getElementById("profHoursTotal").innerHTML = "<b>" + week + "</b> por semana · <b>" + (week * 4) + "</b> por mês";
+  }
+  hoursTable.addEventListener("change", hoursCounts);
   hoursTable.addEventListener("change", function(e){
     if (!e.target.classList.contains("ph-start")) return;
     var per = e.target.getAttribute("data-p");
@@ -4992,7 +5014,9 @@ function openProfessionalModal(p){
         sel.disabled = src[k].disabled;
       });
     });
+    hoursCounts();
   });
+  hoursCounts();
 
   // CPF: só números, formatado enquanto digita (000.000.000-00).
   var cpfEl = document.getElementById("profCpf");
