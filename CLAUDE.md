@@ -785,14 +785,15 @@ filtro de salas (poucas ou nenhuma coluna) a coluna de horários fica nos 87px e
 vez de esticar até a largura da tela. Agenda (visão Dia): sem nenhuma coluna a
 tabela recebe `width:87px` (com `table-layout:fixed` a única coluna esticava).
 
-## Paciente que não faz intervenção ABA ocupa a sala toda (Planner, 2026-10-02)
+## Paciente que não faz intervenção ABA ocupa o horário do profissional (Planner, 2026-10-02)
 Paciente com ABA = "Não" numa coluna de SALA (não grupo) bloqueia as outras
-colunas da mesma sala no mesmo horário. Regra derivada (nada é gravado): tirar o
+colunas do MESMO profissional nessa sala no mesmo horário (colunas de outros
+profissionais na sala continuam livres; `abaByProf` na grade). Regra derivada (nada é gravado): tirar o
 paciente libera as células. `isNaoABABooking(b)`, `abaRoomMsg()`. Na grade a célula
 vazia vira `.slot-off.aba-lock` (listras rosadas, `title` com o motivo; clique e
-soltar mostram o motivo). `plannerConflict` recusa: (a) paciente "não ABA" onde a
-sala já tem alguém no horário; (b) qualquer paciente numa sala ocupada por um
-"não ABA". Bloqueado / Reunião / Treinamento não entram na regra.
+soltar mostram o motivo). `plannerConflict` recusa: (a) paciente "não ABA" onde o
+profissional já tem alguém nessa sala no horário; (b) qualquer paciente numa
+coluna do profissional que está com um "não ABA". Bloqueado / Reunião / Treinamento não entram na regra.
 - Exceção (`groupBookedRoom(bookings, dayKey, time, room)`): se um Grupo de
   Suporte tem, no mesmo horário, um agendamento com o nome desta sala, o MESMO
   profissional pode ter outro paciente "não ABA" em outra coluna dele na sala.
