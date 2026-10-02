@@ -433,7 +433,7 @@ chaves de agendamento do Planner (`hora|roomId|seatId`) não mudam. Helpers:
 `isGroup`, `physicalRooms()`, `supportGroups()`, `plannerRooms()` (grupos
 primeiro, depois salas — usado por `visibleRooms()` e pelo filtro de salas).
 - Tela Salas: botão "Grupos de suporte" alterna `state.salasView` entre
-  "salas" e "grupos" (vira "← Voltar para salas"; "+ Nova sala" vira
+  "salas" e "grupos" (vira "Salas"; "+ Nova sala" vira
   "+ Novo grupo"). As setas trocam só com o vizinho do mesmo tipo.
   `openRoomModal(r, asGroup)` serve aos dois.
 - Regras do Planner: célula de grupo só aceita SALA; célula de sala só aceita
@@ -771,3 +771,9 @@ App: `agdSplitByRecords(rows)` separa {del, kept}; usado em `agdDeleteRow`
 aviso diz quantos). Trocar dois atendimentos de lugar (arrastar em cima de outro)
 agora ATUALIZA os dois (antes apagava e recriava o outro, perdendo o id e a
 ligação com a evolução); permissão exigida: editar.
+
+## Cadastro da Clínica: Aparência e Atendimento em linhas (2026-10-02)
+Os dois cartões ficam um embaixo do outro (`.cl-cards` em coluna, `.cl-row`):
+Aparência = linha 1 "Cor do botão · Cor do texto · Prévia · Restaurar padrão",
+linha 2 "Logo · Escolher · Padrão"; Atendimento = "Duração padrão [seletor] +
+orientação". Janela com 840px. Botão da tela Salas em modo grupos: "Salas".
