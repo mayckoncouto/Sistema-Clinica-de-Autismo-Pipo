@@ -209,7 +209,7 @@ testes continuam usando o mesmo mock.
 - **Tipos especiais de horário** (Planner e Agenda): na janela do atendimento,
   três opções exclusivas — **Bloqueado** (cinza escuro, `blocked:true`),
   **Reunião Clínica** (amarelo, `patient:"Reunião Clínica"`) e **Treinamento**
-  (ciano `#4DE8FD`, `training:true`). Com uma marcada, o campo de paciente
+  (azul `#00B0F0`, `training:true`). Com uma marcada, o campo de paciente
   fica desativado. `SLOT_KINDS`, `bookingKind()`, `slotKindRecord()`,
   `slotKindPickerHtml()`; nenhum conta no Relatório nem na contagem da Agenda.
 - **Serviços** (desde 2026-10-01): documento `config/services`
