@@ -380,24 +380,22 @@
     var list = statusList();
     if (!list.length) return "";
     var map = (perms && perms.status) || {};
-    return '<div class="field" id="rStatusPerms" style="margin-top:12px"><label>Status dos atendimentos (Agenda)</label>' +
-      '<div class="pat-count" style="margin-bottom:6px">Quais status este nível pode marcar nos atendimentos.</div>' +
+    return '<div class="perm-section" id="rStatusPerms"><div class="perm-title">Status dos atendimentos (Agenda)</div>' +
+      '<div class="pat-count">Quais status este nível pode marcar nos atendimentos.</div><div class="perm-opts">' +
       list.map(function (s) {
         var on = locked || !!map[s.id];
-        return '<label class="role-status-opt" style="display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:500">' +
-          '<input type="checkbox" data-status="' + esc(s.id) + '"' + (on ? " checked" : "") + (locked ? " disabled" : "") + ">" +
-          '<span style="width:10px;height:10px;border-radius:50%;background:' + esc(s.color || "#5b6b68") + '"></span>' + esc(s.name) + "</label>";
-      }).join("") + "</div>";
+        return '<label class="perm-opt"><input type="checkbox" data-status="' + esc(s.id) + '"' + (on ? " checked" : "") + (locked ? " disabled" : "") + ">" +
+          '<span class="perm-dot" style="background:' + esc(s.color || "#5b6b68") + '"></span><span>' + esc(s.name) + "</span></label>";
+      }).join("") + "</div></div>";
   }
   function reportPermsHtml(perms, locked) {
     var map = (perms && perms.relatorios) || {};
-    return '<div class="field" id="rReportPerms" style="margin-top:12px"><label>Relatórios</label>' +
-      '<div class="pat-count" style="margin-bottom:6px">Quais relatórios este nível pode gerar na aba Relatórios. O Profissional só vê os dados dele.</div>' +
+    return '<div class="perm-section" id="rReportPerms"><div class="perm-title">Relatórios</div>' +
+      '<div class="pat-count">Quais relatórios este nível pode gerar na aba Relatórios. O Profissional só vê os dados dele.</div><div class="perm-opts">' +
       REPORTS.map(function (x) {
         var on = locked || !!map[x.key];
-        return '<label style="display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:500">' +
-          '<input type="checkbox" data-report="' + x.key + '"' + (on ? " checked" : "") + (locked ? " disabled" : "") + ">" + esc(x.label) + "</label>";
-      }).join("") + "</div>";
+        return '<label class="perm-opt"><input type="checkbox" data-report="' + x.key + '"' + (on ? " checked" : "") + (locked ? " disabled" : "") + "><span>" + esc(x.label) + "</span></label>";
+      }).join("") + "</div></div>";
   }
   function slugify(s) {
     return String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
