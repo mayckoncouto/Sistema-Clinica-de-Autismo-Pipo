@@ -790,7 +790,7 @@ Paciente com ABA = "Não" numa coluna de SALA (não grupo) bloqueia as outras
 colunas do MESMO profissional nessa sala no mesmo horário (colunas de outros
 profissionais na sala continuam livres; `abaByProf` na grade). Regra derivada (nada é gravado): tirar o
 paciente libera as células. `isNaoABABooking(b)`, `abaRoomMsg()`. Na grade a célula
-vazia vira `.slot-off.aba-lock` (listras rosadas, `title` com o motivo; clique e
+vazia vira `.slot-off.aba-lock` (listras cinza-claro e branco, `title` com o motivo; clique e
 soltar mostram o motivo). `plannerConflict` recusa: (a) paciente "não ABA" onde o
 profissional já tem alguém nessa sala no horário; (b) qualquer paciente numa
 coluna do profissional que está com um "não ABA". Bloqueado / Reunião / Treinamento não entram na regra.
@@ -803,6 +803,6 @@ coluna do profissional que está com um "não ABA". Bloqueado / Reunião / Trein
 ## Profissional atendendo numa sala fica bloqueado nos grupos (Planner, 2026-10-02)
 Na grade, por horário, `profInRoom[profId]` = sala (não grupo) onde o
 profissional tem paciente. A coluna dele nos Grupos de Suporte, se vazia, vira
-`.slot-off.prof-busy` (cinza, `title` "Fulano está atendendo em <sala> neste
+`.slot-off.prof-busy` (listras cinza-claro e branco, `title` "Fulano está atendendo em <sala> neste
 horário."; clique/soltar mostram o motivo). A gravação já era recusada pela
 regra "profissional em dois lugares" de `plannerConflict`.
