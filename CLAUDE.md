@@ -588,3 +588,13 @@ entra em Minhas cores e já escolhe). Esc/clique fora fecha só o seletor. Usado
 Salas/Grupos (`#rmColorBtn`), Especialidades (`.spec-color-btn`) e Status
 (`[data-stcolor]`). Cor nova é sempre "#rrggbb"; nomes antigos ("teal"…)
 continuam valendo via `swatchVar`/`cpToHex`.
+
+## Horário do profissional: manhã e tarde (2026-10-02)
+`horarios[dia] = {manha:{inicio,fim}, tarde:{inicio,fim}}` (período sem início =
+não atende). Formato antigo (`{inicio,fim}` por dia, ou `horaInicio/horaFim`)
+continua valendo como faixa única. `profDayRanges` (faixas do dia),
+`profDayHours` (resumo {start,end,ranges}), `profSlotOk` (o horário cabe numa
+faixa) — usados por `seatAvailable` (Planner), `agdInHours` (Agenda, envio,
+relatórios) e `agdHoursText` ("08:00–12:00 e 13:30–17:30"). Cadastro: tabela
+Dia | Manhã (Início, Fim) | Tarde (Início, Fim), `profDayPeriods` converte o
+formato antigo ao abrir; "Copiar segunda para todos" copia os 4 campos.

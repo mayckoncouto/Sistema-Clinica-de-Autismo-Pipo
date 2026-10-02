@@ -342,7 +342,8 @@ td.agd-slot:hover .agd-add{opacity:1}
 table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .prof-hours th{text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted);padding:4px 6px;border-bottom:1px solid var(--line)}
 .prof-hours td{padding:4px 6px;border-bottom:1px solid var(--line)}
-.prof-hours td.ph-day{font-weight:700;color:var(--ink);width:38%}
+.prof-hours td.ph-day{font-weight:700;color:var(--ink);width:24%}
+.prof-hours th.ph-per{text-align:center;color:var(--ink-2);border-bottom:1px dashed var(--line)}
 .prof-hours select{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:inherit;font-size:12.5px;color:var(--ink)}
 .prof-hours select:disabled{opacity:.45}
 .prof-access{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
@@ -4605,18 +4606,20 @@ function openProfessionalModal(p){
     return '<option value="'+esc(s.id)+'"'+(s.id===draftSpecialtyId?' selected':'')+'>'+esc(s.name)+'</option>';
   }).join("");
   var v = p || {};
-  // Horário por dia da semana (seg–sex); dia sem início = não atende.
-  var dayHours = {};
-  PROF_WEEKDAYS.forEach(function(d){ dayHours[d.key] = profDayHours(v, d.key); });
+  // Horário por dia da semana (seg–sex), manhã e tarde; período sem início = não atende.
   function timeOpts(list, sel, withNone){
     return (withNone ? '<option value=""'+(!sel?' selected':'')+'>Não atende</option>' : '') +
       list.map(function(t){ return '<option'+(t===sel?' selected':'')+'>'+t+'</option>'; }).join("");
   }
+  function periodCells(per, x, label){
+    var o = PROF_PERIOD_TIMES[per];
+    return '<td><select class="ph-start" data-p="'+per+'" aria-label="Início '+label+'">'+timeOpts(o.starts, x ? x.inicio : "", true)+'</select></td>' +
+      '<td><select class="ph-end" data-p="'+per+'" aria-label="Fim '+label+'"'+(x?'':' disabled')+'>'+timeOpts(o.ends, x ? x.fim : o.ends[o.ends.length-1], false)+'</select></td>';
+  }
   var hoursRows = PROF_WEEKDAYS.map(function(d){
-    var h = dayHours[d.key];
+    var pp = profDayPeriods(v, d.key);
     return '<tr data-day="'+d.key+'"><td class="ph-day">'+d.label+'</td>' +
-      '<td><select class="ph-start" aria-label="Início '+d.label+'">'+timeOpts(PROF_START_TIMES, h ? h.start : "", true)+'</select></td>' +
-      '<td><select class="ph-end" aria-label="Fim '+d.label+'"'+(h?'':' disabled')+'>'+timeOpts(PROF_END_TIMES, h ? h.end : PROF_DAY_END, false)+'</select></td></tr>';
+      periodCells("m", pp.m, "manhã "+d.label) + periodCells("t", pp.t, "tarde "+d.label) + '</tr>';
   }).join("");
   // Usuário e senha: só o Administrador cria/ajusta acesso (e só ele enxerga os usuários).
   var canManageUser = !!(window.pipoAuth && window.pipoAuth.isAdmin());
@@ -4655,7 +4658,7 @@ function openProfessionalModal(p){
         '<div class="prof-section">' +
           '<div class="prof-section-head"><span class="prof-access-title">Horários</span>' +
             '<button type="button" class="btn ghost ph-copy" id="profHoursCopy">Copiar segunda para todos</button></div>' +
-          '<table class="prof-hours" id="profHours"><thead><tr><th>Dia</th><th>Início</th><th>Fim</th></tr></thead><tbody>'+hoursRows+'</tbody></table>' +
+          '<table class="prof-hours" id="profHours"><thead><tr><th rowspan="2">Dia</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th></tr><tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>'+hoursRows+'</tbody></table>' +
         '</div>' +
         (canManageUser ?
           '<div class="prof-access" id="profAccess">' +
@@ -4724,21 +4727,23 @@ function openProfessionalModal(p){
   var hoursTable = document.getElementById("profHours");
   hoursTable.addEventListener("change", function(e){
     if (!e.target.classList.contains("ph-start")) return;
-    var tr = e.target.closest("tr"), end = tr.querySelector(".ph-end");
+    var per = e.target.getAttribute("data-p");
+    var tr = e.target.closest("tr"), end = tr.querySelector('.ph-end[data-p="'+per+'"]');
     end.disabled = !e.target.value;
     if (e.target.value && end.value <= e.target.value){
-      var next = PROF_END_TIMES.filter(function(t){ return t > e.target.value; });
-      end.value = next.length ? next[next.length-1] : end.value;
+      var ends = PROF_PERIOD_TIMES[per].ends;
+      end.value = ends[ends.length-1];
     }
   });
   document.getElementById("profHoursCopy").addEventListener("click", function(){
     var rows = hoursTable.querySelectorAll("tbody tr");
-    var s = rows[0].querySelector(".ph-start").value, e = rows[0].querySelector(".ph-end").value;
+    var src = rows[0].querySelectorAll("select");
     Array.prototype.forEach.call(rows, function(tr, i){
       if (!i) return;
-      tr.querySelector(".ph-start").value = s;
-      tr.querySelector(".ph-end").value = e;
-      tr.querySelector(".ph-end").disabled = !s;
+      Array.prototype.forEach.call(tr.querySelectorAll("select"), function(sel, k){
+        sel.value = src[k].value;
+        sel.disabled = src[k].disabled;
+      });
     });
   });
 
@@ -4770,16 +4775,20 @@ function openProfessionalModal(p){
     var name = document.getElementById("profName").value.trim();
     if (!name){ document.getElementById("profName").focus(); return; }
     var specialtyId = document.getElementById("profSpecialty").value || null;
-    // Horários por dia: {seg:{inicio,fim}, ...}; dia "Não atende" fica {inicio:"",fim:""}.
-    var horarios = {}, badDay = null;
+    // Horários por dia: {seg:{manha:{inicio,fim}, tarde:{inicio,fim}}, ...}; período "Não atende" = {inicio:"",fim:""}.
+    var horarios = {}, badDay = null, badPer = "";
     Array.prototype.forEach.call(document.querySelectorAll("#profHours tbody tr"), function(tr){
-      var s = tr.querySelector(".ph-start").value, e = tr.querySelector(".ph-end").value;
-      if (s && e <= s) badDay = badDay || tr;
-      horarios[tr.getAttribute("data-day")] = s ? {inicio: s, fim: e} : {inicio: "", fim: ""};
+      var day = {};
+      [["m", "manha", "manhã"], ["t", "tarde", "tarde"]].forEach(function(pp){
+        var s = tr.querySelector('.ph-start[data-p="'+pp[0]+'"]').value, e = tr.querySelector('.ph-end[data-p="'+pp[0]+'"]').value;
+        if (s && e <= s && !badDay){ badDay = tr; badPer = pp[0]; }
+        day[pp[1]] = s ? {inicio: s, fim: e} : {inicio: "", fim: ""};
+      });
+      horarios[tr.getAttribute("data-day")] = day;
     });
     if (badDay){
-      showToast("Em "+badDay.querySelector(".ph-day").textContent+", o horário final precisa ser depois do inicial.", true);
-      badDay.querySelector(".ph-end").focus();
+      showToast("Em "+badDay.querySelector(".ph-day").textContent+" ("+(badPer === "m" ? "manhã" : "tarde")+"), o horário final precisa ser depois do inicial.", true);
+      badDay.querySelector('.ph-end[data-p="'+badPer+'"]').focus();
       return;
     }
     var cpf = formatCpf(cpfEl.value);
@@ -4835,6 +4844,11 @@ var PROF_DAY_START = "07:20", PROF_DAY_END = "18:10";
 // Inícios possíveis = horários do Planner; fins = início + 40 min.
 var PROF_START_TIMES = ["07:20","08:00","08:40","09:20","10:00","10:40","11:20","13:30","14:10","14:50","15:30","16:10","16:50","17:30"];
 var PROF_END_TIMES = ["08:00","08:40","09:20","10:00","10:40","11:20","12:00","14:10","14:50","15:30","16:10","16:50","17:30","18:10"];
+// Opções de manhã e tarde no cadastro do profissional.
+var PROF_PERIOD_TIMES = {
+  m: {starts: PROF_START_TIMES.filter(function(t){ return t < "12:00"; }), ends: PROF_END_TIMES.filter(function(t){ return t <= "12:00"; })},
+  t: {starts: PROF_START_TIMES.filter(function(t){ return t > "12:00"; }), ends: PROF_END_TIMES.filter(function(t){ return t > "12:00"; })}
+};
 var PROF_WEEKDAYS = [
   {key:"seg", label:"Segunda-feira"}, {key:"ter", label:"Terça-feira"}, {key:"qua", label:"Quarta-feira"},
   {key:"qui", label:"Quinta-feira"}, {key:"sex", label:"Sexta-feira"}
@@ -4846,13 +4860,42 @@ var PROF_WEEKDAYS = [
 function seatAvailable(t, dayKey, time){
   var prof = t && t.professionalId ? findProfessional(t.professionalId) : null;
   if (!prof) return true;
-  var h = profDayHours(prof, dayKey);
-  return !!h && time >= h.start && agdPlus40(time) <= h.end;
+  return profSlotOk(prof, dayKey, time);
 }
-function profDayHours(p, dayKey){
+// Faixas de atendimento do profissional no dia ("seg".."sex"): [{start,end}] — manhã
+// e/ou tarde (horarios[dia] = {manha:{inicio,fim}, tarde:{inicio,fim}}). Cadastros
+// antigos com um horário só ({inicio,fim} por dia, ou horaInicio/horaFim) viram
+// uma faixa única; sem nada = dia inteiro.
+function profDayRanges(p, dayKey){
   var h = p && p.horarios && p.horarios[dayKey];
-  if (h) return h.inicio ? {start: h.inicio, end: h.fim || PROF_DAY_END} : null;
-  return {start: (p && p.horaInicio) || PROF_DAY_START, end: (p && p.horaFim) || PROF_DAY_END};
+  if (h && (h.manha || h.tarde)){
+    return [h.manha, h.tarde].filter(function(x){ return x && x.inicio && x.fim; })
+      .map(function(x){ return {start: x.inicio, end: x.fim}; });
+  }
+  if (h) return h.inicio ? [{start: h.inicio, end: h.fim || PROF_DAY_END}] : [];
+  return [{start: (p && p.horaInicio) || PROF_DAY_START, end: (p && p.horaFim) || PROF_DAY_END}];
+}
+// Resumo do dia: {start, end, ranges} (do primeiro início ao último fim) ou null se não atende.
+function profDayHours(p, dayKey){
+  var r = profDayRanges(p, dayKey);
+  return r.length ? {start: r[0].start, end: r[r.length - 1].end, ranges: r} : null;
+}
+// O horário (de 40 min) cabe numa das faixas do profissional?
+function profSlotOk(p, dayKey, time){
+  return profDayRanges(p, dayKey).some(function(r){ return time >= r.start && agdPlus40(time) <= r.end; });
+}
+// Manhã / tarde para o cadastro (converte o formato antigo de um horário só).
+function profDayPeriods(p, dayKey){
+  var h = p && p.horarios && p.horarios[dayKey];
+  if (h && (h.manha || h.tarde)){
+    return {m: h.manha && h.manha.inicio ? h.manha : null, t: h.tarde && h.tarde.inicio ? h.tarde : null};
+  }
+  var r = profDayHours(p, dayKey);
+  if (!r) return {m: null, t: null};
+  return {
+    m: r.start < "12:00" ? {inicio: r.start, fim: r.end < "12:00" ? r.end : "12:00"} : null,
+    t: r.end > "13:30" ? {inicio: r.start > "13:30" ? r.start : "13:30", fim: r.end} : null
+  };
 }
 var CBOS_SUGGESTIONS = [
   ["2515-10","Psicólogo clínico"], ["2238-10","Fonoaudiólogo"], ["2239-05","Terapeuta ocupacional"],
@@ -5414,8 +5457,8 @@ function agdProfRoom(profId){
 }
 // Horário do profissional na data (cada dia da semana tem o seu); null = não atende.
 function agdProfHours(p, date){ return profDayHours(p, AD_WEEKDAY_KEYS[(date || AD.date).getDay()]); }
-function agdHoursText(h){ return h ? h.start + " às " + h.end : "Não atende"; }
-function agdInHours(p, t, date){ var h = agdProfHours(p, date); return !!h && t >= h.start && agdPlus40(t) <= h.end; }
+function agdHoursText(h){ return h ? h.ranges.map(function(r){ return r.start + "–" + r.end; }).join(" e ") : "Não atende"; }
+function agdInHours(p, t, date){ return profSlotOk(p, AD_WEEKDAY_KEYS[(date || AD.date).getDay()], t); }
 function agdResColor(r){
   if (AD.mode === "sala") return swatchVar(r.color || "teal");
   var s = r.specialtyId ? state.specialties.filter(function(x){ return x.id === r.specialtyId; })[0] : null;
