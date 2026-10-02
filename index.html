@@ -897,7 +897,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <span><i style="background:#C4DCA9"></i>5–9 anos</span>
       <span><i style="background:#F4CC99"></i>10+ anos</span>
       <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
-      <span><i style="background:#8FD3F4"></i>Treinamento</span>
+      <span><i style="background:#8FD3F4"></i>Treinamento / serviço que não é sessão</span>
       <span><i style="background:#4a5257"></i>Bloqueado</span>
       <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Fora do horário do profissional</span>
     </div>
@@ -938,7 +938,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <span><i style="background:#C4DCA9"></i>5–9 anos</span>
         <span><i style="background:#F4CC99"></i>10+ anos</span>
         <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
-        <span><i style="background:#8FD3F4"></i>Treinamento</span>
+        <span><i style="background:#8FD3F4"></i>Treinamento / serviço que não é sessão</span>
         <span><i style="background:#4a5257"></i>Bloqueado</span>
         <span><i class="agd-off-swatch"></i>Fora do horário do profissional</span>
       </div>
@@ -1733,6 +1733,9 @@ function canUseStatus(id){ return !id || (window.pipoAuth ? window.pipoAuth.can(
  * "Sessão" (id "sessao", travado no cadastro de serviços). Horários especiais
  * (Bloqueado / Reunião / Treinamento) não têm serviço. */
 var DEFAULT_SERVICE_ID = "sessao";
+// Atendimento de paciente com serviço que não é "Sessão" (Orientação Familiar, Avaliação...):
+// a célula usa a mesma cor de Treinamento (Planner e Agenda).
+function otherService(b){ return !!(b && b.service && b.service !== DEFAULT_SERVICE_ID); }
 function servicesList(){
   var list = state.services.slice();
   if (!list.some(function(s){ return s.id === DEFAULT_SERVICE_ID; })) list.unshift({id: DEFAULT_SERVICE_ID, name: "Sessão"});
@@ -2846,7 +2849,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
           var isTraining = !isBlocked && bookingKind(b) === "treinamento";
           var isSpecialKind = isBlocked || isMeetingDefault || isTraining;
           var pRec = isSpecialKind ? null : findPatientByName(b.patient);
-          var pCol = pRec ? patientColor(pRec) : null;
+          var pCol = pRec ? (otherService(b) ? TRAINING_COLOR : patientColor(pRec)) : null;
           var roomMatch = (!isSpecialKind && !pRec) ? findRoomByName(b.patient) : null;
           var roomCol = roomMatch ? roomFillColor(roomMatch) : null;
           var fillCol = isBlocked ? BLOCKED_COLOR : (isMeetingDefault ? MEETING_COLOR : (isTraining ? TRAINING_COLOR : (pCol || roomCol)));
@@ -5994,7 +5997,7 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   else {
     var pRec = findPatientByName(row.patient);
     var room = !pRec ? findRoomByName(row.patient) : null;
-    fill = pRec ? patientColor(pRec) : (room ? roomFillColor(room) : null);
+    fill = pRec ? (otherService(row) ? TRAINING_COLOR : patientColor(pRec)) : (room ? roomFillColor(room) : null);
     if (fill) cls = " pcolor";
   }
   var name = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : row.patient;

@@ -701,3 +701,8 @@ recusa a troca para "finalizado" sem `clinical_records` ligada (migração
   `#grupos`, `#resumo`, `#agendadia`, `#clinica`), aberto por `openNavFromHash()`
   (na carga e depois que as permissões chegam).
 - Legenda de cores: "Não faz Intervenção ABA".
+
+## Serviço diferente de "Sessão" = cor de Treinamento (2026-10-02)
+Célula de paciente com `service` diferente de `DEFAULT_SERVICE_ID` ("sessao") é
+preenchida com `TRAINING_COLOR`, no Planner e na Agenda (`otherService(b)`), no
+lugar da cor por idade/ABA. Legenda: "Treinamento / serviço que não é sessão".
