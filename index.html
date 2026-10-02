@@ -5984,6 +5984,29 @@ function agdSetStatus(row, statusId){
     return true;
   });
 }
+// Mudar o status de um atendimento. "Finalizado" exige a evolução do atendimento
+// no prontuário: se ainda não existe, abre a janela de evolução e só finaliza
+// depois que ela for salva (cancelar = não finaliza). Atendimento que não é de
+// paciente cadastrado (ex.: grupo de suporte) finaliza direto. O banco confere
+// a mesma regra (migração 2026-10-02i). Promise<boolean>.
+var FINAL_STATUS = "finalizado";
+function agdChangeStatus(row, v){
+  if (v !== FINAL_STATUS) return agdSetStatus(row, v);
+  var p = findPatientByName(row.patient);
+  if (!p) return agdSetStatus(row, v);
+  return agdClient().from("clinical_records").select("id").eq("appointment_id", row.id).then(function(r){
+    if (!r.error && (r.data || []).length) return agdSetStatus(row, v);
+    if (!prCan("create")){
+      showToast("Para finalizar, é preciso registrar a evolução deste atendimento no prontuário (seu nível não tem essa permissão).", true);
+      return false;
+    }
+    return new Promise(function(resolve){
+      prOpenEditor({patient: p, appointment: row,
+        onSaved: function(){ agdSetStatus(row, v).then(resolve); },
+        onCancel: function(){ showToast("O atendimento não foi finalizado: registre e salve a evolução para finalizar."); resolve(false); }});
+    });
+  });
+}
 // Exclui um atendimento da Agenda (com desfazer). Promise<boolean>.
 function agdDeleteRow(row, okMsg){
   return agdClient().from("appointments").delete().eq("id", row.id).then(function(r){
@@ -6189,7 +6212,7 @@ function agdOpenDetails(row){
         '<button class="modal-close" id="agdDetClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="agd-det-top"><div class="agd-det-name">' + (col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + '<span>' + esc(name) + '</span></div>' +
-          (showPront ? '<button class="btn primary" id="agdDetPront">' + PLAY_SVG + ' <span class="pr-btn-label">Registrar Atendimento</span></button>' : '') + '</div>' +
+          '</div>' +
         '<div class="agd-det">' +
         (kind ? '' : line(grp ? "Tipo" : "Serviço", grp ? "Grupo de suporte" : bookingServiceName(row))) +
         line("Profissional", prof ? prof.name : "") +
@@ -6211,14 +6234,11 @@ function agdOpenDetails(row){
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("agdDetClose").addEventListener("click", close);
   document.getElementById("agdDetOk").addEventListener("click", close);
-  var pb = document.getElementById("agdDetPront");
-  prLabelApptButton(row, pb);
-  if (pb) pb.addEventListener("click", function(){ close(); prFromAppointment(row); });
   // Status: grava na hora em que escolhe.
   var sel = document.getElementById("agdDetStatus");
   if (sel) sel.addEventListener("change", function(){
     var v = sel.value; sel.disabled = true;
-    agdSetStatus(row, v).then(function(ok){
+    agdChangeStatus(row, v).then(function(ok){
       sel.disabled = false;
       if (ok){ curStatus = v; row = AD.rows[row.id] || row; agdRender(); }
       else sel.value = curStatus;
@@ -6260,8 +6280,7 @@ function agdOpenModal(opts){
     '<div class="overlay" id="ovAgd"><div class="modal wide" style="max-width:520px">' +
       '<div class="modal-head"><div><h3>'+(isNew ? "Novo atendimento" : canSave ? "Editar atendimento" : "Atendimento")+'</h3>' +
         '<div class="modal-sub">'+agdBrDate(date)+(time ? ' às '+time : '')+'</div></div>' +
-        '<div class="agd-head-actions">' + (showPront ? '<button class="btn primary" id="agdPront" title="Abrir o prontuário e escrever a evolução deste atendimento">'+PLAY_SVG+' <span class="pr-btn-label">Registrar Atendimento</span></button>' : '') +
-        '<button class="modal-close" id="agdClose" aria-label="Fechar">✕</button></div></div>' +
+        '<div class="agd-head-actions">' +         '<button class="modal-close" id="agdClose" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' +
         '<div class="field"><label for="agdPac">Paciente ou grupo de suporte</label><input id="agdPac" type="text" autocomplete="off" placeholder="Nome do paciente ou do grupo…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'><div class="autolist" id="agdSuggest" hidden></div></div>' +
         '<div class="field"><label for="agdServ">Serviço</label><select id="agdServ"'+(canSave && !rowKind?'':' disabled')+'>' +
@@ -6296,15 +6315,12 @@ function agdOpenModal(opts){
     var el = document.getElementById("agdStatus");
     return (el && !el.disabled && el.value !== curStatus) ? el.value : null;
   }
-  var prBtn = document.getElementById("agdPront");
-  prLabelApptButton(row, prBtn);
-  if (prBtn) prBtn.addEventListener("click", function(){ close(); prFromAppointment(row); });
   var stOnly = document.getElementById("agdSaveStatus");
   if (stOnly) stOnly.addEventListener("click", function(){
     var v = statusChoice();
     if (v === null){ close(); return; }
     stOnly.disabled = true;
-    agdSetStatus(row, v).then(function(ok){ stOnly.disabled = false; if (ok){ close(); agdRender(); } });
+    close(); agdChangeStatus(row, v).then(function(){ agdRender(); });
   });
   // Trocar o profissional sugere a sala onde ele atende.
   var profSel = document.getElementById("agdProf");
@@ -6405,10 +6421,10 @@ function agdOpenModal(opts){
           else delete AD.rows[r.data.id];
         }
         var stV = isNew ? null : statusChoice();
-        (stV === null ? Promise.resolve(true) : agdSetStatus(r.data || row, stV)).then(function(){
-          close(); agdRender();
-          showToast(isNew ? "Atendimento marcado." : "Atendimento atualizado.");
-        });
+        close(); agdRender();
+        showToast(isNew ? "Atendimento marcado." : "Atendimento atualizado.");
+        // Status depois de fechar a janela: "Finalizado" pode abrir a evolução.
+        if (stV !== null) agdChangeStatus(r.data || row, stV).then(function(){ agdRender(); });
       });
     }
     // Aviso se a sala já estiver ocupada por outro profissional nesse horário (só a semana carregada).
@@ -7485,6 +7501,7 @@ function prRenderDetail(){
 // Editor: opts {patient, record?, appointment?}
 function prOpenEditor(opts){
   var p = opts.patient, rec = opts.record || null, appt = opts.appointment || null;
+  var savedOk = false;
   if (!p) return;
   if (rec ? !prCan("edit") : !prCan("create")){ showToast(permDeniedMsg("prontuario", rec ? "edit" : "create"), true); return; }
   var me = prMe();
@@ -7497,7 +7514,7 @@ function prOpenEditor(opts){
   host.innerHTML =
     '<div class="overlay" id="ovPr"><div class="modal wide" style="max-width:920px;width:96vw">' +
       '<div class="modal-head"><div><h3>' + (rec ? "Editar evolução" : "Evolução do atendimento") + ' — ' + esc(p.nome) + '</h3>' +
-        '<div class="modal-sub">' + (date ? agdBrDate(date) : "") + (time ? " às " + esc(time) : "") + (prof ? " · " + esc(prof.name) : "") + (serv ? " · " + esc(serv) : "") + '</div></div>' +
+        '<div class="modal-sub">' + (opts.onSaved ? '<b>Registre a evolução para finalizar o atendimento.</b> ' : '') + (date ? agdBrDate(date) : "") + (time ? " às " + esc(time) : "") + (prof ? " · " + esc(prof.name) : "") + (serv ? " · " + esc(serv) : "") + '</div></div>' +
         '<button class="modal-close" id="prClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="pr-toolbar" id="prTools">' +
@@ -7579,10 +7596,11 @@ function prOpenEditor(opts){
   function close(force){
     if (!force && ed.innerHTML !== initial){
       confirmDialog({title: "Descartar alterações?", message: "O texto desta evolução ainda não foi salvo.", confirmLabel: "Descartar"})
-        .then(function(ok){ if (ok) host.innerHTML = ""; });
+        .then(function(ok){ if (ok) { host.innerHTML = ""; if (opts.onCancel) opts.onCancel(); } });
       return;
     }
     host.innerHTML = "";
+    if (!savedOk && opts.onCancel) opts.onCancel();
   }
   var ov = document.getElementById("ovPr");
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
@@ -7603,7 +7621,9 @@ function prOpenEditor(opts){
     q.then(function(r){
       saveBtn.disabled = false;
       if (r.error){ showToast("Não foi possível salvar: " + prErrMsg(r.error), true); return; }
+      savedOk = true;
       close(true);
+      if (opts.onSaved) opts.onSaved(r.data);
       showToast(rec ? "Evolução atualizada." : "Evolução salva no prontuário.");
       PR.loaded = false;
       if (state.tab === "prontuario"){ prLoadSummary(); prOpenPatient(p.id); }

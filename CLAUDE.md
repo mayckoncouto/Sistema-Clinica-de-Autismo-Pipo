@@ -543,9 +543,7 @@ física não é aceita na Agenda (no Planner, só nas colunas de grupo).
 - Quem não tem "editar" na Agenda, ao clicar num atendimento, vê o popup
   `agdOpenDetails(row)` (só leitura): nome, serviço (ou "Grupo de suporte"),
   profissional, observação, sala, data/hora "até", e o Status (grava ao mudar).
-- O botão do prontuário chama "Registrar Atendimento" (ou "Editar Atendimento"
-  quando o usuário já lançou a evolução deste atendimento — `prLabelApptButton`)
-  e fica no canto superior
+- (Removido em 2026-10-02: o botão Registrar/Editar Atendimento da janela.) Antes ficava no canto superior
   direito (cabeçalho, ao lado do ✕), no popup e na janela de edição; as duas
   abrem no centro. Na edição, Status fica abaixo de "Ou marque o horário como". Evoluções também podem ser lançadas direto no
   Prontuário ("+ Nova evolução"), sem atendimento.
@@ -663,3 +661,13 @@ Campos ao lado da duração, com prévia e botão "Padrão".
   (`.pr-appt-link`, `CAL_SVG`) antes da data: `prGoToAppointment(rec)` abre a
   Agenda na data e no profissional e abre a janela do atendimento (avisa se ele
   foi apagado).
+
+## "Finalizado" exige evolução (2026-10-02)
+Sem botão de prontuário nas janelas da Agenda. Mudar o status passa por
+`agdChangeStatus(row, v)`: "finalizado" (`FINAL_STATUS`) em atendimento de
+paciente cadastrado sem evolução abre `prOpenEditor({..., onSaved, onCancel})`
+e só grava o status depois que a evolução é salva (cancelar = não finaliza).
+Já tendo evolução, ou sendo grupo de suporte, finaliza direto. Sem permissão de
+incluir no Prontuário, recusa com aviso. No banco, `appointments_status_guard`
+recusa a troca para "finalizado" sem `clinical_records` ligada (migração
+`supabase/2026-10-02i-finalizado-exige-evolucao.sql`).
