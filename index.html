@@ -7533,7 +7533,9 @@ function plannerClearWeek(){
  * dia, de uma semana ou do mês inteiro (as 4 semanas). Confirmação dupla; entra
  * no desfazer (Ctrl+Z).
  */
-function openFixPatientModal(){
+function openFixPatientModal(back){
+  back = back || null;
+  state.fixReturn = null;
   if (!db){ showToast("Sem conexão com o servidor.", true); return; }
   var host = document.getElementById("modalHost");
   var pats = state.patients.slice().sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); });
@@ -7580,6 +7582,12 @@ function openFixPatientModal(){
       docs[docIds[i]] = (data && data.bookings) || {};
       if (!state.scheduleDocs[docIds[i]]) state.scheduleDocs[docIds[i]] = {bookings: JSON.parse(JSON.stringify(docs[docIds[i]]))};
     });
+    if (back){
+      document.getElementById("fxPat").value = back.patientId || "";
+      if (back.scope) document.getElementById("fxScope").value = back.scope;
+      if (back.week) document.getElementById("fxWeek").value = String(back.week);
+      if (back.day) document.getElementById("fxDay").value = back.day;
+    }
     refresh();
   }).catch(function(){ reportEl.innerHTML = '<div class="pat-count">Não foi possível ler o Planner.</div>'; });
   // Agendamentos do paciente: [{docId, key, week, dayKey, time, spec}]
@@ -7639,7 +7647,12 @@ function openFixPatientModal(){
   // Ir até o horário: abre o dia e a semana no Planner e destaca o paciente.
   document.getElementById("fxList").addEventListener("click", function(e){
     var it = e.target.closest(".fx-item"); if (!it) return;
-    var p = selected(); close();
+    var p = selected();
+    // Esc no Planner volta para esta janela com o mesmo paciente e período.
+    var back = {patientId: p ? p.id : "", scope: document.getElementById("fxScope").value, week: document.getElementById("fxWeek").value, day: document.getElementById("fxDay").value};
+    close();
+    state.fixReturn = back;
+    setTimeout(function(){ showToast("Esc: voltar para Corrigir paciente."); }, 400);
     var db1 = document.querySelector('#daySeg button[data-day="' + it.getAttribute("data-d") + '"]'); if (db1) db1.click();
     var wb = document.querySelector('#weekSeg button[data-week="' + it.getAttribute("data-w") + '"]'); if (wb) wb.click();
     var s = document.getElementById("patientSearch"); if (s && p){ s.value = p.nome; s.dispatchEvent(new Event("input", {bubbles: true})); }
@@ -7692,6 +7705,19 @@ function openFixPatientModal(){
       });
   });
 }
+
+// Voltar do "ir até o horário" (Corrigir paciente) com Esc: limpa a busca da
+// grade e reabre a janela com o mesmo paciente e período.
+document.addEventListener("keydown", function(e){
+  if (e.key !== "Escape" || !state.fixReturn || state.tab !== "agenda") return;
+  if (document.getElementById("dpPop") || (document.getElementById("modalHost").innerHTML || "").trim() || (document.getElementById("confirmHost") && (document.getElementById("confirmHost").innerHTML || "").trim())) return;
+  if (state.clipboard) return; // Esc primeiro cancela copiar/mover
+  e.preventDefault();
+  var back = state.fixReturn;
+  var s = document.getElementById("patientSearch");
+  if (s){ s.value = ""; s.dispatchEvent(new Event("input", {bubbles: true})); }
+  openFixPatientModal(back);
+});
 
 /* ---- Planner -> Agenda: botão "Enviar para a Agenda" ----
  * Leva os agendamentos de UM dia/semana do Planner (ex.: Segunda · 1ª semana)

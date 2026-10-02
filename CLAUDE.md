@@ -878,3 +878,7 @@ paciente escolhido (select com busca), mostra:
   (`plannerConflict`) ficam como estão;
 - lista detalhada (semana, dia, hora, sala, profissional, especialidade); clicar
   abre o dia/semana no Planner e preenche a busca com o paciente.
+- Depois de "ir até o horário", **Esc** no Planner limpa a busca da grade e
+  reabre "Corrigir paciente" com o mesmo paciente e período
+  (`state.fixReturn`, `openFixPatientModal(back)`; não age com janela/menu aberto
+  ou com copiar/mover em andamento).
