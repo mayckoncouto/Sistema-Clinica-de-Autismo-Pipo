@@ -134,6 +134,20 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .sync-dot.off{background:var(--muted)}
 
+/* topo: nome do sistema + abas na mesma linha; menu Cadastros */
+.topbar .maintabs{flex:1 1 auto;margin:0 0 0 18px}
+.cad-wrap{position:relative;display:inline-flex}
+.cad-btn{border:0;background:transparent;padding:7px 15px;border-radius:8px;font:inherit;font-weight:700;font-size:13px;color:var(--ink-2);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.cad-btn.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
+.cad-btn:hover{color:var(--ink)}
+.cad-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:60;min-width:200px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);padding:5px;display:flex;flex-direction:column}
+.cad-menu[hidden]{display:none}
+.cad-menu button{border:0;background:transparent;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
+.cad-menu button:hover,.cad-menu button:focus{background:var(--accent-weak);outline:none}
+#tab-convenios,#tab-servicos,#tab-especialidades{flex:1;min-height:0;display:flex;flex-direction:column}
+.reg-host{flex:1;min-height:0;display:flex;flex-direction:column}
+.reg-table tbody tr{cursor:pointer}
+.reg-table tbody tr:hover td{background:var(--accent-weak)}
 .maintabs{display:flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:11px;width:fit-content}
 .maintabs button{border:0;background:transparent;padding:7px 15px;border-radius:8px;font:inherit;font-weight:700;font-size:13px;color:var(--ink-2);cursor:pointer}
 .maintabs button.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
@@ -753,25 +767,30 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <div class="sub">Sistema de atendimentos</div>
       </div>
     </div>
+    <div class="maintabs" id="mainTabs">
+      <!-- "agenda" = Planner (grade de 4 semanas que se repete); "agendadia" = Agenda por data real. -->
+      <button class="active" data-tab="agenda">Planner</button>
+      <button data-tab="agendadia">Agenda</button>
+      <!-- Cadastros: menu suspenso; as abas de cadastro ficam ocultas e são abertas por ele. -->
+      <div class="cad-wrap"><button type="button" class="cad-btn" id="cadBtn" aria-haspopup="menu" aria-expanded="false">Cadastros <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="cadMenu" role="menu" hidden></div></div>
+      <button data-tab="pacientes" hidden>Pacientes</button>
+      <button data-tab="profissionais" hidden>Profissionais</button>
+      <button data-tab="convenios" hidden>Convênios</button>
+      <button data-tab="servicos" hidden>Serviços</button>
+      <button data-tab="especialidades" hidden>Especialidades</button>
+      <button data-tab="salas" hidden>Salas</button>
+      <button data-tab="relatorio">Atendimentos</button>
+      <button data-tab="relatorios" hidden>Relatórios</button>
+      <button data-tab="prontuario" hidden>Prontuário</button>
+      <!-- Sempre oculto: a tela de Usuários abre pelo menu "Acesso" do topo (js/pipo-supabase.js). -->
+      <button data-tab="usuarios" hidden>Usuários</button>
+    </div>
     <div class="topbar-right">
       <div class="user-pill" id="userPill" hidden></div>
       <div class="sync-pill" id="syncPill"><span class="sync-dot off" id="syncDot"></span><span id="syncText">conectando…</span></div>
     </div>
   </div>
 
-  <div class="maintabs" id="mainTabs">
-    <!-- "agenda" = Planner (grade de 4 semanas que se repete); "agendadia" = Agenda por data real. -->
-    <button class="active" data-tab="agenda">Planner</button>
-    <button data-tab="agendadia">Agenda</button>
-    <button data-tab="pacientes">Pacientes</button>
-    <button data-tab="profissionais">Profissionais</button>
-    <button data-tab="salas">Salas</button>
-    <button data-tab="relatorio">Atendimentos</button>
-    <button data-tab="relatorios" hidden>Relatórios</button>
-    <button data-tab="prontuario" hidden>Prontuário</button>
-    <!-- Sempre oculto: a tela de Usuários abre pelo menu "Acesso" do topo (js/pipo-supabase.js). -->
-    <button data-tab="usuarios" hidden>Usuários</button>
-  </div>
 
   <!-- AGENDA TAB -->
   <section id="tab-agenda" class="panel">
@@ -855,7 +874,6 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <span class="pat-count" id="patCount"></span>
       <div class="spacer"></div>
-      <button class="btn ghost" id="manageConveniosBtn">Convênios</button>
       <button class="btn primary" id="addPatientBtn">+ Novo paciente</button>
     </div>
     <div id="patListHost"></div>
@@ -870,11 +888,48 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <span class="pat-count" id="profCount"></span>
       <div class="spacer"></div>
-      <button class="btn ghost" id="manageServicesBtn">Serviços</button>
-      <button class="btn ghost" id="manageSpecialtiesBtn">Especialidades</button>
       <button class="btn primary" id="addProfessionalBtn">+ Novo profissional</button>
     </div>
     <div id="profList" class="prof-list-host"></div>
+  </section>
+
+  <section id="tab-convenios" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-convenios-search" type="text" placeholder="Buscar convênio…">
+      </div>
+      <span class="pat-count" id="reg-convenios-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-convenios-add">+ Novo convênio</button>
+    </div>
+    <div id="reg-convenios-host" class="reg-host"></div>
+  </section>
+
+  <section id="tab-servicos" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-servicos-search" type="text" placeholder="Buscar serviço…">
+      </div>
+      <span class="pat-count" id="reg-servicos-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-servicos-add">+ Novo serviço</button>
+    </div>
+    <div id="reg-servicos-host" class="reg-host"></div>
+  </section>
+
+  <section id="tab-especialidades" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-especialidades-search" type="text" placeholder="Buscar especialidade…">
+      </div>
+      <span class="pat-count" id="reg-especialidades-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-especialidades-add">+ Nova especialidade</button>
+    </div>
+    <div id="reg-especialidades-host" class="reg-host"></div>
   </section>
 
   <!-- SALAS TAB -->
@@ -1000,7 +1055,9 @@ var DAYS = [
  * fim). Sem cadastro = padrão antigo (seg a sex, 07:20–12:00 e 13:30–18:10;
  * sexta à tarde até 17:30). Sábado/domingo aparecem quando habilitados.
  */
-var CLINIC_SLOT_MIN = 40;
+var CLINIC_SLOT_MIN = 40; // duração padrão do atendimento (cadastro da clínica: "duracao", em minutos)
+var CLINIC_DURATIONS = [20, 30, 40, 45, 50, 60, 90];
+function clinicDuration(){ var d = parseInt(state.clinic && state.clinic.duracao, 10); return d >= 10 && d <= 240 ? d : 40; }
 var ALL_WEEKDAYS = [
   {key:"seg", name:"Segunda", full:"Segunda-feira"}, {key:"ter", name:"Terça", full:"Terça-feira"},
   {key:"qua", name:"Quarta", full:"Quarta-feira"}, {key:"qui", name:"Quinta", full:"Quinta-feira"},
@@ -1015,14 +1072,17 @@ function clinicDayCfg(key){
   var h = state.clinic && state.clinic.horarios && state.clinic.horarios[key];
   return h || clinicDefaultDay(key);
 }
-// Horários de início (de 40 em 40 min) que cabem inteiros no período.
-function clinicSlots(per){
+// Horários de início (de "duração" em "duração" minutos) que cabem inteiros no período.
+function clinicSlots(per, dur){
+  dur = dur || CLINIC_SLOT_MIN;
   if (!per || !per.inicio || !per.fim) return [];
   var out = [], t = per.inicio, guard = 0;
-  while (addMinutes(t, CLINIC_SLOT_MIN) <= per.fim && guard++ < 40){ out.push(t); t = addMinutes(t, CLINIC_SLOT_MIN); }
+  while (addMinutes(t, dur) <= per.fim && guard++ < 100){ out.push(t); t = addMinutes(t, dur); }
   return out;
 }
 function rebuildDays(){
+  CLINIC_SLOT_MIN = clinicDuration();
+  SESSION_MINUTES = CLINIC_SLOT_MIN;
   var list = ALL_WEEKDAYS.map(function(d){
     var h = clinicDayCfg(d.key);
     if (!h.ativo) return null;
@@ -1083,12 +1143,15 @@ function openClinicModal(){
         '<div class="field-row">' + f("clNome", "Nome da clínica", c.nome || "Clínica de Autismo Pipo", "", true) + f("clCnpj", "CNPJ", c.cnpj, "00.000.000/0000-00") + '</div>' +
         '<div class="field-row">' + f("clFone", "Telefone", c.telefone, "(47) 0000-0000") + f("clEmail", "E-mail", c.email, "contato@...", true) + '</div>' +
         '<div class="field-row">' + f("clEnd", "Endereço", c.endereco, "Rua, número, bairro", true) + f("clCidade", "Cidade / UF", c.cidade, "Blumenau / SC") + '</div>' +
+        '<div class="field-row"><div class="field"><label for="clDur">Duração padrão do atendimento</label><select id="clDur">' +
+          CLINIC_DURATIONS.map(function(m){ return '<option value="'+m+'"'+(m === clinicDuration() ? ' selected' : '')+'>'+m+' minutos</option>'; }).join("") + '</select></div>' +
+          '<div class="field" style="flex:2"><label>&nbsp;</label><div class="pat-count">Define os horários do Planner e da Agenda: cada linha da grade = um atendimento.</div></div></div>' +
         '<div class="prof-section"><div class="prof-section-head"><span class="prof-access-title">Horário de atendimento</span>' +
           '<button type="button" class="btn ghost ph-copy" id="clCopy">Copiar segunda para os dias úteis</button></div>' +
           '<table class="prof-hours cl-hours" id="clHours"><thead>' +
             '<tr><th rowspan="2">Dia</th><th rowspan="2">Atende</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th><th rowspan="2">Horários</th></tr>' +
             '<tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-          '<div class="pat-count" style="margin-top:6px">Cada atendimento tem 40 minutos, contados a partir do início de cada período. Deixe o período em branco se não houver atendimento nele. Horários que deixarem de existir somem da grade (os agendamentos ficam guardados e voltam se o horário voltar).</div>' +
+          '<div class="pat-count" style="margin-top:6px">Os horários são contados a partir do início de cada período, de acordo com a duração padrão. Deixe o período em branco se não houver atendimento nele. Horários que deixarem de existir somem da grade (os agendamentos ficam guardados e voltam se o horário voltar).</div>' +
         '</div>' +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="clCancel">Cancelar</button><button class="btn primary" id="clSave">Salvar</button></div>' +
@@ -1105,8 +1168,9 @@ function openClinicModal(){
     return {ativo: on, manha: {inicio: v("cl-"+key+"-mi"), fim: v("cl-"+key+"-mf")}, tarde: {inicio: v("cl-"+key+"-ti"), fim: v("cl-"+key+"-tf")}};
   }
   function counts(){
+    var dur = +document.getElementById("clDur").value;
     ALL_WEEKDAYS.forEach(function(d){
-      var h = readDay(d.key), n = h.ativo ? clinicSlots(h.manha).length + clinicSlots(h.tarde).length : 0;
+      var h = readDay(d.key), n = h.ativo ? clinicSlots(h.manha, dur).length + clinicSlots(h.tarde, dur).length : 0;
       tbl.querySelector('[data-count="'+d.key+'"]').textContent = h.ativo ? n + (n === 1 ? " horário" : " horários") : "Fechado";
     });
   }
@@ -1117,6 +1181,7 @@ function openClinicModal(){
     counts();
   });
   tbl.addEventListener("input", counts);
+  document.getElementById("clDur").addEventListener("change", counts);
   document.getElementById("clCopy").addEventListener("click", function(){
     var src = readDay("seg");
     ["ter", "qua", "qui", "sex"].forEach(function(k){
@@ -1128,6 +1193,7 @@ function openClinicModal(){
   counts();
   document.getElementById("clSave").addEventListener("click", function(){
     var horarios = {}, bad = null;
+    var dur = +document.getElementById("clDur").value;
     ALL_WEEKDAYS.forEach(function(d){
       var h = readDay(d.key);
       [["manha", "manhã"], ["tarde", "tarde"]].forEach(function(pp){
@@ -1135,16 +1201,19 @@ function openClinicModal(){
         if ((x.inicio && !x.fim) || (!x.inicio && x.fim) || (x.inicio && x.fim && x.fim <= x.inicio)) bad = bad || (d.full + " (" + pp[1] + ")");
       });
       if (h.manha.fim && h.tarde.inicio && h.tarde.inicio < h.manha.fim) bad = bad || (d.full + ": a tarde começa antes de a manhã terminar");
-      if (h.ativo && !clinicSlots(h.manha).length && !clinicSlots(h.tarde).length) bad = bad || (d.full + ": nenhum horário de 40 minutos cabe no período");
+      if (h.ativo && !clinicSlots(h.manha, dur).length && !clinicSlots(h.tarde, dur).length) bad = bad || (d.full + ": nenhum horário de " + dur + " minutos cabe no período");
       horarios[d.key] = h;
     });
     if (bad){ showToast("Confira o horário de " + bad + ".", true); return; }
     if (!ALL_WEEKDAYS.some(function(d){ return horarios[d.key].ativo; })){ showToast("Deixe pelo menos um dia com atendimento.", true); return; }
+    var go = dur !== clinicDuration() ? confirmDialog({title: "Mudar a duração dos atendimentos", message: "A grade do Planner e da Agenda passa a ter horários de <b>" + dur + " minutos</b>.<br>Agendamentos em horários que deixarem de existir ficam guardados, mas não aparecem na grade enquanto o horário não voltar.", confirmLabel: "Mudar duração"}) : Promise.resolve(true);
+    go.then(function(ok){ if (!ok) return;
     var rec = {
       nome: document.getElementById("clNome").value.trim(), cnpj: document.getElementById("clCnpj").value.trim(),
       telefone: document.getElementById("clFone").value.trim(), email: document.getElementById("clEmail").value.trim(),
       endereco: document.getElementById("clEnd").value.trim(), cidade: document.getElementById("clCidade").value.trim(),
-      horarios: horarios
+      horarios: horarios,
+      duracao: dur
     };
     if (!db){ showToast("Sem conexão com o servidor.", true); return; }
     db.doc("config/clinic").set(rec).then(function(){
@@ -1152,6 +1221,7 @@ function openClinicModal(){
     }).catch(function(err){
       var m = (err && err.message) || "";
       showToast(/check|path|violat/i.test(m) ? "Falta rodar a atualização do banco (cadastro da clínica)." : "Não foi possível salvar o cadastro da clínica.", true);
+    });
     });
   });
 }
@@ -1786,7 +1856,7 @@ function bookingPermDenied(changesByDoc){
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
   if (!window.pipoAuth) return;
-  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"agenda", pacientes:"pacientes", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios"};
+  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"agenda", pacientes:"pacientes", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"pacientes", servicos:"profissionais", especialidades:"pacientes"};
   var activeHidden = false;
   Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button[data-tab]"), function(b){
     var k = b.getAttribute("data-tab");
@@ -1797,9 +1867,11 @@ function applyPermissionsUI(){
       return;
     }
     var visible = can(tabModule[k], "view");
-    b.hidden = !visible;
+    // Cadastros: botão sempre oculto (abre pelo menu "Cadastros").
+    b.hidden = !visible || CAD_TABS.indexOf(k) !== -1;
     if (!visible && k === state.tab) activeHidden = true;
   });
+  renderCadMenu();
   // Aba atual sem permissão (ou sem conteúdo visível): vai para a primeira permitida.
   var curSec = document.getElementById("tab-" + state.tab);
   if (activeHidden || !curSec){
@@ -2021,6 +2093,7 @@ function subscribeSpecialties(){
     }
     specialtiesLoaded = true;
     renderPatientsTab();
+    if (state.tab === "especialidades") renderRegistryTab("especialidades");
     renderProfissionaisTab(); // coluna "Especialidade principal"
   }, function(){ specialtiesLoaded = true; });
 }
@@ -2034,6 +2107,7 @@ function subscribeStatuses(){
 function subscribeServices(){
   db.doc("config/services").onSnapshot(function(snap){
     state.services = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
+    if (state.tab === "servicos") renderRegistryTab("servicos");
   }, function(){});
 }
 
@@ -2046,6 +2120,7 @@ function subscribeConvenios(){
     }
     conveniosLoaded = true;
     renderPatientsTab();
+    if (state.tab === "convenios") renderRegistryTab("convenios");
   }, function(){ conveniosLoaded = true; });
 }
 
@@ -2273,6 +2348,8 @@ function wireTabs(){
       var sec = document.getElementById("tab-"+k);
       if (sec) sec.hidden = (k !== state.tab);
     });
+    var cadBtnEl = document.getElementById("cadBtn");
+    if (cadBtnEl) cadBtnEl.classList.toggle("active", CAD_TABS.indexOf(state.tab) !== -1);
     var zc = document.getElementById("zoomCtrl");
     if (zc) zc.hidden = (state.tab !== "agenda");
     // Renders for this tab were skipped while it was hidden (see flushGridUpdate /
@@ -2285,6 +2362,7 @@ function wireTabs(){
       else if (state.tab === "agendadia") agdOnShow();
       else if (state.tab === "prontuario") prOnShow();
       else if (state.tab === "relatorios") rpOnShow();
+      else if (REG_CFG[state.tab]) renderRegistryTab(state.tab);
     } catch(err){
       reportAppError(err, "ao abrir a aba");
     }
@@ -2341,9 +2419,6 @@ function wireControls(){
   document.getElementById("roomListSearch").addEventListener("input", renderSalasTab);
   document.getElementById("reportSearch").addEventListener("input", renderRelatorioTab);
   document.getElementById("addPatientBtn").addEventListener("click", function(){ openPatientModal(null); });
-  document.getElementById("manageSpecialtiesBtn").addEventListener("click", function(){ openSpecialtiesModal(); });
-  document.getElementById("manageConveniosBtn").addEventListener("click", function(){ openConveniosModal(); });
-  document.getElementById("manageServicesBtn").addEventListener("click", function(){ openServicesModal(); });
   document.getElementById("addRoomBtn").addEventListener("click", function(){ openRoomModal(null, state.salasView === "grupos"); });
   // Salas <-> Grupos de suporte: a mesma tela mostra um cadastro ou o outro.
   document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
@@ -5602,7 +5677,7 @@ function agdParse(s){ var p = String(s).split("-"); return new Date(+p[0], +p[1]
 function agdAddDays(d, n){ var x = new Date(d); x.setDate(x.getDate()+n); return x; }
 function agdMonday(d){ var x = agdStartOfDay(d); var w = (x.getDay()+6)%7; return agdAddDays(x, -w); }
 function agdSameDay(a, b){ return agdIso(a) === agdIso(b); }
-function agdPlus40(t){ var p = t.split(":"), m = +p[0]*60 + +p[1] + 40; return ("0"+Math.floor(m/60)).slice(-2)+":"+("0"+m%60).slice(-2); }
+function agdPlus40(t){ return addMinutes(t, CLINIC_SLOT_MIN); } // fim do atendimento (duração do cadastro da clínica)
 function agdBrDate(iso){ var p = iso.split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
 // Fim de semana não tem agenda: sábado/domingo pulam para a segunda seguinte.
 function agdClampWeekday(d){ for (var i = 0; i < 7; i++){ if (dayEnabled(AD_WEEKDAY_KEYS[d.getDay()])) return d; d = agdAddDays(d, 1); } return d; }
@@ -7393,11 +7468,10 @@ var RP_TYPES = [
   {id: "bloqueios",       name: "Bloqueios, reuniões e treinamentos", desc: "Quantidade e horas de cada tipo por profissional.", filters: []},
   {id: "sem-atendimento", name: "Pacientes sem atendimento",      desc: "Pacientes cadastrados sem nenhum atendimento no período.", filters: ["convenio"]}
 ];
-var RP_SLOT_MIN = 40; // cada horário da agenda = 40 minutos
 var RP = {last: null};
 function rpCan(type){ return window.pipoAuth ? window.pipoAuth.can("relatorios", type) : true; }
 function rpAllowedTypes(){ return RP_TYPES.filter(function(t){ return rpCan(t.id); }); }
-function rpHours(slots){ var m = slots * RP_SLOT_MIN; return Math.floor(m / 60) + "h" + (m % 60 ? String(m % 60).padStart(2, "0") : ""); }
+function rpHours(slots){ var m = slots * CLINIC_SLOT_MIN; return Math.floor(m / 60) + "h" + (m % 60 ? String(m % 60).padStart(2, "0") : ""); }
 function rpPct(a, b){ return b ? Math.round(a * 100 / b) + "%" : "—"; }
 function rpStatusName(id){ if (!id) return "Em Aberto"; var s = statusById(id); return s ? s.name : id; }
 function rpRoomName(id){ var r = id ? findRoom(id) : null; return r ? r.name : ""; }
@@ -7527,7 +7601,7 @@ var RP_BUILDERS = {
       var fin = s.st["finalizado"] || 0, decided = s.total - s.aberto;
       return [name, s.total].concat(sts.map(function(x){ return s.st[x.id] || 0; }), [s.aberto, rpPct(fin, decided), rpHours(fin)]);
     }
-    return {note: "Comparecimento = Finalizados ÷ atendimentos com status (Em Aberto não conta). Horas atendidas = Finalizados × 40 min.",
+    return {note: "Comparecimento = Finalizados ÷ atendimentos com status (Em Aberto não conta). Horas atendidas = Finalizados × " + CLINIC_SLOT_MIN + " min.",
       sections: [{title: "Por profissional", head: ["Profissional", "Agendados"].concat(sts.map(function(x){ return x.name; }), ["Em Aberto", "Comparecimento", "Horas atendidas"]),
         rows: list.map(function(x){ return line(x.name, x.s); }), foot: list.length > 1 ? line("Total", tot) : null}]};
   },
@@ -7632,7 +7706,7 @@ var RP_BUILDERS = {
       var n = Object.keys(roomUse[r.id] || {}).length;
       return [r.name, rpHours(slotsPerDay), rpHours(n), rpPct(n, slotsPerDay)];
     });
-    return {note: "Disponível = horários dentro do expediente de cada profissional (seg a sex). Sala: horários com pelo menos um atendimento. Cada horário = 40 min.",
+    return {note: "Disponível = horários dentro do expediente de cada profissional (seg a sex). Sala: horários com pelo menos um atendimento. Cada horário = " + CLINIC_SLOT_MIN + " min.",
       sections: [
         {title: "Profissionais", head: ["Profissional", "Disponível", "Atendendo", "Bloqueio/reunião/treino", "Livre", "Ocupação"], rows: profRows},
         {title: "Salas", head: ["Sala", "Horários no período", "Em uso", "Ocupação"], rows: o.prof ? [] : roomRows,
@@ -7811,6 +7885,180 @@ function rpExportCsv(){
   g.addEventListener("click", rpGenerate);
   document.getElementById("rpType").addEventListener("change", rpTypeChanged);
   document.querySelectorAll("[data-rp-quick]").forEach(function(b){ b.addEventListener("click", function(){ rpQuick(b.getAttribute("data-rp-quick")); }); });
+})();
+
+/* ---------------- Cadastros: Convênios, Serviços e Especialidades em tela ----------------
+ * Abertos pelo menu "Cadastros" do topo (como Pacientes): busca, contador,
+ * "+ Novo", tabela; clicar numa linha abre o cadastro do item (com excluir).
+ * Gravam pelos mesmos writeConvenios / writeServices / writeSpecialties.
+ */
+var REG_CFG = {
+  convenios: {
+    title: "convênio", plural: "convênios", module: "pacientes", newLabel: "+ Novo convênio",
+    list: function(){ return state.convenios.slice(); },
+    write: function(l){ return writeConvenios(l); },
+    cols: ["Nome", "Pacientes"],
+    row: function(c){
+      var n = state.patients.filter(function(p){ return p.convenioId === c.id || (!p.convenioId && normText(p.convenio || "") === normText(c.name)); }).length;
+      return ['<b>' + esc(c.name) + '</b>', n];
+    }
+  },
+  servicos: {
+    title: "serviço", plural: "serviços", module: "profissionais", newLabel: "+ Novo serviço",
+    list: function(){ return servicesList(); },
+    write: function(l){
+      // "Sessão" sempre fica, com esse nome, em primeiro.
+      l = l.filter(function(s){ return s.id !== DEFAULT_SERVICE_ID; });
+      l.unshift({id: DEFAULT_SERVICE_ID, name: "Sessão"});
+      return writeServices(l);
+    },
+    locked: function(s){ return s.id === DEFAULT_SERVICE_ID; },
+    cols: ["Nome", "Profissionais que atendem"],
+    row: function(s){
+      var n = state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length;
+      return ['<b>' + esc(s.name) + '</b>' + (s.id === DEFAULT_SERVICE_ID ? ' <span class="serv-lock">padrão</span>' : ''), n];
+    }
+  },
+  especialidades: {
+    title: "especialidade", plural: "especialidades", module: "pacientes", newLabel: "+ Nova especialidade",
+    list: function(){ return state.specialties.slice(); },
+    write: function(l){ return writeSpecialties(l); },
+    cols: ["Nome", "Sigla", "Profissionais"],
+    row: function(s){
+      var n = state.professionals.filter(function(p){ return p.specialtyId === s.id; }).length;
+      return ['<span class="pcolor-dot" style="background:' + swatchVar(s.color || "teal") + '"></span><b>' + esc(s.name) + '</b>', esc(s.sigla || defaultSigla(s.name)), n];
+    }
+  }
+};
+function renderRegistryTab(kind){
+  var cfg = REG_CFG[kind]; if (!cfg) return;
+  var host = document.getElementById("reg-" + kind + "-host"); if (!host) return;
+  var search = document.getElementById("reg-" + kind + "-search");
+  var q = normText((search && search.value || "").trim());
+  var all = cfg.list(), shown = all.filter(function(x){ return !q || normText(x.name).indexOf(q) !== -1; })
+    .sort(function(a, b){ return (cfg.locked && cfg.locked(a) ? -1 : 0) - (cfg.locked && cfg.locked(b) ? -1 : 0) || String(a.name).localeCompare(String(b.name), "pt-BR"); });
+  var cnt = document.getElementById("reg-" + kind + "-count");
+  if (cnt) cnt.textContent = shown.length + " de " + all.length + " " + (all.length === 1 ? cfg.title : cfg.plural);
+  var addBtn = document.getElementById("reg-" + kind + "-add");
+  if (addBtn) addBtn.hidden = !can(cfg.module, "create");
+  if (!all.length){ host.innerHTML = '<div class="empty-state"><b>Nenhum ' + cfg.title + ' cadastrado</b>Use "' + esc(cfg.newLabel) + '".</div>'; return; }
+  if (!shown.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca.</div>'; return; }
+  host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table reg-table"><thead><tr>' +
+    cfg.cols.map(function(c, i){ return '<th' + (i ? ' style="width:22%"' : '') + '>' + c + '</th>'; }).join("") + '</tr></thead><tbody>' +
+    shown.map(function(x){ return '<tr class="pr-row" data-reg-id="' + esc(x.id) + '" tabindex="0">' + cfg.row(x).map(function(v, i){ return '<td' + (i ? ' class="pt-muted"' : ' class="pt-nome"') + '>' + v + '</td>'; }).join("") + '</tr>'; }).join("") +
+    '</tbody></table></div>';
+}
+function openRegistryItem(kind, item){
+  var cfg = REG_CFG[kind], isNew = !item;
+  if (isNew && !can(cfg.module, "create")){ showToast(permDeniedMsg(cfg.module, "create"), true); return; }
+  var locked = !!(item && cfg.locked && cfg.locked(item));
+  var canSave = !locked && (isNew || can(cfg.module, "edit"));
+  var canDel = !isNew && !locked && can(cfg.module, "delete");
+  var color = item && item.color ? item.color : "teal";
+  var host = document.getElementById("modalHost");
+  host.innerHTML =
+    '<div class="overlay" id="ovReg"><div class="modal" style="max-width:440px">' +
+      '<div class="modal-head"><div><h3>' + (isNew ? "Novo " + cfg.title : (canSave ? "Editar " : "") + cfg.title.charAt(0).toUpperCase() + cfg.title.slice(1)) + '</h3>' +
+        (locked ? '<div class="modal-sub">Serviço padrão dos atendimentos: não pode ser renomeado nem excluído.</div>' : '') + '</div>' +
+        '<button class="modal-close" id="regClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="field"><label for="regName">Nome</label><input id="regName" type="text" value="' + esc(item ? item.name : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
+        (kind === "especialidades" ?
+          '<div class="field-row"><div class="field"><label for="regSigla">Sigla</label><input id="regSigla" type="text" maxlength="4" value="' + esc(item ? item.sigla || "" : "") + '" placeholder="' + esc(item ? defaultSigla(item.name) : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
+          '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="regColor"' + (canSave ? '' : ' disabled') + ' aria-label="Escolher cor"></button><span class="color-pick-code mono" id="regColorCode"></span></div></div></div>' : '') +
+      '</div>' +
+      '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="regDel">Excluir</button>' : '<span></span>') +
+        '<div class="spacer"></div><button class="btn ghost" id="regCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
+        (canSave ? '<button class="btn primary" id="regSave">Salvar</button>' : '') + '</div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovReg");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("regClose").addEventListener("click", close);
+  document.getElementById("regCancel").addEventListener("click", close);
+  var cb = document.getElementById("regColor");
+  if (cb){
+    var sync = function(){ cb.style.background = swatchVar(color); document.getElementById("regColorCode").textContent = cpToHex(color).toUpperCase(); };
+    sync();
+    cb.addEventListener("click", function(){ openColorPicker(cb, color, function(hex){ color = hex; sync(); }); });
+  }
+  var nameEl = document.getElementById("regName");
+  if (canSave) nameEl.focus();
+  var del = document.getElementById("regDel");
+  if (del) del.addEventListener("click", function(){
+    confirmDialog({title: "Excluir " + cfg.title, message: "Excluir <b>" + esc(item.name) + "</b> do cadastro de " + cfg.plural + "?", confirmLabel: "Excluir"})
+      .then(function(ok){
+        if (!ok) return;
+        Promise.resolve(cfg.write(cfg.list().filter(function(x){ return x.id !== item.id; }))).then(function(){ close(); renderRegistryTab(kind); });
+      });
+  });
+  var save = document.getElementById("regSave");
+  if (save) save.addEventListener("click", function(){
+    var name = nameEl.value.trim();
+    if (!name){ nameEl.focus(); return; }
+    var dup = cfg.list().filter(function(x){ return (!item || x.id !== item.id) && normText(x.name) === normText(name); })[0];
+    if (dup){ showToast('Já existe "' + dup.name + '" no cadastro.', true); return; }
+    var rec = Object.assign({}, item || {}, {id: item ? item.id : uid(slugify(name) || kind), name: name});
+    if (kind === "especialidades"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); rec.color = color; }
+    var list = cfg.list();
+    list = isNew ? list.concat([rec]) : list.map(function(x){ return x.id === rec.id ? rec : x; });
+    Promise.resolve(cfg.write(list)).then(function(){ close(); renderRegistryTab(kind); showToast(isNew ? "Cadastrado." : "Alterado."); });
+  });
+}
+// Menu "Cadastros" do topo.
+var CAD_ITEMS = [
+  {key: "pacientes", label: "Pacientes", tab: "pacientes", ok: function(){ return can("pacientes", "view"); }},
+  {key: "profissionais", label: "Profissionais", tab: "profissionais", ok: function(){ return can("profissionais", "view"); }},
+  {key: "convenios", label: "Convênios", tab: "convenios", ok: function(){ return can("pacientes", "view"); }},
+  {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("profissionais", "view"); }},
+  {key: "especialidades", label: "Especialidades", tab: "especialidades", ok: function(){ return can("pacientes", "view"); }},
+  {key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
+  {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("salas", "view"); }},
+  {key: "clinica", label: "Clínica", ok: function(){ return !!(window.pipoAuth && window.pipoAuth.isAdmin()); }}
+];
+var CAD_TABS = ["pacientes", "profissionais", "convenios", "servicos", "especialidades", "salas"];
+function renderCadMenu(){
+  var menu = document.getElementById("cadMenu"), btn = document.getElementById("cadBtn");
+  if (!menu || !btn) return;
+  var items = CAD_ITEMS.filter(function(i){ return !window.pipoAuth || i.ok(); });
+  menu.innerHTML = items.map(function(i){ return '<button type="button" role="menuitem" data-cad="' + i.key + '">' + i.label + '</button>'; }).join("");
+  btn.hidden = !items.length;
+}
+function setCadMenu(open){
+  var menu = document.getElementById("cadMenu"), btn = document.getElementById("cadBtn");
+  if (!menu) return;
+  menu.hidden = !open; btn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+(function(){
+  var btn = document.getElementById("cadBtn"), menu = document.getElementById("cadMenu");
+  if (!btn) return;
+  renderCadMenu();
+  btn.addEventListener("click", function(e){ e.stopPropagation(); setCadMenu(menu.hidden); });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-cad]"); if (!b) return;
+    setCadMenu(false);
+    var it = CAD_ITEMS.filter(function(i){ return i.key === b.getAttribute("data-cad"); })[0];
+    if (!it) return;
+    if (!it.tab){ openClinicModal(); return; }
+    if (it.view){ state.salasView = it.view; var s = document.getElementById("roomListSearch"); if (s) s.value = ""; }
+    var tb = document.querySelector('#mainTabs button[data-tab="' + it.tab + '"]');
+    if (tb) tb.click();
+    if (it.tab === "salas") renderSalasTab();
+  });
+  document.addEventListener("mousedown", function(e){ if (!e.target.closest(".cad-wrap")) setCadMenu(false); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !menu.hidden) setCadMenu(false); });
+  ["convenios", "servicos", "especialidades"].forEach(function(k){
+    var s = document.getElementById("reg-" + k + "-search");
+    if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
+    var a = document.getElementById("reg-" + k + "-add");
+    if (a) a.addEventListener("click", function(){ openRegistryItem(k, null); });
+    var h = document.getElementById("reg-" + k + "-host");
+    if (h){
+      var open = function(e){ var tr = e.target.closest("tr[data-reg-id]"); if (!tr) return; var it = REG_CFG[k].list().filter(function(x){ return x.id === tr.getAttribute("data-reg-id"); })[0]; if (it) openRegistryItem(k, it); };
+      h.addEventListener("click", open);
+      h.addEventListener("keydown", function(e){ if (e.key === "Enter") open(e); });
+    }
+  });
 })();
 
 })();

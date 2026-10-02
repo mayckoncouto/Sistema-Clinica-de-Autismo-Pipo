@@ -616,3 +616,22 @@ formato antigo ao abrir; "Copiar segunda para todos" copia os 4 campos.
 - Horário dos profissionais: linhas = dias abertos (`profWeekdays`), opções de
   manhã/tarde = horários da clínica (`profPeriodTimes`); salvar mantém dias
   fechados já gravados. Relatórios (`rpWeekdays`) contam só dias abertos.
+
+## Topo, menu Cadastros e duração dos atendimentos (2026-10-02)
+- As abas (`#mainTabs`) ficam na mesma linha do nome do sistema (`.topbar`).
+  Abas visíveis: Planner, Agenda, **Cadastros ▾** (`#cadBtn`/`#cadMenu`,
+  `CAD_ITEMS`), Atendimentos, Relatórios, Prontuário. As abas de cadastro
+  (`CAD_TABS`: pacientes, profissionais, convenios, servicos, especialidades,
+  salas) ficam com o botão sempre oculto e abrem pelo menu; "Grupos de
+  Suporte" abre Salas com `state.salasView = "grupos"`; "Clínica" abre
+  `openClinicModal` (só Administrador).
+- Convênios, Serviços e Especialidades viraram telas como Pacientes
+  (`#tab-convenios` etc., `REG_CFG`, `renderRegistryTab`, `openRegistryItem`):
+  busca, contador, "+ Novo", tabela, clique abre o item (excluir com
+  confirmação). Os botões dessas listas saíram das telas de Pacientes e
+  Profissionais (as janelas antigas `open*Modal` continuam no código).
+- Duração padrão do atendimento: `config/clinic.duracao` (minutos;
+  `CLINIC_DURATIONS`), aplicada em `rebuildDays` (`CLINIC_SLOT_MIN`,
+  `SESSION_MINUTES`); `agdPlus40(t)` agora = início + duração. Mudar a duração
+  pede confirmação (horários que deixam de existir somem da grade, os
+  agendamentos ficam guardados).
