@@ -645,3 +645,15 @@ formato antigo ao abrir; "Copiar segunda para todos" copia os 4 campos.
 `--accent`, `--accent-ink`, `--accent-weak` (color-mix 16% com a superfície) e
 `--ring`; sem cor escolhida remove e volta ao tema padrão (inclusive o escuro).
 Campos ao lado da duração, com prévia e botão "Padrão".
+
+## Nome, subtítulo e logo da clínica; desfazer na linha de bloquear (2026-10-02)
+- `config/clinic.nome`, `subtitulo` (padrão "Clínica Multidisciplinar") e `logo`
+  (PNG 128 px em data URL, gerado no navegador ao escolher a imagem).
+  `applyClinicBrand()` (em `onClinicChange`) põe nome em `#brandName` e no
+  título da aba, subtítulo em `#brandSub`, logo no `.brand-mark` e no ícone
+  da aba (`#favIcon`); sem cadastro volta ao padrão (`DEFAULT_BRAND`,
+  `/favicon.png`). A impressão dos relatórios usa `clinicName()`. A tela de
+  login continua com o nome fixo (ela aparece antes de ler o cadastro).
+- Desfazer/refazer saíram do cabeçalho: no Planner ficam na linha
+  `periodrow-pre` (`.timecell-hist`), na Agenda na primeira `agd-periodrow`
+  (`.agd-tcol-hist`) — a mesma linha dos botões de bloquear/liberar.
