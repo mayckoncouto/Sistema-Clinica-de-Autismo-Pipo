@@ -4097,6 +4097,69 @@ function wirePatColResize(host, cfg){
 var SORT_ASC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6"/><path d="M6 12l6-6 6 6"/></svg>';
 var SORT_DESC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v13"/><path d="M6 12l6 6 6-6"/></svg>';
 var SORT_NONE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9l5-5 5 5"/><path d="M17 15l-5 5-5-5"/></svg>';
+// ---- Tabela com ordenação e colunas ajustáveis (Convênios, Serviços,
+// Especialidades, Prontuário) — mesmo visual e comportamento da lista de
+// Pacientes/Profissionais. Ordenação: clique no ⇅ (crescente → decrescente →
+// padrão). Largura: arrastar a borda do título (duplo clique volta ao padrão);
+// fica salva no navegador por tabela ("agendaPipo:colWidths:<id>").
+var GT_SORT = {};
+function gtWidths(id){
+  GT_SORT["w:" + id] = GT_SORT["w:" + id] || (function(){
+    try { var p = JSON.parse(localStorage.getItem("agendaPipo:colWidths:" + id) || "{}"); return (p && typeof p === "object") ? p : {}; }
+    catch(e){ return {}; }
+  })();
+  return GT_SORT["w:" + id];
+}
+function gtCfg(id, cols, render){
+  var def = {}, min = {};
+  cols.forEach(function(c){ def[c.key] = c.width || 160; min[c.key] = c.min || 70; });
+  function width(k){ var w = gtWidths(id)[k]; return (typeof w === "number" && isFinite(w) && w > 0) ? w : def[k]; }
+  return {width: width, min: min,
+    total: function(){ return cols.reduce(function(t, c){ return t + width(c.key); }, 0); },
+    set: function(k, w){ gtWidths(id)[k] = w; },
+    reset: function(k){ delete gtWidths(id)[k]; },
+    save: function(){ try { localStorage.setItem("agendaPipo:colWidths:" + id, JSON.stringify(gtWidths(id))); } catch(e){} },
+    render: render};
+}
+// rows: [{attrs:'data-x="..."', cells:[html...], vals:[valor para ordenar...]}]
+function gtSortRows(id, cols, rows){
+  var s = GT_SORT[id];
+  if (!s || !s.dir) return rows;
+  var i = -1; cols.forEach(function(c, j){ if (c.key === s.col) i = j; });
+  if (i < 0) return rows;
+  return rows.slice().sort(function(a, b){
+    var va = a.vals[i], vb = b.vals[i];
+    var ea = va === "" || va == null, eb = vb === "" || vb == null;
+    if (ea !== eb) return ea ? 1 : -1; // vazios sempre no fim
+    var c = (typeof va === "number" && typeof vb === "number") ? va - vb : String(va).localeCompare(String(vb), "pt-BR", {sensitivity: "base", numeric: true});
+    if (!c) c = String(a.vals[0]).localeCompare(String(b.vals[0]), "pt-BR");
+    return s.dir === "desc" ? -c : c;
+  });
+}
+function gtRender(host, id, cols, rows, render, extraClass){
+  var cfg = gtCfg(id, cols, render), s = GT_SORT[id] || {};
+  rows = gtSortRows(id, cols, rows);
+  host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table' + (extraClass ? " " + extraClass : "") + '" style="min-width:' + cfg.total() + 'px">' +
+    '<colgroup>' + cols.map(function(c){ return '<col data-col="' + c.key + '" style="width:' + cfg.width(c.key) + 'px">'; }).join("") + '</colgroup>' +
+    '<thead><tr>' + cols.map(function(c){
+      var active = s.col === c.key ? s.dir : null;
+      var glyph = active === "asc" ? SORT_ASC_SVG : (active === "desc" ? SORT_DESC_SVG : SORT_NONE_SVG);
+      return '<th><span class="th-label">' + c.label + '</span>' +
+        '<button type="button" class="sort-btn' + (active ? ' active' : '') + '" data-gt-sort="' + c.key + '" title="Ordenar por ' + c.label + '" aria-label="Ordenar por ' + c.label + '">' + glyph + '</button>' +
+        '<span class="pat-col-resizer" data-col="' + c.key + '" title="Arrastar para ajustar a largura" aria-hidden="true"></span></th>';
+    }).join("") + '</tr></thead><tbody>' +
+    rows.map(function(r){ return '<tr ' + r.attrs + '>' + r.cells.map(function(v, i){ return '<td' + (cols[i].cls ? ' class="' + cols[i].cls + '"' : '') + '>' + v + '</td>'; }).join("") + '</tr>'; }).join("") +
+    '</tbody></table></div>';
+  wirePatColResize(host, cfg);
+  host.querySelectorAll("[data-gt-sort]").forEach(function(btn){
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      var c = btn.getAttribute("data-gt-sort"), cur = GT_SORT[id] || {};
+      GT_SORT[id] = cur.col !== c ? {col: c, dir: "asc"} : (cur.dir === "asc" ? {col: c, dir: "desc"} : {col: null, dir: null});
+      render();
+    });
+  });
+}
 
 // The raw (unformatted) value a patient contributes for a given sortable column —
 // numbers for numeric columns so they compare numerically, not lexically.
@@ -7436,19 +7499,20 @@ function prRenderList(){
     .sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); });
   countEl.textContent = list.length + " de " + state.patients.length + (state.patients.length === 1 ? " paciente" : " pacientes");
   if (!list.length){ host.innerHTML = '<div class="empty-state"><b>Nenhum paciente encontrado</b>Ajuste a busca.</div>'; return; }
-  host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table" style="min-width:640px">' +
-    '<colgroup><col style="width:34%"><col style="width:12%"><col style="width:16%"><col></colgroup>' +
-    '<thead><tr><th>Paciente</th><th>Registros</th><th>Último atendimento</th><th>Profissionais</th></tr></thead><tbody>' +
-    list.map(function(p){
-      var s = PR.summary[p.id] || {count: 0, last: "", profs: []};
-      var col = patientColor(p);
-      return '<tr class="pr-row" data-pid="' + esc(p.id) + '" tabindex="0">' +
-        '<td class="pt-nome">' + (col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + esc(p.nome) + '</td>' +
-        '<td>' + s.count + '</td>' +
-        '<td class="pt-muted">' + (s.last ? agdBrDate(s.last) : "—") + '</td>' +
-        '<td class="pt-muted" title="' + esc(s.profs.join(", ")) + '">' + (s.profs.length ? esc(s.profs.join(", ")) : "—") + '</td>' +
-      '</tr>';
-    }).join("") + '</tbody></table></div>';
+  var cols = [
+    {key: "paciente", label: "Paciente", width: 300, min: 140, cls: "pt-nome"},
+    {key: "registros", label: "Registros", width: 110, min: 70},
+    {key: "ultimo", label: "Último atendimento", width: 170, min: 90, cls: "pt-muted"},
+    {key: "profs", label: "Profissionais", width: 360, min: 120, cls: "pt-muted"}
+  ];
+  gtRender(host, "prontuario", cols, list.map(function(p){
+    var s = PR.summary[p.id] || {count: 0, last: "", profs: []};
+    var col = patientColor(p);
+    return {attrs: 'class="pr-row" data-pid="' + esc(p.id) + '" tabindex="0"',
+      cells: [(col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + esc(p.nome), s.count,
+        s.last ? agdBrDate(s.last) : "—", '<span title="' + esc(s.profs.join(", ")) + '">' + (s.profs.length ? esc(s.profs.join(", ")) : "—") + '</span>'],
+      vals: [p.nome || "", s.count, s.last || "", s.profs.join(", ")]};
+  }), prRenderList);
 }
 function prOpenPatient(pid){
   PR.patientId = pid; PR.records = []; PR.detailLoading = true;
@@ -8171,6 +8235,9 @@ var REG_CFG = {
     row: function(c){
       var n = state.patients.filter(function(p){ return p.convenioId === c.id || (!p.convenioId && normText(p.convenio || "") === normText(c.name)); }).length;
       return ['<b>' + esc(c.name) + '</b>', n];
+    },
+    vals: function(c){
+      return [c.name, state.patients.filter(function(p){ return p.convenioId === c.id || (!p.convenioId && normText(p.convenio || "") === normText(c.name)); }).length];
     }
   },
   servicos: {
@@ -8187,6 +8254,9 @@ var REG_CFG = {
     row: function(s){
       var n = state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length;
       return ['<b>' + esc(s.name) + '</b>' + (s.id === DEFAULT_SERVICE_ID ? ' <span class="serv-lock">padrão</span>' : ''), n];
+    },
+    vals: function(s){
+      return [s.name, state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length];
     }
   },
   especialidades: {
@@ -8197,6 +8267,9 @@ var REG_CFG = {
     row: function(s){
       var n = state.professionals.filter(function(p){ return p.specialtyId === s.id; }).length;
       return ['<span class="pcolor-dot" style="background:' + swatchVar(s.color || "teal") + '"></span><b>' + esc(s.name) + '</b>', esc(s.sigla || defaultSigla(s.name)), n];
+    },
+    vals: function(s){
+      return [s.name, s.sigla || defaultSigla(s.name), state.professionals.filter(function(p){ return p.specialtyId === s.id; }).length];
     }
   }
 };
@@ -8213,10 +8286,10 @@ function renderRegistryTab(kind){
   if (addBtn) addBtn.hidden = !can(cfg.module, "create");
   if (!all.length){ host.innerHTML = '<div class="empty-state"><b>Nenhum ' + cfg.title + ' cadastrado</b>Use "' + esc(cfg.newLabel) + '".</div>'; return; }
   if (!shown.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca.</div>'; return; }
-  host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table reg-table"><thead><tr>' +
-    cfg.cols.map(function(c, i){ return '<th' + (i ? ' style="width:22%"' : '') + '>' + c + '</th>'; }).join("") + '</tr></thead><tbody>' +
-    shown.map(function(x){ return '<tr class="pr-row" data-reg-id="' + esc(x.id) + '" tabindex="0">' + cfg.row(x).map(function(v, i){ return '<td' + (i ? ' class="pt-muted"' : ' class="pt-nome"') + '>' + v + '</td>'; }).join("") + '</tr>'; }).join("") +
-    '</tbody></table></div>';
+  var cols = cfg.cols.map(function(c, i){ return {key: "c" + i, label: c, width: i ? 180 : 360, min: i ? 70 : 140, cls: i ? "pt-muted" : "pt-nome"}; });
+  gtRender(host, "reg-" + kind, cols, shown.map(function(x){
+    return {attrs: 'class="pr-row" data-reg-id="' + esc(x.id) + '" tabindex="0"', cells: cfg.row(x), vals: cfg.vals(x)};
+  }), function(){ renderRegistryTab(kind); }, "reg-table");
 }
 function openRegistryItem(kind, item){
   var cfg = REG_CFG[kind], isNew = !item;

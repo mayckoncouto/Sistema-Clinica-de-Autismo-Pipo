@@ -712,3 +712,12 @@ lugar da cor por idade/ABA. Legenda: "Treinamento ou Outros serviços".
 `.grid-scroll` rola (`overflow:auto`), igual à aba Resumo/Atendimentos. A barra
 de dias/semanas/salas/busca e a legenda ficam paradas; os cabeçalhos de sala e
 profissional (`.grouphead` / `.seathead`, sticky top) ficam presos no topo da grade.
+
+## Ordenar e ajustar colunas em todos os cadastros (2026-10-02)
+`gtRender(host, id, cols, rows, render, extraClass)` (perto de `SORT_NONE_SVG`):
+tabela `.pat-table` com botão de ordenar (⇅ crescente → decrescente → padrão,
+`GT_SORT[id]`, vazios no fim, números em ordem numérica) e bordas de arrastar
+(reusa `wirePatColResize`; larguras em `agendaPipo:colWidths:<id>`, duplo clique
+volta ao padrão). `rows = [{attrs, cells:[html], vals:[valor de ordenação]}]`.
+Usado em Convênios, Serviços, Especialidades (`REG_CFG[k].vals`) e na lista de
+pacientes do Prontuário (`prRenderList`).
