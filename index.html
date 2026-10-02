@@ -346,6 +346,11 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .prof-hours th.ph-per{text-align:center;color:var(--ink-2);border-bottom:1px dashed var(--line)}
 .prof-hours select{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:inherit;font-size:12.5px;color:var(--ink)}
 .prof-hours select:disabled{opacity:.45}
+.cl-hours input.cl-time{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:inherit;font-size:12.5px;color:var(--ink)}
+.cl-hours input.cl-time:disabled{opacity:.4}
+.cl-hours td.cl-on{text-align:center}
+.cl-hours td.cl-on input{width:16px;height:16px;accent-color:var(--accent)}
+.cl-hours td.cl-count{font-size:11.5px;color:var(--muted);white-space:nowrap}
 .prof-access{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
 .prof-access-title{font-size:12px;font-weight:800;color:var(--ink);text-transform:uppercase;letter-spacing:.03em}
 .confirm-msg{font-size:13px;line-height:1.5;color:var(--ink-2)}
@@ -986,6 +991,170 @@ var DAYS = [
     meeting:null,
     afternoon:["13:30","14:10","14:50","15:30","16:10","16:50"]}
 ];
+
+/* ---------------- cadastro da Clínica (config/clinic) ----------------
+ * Menu Acesso → Clínica (só Administrador): dados da clínica e horário de
+ * atendimento de cada dia (seg a dom): Atende? + manhã (início/fim) + tarde
+ * (início/fim). Os dias e horários do Planner e da Agenda saem daqui:
+ * rebuildDays() refaz DAYS (horários de 40 min a partir de cada início, até o
+ * fim). Sem cadastro = padrão antigo (seg a sex, 07:20–12:00 e 13:30–18:10;
+ * sexta à tarde até 17:30). Sábado/domingo aparecem quando habilitados.
+ */
+var CLINIC_SLOT_MIN = 40;
+var ALL_WEEKDAYS = [
+  {key:"seg", name:"Segunda", full:"Segunda-feira"}, {key:"ter", name:"Terça", full:"Terça-feira"},
+  {key:"qua", name:"Quarta", full:"Quarta-feira"}, {key:"qui", name:"Quinta", full:"Quinta-feira"},
+  {key:"sex", name:"Sexta", full:"Sexta-feira"}, {key:"sab", name:"Sábado", full:"Sábado"},
+  {key:"dom", name:"Domingo", full:"Domingo"}
+];
+function clinicDefaultDay(key){
+  if (key === "sab" || key === "dom") return {ativo: false, manha: {inicio: "07:20", fim: "12:00"}, tarde: {inicio: "", fim: ""}};
+  return {ativo: true, manha: {inicio: "07:20", fim: "12:00"}, tarde: {inicio: "13:30", fim: key === "sex" ? "17:30" : "18:10"}};
+}
+function clinicDayCfg(key){
+  var h = state.clinic && state.clinic.horarios && state.clinic.horarios[key];
+  return h || clinicDefaultDay(key);
+}
+// Horários de início (de 40 em 40 min) que cabem inteiros no período.
+function clinicSlots(per){
+  if (!per || !per.inicio || !per.fim) return [];
+  var out = [], t = per.inicio, guard = 0;
+  while (addMinutes(t, CLINIC_SLOT_MIN) <= per.fim && guard++ < 40){ out.push(t); t = addMinutes(t, CLINIC_SLOT_MIN); }
+  return out;
+}
+function rebuildDays(){
+  var list = ALL_WEEKDAYS.map(function(d){
+    var h = clinicDayCfg(d.key);
+    if (!h.ativo) return null;
+    var m = clinicSlots(h.manha), a = clinicSlots(h.tarde);
+    if (!m.length && !a.length) return null;
+    return {key: d.key, name: d.name, full: d.full, morning: m, meeting: null, afternoon: a};
+  }).filter(Boolean);
+  if (!list.length){ // nunca deixa a agenda sem dias
+    list = ALL_WEEKDAYS.slice(0, 5).map(function(d){ var h = clinicDefaultDay(d.key); return {key: d.key, name: d.name, full: d.full, morning: clinicSlots(h.manha), meeting: null, afternoon: clinicSlots(h.tarde)}; });
+  }
+  DAYS.length = 0;
+  list.forEach(function(d){ DAYS.push(d); });
+}
+function dayEnabled(key){ return DAYS.some(function(d){ return d.key === key; }); }
+// Todos os horários (manhã e tarde) dos dias abertos, sem repetir, em ordem.
+function clinicAllTimes(per){
+  var seen = {}, out = [];
+  DAYS.forEach(function(d){
+    (per === "m" ? d.morning : per === "t" ? d.afternoon : d.morning.concat(d.afternoon)).forEach(function(t){ if (!seen[t]){ seen[t] = 1; out.push(t); } });
+  });
+  return out.sort();
+}
+function subscribeClinic(){
+  db.doc("config/clinic").onSnapshot(function(snap){
+    state.clinic = (snap.exists && snap.data()) ? snap.data() : null;
+    onClinicChange();
+  }, function(){});
+}
+function onClinicChange(){
+  rebuildDays();
+  if (state.day !== "todos" && !dayEnabled(state.day)) state.day = DAYS[0].key;
+  try {
+    buildDaySeg();
+    if (typeof subscribeReportDocs === "function" && db) subscribeReportDocs();
+    if (typeof subscribeSchedule === "function" && db) subscribeSchedule(); else renderGrid();
+    if (state.tab === "agendadia") agdLoadWeek();
+  } catch(err){ reportAppError(err, "ao aplicar o horário da clínica"); }
+}
+function openClinicModal(){
+  if (!(window.pipoAuth && window.pipoAuth.isAdmin())){ showToast("Só o Administrador altera o cadastro da clínica.", true); return; }
+  var c = state.clinic || {};
+  var host = document.getElementById("modalHost");
+  function tm(id, val, dis){ return '<input type="time" step="600" class="cl-time" id="'+id+'" value="'+esc(val || "")+'"'+(dis ? ' disabled' : '')+'>'; }
+  var rows = ALL_WEEKDAYS.map(function(d){
+    var h = clinicDayCfg(d.key), off = !h.ativo;
+    return '<tr data-day="'+d.key+'"><td class="ph-day">'+d.full+'</td>' +
+      '<td class="cl-on"><input type="checkbox" class="cl-ativo"'+(h.ativo ? ' checked' : '')+' aria-label="Atende '+d.full+'"></td>' +
+      '<td>'+tm("cl-"+d.key+"-mi", h.manha && h.manha.inicio, off)+'</td><td>'+tm("cl-"+d.key+"-mf", h.manha && h.manha.fim, off)+'</td>' +
+      '<td>'+tm("cl-"+d.key+"-ti", h.tarde && h.tarde.inicio, off)+'</td><td>'+tm("cl-"+d.key+"-tf", h.tarde && h.tarde.fim, off)+'</td>' +
+      '<td class="cl-count" data-count="'+d.key+'"></td></tr>';
+  }).join("");
+  function f(id, label, val, ph, wide){ return '<div class="field"'+(wide ? ' style="flex:2"' : '')+'><label for="'+id+'">'+label+'</label><input id="'+id+'" type="text" value="'+esc(val || "")+'" placeholder="'+esc(ph || "")+'"></div>'; }
+  host.innerHTML =
+    '<div class="overlay" id="ovClinic"><div class="modal wide" style="max-width:760px">' +
+      '<div class="modal-head"><div><h3>Clínica</h3><div class="modal-sub">Dados da clínica e horário de atendimento. Os dias e horários do Planner e da Agenda seguem este cadastro.</div></div>' +
+        '<button class="modal-close" id="clClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="field-row">' + f("clNome", "Nome da clínica", c.nome || "Clínica de Autismo Pipo", "", true) + f("clCnpj", "CNPJ", c.cnpj, "00.000.000/0000-00") + '</div>' +
+        '<div class="field-row">' + f("clFone", "Telefone", c.telefone, "(47) 0000-0000") + f("clEmail", "E-mail", c.email, "contato@...", true) + '</div>' +
+        '<div class="field-row">' + f("clEnd", "Endereço", c.endereco, "Rua, número, bairro", true) + f("clCidade", "Cidade / UF", c.cidade, "Blumenau / SC") + '</div>' +
+        '<div class="prof-section"><div class="prof-section-head"><span class="prof-access-title">Horário de atendimento</span>' +
+          '<button type="button" class="btn ghost ph-copy" id="clCopy">Copiar segunda para os dias úteis</button></div>' +
+          '<table class="prof-hours cl-hours" id="clHours"><thead>' +
+            '<tr><th rowspan="2">Dia</th><th rowspan="2">Atende</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th><th rowspan="2">Horários</th></tr>' +
+            '<tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+          '<div class="pat-count" style="margin-top:6px">Cada atendimento tem 40 minutos, contados a partir do início de cada período. Deixe o período em branco se não houver atendimento nele. Horários que deixarem de existir somem da grade (os agendamentos ficam guardados e voltam se o horário voltar).</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="clCancel">Cancelar</button><button class="btn primary" id="clSave">Salvar</button></div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovClinic");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("clClose").addEventListener("click", close);
+  document.getElementById("clCancel").addEventListener("click", close);
+  var tbl = document.getElementById("clHours");
+  function v(id){ var el = document.getElementById(id); return el ? el.value : ""; }
+  function readDay(key){
+    var on = tbl.querySelector('tr[data-day="'+key+'"] .cl-ativo').checked;
+    return {ativo: on, manha: {inicio: v("cl-"+key+"-mi"), fim: v("cl-"+key+"-mf")}, tarde: {inicio: v("cl-"+key+"-ti"), fim: v("cl-"+key+"-tf")}};
+  }
+  function counts(){
+    ALL_WEEKDAYS.forEach(function(d){
+      var h = readDay(d.key), n = h.ativo ? clinicSlots(h.manha).length + clinicSlots(h.tarde).length : 0;
+      tbl.querySelector('[data-count="'+d.key+'"]').textContent = h.ativo ? n + (n === 1 ? " horário" : " horários") : "Fechado";
+    });
+  }
+  tbl.addEventListener("change", function(e){
+    if (e.target.classList.contains("cl-ativo")){
+      e.target.closest("tr").querySelectorAll(".cl-time").forEach(function(x){ x.disabled = !e.target.checked; });
+    }
+    counts();
+  });
+  tbl.addEventListener("input", counts);
+  document.getElementById("clCopy").addEventListener("click", function(){
+    var src = readDay("seg");
+    ["ter", "qua", "qui", "sex"].forEach(function(k){
+      tbl.querySelector('tr[data-day="'+k+'"] .cl-ativo').checked = src.ativo;
+      ["mi", "mf", "ti", "tf"].forEach(function(s){ var el = document.getElementById("cl-"+k+"-"+s); el.value = v("cl-seg-"+s); el.disabled = !src.ativo; });
+    });
+    counts();
+  });
+  counts();
+  document.getElementById("clSave").addEventListener("click", function(){
+    var horarios = {}, bad = null;
+    ALL_WEEKDAYS.forEach(function(d){
+      var h = readDay(d.key);
+      [["manha", "manhã"], ["tarde", "tarde"]].forEach(function(pp){
+        var x = h[pp[0]];
+        if ((x.inicio && !x.fim) || (!x.inicio && x.fim) || (x.inicio && x.fim && x.fim <= x.inicio)) bad = bad || (d.full + " (" + pp[1] + ")");
+      });
+      if (h.manha.fim && h.tarde.inicio && h.tarde.inicio < h.manha.fim) bad = bad || (d.full + ": a tarde começa antes de a manhã terminar");
+      if (h.ativo && !clinicSlots(h.manha).length && !clinicSlots(h.tarde).length) bad = bad || (d.full + ": nenhum horário de 40 minutos cabe no período");
+      horarios[d.key] = h;
+    });
+    if (bad){ showToast("Confira o horário de " + bad + ".", true); return; }
+    if (!ALL_WEEKDAYS.some(function(d){ return horarios[d.key].ativo; })){ showToast("Deixe pelo menos um dia com atendimento.", true); return; }
+    var rec = {
+      nome: document.getElementById("clNome").value.trim(), cnpj: document.getElementById("clCnpj").value.trim(),
+      telefone: document.getElementById("clFone").value.trim(), email: document.getElementById("clEmail").value.trim(),
+      endereco: document.getElementById("clEnd").value.trim(), cidade: document.getElementById("clCidade").value.trim(),
+      horarios: horarios
+    };
+    if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+    db.doc("config/clinic").set(rec).then(function(){
+      state.clinic = rec; onClinicChange(); close(); showToast("Cadastro da clínica salvo.");
+    }).catch(function(err){
+      var m = (err && err.message) || "";
+      showToast(/check|path|violat/i.test(m) ? "Falta rodar a atualização do banco (cadastro da clínica)." : "Não foi possível salvar o cadastro da clínica.", true);
+    });
+  });
+}
 var WEEKS = [1,2,3,4];
 var WEEK_LABEL = {1:"1ª semana",2:"2ª semana",3:"3ª semana",4:"4ª semana"};
 
@@ -1732,6 +1901,7 @@ function connectDb(){
     subscribeConvenios();
     subscribeServices();
     subscribeStatuses();
+    subscribeClinic();
     subscribeProfessionals();
     subscribeSchedule();
     subscribeReportDocs();
@@ -1795,6 +1965,7 @@ window.pipoConfirm = confirmDialog; // usado por js/usuarios.js
 window.pipoProfessionals = function(){ return state.professionals.slice(); }; // idem (criar acessos)
 window.pipoStatuses = function(){ return statusesList(); }; // níveis de permissão (js/usuarios.js)
 window.pipoOpenStatuses = function(){ openStatusesModal(); }; // menu Acesso (js/pipo-supabase.js)
+window.pipoOpenClinic = function(){ openClinicModal(); }; // menu Acesso → Clínica
 function namesList(names){
   return '<ul class="confirm-list">' + names.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join("") + '</ul>';
 }
@@ -2131,6 +2302,7 @@ window.addEventListener("unhandledrejection", function(e){ reportAppError(e && e
 
 function buildDaySeg(){
   var host = document.getElementById("daySeg");
+  if (state.day !== "todos" && !dayEnabled(state.day)) state.day = DAYS[0].key;
   host.innerHTML = DAYS.map(function(d){
     return '<button data-day="'+d.key+'" class="'+(d.key===state.day?"active":"")+'">'+d.name+'</button>';
   }).join("") + '<button data-day="todos" class="'+(state.day==="todos"?"active":"")+'">Todos</button>';
@@ -2289,7 +2461,7 @@ function addMinutes(hhmm, mins){
 
 function timeRows(day){
   var rows = day.morning.map(function(t){ return {time:t, meeting:false}; });
-  var morningEnd = addMinutes(day.morning[day.morning.length-1], SESSION_MINUTES);
+  var morningEnd = day.morning.length ? addMinutes(day.morning[day.morning.length-1], SESSION_MINUTES) : (day.afternoon[0] || "12:00");
   if (day.meeting){
     // The team-meeting row sits right at the end of the morning block (its own
     // time already equals that end time), so it doubles as that divider.
@@ -2300,10 +2472,10 @@ function timeRows(day){
     // is the row that sits in the temporal "middle" of the day, so it also
     // repeats each column's professional name and carries the afternoon
     // block/unblock controls (see buildScheduleTable).
-    rows.push({divider:true, time:morningEnd, middle:true});
+    if (day.afternoon.length) rows.push({divider:true, time:morningEnd, middle:true}); // sem tarde: só a linha final
   }
   day.afternoon.forEach(function(t){ rows.push({time:t, meeting:false}); });
-  var afternoonEnd = addMinutes(day.afternoon[day.afternoon.length-1], SESSION_MINUTES);
+  var afternoonEnd = day.afternoon.length ? addMinutes(day.afternoon[day.afternoon.length-1], SESSION_MINUTES) : morningEnd;
   rows.push({divider:true, time:afternoonEnd});
   return rows;
 }
@@ -4612,11 +4784,11 @@ function openProfessionalModal(p){
       list.map(function(t){ return '<option'+(t===sel?' selected':'')+'>'+t+'</option>'; }).join("");
   }
   function periodCells(per, x, label){
-    var o = PROF_PERIOD_TIMES[per];
+    var o = profPeriodTimes()[per];
     return '<td><select class="ph-start" data-p="'+per+'" aria-label="Início '+label+'">'+timeOpts(o.starts, x ? x.inicio : "", true)+'</select></td>' +
       '<td><select class="ph-end" data-p="'+per+'" aria-label="Fim '+label+'"'+(x?'':' disabled')+'>'+timeOpts(o.ends, x ? x.fim : o.ends[o.ends.length-1], false)+'</select></td>';
   }
-  var hoursRows = PROF_WEEKDAYS.map(function(d){
+  var hoursRows = profWeekdays().map(function(d){
     var pp = profDayPeriods(v, d.key);
     return '<tr data-day="'+d.key+'"><td class="ph-day">'+d.label+'</td>' +
       periodCells("m", pp.m, "manhã "+d.label) + periodCells("t", pp.t, "tarde "+d.label) + '</tr>';
@@ -4731,7 +4903,7 @@ function openProfessionalModal(p){
     var tr = e.target.closest("tr"), end = tr.querySelector('.ph-end[data-p="'+per+'"]');
     end.disabled = !e.target.value;
     if (e.target.value && end.value <= e.target.value){
-      var ends = PROF_PERIOD_TIMES[per].ends;
+      var ends = profPeriodTimes()[per].ends;
       end.value = ends[ends.length-1];
     }
   });
@@ -4776,7 +4948,7 @@ function openProfessionalModal(p){
     if (!name){ document.getElementById("profName").focus(); return; }
     var specialtyId = document.getElementById("profSpecialty").value || null;
     // Horários por dia: {seg:{manha:{inicio,fim}, tarde:{inicio,fim}}, ...}; período "Não atende" = {inicio:"",fim:""}.
-    var horarios = {}, badDay = null, badPer = "";
+    var horarios = Object.assign({}, (p && p.horarios) || {}), badDay = null, badPer = ""; // mantém dias fechados na clínica
     Array.prototype.forEach.call(document.querySelectorAll("#profHours tbody tr"), function(tr){
       var day = {};
       [["m", "manha", "manhã"], ["t", "tarde", "tarde"]].forEach(function(pp){
@@ -4845,10 +5017,13 @@ var PROF_DAY_START = "07:20", PROF_DAY_END = "18:10";
 var PROF_START_TIMES = ["07:20","08:00","08:40","09:20","10:00","10:40","11:20","13:30","14:10","14:50","15:30","16:10","16:50","17:30"];
 var PROF_END_TIMES = ["08:00","08:40","09:20","10:00","10:40","11:20","12:00","14:10","14:50","15:30","16:10","16:50","17:30","18:10"];
 // Opções de manhã e tarde no cadastro do profissional.
-var PROF_PERIOD_TIMES = {
-  m: {starts: PROF_START_TIMES.filter(function(t){ return t < "12:00"; }), ends: PROF_END_TIMES.filter(function(t){ return t <= "12:00"; })},
-  t: {starts: PROF_START_TIMES.filter(function(t){ return t > "12:00"; }), ends: PROF_END_TIMES.filter(function(t){ return t > "12:00"; })}
-};
+// Opções de manhã e tarde no cadastro do profissional = horários da clínica.
+function profPeriodTimes(){
+  var m = clinicAllTimes("m"), t = clinicAllTimes("t");
+  return {m: {starts: m, ends: m.map(function(x){ return addMinutes(x, CLINIC_SLOT_MIN); })},
+          t: {starts: t, ends: t.map(function(x){ return addMinutes(x, CLINIC_SLOT_MIN); })}};
+}
+function profWeekdays(){ return DAYS.map(function(d){ return {key: d.key, label: d.full}; }); }
 var PROF_WEEKDAYS = [
   {key:"seg", label:"Segunda-feira"}, {key:"ter", label:"Terça-feira"}, {key:"qua", label:"Quarta-feira"},
   {key:"qui", label:"Quinta-feira"}, {key:"sex", label:"Sexta-feira"}
@@ -5430,12 +5605,19 @@ function agdSameDay(a, b){ return agdIso(a) === agdIso(b); }
 function agdPlus40(t){ var p = t.split(":"), m = +p[0]*60 + +p[1] + 40; return ("0"+Math.floor(m/60)).slice(-2)+":"+("0"+m%60).slice(-2); }
 function agdBrDate(iso){ var p = iso.split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
 // Fim de semana não tem agenda: sábado/domingo pulam para a segunda seguinte.
-function agdClampWeekday(d){ var w = d.getDay(); return w === 6 ? agdAddDays(d, 2) : (w === 0 ? agdAddDays(d, 1) : d); }
-function agdWeekDays(){ var m = agdMonday(AD.date); return [0,1,2,3,4].map(function(i){ return agdAddDays(m, i); }); }
+function agdClampWeekday(d){ for (var i = 0; i < 7; i++){ if (dayEnabled(AD_WEEKDAY_KEYS[d.getDay()])) return d; d = agdAddDays(d, 1); } return d; }
+function agdWeekDays(){ var m = agdMonday(AD.date); return [0,1,2,3,4,5,6].map(function(i){ return agdAddDays(m, i); }).filter(function(d){ return dayEnabled(AD_WEEKDAY_KEYS[d.getDay()]); }); }
+// Horários da semana: manhãs e tardes de todos os dias abertos (ALMOCO no meio).
+function agdWeekSlots(days){
+  var m = {}, t = {};
+  days.forEach(function(d){ var o = agdDayObj(d); o.morning.forEach(function(x){ m[x] = 1; }); o.afternoon.forEach(function(x){ t[x] = 1; }); });
+  return Object.keys(m).sort().concat(["ALMOCO"], Object.keys(t).sort());
+}
+function agdLunchLabel(slots){ var i = slots.indexOf("ALMOCO"); return i > 0 ? addMinutes(slots[i-1], CLINIC_SLOT_MIN) : (slots[i+1] || ""); }
 function agdDayObj(d){ return findDayObj(AD_WEEKDAY_KEYS[d.getDay()]); }
 // Horários do dia = os mesmos do Planner (manhã, almoço, tarde).
 function agdSlots(d){ var o = agdDayObj(d); return o.morning.concat(["ALMOCO"], o.afternoon); }
-function agdAllTimes(){ var o = DAYS[0]; return o.morning.concat(o.afternoon); }
+function agdAllTimes(){ return clinicAllTimes(); }
 // Profissional (usuário ligado a um profissional, não Administrador e sem "editar"
 // na Agenda): vê só a própria agenda, sem a lista lateral. O banco aplica a mesma
 // regra (agenda_scope_professional, migração 2026-10-02f).
@@ -5481,7 +5663,7 @@ function agdIndex(){
 
 function agdLoadWeek(){
   var days = agdWeekDays();
-  AD.rangeFrom = agdIso(days[0]); AD.rangeTo = agdIso(days[4]);
+  AD.rangeFrom = agdIso(agdMonday(AD.date)); AD.rangeTo = agdIso(agdAddDays(agdMonday(AD.date), 6));
   var c = agdClient();
   if (!c){ AD.loaded = true; AD.error = "offline"; agdRender(); return Promise.resolve(); }
   var seq = ++AD.loadSeq;
@@ -5606,7 +5788,7 @@ function agdRender(){
 
   var days = agdWeekDays(), today = agdStartOfDay(new Date());
   if (AD.view === "semana"){
-    var a = days[0], b = days[4];
+    var a = days[0], b = days[days.length - 1];
     document.getElementById("agdTitle").textContent = a.getMonth() === b.getMonth()
       ? a.getDate()+" – "+b.getDate()+" de "+AD_MONTHS[b.getMonth()]+" de "+b.getFullYear()
       : a.getDate()+" de "+AD_MONTHS[a.getMonth()]+" – "+b.getDate()+" de "+AD_MONTHS[b.getMonth()]+" de "+b.getFullYear();
@@ -5631,6 +5813,8 @@ function agdRender(){
   // e um "+" para marcar mais um.
   function cell(dateIso, t, res){
     var list, off = false;
+    // Horário que não existe neste dia no cadastro da clínica (ex.: sexta termina mais cedo).
+    var closed = agdSlots(agdParse(dateIso)).indexOf(t) === -1;
     if (AD.mode === "prof"){
       off = !agdInHours(res, t, agdParse(dateIso));
       list = idx.byProf[dateIso+"|"+t+"|"+res.id] || [];
@@ -5641,7 +5825,7 @@ function agdRender(){
     var searching = !!(AD.search || "").trim();
     var anyHit = searching && list.some(agdSearchHit);
     if (anyHit) shownHits += list.filter(agdSearchHit).length;
-    var isOff = off && !has;
+    var isOff = (off || closed) && !has;
     var cls = "agd-slot" + (isOff ? " agd-off" : (AD.clipboard ? " paste-target" : "")) + (anyHit ? " search-hit" : "") + (!has && !canCreate ? " agd-ro" : "") + (has && !canEdit ? " agd-ro" : "");
     var items = list.map(function(row){
       var label = "", color = agdResColor(res);
@@ -5663,8 +5847,8 @@ function agdRender(){
       return html1;
     }).join("");
     return '<td class="'+cls+'" data-d="'+dateIso+'" data-t="'+t+'" data-r="'+esc(res.id)+'"'+
-      (isOff ? ' title="Fora do horário do profissional"' : '')+'>' +
-      (has ? '<div class="agd-multi">' + items + (canCreate && !off ? '<button type="button" class="agd-add" title="Marcar mais um atendimento neste horário" aria-label="Marcar mais um atendimento">+</button>' : '') + '</div>'
+      (isOff ? ' title="'+(closed ? "Clínica fechada neste horário" : "Fora do horário do profissional")+'"' : '')+'>' +
+      (has ? '<div class="agd-multi">' + items + (canCreate && !off && !closed ? '<button type="button" class="agd-add" title="Marcar mais um atendimento neste horário" aria-label="Marcar mais um atendimento">+</button>' : '') + '</div>'
            : (isOff ? '<div class="book"><div class="book-main off-box" aria-hidden="true"></div></div>' : '<div class="book"><button type="button" class="book-main"><span class="empty-plus">+</span></button></div>')) + '</td>';
   }
 
@@ -5677,8 +5861,9 @@ function agdRender(){
     }).join("") + '</tr></thead><tbody>';
     // Linha antes das 07:20 com os botões da manhã; a do almoço leva os da tarde (igual ao Planner).
     html += '<tr class="agd-periodrow"><td class="agd-tcol"></td>' + days.map(function(d){ return agdPeriodCell("morning", agdIso(d), res.id); }).join("") + '</tr>';
-    agdSlots(days[0]).forEach(function(t){
-      if (t === "ALMOCO"){ html += '<tr class="agd-lunch agd-periodrow"><td class="agd-tcol">12:00</td>' + days.map(function(d){ return agdPeriodCell("afternoon", agdIso(d), res.id); }).join("") + '</tr>'; return; }
+    var wkSlots = agdWeekSlots(days), lunchLbl = agdLunchLabel(wkSlots);
+    wkSlots.forEach(function(t){
+      if (t === "ALMOCO"){ html += '<tr class="agd-lunch agd-periodrow"><td class="agd-tcol">'+lunchLbl+'</td>' + days.map(function(d){ return agdPeriodCell("afternoon", agdIso(d), res.id); }).join("") + '</tr>'; return; }
       html += '<tr><td class="agd-tcol">'+agdRowTimeHtml(t)+'</td>' + days.map(function(d){ return cell(agdIso(d), t, res); }).join("") + '</tr>';
     });
   } else {
@@ -5694,8 +5879,9 @@ function agdRender(){
       return '<th style="'+(r.id === AD.sel ? 'color:var(--accent)' : '')+'" title="'+esc(r.name)+'">'+esc(r.name)+'<span class="agd-hsub">'+esc(sub || " ")+'</span></th>';
     }).join("") + '</tr></thead><tbody>';
     html += '<tr class="agd-periodrow"><td class="agd-tcol"></td>' + cols.map(function(r){ return agdPeriodCell("morning", dIso, r.id); }).join("") + '</tr>';
-    agdSlots(AD.date).forEach(function(t){
-      if (t === "ALMOCO"){ html += '<tr class="agd-lunch agd-periodrow"><td class="agd-tcol">12:00</td>' + cols.map(function(r){ return agdPeriodCell("afternoon", dIso, r.id); }).join("") + '</tr>'; return; }
+    var daySlots = agdSlots(AD.date), dayLunch = agdLunchLabel(daySlots);
+    daySlots.forEach(function(t){
+      if (t === "ALMOCO"){ html += '<tr class="agd-lunch agd-periodrow"><td class="agd-tcol">'+dayLunch+'</td>' + cols.map(function(r){ return agdPeriodCell("afternoon", dIso, r.id); }).join("") + '</tr>'; return; }
       html += '<tr><td class="agd-tcol">'+agdRowTimeHtml(t)+'</td>' + cols.map(function(r){ return cell(dIso, t, r); }).join("") + '</tr>';
     });
     html = html.replace('<table class="agd-grid">', '<table class="agd-grid" style="min-width:'+(70 + cols.length*130)+'px">');
@@ -6104,7 +6290,7 @@ function wireAgendaDia(){
   document.getElementById("agdPrev").addEventListener("click", function(){
     if (AD.view === "dia"){
       var d = agdAddDays(AD.date, -1);
-      while (d.getDay() === 0 || d.getDay() === 6) d = agdAddDays(d, -1);
+      var g = 0; while (!dayEnabled(AD_WEEKDAY_KEYS[d.getDay()]) && g++ < 7) d = agdAddDays(d, -1);
       var before = agdIso(agdMonday(AD.date)); AD.date = d;
       if (agdIso(agdMonday(AD.date)) !== before) agdLoadWeek(); else agdRender();
       return;
@@ -6819,7 +7005,7 @@ function agdClearWeek(){
   var c = agdClient();
   if (!c){ showToast("A Agenda funciona no sistema online.", true); return; }
   if (!can("agendamentos", "delete")){ showToast(permDeniedMsg("agendamentos", "delete"), true); return; }
-  var days = agdWeekDays(), from = agdIso(days[0]), to = agdIso(days[4]);
+  var days = agdWeekDays(), from = agdIso(days[0]), to = agdIso(days[days.length - 1]);
   var period = agdBrDate(from).slice(0, 5) + " a " + agdBrDate(to);
   c.from("appointments").select("*").gte("date", from).lte("date", to).then(function(r){
     if (r.error){ showToast("Não foi possível ler a semana: " + agdErr(r.error), true); return; }
@@ -7218,7 +7404,7 @@ function rpRoomName(id){ var r = id ? findRoom(id) : null; return r ? r.name : "
 function rpProfName(id){ var p = id ? findProfessional(id) : null; return p ? p.name : ""; }
 function rpWeekdays(fromIso, toIso){
   var out = [], d = agdParse(fromIso), end = agdParse(toIso);
-  while (d <= end){ var wd = d.getDay(); if (wd >= 1 && wd <= 5) out.push(new Date(d)); d = agdAddDays(d, 1); }
+  while (d <= end){ var wd = d.getDay(); if (dayEnabled(AD_WEEKDAY_KEYS[wd])) out.push(new Date(d)); d = agdAddDays(d, 1); }
   return out;
 }
 

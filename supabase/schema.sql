@@ -100,7 +100,7 @@ create table if not exists public.documents (
   updated_at  timestamptz not null default now(),
   updated_by  uuid references auth.users(id) on delete set null,
   constraint documents_path_valid check (
-    path ~ '^(config/(rooms|specialties|convenios|professionals|services|statuses)|patients/all|schedule/(seg|ter|qua|qui|sex)-[1-4])$'
+    path ~ '^(config/(rooms|specialties|convenios|professionals|services|statuses|clinic)|patients/all|schedule/(seg|ter|qua|qui|sex|sab|dom)-[1-4])$'
   )
 );
 
@@ -145,6 +145,7 @@ returns text language sql immutable as $$
     when p_path = 'config/services'        then 'profissionais'
     when p_path = 'config/rooms'           then 'salas'
     when p_path = 'config/statuses'        then 'cadastro_status' -- nenhum nível tem: só Administrador
+    when p_path = 'config/clinic'          then 'cadastro_clinica' -- só Administrador
   end;
 $$;
 

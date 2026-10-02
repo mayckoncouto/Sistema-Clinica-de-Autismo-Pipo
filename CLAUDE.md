@@ -598,3 +598,21 @@ faixa) — usados por `seatAvailable` (Planner), `agdInHours` (Agenda, envio,
 relatórios) e `agdHoursText` ("08:00–12:00 e 13:30–17:30"). Cadastro: tabela
 Dia | Manhã (Início, Fim) | Tarde (Início, Fim), `profDayPeriods` converte o
 formato antigo ao abrir; "Copiar segunda para todos" copia os 4 campos.
+
+## Cadastro da Clínica: dias e horários do Planner e da Agenda (2026-10-02)
+- Documento `config/clinic` {nome, cnpj, telefone, email, endereco, cidade,
+  horarios:{seg..dom:{ativo, manha:{inicio,fim}, tarde:{inicio,fim}}}} — menu
+  Acesso → Clínica (`openClinicModal`, só Administrador; módulo
+  `cadastro_clinica` no banco). Migração `supabase/2026-10-02h-clinica.sql`
+  (também libera `schedule/sab-N` e `dom-N`).
+- `DAYS` deixou de ser fixo: `rebuildDays()` gera os dias abertos e os horários
+  de 40 min (`clinicSlots`) a partir do cadastro; sem cadastro = padrão antigo
+  (seg a sex, 07:20–12:00 / 13:30–18:10, sexta tarde até 17:30).
+  `onClinicChange()` refaz botões de dia, assinaturas do Planner e a Agenda.
+- Agenda: `agdWeekDays()` = dias abertos da semana (inclui sáb/dom se abertos);
+  semana carregada de segunda a domingo; `agdWeekSlots`/`agdLunchLabel`
+  (linha do almoço = fim da manhã); célula de horário que não existe naquele dia
+  = cinza "Clínica fechada neste horário"; `agdClampWeekday` pula dias fechados.
+- Horário dos profissionais: linhas = dias abertos (`profWeekdays`), opções de
+  manhã/tarde = horários da clínica (`profPeriodTimes`); salvar mantém dias
+  fechados já gravados. Relatórios (`rpWeekdays`) contam só dias abertos.
