@@ -58,7 +58,7 @@
   function friendlyDbError(e) {
     var m = (e && e.message) || String(e || "");
     if (/administrador ativo/i.test(m)) return "É preciso manter pelo menos um administrador ativo.";
-    if (/permission|42501|row-level/i.test(m)) return "Sem permissão para esta alteração.";
+    if (/permission|42501|row-level/i.test(m)) return "Sem permissão para esta alteração. (" + m + ")";
     return m;
   }
 
