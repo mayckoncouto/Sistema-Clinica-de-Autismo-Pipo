@@ -1865,7 +1865,12 @@ function patientSpecRows(p){
   });
   return rows;
 }
+// Linha do paciente pode ser uma especialidade (id normal) ou um SERVIÇO ("svc:<id>").
+var SVC_PREFIX = "svc:";
+function isSvcItem(id){ return String(id || "").indexOf(SVC_PREFIX) === 0; }
+function svcItemService(id){ var sid = String(id).slice(SVC_PREFIX.length); return servicesList().filter(function(x){ return x.id === sid; })[0] || null; }
 function specialtyName(specId){
+  if (isSvcItem(specId)){ var sv = svcItemService(specId); return sv ? sv.name : String(specId).slice(SVC_PREFIX.length); }
   var s = state.specialties.filter(function(x){ return x.id === specId; })[0];
   return s ? s.name : specId;
 }
@@ -1876,6 +1881,7 @@ function defaultSigla(name){
   return letters ? letters.slice(0,2).toUpperCase() : "?";
 }
 function specialtySigla(specId){
+  if (isSvcItem(specId)){ var sv = svcItemService(specId); return sv ? ((sv.sigla && String(sv.sigla).trim()) ? String(sv.sigla).trim().toUpperCase() : defaultSigla(sv.name)) : "?"; }
   var s = state.specialties.filter(function(x){ return x.id === specId; })[0];
   if (!s) return String(specId||"").slice(0,2).toUpperCase();
   return (s.sigla && String(s.sigla).trim()) ? String(s.sigla).trim().toUpperCase() : defaultSigla(s.name);
@@ -1887,6 +1893,7 @@ function patientSpecRowsOrdered(p){
   var rows = patientSpecRows(p);
   var order = {};
   state.specialties.forEach(function(s, i){ order[s.id] = i; });
+  servicesList().forEach(function(s, i){ order[SVC_PREFIX + s.id] = 500 + i; }); // serviços depois das especialidades
   return rows.slice().sort(function(a, b){
     var oa = Object.prototype.hasOwnProperty.call(order, a.specId) ? order[a.specId] : 999;
     var ob = Object.prototype.hasOwnProperty.call(order, b.specId) ? order[b.specId] : 999;
@@ -4446,7 +4453,7 @@ function renderPatientsTab(){
     return '<th><span class="th-label">'+c.label+'</span>' +
       '<button type="button" class="sort-btn'+(active?' active':'')+'" data-sort-col="'+c.key+'" title="Ordenar por '+c.label+'" aria-label="Ordenar por '+c.label+'">'+glyph+'</button>' +
       colResizer(c.key) + '</th>';
-  }).join("") + '<th>Especialidades (sessão/mês)'+colResizer("especialidades")+'</th></tr>';
+  }).join("") + '<th>Especialidades/Serviços (sessão/mês)'+colResizer("especialidades")+'</th></tr>';
 
   host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table" style="min-width:'+patTableWidthPx()+'px">' +
     colgroupHtml +
@@ -4577,8 +4584,8 @@ function openPatientModal(p){
             '<option value="Não"'+(v.aba==="Não"?" selected":"")+'>Não</option>' +
           '</select></div>' +
         '</div>' +
-        '<div class="field"><label>Especialidades e sessão (mês)</label><div class="hours-list" id="specRowsHost"></div>' +
-          '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ especialidade</button>' +
+        '<div class="field"><label>Especialidades/serviços e sessão (mês)</label><div class="hours-list" id="specRowsHost"></div>' +
+          '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ especialidade ou serviço</button>' +
         '</div>' +
         patHoursSectionHtml(v) +
       '</div>' +
@@ -4650,14 +4657,24 @@ function openPatientModal(p){
           if (used.indexOf("name:"+s.name.trim().toLowerCase()) !== -1) return false;
           return !q || normText(s.name).indexOf(normText(q)) !== -1;
         }).slice(0,8);
+        // Serviços do cadastro, menos "Sessão" (sessão = escolher a especialidade).
+        var svcOpts = servicesList().filter(function(s){
+          if (s.id === DEFAULT_SERVICE_ID) return false;
+          if (used.indexOf(SVC_PREFIX + s.id) !== -1) return false;
+          return !q || normText(s.name).indexOf(normText(q)) !== -1;
+        }).slice(0,8);
         var exact = localSpecialties.filter(function(s){ return normText(s.name.trim()) === normText(q); })[0];
         var html = opts.map(function(s){
           return '<button type="button" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'"><span class="autolist-name">'+esc(s.name)+'</span></button>';
         }).join("");
+        html += svcOpts.map(function(s){
+          return '<button type="button" data-id="'+esc(SVC_PREFIX + s.id)+'" data-name="'+esc(s.name)+'"><span class="autolist-name">'+esc(s.name)+'</span><span class="autolist-kind">Serviço</span></button>';
+        }).join("");
+        if (!exact) exact = servicesList().filter(function(s){ return s.id !== DEFAULT_SERVICE_ID && normText(s.name.trim()) === normText(q); })[0];
         if (q && !exact){
           html += '<button type="button" class="autolist-new" data-new="'+esc(q)+'">+ Cadastrar nova especialidade "'+esc(q)+'"</button>';
         }
-        if (!html){ html = '<div class="none">'+(q?'Nenhuma especialidade encontrada.':'Todas as especialidades cadastradas já foram adicionadas.')+'</div>'; }
+        if (!html){ html = '<div class="none">'+(q?'Nenhuma especialidade ou serviço encontrado.':'Todas as especialidades e serviços já foram adicionados.')+'</div>'; }
         sugg.innerHTML = html;
         sugg.hidden = false;
       }
@@ -4697,13 +4714,13 @@ function openPatientModal(p){
     specRowsHost.innerHTML = draftSpecRows.length ? draftSpecRows.map(function(row, i){
       return '<div class="hours-row" data-i="'+i+'">' +
         '<div class="spec-name-wrap">' +
-          '<input type="text" class="spec-name" autocomplete="off" placeholder="Especialidade" value="'+esc(row.name)+'">' +
+          '<input type="text" class="spec-name" autocomplete="off" placeholder="Especialidade ou serviço" value="'+esc(row.name)+'">' +
           '<div class="autolist floating" hidden></div>' +
         '</div>' +
         '<input type="text" class="spec-hours-val" placeholder="0" value="'+esc(row.hours)+'">' +
         '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover especialidade">✕</button>' +
       '</div>';
-    }).join("") : '<div class="hours-empty">Nenhuma especialidade nesta ficha — clique em "+ especialidade" para adicionar.</div>';
+    }).join("") : '<div class="hours-empty">Nenhuma especialidade ou serviço nesta ficha — clique em "+ especialidade ou serviço" para adicionar.</div>';
     specRowsHost.querySelectorAll(".rm").forEach(function(b){
       b.addEventListener("click", function(){
         syncSpecRowsFromDom();
@@ -4817,6 +4834,8 @@ function openPatientModal(p){
       if (!name) return;
       var hours = (row.hours||"").trim();
       var specId = row.specId;
+      var svcMatch = !specId && servicesList().filter(function(s){ return s.id !== DEFAULT_SERVICE_ID && normText(s.name.trim()) === normText(name); })[0];
+      if (!specId && svcMatch && !localSpecialties.some(function(s){ return normText(s.name.trim()) === normText(name); })) specId = SVC_PREFIX + svcMatch.id;
       if (!specId){
         var existing = localSpecialties.filter(function(s){ return s.name.trim().toLowerCase() === name.toLowerCase(); })[0];
         if (existing){
@@ -8291,6 +8310,8 @@ var RP_BUILDERS = {
       var pr = findProfessional(a.professional_id);
       var k = p.id + "|" + ((pr && pr.specialtyId) || "");
       done[k] = (done[k] || 0) + 1;
+      var ks = p.id + "|" + SVC_PREFIX + (a.service || DEFAULT_SERVICE_ID);
+      done[ks] = (done[ks] || 0) + 1;
     });
     var out = [];
     state.patients.slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); }).forEach(function(p){
@@ -8550,18 +8571,19 @@ var REG_CFG = {
     list: function(){ return servicesList(); },
     write: function(l){
       // "Sessão" sempre fica, com esse nome, em primeiro.
+      var sess = l.filter(function(s){ return s.id === DEFAULT_SERVICE_ID; })[0];
       l = l.filter(function(s){ return s.id !== DEFAULT_SERVICE_ID; });
-      l.unshift({id: DEFAULT_SERVICE_ID, name: "Sessão"});
+      l.unshift(Object.assign({}, sess || {}, {id: DEFAULT_SERVICE_ID, name: "Sessão"}));
       return writeServices(l);
     },
     locked: function(s){ return s.id === DEFAULT_SERVICE_ID; },
-    cols: ["Nome", "Profissionais que atendem"],
+    cols: ["Nome", "Sigla", "Profissionais que atendem"],
     row: function(s){
       var n = state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length;
-      return ['<b>' + esc(s.name) + '</b>' + (s.id === DEFAULT_SERVICE_ID ? ' <span class="serv-lock">padrão</span>' : ''), n];
+      return ['<b>' + esc(s.name) + '</b>' + (s.id === DEFAULT_SERVICE_ID ? ' <span class="serv-lock">padrão</span>' : ''), esc(specialtySigla(SVC_PREFIX + s.id)), n];
     },
     vals: function(s){
-      return [s.name, state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length];
+      return [s.name, specialtySigla(SVC_PREFIX + s.id), state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length];
     }
   },
   especialidades: {
@@ -8611,6 +8633,8 @@ function openRegistryItem(kind, item){
         '<button class="modal-close" id="regClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="field"><label for="regName">Nome</label><input id="regName" type="text" value="' + esc(item ? item.name : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
+        (kind === "servicos" ?
+          '<div class="field"><label for="regSigla">Sigla</label><input id="regSigla" type="text" maxlength="4" value="' + esc(item ? item.sigla || "" : "") + '" placeholder="' + esc(item ? defaultSigla(item.name) : "") + '"' + (canSave ? '' : ' disabled') + '></div>' : '') +
         (kind === "especialidades" ?
           '<div class="field-row"><div class="field"><label for="regSigla">Sigla</label><input id="regSigla" type="text" maxlength="4" value="' + esc(item ? item.sigla || "" : "") + '" placeholder="' + esc(item ? defaultSigla(item.name) : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
           '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="regColor"' + (canSave ? '' : ' disabled') + ' aria-label="Escolher cor"></button><span class="color-pick-code mono" id="regColorCode"></span></div></div></div>' : '') +
@@ -8648,6 +8672,7 @@ function openRegistryItem(kind, item){
     if (dup){ showToast('Já existe "' + dup.name + '" no cadastro.', true); return; }
     var rec = Object.assign({}, item || {}, {id: item ? item.id : uid(slugify(name) || kind), name: name});
     if (kind === "especialidades"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); rec.color = color; }
+    if (kind === "servicos"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); }
     var list = cfg.list();
     list = isNew ? list.concat([rec]) : list.map(function(x){ return x.id === rec.id ? rec : x; });
     Promise.resolve(cfg.write(list)).then(function(){ close(); renderRegistryTab(kind); showToast(isNew ? "Cadastrado." : "Alterado."); });

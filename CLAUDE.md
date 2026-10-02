@@ -853,3 +853,15 @@ mesmo") antes de gravar; desfazer/refazer não perguntam (`opts.patientHoursOk`)
 ## Filtro de salas do Planner mantém os grupos (2026-10-02)
 `visibleRooms()`: com `state.activeRoomFilter`, mostra a sala escolhida E todos os
 Grupos de Suporte (`isGroup(r) || r.id === filtro`).
+
+## Paciente: especialidade OU serviço; sigla dos serviços (2026-10-02)
+- "Especialidades/serviços e sessão (mês)" no cadastro do paciente: cada linha é
+  uma especialidade (id normal) ou um serviço do cadastro, guardado em
+  `specHours[].specId` como `"svc:<id>"` (`SVC_PREFIX`, `isSvcItem`,
+  `svcItemService`). "Sessão" NÃO aparece (sessão = escolher a especialidade).
+  `specialtyName` / `specialtySigla` entendem os dois; serviços vêm depois das
+  especialidades na coluna "Especialidades/Serviços (sessão/mês)" da lista.
+- Cadastro de Serviços com "Sigla" (coluna na tabela; vazio = `defaultSigla`).
+  A gravação mantém os campos de "Sessão" (antes era recriada só com id/nome).
+- Relatório "Pacote contratado × realizado": linha de serviço conta os
+  Finalizados com aquele `service`.
