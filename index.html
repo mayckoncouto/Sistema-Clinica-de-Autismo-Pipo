@@ -850,7 +850,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <!-- "agenda" = Planner (grade de 4 semanas que se repete); "agendadia" = Agenda por data real. -->
       <!-- Cadastros: menu suspenso; as abas de cadastro ficam ocultas e são abertas por ele. -->
       <div class="cad-wrap"><button type="button" class="cad-btn" id="cadBtn" aria-haspopup="menu" aria-expanded="false">Cadastros <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="cadMenu" role="menu" hidden></div></div>
-      <button class="active" data-tab="agenda">Planner</button>
+      <div class="cad-wrap"><button type="button" class="cad-btn active" id="plBtn" aria-haspopup="menu" aria-expanded="false">Planner <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="plMenu" role="menu" hidden></div></div>
+      <button class="active" data-tab="agenda" hidden>Planner</button>
       <button data-tab="agendadia">Agenda</button>
       <button data-tab="prontuario" hidden>Prontuário</button>
       <button data-tab="pacientes" hidden>Pacientes</button>
@@ -859,7 +860,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="servicos" hidden>Serviços</button>
       <button data-tab="especialidades" hidden>Especialidades</button>
       <button data-tab="salas" hidden>Salas</button>
-      <button data-tab="relatorio">Atendimentos</button>
+      <button data-tab="relatorio" hidden>Resumo</button>
       <button data-tab="relatorios" hidden>Relatórios</button>
       <!-- Sempre oculto: a tela de Usuários abre pelo menu "Acesso" do topo (js/pipo-supabase.js). -->
       <button data-tab="usuarios" hidden>Usuários</button>
@@ -891,7 +892,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
     <div class="clipboard-bar" id="clipboardBar"></div>
     <div class="grid-scroll"><div id="gridHost"></div></div>
     <div class="color-legend">
-      <span><i style="background:#F4B7B7"></i>Não faz ABA</span>
+      <span><i style="background:#F4B7B7"></i>Não faz Intervenção ABA</span>
       <span><i style="background:#AECCE5"></i>0–4 anos</span>
       <span><i style="background:#C4DCA9"></i>5–9 anos</span>
       <span><i style="background:#F4CC99"></i>10+ anos</span>
@@ -932,7 +933,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <div class="clipboard-bar" id="agdClipboardBar"></div>
       <div class="agd-scroll"><div id="agdGrid"></div></div>
       <div class="color-legend agd-legend">
-        <span><i style="background:#F4B7B7"></i>Não faz ABA</span>
+        <span><i style="background:#F4B7B7"></i>Não faz Intervenção ABA</span>
         <span><i style="background:#AECCE5"></i>0–4 anos</span>
         <span><i style="background:#C4DCA9"></i>5–9 anos</span>
         <span><i style="background:#F4CC99"></i>10+ anos</span>
@@ -2044,14 +2045,18 @@ function applyPermissionsUI(){
     }
     var visible = can(tabModule[k], "view");
     // Cadastros: botão sempre oculto (abre pelo menu "Cadastros").
-    b.hidden = !visible || CAD_TABS.indexOf(k) !== -1;
+    b.hidden = !visible || navMenuTab(k);
     if (!visible && k === state.tab) activeHidden = true;
   });
   renderCadMenu();
   // Aba atual sem permissão (ou sem conteúdo visível): vai para a primeira permitida.
   var curSec = document.getElementById("tab-" + state.tab);
   if (activeHidden || !curSec){
-    var first = document.querySelector("#mainTabs button[data-tab]:not([hidden])");
+    var first = null;
+    ["agenda", "agendadia", "prontuario", "relatorio", "relatorios"].concat(CAD_TABS).some(function(k){
+      if (!can(tabModule[k], "view")) return false;
+      first = document.querySelector('#mainTabs button[data-tab="' + k + '"]'); return !!first;
+    });
     if (first) first.click();
     else {
       // Nível sem acesso a nenhuma tela: esconde tudo e avisa.
@@ -2070,6 +2075,7 @@ function applyPermissionsUI(){
   var banner = document.getElementById("readonlyBanner");
   if (banner) banner.textContent = "Modo somente leitura — você pode ver a agenda, mas não tem permissão para alterá-la.";
   setReadonlyBanner(!agendaWrite);
+  openNavFromHash();
 }
 var roomsLoaded = false, patientsLoaded = false, specialtiesLoaded = false, conveniosLoaded = false, professionalsLoaded = false;
 var reportSubs = {}; // docId -> {active, unsub}, independent of the Agenda tab's own day/week subscriptions
@@ -2526,6 +2532,8 @@ function wireTabs(){
     });
     var cadBtnEl = document.getElementById("cadBtn");
     if (cadBtnEl) cadBtnEl.classList.toggle("active", CAD_TABS.indexOf(state.tab) !== -1);
+    var plBtnEl = document.getElementById("plBtn");
+    if (plBtnEl) plBtnEl.classList.toggle("active", PL_TABS.indexOf(state.tab) !== -1);
     var zc = document.getElementById("zoomCtrl");
     if (zc) zc.hidden = (state.tab !== "agenda");
     // Renders for this tab were skipped while it was hidden (see flushGridUpdate /
@@ -8259,7 +8267,9 @@ function openRegistryItem(kind, item){
     Promise.resolve(cfg.write(list)).then(function(){ close(); renderRegistryTab(kind); showToast(isNew ? "Cadastrado." : "Alterado."); });
   });
 }
-// Menu "Cadastros" do topo.
+// Menus suspensos do topo: "Cadastros" e "Planner" (Planner / Resumo).
+// Ctrl+clique (ou botão do meio) num item ou numa aba abre a tela em outra aba
+// do navegador: o endereço leva "#chave" e openNavFromHash() abre a tela certa.
 var CAD_ITEMS = [
   {key: "pacientes", label: "Pacientes", tab: "pacientes", ok: function(){ return can("pacientes", "view"); }},
   {key: "profissionais", label: "Profissionais", tab: "profissionais", ok: function(){ return can("profissionais", "view"); }},
@@ -8271,36 +8281,95 @@ var CAD_ITEMS = [
   {key: "clinica", label: "Clínica", ok: function(){ return !!(window.pipoAuth && window.pipoAuth.isAdmin()); }}
 ];
 var CAD_TABS = ["pacientes", "profissionais", "convenios", "servicos", "especialidades", "salas"];
-function renderCadMenu(){
-  var menu = document.getElementById("cadMenu"), btn = document.getElementById("cadBtn");
-  if (!menu || !btn) return;
-  var items = CAD_ITEMS.filter(function(i){ return !window.pipoAuth || i.ok(); });
-  menu.innerHTML = items.map(function(i){ return '<button type="button" role="menuitem" data-cad="' + i.key + '">' + i.label + '</button>'; }).join("");
-  btn.hidden = !items.length;
+var PL_ITEMS = [
+  {key: "planner", label: "Planner", tab: "agenda", ok: function(){ return can("agenda", "view"); }},
+  {key: "resumo", label: "Resumo", tab: "relatorio", ok: function(){ return can("agenda", "view"); }}
+];
+var PL_TABS = ["agenda", "relatorio"];
+var NAV_MENUS = [
+  {btn: "cadBtn", menu: "cadMenu", items: CAD_ITEMS, tabs: CAD_TABS},
+  {btn: "plBtn", menu: "plMenu", items: PL_ITEMS, tabs: PL_TABS}
+];
+// Abas cujo botão fica sempre oculto (abrem por um dos menus acima).
+function navMenuTab(k){ return CAD_TABS.indexOf(k) !== -1 || PL_TABS.indexOf(k) !== -1; }
+function renderNavMenus(){
+  NAV_MENUS.forEach(function(m){
+    var menu = document.getElementById(m.menu), btn = document.getElementById(m.btn);
+    if (!menu || !btn) return;
+    var items = m.items.filter(function(i){ return !window.pipoAuth || i.ok(); });
+    menu.innerHTML = items.map(function(i){ return '<button type="button" role="menuitem" data-nav="' + i.key + '">' + i.label + '</button>'; }).join("");
+    btn.hidden = !items.length;
+    btn.classList.toggle("active", m.tabs.indexOf(state.tab) !== -1);
+  });
 }
-function setCadMenu(open){
-  var menu = document.getElementById("cadMenu"), btn = document.getElementById("cadBtn");
+function renderCadMenu(){ renderNavMenus(); }
+function setNavMenu(m, open){
+  var menu = document.getElementById(m.menu), btn = document.getElementById(m.btn);
   if (!menu) return;
   menu.hidden = !open; btn.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open){ var f = menu.querySelector("button"); if (f) f.focus(); }
+}
+function closeNavMenus(){ NAV_MENUS.forEach(function(m){ setNavMenu(m, false); }); }
+function navItem(key){
+  var all = CAD_ITEMS.concat(PL_ITEMS);
+  for (var i = 0; i < all.length; i++) if (all[i].key === key) return all[i];
+  return null;
+}
+function navActivate(it){
+  if (!it.tab){ openClinicModal(); return; }
+  if (it.view){ state.salasView = it.view; var s = document.getElementById("roomListSearch"); if (s) s.value = ""; }
+  var tb = document.querySelector('#mainTabs button[data-tab="' + it.tab + '"]');
+  if (tb) tb.click();
+  if (it.tab === "salas") renderSalasTab();
+}
+function navOpenNewTab(key){ window.open(location.pathname + location.search + "#" + encodeURIComponent(key), "_blank"); }
+// Abre a tela pedida no endereço (#pacientes, #grupos, #resumo, #agendadia...).
+var navHashDone = false;
+function openNavFromHash(){
+  if (navHashDone) return;
+  var key = decodeURIComponent((location.hash || "").slice(1));
+  if (!key){ navHashDone = true; return; }
+  var it = navItem(key);
+  if (it){
+    if (window.pipoAuth && !it.ok()) return;
+    navHashDone = true;
+    if (!it.tab) setTimeout(function(){ openClinicModal(); }, 800); else navActivate(it);
+    return;
+  }
+  var tb = document.querySelector('#mainTabs button[data-tab="' + key + '"]');
+  if (!tb || (window.pipoAuth && tb.hidden)) return;
+  navHashDone = true;
+  tb.click();
 }
 (function(){
-  var btn = document.getElementById("cadBtn"), menu = document.getElementById("cadMenu");
-  if (!btn) return;
-  renderCadMenu();
-  btn.addEventListener("click", function(e){ e.stopPropagation(); setCadMenu(menu.hidden); });
-  menu.addEventListener("click", function(e){
-    var b = e.target.closest("[data-cad]"); if (!b) return;
-    setCadMenu(false);
-    var it = CAD_ITEMS.filter(function(i){ return i.key === b.getAttribute("data-cad"); })[0];
-    if (!it) return;
-    if (!it.tab){ openClinicModal(); return; }
-    if (it.view){ state.salasView = it.view; var s = document.getElementById("roomListSearch"); if (s) s.value = ""; }
-    var tb = document.querySelector('#mainTabs button[data-tab="' + it.tab + '"]');
-    if (tb) tb.click();
-    if (it.tab === "salas") renderSalasTab();
+  renderNavMenus();
+  NAV_MENUS.forEach(function(m){
+    var btn = document.getElementById(m.btn), menu = document.getElementById(m.menu);
+    if (!btn) return;
+    btn.addEventListener("click", function(e){ e.stopPropagation(); var open = menu.hidden; closeNavMenus(); setNavMenu(m, open); });
+    function pick(e){
+      var b = e.target.closest("[data-nav]"); if (!b) return;
+      var it = navItem(b.getAttribute("data-nav")); if (!it) return;
+      if (e.ctrlKey || e.metaKey || e.button === 1){ e.preventDefault(); setNavMenu(m, false); navOpenNewTab(it.key); return; }
+      setNavMenu(m, false);
+      navActivate(it);
+    }
+    menu.addEventListener("click", pick);
+    menu.addEventListener("auxclick", pick);
   });
-  document.addEventListener("mousedown", function(e){ if (!e.target.closest(".cad-wrap")) setCadMenu(false); });
-  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !menu.hidden) setCadMenu(false); });
+  document.addEventListener("mousedown", function(e){ if (!e.target.closest(".cad-wrap")) closeNavMenus(); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeNavMenus(); });
+  // Ctrl+clique / botão do meio nas abas comuns do topo (Agenda, Prontuário...).
+  var tabs = document.getElementById("mainTabs");
+  function tabNew(e){
+    var b = e.target.closest("button[data-tab]"); if (!b) return;
+    if (!(e.ctrlKey || e.metaKey || e.button === 1)) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    navOpenNewTab(b.getAttribute("data-tab"));
+  }
+  tabs.addEventListener("click", tabNew, true);
+  tabs.addEventListener("auxclick", tabNew, true);
+  setTimeout(openNavFromHash, 0);
   ["convenios", "servicos", "especialidades"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });

@@ -687,3 +687,17 @@ recusa a troca para "finalizado" sem `clinical_records` ligada (migração
 - Teclado: nas sugestões ↑ ↓ marcam (`.kb`) e Enter escolhe; no calendário
   ← → dia, ↑ ↓ semana, Enter escolhe; nas listas ↑ ↓ e Enter; nos menus
   ↑ ↓ andam pelos itens. Esc fecha.
+
+## Menu Planner, Clínica só em Cadastros, Ctrl+clique (2026-10-02)
+- "Planner ▾" virou menu suspenso igual a Cadastros (`#plBtn`/`#plMenu`,
+  `PL_ITEMS`): **Planner** (aba `agenda`) e **Resumo** (aba `relatorio`, antiga
+  "Atendimentos"). Os dois botões de aba ficam sempre ocultos. Código genérico
+  `NAV_MENUS` / `renderNavMenus` / `navActivate` / `navMenuTab(k)`;
+  `renderCadMenu()` ficou como apelido. Tela inicial sem permissão: a primeira
+  permitida na ordem agenda, agendadia, prontuario, relatorio, relatorios, cadastros.
+- "Clínica" saiu do menu Acesso (`js/pipo-supabase.js`); fica só em Cadastros.
+- Ctrl+clique (ou botão do meio) em qualquer aba ou item dos menus do topo abre
+  a tela em outra aba do navegador: endereço `#chave` (ex.: `#pacientes`,
+  `#grupos`, `#resumo`, `#agendadia`, `#clinica`), aberto por `openNavFromHash()`
+  (na carga e depois que as permissões chegam).
+- Legenda de cores: "Não faz Intervenção ABA".
