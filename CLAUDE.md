@@ -747,3 +747,17 @@ Campo "Nome social" no cadastro do profissional (`#profSocial` → `nomeSocial`)
 `profShortName(p)` = nome social ou, sem ele, `firstName(p.name)`;
 `seatShortName(t)` para as colunas do Planner. Usado no cabeçalho das colunas e
 na linha do almoço do Planner e no cabeçalho de profissionais do Resumo.
+
+## Permissão própria para cada cadastro e para o Resumo (2026-10-02)
+Novos módulos em `roles.permissions` (tela Níveis de permissão, `MODULES` em
+`js/usuarios.js`, com `actions` quando nem todas as ações fazem sentido):
+`convenios`, `especialidades`, `servicos`, `grupos`, `clinica` (ver/editar),
+`cadastro_status`, `resumo` (ver). Antes seguiam Pacientes / Profissionais / Salas
+/ só Administrador / Planner. Migração `supabase/2026-10-02l-permissoes-cadastros.sql`:
+`module_for_path` novo, `can_write_path` (config/rooms aceita salas ou grupos) nas
+políticas de `documents`, `documents_enforce` confere cada item com o módulo dele
+(item de config/rooms com `group:true` = `grupos`; documento que não é lista, como
+config/clinic, mudou = editar) e copia o acesso antigo para os níveis existentes.
+No app: `tabCan(k)` em `applyPermissionsUI` (Salas aparece com salas OU grupos),
+`writeRooms` confere salas e grupos separadamente, Clínica abre com "ver" e só
+salva com "editar", Status (menu Acesso) com `cadastro_status`.

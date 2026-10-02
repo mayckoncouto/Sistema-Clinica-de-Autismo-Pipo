@@ -1251,7 +1251,8 @@ function onClinicChange(){
   } catch(err){ reportAppError(err, "ao aplicar o horário da clínica"); }
 }
 function openClinicModal(){
-  if (!(window.pipoAuth && window.pipoAuth.isAdmin())){ showToast("Só o Administrador altera o cadastro da clínica.", true); return; }
+  if (!can("clinica", "view")){ showToast("Seu nível de permissão não dá acesso ao cadastro da clínica.", true); return; }
+  var clCanEdit = can("clinica", "edit");
   var c = state.clinic || {};
   var host = document.getElementById("modalHost");
   function tm(id, val, dis){ return '<input type="time" step="600" class="cl-time" id="'+id+'" value="'+esc(val || "")+'"'+(dis ? ' disabled' : '')+'>'; }
@@ -1296,7 +1297,7 @@ function openClinicModal(){
           '<div class="pat-count" style="margin-top:6px">Os horários são contados a partir do início de cada período, de acordo com a duração padrão. Deixe o período em branco se não houver atendimento nele. Horários que deixarem de existir somem da grade (os agendamentos ficam guardados e voltam se o horário voltar).</div>' +
         '</div>' +
       '</div>' +
-      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="clCancel">Cancelar</button><button class="btn primary" id="clSave">Salvar</button></div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="clCancel">' + (clCanEdit ? "Cancelar" : "Fechar") + '</button>' + (clCanEdit ? '<button class="btn primary" id="clSave">Salvar</button>' : "") + '</div>' +
     '</div></div>';
   var ov = document.getElementById("ovClinic");
   function close(){ host.innerHTML = ""; }
@@ -1376,7 +1377,7 @@ function openClinicModal(){
     counts();
   });
   counts();
-  document.getElementById("clSave").addEventListener("click", function(){
+  if (clCanEdit) document.getElementById("clSave").addEventListener("click", function(){
     var horarios = {}, bad = null;
     var dur = +document.getElementById("clDur").value;
     ALL_WEEKDAYS.forEach(function(d){
@@ -1990,7 +1991,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", pacientes:"Pacientes", profissionais:"Profissionais", salas:"Salas", prontuario:"Prontuário", relatorios:"Relatórios"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -2057,7 +2058,9 @@ function bookingPermDenied(changesByDoc){
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
   if (!window.pipoAuth) return;
-  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"agenda", pacientes:"pacientes", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"pacientes", servicos:"profissionais", especialidades:"pacientes"};
+  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades"};
+  // Salas e Grupos de Suporte dividem a mesma tela.
+  function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : can(tabModule[k], "view"); }
   var activeHidden = false;
   Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button[data-tab]"), function(b){
     var k = b.getAttribute("data-tab");
@@ -2067,7 +2070,7 @@ function applyPermissionsUI(){
       if (k === state.tab && !window.pipoAuth.isAdmin()) activeHidden = true;
       return;
     }
-    var visible = can(tabModule[k], "view");
+    var visible = tabCan(k);
     // Cadastros: botão sempre oculto (abre pelo menu "Cadastros").
     b.hidden = !visible || navMenuTab(k);
     if (!visible && k === state.tab) activeHidden = true;
@@ -2078,7 +2081,7 @@ function applyPermissionsUI(){
   if (activeHidden || !curSec){
     var first = null;
     ["agenda", "agendadia", "prontuario", "relatorio", "relatorios"].concat(CAD_TABS).some(function(k){
-      if (!can(tabModule[k], "view")) return false;
+      if (!tabCan(k)) return false;
       first = document.querySelector('#mainTabs button[data-tab="' + k + '"]'); return !!first;
     });
     if (first) first.click();
@@ -2091,7 +2094,10 @@ function applyPermissionsUI(){
   function show(id, on){ var el = document.getElementById(id); if (el) el.hidden = !on; }
   show("addPatientBtn", can("pacientes","create"));
   show("addProfessionalBtn", can("profissionais","create"));
-  show("addRoomBtn", can("salas","create"));
+  show("addRoomBtn", can(state.salasView === "grupos" ? "grupos" : "salas", "create"));
+  show("toggleGroupsBtn", can("salas", "view") && can("grupos", "view"));
+  if (state.salasView !== "grupos" && !can("salas", "view") && can("grupos", "view")) state.salasView = "grupos";
+  if (state.salasView === "grupos" && !can("grupos", "view") && can("salas", "view")) state.salasView = "salas";
   show("sendToAgendaBtn", can("agendamentos","create"));
   show("plClearWeekBtn", can("agenda","delete"));
   show("agdClearWeekBtn", can("agendamentos","delete"));
@@ -4747,7 +4753,7 @@ function openSpecialtiesModal(){
 }
 
 function writeSpecialties(list){
-  var denied = listPermDenied("pacientes", state.specialties, list);
+  var denied = listPermDenied("especialidades", state.specialties, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.specialties = list;
   renderPatientsTab();
@@ -4929,7 +4935,7 @@ function openServicesModal(){
 }
 
 function openStatusesModal(){
-  if (!(window.pipoAuth && window.pipoAuth.isAdmin())){ showToast("Só o Administrador altera o cadastro de status.", true); return; }
+  if (!can("cadastro_status", "view")){ showToast("Seu nível de permissão não dá acesso ao cadastro de status.", true); return; }
   var host = document.getElementById("modalHost");
   var draft = statusesList().map(function(s){ return {id: s.id, name: s.name, color: s.color || "#5b6b68"}; });
   host.innerHTML =
@@ -4990,6 +4996,8 @@ function openStatusesModal(){
     var seen = {}, dup = null;
     clean.forEach(function(s){ var k = normText(s.name); if (seen[k]) dup = dup || s.name; seen[k] = true; });
     if (dup){ showToast('O status "'+dup+'" aparece mais de uma vez.', true); return; }
+    var stDenied = listPermDenied("cadastro_status", statusesList(), clean);
+    if (stDenied){ showToast(stDenied, true); return; }
     var keptIds = clean.map(function(s){ return s.id; });
     var removed = statusesList().filter(function(s){ return keptIds.indexOf(s.id) === -1; });
     (removed.length ? confirmDialog({
@@ -5008,7 +5016,7 @@ function openStatusesModal(){
 }
 
 function writeServices(list){
-  var denied = listPermDenied("profissionais", state.services, list);
+  var denied = listPermDenied("servicos", state.services, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.services = list;
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
@@ -5019,7 +5027,7 @@ function writeServices(list){
 }
 
 function writeConvenios(list){
-  var denied = listPermDenied("pacientes", state.convenios, list);
+  var denied = listPermDenied("convenios", state.convenios, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.convenios = list;
   renderPatientsTab();
@@ -5489,6 +5497,7 @@ function renderSalasTab(){
   var toggleBtn = document.getElementById("toggleGroupsBtn"), addBtn = document.getElementById("addRoomBtn");
   if (toggleBtn) toggleBtn.textContent = groupsView ? "← Voltar para salas" : "Grupos de suporte";
   if (addBtn) addBtn.textContent = groupsView ? "+ Novo grupo" : "+ Nova sala";
+  if (addBtn && window.pipoAuth) addBtn.hidden = !can(groupsView ? "grupos" : "salas", "create");
   var searchInput = document.getElementById("roomListSearch");
   if (searchInput) searchInput.placeholder = groupsView ? "Buscar grupo ou profissional…" : "Buscar sala ou profissional…";
   if (!roomsLoaded){ host.innerHTML = '<div class="empty-state">Carregando salas…</div>'; return; }
@@ -5705,7 +5714,8 @@ function openRoomModal(r, asGroup){
 }
 
 function writeRooms(list){
-  var denied = listPermDenied("salas", state.rooms, list);
+  var denied = listPermDenied("salas", state.rooms.filter(function(r){ return !isGroup(r); }), list.filter(function(r){ return !isGroup(r); })) ||
+    listPermDenied("grupos", state.rooms.filter(isGroup), list.filter(isGroup));
   if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.rooms = list;
   renderAgendaShell();
@@ -8248,7 +8258,7 @@ function rpExportCsv(){
  */
 var REG_CFG = {
   convenios: {
-    title: "convênio", plural: "convênios", module: "pacientes", newLabel: "+ Novo convênio",
+    title: "convênio", plural: "convênios", module: "convenios", newLabel: "+ Novo convênio",
     list: function(){ return state.convenios.slice(); },
     write: function(l){ return writeConvenios(l); },
     cols: ["Nome", "Pacientes"],
@@ -8261,7 +8271,7 @@ var REG_CFG = {
     }
   },
   servicos: {
-    title: "serviço", plural: "serviços", module: "profissionais", newLabel: "+ Novo serviço",
+    title: "serviço", plural: "serviços", module: "servicos", newLabel: "+ Novo serviço",
     list: function(){ return servicesList(); },
     write: function(l){
       // "Sessão" sempre fica, com esse nome, em primeiro.
@@ -8280,7 +8290,7 @@ var REG_CFG = {
     }
   },
   especialidades: {
-    title: "especialidade", plural: "especialidades", module: "pacientes", newLabel: "+ Nova especialidade",
+    title: "especialidade", plural: "especialidades", module: "especialidades", newLabel: "+ Nova especialidade",
     list: function(){ return state.specialties.slice(); },
     write: function(l){ return writeSpecialties(l); },
     cols: ["Nome", "Sigla", "Profissionais"],
@@ -8374,17 +8384,17 @@ function openRegistryItem(kind, item){
 var CAD_ITEMS = [
   {key: "pacientes", label: "Pacientes", tab: "pacientes", ok: function(){ return can("pacientes", "view"); }},
   {key: "profissionais", label: "Profissionais", tab: "profissionais", ok: function(){ return can("profissionais", "view"); }},
-  {key: "convenios", label: "Convênios", tab: "convenios", ok: function(){ return can("pacientes", "view"); }},
-  {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("profissionais", "view"); }},
-  {key: "especialidades", label: "Especialidades", tab: "especialidades", ok: function(){ return can("pacientes", "view"); }},
+  {key: "convenios", label: "Convênios", tab: "convenios", ok: function(){ return can("convenios", "view"); }},
+  {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("servicos", "view"); }},
+  {key: "especialidades", label: "Especialidades", tab: "especialidades", ok: function(){ return can("especialidades", "view"); }},
   {key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
-  {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("salas", "view"); }},
-  {key: "clinica", label: "Clínica", ok: function(){ return !!(window.pipoAuth && window.pipoAuth.isAdmin()); }}
+  {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }},
+  {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }}
 ];
 var CAD_TABS = ["pacientes", "profissionais", "convenios", "servicos", "especialidades", "salas"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "agenda", ok: function(){ return can("agenda", "view"); }},
-  {key: "resumo", label: "Resumo", tab: "relatorio", ok: function(){ return can("agenda", "view"); }}
+  {key: "resumo", label: "Resumo", tab: "relatorio", ok: function(){ return can("resumo", "view"); }}
 ];
 var PL_TABS = ["agenda", "relatorio"];
 var NAV_MENUS = [

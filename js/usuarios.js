@@ -13,14 +13,23 @@
   if (!window.pipoAuth) return;
 
   var auth = window.pipoAuth;
+  // actions: ações que fazem sentido na tela (as demais aparecem como "—").
   var MODULES = [
     { key: "agendamentos", label: "Agenda", hint: "atendimentos por data" },
-    { key: "agenda", label: "Planner", hint: "grade de 4 semanas; também dá acesso ao Relatório" },
-    { key: "pacientes", label: "Pacientes", hint: "inclui Convênios e Especialidades" },
+    { key: "agenda", label: "Planner", hint: "grade de 4 semanas" },
+    { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
+    { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)" },
+    { key: "pacientes", label: "Pacientes", hint: "" },
     { key: "profissionais", label: "Profissionais", hint: "" },
+    { key: "convenios", label: "Convênios", hint: "" },
+    { key: "servicos", label: "Serviços", hint: "" },
+    { key: "especialidades", label: "Especialidades", hint: "" },
     { key: "salas", label: "Salas", hint: "" },
-    { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)" }
+    { key: "grupos", label: "Grupos de Suporte", hint: "" },
+    { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"] },
+    { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" }
   ];
+  function modActs(m) { return m.actions || ["view", "create", "edit", "delete"]; }
   var ACTIONS = [
     { key: "view", label: "Ver" },
     { key: "create", label: "Incluir" },
@@ -364,7 +373,7 @@
     p = p || {};
     MODULES.forEach(function (m) {
       out[m.key] = {};
-      ACTIONS.forEach(function (a) { out[m.key][a.key] = !!(p[m.key] && p[m.key][a.key]); });
+      ACTIONS.forEach(function (a) { out[m.key][a.key] = modActs(m).indexOf(a.key) !== -1 && !!(p[m.key] && p[m.key][a.key]); });
     });
     // Status dos atendimentos que o nível pode usar na Agenda: {id: true}.
     out.status = {};
@@ -456,6 +465,7 @@
       MODULES.map(function (m) {
         return "<tr><td><b>" + m.label + "</b>" + (m.hint ? "<small>" + m.hint + "</small>" : "") + "</td>" +
           ACTIONS.map(function (a) {
+            if (modActs(m).indexOf(a.key) === -1) return '<td class="pt-muted">—</td>';
             var on = locked || !!(perms[m.key] && perms[m.key][a.key]);
             return '<td><input type="checkbox" data-m="' + m.key + '" data-a="' + a.key + '"' + (on ? " checked" : "") +
               (locked ? " disabled" : "") + ' aria-label="' + a.label + " em " + m.label + '"></td>';
@@ -478,7 +488,7 @@
           '<button class="modal-close" id="rClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
           '<div class="field"><label for="rName">Nome do nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
-          roleGridHtml(role ? (role.permissions || {}) : { agendamentos: { view: true }, agenda: { view: true }, pacientes: { view: true }, profissionais: { view: true }, salas: { view: true } }, locked) +
+          roleGridHtml(role ? (role.permissions || {}) : { agendamentos: { view: true }, agenda: { view: true }, resumo: { view: true }, pacientes: { view: true }, profissionais: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
           statusPermsHtml(role ? (role.permissions || {}) : {}, locked) +
           reportPermsHtml(role ? (role.permissions || {}) : {}, locked) +
           (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +

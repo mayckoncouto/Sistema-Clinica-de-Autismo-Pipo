@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var MODULES = ["agendamentos", "agenda", "pacientes", "profissionais", "salas", "prontuario"];
+  var MODULES = ["agendamentos", "agenda", "resumo", "pacientes", "profissionais", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario"];
   var ACTIONS = ["view", "create", "edit", "delete"];
 
   var client = null;
@@ -281,7 +281,7 @@
           '<svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
         '<div class="acesso-menu" id="acessoMenu" role="menu" hidden>' +
           (isAdmin() ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : "") +
-          (isAdmin() ? '<button type="button" role="menuitem" data-act="status">Status</button>' : "") +
+          ((isAdmin() || can("cadastro_status", "view")) ? '<button type="button" role="menuitem" data-act="status">Status</button>' : "") +
           '<button type="button" role="menuitem" data-act="senha">Trocar senha</button>' +
           '<button type="button" role="menuitem" data-act="sair">Sair</button>' +
         "</div>" +
