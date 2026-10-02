@@ -820,3 +820,8 @@ regra "profissional em dois lugares" de `plannerConflict`.
 - Sentido contrário: profissional com agendamento num GRUPO (`profInGroup`) tem
   as colunas dele nas SALAS bloqueadas no mesmo horário (`.prof-busy`, "Fulano tem
   agendamento no grupo <grupo> neste horário.").
+- Generalizado: `profWhere[profId] = [{id, name, grp}]` (salas e grupos onde o
+  profissional tem atendimento no horário). Qualquer coluna vazia dele em OUTRA
+  sala ou grupo fica `.prof-busy` ("Fulano está atendendo em <sala>" / "tem
+  agendamento no grupo <grupo>"). Colunas dele na MESMA sala seguem só as regras
+  de "não ABA".
