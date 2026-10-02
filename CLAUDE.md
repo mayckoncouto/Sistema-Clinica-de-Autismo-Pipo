@@ -840,3 +840,12 @@ de 6 opções (ex.: profissional da coluna da sala): campo `.dp-filter` no topo
 ("Digite para buscar…", sem acento/maiúscula via `data-n`), Enter escolhe o
 primeiro que sobrou, ↓ desce para a lista. Começar a digitar com o botão em foco
 já abre a lista com a letra no campo.
+
+## Horário de atendimento do paciente (2026-10-02)
+Cadastro do paciente: seção "Horário de atendimento" (`patHoursSectionHtml`,
+`wirePatHours`, `readPatHours` → `horarios` no formato da clínica, só os dias
+abertos; sem horário salvo abre com o da clínica). `patientSlotOk(p, dayKey, time)`
+(sem `horarios` = sem restrição). Planner: `applyBookingChanges` chama
+`patientHoursOutside(changesByDoc)` e, se algum paciente novo naquela célula fica
+fora do horário dele, pede confirmação dupla ("Continuar" → "Agendar assim
+mesmo") antes de gravar; desfazer/refazer não perguntam (`opts.patientHoursOk`).

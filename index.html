@@ -381,6 +381,10 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .prof-hours select:disabled{opacity:.45}
 /* Horários do profissional: cabe na janela sem rolar para o lado. */
 #profHours{table-layout:fixed}
+#pHours{table-layout:fixed}
+#pHours th,#pHours td{padding:4px 3px}
+#pHours .dp-btn{padding:5px 6px;gap:4px}
+#pHours .dp-btn .dp-ico{display:none}
 #profHours th,#profHours td{padding:4px 3px}
 #profHours .dp-btn{padding:5px 6px;gap:4px}
 #profHours .dp-btn .dp-ico{display:none}
@@ -3848,6 +3852,36 @@ function abaGroupDependencyDenied(changesByDoc){
   });
   return msg;
 }
+// Horário de atendimento do paciente (cadastro do paciente, `horarios` no mesmo
+// formato da clínica: {seg:{ativo, manha:{inicio,fim}, tarde:{inicio,fim}}, ...}).
+// Sem `horarios` = sem restrição. No Planner, agendar fora dele pede confirmação dupla.
+function patientSlotOk(p, dayKey, time){
+  if (!p || !p.horarios) return true;
+  var h = p.horarios[dayKey];
+  if (!h || !h.ativo) return false;
+  var end = addMinutes(time, CLINIC_SLOT_MIN);
+  return [h.manha, h.tarde].some(function(x){ return x && x.inicio && x.fim && time >= x.inicio && end <= x.fim; });
+}
+function patientHoursOutside(changesByDoc){
+  var out = [];
+  Object.keys(changesByDoc).forEach(function(docId){
+    var changes = changesByDoc[docId], parts = docId.split("-"), dayKey = parts[0], week = parts[1];
+    var doc = state.scheduleDocs[docId] || state.reportDocs[docId], oldB = (doc && doc.bookings) || {};
+    Object.keys(changes).forEach(function(k){
+      var rec = changes[k];
+      if (!rec || !rec.patient || bookingKind(rec)) return;
+      var kp = k.split("|"), time = kp[0], room = findRoom(kp[1]);
+      if (!room || isGroup(room)) return;
+      var p = findPatientByName(rec.patient);
+      if (!p || patientSlotOk(p, dayKey, time)) return;
+      var old = effectiveBooking(oldB, k, dayKey, time);
+      if (old && old.patient && normText(old.patient) === normText(rec.patient)) return; // já estava aí (ex.: só mudou a observação)
+      var d = ALL_WEEKDAYS.filter(function(x){ return x.key === dayKey; })[0];
+      out.push("<b>" + esc(p.nome) + "</b> — " + esc(d ? d.full : dayKey) + (week ? " (" + week + "ª semana)" : "") + " às " + time);
+    });
+  });
+  return out;
+}
 function applyBookingChanges(changesByDoc, opts){
   // changesByDoc: { docId: { key: {patient,note} | null, ... }, ... } — null clears that key
   // opts.history: "undo" | "redo" quando a chamada vem do desfazer/refazer.
@@ -3869,6 +3903,18 @@ function applyBookingChanges(changesByDoc, opts){
   if (abaDep){
     showToast(abaDep, true);
     return Promise.resolve(false);
+  }
+  // Fora do horário de atendimento do paciente: confirmação dupla (não vale para desfazer/refazer).
+  if (!opts.history && !opts.patientHoursOk){
+    var outside = patientHoursOutside(changesByDoc);
+    if (outside.length){
+      var many = outside.length > 1;
+      return confirmDialog({title: "Fora do horário do paciente",
+        message: (many ? "Estes agendamentos ficam" : "Este agendamento fica") + " fora do horário de atendimento cadastrado para o paciente:<br>" + outside.slice(0, 8).join("<br>") + (outside.length > 8 ? "<br>…" : ""),
+        confirmLabel: "Continuar"})
+        .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar mesmo fora do horário do paciente?", confirmLabel: "Agendar assim mesmo"}); })
+        .then(function(ok){ return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {patientHoursOk: true})) : false; });
+    }
   }
   var seq = ++pendingSeqCounter;
   var prevByDoc = {};
@@ -4431,6 +4477,51 @@ function renderPatientsTab(){
   });
 }
 
+// Tabela "Horário de atendimento" do cadastro do paciente (dias abertos da clínica).
+// Sem horário salvo, abre com o horário da clínica (= sem restrição na prática).
+function patHoursSectionHtml(v){
+  var days = ALL_WEEKDAYS.filter(function(d){ return clinicDayCfg(d.key).ativo; });
+  function tm(id, val, dis){ return '<input type="time" step="600" class="cl-time" id="'+id+'" value="'+esc(val || "")+'"'+(dis ? ' disabled' : '')+'>'; }
+  var rows = days.map(function(d){
+    var h = (v.horarios && v.horarios[d.key]) || (v.horarios ? {ativo: false} : clinicDayCfg(d.key)), off = !h.ativo;
+    return '<tr data-day="'+d.key+'"><td class="ph-day" title="'+esc(d.full)+'">'+d.full.slice(0, 3)+'</td>' +
+      '<td class="cl-on"><input type="checkbox" class="cl-ativo"'+(h.ativo ? ' checked' : '')+' aria-label="Atende '+d.full+'"></td>' +
+      '<td>'+tm("ph-"+d.key+"-mi", h.manha && h.manha.inicio, off)+'</td><td>'+tm("ph-"+d.key+"-mf", h.manha && h.manha.fim, off)+'</td>' +
+      '<td>'+tm("ph-"+d.key+"-ti", h.tarde && h.tarde.inicio, off)+'</td><td>'+tm("ph-"+d.key+"-tf", h.tarde && h.tarde.fim, off)+'</td></tr>';
+  }).join("");
+  return '<div class="prof-section"><div class="prof-section-head"><span class="prof-access-title">Horário de atendimento</span>' +
+      '<button type="button" class="btn ghost ph-copy" id="pHoursCopy">Copiar segunda para os dias úteis</button></div>' +
+    '<table class="prof-hours cl-hours" id="pHours"><colgroup><col style="width:48px"><col style="width:58px"><col><col><col><col></colgroup><thead>' +
+      '<tr><th rowspan="2">Dia</th><th rowspan="2">Atende</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th></tr>' +
+      '<tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div class="pat-count" style="margin-top:6px">Horários em que o paciente pode ser atendido. No Planner, agendar fora deles pede confirmação dupla. Deixe o período em branco se não houver atendimento nele.</div></div>';
+}
+function wirePatHours(){
+  var tbl = document.getElementById("pHours"); if (!tbl) return;
+  tbl.addEventListener("change", function(e){
+    if (e.target.classList.contains("cl-ativo")) e.target.closest("tr").querySelectorAll(".cl-time").forEach(function(x){ x.disabled = !e.target.checked; });
+  });
+  var cp = document.getElementById("pHoursCopy");
+  if (cp) cp.addEventListener("click", function(){
+    var src = tbl.querySelector('tr[data-day="seg"]'); if (!src) return;
+    var on = src.querySelector(".cl-ativo").checked;
+    ["ter", "qua", "qui", "sex"].forEach(function(k){
+      var tr = tbl.querySelector('tr[data-day="'+k+'"]'); if (!tr) return;
+      tr.querySelector(".cl-ativo").checked = on;
+      ["mi", "mf", "ti", "tf"].forEach(function(s){ var el = document.getElementById("ph-"+k+"-"+s); el.value = document.getElementById("ph-seg-"+s).value; el.disabled = !on; });
+    });
+  });
+}
+function readPatHours(){
+  var tbl = document.getElementById("pHours"); if (!tbl) return undefined;
+  var out = {};
+  Array.prototype.forEach.call(tbl.querySelectorAll("tbody tr"), function(tr){
+    var k = tr.getAttribute("data-day");
+    function v(s){ return document.getElementById("ph-"+k+"-"+s).value; }
+    out[k] = {ativo: tr.querySelector(".cl-ativo").checked, manha: {inicio: v("mi"), fim: v("mf")}, tarde: {inicio: v("ti"), fim: v("tf")}};
+  });
+  return out;
+}
 function openPatientModal(p){
   var isNew = !p;
   var host = document.getElementById("modalHost");
@@ -4488,6 +4579,7 @@ function openPatientModal(p){
         '<div class="field"><label>Especialidades e sessão (mês)</label><div class="hours-list" id="specRowsHost"></div>' +
           '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ especialidade</button>' +
         '</div>' +
+        patHoursSectionHtml(v) +
       '</div>' +
       '<div class="modal-foot">' +
         (isNew ? '<span></span>' : '<button class="btn danger" id="pDelete">Excluir</button>') +
@@ -4498,6 +4590,7 @@ function openPatientModal(p){
     '</div></div>';
 
   var overlay = document.getElementById("ovPat");
+  wirePatHours();
   function close(){ host.innerHTML = ""; }
   overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
   document.getElementById("closePat").addEventListener("click", close);
@@ -4758,6 +4851,7 @@ function openPatientModal(p){
       idade: idadeOut,
       pacoteHoras: document.getElementById("pPac").value.trim(),
       aba: document.getElementById("pAba").value,
+      horarios: readPatHours(),
       specHours: specHoursOut
     };
     var list = state.patients.slice();
