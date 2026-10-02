@@ -58,6 +58,29 @@ const path = require('path');
   const seat = await page.evaluate(() => window.__STORE__['config/rooms'].list.find((r) => r.id === 'r1').therapists.find((t) => t.id === 'r1-t2'));
   console.log('the column now belongs to Andrelisa (id and name)?', seat.professionalId === 'andrelisa-terapeuta' && seat.name === 'Andrelisa');
 
+  // ---- Mesmo paciente + mesmo profissional + mesmo horário: recusado (mesmo com outro serviço) ----
+  await page.evaluate(async () => {
+    const db = await window.claude.use('db');
+    const rooms = (await db.doc('config/rooms').get()).data();
+    rooms.list.find((r) => r.id === 'r1').therapists.push({ id: 'r1-t9', name: 'Ana', professionalId: 'ana-terapeuta' });
+    await db.doc('config/rooms').set(rooms);
+    const sv = { list: [{ id: 'sessao', name: 'Sessão' }, { id: 'orientacao', name: 'Orientação Familiar' }] };
+    await db.doc('config/services').set(sv);
+  });
+  await page.waitForTimeout(300);
+  const extra = page.locator('table.sched[data-doc="seg-1"] td.slotcell[data-key="07:20|r1|r1-t9"]');
+  await extra.locator('.book-main').click();
+  await page.waitForSelector('#ovBook');
+  await page.fill('#bkPatient', 'Paciente Um');
+  await page.$eval('#bkService', (s) => { s.value = 'orientacao'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.click('#bkSave');
+  await page.waitForTimeout(250);
+  const stillOpen = await page.locator('#ovBook').count();
+  const toast = await page.innerText('#toastHost');
+  console.log('same patient with the same professional at the same time is refused (even with another service)?', stillOpen === 1 && /nem com outro servi/.test(toast) &&
+    !(await page.evaluate(() => window.__STORE__['schedule/seg-1'].bookings['07:20|r1|r1-t9'])));
+  await page.click('#bkCancel').catch(() => {});
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });

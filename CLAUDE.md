@@ -476,6 +476,8 @@ Bloqueado / Reunião Clínica / Treinamento não entram nas regras.
    MESMA sala continuam permitidos (lado a lado).
 2. Paciente não pode ter o MESMO serviço em dois lugares no mesmo horário
    (serviço diferente pode).
+3. (Planner, 2026-10-02) Paciente não pode ter dois atendimentos com o MESMO
+   profissional no mesmo horário, nem com serviço diferente (`plannerConflict`).
 - Planner: `plannerConflict(docId, key, rec, ignoreKeys, extra)` — na janela,
   ao colar e ao mover/arrastar (na troca confere os dois lados).
 - Agenda: `agdConflictIn(rows, rec)` (síncrono) e `agdConflictsFor(recs,
