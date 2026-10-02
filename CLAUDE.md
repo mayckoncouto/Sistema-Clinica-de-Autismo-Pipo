@@ -734,3 +734,10 @@ trigger em `documents` (`config/professionals`) atualiza `profiles.full_name`;
 trigger `profiles_professional_name` (before insert/update) força o nome ao ligar
 ou editar; acerto único dos já diferentes. Tela Usuários: campo Nome travado
 para usuário ligado ("altere em Cadastros → Profissionais").
+
+## Horários do profissional sem rolagem lateral (2026-10-02)
+`#profHours` com `table-layout:fixed` e `<colgroup>` (dia 48px, contagem 58px):
+dia abreviado ("Seg", nome completo no `title`), seletores sem ícone de relógio,
+coluna "Atend." só com o número (texto completo no `title`), rodapé numa linha só
+("Total: N atendimentos por semana · M por mês (4 semanas)", colspan 6 — antes
+somava 7 colunas e empurrava a tabela para fora da janela).

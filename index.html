@@ -374,6 +374,13 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .prof-hours td.ph-total{color:var(--ink);font-size:12px}
 .prof-hours select{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:inherit;font-size:12.5px;color:var(--ink)}
 .prof-hours select:disabled{opacity:.45}
+/* Horários do profissional: cabe na janela sem rolar para o lado. */
+#profHours{table-layout:fixed}
+#profHours th,#profHours td{padding:4px 3px}
+#profHours .dp-btn{padding:5px 6px;gap:4px}
+#profHours .dp-btn .dp-ico{display:none}
+#profHours td.ph-count,#profHours th.ph-count-h{text-align:center}
+#profHours td.ph-total-label{text-align:right;white-space:normal}
 .cl-cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px;margin:2px 0 4px}
 .cl-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px}
 .cl-card-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
@@ -5123,7 +5130,7 @@ function openProfessionalModal(p){
   }
   var hoursRows = profWeekdays().map(function(d){
     var pp = profDayPeriods(v, d.key);
-    return '<tr data-day="'+d.key+'"><td class="ph-day">'+d.label+'</td>' +
+    return '<tr data-day="'+d.key+'"><td class="ph-day" title="'+esc(d.label)+'">'+d.label.slice(0, 3)+'</td>' +
       periodCells("m", pp.m, "manhã "+d.label) + periodCells("t", pp.t, "tarde "+d.label) + '<td class="ph-count" data-count="'+d.key+'"></td></tr>';
   }).join("");
   // Usuário e senha: só o Administrador cria/ajusta acesso (e só ele enxerga os usuários).
@@ -5163,8 +5170,8 @@ function openProfessionalModal(p){
         '<div class="prof-section">' +
           '<div class="prof-section-head"><span class="prof-access-title">Horários</span>' +
             '<button type="button" class="btn ghost ph-copy" id="profHoursCopy">Copiar segunda para todos</button></div>' +
-          '<table class="prof-hours" id="profHours"><thead><tr><th rowspan="2">Dia</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th><th rowspan="2">Atendimentos</th></tr><tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>'+hoursRows+'</tbody>' +
-            '<tfoot><tr><td colspan="6" class="ph-total-label">Total na semana · no mês (4 semanas)</td><td class="ph-count ph-total" id="profHoursTotal"></td></tr></tfoot></table>' +
+          '<table class="prof-hours" id="profHours"><colgroup><col style="width:48px"><col><col><col><col><col style="width:58px"></colgroup><thead><tr><th rowspan="2">Dia</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th><th rowspan="2" class="ph-count-h" title="Atendimentos por dia">Atend.</th></tr><tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>'+hoursRows+'</tbody>' +
+            '<tfoot><tr><td colspan="6" class="ph-total-label">Total: <span class="ph-total" id="profHoursTotal"></span></td></tr></tfoot></table>' +
         '</div>' +
         (canManageUser ?
           '<div class="prof-access" id="profAccess">' +
@@ -5243,9 +5250,11 @@ function openProfessionalModal(p){
         n += day.morning.concat(day.afternoon).filter(function(t){ return t >= s && addMinutes(t, CLINIC_SLOT_MIN) <= e; }).length;
       });
       week += n;
-      tr.querySelector(".ph-count").textContent = n ? n + (n === 1 ? " atendimento" : " atendimentos") : "Não atende";
+      var cEl = tr.querySelector(".ph-count");
+      cEl.textContent = n ? String(n) : "—";
+      cEl.title = n ? n + (n === 1 ? " atendimento" : " atendimentos") + " neste dia" : "Não atende";
     });
-    document.getElementById("profHoursTotal").innerHTML = "<b>" + week + "</b> por semana · <b>" + (week * 4) + "</b> por mês";
+    document.getElementById("profHoursTotal").innerHTML = "<b>" + week + "</b> atendimentos por semana · <b>" + (week * 4) + "</b> por mês (4 semanas)";
   }
   hoursTable.addEventListener("change", hoursCounts);
   hoursTable.addEventListener("change", function(e){
