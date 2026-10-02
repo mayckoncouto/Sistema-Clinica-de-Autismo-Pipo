@@ -931,3 +931,14 @@ listas próprias (setar `.value` + `change`), Coordenador é grupo de suporte no
 (agendamento dele às 16:10), Especialidades/Convênios pelas telas de cadastro,
 seletor de cor `#cpPop`, desfazer na linha dos cadeados, cor de Treinamento
 #24E2FC, "Reunião Clínica" como tipo marcado.
+
+## Planner: Exportar Excel, envio da semana inteira, legenda (2026-10-02)
+- `#plExportBtn` → `plannerExportCsv()`: baixa `planner.csv` (";" com BOM, abre no
+  Excel) com uma linha por agendamento das 4 semanas — Semana, Dia, Hora, Sala/grupo,
+  Profissional, Agendamento, Tipo, Serviço, Observação. Respeita o filtro de salas.
+- "Enviar para a Agenda": opção **Semana inteira** no dia do Planner →
+  `refreshWeek()`: cada dia aberto vai para o mesmo dia da semana (seg–dom) que
+  contém a data escolhida; dias que já passaram ficam de fora; prévia por dia.
+- Legenda do Planner: "Bloqueado por regra" (listras cinza-claro e branco).
+- Teste `tests/run_planner_tools.js` (export, Editar agendamento, Trocar
+  profissional) — `npm test` agora 20 arquivos.

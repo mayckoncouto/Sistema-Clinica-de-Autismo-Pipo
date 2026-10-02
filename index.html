@@ -938,6 +938,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <span class="pat-count" id="matchCount"></span>
       <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar profissional</button>
       <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar agendamento</button>
+      <button class="btn ghost" id="plExportBtn" title="Baixa o Planner (4 semanas) em planilha para abrir no Excel">Exportar Excel</button>
       <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do dia e semana abertos para uma data da Agenda" hidden>Enviar para a Agenda</button>
       <button class="btn ghost" id="plClearWeekBtn" title="Apaga todos os agendamentos da semana escolhida (segunda a sexta)" hidden>Limpar semana</button>
     </div>
@@ -953,6 +954,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <span><i style="background:#24E2FC"></i>Treinamento ou Outros serviços</span>
       <span><i style="background:#4a5257"></i>Bloqueado</span>
       <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Fora do horário do profissional</span>
+      <span title="Profissional atendendo em outra sala ou grupo, ou paciente que não faz intervenção ABA ocupando o horário"><i style="background:repeating-linear-gradient(135deg,#E4E7E6 0 3px,#FFFFFF 3px 6px);border:1px solid var(--line)"></i>Bloqueado por regra</span>
     </div>
     <div class="foot-note">Clique numa célula para agendar, editar ou desmarcar. Arraste um atendimento para outro horário para movê-lo (solte sobre uma célula ocupada para trocar os dois). Use o ícone de cópia para colar em outro dia ou semana. Clique no lápis no cabeçalho de uma sala para editar nome, cor e terapeutas. Alterações são sincronizadas automaticamente para toda a equipe.</div>
   </section>
@@ -2701,6 +2703,7 @@ function wireControls(){
   document.getElementById("plClearWeekBtn").addEventListener("click", function(){ plannerClearWeek(); });
   document.getElementById("fixPatientBtn").addEventListener("click", function(){ openFixPatientModal(); });
   document.getElementById("swapProfBtn").addEventListener("click", function(){ openSwapProfModal(); });
+  document.getElementById("plExportBtn").addEventListener("click", function(){ plannerExportCsv(); });
   document.getElementById("toggleGroupsBtn").addEventListener("click", function(){
     state.salasView = state.salasView === "grupos" ? "salas" : "grupos";
     var s = document.getElementById("roomListSearch"); if (s) s.value = "";
@@ -7964,6 +7967,48 @@ function openSwapProfModal(){
   });
 }
 
+/* ---- Planner: botão "Exportar Excel" ----
+ * Baixa um arquivo .csv (abre no Excel) com uma linha por agendamento do Planner
+ * nas 4 semanas: semana, dia, hora, sala/grupo, profissional, agendamento, tipo,
+ * serviço e observação. Respeita o filtro de salas (sala filtrada + grupos).
+ */
+function plannerExportCsv(){
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var docIds = [];
+  WEEKS.forEach(function(w){ DAYS.forEach(function(d){ docIds.push(d.key + "-" + w); }); });
+  var shownRooms = {}; visibleRooms().forEach(function(r){ shownRooms[r.id] = true; });
+  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+    function cell(v){ v = v == null ? "" : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    var rows = [];
+    var roomOrder = {}; plannerRooms().forEach(function(r, i){ roomOrder[r.id] = i; });
+    snaps.forEach(function(snap, i){
+      var parts = docIds[i].split("-"), dayKey = parts[0], week = +parts[1], dObj = findDayObj(dayKey);
+      var bk = (snap && snap.exists && snap.data() && snap.data().bookings) || {};
+      Object.keys(bk).forEach(function(k){
+        var b = bk[k]; if (!b || !b.patient) return;
+        var kp = k.split("|"), room = findRoom(kp[1]); if (!room || !shownRooms[room.id]) return;
+        var ther = findTherapist(room, kp[2]);
+        var kind = bookingKind(b);
+        var tipo = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : (isGroup(room) ? "Sala (grupo)" : (findPatientByName(b.patient) ? "Paciente" : "Outro"));
+        rows.push({sort: [week, DAYS.indexOf(dObj), kp[0], roomOrder[room.id] || 0, kp[2]],
+          cells: [WEEK_LABEL[week], dObj ? dObj.full : dayKey, kp[0], room.name + (isGroup(room) ? " (grupo)" : ""),
+            ther ? therapistDisplayName(ther) : "", kind ? "" : b.patient, tipo, kind ? "" : bookingServiceName(b), b.note || ""]});
+      });
+    });
+    rows.sort(function(a, b){ for (var i = 0; i < a.sort.length; i++){ if (a.sort[i] < b.sort[i]) return -1; if (a.sort[i] > b.sort[i]) return 1; } return 0; });
+    if (!rows.length){ showToast("Nenhum agendamento no Planner para exportar.", true); return; }
+    var lines = [["Semana", "Dia", "Hora", "Sala / grupo", "Profissional", "Agendamento", "Tipo", "Serviço", "Observação"].map(cell).join(";")]
+      .concat(rows.map(function(r){ return r.cells.map(cell).join(";"); }));
+    var blob = new Blob(["﻿" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "planner" + (state.activeRoomFilter ? "-" + slugify((findRoom(state.activeRoomFilter) || {}).name || "sala") : "") + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    showToast(rows.length + " agendamentos exportados.");
+  }).catch(function(){ showToast("Não foi possível ler o Planner.", true); });
+}
+
 /* ---- Planner -> Agenda: botão "Enviar para a Agenda" ----
  * Leva os agendamentos de UM dia/semana do Planner (ex.: Segunda · 1ª semana)
  * para uma data real da Agenda escolhida pelo usuário. Só acrescenta: nunca
@@ -8044,6 +8089,7 @@ function openSendToAgendaModal(){
   var week = state.week === "todos" ? WEEKS[0] : state.week;
   // Data sugerida: o próximo dia (a partir de hoje) com o mesmo dia da semana.
   function nextDateFor(key){
+    if (key === "semana") key = DAYS[0].key; // semana inteira: a próxima segunda (ou o 1º dia aberto)
     var d = agdStartOfDay(new Date());
     for (var i=0;i<7;i++){ if (AD_WEEKDAY_KEYS[d.getDay()] === key) return agdIso(d); d = agdAddDays(d, 1); }
     return agdIso(d);
@@ -8052,12 +8098,12 @@ function openSendToAgendaModal(){
   host.innerHTML =
     '<div class="overlay" id="ovSend"><div class="modal" style="max-width:520px">' +
       '<div class="modal-head"><div><h3>Enviar para a Agenda</h3>' +
-        '<div class="modal-sub">Copia os agendamentos de um dia do Planner para uma data da Agenda. Nada que já está na Agenda é apagado ou substituído.</div></div>' +
+        '<div class="modal-sub">Copia os agendamentos de um dia (ou da semana inteira) do Planner para a Agenda. Nada que já está na Agenda é apagado ou substituído.</div></div>' +
         '<button class="modal-close" id="closeSend" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="field-row" style="display:flex;gap:10px">' +
           '<div class="field" style="flex:1"><label for="sendDay">Dia do Planner</label><select id="sendDay">' +
-            DAYS.map(function(d){ return '<option value="'+d.key+'"'+(d.key === dayKey ? ' selected' : '')+'>'+esc(d.full)+'</option>'; }).join("") + '</select></div>' +
+            DAYS.map(function(d){ return '<option value="'+d.key+'"'+(d.key === dayKey ? ' selected' : '')+'>'+esc(d.full)+'</option>'; }).join("") + '<option value="semana">Semana inteira</option></select></div>' +
           '<div class="field" style="flex:1"><label for="sendWeek">Semana</label><select id="sendWeek">' +
             WEEKS.map(function(w){ return '<option value="'+w+'"'+(String(w) === String(week) ? ' selected' : '')+'>'+esc(WEEK_LABEL[w])+'</option>'; }).join("") + '</select></div>' +
           '<div class="field" style="flex:1"><label for="sendDate">Data na Agenda</label><input type="date" id="sendDate" value="'+nextDateFor(dayKey)+'"></div>' +
@@ -8080,6 +8126,7 @@ function openSendToAgendaModal(){
   function refresh(){
     var my = ++seq; current = null; okBtn.disabled = true;
     var dk = daySel.value, wk = weekSel.value, iso = dateEl.value;
+    if (dk === "semana") return refreshWeek(my, wk, iso);
     var dayObj = findDayObj(dk);
     if (!iso){ prev.innerHTML = '<div class="send-warn">Escolha a data.</div>'; return; }
     if (iso < agdIso(agdStartOfDay(new Date()))){ prev.innerHTML = '<div class="send-warn">Escolha hoje ou uma data futura (datas que já passaram não recebem envio).</div>'; return; }
@@ -8105,6 +8152,44 @@ function openSendToAgendaModal(){
       prev.innerHTML = '<div class="send-warn">Não foi possível calcular: '+esc(agdErr(err))+'</div>';
     });
   }
+  // Semana inteira: cada dia aberto do Planner vai para o mesmo dia da semana da data
+  // escolhida (a semana de segunda a domingo que contém a data). Dias que já passaram ficam de fora.
+  function refreshWeek(my, wk, iso){
+    if (!iso){ prev.innerHTML = '<div class="send-warn">Escolha uma data da semana de destino.</div>'; return; }
+    var base = agdParse(iso), monday = agdAddDays(base, -((base.getDay() + 6) % 7)), today = agdIso(agdStartOfDay(new Date()));
+    var targets = DAYS.map(function(d){
+      var off = AD_WEEKDAY_KEYS.indexOf(d.key); // 0 = domingo
+      var dt = agdAddDays(monday, off === 0 ? 6 : off - 1);
+      return {d: d, iso: agdIso(dt)};
+    });
+    var future = targets.filter(function(x){ return x.iso >= today; });
+    if (!future.length){ prev.innerHTML = '<div class="send-warn">Todos os dias dessa semana já passaram. Escolha uma semana atual ou futura.</div>'; return; }
+    prev.innerHTML = "Calculando…";
+    Promise.all(future.map(function(x){ return plannerSendPlan(x.d.key, wk, x.iso); })).then(function(plans){
+      if (my !== seq) return;
+      var send = [], skipped = [], perDay = [];
+      plans.forEach(function(pl, i){
+        send = send.concat(pl.send);
+        perDay.push(esc(future[i].d.name) + " " + agdBrDate(future[i].iso) + ": <b>" + pl.send.length + "</b>");
+        skipped = skipped.concat(pl.skipped.map(function(s){ return Object.assign({}, s, {time: future[i].d.name.slice(0, 3) + " " + s.time}); }));
+      });
+      current = {plan: {send: send, skipped: skipped}, dk: "semana", wk: wk, iso: agdIso(monday), week: true};
+      var html = '<div class="send-total"><b>' + send.length + '</b> ' + (send.length === 1 ? 'agendamento será enviado' : 'agendamentos serão enviados') + ' para a semana de <b>' + agdBrDate(agdIso(monday)) + '</b>.</div>' +
+        '<div class="pat-count" style="margin:4px 0 8px">' + perDay.join(" · ") + (future.length < targets.length ? " · dias que já passaram ficam de fora" : "") + '</div>';
+      var byWhy = {};
+      skipped.forEach(function(s){ (byWhy[s.why] = byWhy[s.why] || []).push(s); });
+      Object.keys(SEND_SKIP_LABELS).forEach(function(k){
+        var list = byWhy[k]; if (!list) return;
+        html += '<details class="send-skip"><summary>' + list.length + ' ' + (list.length === 1 ? 'pulado' : 'pulados') + ' — ' + esc(SEND_SKIP_LABELS[k]) + '</summary><ul>' +
+          list.map(function(s){ return '<li' + (s.detail ? ' title="' + esc(s.detail) + '"' : '') + '><span class="mono">' + esc(s.time) + '</span> ' + esc(s.what) + ' · ' + esc(s.who) + ' · ' + esc(s.where) + '</li>'; }).join("") + '</ul></details>';
+      });
+      prev.innerHTML = html;
+      okBtn.disabled = !send.length;
+    }).catch(function(err){
+      if (my !== seq) return;
+      prev.innerHTML = '<div class="send-warn">Não foi possível calcular: ' + esc(agdErr(err)) + '</div>';
+    });
+  }
   daySel.addEventListener("change", function(){ dateEl.value = nextDateFor(daySel.value); refresh(); });
   weekSel.addEventListener("change", refresh);
   dateEl.addEventListener("change", refresh);
@@ -8120,12 +8205,12 @@ function openSendToAgendaModal(){
         });
       });
     }, Promise.resolve([])).then(function(created){
-      var dayObj = findDayObj(cur.dk);
-      agdRecord("Enviar do Planner · " + dayObj.name + " " + WEEK_LABEL[cur.wk] + " → " + agdBrDate(cur.iso), [], created);
+      var dayObj = cur.week ? {name: "Semana"} : findDayObj(cur.dk);
+      agdRecord("Enviar do Planner · " + dayObj.name + " " + WEEK_LABEL[cur.wk] + " → " + (cur.week ? "semana de " : "") + agdBrDate(cur.iso), [], created);
       close();
-      showToast(created.length + (created.length === 1 ? " agendamento enviado" : " agendamentos enviados") + " para a Agenda (" + agdBrDate(cur.iso) + ")" +
+      showToast(created.length + (created.length === 1 ? " agendamento enviado" : " agendamentos enviados") + " para a Agenda (" + (cur.week ? "semana de " : "") + agdBrDate(cur.iso) + ")" +
         (cur.plan.skipped.length ? ", " + cur.plan.skipped.length + (cur.plan.skipped.length === 1 ? " pulado." : " pulados.") : "."));
-      if (AD.loaded && cur.iso >= AD.rangeFrom && cur.iso <= AD.rangeTo) agdLoadWeek();
+      if (AD.loaded && (cur.week || (cur.iso >= AD.rangeFrom && cur.iso <= AD.rangeTo))) agdLoadWeek();
     }).catch(function(err){
       okBtn.textContent = "Enviar"; okBtn.disabled = false;
       var m = (err && err.message) || "";
