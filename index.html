@@ -3788,6 +3788,42 @@ document.addEventListener("scroll", function(e){
   if (historyMenuEl && !(e.target instanceof Node && historyMenuEl.contains(e.target))) closeHistoryMenu();
 }, true);
 
+// O agendamento do grupo que libera dois (ou mais) pacientes "não ABA" do mesmo
+// profissional numa sala não pode sair (excluir, mover, trocar o nome) enquanto
+// esses pacientes estiverem lá — tire primeiro os agendamentos da sala.
+// Confere o resultado final de cada mudança (vale para janela, lixeira, mover,
+// arrastar, colar, limpar e desfazer). Devolve a mensagem de recusa ou null.
+function abaGroupDependencyDenied(changesByDoc){
+  var msg = null;
+  Object.keys(changesByDoc).some(function(docId){
+    var changes = changesByDoc[docId], dayKey = docId.split("-")[0];
+    var doc = state.scheduleDocs[docId] || state.reportDocs[docId];
+    var oldB = (doc && doc.bookings) || {}, newB = Object.assign({}, oldB);
+    Object.keys(changes).forEach(function(k){ if (changes[k] === null) delete newB[k]; else newB[k] = changes[k]; });
+    return Object.keys(changes).some(function(k){
+      var parts = k.split("|"), time = parts[0], grp = findRoom(parts[1]);
+      if (!grp || !isGroup(grp)) return false;
+      var oldRec = effectiveBooking(oldB, k, dayKey, time);
+      if (!oldRec || !oldRec.patient || bookingKind(oldRec)) return false;
+      var target = findRoomByName(oldRec.patient);
+      if (!target || isGroup(target)) return false;
+      var newRec = effectiveBooking(newB, k, dayKey, time);
+      if (newRec && newRec.patient && normText(newRec.patient) === normText(target.name)) return false;
+      if (groupBookedRoom(newB, dayKey, time, target)) return false; // outro grupo continua marcando a sala
+      var perProf = {};
+      (target.therapists || []).forEach(function(t){
+        if (!t.professionalId) return;
+        if (isNaoABABooking(effectiveBooking(newB, time + "|" + target.id + "|" + t.id, dayKey, time))) perProf[t.professionalId] = (perProf[t.professionalId] || 0) + 1;
+      });
+      var prof = Object.keys(perProf).filter(function(p){ return perProf[p] >= 2; })[0];
+      if (!prof) return false;
+      msg = "Não é possível tirar " + target.name + " de " + grp.name + " às " + time + ": " + professionalName(prof) +
+        " tem pacientes que não fazem intervenção ABA na sala que dependem desse agendamento. Remova antes os agendamentos na sala.";
+      return true;
+    });
+  });
+  return msg;
+}
 function applyBookingChanges(changesByDoc, opts){
   // changesByDoc: { docId: { key: {patient,note} | null, ... }, ... } — null clears that key
   // opts.history: "undo" | "redo" quando a chamada vem do desfazer/refazer.
@@ -3803,6 +3839,11 @@ function applyBookingChanges(changesByDoc, opts){
   var denied = bookingPermDenied(changesByDoc);
   if (denied){
     showToast(denied, true);
+    return Promise.resolve(false);
+  }
+  var abaDep = abaGroupDependencyDenied(changesByDoc);
+  if (abaDep){
+    showToast(abaDep, true);
     return Promise.resolve(false);
   }
   var seq = ++pendingSeqCounter;

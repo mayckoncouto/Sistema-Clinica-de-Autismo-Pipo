@@ -806,3 +806,8 @@ profissional tem paciente. A coluna dele nos Grupos de Suporte, se vazia, vira
 `.slot-off.prof-busy` (listras cinza-claro e branco, `title` "Fulano está atendendo em <sala> neste
 horário."; clique/soltar mostram o motivo). A gravação já era recusada pela
 regra "profissional em dois lugares" de `plannerConflict`.
+- O agendamento do grupo que libera esses "não ABA" não pode sair (excluir,
+  mover, trocar o nome, limpar, desfazer) enquanto o profissional tiver 2+
+  pacientes "não ABA" na sala naquele horário, a não ser que outro grupo
+  continue marcando a sala: `abaGroupDependencyDenied(changesByDoc)`, conferido
+  em `applyBookingChanges` logo depois de `bookingPermDenied`.
