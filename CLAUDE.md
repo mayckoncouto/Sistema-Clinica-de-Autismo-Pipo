@@ -578,3 +578,13 @@ Botão `#plClearWeekBtn` na barra do Planner (precisa de excluir em `agenda`):
 escolhida (com "Todos" pede para escolher uma), remove toda chave gravada com
 conteúdo (a Reunião Clínica padrão de segunda 11:20 volta), dupla confirmação,
 um único `applyBookingChanges` (entra no desfazer).
+
+## Seletor de cor único (2026-10-02)
+`openColorPicker(anchor, corAtual, aoEscolher)` (perto de `swatchVar`): janela
+flutuante `#cpPop` com "Cor" (12 cores prontas, `CP_PRESETS`), "Minhas cores"
+(salvas no navegador em `agendaPipo:myColors`, até 12) e o "+" que abre o editor
+(quadro saturação/brilho, barra de matiz, HEX/RGB, aviso de contraste, Salvar →
+entra em Minhas cores e já escolhe). Esc/clique fora fecha só o seletor. Usado em
+Salas/Grupos (`#rmColorBtn`), Especialidades (`.spec-color-btn`) e Status
+(`[data-stcolor]`). Cor nova é sempre "#rrggbb"; nomes antigos ("teal"…)
+continuam valendo via `swatchVar`/`cpToHex`.

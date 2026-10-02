@@ -580,6 +580,35 @@ body.pat-col-resizing *{user-select:none}
 .modal-foot{display:flex;gap:8px;padding:12px 18px 16px;border-top:1px solid var(--line)}
 .modal-foot .spacer{flex:1}
 
+/* seletor de cor único (openColorPicker) */
+.cp-pop{position:fixed;z-index:400;width:248px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:12px 14px}
+.cp-title{font-size:13px;color:var(--ink-2);margin:2px 0 8px}
+.cp-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;justify-items:center}
+.cp-dot{width:24px;height:24px;border-radius:50%;border:0;padding:0;cursor:pointer;position:relative}
+.cp-dot:hover{transform:scale(1.1)}
+.cp-dot.on::after{content:"";position:absolute;inset:-4px;border:2px solid var(--ink);border-radius:50%}
+.cp-add{width:24px;height:24px;border-radius:50%;border:0;background:transparent;color:var(--ink-2);font-size:20px;line-height:1;cursor:pointer;padding:0}
+.cp-add:hover{background:var(--surface-2)}
+.cp-sep{height:1px;background:var(--line);margin:12px -14px}
+.cp-head{display:flex;align-items:center;gap:7px;font-size:12.5px;margin-bottom:10px}
+.cp-swatch{width:14px;height:14px;border-radius:50%;flex:none}
+.cp-contrast{color:var(--muted)}.cp-contrast.bad{color:var(--danger)}
+.cp-sv{position:relative;height:150px;border-radius:10px;cursor:crosshair;touch-action:none;overflow:hidden}
+.cp-sv-white,.cp-sv-black{position:absolute;inset:0;pointer-events:none}
+.cp-sv-white{background:linear-gradient(to right,#fff,rgba(255,255,255,0))}
+.cp-sv-black{background:linear-gradient(to top,#000,rgba(0,0,0,0))}
+.cp-thumb{position:absolute;width:14px;height:14px;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.35);transform:translate(-50%,-50%);pointer-events:none}
+.cp-hue{width:100%;margin:12px 0 10px;-webkit-appearance:none;appearance:none;height:12px;border-radius:999px;background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);outline:none}
+.cp-hue::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);cursor:pointer}
+.cp-hue::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);cursor:pointer}
+.cp-row{display:flex;gap:6px;margin-bottom:8px}
+.cp-fmt{flex:none;width:76px;padding:7px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px}
+.cp-val{flex:1;min-width:0;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.cp-save{width:100%;padding:8px;border:0;border-radius:8px;background:var(--ink);color:var(--surface);font:inherit;font-weight:800;font-size:13px;cursor:pointer}
+.color-pick-row{display:flex;align-items:center;gap:9px}
+.color-trigger{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);cursor:pointer;padding:0;flex:none}
+.color-trigger:hover{filter:brightness(.95)}
+.color-pick-code{font-size:12.5px;color:var(--ink-2)}
 /* swatch color picker */
 .swatch-picker{display:flex;flex-wrap:wrap;gap:9px;margin-top:2px}
 .swatch-btn{width:26px;height:26px;border-radius:50%;border:0;cursor:pointer;padding:0;position:relative;flex:none}
@@ -967,6 +996,144 @@ function swatchKey(k){ return SWATCHES.indexOf(k)!==-1 ? k : null; }
 function swatchVar(k){
   if (isHexColor(k)) return k;
   return "var(--sw-"+(swatchKey(k) || "slate")+")";
+}
+
+/* ---------------- seletor de cor (único para todo o sistema) ----------------
+ * openColorPicker(anchorEl, corAtual, aoEscolher): janela flutuante com
+ *  - "Cor": 12 cores prontas;
+ *  - "Minhas cores": cores salvas pela pessoa (neste navegador) + botão "+";
+ *  - "+": quadro de saturação/brilho, barra de matiz, HEX/RGB, contraste, "Salvar"
+ *    (salva em Minhas cores e já escolhe a cor).
+ * Usado em Salas/Grupos, Especialidades e Status. A cor escolhida é sempre "#rrggbb"
+ * (cores antigas por nome, ex. "teal", continuam funcionando via swatchVar).
+ */
+var CP_PRESETS = ["#5f6368", "#9aa0a6", "#7c4dff", "#4a63d8", "#0a8ef0", "#2e9b6a",
+                  "#d4a017", "#f06a10", "#e04f4f", "#e0457b", "#a855c7", "#a07a64"];
+var CP_MINE_KEY = "agendaPipo:myColors";
+var CP_MEM = null; // cópia em memória (se o navegador bloquear o armazenamento)
+function cpMine(){
+  try { var v = JSON.parse(localStorage.getItem(CP_MINE_KEY) || "null"); if (Array.isArray(v)) return v.filter(isHexColor); } catch(e){}
+  return (CP_MEM || []).slice();
+}
+function cpSaveMine(list){ CP_MEM = list.slice(0, 12); try { localStorage.setItem(CP_MINE_KEY, JSON.stringify(CP_MEM)); } catch(e){} }
+function cpHexToRgb(h){ h = h.replace("#", ""); return [parseInt(h.substr(0,2),16), parseInt(h.substr(2,2),16), parseInt(h.substr(4,2),16)]; }
+function cpRgbToHex(r, g, b){ return "#" + [r, g, b].map(function(x){ return ("0" + Math.max(0, Math.min(255, Math.round(x))).toString(16)).slice(-2); }).join(""); }
+function cpRgbToHsv(r, g, b){
+  r /= 255; g /= 255; b /= 255;
+  var max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min, h = 0;
+  if (d){ if (max === r) h = ((g - b) / d) % 6; else if (max === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  return [h, max ? d / max : 0, max];
+}
+function cpHsvToRgb(h, s, v){
+  var c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c, r = 0, g = 0, b = 0;
+  if (h < 60){ r = c; g = x; } else if (h < 120){ r = x; g = c; } else if (h < 180){ g = c; b = x; }
+  else if (h < 240){ g = x; b = c; } else if (h < 300){ r = x; b = c; } else { r = c; b = x; }
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+function cpLum(hex){
+  return cpHexToRgb(hex).map(function(c){ c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); })
+    .reduce(function(t, c, i){ return t + c * [0.2126, 0.7152, 0.0722][i]; }, 0);
+}
+// Contraste com texto (branco ou escuro, o que for melhor): OK a partir de 4,5:1.
+function cpContrastOk(hex){
+  var L = cpLum(hex), withWhite = 1.05 / (L + 0.05), withDark = (L + 0.05) / (cpLum("#1f2b29") + 0.05);
+  return Math.max(withWhite, withDark) >= 4.5;
+}
+function cpToHex(c){
+  if (isHexColor(c)) return c.toLowerCase();
+  var k = swatchKey(c);
+  if (k){ var v = getComputedStyle(document.documentElement).getPropertyValue("--sw-" + k).trim(); if (isHexColor(v)) return v.toLowerCase(); }
+  return "#2e9b6a";
+}
+function closeColorPicker(){
+  var el = document.getElementById("cpPop");
+  if (el){ el.remove(); }
+  document.removeEventListener("mousedown", cpOutside, true);
+  document.removeEventListener("keydown", cpKey, true);
+}
+function cpOutside(e){ var el = document.getElementById("cpPop"); if (el && !el.contains(e.target) && !(el.__anchor && el.__anchor.contains(e.target))) closeColorPicker(); }
+function cpKey(e){ if (e.key === "Escape" && document.getElementById("cpPop")){ e.preventDefault(); e.stopImmediatePropagation(); closeColorPicker(); } }
+function openColorPicker(anchor, current, onPick){
+  closeColorPicker();
+  var cur = current ? cpToHex(current) : null;
+  var pop = document.createElement("div");
+  pop.id = "cpPop"; pop.className = "cp-pop"; pop.__anchor = anchor;
+  document.body.appendChild(pop);
+  function place(){
+    var r = anchor.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+    var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    var top = r.bottom + 6; if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    pop.style.left = left + "px"; pop.style.top = top + "px";
+  }
+  function pick(hex){ closeColorPicker(); onPick(hex.toLowerCase()); }
+  function dot(hex){ return '<button type="button" class="cp-dot' + (cur === hex ? " on" : "") + '" data-hex="' + hex + '" style="background:' + hex + '" title="' + hex.toUpperCase() + '" aria-label="Cor ' + hex.toUpperCase() + '"></button>'; }
+  function renderList(){
+    var mine = cpMine();
+    pop.innerHTML = '<div class="cp-title">Cor</div><div class="cp-grid">' + CP_PRESETS.map(dot).join("") + '</div>' +
+      '<div class="cp-sep"></div><div class="cp-title">Minhas cores</div><div class="cp-grid">' + mine.map(dot).join("") +
+      '<button type="button" class="cp-add" title="Nova cor" aria-label="Nova cor">+</button></div>';
+    pop.querySelectorAll(".cp-dot").forEach(function(b){ b.addEventListener("click", function(){ pick(b.getAttribute("data-hex")); }); });
+    pop.querySelector(".cp-add").addEventListener("click", renderEditor);
+    place();
+  }
+  function renderEditor(){
+    var hsv = cpRgbToHsv.apply(null, cpHexToRgb(cur || "#2e9b6a"));
+    var h = hsv[0], s = hsv[1], v = hsv[2], fmt = "hex";
+    pop.innerHTML =
+      '<div class="cp-head"><span class="cp-swatch"></span><b class="cp-hex mono"></b><span class="cp-contrast"></span></div>' +
+      '<div class="cp-sv"><div class="cp-sv-white"></div><div class="cp-sv-black"></div><span class="cp-thumb"></span></div>' +
+      '<input type="range" class="cp-hue" min="0" max="360" step="1" aria-label="Matiz">' +
+      '<div class="cp-row"><select class="cp-fmt" aria-label="Formato"><option value="hex">HEX</option><option value="rgb">RGB</option></select>' +
+        '<input type="text" class="cp-val" aria-label="Código da cor"></div>' +
+      '<button type="button" class="cp-save">Salvar</button>';
+    var sv = pop.querySelector(".cp-sv"), thumb = pop.querySelector(".cp-thumb"), hue = pop.querySelector(".cp-hue");
+    var val = pop.querySelector(".cp-val"), fmtSel = pop.querySelector(".cp-fmt");
+    function hex(){ var c = cpHsvToRgb(h, s, v); return cpRgbToHex(c[0], c[1], c[2]); }
+    function paint(skipInput){
+      var hx = hex(), rgb = cpHexToRgb(hx);
+      sv.style.background = "hsl(" + h + ",100%,50%)";
+      thumb.style.left = (s * 100) + "%"; thumb.style.top = ((1 - v) * 100) + "%";
+      hue.value = Math.round(h);
+      pop.querySelector(".cp-swatch").style.background = hx;
+      pop.querySelector(".cp-hex").textContent = hx.toUpperCase();
+      var ok = cpContrastOk(hx);
+      var ct = pop.querySelector(".cp-contrast"); ct.textContent = ok ? "· Contraste OK" : "· Contraste baixo"; ct.classList.toggle("bad", !ok);
+      if (!skipInput) val.value = fmt === "hex" ? hx.toUpperCase() : rgb.join(", ");
+    }
+    function fromPointer(e){
+      var r = sv.getBoundingClientRect();
+      s = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      v = 1 - Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+      paint();
+    }
+    sv.addEventListener("pointerdown", function(e){
+      e.preventDefault(); sv.setPointerCapture(e.pointerId); fromPointer(e);
+      function mv(ev){ fromPointer(ev); }
+      function up(){ sv.removeEventListener("pointermove", mv); sv.removeEventListener("pointerup", up); }
+      sv.addEventListener("pointermove", mv); sv.addEventListener("pointerup", up);
+    });
+    hue.addEventListener("input", function(){ h = +hue.value; paint(); });
+    fmtSel.addEventListener("change", function(){ fmt = fmtSel.value; paint(); });
+    val.addEventListener("input", function(){
+      var t = val.value.trim(), rgb = null;
+      if (fmt === "hex"){ if (t && t[0] !== "#") t = "#" + t; if (isHexColor(t)) rgb = cpHexToRgb(t); }
+      else { var m = t.match(/^(\d{1,3})\D+(\d{1,3})\D+(\d{1,3})$/); if (m && +m[1] < 256 && +m[2] < 256 && +m[3] < 256) rgb = [+m[1], +m[2], +m[3]]; }
+      if (rgb){ var n = cpRgbToHsv(rgb[0], rgb[1], rgb[2]); h = n[0]; s = n[1]; v = n[2]; paint(true); }
+    });
+    pop.querySelector(".cp-save").addEventListener("click", function(){
+      var hx = hex(), mine = cpMine().filter(function(c){ return c !== hx; });
+      mine.unshift(hx); cpSaveMine(mine);
+      pick(hx);
+    });
+    paint();
+    place();
+    val.focus();
+  }
+  renderList();
+  setTimeout(function(){
+    document.addEventListener("mousedown", cpOutside, true);
+    document.addEventListener("keydown", cpKey, true);
+  }, 0);
 }
 
 // Specialty list is dynamic now (state.specialties, from db config/specialties).
@@ -3964,7 +4131,6 @@ function writePatients(list){
 function openSpecialtiesModal(){
   var host = document.getElementById("modalHost");
   var draft = state.specialties.map(function(s){ return {id:s.id, name:s.name, sigla:s.sigla||"", color:s.color||"teal"}; });
-  var openColorIdx = null;
 
   host.innerHTML =
     '<div class="overlay" id="ovSpec"><div class="modal">' +
@@ -4003,16 +4169,6 @@ function openSpecialtiesModal(){
     rowsHost.innerHTML = draft.length ? draft.map(function(s, i){
       var col = s.color || "teal";
       var panelHtml = "";
-      if (openColorIdx === i){
-        panelHtml = '<div class="spec-color-panel" data-panel-i="'+i+'">' +
-            '<div class="swatch-picker" data-swhost="'+i+'"></div>' +
-            '<div class="color-hex-row">' +
-              '<span class="color-hex-preview" data-hexprev="'+i+'"></span>' +
-              '<input type="text" class="spec-hex-inp" data-hexinp="'+i+'" placeholder="#RRGGBB" maxlength="7">' +
-              '<span class="color-hex-label">ou digite um código de cor</span>' +
-            '</div>' +
-          '</div>';
-      }
       return '<div class="spec-row-wrap">' +
         '<div class="therapist-row" data-i="'+i+'">' +
           '<button type="button" class="spec-color-btn" data-coloridx="'+i+'" style="background:'+swatchVar(col)+'" aria-label="Cor da especialidade" title="Cor da especialidade"></button>' +
@@ -4028,64 +4184,21 @@ function openSpecialtiesModal(){
       b.addEventListener("click", function(){
         syncFromDom();
         var i = parseInt(b.getAttribute("data-coloridx"),10);
-        openColorIdx = (openColorIdx === i) ? null : i;
-        renderRows();
+        openColorPicker(b, draft[i].color || "teal", function(hex){ draft[i].color = hex; b.style.background = hex; });
       });
     });
 
-    if (openColorIdx !== null && draft[openColorIdx]) wireColorPanel(openColorIdx);
 
     rowsHost.querySelectorAll(".rm").forEach(function(b){
       b.addEventListener("click", function(){
         syncFromDom();
         var i = parseInt(b.getAttribute("data-rm"),10);
         draft.splice(i, 1);
-        if (openColorIdx === i) openColorIdx = null;
-        else if (openColorIdx !== null && openColorIdx > i) openColorIdx--;
         renderRows();
       });
     });
   }
 
-  function wireColorPanel(i){
-    var swHost = rowsHost.querySelector('[data-swhost="'+i+'"]');
-    var hexInput = rowsHost.querySelector('[data-hexinp="'+i+'"]');
-    var hexPreview = rowsHost.querySelector('[data-hexprev="'+i+'"]');
-    if (!swHost || !hexInput || !hexPreview) return;
-    function colorBtnEl(){ return rowsHost.querySelector('.spec-color-btn[data-coloridx="'+i+'"]'); }
-    function syncHexUI(){
-      var col = draft[i].color || "teal";
-      hexInput.value = isHexColor(col) ? col : "";
-      hexPreview.style.background = swatchVar(col);
-    }
-    function renderSwatches(){
-      var col = draft[i].color || "teal";
-      swHost.innerHTML = SWATCHES.map(function(k){
-        return '<button type="button" class="swatch-btn'+(k===col?' selected':'')+'" data-color="'+k+'" style="background:var(--sw-'+k+')" aria-label="'+k+'"></button>';
-      }).join("");
-      swHost.querySelectorAll(".swatch-btn").forEach(function(b){
-        b.addEventListener("click", function(){
-          draft[i].color = b.getAttribute("data-color");
-          var btn = colorBtnEl();
-          if (btn) btn.style.background = swatchVar(draft[i].color);
-          renderSwatches();
-          syncHexUI();
-        });
-      });
-    }
-    renderSwatches();
-    syncHexUI();
-    hexInput.addEventListener("input", function(){
-      var v = hexInput.value.trim();
-      if (isHexColor(v)){
-        draft[i].color = v;
-        var btn = colorBtnEl();
-        if (btn) btn.style.background = swatchVar(draft[i].color);
-        renderSwatches();
-        hexPreview.style.background = swatchVar(v);
-      }
-    });
-  }
   renderRows();
 
   document.getElementById("specAdd").addEventListener("click", function(){
@@ -4323,19 +4436,25 @@ function openStatusesModal(){
     rowsHost.querySelectorAll(".therapist-row").forEach(function(row, i){
       if (!draft[i]) return;
       draft[i].name = row.querySelector("input[type=text]").value;
-      draft[i].color = row.querySelector("input[type=color]").value;
     });
   }
   function renderRows(){
     rowsHost.innerHTML = draft.length ? draft.map(function(s, i){
       return '<div class="therapist-row" data-i="'+i+'">' +
-        '<input type="color" value="'+esc(s.color)+'" title="Cor do status" style="width:38px;flex:none;padding:2px">' +
+        '<button type="button" class="spec-color-btn" data-stcolor="'+i+'" style="background:'+esc(s.color)+'" title="Cor do status" aria-label="Cor do status"></button>' +
         '<input type="text" value="'+esc(s.name)+'" placeholder="Nome do status">' +
         '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover status">✕</button>' +
       '</div>';
     }).join("") : '<div class="hours-empty">Nenhum status ainda.</div>';
     rowsHost.querySelectorAll(".rm").forEach(function(b){
       b.addEventListener("click", function(){ syncFromDom(); draft.splice(parseInt(b.getAttribute("data-rm"), 10), 1); renderRows(); });
+    });
+    rowsHost.querySelectorAll("[data-stcolor]").forEach(function(b){
+      b.addEventListener("click", function(){
+        syncFromDom();
+        var i = parseInt(b.getAttribute("data-stcolor"), 10);
+        openColorPicker(b, draft[i].color, function(hex){ draft[i].color = hex; b.style.background = hex; });
+      });
     });
   }
   renderRows();
@@ -4870,11 +4989,7 @@ function openRoomModal(r, asGroup){
         '<button class="modal-close" id="closeRoom" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="field"><label for="rmName">Nome '+(grp ? "do grupo" : "da sala")+'</label><input id="rmName" type="text" placeholder="'+(grp ? "ex: Coordenador" : "ex: Fonoaudiologia ABA")+'" value="'+esc(draftName)+'"></div>' +
-        '<div class="field"><label>Cor</label><div class="swatch-picker" id="rmSwatches"></div>' +
-          '<div class="color-hex-row"><span class="color-hex-preview" id="rmHexPreview"></span>' +
-            '<input id="rmHexInput" type="text" placeholder="#RRGGBB" maxlength="7">' +
-            '<span class="color-hex-label">ou digite um código de cor</span></div>' +
-        '</div>' +
+        '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="rmColorBtn" title="Escolher cor" aria-label="Escolher cor"></button><span class="color-pick-code mono" id="rmColorCode"></span><span class="color-hex-label">clique na bolinha para escolher</span></div></div>' +
         '<div class="field"><label>Terapeutas (colunas na grade)</label><div class="therapist-rows" id="rmTherapists"></div>' +
           '<button type="button" class="btn ghost add-row-btn" id="rmAddTherapist">+ terapeuta</button>' +
           '<div class="color-hex-label" style="margin-top:6px">Selecione o profissional cadastrado para cada coluna. Gerencie a lista na aba Profissionais.</div>' +
@@ -4894,37 +5009,11 @@ function openRoomModal(r, asGroup){
   document.getElementById("closeRoom").addEventListener("click", close);
   document.getElementById("rmCancel").addEventListener("click", close);
 
-  var swHost = document.getElementById("rmSwatches");
-  var hexInput = document.getElementById("rmHexInput");
-  var hexPreview = document.getElementById("rmHexPreview");
-  function syncHexUI(){
-    hexInput.value = isHexColor(draftColor) ? draftColor : "";
-    hexPreview.style.background = swatchVar(draftColor);
-  }
-  function renderSwatches(){
-    swHost.innerHTML = SWATCHES.map(function(k){
-      return '<button type="button" class="swatch-btn'+(k===draftColor?' selected':'')+'" data-color="'+k+'" style="background:var(--sw-'+k+')" aria-label="'+k+'"></button>';
-    }).join("");
-    swHost.querySelectorAll(".swatch-btn").forEach(function(b){
-      b.addEventListener("click", function(){
-        draftColor = b.getAttribute("data-color");
-        renderSwatches();
-        syncHexUI();
-      });
-    });
-  }
-  renderSwatches();
-  syncHexUI();
-  hexInput.addEventListener("input", function(){
-    var v = hexInput.value.trim();
-    if (v && v.charAt(0) !== "#") v = "#" + v;
-    if (isHexColor(v)){
-      draftColor = v.toLowerCase();
-      renderSwatches();
-      hexPreview.style.background = draftColor;
-    } else {
-      hexPreview.style.background = "transparent";
-    }
+  var colorBtn = document.getElementById("rmColorBtn"), colorCode = document.getElementById("rmColorCode");
+  function syncColor(){ colorBtn.style.background = swatchVar(draftColor); colorCode.textContent = cpToHex(draftColor).toUpperCase(); }
+  syncColor();
+  colorBtn.addEventListener("click", function(){
+    openColorPicker(colorBtn, draftColor, function(hex){ draftColor = hex; syncColor(); });
   });
 
   var thHost = document.getElementById("rmTherapists");
