@@ -2958,7 +2958,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
       (r0.therapists || []).forEach(function(t0){
         if (!t0.professionalId) return;
         var b0 = effectiveBooking(bookings, row.time+"|"+r0.id+"|"+t0.id, dayObj.key, row.time);
-        if (b0 && b0.patient && !bookingKind(b0)) (profWhere[t0.professionalId] = profWhere[t0.professionalId] || []).push({id: r0.id, name: r0.name, grp: isGroup(r0)});
+        if (b0 && b0.patient && !bookingKind(b0)) (profWhere[t0.professionalId] = profWhere[t0.professionalId] || []).push({id: r0.id, name: r0.name, grp: isGroup(r0), target: isGroup(r0) ? normText(b0.patient) : ""});
       });
     });
     rooms.forEach(function(r){
@@ -2992,7 +2992,12 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         var abaHolder = abaAny || abaOwn;
         var abaLock = !(b && b.patient) && !!abaHolder && !abaExcept;
         // atendimento do mesmo profissional em OUTRA sala ou grupo neste horário
-        var busyAt = t.professionalId ? (profWhere[t.professionalId] || []).filter(function(x){ return x.id !== r.id; })[0] : null;
+        // (grupo do profissional apontando para esta sala não bloqueia; e a coluna dele no
+        // grupo fica livre quando ele está numa sala só — o grupo pode apontar para ela)
+        var pw = t.professionalId ? (profWhere[t.professionalId] || []).filter(function(x){ return x.id !== r.id; }) : [];
+        if (!isGroup(r)) pw = pw.filter(function(x){ return !(x.grp && x.target === normText(r.name)); });
+        else { var physical = pw.filter(function(x){ return !x.grp; }); if (physical.length && physical.length === pw.length && physical.every(function(x){ return x.id === physical[0].id; })) pw = []; }
+        var busyAt = pw[0] || null;
         var busyLock = !(b && b.patient) && !!busyAt;
         var isOff = abaLock || busyLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
         var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time, roomIsABA(r) ? professionalName(t.professionalId) : "")
@@ -3533,7 +3538,11 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
           : "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + ".";
         if (isNaoABABooking(b)) return abaRoomMsg(b.patient, room.name, time, roomIsABA(room) ? professionalName(profId) : "");
       }
-      if (profId && t.professionalId === profId && r.id !== room.id) return profBusyMsg(professionalName(profId), time, r.name);
+      // Exceção (2026-10-02): o grupo de suporte do profissional que aponta para a MESMA
+      // sala onde ele está atendendo não conta como "dois lugares".
+      var sameRoomViaGroup = (isGroup(room) && !isGroup(r) && normText(rec.patient) === normText(r.name)) ||
+                             (isGroup(r) && !isGroup(room) && normText(b.patient) === normText(room.name));
+      if (profId && t.professionalId === profId && r.id !== room.id && !sameRoomViaGroup) return profBusyMsg(professionalName(profId), time, r.name);
       // Mesmo paciente com o MESMO profissional no mesmo horário: nunca (nem com outro serviço).
       if (patientRule && !isGroup(r) && profId && t.professionalId === profId && normText(b.patient) === normText(rec.patient)){
         return rec.patient + " já está com " + professionalName(profId) + " às " + time + " em " + r.name + ". O mesmo paciente não pode ter dois atendimentos com o mesmo profissional no mesmo horário, nem com outro serviço.";

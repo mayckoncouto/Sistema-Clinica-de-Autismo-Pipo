@@ -22,7 +22,8 @@ const path = require('path');
 
   const off = (doc, ther) => page.locator(`td.slotcell.slot-off[data-doc="${doc}"][data-ther="${ther}"]`).count();
   console.log('Monday afternoon of Ana (7 slots) is gray/inactive in her Sala Teste column?', (await off('seg-1', 'r1-t1')) === 7);
-  console.log('…and in her Coordenador column too (same professional)?', (await off('seg-1', 'coord-t1')) === 7);
+  // (no Coordenador a tarde tem 7 horários, um deles já agendado às 16:10 = continua visível)
+  console.log('…and in her Coordenador column too (same professional)?', (await page.locator('td.slotcell.slot-off[data-doc="seg-1"][data-ther="coord-t1"]:not([data-time^="07"]):not([data-time^="08"]):not([data-time^="09"]):not([data-time^="10"]):not([data-time^="11"])').count()) === 6);
   console.log('Bia (no hours set) keeps every slot active?', (await off('seg-1', 'r1-t2')) === 0);
 
   await page.locator('td.slotcell[data-doc="seg-1"][data-key="13:30|r1|r1-t1"]').click();

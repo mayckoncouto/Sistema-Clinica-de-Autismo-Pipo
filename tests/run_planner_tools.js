@@ -81,6 +81,28 @@ const path = require('path');
     !(await page.evaluate(() => window.__STORE__['schedule/seg-1'].bookings['07:20|r1|r1-t9'])));
   await page.click('#bkCancel').catch(() => {});
 
+  // ---- Grupo do próprio profissional apontando para a sala onde ele atende (caso "Lara") ----
+  // Ana atende Paciente Um na Sala Teste às 07:20 e é a profissional da coluna do grupo Coordenador.
+  const book = async (key, name) => {
+    const td = page.locator('table.sched[data-doc="seg-1"] td.slotcell[data-key="' + key + '"]');
+    if (await td.evaluate((el) => el.classList.contains('slot-off'))) return 'LOCKED';
+    await td.locator('.book-main').click();
+    await page.waitForSelector('#ovBook');
+    await page.fill('#bkPatient', name);
+    await page.click('#bkSave');
+    await page.waitForTimeout(250);
+    const open = await page.locator('#ovBook').count();
+    if (open) await page.click('#bkCancel');
+    return open ? 'REFUSED' : 'ok';
+  };
+  console.log('own group column is free while she attends in a single room?', !(await page.locator('table.sched[data-doc="seg-1"] td.slotcell[data-key="07:20|coord|coord-t1"]').evaluate((el) => el.classList.contains('slot-off'))));
+  console.log('group pointing to the SAME room where she attends is accepted?', (await book('07:20|coord|coord-t1', 'Sala Teste')) === 'ok');
+  await book('10:00|r1|r1-t1', 'Carla Laranja');
+  console.log('group pointing to ANOTHER room (while she attends in Sala Teste) is still refused?', (await book('10:00|coord|coord-t1', 'Sala Azul')) !== 'ok');
+  // ao contrário: grupo já aponta para a Sala Teste às 09:20 → paciente na coluna dela na Sala Teste é aceito
+  await book('09:20|coord|coord-t1', 'Sala Teste');
+  console.log('patient in her room column while her group points to that room is accepted?', (await book('09:20|r1|r1-t1', 'Bruno Verde')) === 'ok');
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });

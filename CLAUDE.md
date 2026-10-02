@@ -478,6 +478,11 @@ Bloqueado / Reunião Clínica / Treinamento não entram nas regras.
    (serviço diferente pode).
 3. (Planner, 2026-10-02) Paciente não pode ter dois atendimentos com o MESMO
    profissional no mesmo horário, nem com serviço diferente (`plannerConflict`).
+- Exceção da regra 1 (Planner, 2026-10-02, decidida com o usuário): o agendamento
+  de GRUPO do profissional que aponta para a MESMA sala onde ele está atendendo não
+  conta como "dois lugares" (`sameRoomViaGroup` em `plannerConflict`; na grade,
+  `profWhere[].target` e a coluna do grupo fica livre quando ele está numa sala só).
+  Regra 2 mantida como está (decisão do usuário).
 - Planner: `plannerConflict(docId, key, rec, ignoreKeys, extra)` — na janela,
   ao colar e ao mover/arrastar (na troca confere os dois lados).
 - Agenda: `agdConflictIn(rows, rec)` (síncrono) e `agdConflictsFor(recs,
