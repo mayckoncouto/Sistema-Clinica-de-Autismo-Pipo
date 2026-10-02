@@ -849,3 +849,7 @@ abertos; sem horário salvo abre com o da clínica). `patientSlotOk(p, dayKey, t
 `patientHoursOutside(changesByDoc)` e, se algum paciente novo naquela célula fica
 fora do horário dele, pede confirmação dupla ("Continuar" → "Agendar assim
 mesmo") antes de gravar; desfazer/refazer não perguntam (`opts.patientHoursOk`).
+
+## Filtro de salas do Planner mantém os grupos (2026-10-02)
+`visibleRooms()`: com `state.activeRoomFilter`, mostra a sala escolhida E todos os
+Grupos de Suporte (`isGroup(r) || r.id === filtro`).
