@@ -896,3 +896,8 @@ Na janela, abaixo do resumo por especialidade: tabela com o pacote do paciente
 (`patientSpecRows`) × agendamentos no Planner nas 4 semanas (= 1 mês).
 Especialidade conta os de serviço Sessão com profissional dessa especialidade;
 serviço (`svc:`) conta pelo serviço. Diferença em vermelho (falta) / âmbar (sobra).
+- Botão "Pacientes com pacote diferente do Planner": lista todos os pacientes
+  cuja comparação (`pkCompare`) não bate, ordenados por sessões faltando; clicar
+  abre o paciente na janela.
+- "Copiar a semana do paciente para outra semana" (precisa de incluir): mesmas
+  células na semana de destino; ocupadas ou com `plannerConflict` ficam de fora.

@@ -392,6 +392,9 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 #profHours td.ph-total-label{text-align:right;white-space:normal}
 .cl-cards{display:flex;flex-direction:column;gap:12px;margin:2px 0 4px}
 .fx-report{margin:4px 0 12px}
+.fx-top-row{margin:-4px 0 10px}
+.fx-item span.fx-neg{color:var(--danger);font-weight:700}
+.fx-item span.fx-pos{color:#b7791f;font-weight:700}
 .fx-table{width:100%;border-collapse:collapse;font-size:13px}
 .fx-table th,.fx-table td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:center}
 .fx-table th:first-child,.fx-table td:first-child{text-align:left}
@@ -7566,6 +7569,8 @@ function openFixPatientModal(back){
       '<div class="modal-body">' +
         '<div class="field"><label for="fxPat">Paciente</label><select id="fxPat"><option value="">Selecione um paciente…</option>' +
           pats.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div>' +
+        '<div class="fx-top-row"><button type="button" class="btn ghost" id="fxAllBtn">Pacientes com pacote diferente do Planner</button></div>' +
+        '<div class="prof-section" id="fxAllBox" hidden><div class="prof-section-head"><span class="prof-access-title">Pacientes com pacote diferente do Planner</span><span class="pat-count">Clique para abrir o paciente</span></div><div id="fxAll" class="fx-list"></div></div>' +
         '<div id="fxReport" class="fx-report"><div class="pat-count">Escolha um paciente para ver os agendamentos.</div></div>' +
         '<div class="prof-section" id="fxDelBox" hidden><div class="prof-section-head"><span class="prof-access-title">Apagar agendamentos do paciente</span></div>' +
           '<div class="fx-del-row">' +
@@ -7579,6 +7584,11 @@ function openFixPatientModal(back){
             pats.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select>' +
           '<button type="button" class="btn" id="fxSwap" disabled>Trocar</button></div>' +
           '<div class="pat-count" style="margin-top:6px">Útil para corrigir agendamentos feitos no paciente errado. Mantém sala, profissional, serviço e observação; os que dariam conflito ficam como estão.</div></div>' +
+        '<div class="prof-section" id="fxCopyBox" hidden><div class="prof-section-head"><span class="prof-access-title">Copiar a semana do paciente para outra semana</span></div>' +
+          '<div class="fx-del-row">De <select id="fxCopyFrom" style="width:140px">' + weeks.map(function(w){ return '<option value="' + w + '">' + WEEK_LABEL[w] + '</option>'; }).join("") + '</select>' +
+          ' para <select id="fxCopyTo" style="width:140px">' + weeks.map(function(w){ return '<option value="' + w + '"' + (w === 2 ? ' selected' : '') + '>' + WEEK_LABEL[w] + '</option>'; }).join("") + '</select>' +
+          '<button type="button" class="btn" id="fxCopy">Copiar</button></div>' +
+          '<div class="pat-count" style="margin-top:6px">Copia os agendamentos do paciente (mesmo dia, horário, sala e coluna). Horários já ocupados ou com conflito na semana de destino ficam como estão.</div></div>' +
         '<div class="prof-section" id="fxListBox" hidden><div class="prof-section-head"><span class="prof-access-title">Agendamentos</span><span class="pat-count">Clique para ir até o horário no Planner</span></div><div id="fxList" class="fx-list"></div></div>' +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="fxCancel">Fechar</button></div>' +
@@ -7627,6 +7637,17 @@ function openFixPatientModal(back){
     });
     return out;
   }
+  // Pacote do paciente × agendamentos no Planner (4 semanas = 1 mês).
+  function pkCompare(p, list){
+    var pk = patientSpecRows(p).map(function(r){ return {id: r.specId, hours: Number(String(r.hours).replace(",", ".")) || 0}; }).filter(function(r){ return r.hours > 0; });
+    var planned = {};
+    list.forEach(function(x){
+      var svc = (x.rec && x.rec.service) || DEFAULT_SERVICE_ID;
+      var key = svc !== DEFAULT_SERVICE_ID ? SVC_PREFIX + svc : (x.specId || "");
+      planned[key] = (planned[key] || 0) + 1;
+    });
+    return pk.map(function(r){ var got = planned[r.id] || 0; return {id: r.id, name: specialtyName(r.id), hours: r.hours, got: got, diff: got - r.hours}; });
+  }
   function selected(){ var id = document.getElementById("fxPat").value; return state.patients.filter(function(p){ return p.id === id; })[0] || null; }
   function inScope(list){
     var sc = document.getElementById("fxScope").value, w = +document.getElementById("fxWeek").value, d = document.getElementById("fxDay").value;
@@ -7643,20 +7664,14 @@ function openFixPatientModal(back){
     // Pacote do paciente (cadastro: especialidades/serviços e sessões por mês) × o que
     // está no Planner nas 4 semanas (= 1 mês). Especialidade: agendamentos com
     // profissional dessa especialidade e serviço Sessão; serviço: pelo serviço.
-    var pk = patientSpecRows(p).map(function(r){ return {id: r.specId, hours: Number(String(r.hours).replace(",", ".")) || 0}; }).filter(function(r){ return r.hours > 0; });
+    var pk = pkCompare(p, list);
     var pkHtml = "";
     if (pk.length){
-      var planned = {};
-      list.forEach(function(x){
-        var svc = (x.rec && x.rec.service) || DEFAULT_SERVICE_ID;
-        var key = svc !== DEFAULT_SERVICE_ID ? SVC_PREFIX + svc : (x.specId || "");
-        planned[key] = (planned[key] || 0) + 1;
-      });
       pkHtml = '<div class="prof-section-head" style="margin-top:12px"><span class="prof-access-title">Pacote contratado × planejado no Planner (mês)</span></div>' +
         '<table class="fx-table"><thead><tr><th>Especialidade / serviço</th><th>Contratado</th><th>No Planner</th><th>Diferença</th></tr></thead><tbody>' +
         pk.map(function(r){
-          var got = planned[r.id] || 0, diff = got - r.hours;
-          return '<tr><td>' + esc(specialtyName(r.id)) + '</td><td>' + r.hours + '</td><td>' + got + '</td><td class="' + (diff < 0 ? "fx-neg" : diff > 0 ? "fx-pos" : "fx-ok") + '">' + (diff === 0 ? "ok" : (diff > 0 ? "+" : "") + diff) + '</td></tr>';
+          var got = r.got, diff = r.diff;
+          return '<tr><td>' + esc(r.name) + '</td><td>' + r.hours + '</td><td>' + got + '</td><td class="' + (diff < 0 ? "fx-neg" : diff > 0 ? "fx-pos" : "fx-ok") + '">' + (diff === 0 ? "ok" : (diff > 0 ? "+" : "") + diff) + '</td></tr>';
         }).join("") + '</tbody></table>';
     }
     reportEl.innerHTML = list.length
@@ -7667,6 +7682,7 @@ function openFixPatientModal(back){
     reportEl.innerHTML += pkHtml;
     box.hidden = !list.length || !can("agenda", "delete");
     document.getElementById("fxSwapBox").hidden = !list.length || !can("agenda", "edit");
+    document.getElementById("fxCopyBox").hidden = !list.length || !can("agenda", "create");
     var lb = document.getElementById("fxListBox"); lb.hidden = !list.length;
     var dayIdx = {}; DAYS.forEach(function(d, i){ dayIdx[d.key] = i; });
     document.getElementById("fxList").innerHTML = list.slice().sort(function(a, b){ return a.week - b.week || dayIdx[a.dayKey] - dayIdx[b.dayKey] || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0); })
@@ -7695,6 +7711,55 @@ function openFixPatientModal(back){
     var db1 = document.querySelector('#daySeg button[data-day="' + it.getAttribute("data-d") + '"]'); if (db1) db1.click();
     var wb = document.querySelector('#weekSeg button[data-week="' + it.getAttribute("data-w") + '"]'); if (wb) wb.click();
     var s = document.getElementById("patientSearch"); if (s && p){ s.value = p.nome; s.dispatchEvent(new Event("input", {bubbles: true})); }
+  });
+  // Visão geral: todos os pacientes com pacote diferente do que está no Planner.
+  document.getElementById("fxAllBtn").addEventListener("click", function(){
+    var box = document.getElementById("fxAllBox");
+    if (!box.hidden){ box.hidden = true; return; }
+    if (!docs){ showToast("Aguarde: o Planner ainda está carregando."); return; }
+    var rows = [];
+    pats.forEach(function(p){
+      var cmp = pkCompare(p, patientBookings(p)).filter(function(r){ return r.diff !== 0; });
+      if (cmp.length) rows.push({p: p, cmp: cmp, miss: cmp.reduce(function(a, r){ return a + (r.diff < 0 ? -r.diff : 0); }, 0)});
+    });
+    rows.sort(function(a, b){ return b.miss - a.miss || String(a.p.nome).localeCompare(String(b.p.nome), "pt-BR"); });
+    document.getElementById("fxAll").innerHTML = rows.length ? rows.map(function(x){
+      return '<button type="button" class="fx-item" data-pid="' + esc(x.p.id) + '"><b>' + esc(x.p.nome) + '</b> — ' +
+        x.cmp.map(function(r){ return '<span class="' + (r.diff < 0 ? "fx-neg" : "fx-pos") + '">' + esc(specialtySigla(r.id)) + " " + (r.diff > 0 ? "+" : "") + r.diff + '</span>'; }).join(" · ") + '</button>';
+    }).join("") : '<div class="pat-count" style="padding:10px 12px">Todos os pacientes com pacote cadastrado estão iguais ao Planner.</div>';
+    box.hidden = false;
+  });
+  document.getElementById("fxAll").addEventListener("click", function(e){
+    var it = e.target.closest(".fx-item"); if (!it) return;
+    document.getElementById("fxPat").value = it.getAttribute("data-pid");
+    document.getElementById("fxAllBox").hidden = true;
+    refresh();
+  });
+  // Copiar a semana do paciente para outra semana (mesmas células).
+  document.getElementById("fxCopy").addEventListener("click", function(){
+    var p = selected(); if (!p) return;
+    var from = +document.getElementById("fxCopyFrom").value, to = +document.getElementById("fxCopyTo").value;
+    if (from === to){ showToast("Escolha semanas diferentes.", true); return; }
+    var src = patientBookings(p).filter(function(x){ return x.week === from; });
+    if (!src.length){ showToast(p.nome + " não tem agendamentos na " + WEEK_LABEL[from] + ".", true); return; }
+    var changes = {}, ok = 0, busy = 0;
+    src.forEach(function(x){
+      var tDoc = x.dayKey + "-" + to, cur = effectiveBooking(docs[tDoc] || {}, x.key, x.dayKey, x.time);
+      var rec = Object.assign({}, x.rec);
+      if ((cur && cur.patient) || plannerConflict(tDoc, x.key, rec)){ busy++; return; }
+      (changes[tDoc] = changes[tDoc] || {})[x.key] = rec; ok++;
+    });
+    if (!ok){ showToast("Nada copiado: os horários na " + WEEK_LABEL[to] + " já estão ocupados ou dariam conflito.", true); return; }
+    confirmDialog({title: "Copiar semana do paciente", message: "Copiar <b>" + ok + (ok === 1 ? " agendamento" : " agendamentos") + "</b> de " + esc(p.nome) + " da " + WEEK_LABEL[from] + " para a " + WEEK_LABEL[to] + "?" + (busy ? "<br>" + busy + (busy === 1 ? " fica de fora" : " ficam de fora") + " (horário ocupado ou com conflito)." : ""), confirmLabel: "Copiar"})
+      .then(function(go){
+        if (!go) return;
+        applyBookingChanges(changes).then(function(res){
+          if (res === false) return;
+          Object.keys(changes).forEach(function(d){ Object.keys(changes[d]).forEach(function(k){ (docs[d] = docs[d] || {})[k] = changes[d][k]; }); });
+          renderGrid(); refresh();
+          showToast(ok + (ok === 1 ? " agendamento copiado" : " agendamentos copiados") + " para a " + WEEK_LABEL[to] + (busy ? " (" + busy + " ficaram de fora)" : "") + ".");
+        });
+      });
   });
   document.getElementById("fxNew").addEventListener("change", function(){ document.getElementById("fxSwap").disabled = !document.getElementById("fxNew").value; });
   document.getElementById("fxSwap").addEventListener("click", function(){
