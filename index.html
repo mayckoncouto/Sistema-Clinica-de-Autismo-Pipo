@@ -6944,10 +6944,29 @@ function agdOpenModal(opts){
 function agdConflictIn(rows, rec){
   if (!rec || !rec.patient || bookingKind(rec)) return null;
   var isPatient = !!findPatientByName(rec.patient);
+  // Paciente "não ABA" (mesma regra do Planner): em sala SEM "ABA" no nome ocupa a sala
+  // toda; em sala COM "ABA" no nome, o horário do profissional. Exceção: um grupo de
+  // suporte agendado para a sala libera outro "não ABA" do MESMO profissional.
+  var recRoom = rec.room_id ? findRoom(rec.room_id) : null;
+  var recNao = !!recRoom && !isGroup(recRoom) && !agdIsGroupRow(rec) && isNaoABABooking(rec);
+  var grpOk = !!recRoom && rows.some(function(g){ return g && g !== rec && g.date === rec.date && g.time === rec.time && g.room_id === rec.room_id && agdIsGroupRow(g); });
   for (var i=0;i<rows.length;i++){
     var o = rows[i];
     if (!o || o === rec || !o.patient || bookingKind(o) || o.date !== rec.date || o.time !== rec.time) continue;
     var oRoom = o.room_id ? findRoom(o.room_id) : null;
+    if (recRoom && !isGroup(recRoom) && o.room_id === rec.room_id && !agdIsGroupRow(o) && !agdIsGroupRow(rec)){
+      var same = !!rec.professional_id && o.professional_id === rec.professional_id;
+      if (same || !roomIsABA(recRoom)){
+        var oNao = isNaoABABooking(o);
+        if (!(recNao && oNao && same && grpOk)){
+          var pn = roomIsABA(recRoom) ? professionalName(rec.professional_id) : "";
+          if (recNao) return roomIsABA(recRoom)
+            ? "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + pn + " já tem " + o.patient + " às " + rec.time + " em " + recRoom.name + "."
+            : "Paciente que não faz intervenção ABA ocupa a sala toda: " + recRoom.name + " já tem " + o.patient + " às " + rec.time + ".";
+          if (oNao) return abaRoomMsg(o.patient, recRoom.name, rec.time, pn);
+        }
+      }
+    }
     if (o.professional_id === rec.professional_id && (o.room_id || "") !== (rec.room_id || "")){
       var p = findProfessional(rec.professional_id);
       return profBusyMsg(p ? p.name : "", rec.time, oRoom ? oRoom.name : (o.patient || ""));

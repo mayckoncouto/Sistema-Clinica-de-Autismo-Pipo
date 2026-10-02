@@ -910,3 +910,11 @@ fora do horário dele (`profSlotOk`). Aplica trocando `professionalId`/`name` da
 colunas em `config/rooms` (`writeRooms`, permissão de editar Salas/Grupos). Com
 conflito, pede confirmação dupla. Não entra no desfazer da grade: voltar = trocar
 ao contrário.
+
+## Agenda: regra do paciente "não ABA" (2026-10-02)
+`agdConflictIn(rows, rec)` agora também aplica a regra do Planner na mesma sala,
+data e horário: sala SEM "ABA" no nome → o "não ABA" ocupa a sala toda; sala COM
+"ABA" → só o horário do mesmo profissional; exceção: atendimento de grupo de
+suporte (`agdIsGroupRow`) na mesma sala libera outro "não ABA" do MESMO
+profissional. Atendimentos de grupo não contam como ocupantes. Vale na janela,
+colar/mover/trocar e no "Enviar para a Agenda" (que já usa `agdConflictsFor`).
