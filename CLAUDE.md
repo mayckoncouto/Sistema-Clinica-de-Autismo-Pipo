@@ -862,6 +862,6 @@ Grupos de Suporte (`isGroup(r) || r.id === filtro`).
   `specialtyName` / `specialtySigla` entendem os dois; serviços vêm depois das
   especialidades na coluna "Especialidades/Serviços (sessão/mês)" da lista.
 - Cadastro de Serviços com "Sigla" (coluna na tabela; vazio = `defaultSigla`).
-  A gravação mantém os campos de "Sessão" (antes era recriada só com id/nome).
+  A gravação mantém os campos de "Sessão" (antes era recriada só com id/nome). Sigla da Sessão: "SS".
 - Relatório "Pacote contratado × realizado": linha de serviço conta os
   Finalizados com aquele `service`.
