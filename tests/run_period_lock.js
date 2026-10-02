@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -72,7 +72,7 @@ const path = require('path');
   console.log('bloquear never blocks the Monday meeting slot (11:20 keeps the virtual "Reunião Clínica")?',
     !storeAfterLock.bookings['11:20|r1|r1-t1']);
   console.log('Ana\'s OTHER seat (coord-t1, same professional but a different column) is untouched — scoping is per seat, not per professional?',
-    storeAfterLock.bookings['08:00|coord|coord-t1'] && storeAfterLock.bookings['08:00|coord|coord-t1'].patient === 'Fonoaudiologia ABA' && !storeAfterLock.bookings['08:00|coord|coord-t1'].blocked);
+    storeAfterLock.bookings['16:10|coord|coord-t1'] && storeAfterLock.bookings['16:10|coord|coord-t1'].patient === 'Fonoaudiologia ABA' && !storeAfterLock.bookings['16:10|coord|coord-t1'].blocked);
   console.log('afternoon slots were NOT touched by the morning action (13:30 r1-t1 still absent)?',
     !storeAfterLock.bookings['13:30|r1|r1-t1']);
   const cellAfterLock = await anaCell.innerText();

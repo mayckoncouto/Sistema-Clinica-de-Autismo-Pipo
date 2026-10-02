@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -37,10 +37,12 @@ const path = require('path');
   await cell1.locator('.book-main').click();
   await page.waitForSelector('#ovBook');
   console.log('modal title says "Editar" (looks already booked)?', (await page.locator('.modal-head h3').innerText()) === 'Editar atendimento');
-  console.log('patient field pre-filled with "Reunião Clínica"?', (await page.locator('#bkPatient').inputValue()) === 'Reunião Clínica');
+  console.log('opens with the "Reunião Clínica" kind ticked?', await page.locator('#ovBook .kind-pick input[value="reuniao"]').isChecked());
   console.log('"Desmarcar" button is present?', (await page.locator('#bkClear').count()) === 1);
 
   // Overriding it with a real patient at that seat should work like any other slot.
+  // Desde 2026-10-01 a reunião é um tipo especial marcado: desmarcar libera o campo do paciente.
+  await page.uncheck('#ovBook .kind-pick input[value="reuniao"]');
   await page.fill('#bkPatient', 'Paciente Um');
   await page.waitForSelector('#bkSuggest button', { timeout: 3000 });
   await page.locator('#bkSuggest button', { hasText: 'Paciente Um' }).first().click();

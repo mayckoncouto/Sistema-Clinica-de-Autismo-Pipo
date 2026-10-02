@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('console', msg => console.log('[console]', msg.type(), msg.text()));
   page.on('pageerror', err => console.log('[pageerror]', err.message));
@@ -25,7 +25,7 @@ const path = require('path');
   await filledTd.locator('.book-copy').click({ force: true });
 
   await page.waitForSelector('.clipboard-bar.on');
-  console.log('=== clipboard bar text ===', await page.locator('.clipboard-bar').innerText());
+  console.log('=== clipboard bar text ===', await page.locator('#clipboardBar').innerText());
 
   // click destination empty cell 07:20|r1|r1-t2
   const destTd = await page.locator('td.slotcell[data-key="07:20|r1|r1-t2"]');

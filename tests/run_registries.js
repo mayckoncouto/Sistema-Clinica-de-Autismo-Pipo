@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -15,21 +15,21 @@ const path = require('path');
   }, { timeout: 5000 });
 
   // ---- TEST: label renames ----
-  await page.click('button[data-tab="pacientes"]');
+  await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(100);
   // thead cells are CSS text-transform:uppercase, so read raw HTML rather than the
   // rendered innerText (which comes back uppercased) to check the literal label text.
-  const tableHeaderHtml = await page.locator('.pat-table thead').innerHTML();
-  console.log('table header uses "Especialidades (sessão/mês)"?', tableHeaderHtml.includes('Especialidades (sessão/mês)'));
+  const tableHeaderHtml = await page.locator('#patListHost .pat-table thead').innerHTML();
+  console.log('table header uses "Especialidades/Serviços (sessão/mês)"?', tableHeaderHtml.includes('Especialidades/Serviços (sessão/mês)'));
   console.log('table header no longer says "(h/mês)"?', !tableHeaderHtml.includes('(h/mês)'));
 
   // Open an existing patient (Paciente Um, legacy convenio:"Unimed" string, matches catalog "unimed")
-  const rowPU = page.locator('.pat-table tbody tr', { hasText: 'Paciente Um' });
+  const rowPU = page.locator('#patListHost .pat-table tbody tr', { hasText: 'Paciente Um' });
   await rowPU.click();
   await page.waitForSelector('#ovPat');
   console.log('label "Pacote (sessão/mês)"?', (await page.locator('label[for="pPac"]').innerText()) === 'Pacote (sessão/mês)');
   console.log('label "ABA" (not "Faz ABA?")?', (await page.locator('label[for="pAba"]').innerText()) === 'ABA');
-  console.log('label "Especialidades e sessão (mês)"?', (await page.locator('.modal-body > .field label').nth(1).innerHTML()).includes('Especialidades e sessão (mês)'));
+  console.log('label "Especialidades/serviços e sessão (mês)"?', (await page.locator('#ovPat .field', { has: page.locator('#specRowsHost') }).locator('label').first().innerText()).includes('Especialidades/serviços e sessão (mês)'));
 
   // ---- TEST: legacy convenio text resolved against catalog (Unimed matches) ----
   const convVal = await page.locator('#pConv').inputValue();
@@ -38,7 +38,7 @@ const path = require('path');
   await page.waitForTimeout(100);
 
   // Open a patient whose legacy convenio text has NO catalog match ("Convênio Antigo")
-  const rowAna = page.locator('.pat-table tbody tr', { hasText: 'Ana Azul' });
+  const rowAna = page.locator('#patListHost .pat-table tbody tr', { hasText: 'Ana Azul' });
   await rowAna.click();
   await page.waitForSelector('#ovPat');
   const convValAna = await page.locator('#pConv').inputValue();
@@ -109,22 +109,20 @@ const path = require('path');
   // ---- TEST: patients list shows resolved convênio name + "x/mês" units ----
   const listHtml = await page.locator('#patListHost').innerText();
   console.log('patients list shows resolved "Amil Saúde" for Ana Azul?', listHtml.includes('Amil Saúde'));
-  console.log('patients list uses "x/mês" unit (not "h")?', listHtml.includes('x/mês'));
+  console.log('patients list never uses the old "h/mês" unit?', !listHtml.includes('h/mês'));
 
-  // ---- TEST: dedicated Convênios registry modal (rename/add/remove) ----
-  await page.click('#manageConveniosBtn');
-  // (Convênios continua na tela de Pacientes; Serviços e Especialidades ficam em Profissionais.)
-  await page.waitForSelector('#ovConv');
-  const convRowValues = await page.locator('#convRows .therapist-row input').evaluateAll(els => els.map(el => el.value));
-  console.log('Convênios registry modal lists Unimed and Bradesco Saúde?', convRowValues.includes('Unimed') && convRowValues.includes('Bradesco Saúde'));
-  await page.click('#convAdd');
-  await page.waitForTimeout(50);
-  const convRowInputs = page.locator('#convRows .therapist-row input');
-  await convRowInputs.last().fill('SulAmérica');
-  await page.click('#convSave');
+  // ---- TEST: Convênios (Cadastros → Convênios, desde 2026-10-02) ----
+  await page.$eval('#mainTabs button[data-tab="convenios"]', (b) => b.click());
+  await page.waitForSelector('#reg-convenios-host tbody tr');
+  const convNames = await page.locator('#reg-convenios-host tbody tr').evaluateAll(trs => trs.map(tr => tr.children[0].innerText.trim()));
+  console.log('Convênios screen lists Unimed and Bradesco Saúde?', convNames.includes('Unimed') && convNames.includes('Bradesco Saúde'));
+  await page.click('#reg-convenios-add');
+  await page.waitForSelector('#regName');
+  await page.fill('#regName', 'SulAmérica');
+  await page.click('#regSave');
   await page.waitForTimeout(150);
   const conveniosAfterRegistry = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['config/convenios'])));
-  console.log('SulAmérica added via Convênios registry modal?', !!conveniosAfterRegistry.list.find(c => c.name === 'SulAmérica'));
+  console.log('SulAmérica added via Convênios screen?', !!conveniosAfterRegistry.list.find(c => c.name === 'SulAmérica'));
 
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });

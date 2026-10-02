@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -42,13 +42,13 @@ const path = require('path');
   console.log('Eva Sem Idade bg:', await bg('10:40|r1|r1-t1'), '(expect empty/none)');
 
   // ---- TEST: unified search finds a ROOM too, and booking with a room name works ----
-  const td2 = page.locator('td.slotcell[data-key="13:30|r1|r1-t2"]');
+  const td2 = page.locator('td.slotcell[data-key="13:30|coord|coord-t1"]');
   await td2.locator('.book-main').click();
   await page.waitForSelector('#ovBook');
   await page.fill('#bkPatient', 'Sala Azul');
   await page.waitForSelector('.autolist button', { timeout: 3000 });
   const suggestHtml = await page.locator('#bkSuggest').innerHTML();
-  console.log('room suggestion shows "Sala" tag?', suggestHtml.includes('>Sala<'));
+  console.log('room suggestion offered in the group column?', suggestHtml.includes('Sala Azul'));
   await page.locator('#bkSuggest button', { hasText: 'Sala Azul' }).first().click();
   await page.click('#bkSave');
   await page.waitForTimeout(150);
@@ -56,30 +56,31 @@ const path = require('path');
   console.log('booked with room name "Sala Azul"?', roomBookingText.includes('Sala Azul'));
 
   // ---- TEST: room editor hex color input ----
-  await page.click('button[data-tab="salas"]');
+  await page.$eval('#mainTabs button[data-tab="salas"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(100);
   await page.locator('[data-edit="r1"]').click();
   await page.waitForSelector('#ovRoom');
-  await page.fill('#rmHexInput', '#ff00aa');
-  const previewBg = await page.locator('#rmHexPreview').evaluate(el => el.style.background);
-  console.log('hex preview updates live?', previewBg.replace(/\s/g,'').toLowerCase().includes('255,0,170') || previewBg.toLowerCase().includes('#ff00aa'));
-  const anySwatchSelected = await page.locator('.swatch-btn.selected').count();
-  console.log('typing hex deselects swatch buttons?', anySwatchSelected === 0);
+  // Cor da sala pelo seletor de cor único (#cpPop), desde 2026-10-02.
+  await page.click('#rmColorBtn');
+  await page.waitForSelector('#cpPop .cp-dot');
+  await page.click('#cpPop .cp-dot[data-hex="#0a8ef0"]');
+  await page.waitForTimeout(60);
+  console.log('color code updates live?', (await page.innerText('#rmColorCode')).trim().toLowerCase() === '#0a8ef0');
   await page.click('#rmSave');
   await page.waitForTimeout(150);
   console.log('=== room store after hex save ===', await page.evaluate(() => JSON.stringify(window.__STORE__['config/rooms'])));
 
   // ---- TEST: patient modal — birth date auto-computes idade, ABA select, per-patient specialties ----
-  await page.click('button[data-tab="pacientes"]');
+  await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(100);
   await page.click('#addPatientBtn');
   await page.waitForSelector('#ovPat');
   await page.fill('#pNome', 'Novo Paciente Teste');
-  await page.fill('#pNasc', '2020-01-15'); // should compute an age
+  await page.$eval('#pNasc', (el) => { el.value = '2020-01-15'; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }); // campo de data vira calendário próprio
   await page.waitForTimeout(50);
   const idadeCalcVal = await page.locator('#pIdadeCalc').inputValue().catch(() => null);
   console.log('idade auto-calculada a partir do nascimento:', idadeCalcVal);
-  await page.selectOption('#pAba', 'Não');
+  await page.$eval('#pAba', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, 'Não'); // select vira lista própria (dpEnhance)
   // add a specialty row referencing an EXISTING one, and a brand-new one
   await page.click('#specRowAdd');
   await page.waitForTimeout(50);

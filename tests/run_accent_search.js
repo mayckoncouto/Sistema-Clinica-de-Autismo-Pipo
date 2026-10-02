@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const page = await context.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
@@ -51,7 +51,7 @@ const path = require('path');
   await page.waitForTimeout(80);
 
   // ---- TEST: Pacientes tab list search ----
-  await page.click('button[data-tab="pacientes"]');
+  await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(150);
   await page.fill('#patientListSearch', 'jose');
   await page.waitForTimeout(120);
@@ -66,7 +66,7 @@ const path = require('path');
   await page.waitForTimeout(80);
 
   // ---- TEST: Relatório search ----
-  await page.click('button[data-tab="relatorio"]');
+  await page.$eval('#mainTabs button[data-tab="relatorio"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(150);
   await page.fill('#reportSearch', 'avila');
   await page.waitForTimeout(120);
@@ -76,7 +76,7 @@ const path = require('path');
   await page.waitForTimeout(80);
 
   // ---- TEST: booking-modal typeahead (#bkPatient) ----
-  await page.click('button[data-tab="agenda"]');
+  await page.$eval('#mainTabs button[data-tab="agenda"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(150);
   const cell = page.locator('.slotcell[data-key="09:20|r1|r1-t2"]');
   await cell.locator('.book-main').click();

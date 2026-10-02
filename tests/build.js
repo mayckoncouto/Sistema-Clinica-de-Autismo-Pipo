@@ -18,3 +18,11 @@ const test = fs.readFileSync(path.join(__dirname, 'test.html'), 'utf8');
 const out = test.replace('__PAGE_BODY__', () => app);
 fs.writeFileSync(path.join(__dirname, 'page.html'), out);
 console.log('rebuilt tests/page.html (' + out.length + ' bytes)');
+
+// Mesma coisa para o teste de condição de corrida (test_race.html -> page_race.html).
+const raceSrc = path.join(__dirname, 'test_race.html');
+if (fs.existsSync(raceSrc)) {
+  const race = fs.readFileSync(raceSrc, 'utf8').replace('__PAGE_BODY__', () => app);
+  fs.writeFileSync(path.join(__dirname, 'page_race.html'), race);
+  console.log('rebuilt tests/page_race.html (' + race.length + ' bytes)');
+}

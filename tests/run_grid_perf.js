@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -73,7 +73,7 @@ const path = require('path');
 
   // ---- TEST: while a different tab is active, background schedule snapshots don't
   // touch the (hidden) agenda grid DOM at all — switching back re-renders fresh ----
-  await page.click('button[data-tab="pacientes"]');
+  await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(100);
   await page.evaluate(() => { window.__hostInnerHTMLSets = 0; });
   // Simulate a live edit arriving from another user while we're on a different tab.
@@ -97,7 +97,7 @@ const path = require('path');
   const rebuildsWhileHidden = await page.evaluate(() => window.__hostInnerHTMLSets);
   console.log('no grid DOM work happened while Agenda tab was hidden?', rebuildsWhileHidden === 0, '(host.innerHTML sets: ' + rebuildsWhileHidden + ')');
 
-  await page.click('button[data-tab="agenda"]');
+  await page.$eval('#mainTabs button[data-tab="agenda"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(150);
   const cellAfterReturn = page.locator('table.sched[data-doc="seg-2"] td.slotcell[data-key="07:20|r1|r1-t1"]');
   const textAfterReturn = await cellAfterReturn.innerText();
@@ -105,14 +105,16 @@ const path = require('path');
 
   // ---- TEST: interactions still work correctly after several targeted (non-full)
   // rebuilds — delegation on #gridHost survives table replacement ----
-  const anotherCell = page.locator('table.sched[data-doc="seg-1"] td.slotcell[data-key="08:00|coord|coord-t1"]');
+  // Copia o primeiro paciente de uma coluna de SALA (grupo só aceita sala).
+  const anotherCell = page.locator('table.sched[data-doc="seg-1"] td.slotcell[data-room="r1"]', { has: page.locator('.book-copy') }).first();
+  const copiedName = (await anotherCell.locator('.pname').innerText()).trim();
   await anotherCell.locator('.book-copy').click();
   await page.waitForTimeout(80);
   console.log('clipboard bar shows after copy (delegated click still wired post-rebuild)?', (await page.locator('.clipboard-bar.on').count()) === 1);
-  const pasteTarget = page.locator('table.sched[data-doc="seg-1"] td.slotcell[data-key="09:20|r1|r1-t1"]');
+  const pasteTarget = page.locator('table.sched[data-doc="seg-1"] td.slotcell[data-key="09:20|r2|r2-t1"]');
   await pasteTarget.locator('.book-main').click();
   await page.waitForTimeout(120);
-  console.log('paste landed correctly via delegated click?', (await pasteTarget.innerText()).includes('Fonoaudiologia ABA'));
+  console.log('paste landed correctly via delegated click?', (await pasteTarget.innerText()).includes(copiedName));
 
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });

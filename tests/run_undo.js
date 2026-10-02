@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   await page.goto('file://' + path.join(__dirname, 'page.html'));
   await page.waitForSelector('[data-hist="undo"]');
@@ -14,8 +14,8 @@ const path = require('path');
   const undoBtn = page.locator('[data-hist="undo"]').first();
   const redoBtn = page.locator('[data-hist="redo"]').first();
 
-  console.log('undo/redo buttons live in the grid corner (first row, first column)?',
-    (await page.locator('th.corner [data-hist="undo"]').count()) > 0 && (await page.locator('th.corner [data-hist="redo"]').count()) > 0);
+  console.log('undo/redo buttons live in the lock-buttons row (before 07:20)?',
+    (await page.locator('.timecell-hist [data-hist="undo"]').count()) > 0 && (await page.locator('.timecell-hist [data-hist="redo"]').count()) > 0);
   console.log('both start disabled (nothing to undo yet)?', await undoBtn.isDisabled() && await redoBtn.isDisabled());
 
   // agenda um paciente

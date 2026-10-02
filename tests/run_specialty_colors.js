@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -25,63 +25,43 @@ const path = require('path');
     }, cssValue);
   }
 
-  // O botão Especialidades fica na tela de Profissionais (desde 2026-10-01).
-  await page.click('button[data-tab="profissionais"]');
-  await page.waitForTimeout(150);
-  console.log('Especialidades button is no longer on the Pacientes screen?',
-    (await page.locator('#tab-pacientes #manageSpecialtiesBtn').count()) === 0);
-
-  // ---- TEST: opening Especialidades shows a color swatch button per row, default teal ----
-  await page.click('#manageSpecialtiesBtn');
-  await page.waitForSelector('#ovSpec');
-  console.log('one color button per existing specialty (2)?', (await page.locator('.spec-color-btn').count()) === 2);
-  // Mock data order: index 0 = Fonoaudiologia ("fono"), index 1 = Psicologia ("psico").
-  const fonoRow = page.locator('.therapist-row').nth(0);
-  console.log('row 0 is Fonoaudiologia?', (await fonoRow.locator('.spec-name-inp').inputValue()) === 'Fonoaudiologia');
-  const fonoColorBtn = fonoRow.locator('.spec-color-btn');
-  const fonoBtnBg = await fonoColorBtn.evaluate(el => getComputedStyle(el).backgroundColor);
+  // Especialidades: tela própria (Cadastros → Especialidades) e o seletor de cor
+  // único do sistema (#cpPop), desde 2026-10-02.
+  await page.$eval('#mainTabs button[data-tab="especialidades"]', (b) => b.click());
+  await page.waitForSelector('#reg-especialidades-host tbody tr');
+  console.log('one row per existing specialty (2)?', (await page.locator('#reg-especialidades-host tbody tr').count()) === 2);
   const tealRgb = await resolvedColor('var(--sw-teal)');
-  console.log('specialty with no saved color defaults to teal?', fonoBtnBg === tealRgb);
+  const dotBg = await page.locator('#reg-especialidades-host tbody tr', { hasText: 'Fonoaudiologia' }).locator('.pcolor-dot').evaluate(el => getComputedStyle(el).backgroundColor);
+  console.log('specialty with no saved color shows teal?', dotBg === tealRgb);
 
-  // ---- TEST: clicking the color button opens an inline swatch panel ----
-  await fonoColorBtn.click();
+  // ---- TEST: open Fonoaudiologia, pick a color in the color picker, save ----
+  await page.locator('#reg-especialidades-host tbody tr', { hasText: 'Fonoaudiologia' }).click();
+  await page.waitForSelector('#regColor');
+  await page.click('#regColor');
+  await page.waitForSelector('#cpPop .cp-dot');
+  const PICK = '#4a63d8';
+  await page.click('#cpPop .cp-dot[data-hex="' + PICK + '"]');
   await page.waitForTimeout(80);
-  console.log('color panel opens with 10 swatches?', (await page.locator('.spec-color-panel .swatch-btn').count()) === 10);
-
-  // ---- TEST: picking a swatch updates the row's color button + hex preview ----
-  await page.locator('.spec-color-panel .swatch-btn[data-color="rose"]').click();
-  await page.waitForTimeout(60);
-  const roseRgb = await resolvedColor('var(--sw-rose)');
-  const fonoBtnBgAfter = await fonoColorBtn.evaluate(el => getComputedStyle(el).backgroundColor);
-  console.log('picking "rose" updates the color button live?', fonoBtnBgAfter === roseRgb);
-  console.log('the rose swatch shows as selected?', (await page.locator('.spec-color-panel .swatch-btn[data-color="rose"]').getAttribute('class') || '').includes('selected'));
-
-  // ---- TEST: typing a hex code also updates the color ----
-  await page.locator('.spec-color-panel .spec-hex-inp').fill('#123456');
-  await page.waitForTimeout(60);
-  const hexRgb = await resolvedColor('#123456');
-  const fonoBtnBgHex = await fonoColorBtn.evaluate(el => getComputedStyle(el).backgroundColor);
-  console.log('typing a hex code updates the color button?', fonoBtnBgHex === hexRgb);
-
-  // ---- TEST: saving persists the color to config/specialties ----
-  await page.click('#specSave');
-  await page.waitForTimeout(120);
+  const hexRgb = await resolvedColor(PICK);
+  console.log('picking a color updates the button live?', (await page.locator('#regColor').evaluate(el => getComputedStyle(el).backgroundColor)) === hexRgb);
+  console.log('hex code shown next to the button?', (await page.innerText('#regColorCode')).trim().toLowerCase() === PICK);
+  await page.click('#regSave');
+  await page.waitForTimeout(150);
   const specStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['config/specialties'])));
   const fonoSaved = specStore.list.find(s => s.name === 'Fonoaudiologia');
-  console.log('Fonoaudiologia persisted with color "#123456"?', fonoSaved && fonoSaved.color === '#123456');
+  console.log('Fonoaudiologia persisted with the picked color?', fonoSaved && fonoSaved.color === PICK);
   const psicoSaved = specStore.list.find(s => s.name === 'Psicologia');
-  console.log('Psicologia (untouched) persisted with default color "teal"?', psicoSaved && psicoSaved.color === 'teal');
+  console.log('Psicologia (untouched) keeps no/teal color?', psicoSaved && (!psicoSaved.color || psicoSaved.color === 'teal'));
 
-  // ---- TEST: reopening the modal shows the persisted color ----
-  await page.click('#manageSpecialtiesBtn');
-  await page.waitForSelector('#ovSpec');
-  const fonoBtnReopened = await page.locator('.therapist-row').nth(0).locator('.spec-color-btn').evaluate(el => getComputedStyle(el).backgroundColor);
-  console.log('reopening the modal shows the saved color?', fonoBtnReopened === hexRgb);
-  await page.click('#specCancel');
+  // ---- TEST: reopening shows the persisted color ----
+  await page.locator('#reg-especialidades-host tbody tr', { hasText: 'Fonoaudiologia' }).click();
+  await page.waitForSelector('#regColor');
+  console.log('reopening shows the saved color?', (await page.locator('#regColor').evaluate(el => getComputedStyle(el).backgroundColor)) === hexRgb);
+  await page.click('#regCancel');
   await page.waitForTimeout(80);
 
   // ---- TEST: the Relatório specialty header cells use each specialty's own color ----
-  await page.click('button[data-tab="relatorio"]');
+  await page.$eval('#mainTabs button[data-tab="relatorio"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(200);
   const fonoHeaderBg = await page.locator('.rpt-spec-name', { hasText: 'Fonoaudiologia' }).evaluate(el => getComputedStyle(el).backgroundColor);
   console.log('Relatório "Fonoaudiologia" header uses its saved hex color?', fonoHeaderBg === hexRgb);

@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   await page.goto('file://' + path.join(__dirname, 'page.html'));
   await page.waitForSelector('td.slotcell');

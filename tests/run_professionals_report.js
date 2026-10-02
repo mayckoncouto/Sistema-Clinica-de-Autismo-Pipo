@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -21,7 +21,7 @@ const path = require('path');
   console.log('seat headers show "Caio" (legacy fallback, no professionalId)?', seatNames.includes('Caio'));
 
   // ---- TEST: Profissionais tab ----
-  await page.click('button[data-tab="profissionais"]');
+  await page.$eval('#mainTabs button[data-tab="profissionais"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(150);
   console.log('Profissionais tab lists Ana?', (await page.locator('#profList').innerText()).includes('Ana'));
   console.log('Profissionais tab lists Bia?', (await page.locator('#profList').innerText()).includes('Bia'));
@@ -42,7 +42,7 @@ const path = require('path');
   await page.click('#addProfessionalBtn');
   await page.waitForSelector('#ovProf');
   await page.fill('#profName', 'Nova Terapeuta');
-  await page.selectOption('#profSpecialty', 'fono');
+  await page.$eval('#profSpecialty', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, 'fono'); // select vira lista própria (dpEnhance)
   await page.click('#profSave');
   await page.waitForTimeout(150);
   console.log('new professional appears in the list?', (await page.locator('#profList').innerText()).includes('Nova Terapeuta'));
@@ -50,7 +50,7 @@ const path = require('path');
   console.log('new professional persisted with specialtyId "fono"?', profStore.list.filter(p => p.name === 'Nova Terapeuta')[0].specialtyId === 'fono');
 
   // ---- TEST: room modal therapist rows are selects wired to the registry ----
-  await page.click('button[data-tab="salas"]');
+  await page.$eval('#mainTabs button[data-tab="salas"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(150);
   await page.locator('.room-row', { hasText: 'Sala Teste' }).locator('[data-edit]').click();
   await page.waitForSelector('#ovRoom');
@@ -64,7 +64,7 @@ const path = require('path');
 
   // ---- TEST: Relatório tab — four-row header (especialidade / total esp. /
   // profissional / total prof.) + the "Pacientes" mid-row + data rows ----
-  await page.click('button[data-tab="relatorio"]');
+  await page.$eval('#mainTabs button[data-tab="relatorio"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(200);
   const reportText = await page.locator('#reportHost').innerText();
   console.log('report shows "Coordenador" row?', reportText.includes('Coordenador'));

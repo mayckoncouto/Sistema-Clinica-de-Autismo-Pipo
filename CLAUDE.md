@@ -918,3 +918,16 @@ data e horário: sala SEM "ABA" no nome → o "não ABA" ocupa a sala toda; sala
 suporte (`agdIsGroupRow`) na mesma sala libera outro "não ABA" do MESMO
 profissional. Atendimentos de grupo não contam como ocupantes. Vale na janela,
 colar/mover/trocar e no "Enviar para a Agenda" (que já usa `agdConflictsFor`).
+
+## Testes no Windows (2026-10-02)
+Node.js 24 instalado (winget `OpenJS.NodeJS.LTS`). `npm install` com
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` (não baixa navegador): `tests/launch-opts.js`
+escolhe o navegador — `PW_CHROMIUM`, senão o Chrome/Edge instalado, senão o
+Chromium do ambiente Linux antigo. `tests/build.js` gera `page.html` e também
+`page_race.html` (de `test_race.html`). `npm test` = 19 arquivos, 268 checagens.
+Testes atualizados para o sistema atual: abas de cadastro abrem pelos menus
+(`$eval('#mainTabs button[data-tab=…]', b => b.click())`), selects/datas viram
+listas próprias (setar `.value` + `change`), Coordenador é grupo de suporte no mock
+(agendamento dele às 16:10), Especialidades/Convênios pelas telas de cadastro,
+seletor de cor `#cpPop`, desfazer na linha dos cadeados, cor de Treinamento
+#24E2FC, "Reunião Clínica" como tipo marcado.

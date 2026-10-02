@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -90,25 +90,25 @@ const path = require('path');
   console.log('zoom control visible on Agenda tab?', !(await page.locator('#zoomCtrl').isHidden()));
   const zoomBefore = await page.locator('#gridHost').evaluate(el => el.style.zoom);
   console.log('zoom starts at 100%?', zoomBefore === '100%');
-  await page.selectOption('#zoomSelect', '70');
+  await page.$eval('#zoomSelect', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, '70'); // select vira lista própria (dpEnhance)
   await page.waitForTimeout(100);
   console.log('zoom applies 70% to gridHost?', (await page.locator('#gridHost').evaluate(el => el.style.zoom)) === '70%');
   console.log('zoom label shows 70%?', (await page.locator('#zoomLabel').innerText()) === '70%');
 
-  await page.selectOption('#zoomSelect', 'dia');
+  await page.$eval('#zoomSelect', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, 'dia'); // select vira lista própria (dpEnhance)
   await page.waitForTimeout(250);
   const zoomDia = await page.locator('#gridHost').evaluate(el => el.style.zoom);
   console.log('zoom dia computes some percentage (not empty)?', !!zoomDia && zoomDia.endsWith('%'));
 
-  await page.selectOption('#zoomSelect', '100');
+  await page.$eval('#zoomSelect', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, '100'); // select vira lista própria (dpEnhance)
   await page.waitForTimeout(100);
   console.log('zoom back to normal 100%?', (await page.locator('#gridHost').evaluate(el => el.style.zoom)) === '100%');
 
   // zoom control hides on other tabs
-  await page.click('button[data-tab="pacientes"]');
+  await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(100);
   console.log('zoom control hidden on Pacientes tab?', await page.locator('#zoomCtrl').isHidden());
-  await page.click('button[data-tab="agenda"]');
+  await page.$eval('#mainTabs button[data-tab="agenda"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
 
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });

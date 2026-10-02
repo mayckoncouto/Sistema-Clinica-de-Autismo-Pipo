@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
+  const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -19,7 +19,7 @@ const path = require('path');
 
   // ---- TEST: booking a ROOM name into a slot gets that room's own color, filled style ----
   // "Sala Azul" (r2) is registered with hex color #2255aa.
-  const td = page.locator('td.slotcell[data-key="13:30|r1|r1-t1"]');
+  const td = page.locator('td.slotcell[data-key="13:30|coord|coord-t1"]');
   await td.locator('.book-main').click();
   await page.waitForSelector('#ovBook');
   await page.fill('#bkPatient', 'Sala Azul');
@@ -27,8 +27,8 @@ const path = require('path');
   await page.locator('#bkSuggest button', { hasText: 'Sala Azul' }).first().click();
   await page.click('#bkSave');
   await page.waitForTimeout(150);
-  console.log('room-booked slot gets "pcolor" fill class?', (await cls('13:30|r1|r1-t1')).includes('pcolor'));
-  console.log('room-booked slot background uses color-mix of room hex?', (await bg('13:30|r1|r1-t1')).includes('color-mix'));
+  console.log('room-booked slot gets "pcolor" fill class?', (await cls('13:30|coord|coord-t1')).includes('pcolor'));
+  console.log('room-booked slot background uses color-mix of room hex?', (await bg('13:30|coord|coord-t1')).includes('color-mix'));
 
   // ---- TEST: "Bloqueado" checkbox marks the slot dark gray, no patient/room required ----
   const td2 = page.locator('td.slotcell[data-key="14:10|r1|r1-t2"]');
@@ -55,8 +55,8 @@ const path = require('path');
   await page.click('#bkCancel');
   await page.waitForTimeout(100);
 
-  // ---- TEST: Reunião Clínica (amarelo) e Treinamento (azul-claro) ----
-  for (const [key, kind, rgb, label] of [['14:50|r1|r1-t2','reuniao','rgb(245,226,122)','Reunião Clínica'], ['15:30|r1|r1-t2','treinamento','rgb(143,211,244)','Treinamento']]) {
+  // ---- TEST: Reunião Clínica (amarelo) e Treinamento (ciano #24E2FC) ----
+  for (const [key, kind, rgb, label] of [['14:50|r1|r1-t2','reuniao','rgb(245,226,122)','Reunião Clínica'], ['15:30|r1|r1-t2','treinamento','rgb(36,226,252)','Treinamento']]) {
     const td = page.locator('td.slotcell[data-key="'+key+'"]');
     await td.locator('.book-main').click();
     await page.waitForSelector('#ovBook');
