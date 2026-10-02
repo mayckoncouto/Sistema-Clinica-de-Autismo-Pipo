@@ -621,8 +621,8 @@ formato antigo ao abrir; "Copiar segunda para todos" copia os 4 campos.
 
 ## Topo, menu Cadastros e duração dos atendimentos (2026-10-02)
 - As abas (`#mainTabs`) ficam na mesma linha do nome do sistema (`.topbar`).
-  Abas visíveis: Planner, Agenda, **Cadastros ▾** (`#cadBtn`/`#cadMenu`,
-  `CAD_ITEMS`), Atendimentos, Relatórios, Prontuário. As abas de cadastro
+  Abas visíveis, nesta ordem: **Cadastros ▾** (`#cadBtn`/`#cadMenu`,
+  `CAD_ITEMS`), Planner, Agenda, Prontuário, Atendimentos, Relatórios. As abas de cadastro
   (`CAD_TABS`: pacientes, profissionais, convenios, servicos, especialidades,
   salas) ficam com o botão sempre oculto e abrem pelo menu; "Grupos de
   Suporte" abre Salas com `state.salasView = "grupos"`; "Clínica" abre
