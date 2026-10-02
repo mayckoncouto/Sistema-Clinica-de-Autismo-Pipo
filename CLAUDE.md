@@ -706,3 +706,9 @@ recusa a troca para "finalizado" sem `clinical_records` ligada (migração
 Célula de paciente com `service` diferente de `DEFAULT_SERVICE_ID` ("sessao") é
 preenchida com `TRAINING_COLOR`, no Planner e na Agenda (`otherService(b)`), no
 lugar da cor por idade/ABA. Legenda: "Treinamento / serviço que não é sessão".
+
+## Planner: barra fixa, grade rola sozinha (2026-10-02)
+`#tab-agenda` é coluna flex com altura limitada (`flex:1;min-height:0`) e só
+`.grid-scroll` rola (`overflow:auto`), igual à aba Resumo/Atendimentos. A barra
+de dias/semanas/salas/busca e a legenda ficam paradas; os cabeçalhos de sala e
+profissional (`.grouphead` / `.seathead`, sticky top) ficam presos no topo da grade.
