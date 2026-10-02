@@ -689,6 +689,8 @@ body.pat-col-resizing *{user-select:none}
 .dp-day.today{background:var(--surface-2)}
 .dp-day.sel{background:var(--accent);color:var(--accent-ink);font-weight:700}
 .dp-pop-list{padding:0}
+.dp-filter{display:block;width:100%;box-sizing:border-box;border:0;border-bottom:1px solid var(--line);padding:9px 14px;font:inherit;font-size:13px;background:var(--surface);color:var(--ink);outline:none;border-radius:10px 10px 0 0}
+.dp-opt[hidden]{display:none}
 .dp-list{max-height:260px;overflow:auto;display:flex;flex-direction:column}
 .dp-opt{border:0;background:transparent;text-align:left;padding:9px 14px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums}
 .dp-opt.sel{background:var(--accent);color:var(--accent-ink);font-weight:700}
@@ -8797,8 +8799,15 @@ function dpEnhanceTimeList(el){
   }
   function sync(){ b.querySelector(".dp-txt").textContent = label(); b.classList.toggle("dp-empty", !el.value); b.disabled = el.disabled; }
   dpWatchValue(el, isSel ? HTMLSelectElement.prototype : HTMLInputElement.prototype, sync); sync();
+  // Lista longa que não é de horários: dá para digitar o nome e filtrar (também
+  // começando a digitar com o botão em foco).
+  var typed = "";
+  b.addEventListener("keydown", function(e){
+    if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey || !isSel || dpIsTimeSelect(el) || el.options.length <= 6) return;
+    e.preventDefault(); typed = e.key; b.click();
+  });
   if (isSel) el.addEventListener("change", sync);
-  b.addEventListener("click", function(){
+  b.addEventListener("click", function(ev){
     if (document.getElementById("dpPop") && document.getElementById("dpPop").__btn === b){ dpClose(); return; }
     var items;
     if (isSel) items = Array.prototype.map.call(el.options, function(o){ return {v: o.value, t: o.textContent, dis: o.disabled}; });
@@ -8809,8 +8818,9 @@ function dpEnhanceTimeList(el){
     var pop = dpOpenPop(b, function(pop){
       pop.classList.add("dp-pop-list");
       pop.style.minWidth = Math.max(140, b.offsetWidth) + "px";
-      pop.innerHTML = '<div class="dp-list">' + items.map(function(it){
-        return '<button type="button" class="dp-opt' + (it.v === el.value ? ' sel' : '') + '" data-v="' + esc(it.v) + '"' + (it.dis ? ' disabled' : '') + '>' + esc(it.t) + '</button>';
+      var withFilter = isSel && !dpIsTimeSelect(el) && items.length > 6;
+      pop.innerHTML = (withFilter ? '<input type="text" class="dp-filter" placeholder="Digite para buscar…" autocomplete="off">' : '') + '<div class="dp-list">' + items.map(function(it){
+        return '<button type="button" class="dp-opt' + (it.v === el.value ? ' sel' : '') + '" data-v="' + esc(it.v) + '" data-n="' + esc(normText(it.t)) + '"' + (it.dis ? ' disabled' : '') + '>' + esc(it.t) + '</button>';
       }).join("") + '</div>';
       pop.addEventListener("click", function(e){
         var t = e.target.closest(".dp-opt"); if (!t || t.disabled) return;
@@ -8819,11 +8829,25 @@ function dpEnhanceTimeList(el){
     });
     var s = pop.querySelector(".dp-opt.sel") || (!isSel && pop.querySelector('.dp-opt[data-v="08:00"]'));
     if (s) s.scrollIntoView({block: "center"});
-    (s || pop.querySelector(".dp-opt:not(:disabled)") || {focus: function(){}}).focus();
+    var filterEl = pop.querySelector(".dp-filter");
+    if (filterEl){
+      filterEl.addEventListener("input", function(){
+        var q = normText(filterEl.value.trim());
+        Array.prototype.forEach.call(pop.querySelectorAll(".dp-opt"), function(o){ o.hidden = !!q && o.getAttribute("data-n").indexOf(q) === -1; });
+      });
+      filterEl.addEventListener("keydown", function(e){
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        var f = pop.querySelector(".dp-opt:not(:disabled):not([hidden])"); if (f) f.click();
+      });
+      if (typed){ filterEl.value = typed; typed = ""; filterEl.dispatchEvent(new Event("input")); }
+      filterEl.focus();
+    } else (s || pop.querySelector(".dp-opt:not(:disabled)") || {focus: function(){}}).focus();
     pop.addEventListener("keydown", function(e){
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       e.preventDefault();
-      var opts = Array.prototype.slice.call(pop.querySelectorAll(".dp-opt:not(:disabled)")), i = opts.indexOf(document.activeElement);
+      var opts = Array.prototype.slice.call(pop.querySelectorAll(".dp-opt:not(:disabled):not([hidden])")), i = opts.indexOf(document.activeElement);
+      if (i === -1 && e.key === "ArrowUp") return;
       var n = opts[Math.max(0, Math.min(opts.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
       if (n){ n.focus(); n.scrollIntoView({block: "nearest"}); }
     });

@@ -833,3 +833,10 @@ grupo no lugar do paciente e `room_id` = a sala — como chegam do "Enviar para 
 Agenda"). `agdIsGroupRow(row)`; as colunas são cópias do recurso com `_split:
 "prof" | "grupos"` e `cell()` filtra a lista por isso. A coluna dos grupos não tem
 botões de bloquear/liberar (`td.agd-grp-col`, fundo cinza-claro).
+
+## Digitar para buscar nas listas longas (2026-10-02)
+Lista própria (`dpEnhanceTimeList`) de `<select>` que não é de horários e tem mais
+de 6 opções (ex.: profissional da coluna da sala): campo `.dp-filter` no topo
+("Digite para buscar…", sem acento/maiúscula via `data-n`), Enter escolhe o
+primeiro que sobrou, ↓ desce para a lista. Começar a digitar com o botão em foco
+já abre a lista com a letra no campo.
