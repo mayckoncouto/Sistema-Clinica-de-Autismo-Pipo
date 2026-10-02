@@ -564,6 +564,11 @@ th.timecol{z-index:5}
 .book-move:hover{color:var(--warn);background:var(--warn-weak)}
 .book-del:hover{color:var(--danger);background:var(--danger-weak)}
 .book-copy svg,.book-move svg,.book-del svg{width:10px;height:10px;display:block}
+/* ícones pela máscara do CSS (a cor segue currentColor, inclusive no hover) */
+.book-copy::before,.book-move::before,.book-del::before{content:"";width:10px;height:10px;display:block;background:currentColor;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+.book-del{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'><polyline points='3 6 5 6 21 6'/><path d='M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6'/><path d='M10 11v6M14 11v6'/><path d='M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2'/></svg>")}
+.book-move{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'><polyline points='5 9 2 12 5 15'/><polyline points='9 5 12 2 15 5'/><polyline points='15 19 12 22 9 19'/><polyline points='19 9 22 12 19 15'/><line x1='2' y1='12' x2='22' y2='12'/><line x1='12' y1='2' x2='12' y2='22'/></svg>")}
+.book-copy{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'><rect x='9' y='9' width='12' height='12' rx='2'/><path d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/></svg>")}
 
 .clipboard-bar{display:none;align-items:center;gap:8px;padding:8px 14px;background:var(--warn-weak);border-top:1px solid var(--line);font-size:12px;color:var(--ink-2);flex-wrap:wrap}
 .clipboard-bar.on{display:flex}
@@ -600,6 +605,11 @@ tr:hover .row-lock .period-btn{opacity:.8}
 .seat-lock-group{display:flex;justify-content:center;align-items:center;gap:3px}
 .period-btn{width:18px;height:18px;flex:none;border:0;border-radius:5px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;opacity:.5}
 .period-btn svg{width:10px;height:10px;display:block}
+/* botões sem <svg> dentro: ícone pela máscara do CSS (mesma cor e hover de antes) */
+.period-btn:empty::before{content:"";width:10px;height:10px;display:block;background:currentColor;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+.period-btn{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='11' width='14' height='10' rx='2'/><path d='M8 11V7a4 4 0 0 1 7.5-1.9'/></svg>")}
+.period-btn.period-btn-lock{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='11' width='14' height='10' rx='2'/><path d='M8 11V7a4 4 0 0 1 8 0v4'/></svg>")}
+.period-btn.period-btn-clear{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'><path d='m7 21-4.3-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L11 21'/><path d='M22 21H7'/><path d='m5 11 9 9'/></svg>")}
 .period-btn:hover{opacity:1;background:var(--surface-2);color:var(--ink-2)}
 .period-btn.period-btn-lock:hover{color:var(--danger);background:var(--danger-weak)}
 .period-btn.period-btn-clear:hover{color:var(--danger);background:var(--danger-weak)}
@@ -2579,6 +2589,26 @@ function renderScheduleDocsTargeted(docIds){
   updateMatchCountBadge();
   applyZoom();
 }
+// Busca da grade sem redesenhar: só marca (amarelo) / apaga as células que já estão
+// na tela. Mesma regra do desenho completo (nome da célula contém o texto, sem
+// acento/maiúscula). Bem mais leve na visão com todos os dias e semanas.
+function applyGridSearch(){
+  var s = state.search, counts = {};
+  Array.prototype.forEach.call(document.querySelectorAll("#gridHost table.sched"), function(tbl){
+    var doc = tbl.getAttribute("data-doc"), n = 0;
+    Array.prototype.forEach.call(tbl.querySelectorAll("td.slotcell"), function(td){
+      var pn = td.querySelector(".pname"), main = td.querySelector(".book-main");
+      var hit = !!(s && pn && normText(pn.textContent).indexOf(s) !== -1);
+      if (hit) n++;
+      td.classList.toggle("search-hit", hit);
+      td.classList.toggle("search-dim", !!(s && pn && !hit));
+      if (main) main.classList.toggle("match", hit);
+    });
+    if (doc) counts[doc] = n;
+  });
+  Object.keys(counts).forEach(function(d){ scheduleMatchCounts[d] = counts[d]; });
+  updateMatchCountBadge();
+}
 function updateMatchCountBadge(){
   var mc = document.getElementById("matchCount");
   if (!mc) return;
@@ -2690,7 +2720,7 @@ function wireControls(){
   });
   document.getElementById("patientSearch").addEventListener("input", function(e){
     state.search = normText(e.target.value.trim());
-    renderGrid();
+    applyGridSearch();
   });
   document.getElementById("patientListSearch").addEventListener("input", renderPatientsTab);
   document.getElementById("profListSearch").addEventListener("input", renderProfissionaisTab);
@@ -2850,9 +2880,9 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
   function seatLockButtons(period, roomId, seatId, displayName){
     var label = period === "morning" ? "manhã" : "tarde";
     return '<div class="seat-lock-group">' +
-      '<button type="button" class="period-btn" data-period-action="unlock" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Liberar horários bloqueados da '+label+'" aria-label="Liberar horários bloqueados da '+label+'">'+UNLOCK_SVG+'</button>' +
-      '<button type="button" class="period-btn period-btn-lock" data-period-action="lock" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Bloquear horários livres da '+label+'" aria-label="Bloquear horários livres da '+label+'">'+LOCK_SVG+'</button>' +
-      '<button type="button" class="period-btn period-btn-clear" data-period-action="clear" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Limpar todos os agendamentos da '+label+'" aria-label="Limpar todos os agendamentos da '+label+'">'+ERASER_SVG+'</button>' +
+      '<button type="button" class="period-btn" data-period-action="unlock" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Liberar horários bloqueados da '+label+'" aria-label="Liberar horários bloqueados da '+label+'"></button>' +
+      '<button type="button" class="period-btn period-btn-lock" data-period-action="lock" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Bloquear horários livres da '+label+'" aria-label="Bloquear horários livres da '+label+'"></button>' +
+      '<button type="button" class="period-btn period-btn-clear" data-period-action="clear" data-period="'+period+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(roomId)+'" data-seat="'+esc(seatId)+'" data-name="'+esc(displayName)+'" title="Limpar todos os agendamentos da '+label+'" aria-label="Limpar todos os agendamentos da '+label+'"></button>' +
     '</div>';
   }
 
@@ -2990,9 +3020,9 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
               (bookingServiceName(b) ? '<span class="pserv">'+esc(bookingServiceName(b))+'</span>' : '') +
               (b.note ? '<span class="pnote">'+esc(b.note)+'</span>' : '') +
             '</button>' +
-            (can("agenda","delete") ? '<button type="button" class="book-del" title="Excluir agendamento" aria-label="Excluir agendamento">'+DEL_SVG+'</button>' : "") +
-            '<button type="button" class="book-move" title="Mover paciente" aria-label="Mover paciente">'+MOVE_SVG+'</button>' +
-            '<button type="button" class="book-copy" title="Copiar paciente" aria-label="Copiar paciente">'+COPY_SVG+'</button>' +
+            (can("agenda","delete") ? '<button type="button" class="book-del" title="Excluir agendamento" aria-label="Excluir agendamento"></button>' : "") +
+            '<button type="button" class="book-move" title="Mover paciente" aria-label="Mover paciente"></button>' +
+            '<button type="button" class="book-copy" title="Copiar paciente" aria-label="Copiar paciente"></button>' +
           '</div>';
         } else {
           html += '<div class="book"><button type="button" class="book-main"><span class="empty-plus">+</span></button></div>';
@@ -3027,8 +3057,8 @@ function armTwoClick(btn, baseTitle){
 var ROW_LOCK_TITLES = {unlock: "Liberar os horários bloqueados desta linha", lock: "Bloquear os horários livres desta linha"};
 function rowLockButtonsHtml(dataAttrs){
   return '<span class="row-lock">' +
-    '<button type="button" class="period-btn" data-row-action="unlock" '+dataAttrs+' title="'+ROW_LOCK_TITLES.unlock+'" aria-label="'+ROW_LOCK_TITLES.unlock+'">'+UNLOCK_SVG+'</button>' +
-    '<button type="button" class="period-btn period-btn-lock" data-row-action="lock" '+dataAttrs+' title="'+ROW_LOCK_TITLES.lock+'" aria-label="'+ROW_LOCK_TITLES.lock+'">'+LOCK_SVG+'</button>' +
+    '<button type="button" class="period-btn" data-row-action="unlock" '+dataAttrs+' title="'+ROW_LOCK_TITLES.unlock+'" aria-label="'+ROW_LOCK_TITLES.unlock+'"></button>' +
+    '<button type="button" class="period-btn period-btn-lock" data-row-action="lock" '+dataAttrs+' title="'+ROW_LOCK_TITLES.lock+'" aria-label="'+ROW_LOCK_TITLES.lock+'"></button>' +
   '</span>';
 }
 
@@ -6408,9 +6438,9 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
       '<span class="pname">'+esc(name)+'</span>' + (serv ? '<span class="pserv">'+esc(serv)+'</span>' : '') + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
       (st ? '<span class="agd-status" style="background:'+esc(st.color || "#5b6b68")+'" title="Status: '+esc(st.name)+'">'+esc(st.name)+'</span>' : '') +
     '</button>' +
-    (can("agendamentos","delete") ? '<button type="button" class="book-del" title="Excluir agendamento" aria-label="Excluir agendamento">'+DEL_SVG+'</button>' : "") +
-    '<button type="button" class="book-move" title="Mover" aria-label="Mover">'+MOVE_SVG+'</button>' +
-    '<button type="button" class="book-copy" title="Copiar" aria-label="Copiar">'+COPY_SVG+'</button>' +
+    (can("agendamentos","delete") ? '<button type="button" class="book-del" title="Excluir agendamento" aria-label="Excluir agendamento"></button>' : "") +
+    '<button type="button" class="book-move" title="Mover" aria-label="Mover"></button>' +
+    '<button type="button" class="book-copy" title="Copiar" aria-label="Copiar"></button>' +
   '</div>';
 }
 
@@ -7383,9 +7413,9 @@ function agdPeriodCell(period, dateIso, resId){
     return '<button type="button" class="period-btn agd-period-btn'+cls+'" data-agd-action="'+action+'" data-period="'+period+'" data-d="'+dateIso+'" data-r="'+esc(resId)+'" title="'+title+' '+label+'" aria-label="'+title+' '+label+'">'+svg+'</button>';
   }
   return '<td class="agd-period-cell"><div class="seat-lock-group">' +
-    btn("unlock", "", "Liberar horários bloqueados da", UNLOCK_SVG) +
-    btn("lock", " period-btn-lock", "Bloquear horários livres da", LOCK_SVG) +
-    btn("clear", " period-btn-clear", "Limpar todos os atendimentos da", ERASER_SVG) +
+    btn("unlock", "", "Liberar horários bloqueados da", "") +
+    btn("lock", " period-btn-lock", "Bloquear horários livres da", "") +
+    btn("clear", " period-btn-clear", "Limpar todos os atendimentos da", "") +
   '</div></td>';
 }
 function agdPeriodAction(action, period, dateIso, resId){

@@ -944,3 +944,15 @@ seletor de cor `#cpPop`, desfazer na linha dos cadeados, cor de Treinamento
 - Legenda do Planner: "Bloqueado por regra" (listras cinza-claro e branco).
 - Teste `tests/run_planner_tools.js` (export, Editar agendamento, Trocar
   profissional) — `npm test` agora 20 arquivos.
+
+## Planner mais leve (2026-10-02)
+Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupado):
+- Ícones das células (excluir/mover/copiar) e dos botões de cadeado/borracha
+  (colunas e linhas, Planner e Agenda) sem `<svg>` dentro: desenhados por máscara
+  CSS (`--ico` + `::before`, cor = currentColor). Célula com agendamento passou de
+  22 para ~5 elementos. Redesenho da visão Todos×Todos: 1,2 s → ~0,65 s.
+- Busca da grade (`#patientSearch`) não redesenha mais: `applyGridSearch()` só liga
+  /desliga `.search-hit`/`.search-dim`/`.match` e atualiza o contador. Por letra:
+  ~1,2 s → ~12 ms (Todos×Todos), ~37 ms → ~2 ms (1 dia). O desenho completo
+  continua marcando a busca do mesmo jeito.
+- Testado e descartado: `content-visibility` nos dias (sem ganho medido).
