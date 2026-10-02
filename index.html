@@ -397,6 +397,9 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .fx-table th:first-child,.fx-table td:first-child{text-align:left}
 .fx-table th{font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted)}
 .fx-table tfoot td{font-weight:700;border-bottom:0}
+.fx-table td.fx-neg{color:var(--danger);font-weight:700}
+.fx-table td.fx-pos{color:#b7791f;font-weight:700}
+.fx-table td.fx-ok{color:var(--muted)}
 .fx-del-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .fx-list{display:flex;flex-direction:column;max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px}
 .fx-item{border:0;border-bottom:1px solid var(--line);background:var(--surface);text-align:left;padding:8px 12px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
@@ -1681,13 +1684,21 @@ function patientColor(p){
   if (age <= 9) return PCOLOR_5_9;
   return PCOLOR_10_MAIS;
 }
+// Índice nome -> paciente, refeito só quando a lista de pacientes muda (ela é
+// sempre substituída por uma lista nova). A grade chama isto várias vezes por célula.
+var _patIdx = {list: null, map: null};
 function findPatientByName(name){
   if (!name) return null;
-  var n = String(name).trim().toLowerCase();
-  for (var i=0;i<state.patients.length;i++){
-    if (String(state.patients[i].nome||"").trim().toLowerCase() === n) return state.patients[i];
+  if (_patIdx.list !== state.patients){
+    var m = {};
+    for (var i=0;i<state.patients.length;i++){
+      var k = String(state.patients[i].nome||"").trim().toLowerCase();
+      if (!Object.prototype.hasOwnProperty.call(m, k)) m[k] = state.patients[i];
+    }
+    _patIdx = {list: state.patients, map: m};
   }
-  return null;
+  var hit = _patIdx.map[String(name).trim().toLowerCase()];
+  return hit || null;
 }
 // Grupos de suporte: ficam no mesmo cadastro das salas (config/rooms), marcados
 // com group:true. No Planner as colunas dos grupos vêm sempre antes das salas.
@@ -3393,9 +3404,15 @@ function wireZoomControl(){
 }
 
 /* ---------------- booking modal ---------------- */
+// Índice id -> sala/grupo, refeito só quando a lista de salas muda.
+var _roomIdx = {list: null, map: null};
 function findRoom(id){
-  for (var i=0;i<state.rooms.length;i++) if (state.rooms[i].id===id) return state.rooms[i];
-  return null;
+  if (_roomIdx.list !== state.rooms){
+    var m = {};
+    for (var i=0;i<state.rooms.length;i++) if (!Object.prototype.hasOwnProperty.call(m, state.rooms[i].id)) m[state.rooms[i].id] = state.rooms[i];
+    _roomIdx = {list: state.rooms, map: m};
+  }
+  return Object.prototype.hasOwnProperty.call(_roomIdx.map, id) ? _roomIdx.map[id] : null;
 }
 function findTherapist(room, id){
   if (!room) return null;
@@ -7604,6 +7621,7 @@ function openFixPatientModal(back){
         var dO = DAYS.filter(function(d){ return d.key === parts[0]; })[0];
         out.push({docId: docId, key: k, week: +parts[1], dayKey: parts[0], time: kp[0],
           room: room ? room.name : "", prof: prof ? (profShortName(prof) || prof.name) : (ther ? therapistDisplayName(ther) : ""), dayName: dO ? dO.full : parts[0], rec: b,
+          specId: prof && prof.specialtyId ? prof.specialtyId : "",
           spec: prof && prof.specialtyId ? specialtyName(prof.specialtyId) : "Sem especialidade"});
       });
     });
@@ -7622,11 +7640,31 @@ function openFixPatientModal(back){
     var specs = Object.keys(by).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
     var tot = {1: 0, 2: 0, 3: 0, 4: 0, t: 0};
     specs.forEach(function(s){ weeks.concat(["t"]).forEach(function(w){ tot[w] += by[s][w]; }); });
+    // Pacote do paciente (cadastro: especialidades/serviços e sessões por mês) × o que
+    // está no Planner nas 4 semanas (= 1 mês). Especialidade: agendamentos com
+    // profissional dessa especialidade e serviço Sessão; serviço: pelo serviço.
+    var pk = patientSpecRows(p).map(function(r){ return {id: r.specId, hours: Number(String(r.hours).replace(",", ".")) || 0}; }).filter(function(r){ return r.hours > 0; });
+    var pkHtml = "";
+    if (pk.length){
+      var planned = {};
+      list.forEach(function(x){
+        var svc = (x.rec && x.rec.service) || DEFAULT_SERVICE_ID;
+        var key = svc !== DEFAULT_SERVICE_ID ? SVC_PREFIX + svc : (x.specId || "");
+        planned[key] = (planned[key] || 0) + 1;
+      });
+      pkHtml = '<div class="prof-section-head" style="margin-top:12px"><span class="prof-access-title">Pacote contratado × planejado no Planner (mês)</span></div>' +
+        '<table class="fx-table"><thead><tr><th>Especialidade / serviço</th><th>Contratado</th><th>No Planner</th><th>Diferença</th></tr></thead><tbody>' +
+        pk.map(function(r){
+          var got = planned[r.id] || 0, diff = got - r.hours;
+          return '<tr><td>' + esc(specialtyName(r.id)) + '</td><td>' + r.hours + '</td><td>' + got + '</td><td class="' + (diff < 0 ? "fx-neg" : diff > 0 ? "fx-pos" : "fx-ok") + '">' + (diff === 0 ? "ok" : (diff > 0 ? "+" : "") + diff) + '</td></tr>';
+        }).join("") + '</tbody></table>';
+    }
     reportEl.innerHTML = list.length
       ? '<table class="fx-table"><thead><tr><th>Especialidade</th>' + weeks.map(function(w){ return '<th>' + w + 'ª sem.</th>'; }).join("") + '<th>Total</th></tr></thead><tbody>' +
           specs.map(function(s){ return '<tr><td>' + esc(s) + '</td>' + weeks.map(function(w){ return '<td>' + (by[s][w] || "—") + '</td>'; }).join("") + '<td><b>' + by[s].t + '</b></td></tr>'; }).join("") +
         '</tbody><tfoot><tr><td>Total</td>' + weeks.map(function(w){ return '<td>' + tot[w] + '</td>'; }).join("") + '<td><b>' + tot.t + '</b></td></tr></tfoot></table>'
       : '<div class="pat-count"><b>' + esc(p.nome) + '</b> não tem agendamentos no Planner.</div>';
+    reportEl.innerHTML += pkHtml;
     box.hidden = !list.length || !can("agenda", "delete");
     document.getElementById("fxSwapBox").hidden = !list.length || !can("agenda", "edit");
     var lb = document.getElementById("fxListBox"); lb.hidden = !list.length;

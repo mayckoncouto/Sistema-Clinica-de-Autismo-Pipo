@@ -884,3 +884,15 @@ paciente escolhido (select com busca), mostra:
   ou com copiar/mover em andamento).
 - `profWhere` é calculado sobre `plannerRooms()` (todas as salas e grupos), não só
   as visíveis: com o filtro de salas os bloqueios continuam valendo.
+
+## Otimização: índices de busca (2026-10-02)
+`findPatientByName` e `findRoom` usam um índice (`_patIdx`, `_roomIdx`) refeito só
+quando `state.patients` / `state.rooms` é substituído (sempre por uma lista nova;
+nunca alterar essas listas no lugar, senão o índice fica velho). A grade chama
+essas buscas várias vezes por célula (cores, regras "não ABA", bloqueios).
+
+## Editar agendamento: pacote contratado × planejado (2026-10-02)
+Na janela, abaixo do resumo por especialidade: tabela com o pacote do paciente
+(`patientSpecRows`) × agendamentos no Planner nas 4 semanas (= 1 mês).
+Especialidade conta os de serviço Sessão com profissional dessa especialidade;
+serviço (`svc:`) conta pelo serviço. Diferença em vermelho (falta) / âmbar (sobra).
