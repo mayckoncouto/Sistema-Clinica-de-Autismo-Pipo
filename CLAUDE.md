@@ -811,3 +811,9 @@ regra "profissional em dois lugares" de `plannerConflict`.
   pacientes "não ABA" na sala naquele horário, a não ser que outro grupo
   continue marcando a sala: `abaGroupDependencyDenied(changesByDoc)`, conferido
   em `applyBookingChanges` logo depois de `bookingPermDenied`.
+- Sala SEM "ABA" no nome (`roomIsABA(r)` falso — ex.: "Psicologia",
+  "Fisioterapia"): o paciente "não ABA" bloqueia a SALA TODA no horário, inclusive
+  as colunas de outros profissionais (`abaAny` na grade; `plannerConflict` confere
+  todas as colunas da sala). Sala COM "ABA" no nome (ex.: "Fonoaudiologia ABA"):
+  só as colunas do mesmo profissional. A exceção do grupo de suporte vale nos dois
+  casos, só para as colunas do profissional que tem o "não ABA".

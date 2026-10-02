@@ -2885,6 +2885,9 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
       var abaByProf = {};
       if (!isGroup(r)) r.therapists.forEach(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (t2.professionalId && isNaoABABooking(b2) && !abaByProf[t2.professionalId]) abaByProf[t2.professionalId] = b2.patient; });
       var abaGroupOk = Object.keys(abaByProf).length && groupBookedRoom(bookings, dayObj.key, row.time, r);
+      // Sala sem "ABA" no nome: qualquer "não ABA" bloqueia a sala toda.
+      var abaAny = null;
+      if (!isGroup(r) && !roomIsABA(r)) r.therapists.some(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2)){ abaAny = b2.patient; return true; } return false; });
       r.therapists.forEach(function(t){
         var key = row.time+"|"+r.id+"|"+t.id;
         var b = effectiveBooking(bookings, key, dayObj.key, row.time);
@@ -2900,11 +2903,14 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         // Fora do horário do profissional desta coluna: célula cinza e inativa
         // (sem clique, sem colar, sem soltar). Se já houver algo marcado ali, continua
         // aparecendo normalmente para poder ser movido ou desmarcado.
-        var abaHolder = t.professionalId ? abaByProf[t.professionalId] : null;
-        var abaLock = !(b && b.patient) && !!abaHolder && !abaGroupOk;
+        var abaOwn = t.professionalId ? abaByProf[t.professionalId] : null;
+        // exceção do grupo: só as colunas do profissional que tem o "não ABA" (e um só profissional nessa situação)
+        var abaExcept = abaGroupOk && !!abaOwn && (roomIsABA(r) || Object.keys(abaByProf).length === 1);
+        var abaHolder = abaAny || abaOwn;
+        var abaLock = !(b && b.patient) && !!abaHolder && !abaExcept;
         var busyLock = !(b && b.patient) && isGroup(r) && !!t.professionalId && !!profInRoom[t.professionalId];
         var isOff = abaLock || busyLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
-        var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time, professionalName(t.professionalId))
+        var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time, roomIsABA(r) ? professionalName(t.professionalId) : "")
           : busyLock ? professionalName(t.professionalId) + " está atendendo em " + profInRoom[t.professionalId] + " neste horário."
           : "Fora do horário do profissional";
         html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock' : (busyLock ? ' prof-busy' : '')) : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
@@ -3394,8 +3400,14 @@ function groupBookedRoom(bookings, dayKey, time, room){
     });
   });
 }
+// Sala com "ABA" no nome (ex.: "Fonoaudiologia ABA"): o paciente "não ABA" bloqueia
+// só as colunas do mesmo profissional. Sala SEM "ABA" no nome: bloqueia a sala toda,
+// inclusive as colunas de outros profissionais.
+function roomIsABA(r){ return !!r && /(^|\s)aba(\s|$)/.test(normText(r.name)); }
 function abaRoomMsg(holder, roomName, time, profName){
-  return (profName ? profName + " está" : roomName + " está") + " com " + holder + " às " + time + " em " + roomName + ": paciente que não faz intervenção ABA ocupa o horário do profissional.";
+  return profName
+    ? profName + " está com " + holder + " às " + time + " em " + roomName + ": paciente que não faz intervenção ABA ocupa o horário do profissional."
+    : roomName + " às " + time + " está ocupada por " + holder + ", que não faz intervenção ABA (ocupa a sala toda).";
 }
 // Planner: confere se rec pode ir na célula key do docId (dia-semana).
 // ignoreKeys: células que vão ficar vazias (origem de um mover); extra: {key: rec}
@@ -3420,11 +3432,15 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       if (k === key || ignoreKeys.indexOf(k) !== -1) continue;
       var b = Object.prototype.hasOwnProperty.call(extra, k) ? extra[k] : effectiveBooking(bookings, k, dayKey, time);
       if (!b || !b.patient || bookingKind(b)) continue;
-      // "Não ABA": vale só entre as colunas do MESMO profissional nesta sala.
-      if (r.id === room.id && !isGroup(room) && profId && t.professionalId === profId){
-        if (recNaoABA && isNaoABABooking(b) && groupBookedRoom(bookings, dayKey, time, room)) continue;
-        if (recNaoABA) return "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + professionalName(profId) + " já tem " + b.patient + " às " + time + " em " + room.name + ".";
-        if (isNaoABABooking(b)) return abaRoomMsg(b.patient, room.name, time, professionalName(profId));
+      // "Não ABA": em sala com "ABA" no nome vale só entre as colunas do MESMO
+      // profissional; em sala sem "ABA" no nome vale para a sala toda.
+      var sameProfSeat = !!profId && t.professionalId === profId;
+      if (r.id === room.id && !isGroup(room) && (sameProfSeat || !roomIsABA(room))){
+        if (recNaoABA && isNaoABABooking(b) && sameProfSeat && groupBookedRoom(bookings, dayKey, time, room)) continue;
+        if (recNaoABA) return roomIsABA(room)
+          ? "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + professionalName(profId) + " já tem " + b.patient + " às " + time + " em " + room.name + "."
+          : "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + ".";
+        if (isNaoABABooking(b)) return abaRoomMsg(b.patient, room.name, time, roomIsABA(room) ? professionalName(profId) : "");
       }
       if (profId && t.professionalId === profId && r.id !== room.id) return profBusyMsg(professionalName(profId), time, r.name);
       if (patientRule && !isGroup(r) && normText(b.patient) === normText(rec.patient) && (b.service || DEFAULT_SERVICE_ID) === svc){
