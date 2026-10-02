@@ -761,3 +761,13 @@ config/clinic, mudou = editar) e copia o acesso antigo para os níveis existente
 No app: `tabCan(k)` em `applyPermissionsUI` (Salas aparece com salas OU grupos),
 `writeRooms` confere salas e grupos separadamente, Clínica abre com "ver" e só
 salva com "editar", Status (menu Acesso) com `cadastro_status`.
+
+## Atendimento com evolução não pode ser apagado (2026-10-02)
+Só o Administrador exclui atendimento da Agenda que tem `clinical_records`
+ligada (a evolução fica, sem a ligação). Banco: trigger
+`appointments_delete_guard` (migração `supabase/2026-10-02m-atendimento-com-evolucao.sql`).
+App: `agdSplitByRecords(rows)` separa {del, kept}; usado em `agdDeleteRow`
+(lixeira/Desmarcar), limpar período e `agdClearWeek` (os com evolução ficam e o
+aviso diz quantos). Trocar dois atendimentos de lugar (arrastar em cima de outro)
+agora ATUALIZA os dois (antes apagava e recriava o outro, perdendo o id e a
+ligação com a evolução); permissão exigida: editar.

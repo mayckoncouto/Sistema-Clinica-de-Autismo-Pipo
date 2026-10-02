@@ -6163,9 +6163,34 @@ function agdChangeStatus(row, v){
     });
   });
 }
+// Atendimento com evolução no prontuário é registro clínico: só o Administrador
+// pode excluí-lo (a evolução fica no prontuário, sem a ligação). Os demais
+// precisam apagar a evolução antes. O banco confere a mesma regra
+// (migração 2026-10-02m). Separa {del: podem ser apagados, kept: têm evolução}.
+var AGD_KEPT_MSG = "tem evolução no prontuário: para excluir, apague a evolução antes (ou peça ao Administrador).";
+function agdSplitByRecords(rows){
+  rows = rows || [];
+  if (!rows.length || (window.pipoAuth && window.pipoAuth.isAdmin())) return Promise.resolve({del: rows, kept: []});
+  var ids = rows.map(function(r){ return r.id; });
+  return agdChunks(ids, 100).reduce(function(p, part){
+    return p.then(function(acc){
+      return agdClient().from("clinical_records").select("appointment_id").in("appointment_id", part).then(function(r){
+        if (r.error) throw r.error;
+        (r.data || []).forEach(function(x){ acc[x.appointment_id] = true; });
+        return acc;
+      });
+    });
+  }, Promise.resolve({})).then(function(has){
+    return {del: rows.filter(function(r){ return !has[r.id]; }), kept: rows.filter(function(r){ return has[r.id]; })};
+  });
+}
 // Exclui um atendimento da Agenda (com desfazer). Promise<boolean>.
 function agdDeleteRow(row, okMsg){
-  return agdClient().from("appointments").delete().eq("id", row.id).then(function(r){
+  return agdSplitByRecords([row]).then(function(s){
+    if (s.kept.length){ showToast("Este atendimento " + AGD_KEPT_MSG, true); return null; }
+    return agdClient().from("appointments").delete().eq("id", row.id);
+  }).then(function(r){
+    if (r === null) return false;
     if (r.error){ showToast("Não foi possível excluir: " + agdErr(r.error), true); return false; }
     agdRecord("Desmarcar " + agdRowLabel(row), [row], []);
     delete AD.rows[row.id];
@@ -7080,11 +7105,16 @@ function agdPeriodAction(action, period, dateIso, resId){
   var targets = action === "unlock" ? inPeriod.filter(function(r){ return bookingKind(r) === "bloqueado"; }) : inPeriod;
   var verb = action === "unlock" ? "liberado" : "limpo";
   if (!targets.length){ finish(0, verb); return; }
-  c.from("appointments").delete().in("id", targets.map(function(r){ return r.id; })).then(function(r){
+  agdSplitByRecords(targets).then(function(s){
+    if (s.kept.length) showToast(s.kept.length + (s.kept.length === 1 ? " atendimento mantido: " : " atendimentos mantidos: cada um ") + AGD_KEPT_MSG, true);
+    targets = s.del;
+    if (!targets.length){ agdLoadWeek(); return; }
+    return c.from("appointments").delete().in("id", targets.map(function(r){ return r.id; })).then(function(r){
     if (r.error){ showToast("Não foi possível " + (action === "unlock" ? "liberar" : "limpar") + ": " + agdErr(r.error), true); agdLoadWeek(); return; }
     agdRecord((action === "unlock" ? "Liberar " : "Limpar ") + targets.length + (targets.length === 1 ? " horário" : " horários") + who + " · " + label, targets, []);
     finish(targets.length, verb);
   });
+  }).catch(function(err){ showToast("Não foi possível conferir o prontuário: " + agdErr(err), true); });
 }
 
 /* ---- copiar / mover / arrastar na Agenda ---- */
@@ -7138,18 +7168,18 @@ function agdPlace(row, td, mode, swapWith){
 
   // Destino ocupado ao arrastar: troca os dois (o outro vai para o lugar de origem).
   if (occupant && mode === "drag"){
-    if (!can("agendamentos","delete") || !can("agendamentos","create")){ showToast("Você não tem permissão para trocar atendimentos de lugar.", true); return; }
+    if (!can("agendamentos","edit")){ showToast("Você não tem permissão para trocar atendimentos de lugar.", true); return; }
     var back = agdTargetFor(occupant, row.date, row.time, AD.mode === "prof" ? row.professional_id : (row.room_id || ""));
     var occPayload = {patient: occupant.patient, note: occupant.note || "", blocked: !!occupant.blocked, service: occupant.service || null,
       professional_id: back.professional_id, room_id: back.room_id, date: back.date, time: back.time};
     agdConflictsFor([payload, occPayload], [row.id, occupant.id]).then(function(conflict){
     if (conflict){ showToast(conflict, true); return; }
-    c.from("appointments").delete().eq("id", occupant.id).then(function(r1){
-      if (r1.error) return fail(r1);
-      return c.from("appointments").update(payload).eq("id", row.id).select().single().then(function(r2){
-        if (r2.error){ c.from("appointments").insert(Object.assign({}, occupant, {id: undefined})).then(function(){ fail(r2); }); return; }
-        return c.from("appointments").insert(occPayload).select().single().then(function(r3){
-          if (r3.error) return fail(r3);
+    // Os dois são atualizados (nada é apagado e recriado): cada um mantém o id e a evolução.
+    c.from("appointments").update(payload).eq("id", row.id).select().single().then(function(r2){
+      if (r2.error) return fail(r2);
+      return c.from("appointments").update(occPayload).eq("id", occupant.id).select().single().then(function(r3){
+        if (r3.error){ c.from("appointments").update(agdRowCore(row)).eq("id", row.id).then(function(){ fail(r3); }); return; }
+        return Promise.resolve().then(function(){
           agdRecord("Trocar " + agdRowLabel(row) + " ↔ " + agdRowLabel(occupant), [row, occupant], [r2.data, r3.data]);
           done("Atendimentos trocados de lugar.");
         });
@@ -7424,12 +7454,15 @@ function agdClearWeek(){
       });
     }).then(function(ok){
       if (!ok) return;
-      agdDeleteByIds(rows.map(function(x){ return x.id; })).then(function(d){
-        if (d && d.error){ showToast("Não foi possível limpar: " + agdErr(d.error), true); agdLoadWeek(); return; }
-        agdRecord("Limpar semana " + period, rows, []);
-        showToast("Semana de " + period + " limpa (" + n + "). Use desfazer (Ctrl+Z) se foi engano.");
-        agdLoadWeek();
-      });
+      agdSplitByRecords(rows).then(function(s){
+        var del = s.del;
+        return agdDeleteByIds(del.map(function(x){ return x.id; })).then(function(d){
+          if (d && d.error){ showToast("Não foi possível limpar: " + agdErr(d.error), true); agdLoadWeek(); return; }
+          agdRecord("Limpar semana " + period, del, []);
+          showToast("Semana de " + period + " limpa (" + del.length + ")." + (s.kept.length ? " " + s.kept.length + (s.kept.length === 1 ? " atendimento com evolução foi mantido." : " atendimentos com evolução foram mantidos.") : "") + " Use desfazer (Ctrl+Z) se foi engano.", !!s.kept.length);
+          agdLoadWeek();
+        });
+      }).catch(function(err){ showToast("Não foi possível conferir o prontuário: " + agdErr(err), true); });
     });
   });
 }
