@@ -106,7 +106,8 @@
   function loadRoles() {
     return auth.client.from("roles").select("*").order("sort", { ascending: true }).then(function (r) {
       if (r.error) { toast("Não foi possível carregar os níveis: " + r.error.message, true); return; }
-      roles = r.data || [];
+      // Níveis em ordem alfabética (lista de níveis e escolha do nível do usuário).
+      roles = (r.data || []).sort(function (a, b) { return (a.name || "").localeCompare(b.name || "", "pt-BR", { sensitivity: "base" }); });
       loaded.roles = true;
     });
   }
@@ -238,7 +239,7 @@
     var isNew = !u;
     var me = auth.profile();
     var isMe = !!(u && me && u.id === me.id);
-    var defaultRole = roleById("secretaria") ? "secretaria" : (roles[roles.length - 1] || {}).id;
+    var defaultRole = roleById("secretaria") ? "secretaria" : (roles.filter(function (x) { return !x.is_admin; })[0] || {}).id;
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
       '<div class="overlay" id="ovUser"><div class="modal wide" style="max-width:560px">' +
