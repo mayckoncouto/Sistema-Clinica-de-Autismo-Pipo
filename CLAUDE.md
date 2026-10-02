@@ -901,3 +901,12 @@ serviço (`svc:`) conta pelo serviço. Diferença em vermelho (falta) / âmbar (
   abre o paciente na janela.
 - "Copiar a semana do paciente para outra semana" (precisa de incluir): mesmas
   células na semana de destino; ocupadas ou com `plannerConflict` ficam de fora.
+
+## Planner: "Trocar profissional" (2026-10-02)
+Botão `#swapProfBtn` → `openSwapProfModal()`: escolhe o profissional atual e o
+novo, marca as colunas (salas e grupos) a passar; mostra quantos agendamentos vão
+junto, quantos horários ficariam com o novo profissional em dois lugares e quantos
+fora do horário dele (`profSlotOk`). Aplica trocando `professionalId`/`name` das
+colunas em `config/rooms` (`writeRooms`, permissão de editar Salas/Grupos). Com
+conflito, pede confirmação dupla. Não entra no desfazer da grade: voltar = trocar
+ao contrário.

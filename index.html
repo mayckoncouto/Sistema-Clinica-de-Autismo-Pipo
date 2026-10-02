@@ -393,6 +393,8 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .cl-cards{display:flex;flex-direction:column;gap:12px;margin:2px 0 4px}
 .fx-report{margin:4px 0 12px}
 .fx-top-row{margin:-4px 0 10px}
+.fx-seat{display:inline-flex;align-items:center;gap:6px;margin:4px 14px 4px 0;font-size:13px}
+.fx-seat input{accent-color:var(--accent)}
 .fx-item span.fx-neg{color:var(--danger);font-weight:700}
 .fx-item span.fx-pos{color:#b7791f;font-weight:700}
 .fx-table{width:100%;border-collapse:collapse;font-size:13px}
@@ -934,6 +936,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <div class="spacer"></div>
       <span class="pat-count" id="matchCount"></span>
+      <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar profissional</button>
       <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar agendamento</button>
       <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do dia e semana abertos para uma data da Agenda" hidden>Enviar para a Agenda</button>
       <button class="btn ghost" id="plClearWeekBtn" title="Apaga todos os agendamentos da semana escolhida (segunda a sexta)" hidden>Limpar semana</button>
@@ -2697,6 +2700,7 @@ function wireControls(){
   document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
   document.getElementById("plClearWeekBtn").addEventListener("click", function(){ plannerClearWeek(); });
   document.getElementById("fixPatientBtn").addEventListener("click", function(){ openFixPatientModal(); });
+  document.getElementById("swapProfBtn").addEventListener("click", function(){ openSwapProfModal(); });
   document.getElementById("toggleGroupsBtn").addEventListener("click", function(){
     state.salasView = state.salasView === "grupos" ? "salas" : "grupos";
     var s = document.getElementById("roomListSearch"); if (s) s.value = "";
@@ -7822,6 +7826,124 @@ document.addEventListener("keydown", function(e){
   if (s){ s.value = ""; s.dispatchEvent(new Event("input", {bubbles: true})); }
   openFixPatientModal(back);
 });
+
+/* ---- Planner: botão "Trocar profissional" ----
+ * Passa as colunas (salas e grupos) de um profissional para outro: os
+ * agendamentos das 4 semanas vão junto, porque no Planner o atendimento é da
+ * coluna. Antes de aplicar mostra quantos horários dariam conflito (o novo
+ * profissional já atendendo em outro lugar no mesmo horário) e quantos ficam
+ * fora do horário dele. Grava em config/rooms (permissão de editar Salas/Grupos).
+ */
+function openSwapProfModal(){
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var host = document.getElementById("modalHost");
+  var profs = state.professionals.slice().sort(function(a, b){ return String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"); });
+  var opts = profs.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("");
+  host.innerHTML =
+    '<div class="overlay" id="ovSwp"><div class="modal wide" style="max-width:640px">' +
+      '<div class="modal-head"><div><h3>Trocar profissional</h3><div class="modal-sub">Passa as colunas de um profissional para outro no Planner (férias, saída, substituição). Os agendamentos das 4 semanas vão junto.</div></div>' +
+        '<button class="modal-close" id="swClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="field-row"><div class="field"><label for="swFrom">Profissional atual</label><select id="swFrom"><option value="">Selecione…</option>' + opts + '</select></div>' +
+        '<div class="field"><label for="swTo">Passar para</label><select id="swTo"><option value="">Selecione…</option>' + opts + '</select></div></div>' +
+        '<div id="swSeats" class="fx-report"></div>' +
+        '<div id="swCheck" class="pat-count"></div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="swCancel">Fechar</button><button class="btn primary" id="swApply" disabled>Trocar</button></div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovSwp");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("swClose").addEventListener("click", close);
+  document.getElementById("swCancel").addEventListener("click", close);
+  var docIds = [];
+  [1, 2, 3, 4].forEach(function(w){ DAYS.forEach(function(d){ docIds.push(d.key + "-" + w); }); });
+  var docs = null;
+  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+    docs = {};
+    snaps.forEach(function(snap, i){ var data = snap && snap.exists ? snap.data() : null; docs[docIds[i]] = (data && data.bookings) || {}; });
+    update();
+  }).catch(function(){ document.getElementById("swCheck").textContent = "Não foi possível ler o Planner."; });
+  function seatsOf(profId){
+    var out = [];
+    plannerRooms().forEach(function(r){ (r.therapists || []).forEach(function(t){ if (t.professionalId === profId) out.push({room: r, seat: t}); }); });
+    return out;
+  }
+  function chosenSeats(){
+    return Array.prototype.slice.call(document.querySelectorAll("#swSeats input[data-seat]:checked")).map(function(c){ return c.getAttribute("data-seat"); });
+  }
+  function renderSeats(){
+    var from = document.getElementById("swFrom").value, el = document.getElementById("swSeats");
+    if (!from){ el.innerHTML = ""; return; }
+    var seats = seatsOf(from);
+    el.innerHTML = seats.length
+      ? '<div class="prof-section-head"><span class="prof-access-title">Colunas de ' + esc(professionalName(from)) + '</span></div>' +
+        seats.map(function(s){ return '<label class="fx-seat"><input type="checkbox" checked data-seat="' + esc(s.room.id + "|" + s.seat.id) + '"> ' + esc(s.room.name) + (isGroup(s.room) ? ' <span class="autolist-kind">grupo</span>' : '') + '</label>'; }).join("")
+      : '<div class="pat-count">Este profissional não tem colunas no Planner.</div>';
+  }
+  function update(){
+    var from = document.getElementById("swFrom").value, to = document.getElementById("swTo").value, chk = document.getElementById("swCheck"), btn = document.getElementById("swApply");
+    btn.disabled = true;
+    if (!from || !to || !docs){ chk.textContent = docs ? "" : "Carregando o Planner…"; return; }
+    if (from === to){ chk.textContent = "Escolha dois profissionais diferentes."; return; }
+    var moving = chosenSeats();
+    if (!moving.length){ chk.textContent = "Marque pelo menos uma coluna."; return; }
+    var toProf = findProfessional(to), n = 0, clash = 0, offH = 0;
+    // horários (doc|hora) em que o novo profissional já atende nas colunas que ele já tem
+    var busy = {};
+    seatsOf(to).forEach(function(s){
+      docIds.forEach(function(d){
+        Object.keys(docs[d]).forEach(function(k){
+          var kp = k.split("|"); if (kp[1] !== s.room.id || kp[2] !== s.seat.id) return;
+          var b = docs[d][k]; if (b && b.patient && !bookingKind(b)) busy[d + "|" + kp[0]] = s.room.id;
+        });
+      });
+    });
+    moving.forEach(function(ms){
+      var mp = ms.split("|");
+      docIds.forEach(function(d){
+        Object.keys(docs[d]).forEach(function(k){
+          var kp = k.split("|"); if (kp[1] !== mp[0] || kp[2] !== mp[1]) return;
+          var b = docs[d][k]; if (!b || !b.patient || bookingKind(b)) return;
+          n++;
+          if (busy[d + "|" + kp[0]] && busy[d + "|" + kp[0]] !== mp[0]) clash++;
+          if (toProf && !profSlotOk(toProf, d.split("-")[0], kp[0])) offH++;
+        });
+      });
+    });
+    chk.innerHTML = "<b>" + n + "</b> " + (n === 1 ? "agendamento vai" : "agendamentos vão") + " para " + esc(professionalName(to)) + "." +
+      (clash ? "<br><span class=\"fx-neg\">" + clash + (clash === 1 ? " horário fica" : " horários ficam") + " com " + esc(professionalName(to)) + " em dois lugares ao mesmo tempo.</span>" : "") +
+      (offH ? "<br><span class=\"fx-pos\">" + offH + (offH === 1 ? " fica" : " ficam") + " fora do horário cadastrado de " + esc(professionalName(to)) + ".</span>" : "");
+    btn.disabled = false;
+    btn.__info = {n: n, clash: clash, offH: offH, moving: moving};
+  }
+  document.getElementById("swFrom").addEventListener("change", function(){ renderSeats(); update(); });
+  document.getElementById("swTo").addEventListener("change", update);
+  document.getElementById("swSeats").addEventListener("change", update);
+  document.getElementById("swApply").addEventListener("click", function(){
+    var info = this.__info; if (!info) return;
+    var from = document.getElementById("swFrom").value, to = document.getElementById("swTo").value, toProf = findProfessional(to);
+    var warn = (info.clash || info.offH) ? "<br><b>Atenção:</b> " + [info.clash ? info.clash + " com conflito de horário" : "", info.offH ? info.offH + " fora do horário do profissional" : ""].filter(Boolean).join(" e ") + "." : "";
+    confirmDialog({title: "Trocar profissional", message: "Passar " + info.moving.length + (info.moving.length === 1 ? " coluna" : " colunas") + " de <b>" + esc(professionalName(from)) + "</b> para <b>" + esc(professionalName(to)) + "</b> (" + info.n + " agendamentos)?" + warn, confirmLabel: "Trocar"})
+      .then(function(ok){ return ok && (info.clash ? confirmDialog({title: "Tem certeza?", message: "Há horários em que " + esc(professionalName(to)) + " ficará em dois lugares. Trocar assim mesmo?", confirmLabel: "Trocar assim mesmo"}) : true); })
+      .then(function(ok){
+        if (!ok) return;
+        var list = state.rooms.map(function(r){
+          var touched = false;
+          var ths = (r.therapists || []).map(function(t){
+            if (info.moving.indexOf(r.id + "|" + t.id) === -1) return t;
+            touched = true;
+            return Object.assign({}, t, {professionalId: to, name: toProf ? toProf.name : t.name});
+          });
+          return touched ? Object.assign({}, r, {therapists: ths}) : r;
+        });
+        Promise.resolve(writeRooms(list)).then(function(){
+          close(); renderGrid();
+          showToast("Colunas passadas para " + professionalName(to) + ". Para voltar, faça a troca ao contrário.");
+        });
+      });
+  });
+}
 
 /* ---- Planner -> Agenda: botão "Enviar para a Agenda" ----
  * Leva os agendamentos de UM dia/semana do Planner (ex.: Segunda · 1ª semana)
