@@ -799,3 +799,10 @@ coluna do profissional que está com um "não ABA". Bloqueado / Reunião / Trein
   profissional pode ter outro paciente "não ABA" em outra coluna dele na sala.
   Na grade, as colunas desse profissional não ficam listradas (`abaFreeProf`);
   paciente ABA ou outro profissional continuam recusados.
+
+## Profissional atendendo numa sala fica bloqueado nos grupos (Planner, 2026-10-02)
+Na grade, por horário, `profInRoom[profId]` = sala (não grupo) onde o
+profissional tem paciente. A coluna dele nos Grupos de Suporte, se vazia, vira
+`.slot-off.prof-busy` (cinza, `title` "Fulano está atendendo em <sala> neste
+horário."; clique/soltar mostram o motivo). A gravação já era recusada pela
+regra "profissional em dois lugares" de `plannerConflict`.

@@ -2867,6 +2867,16 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
     }
     html += '<tr><td class="timecol"><div class="timecell has-row-btns"><span>'+row.time+'</span>' +
       rowLockButtonsHtml('data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-time="'+row.time+'"') + '</div></td>';
+    // Profissional atendendo numa SALA neste horário: a coluna dele nos grupos fica bloqueada.
+    var profInRoom = {};
+    rooms.forEach(function(r0){
+      if (isGroup(r0)) return;
+      r0.therapists.forEach(function(t0){
+        if (!t0.professionalId || profInRoom[t0.professionalId]) return;
+        var b0 = effectiveBooking(bookings, row.time+"|"+r0.id+"|"+t0.id, dayObj.key, row.time);
+        if (b0 && b0.patient && !bookingKind(b0)) profInRoom[t0.professionalId] = r0.name;
+      });
+    });
     rooms.forEach(function(r){
       // Paciente que não faz intervenção ABA nesta sala e horário: bloqueia as outras
       // colunas do MESMO profissional (as de outros profissionais ficam livres).
@@ -2891,9 +2901,12 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         // aparecendo normalmente para poder ser movido ou desmarcado.
         var abaHolder = t.professionalId ? abaByProf[t.professionalId] : null;
         var abaLock = !(b && b.patient) && !!abaHolder && !abaGroupOk;
-        var isOff = abaLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
-        var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time, professionalName(t.professionalId)) : "Fora do horário do profissional";
-        html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock' : '') : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
+        var busyLock = !(b && b.patient) && isGroup(r) && !!t.professionalId && !!profInRoom[t.professionalId];
+        var isOff = abaLock || busyLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
+        var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time, professionalName(t.professionalId))
+          : busyLock ? professionalName(t.professionalId) + " está atendendo em " + profInRoom[t.professionalId] + " neste horário."
+          : "Fora do horário do profissional";
+        html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock' : (busyLock ? ' prof-busy' : '')) : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
         if (isOff){
           html += '<div class="book"><div class="book-main off-box" aria-hidden="true"></div></div>';
         } else if (b && b.patient){
@@ -3159,7 +3172,7 @@ function wireGridDelegatedEvents(){
       return;
     }
     if (td.classList.contains("slot-off")){
-      showToast(td.classList.contains("aba-lock") ? td.title : "Fora do horário de atendimento do profissional.", true);
+      showToast((td.classList.contains("aba-lock") || td.classList.contains("prof-busy")) ? td.title : "Fora do horário de atendimento do profissional.", true);
       return;
     }
     if (!e.target.closest(".book-main")) return;
@@ -3216,7 +3229,7 @@ function wireGridDelegatedEvents(){
     if (td.classList.contains("slot-off")){
       e.preventDefault();
       state.dragKey = null; state.dragDocId = null;
-      showToast(td.classList.contains("aba-lock") ? td.title : "Fora do horário de atendimento do profissional.", true);
+      showToast((td.classList.contains("aba-lock") || td.classList.contains("prof-busy")) ? td.title : "Fora do horário de atendimento do profissional.", true);
       return;
     }
     e.preventDefault();
