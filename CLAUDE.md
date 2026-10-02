@@ -817,3 +817,6 @@ regra "profissional em dois lugares" de `plannerConflict`.
   todas as colunas da sala). Sala COM "ABA" no nome (ex.: "Fonoaudiologia ABA"):
   só as colunas do mesmo profissional. A exceção do grupo de suporte vale nos dois
   casos, só para as colunas do profissional que tem o "não ABA".
+- Sentido contrário: profissional com agendamento num GRUPO (`profInGroup`) tem
+  as colunas dele nas SALAS bloqueadas no mesmo horário (`.prof-busy`, "Fulano tem
+  agendamento no grupo <grupo> neste horário.").

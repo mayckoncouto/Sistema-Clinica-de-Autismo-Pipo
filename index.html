@@ -2869,13 +2869,14 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
     html += '<tr><td class="timecol"><div class="timecell has-row-btns"><span>'+row.time+'</span>' +
       rowLockButtonsHtml('data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-time="'+row.time+'"') + '</div></td>';
     // Profissional atendendo numa SALA neste horário: a coluna dele nos grupos fica bloqueada.
-    var profInRoom = {};
+    // e profissional agendado num GRUPO: as colunas dele nas salas ficam bloqueadas.
+    var profInRoom = {}, profInGroup = {};
     rooms.forEach(function(r0){
-      if (isGroup(r0)) return;
+      var map = isGroup(r0) ? profInGroup : profInRoom;
       r0.therapists.forEach(function(t0){
-        if (!t0.professionalId || profInRoom[t0.professionalId]) return;
+        if (!t0.professionalId || map[t0.professionalId]) return;
         var b0 = effectiveBooking(bookings, row.time+"|"+r0.id+"|"+t0.id, dayObj.key, row.time);
-        if (b0 && b0.patient && !bookingKind(b0)) profInRoom[t0.professionalId] = r0.name;
+        if (b0 && b0.patient && !bookingKind(b0)) map[t0.professionalId] = r0.name;
       });
     });
     rooms.forEach(function(r){
@@ -2908,10 +2909,11 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         var abaExcept = abaGroupOk && !!abaOwn && (roomIsABA(r) || Object.keys(abaByProf).length === 1);
         var abaHolder = abaAny || abaOwn;
         var abaLock = !(b && b.patient) && !!abaHolder && !abaExcept;
-        var busyLock = !(b && b.patient) && isGroup(r) && !!t.professionalId && !!profInRoom[t.professionalId];
+        var busyWhere = !t.professionalId ? null : (isGroup(r) ? profInRoom[t.professionalId] : profInGroup[t.professionalId]);
+        var busyLock = !(b && b.patient) && !!busyWhere;
         var isOff = abaLock || busyLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
         var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time, roomIsABA(r) ? professionalName(t.professionalId) : "")
-          : busyLock ? professionalName(t.professionalId) + " está atendendo em " + profInRoom[t.professionalId] + " neste horário."
+          : busyLock ? professionalName(t.professionalId) + (isGroup(r) ? " está atendendo em " : " tem agendamento no grupo ") + busyWhere + " neste horário."
           : "Fora do horário do profissional";
         html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock' : (busyLock ? ' prof-busy' : '')) : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
         if (isOff){
