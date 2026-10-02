@@ -774,6 +774,7 @@ ligação com a evolução); permissão exigida: editar.
 
 ## Cadastro da Clínica: Aparência e Atendimento em linhas (2026-10-02)
 Os dois cartões ficam um embaixo do outro (`.cl-cards` em coluna, `.cl-row`):
-Aparência = linha 1 "Cor do botão · Cor do texto · Prévia · Restaurar padrão",
-linha 2 "Logo · Escolher · Padrão"; Atendimento = "Duração padrão [seletor] +
+Aparência = linha 1 "Cor do botão · Cor do texto · Restaurar padrão",
+linha 2 "Prévia", linha 3 "Logo · Escolher · Padrão" (primeira etiqueta de cada
+linha com 104px: círculo da cor, prévia e logo alinhados); Atendimento = "Duração padrão [seletor] +
 orientação". Janela com 840px. Botão da tela Salas em modo grupos: "Salas".
