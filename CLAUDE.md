@@ -726,3 +726,11 @@ pacientes do Prontuário (`prRenderList`).
 `firstName(n)` (perto de `therapistDisplayName`): cabeçalho das colunas do
 Planner (`.seathead-name`, nome completo no `title`), nome na linha do almoço
 (`.periodrow-seatname`) e cabeçalho de profissionais do Resumo (`.rpt-prof-name`).
+
+## Nome do usuário = nome do profissional (2026-10-02)
+Usuário com `profiles.professional_id` tem sempre o nome do cadastro do
+profissional. Migração `supabase/2026-10-02j-nome-usuario-igual-profissional.sql`:
+trigger em `documents` (`config/professionals`) atualiza `profiles.full_name`;
+trigger `profiles_professional_name` (before insert/update) força o nome ao ligar
+ou editar; acerto único dos já diferentes. Tela Usuários: campo Nome travado
+para usuário ligado ("altere em Cadastros → Profissionais").

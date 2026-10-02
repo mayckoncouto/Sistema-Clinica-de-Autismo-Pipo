@@ -248,7 +248,9 @@
             : esc(u.email)) + "</div></div>" +
           '<button class="modal-close" id="uClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
-          '<div class="field"><label for="uName">Nome</label><input id="uName" type="text" value="' + esc(u ? u.full_name : "") + '"></div>' +
+          // Usuário ligado a um profissional: o nome vem do cadastro do profissional (o banco também garante).
+          '<div class="field"><label for="uName">Nome</label><input id="uName" type="text" value="' + esc(u ? u.full_name : "") + '"' + (u && u.professional_id ? " disabled" : "") + '>' +
+            (u && u.professional_id ? '<div class="pat-count" style="margin-top:6px">Igual ao cadastro do profissional. Para mudar, altere em Cadastros → Profissionais.</div>' : "") + "</div>" +
           (isNew
             ? '<div class="field-row">' +
                 '<div class="field"><label for="uEmail">E-mail</label><input id="uEmail" type="email" autocomplete="off"></div>' +
@@ -301,9 +303,10 @@
           role_id: roleId
         }).then(function () { toast("Usuário criado."); });
       } else {
-        var patch = { full_name: name };
+        var patch = u.professional_id ? {} : { full_name: name };
         if (!isMe) patch.role_id = roleId;
-        p = auth.client.from("profiles").update(patch).eq("id", u.id).then(function (r) {
+        p = !Object.keys(patch).length ? Promise.resolve(toast("Nada para salvar: o nome vem do cadastro do profissional.")) :
+          auth.client.from("profiles").update(patch).eq("id", u.id).then(function (r) {
           if (r.error) throw new Error(friendlyDbError(r.error));
           toast("Usuário atualizado.");
         });
