@@ -778,3 +778,9 @@ Aparência = linha 1 "Cor do botão · Cor do texto",
 linha 2 "Prévia | Restaurar padrão", linha 3 "Logo · Escolher | Restaurar padrão" (mesma divisória .cl-sep de "Cor do texto") (primeira etiqueta de cada
 linha com 104px: círculo da cor, prévia e logo alinhados); Atendimento = "Duração padrão [seletor] +
 orientação". Janela com 840px. Botão da tela Salas em modo grupos: "Salas".
+
+## Coluna de horários com largura fixa ao filtrar (2026-10-02)
+Planner: `table.sched` com `width:max-content` (sem `min-width:100%`): com o
+filtro de salas (poucas ou nenhuma coluna) a coluna de horários fica nos 87px em
+vez de esticar até a largura da tela. Agenda (visão Dia): sem nenhuma coluna a
+tabela recebe `width:87px` (com `table-layout:fixed` a única coluna esticava).
