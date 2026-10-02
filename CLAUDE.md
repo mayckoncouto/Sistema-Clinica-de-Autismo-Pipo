@@ -793,3 +793,8 @@ vazia vira `.slot-off.aba-lock` (listras rosadas, `title` com o motivo; clique e
 soltar mostram o motivo). `plannerConflict` recusa: (a) paciente "não ABA" onde a
 sala já tem alguém no horário; (b) qualquer paciente numa sala ocupada por um
 "não ABA". Bloqueado / Reunião / Treinamento não entram na regra.
+- Exceção (`groupBookedRoom(bookings, dayKey, time, room)`): se um Grupo de
+  Suporte tem, no mesmo horário, um agendamento com o nome desta sala, o MESMO
+  profissional pode ter outro paciente "não ABA" em outra coluna dele na sala.
+  Na grade, as colunas desse profissional não ficam listradas (`abaFreeProf`);
+  paciente ABA ou outro profissional continuam recusados.

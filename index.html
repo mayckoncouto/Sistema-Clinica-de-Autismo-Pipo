@@ -2869,8 +2869,10 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
       rowLockButtonsHtml('data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-time="'+row.time+'"') + '</div></td>';
     rooms.forEach(function(r){
       // Paciente que não faz intervenção ABA nesta sala e horário: as outras colunas ficam bloqueadas.
-      var abaHolder = null;
-      if (!isGroup(r)) r.therapists.some(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2)){ abaHolder = b2.patient; return true; } return false; });
+      var abaHolder = null, abaProfs = {};
+      if (!isGroup(r)) r.therapists.forEach(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2)){ abaHolder = abaHolder || b2.patient; abaProfs[t2.professionalId || ""] = true; } });
+      // Exceção: grupo de suporte agendado para esta sala e todos os "não ABA" do mesmo profissional.
+      var abaFreeProf = (abaHolder && Object.keys(abaProfs).length === 1 && Object.keys(abaProfs)[0] && groupBookedRoom(bookings, dayObj.key, row.time, r)) ? Object.keys(abaProfs)[0] : null;
       r.therapists.forEach(function(t){
         var key = row.time+"|"+r.id+"|"+t.id;
         var b = effectiveBooking(bookings, key, dayObj.key, row.time);
@@ -2886,7 +2888,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         // Fora do horário do profissional desta coluna: célula cinza e inativa
         // (sem clique, sem colar, sem soltar). Se já houver algo marcado ali, continua
         // aparecendo normalmente para poder ser movido ou desmarcado.
-        var abaLock = !(b && b.patient) && !!abaHolder;
+        var abaLock = !(b && b.patient) && !!abaHolder && !(abaFreeProf && t.professionalId === abaFreeProf);
         var isOff = abaLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
         var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time) : "Fora do horário do profissional";
         html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock' : '') : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
@@ -3364,6 +3366,18 @@ function isNaoABABooking(b){
   var p = findPatientByName(b.patient);
   return !!(p && patientIsNaoABA(p));
 }
+// Exceção: com um Grupo de Suporte agendado para esta sala no mesmo horário, o
+// MESMO profissional pode ter dois (ou mais) pacientes que não fazem intervenção
+// ABA na sala (um em cada coluna dele).
+function groupBookedRoom(bookings, dayKey, time, room){
+  return plannerRooms().some(function(g){
+    if (!isGroup(g)) return false;
+    return (g.therapists || []).some(function(t){
+      var b = effectiveBooking(bookings, time + "|" + g.id + "|" + t.id, dayKey, time);
+      return !!(b && b.patient && !bookingKind(b) && normText(b.patient) === normText(room.name));
+    });
+  });
+}
 function abaRoomMsg(holder, roomName, time){
   return roomName + " às " + time + " está ocupada por " + holder + ", que não faz intervenção ABA (ocupa a sala toda).";
 }
@@ -3391,6 +3405,7 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       var b = Object.prototype.hasOwnProperty.call(extra, k) ? extra[k] : effectiveBooking(bookings, k, dayKey, time);
       if (!b || !b.patient || bookingKind(b)) continue;
       if (r.id === room.id && !isGroup(room)){
+        if (recNaoABA && isNaoABABooking(b) && profId && t.professionalId === profId && groupBookedRoom(bookings, dayKey, time, room)) continue;
         if (recNaoABA) return "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + ".";
         if (isNaoABABooking(b)) return abaRoomMsg(b.patient, room.name, time);
       }
