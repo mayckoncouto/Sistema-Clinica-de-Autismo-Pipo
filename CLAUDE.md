@@ -825,3 +825,11 @@ regra "profissional em dois lugares" de `plannerConflict`.
   sala ou grupo fica `.prof-busy` ("Fulano está atendendo em <sala>" / "tem
   agendamento no grupo <grupo>"). Colunas dele na MESMA sala seguem só as regras
   de "não ABA".
+
+## Agenda, visão Dia + Salas: coluna dos grupos de suporte (2026-10-02)
+Só nesse modo, a grade tem duas colunas para a sala escolhida: a da sala (atendimentos
+dos profissionais) e, à direita, "Grupos de suporte" (atendimentos com o NOME de um
+grupo no lugar do paciente e `room_id` = a sala — como chegam do "Enviar para a
+Agenda"). `agdIsGroupRow(row)`; as colunas são cópias do recurso com `_split:
+"prof" | "grupos"` e `cell()` filtra a lista por isso. A coluna dos grupos não tem
+botões de bloquear/liberar (`td.agd-grp-col`, fundo cinza-claro).

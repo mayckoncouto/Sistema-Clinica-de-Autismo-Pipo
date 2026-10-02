@@ -209,6 +209,8 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .agd-grid th.today .agd-dnum{background:var(--accent);color:#fff;border-radius:999px;padding:1px 7px}
 .agd-grid th .agd-hsub{display:block;font-size:10.5px;font-weight:600;color:var(--muted);margin-top:1px}
 .agd-grid th.agd-tcol,.agd-grid td.agd-tcol{width:87px;position:sticky;left:0;z-index:2;background:var(--surface)}
+.agd-grid th.agd-grp-col{color:var(--ink-2)}
+.agd-grid td.agd-grp-col{background:var(--surface-2)}
 .agd-grid th.agd-tcol{z-index:4;padding:6px 1px;background:var(--surface-2);border-right:1px solid var(--line)}
 .agd-grid td.agd-tcol{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;font-weight:600;color:var(--ink-2);vertical-align:middle;padding:1px;white-space:nowrap;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
 /* Coluna de horários igual à do Planner (linhas, canto cinza, 12:00 no mesmo estilo). */
@@ -6379,6 +6381,8 @@ function agdRender(){
       list = idx.byProf[dateIso+"|"+t+"|"+res.id] || [];
     } else {
       list = idx.byRoom[dateIso+"|"+t+"|"+res.id] || [];
+      // Dia + Salas: a coluna da sala mostra os profissionais e a coluna "Grupos" os grupos de suporte.
+      if (res._split) list = list.filter(function(row){ return agdIsGroupRow(row) === (res._split === "grupos"); });
     }
     var has = list.length > 0;
     var searching = !!(AD.search || "").trim();
@@ -6431,16 +6435,20 @@ function agdRender(){
     var selRes = agdFindRes(AD.sel) || resources[0];
     AD.sel = selRes.id;
     var cols = [selRes];
+    // Dia + Salas: ao lado da sala, uma coluna com os agendamentos dos grupos de suporte nessa sala.
+    var daySplit = AD.mode === "sala";
+    if (daySplit) cols = [Object.assign({}, selRes, {_split: "prof"}), Object.assign({}, selRes, {_split: "grupos", _label: "Grupos de suporte"})];
     whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(selRes.name)+"</b>";
     html += '<thead><tr><th class="agd-tcol"></th>' + cols.map(function(r){
       var sub = AD.mode === "prof" ? (r.specialtyId ? specialtyName(r.specialtyId) : "") : "Sala";
-      // Sem largura fixa: a coluna do selecionado ocupa o resto e a de horários fica com 70px.
+      if (r._split === "grupos") return '<th class="agd-grp-col" title="Agendamentos dos grupos de suporte nesta sala">'+esc(r._label)+'<span class="agd-hsub">em '+esc(r.name)+'</span></th>';
+      // Sem largura fixa: a coluna do selecionado ocupa o resto e a de horários fica com 87px.
       return '<th style="'+(r.id === AD.sel ? 'color:var(--accent)' : '')+'" title="'+esc(r.name)+'">'+esc(r.name)+'<span class="agd-hsub">'+esc(sub || " ")+'</span></th>';
     }).join("") + '</tr></thead><tbody>';
-    html += '<tr class="agd-periodrow"><td class="agd-tcol agd-tcol-hist">'+agdHistoryButtonsHtml()+'</td>' + cols.map(function(r){ return agdPeriodCell("morning", dIso, r.id); }).join("") + '</tr>';
+    html += '<tr class="agd-periodrow"><td class="agd-tcol agd-tcol-hist">'+agdHistoryButtonsHtml()+'</td>' + cols.map(function(r){ return r._split === "grupos" ? '<td class="agd-grp-col"></td>' : agdPeriodCell("morning", dIso, r.id); }).join("") + '</tr>';
     var daySlots = agdSlots(AD.date), dayLunch = agdLunchLabel(daySlots);
     daySlots.forEach(function(t){
-      if (t === "ALMOCO"){ html += '<tr class="agd-lunch agd-periodrow"><td class="agd-tcol">'+dayLunch+'</td>' + cols.map(function(r){ return agdPeriodCell("afternoon", dIso, r.id); }).join("") + '</tr>'; return; }
+      if (t === "ALMOCO"){ html += '<tr class="agd-lunch agd-periodrow"><td class="agd-tcol">'+dayLunch+'</td>' + cols.map(function(r){ return r._split === "grupos" ? '<td class="agd-grp-col"></td>' : agdPeriodCell("afternoon", dIso, r.id); }).join("") + '</tr>'; return; }
       html += '<tr><td class="agd-tcol">'+agdRowTimeHtml(t)+'</td>' + cols.map(function(r){ return cell(dIso, t, r); }).join("") + '</tr>';
     });
     // Sem nenhuma coluna (filtro sem resultado): a tabela fica só com os 87px dos horários, sem esticar.
@@ -6456,6 +6464,12 @@ function agdRender(){
   }
 }
 
+// Atendimento da Agenda que é de um grupo de suporte (o nome do grupo no lugar do paciente).
+function agdIsGroupRow(row){
+  if (!row || !row.patient || bookingKind(row)) return false;
+  var n = normText(row.patient);
+  return supportGroups().some(function(g){ return normText(g.name) === n; });
+}
 // Busca da Agenda: nome do paciente/grupo (ou do tipo especial) contém o texto, sem acento/maiúscula.
 function agdSearchHit(row){
   var q = normText((AD.search || "").trim());
