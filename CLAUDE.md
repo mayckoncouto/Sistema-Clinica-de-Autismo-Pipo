@@ -671,3 +671,19 @@ Já tendo evolução, ou sendo grupo de suporte, finaliza direto. Sem permissão
 incluir no Prontuário, recusa com aviso. No banco, `appointments_status_guard`
 recusa a troca para "finalizado" sem `clinical_records` ligada (migração
 `supabase/2026-10-02i-finalizado-exige-evolucao.sql`).
+
+## Menus suspensos e seletores no padrão do sistema (2026-10-02)
+- Todo `<input type="date">`, `<input type="time">` e `<select>` simples (sem
+  `multiple`, sem `data-native`) vira um botão `.dp-btn` que abre uma janela
+  própria flutuante `#dpPop` (calendário ou lista). O campo original fica
+  escondido e continua recebendo `.value` / `change` (`dpEnhanceDate`,
+  `dpEnhanceTimeList`, `dpScan`, observador no body). Ícone de relógio só nos
+  selects de horário (`dpIsTimeSelect`); os outros têm `.dp-plain`.
+- Visual único (bloco "Padrão de TODO menu suspenso" no CSS): fundo branco,
+  borda e linhas cinzas entre itens, cantos de 10px, sombra leve; cor do
+  sistema só no item escolhido. Vale para `.autolist` (sugestões, agora
+  flutuantes, não empurram a janela), `.dp-pop`, `.cp-pop`, `.cad-menu`,
+  `.ms-panel`, `.rf-panel`, `.hist-menu`, `#acessoMenu`.
+- Teclado: nas sugestões ↑ ↓ marcam (`.kb`) e Enter escolhe; no calendário
+  ← → dia, ↑ ↓ semana, Enter escolhe; nas listas ↑ ↓ e Enter; nos menus
+  ↑ ↓ andam pelos itens. Esc fecha.
