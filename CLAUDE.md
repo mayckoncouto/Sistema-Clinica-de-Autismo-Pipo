@@ -866,7 +866,7 @@ Grupos de Suporte (`isGroup(r) || r.id === filtro`).
 - Relatório "Pacote contratado × realizado": linha de serviço conta os
   Finalizados com aquele `service`.
 
-## Planner: "Corrigir paciente" (2026-10-02)
+## Planner: "Editar agendamento" (antes "Corrigir paciente") (2026-10-02)
 Botão `#fixPatientBtn` na barra do Planner (antes de "Enviar para a Agenda") →
 `openFixPatientModal()`: lê os documentos `schedule/<dia>-<1..4>` e, para o
 paciente escolhido (select com busca), mostra:
@@ -879,6 +879,6 @@ paciente escolhido (select com busca), mostra:
 - lista detalhada (semana, dia, hora, sala, profissional, especialidade); clicar
   abre o dia/semana no Planner e preenche a busca com o paciente.
 - Depois de "ir até o horário", **Esc** no Planner limpa a busca da grade e
-  reabre "Corrigir paciente" com o mesmo paciente e período
+  reabre "Editar agendamento" com o mesmo paciente e período
   (`state.fixReturn`, `openFixPatientModal(back)`; não age com janela/menu aberto
   ou com copiar/mover em andamento).
