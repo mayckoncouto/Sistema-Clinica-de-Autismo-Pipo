@@ -721,3 +721,8 @@ tabela `.pat-table` com botão de ordenar (⇅ crescente → decrescente → pad
 volta ao padrão). `rows = [{attrs, cells:[html], vals:[valor de ordenação]}]`.
 Usado em Convênios, Serviços, Especialidades (`REG_CFG[k].vals`) e na lista de
 pacientes do Prontuário (`prRenderList`).
+
+## Primeiro nome do profissional no Planner e no Resumo (2026-10-02)
+`firstName(n)` (perto de `therapistDisplayName`): cabeçalho das colunas do
+Planner (`.seathead-name`, nome completo no `title`), nome na linha do almoço
+(`.periodrow-seatname`) e cabeçalho de profissionais do Resumo (`.rpt-prof-name`).
