@@ -1009,3 +1009,22 @@ sendo trocados pela Agenda.
   `#agendadia` no endereço. Só troca a seção visível; a carga dos dados vem do
   clique feito depois por `openNavFromHash()`. Roda antes de `CAD_ITEMS` e
   `MOBILE_MQ` existirem (por isso tem o próprio mapa e o próprio `matchMedia`).
+
+## Janelas no celular sem zoom (2026-10-03)
+- Causa do zoom: o iPhone (Safari) amplia sozinho ao tocar num campo com letra
+  menor que 16px e não volta ao sair. No `@media (max-width:760px)`: todo
+  input/select/textarea/contenteditable com `font-size:16px!important` (inclui o
+  login e campos com estilo inline). A meta viewport ganhou `maximum-scale=1`
+  (o iOS continua deixando a pessoa dar zoom com os dedos).
+- Janelas (`.modal`) ocupam a largura toda (`max-width/width:100%!important`,
+  vence os `style="max-width:…"` inline), overlay com 8px de margem e alinhado
+  em cima; `.field-row` quebra em 2 por linha (`flex:1 1 140px`); rodapé quebra
+  linha com botões centralizados; seletores (`.field .dp-btn`) com 16px.
+- Tabelas de horário (profissional, paciente, clínica) sem ícones/setas nos
+  seletores para caber "07:20"; `#clHours` rola para o lado se precisar.
+- Conferido com Playwright em 390px (`isMobile`) abrindo cada janela: Clínica,
+  confirmação, Paciente (novo/editar), Status, Profissional, Sala, Grupo, Agenda
+  (novo/detalhes), Editar agendamento, Trocar profissional, Evolução, Convênio,
+  Serviço, Especialidade — nenhuma passa da tela e nenhum campo < 16px.
+  Atenção: `tests/test.html` não tem meta viewport; para testar em celular
+  "de verdade" (isMobile) injete `<meta name="viewport" ...>` numa cópia.
