@@ -968,16 +968,16 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
 - Topo no celular (até 760px): abas (`#mainTabs`) e `.topbar-right` (usuário,
   Acesso, sincronização) somem; no canto direito fica o botão ☰ `#mnavBtn`
   (vira ✕ aberto) que abre `#mnavPanel` (`mnavRender`, `wireMobileNav`): nome e
-  nível do usuário, seção Cadastros (`CAD_ITEMS`), seção Planner (`PL_ITEMS`),
+  nível do usuário, seção Cadastros (`CAD_ITEMS`),
   abas visíveis de `#mainTabs` e seção Acesso (cópias dos botões de
   `#acessoMenu`; o clique é repassado ao botão original). Montado a cada
   abertura, então segue as permissões atuais.
-- **Planner não aparece no celular** (`isMobileView()`, `MOBILE_MQ` = mesma
-  largura de 760px): fica fora do menu ☰ (o Resumo entra como item comum, antes
-  de Relatórios); clicar na aba `agenda` no celular vai para `mobileAltTab()`
-  (primeira permitida: Agenda, Prontuário, Resumo, Relatórios, cadastros); ao
-  abrir ou virar celular com o Planner na tela, `mobileLeavePlanner()` troca de
-  tela. Só fica no Planner quem não tem nenhuma outra tela.
+- **Planner e Resumo não aparecem no celular** (`MOBILE_HIDDEN_TABS` =
+  `agenda`, `relatorio`; `isMobileView()`, `MOBILE_MQ` = mesma largura de
+  760px): ficam fora do menu ☰; clicar nessas abas no celular vai para
+  `mobileAltTab()` (primeira permitida: Agenda, Prontuário, Relatórios,
+  cadastros); ao abrir ou virar celular com uma delas na tela,
+  `mobileLeavePlanner()` troca de tela. Só fica nelas quem não tem outra tela.
 - Menu ☰: **Cadastros** e **Acesso** são grupos recolhidos (`mnavGroup`,
   botão `.mnav-grp[data-mnav-grp]` com seta + `.mnav-items` oculto); tocar no
   título abre/fecha as opções sem fechar o menu. Agenda, Prontuário, Resumo e
