@@ -2225,7 +2225,8 @@ function applyPermissionsUI(){
   var banner = document.getElementById("readonlyBanner");
   if (banner) banner.textContent = "Modo somente leitura — você pode ver a agenda, mas não tem permissão para alterá-la.";
   setReadonlyBanner(!agendaWrite);
-  openNavFromHash();
+  // Perfil já carregado: última tentativa de abrir a tela do endereço.
+  openNavFromHash(true);
 }
 var roomsLoaded = false, patientsLoaded = false, specialtiesLoaded = false, conveniosLoaded = false, professionalsLoaded = false;
 var reportSubs = {}; // docId -> {active, unsub}, independent of the Agenda tab's own day/week subscriptions
@@ -2708,6 +2709,7 @@ function wireTabs(){
     if (plBtnEl) plBtnEl.classList.toggle("active", PL_TABS.indexOf(state.tab) !== -1);
     var zc = document.getElementById("zoomCtrl");
     if (zc) zc.hidden = (state.tab !== "agenda");
+    navSaveHash();
     // Renders for this tab were skipped while it was hidden (see flushGridUpdate /
     // scheduleRelatorioRender) — the underlying state is current, only the DOM
     // wasn't repainted, so force one fresh render now that it's visible again.
@@ -5874,6 +5876,7 @@ function writeProfessionals(list){
 function renderSalasTab(){
   var host = document.getElementById("roomList");
   var groupsView = state.salasView === "grupos";
+  if (state.tab === "salas") navSaveHash();
   var toggleBtn = document.getElementById("toggleGroupsBtn"), addBtn = document.getElementById("addRoomBtn");
   if (toggleBtn) toggleBtn.textContent = groupsView ? "Salas" : "Grupos de suporte";
   if (addBtn) addBtn.textContent = groupsView ? "+ Novo grupo" : "+ Nova sala";
@@ -9362,22 +9365,39 @@ function navActivate(it){
 }
 function navOpenNewTab(key){ window.open(location.pathname + location.search + "#" + encodeURIComponent(key), "_blank"); }
 // Abre a tela pedida no endereço (#pacientes, #grupos, #resumo, #agendadia...).
+// "final" = perfil já carregado: se ainda não deu para abrir, desiste (sem permissão).
 var navHashDone = false;
-function openNavFromHash(){
+function openNavFromHash(final){
   if (navHashDone) return;
   var key = decodeURIComponent((location.hash || "").slice(1));
   if (!key){ navHashDone = true; return; }
   var it = navItem(key);
   if (it){
-    if (window.pipoAuth && !it.ok()) return;
+    if (window.pipoAuth && !it.ok()){ if (final){ navHashDone = true; navSaveHash(); } return; }
     navHashDone = true;
     if (!it.tab) setTimeout(function(){ openClinicModal(); }, 800); else navActivate(it);
+    navSaveHash();
     return;
   }
   var tb = document.querySelector('#mainTabs button[data-tab="' + key + '"]');
-  if (!tb || (window.pipoAuth && tb.hidden)) return;
+  // Usuários: botão sempre oculto, só o Administrador abre.
+  var ok = tb && (!window.pipoAuth || (key === "usuarios" ? window.pipoAuth.isAdmin() : !tb.hidden));
+  if (!ok){ if (final || !tb){ navHashDone = true; navSaveHash(); } return; }
   navHashDone = true;
   tb.click();
+}
+// Atualizar a página (F5) volta para a mesma tela: a tela aberta fica no endereço
+// (#pacientes, #grupos, #agendadia...), sem criar histórico no navegador.
+function navHashKey(){
+  if (state.tab === "salas") return state.salasView === "grupos" ? "grupos" : "salas";
+  if (state.tab === "agenda") return "planner";
+  if (state.tab === "relatorio") return "resumo";
+  return state.tab;
+}
+function navSaveHash(){
+  if (!navHashDone || !window.history || !history.replaceState) return;
+  var h = "#" + navHashKey();
+  if (location.hash !== h){ try { history.replaceState(history.state, "", location.pathname + location.search + h); } catch(e){} }
 }
 // Celular (até 760px): o botão ☰ no canto do topo abre um menu único com as
 // abas, os itens dos menus Cadastros/Planner e os do menu Acesso (que repassa o

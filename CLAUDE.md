@@ -991,3 +991,15 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   Serviços e Especialidades = Nome + Profissionais; Convênios = as duas que já
   tem. Busca ocupa a linha toda. Salas/Grupos já eram cartões e cabem na tela.
   Mudou a ordem das colunas no computador? Ajustar os `:nth-child` também.
+
+## Atualizar a página mantém a tela (2026-10-03, computador e celular)
+A tela aberta fica no endereço (`navSaveHash()` → `history.replaceState`, sem
+criar histórico): `#planner`, `#resumo`, `#agendadia`, `#prontuario`,
+`#relatorios`, `#pacientes`, `#salas`/`#grupos`, `#usuarios`… (`navHashKey()`).
+Chamado no clique das abas (`wireTabs`) e em `renderSalasTab`. No F5,
+`openNavFromHash()` abre a mesma tela (o mesmo mecanismo do Ctrl+clique); só
+grava depois que o endereço inicial foi tratado (`navHashDone`), para a tela
+padrão da carga não apagar o endereço. `applyPermissionsUI` chama
+`openNavFromHash(true)` (perfil carregado): sem permissão para a tela do
+endereço, desiste e grava a tela atual. No celular, Planner/Resumo continuam
+sendo trocados pela Agenda.
