@@ -1019,7 +1019,8 @@ sendo trocados pela Agenda.
 - Janelas (`.modal`) ocupam a largura toda (`max-width/width:100%!important`,
   vence os `style="max-width:…"` inline), overlay com 8px de margem e alinhado
   em cima; `.field-row` quebra em 2 por linha (`flex:1 1 140px`); rodapé quebra
-  linha com botões centralizados; seletores (`.field .dp-btn`) com 16px.
+  linha com botões centralizados; ✕ de fechar (`.modal-close`) com 24px e área
+  de toque de 44×44; seletores (`.field .dp-btn`) com 16px.
 - Tabelas de horário (profissional, paciente, clínica) sem ícones/setas nos
   seletores para caber "07:20"; `#clHours` rola para o lado se precisar.
 - Conferido com Playwright em 390px (`isMobile`) abrindo cada janela: Clínica,
