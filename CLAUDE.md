@@ -1003,3 +1003,9 @@ padrão da carga não apagar o endereço. `applyPermissionsUI` chama
 `openNavFromHash(true)` (perfil carregado): sem permissão para a tela do
 endereço, desiste e grava a tela atual. No celular, Planner/Resumo continuam
 sendo trocados pela Agenda.
+- **Sem "passar" por outra tela ao carregar:** `navInitialTab()` (no `boot`,
+  logo após `wireTabs`) mostra já a seção certa antes do primeiro desenho — a do
+  endereço, ou no celular sem endereço (ou com Planner/Resumo) a Agenda, gravando
+  `#agendadia` no endereço. Só troca a seção visível; a carga dos dados vem do
+  clique feito depois por `openNavFromHash()`. Roda antes de `CAD_ITEMS` e
+  `MOBILE_MQ` existirem (por isso tem o próprio mapa e o próprio `matchMedia`).

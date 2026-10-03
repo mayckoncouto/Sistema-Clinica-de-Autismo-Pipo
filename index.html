@@ -2232,10 +2232,38 @@ var roomsLoaded = false, patientsLoaded = false, specialtiesLoaded = false, conv
 var reportSubs = {}; // docId -> {active, unsub}, independent of the Agenda tab's own day/week subscriptions
 
 /* ---------------- boot ---------------- */
+// Tela inicial decidida antes do primeiro desenho, para não "passar" pelo
+// Planner ao atualizar a página: a do endereço (#pacientes, #grupos...) ou, no
+// celular sem endereço (ou com Planner/Resumo), a Agenda. Só mostra a seção; a
+// carga dos dados vem do clique na aba feito por openNavFromHash().
+// (Roda no boot, antes de CAD_ITEMS/MOBILE_MQ existirem: não usar esses aqui.)
+function navInitialTab(){
+  var key = "";
+  try { key = decodeURIComponent((location.hash || "").slice(1)); } catch(e){}
+  var tab = ({planner: "agenda", resumo: "relatorio", grupos: "salas"})[key] || key;
+  if (!tab || !document.getElementById("tab-" + tab) || !document.querySelector('#mainTabs button[data-tab="' + tab + '"]')) tab = "";
+  var mobile = !!(window.matchMedia && window.matchMedia("(max-width:760px)").matches);
+  if (mobile && (!tab || tab === "agenda" || tab === "relatorio")){
+    tab = "agendadia";
+    try { history.replaceState(history.state, "", location.pathname + location.search + "#agendadia"); } catch(e){}
+  }
+  if (!tab) return;
+  if (key === "grupos") state.salasView = "grupos";
+  state.tab = tab;
+  Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button[data-tab]"), function(x){
+    var k = x.getAttribute("data-tab");
+    x.classList.toggle("active", k === tab);
+    var sec = document.getElementById("tab-" + k);
+    if (sec) sec.hidden = (k !== tab);
+  });
+  var zc = document.getElementById("zoomCtrl");
+  if (zc) zc.hidden = (tab !== "agenda");
+}
 function boot(){
   buildDaySeg();
   buildWeekSeg();
   wireTabs();
+  navInitialTab();
   wireControls();
   wireZoomControl();
   wireGridDelegatedEvents();
