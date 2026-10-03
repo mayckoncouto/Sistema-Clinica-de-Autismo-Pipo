@@ -109,7 +109,16 @@
       ".field .role-pick b{color:var(--ink);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
       ".field .role-pick span{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
       ".u-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end}" +
-      ".u-actions .field{flex:1;min-width:160px;margin:0}";
+      ".u-actions .field{flex:1;min-width:160px;margin:0}" +
+      // Celular: lista de usuários só com Nome e Situação; busca na linha toda.
+      "@media (max-width:760px){" +
+        "#tab-usuarios .pat-toolbar{flex-wrap:wrap}" +
+        "#tab-usuarios .pat-toolbar .search-wrap{flex:1 1 100%;max-width:none!important}" +
+        ".adm-wrap{padding:0 8px 10px}" +
+        ".adm-users :is(th,td):nth-child(2),.adm-users :is(th,td):nth-child(3){display:none}" +
+        ".adm-users td.u-name{overflow-wrap:anywhere}" +
+        ".adm-users :is(th,td):last-child{width:1%;white-space:nowrap}" +
+      "}";
     var st = document.createElement("style");
     st.textContent = css;
     document.head.appendChild(st);
@@ -217,7 +226,7 @@
       return;
     }
     host.innerHTML =
-        '<table class="adm-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Nível de permissão</th><th>Situação</th></tr></thead><tbody>' +
+        '<table class="adm-table adm-users"><thead><tr><th>Nome</th><th>E-mail</th><th>Nível de permissão</th><th>Situação</th></tr></thead><tbody>' +
           list.map(function (u) {
             var role = roleById(u.role_id);
             return '<tr data-uid="' + esc(u.id) + '" class="' + (u.active ? "" : "inactive") + '" tabindex="0">' +
