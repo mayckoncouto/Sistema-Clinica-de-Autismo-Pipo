@@ -64,6 +64,29 @@ const path = require('path');
   console.log('convênio report uses convênio of the date?', r.conv === 'Conv A:P1:1 | Conv B:P2:2', r.conv);
   console.log('no-appointment report skips treatment closed before the period?', r.semHasCancelled === false);
   console.log('no-appointment report shows convênio at the end of the period?', r.semConv === 'Conv B', r.semConv);
+
+  // Tratamento com atendimentos Finalizados: não exclui e não muda a quantidade de sessões.
+  const lk = await ev(`(function(){
+    var pat = state.patientsRaw.filter(function(p){ return p.id === "duda-vermelho"; })[0];
+    TR.done = {}; TR.done[normText(pat.nome)] = ["2026-02-10"];   // finalizado no tempo do t1
+    var t1 = state.treatments.filter(function(t){ return t.id === "t1"; })[0];
+    var t2 = state.treatments.filter(function(t){ return t.id === "t2"; })[0];
+    return {c1: trDoneCount(t1), c2: trDoneCount(t2)};
+  })()`);
+  console.log('finalized appointment counts for the treatment of its date only?', lk.c1 === 1 && lk.c2 === 0, JSON.stringify(lk));
+  await ev(`openTreatmentModal(state.treatments.filter(function(t){ return t.id === "t1"; })[0])`);
+  await page.waitForSelector('#ovTreat');
+  console.log('treatment with done sessions: no Excluir, lock note shown?', !(await page.isVisible('#trDel')) && await page.isVisible('#trLockNote'));
+  console.log('package and specialty quantities locked?', await page.$eval('#pPac', (i) => i.disabled) && await page.$eval('#specRowsHost .spec-hours-val', (i) => i.disabled) && await page.$eval('#specRowAdd', (b) => b.disabled));
+  console.log('therapist per specialty still editable?', !(await page.$eval('#specRowsHost .spec-prof', (s) => s.disabled)));
+  await page.$eval('#pPac', (i) => { i.disabled = false; i.value = '99'; });
+  await page.click('#trSave'); await page.waitForTimeout(200);
+  console.log('saving with a changed quantity is refused?', !!(await page.$('#ovTreat')) && (await ev(`state.treatments.filter(function(t){ return t.id === "t1"; })[0].pacoteHoras`)) === undefined);
+  await page.click('#trCancel');
+  await ev(`openTreatmentModal(state.treatments.filter(function(t){ return t.id === "t2"; })[0])`);
+  await page.waitForSelector('#ovTreat');
+  console.log('treatment without done sessions can still be deleted and edited?', await page.isVisible('#trDel') && !(await page.$eval('#pPac', (i) => i.disabled)));
+  await page.click('#trCancel');
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

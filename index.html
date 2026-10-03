@@ -9618,7 +9618,7 @@ function trHistHtml(t){
       (e.obs ? '<div class="tr-hist-obs">' + esc(e.obs) + '</div>' : '') + '</li>';
   }).join("") + '</ul>';
 }
-var TR = {last: null, lastAt: 0, loading: false, filter: "", search: "", fin: null};
+var TR = {last: null, done: null, lastAt: 0, loading: false, loadP: null, filter: "", search: "", fin: null};
 var treatmentsLoaded = false;
 function trLabel(list, id){ var x = list.filter(function(i){ return i.id === id; })[0]; return x ? x.name : (id || "—"); }
 function trTodayIso(){ var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -9778,23 +9778,46 @@ function treatSummaryHtml(t){
 }
 
 // Último atendimento (Agenda, sem bloqueios, até hoje) de cada paciente; recarrega a cada 2 min.
+// Também guarda as datas dos atendimentos Finalizados (TR.done), que travam o
+// tratamento: não pode ser excluído nem ter a quantidade de sessões alterada.
+// Devolve uma Promise (a mesma enquanto carrega).
 function trLoadLast(force){
   var c = agdClient();
-  if (!c || TR.loading) return;
-  if (!force && TR.last && Date.now() - TR.lastAt < 120000) return;
+  if (!c) return Promise.resolve();
+  if (TR.loading) return TR.loadP;
+  if (!force && TR.last && Date.now() - TR.lastAt < 120000) return Promise.resolve();
   TR.loading = true;
-  var out = {}, page = 1000, today = trTodayIso();
+  var out = {}, done = {}, page = 1000, today = trTodayIso();
   function next(from){
-    return c.from("appointments").select("patient,date").eq("blocked", false).lte("date", today)
+    return c.from("appointments").select("patient,date,status").eq("blocked", false).lte("date", today)
       .order("date").range(from, from + page - 1).then(function(r){
         if (r.error) throw r.error;
-        (r.data || []).forEach(function(a){ var k = normText(String(a.patient || "").trim()); if (k) (out[k] = out[k] || []).push(a.date); });
+        (r.data || []).forEach(function(a){
+          var k = normText(String(a.patient || "").trim()); if (!k) return;
+          (out[k] = out[k] || []).push(a.date);
+          if (a.status === FINAL_STATUS) (done[k] = done[k] || []).push(a.date);
+        });
         return (r.data || []).length === page ? next(from + page) : null;
       });
   }
-  next(0).then(function(){ TR.last = out; TR.lastAt = Date.now(); })
+  TR.loadP = next(0).then(function(){ TR.last = out; TR.done = done; TR.lastAt = Date.now(); })
     .catch(function(){ TR.last = TR.last || {}; })
     .then(function(){ TR.loading = false; if (state.tab === "tratamentos") renderTreatmentsTab(); });
+  return TR.loadP;
+}
+// Atendimentos Finalizados deste tratamento (pela regra do tratamento vigente na
+// data). null = ainda não se sabe (sem sistema online ou carregando).
+function trDoneCount(t){
+  if (!t || !TR.done) return null;
+  var p = rawPatient(t.patientId); if (!p) return 0;
+  return (TR.done[normText(String(p.nome || "").trim())] || []).filter(function(d){
+    var x = treatmentAt(t.patientId, d); return x && x.id === t.id;
+  }).length;
+}
+// Quantidade total de sessões contratadas (pacote + especialidades/serviços).
+function trQtyKey(o){
+  return JSON.stringify([String(o.pacoteHoras == null ? "" : o.pacoteHoras).trim(),
+    (Array.isArray(o.specHours) ? o.specHours : []).map(function(r){ return [r.specId, String(r.hours == null ? "" : r.hours).trim()]; })]);
 }
 // Término = último atendimento entre o início deste tratamento e o início do seguinte.
 function trEnd(t){
@@ -9944,6 +9967,7 @@ function openTreatmentModal(t, opts){
         '<div class="modal-sub">Cada paciente tem só um tratamento Ativo. O tipo é automático: <b>Novo</b> quando não há tratamento anterior ou o anterior foi Cancelado; <b>Renegociado</b> quando o anterior foi Renegociado.</div></div>' +
         '<button class="modal-close" id="trClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
+        '<div class="tr-cancel" id="trLockNote" hidden><p class="tr-cancel-note" id="trLockText"></p></div>' +
         '<div class="field"><label for="trPat">Paciente</label><select id="trPat"' + (isNew && !opts.renegotiateFrom ? '' : ' disabled') + '>' + patOpts + '</select></div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="trIni">Data de início</label><input type="date" id="trIni" value="' + esc(d.inicio) + '"></div>' +
@@ -9993,6 +10017,25 @@ function openTreatmentModal(t, opts){
     document.getElementById("trVal").addEventListener("input", upFinal);
     document.getElementById("trDesp").addEventListener("input", upFinal);
   }
+  // Com atendimentos Finalizados: não exclui e não muda a quantidade de sessões
+  // (pacote e especialidades/serviços) — para isso, Renegociar ou Cancelar.
+  var doneN = isNew ? 0 : trDoneCount(t);
+  function applyLock(){
+    if (!document.getElementById("ovTreat")) return;
+    doneN = trDoneCount(t);
+    if (!doneN) return;
+    var note = document.getElementById("trLockNote");
+    note.hidden = false;
+    document.getElementById("trLockText").textContent = "Este tratamento já tem " + doneN + (doneN === 1 ? " atendimento realizado (Finalizado)" : " atendimentos realizados (Finalizados)") +
+      ": não pode ser excluído e a quantidade de sessões (pacote e especialidades/serviços) não pode ser alterada. Para mudar, use Renegociar (ou Cancelar).";
+    var d0 = document.getElementById("trDel"); if (d0) d0.hidden = true;
+    var lockSel = "#pPac, #specRowsHost .spec-name, #specRowsHost .spec-hours-val, #specRowsHost .rm, #specRowAdd";
+    Array.prototype.forEach.call(document.querySelectorAll(lockSel), function(el){ el.disabled = true; el.title = "Já há atendimentos realizados: use Renegociar."; });
+  }
+  if (!isNew){
+    if (doneN) applyLock();
+    else if (doneN === null && agdClient()) trLoadLast(false).then(applyLock);
+  }
   // Cancelado: mostra motivo e observação ("Outro" torna a observação obrigatória).
   function syncCancel(){
     var on = document.getElementById("trSt").value === "cancelado";
@@ -10012,6 +10055,9 @@ function openTreatmentModal(t, opts){
   var del = document.getElementById("trDel");
   if (del) del.addEventListener("click", function(){
     var p = rawPatient(t.patientId);
+    var n0 = trDoneCount(t);
+    if (n0 === null && agdClient()){ trLoadLast(false).then(function(){ applyLock(); var n1 = trDoneCount(t); if (n1 === null) showToast("Não foi possível conferir os atendimentos deste tratamento. Tente de novo.", true); else if (n1) showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); else del.click(); }); return; }
+    if (n0){ showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); return; }
     confirmDialog({title: "Excluir tratamento", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Excluir tratamento"})
       .then(function(ok){
         if (!ok) return;
@@ -10029,6 +10075,9 @@ function openTreatmentModal(t, opts){
     var ini = document.getElementById("trIni").value;
     if (!ini){ showToast("Informe a data de início.", true); return; }
     var r = ed.read();
+    if (!isNew && trDoneCount(t) && trQtyKey(r.fields) !== trQtyKey(t)){
+      showToast("Já há atendimentos realizados neste tratamento: a quantidade de sessões não pode ser alterada. Use Renegociar.", true); return;
+    }
     var st = document.getElementById("trSt").value;
     if (wasCancelled) st = "cancelado";   // cancelado é definitivo
     var motId = document.getElementById("trMot").value;

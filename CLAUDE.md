@@ -1215,3 +1215,14 @@ volta a outro status — para retomar, novo tratamento); histórico na janela.
   permitido, `module_for_path`, níveis copiam o acesso de Tratamentos, motivos
   iniciais, trigger `treatments_cancel_rules`: cancelado não muda de status e
   cancelar exige `motivoCancel`). `writeTreatments` mostra essas mensagens.
+
+## Tratamento com atendimentos realizados fica travado (2026-10-03)
+"Realizado" = atendimento da Agenda com status Finalizado, atribuído ao
+tratamento pela data (`treatmentAt`). `trLoadLast` (agora devolve Promise) também
+guarda `TR.done` (nome normalizado → datas Finalizadas); `trDoneCount(t)` (null =
+ainda não carregado). Com 1 ou mais: a janela mostra `#trLockNote`, esconde
+Excluir e desativa pacote (`#pPac`) e quantidades/linhas de especialidades e
+serviços (`.spec-name`, `.spec-hours-val`, `.rm`, `#specRowAdd`) — o terapeuta da
+linha continua editável. Salvar compara `trQtyKey` (pacote + specId/quantidade)
+e recusa mudança; excluir recusa. Para mudar: Renegociar (ou Cancelar). Só no
+app (o banco não confere). Teste no fim de `tests/run_treatment_history.js`.
