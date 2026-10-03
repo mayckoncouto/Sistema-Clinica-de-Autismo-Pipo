@@ -915,6 +915,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .mnav-panel button:hover,.mnav-panel button:focus{background:var(--accent-weak);outline:none}
   .mnav-panel button.on{background:var(--accent-weak);color:var(--accent);font-weight:800}
   .mnav-sep{height:1px;background:var(--line);margin:6px 0}
+  /* Agenda no celular: só a visão Dia. */
+  #agdViewSeg{display:none!important}
   /* Relatórios no celular: campos OU relatório (tela cheia, com "Voltar"). */
   #tab-relatorios{flex-direction:column}
   #tab-relatorios .rp-form{width:auto;border:0;flex:1;min-height:0}
@@ -6642,6 +6644,16 @@ function agdDeleteRow(row, okMsg){
 }
 
 function agdRender(){
+  // Celular: só a visão Dia (os botões Dia/Semana ficam ocultos pelo CSS). A
+  // escolha do computador é guardada e volta quando a tela fica larga de novo.
+  var agdMob = !!(window.matchMedia && window.matchMedia("(max-width:760px)").matches);
+  if (agdMob && AD.view !== "dia"){
+    AD._deskView = AD.view; AD.view = "dia";
+    var agdWk = agdIso(agdMonday(AD.date));
+    AD.date = agdClampWeekday(AD.date);
+    if (agdIso(agdMonday(AD.date)) !== agdWk){ agdLoadWeek(); return; }
+  }
+  else if (!agdMob && AD._deskView){ AD.view = AD._deskView; AD._deskView = null; }
   var gridHost = document.getElementById("agdGrid");
   if (!gridHost) return;
   var ownProf = agdOwnProfId();
@@ -9555,7 +9567,10 @@ function wireMobileNav(){
   // Abriu (ou virou) celular com o Planner na tela: troca para outra tela.
   setTimeout(mobileLeavePlanner, 0);
   if (MOBILE_MQ){
-    var onMq = function(){ if (isMobileView()) mobileLeavePlanner(); };
+    var onMq = function(){
+      if (isMobileView()) mobileLeavePlanner();
+      if (state.tab === "agendadia") agdRender();
+    };
     if (MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener("change", onMq); else if (MOBILE_MQ.addListener) MOBILE_MQ.addListener(onMq);
   }
   // Voltou para a tela grande com o menu aberto: fecha.

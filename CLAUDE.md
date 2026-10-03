@@ -1036,3 +1036,11 @@ esconde `.rp-form` e mostra `#rpOut` com a barra `.rp-back-bar` / botão
 `#rpBack` ("‹ Voltar") no topo; Voltar = `rpShowResult(false)`. Sem relatório
 gerado, `#rpOut` fica oculto no celular. No computador nada muda (a barra fica
 sempre oculta, form e resultado lado a lado).
+
+## Agenda no celular: só a visão Dia (2026-10-03)
+`#agdViewSeg` (Dia/Semana) oculto no `@media (max-width:760px)`. No início de
+`agdRender()`, em tela de celular, `AD.view` vira "dia" (a escolha anterior fica
+em `AD._deskView` e volta ao alargar a tela); a data é levada ao próximo dia
+aberto (`agdClampWeekday`) e, se isso mudar de semana, chama `agdLoadWeek()`.
+A troca de largura (`MOBILE_MQ`, `wireMobileNav`) redesenha a Agenda se ela
+estiver aberta. ‹ › andam de dia em dia (lógica da visão Dia que já existia).
