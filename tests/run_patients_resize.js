@@ -59,12 +59,12 @@ const path = require('path');
 
   // ---- TEST: the width survives a full reload (simulating the user coming back later) ----
   await page.reload();
+  // Atualizar a página volta para a mesma tela (endereço #pacientes).
   await page.waitForFunction(() => {
-    const el = document.querySelector('#gridHost .book-main .pname');
-    return el && el.textContent.includes('Paciente Um');
+    const el = document.querySelector('#patListHost .pt-nome');
+    return el && !document.getElementById('tab-pacientes').hidden;
   }, { timeout: 5000 });
-  await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
-  await page.waitForTimeout(150);
+  console.log('reload stays on Pacientes (#pacientes)?', await page.evaluate(() => location.hash === '#pacientes'));
   const widthAfterReload = await page.locator('#patListHost col[data-col="nome"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
   console.log('after reload, Nome column keeps the saved 310px width?', widthAfterReload === 310);
 
