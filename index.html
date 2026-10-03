@@ -144,7 +144,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .cad-menu[hidden]{display:none}
 .cad-menu button{border:0;background:transparent;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 .cad-menu button:hover,.cad-menu button:focus{background:var(--accent-weak);outline:none}
-#tab-convenios,#tab-servicos,#tab-especialidades{flex:1;min-height:0;display:flex;flex-direction:column}
+#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-host{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-table tbody tr{cursor:pointer}
 .reg-table tbody tr:hover td{background:var(--accent-weak)}
@@ -294,6 +294,13 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .rp-back-bar{display:none}
 .tr-chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:800;color:#fff;background:#6b7a77}
 .tr-chip.st-ativo{background:#2c7a72}.tr-chip.st-renegociado{background:#b7791f}.tr-chip.st-cancelado{background:#b6403a}
+.tr-cancel{border:1px solid #f0c9c6;background:color-mix(in srgb,#b6403a 6%,var(--surface));border-radius:10px;padding:10px 12px 2px;margin-bottom:12px}
+.tr-cancel-note{font-size:12px;color:#9b3530;margin:0 0 8px}
+.tr-hist{list-style:none;margin:6px 0 10px;padding:0;font-size:12.5px}
+.tr-hist li{padding:6px 0;border-bottom:1px solid var(--line)}
+.tr-hist li:last-child{border-bottom:0}
+.tr-hist-when{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:6px}
+.tr-hist-obs{color:var(--muted);margin-top:2px;white-space:pre-wrap}
 .tr-sec{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
 .pt-treat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
 .pt-treat-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -1015,6 +1022,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="convenios" hidden>Convênios</button>
       <button data-tab="servicos" hidden>Serviços</button>
       <button data-tab="especialidades" hidden>Especialidades</button>
+      <button data-tab="motivos" hidden>Motivos de cancelamento</button>
       <button data-tab="salas" hidden>Salas</button>
       <button data-tab="relatorio" hidden>Resumo</button>
       <button data-tab="relatorios" hidden>Relatórios</button>
@@ -1194,6 +1202,19 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button class="btn primary" id="reg-especialidades-add">+ Nova especialidade</button>
     </div>
     <div id="reg-especialidades-host" class="reg-host"></div>
+  </section>
+
+  <section id="tab-motivos" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-motivos-search" type="text" placeholder="Buscar motivo…">
+      </div>
+      <span class="pat-count" id="reg-motivos-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-motivos-add">+ Novo motivo</button>
+    </div>
+    <div id="reg-motivos-host" class="reg-host"></div>
   </section>
 
   <!-- SALAS TAB -->
@@ -2157,6 +2178,7 @@ var state = {
   treatments: [],        // treatments/all
   specialties: [],       // specialty registry [{id,name}], from db
   convenios: [],         // convênio registry [{id,name}], from db
+  cancelReasons: [],     // motivos de cancelamento dos tratamentos [{id,name}] (config/cancel_reasons)
   services: [],          // serviços [{id,name}] (Sessão, Triagem…), from db — tela Profissionais › Serviços
   professionals: [],     // staff registry [{id,name,specialtyId}], from db
   reportDocs: {},         // docId -> {bookings:{...}} for ALL 20 day/week docs, for the Relatório tab
@@ -2188,7 +2210,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -2255,7 +2277,7 @@ function bookingPermDenied(changesByDoc){
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
   if (!window.pipoAuth) return;
-  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades"};
+  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -2412,6 +2434,7 @@ function connectDb(){
     subscribeSpecialties();
     subscribeConvenios();
     subscribeServices();
+    subscribeCancelReasons();
     subscribeStatuses();
     subscribeClinic();
     subscribeProfessionals();
@@ -2545,6 +2568,23 @@ function subscribeStatuses(){
     state.statuses = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
     if (typeof agdRender === "function" && state.tab === "agendadia") agdRender();
   }, function(){});
+}
+function subscribeCancelReasons(){
+  db.doc("config/cancel_reasons").onSnapshot(function(snap){
+    state.cancelReasons = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
+    if (state.tab === "motivos") renderRegistryTab("motivos");
+  }, function(){});
+}
+function writeCancelReasons(list){
+  var denied = listPermDenied("motivos_cancelamento", state.cancelReasons, list);
+  if (denied){ showToast(denied, true); return Promise.resolve(); }
+  state.cancelReasons = list;
+  if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
+  if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
+  return db.doc("config/cancel_reasons").set({list: list}).catch(function(e){
+    var m = (e && e.message) || "";
+    showToast(/check constraint|documents_path_valid/i.test(m) ? "Falta rodar a atualização do banco (motivos de cancelamento)." : "Não foi possível salvar os motivos.", true);
+  });
 }
 function subscribeServices(){
   db.doc("config/services").onSnapshot(function(snap){
@@ -9178,9 +9218,9 @@ var RP_BUILDERS = {
       {title: "Tratamentos iniciados no período", head: mm(["Paciente", "Início", "Tipo", "Status", "Convênio"], ["Valor", "Despesas", "Valor final"]),
         empty: "Nenhum tratamento iniciado no período.",
         rows: started.map(function(t){ var mo = trMoney(t); return mm([pn(t), trBr(t.inicio), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), conv(t) || "—"], [fmtMoney(mo.valor), fmtMoney(mo.despesas), fmtMoney(trFinal(t))]); })},
-      {title: "Tratamentos encerrados no período (cancelados ou renegociados)", head: mm(["Paciente", "Início", "Encerrado em", "Status"], ["Valor final"]),
+      {title: "Tratamentos encerrados no período (cancelados ou renegociados)", head: mm(["Paciente", "Início", "Encerrado em", "Status", "Motivo", "Observação do cancelamento"], ["Valor final"]),
         empty: "Nenhum tratamento encerrado no período.",
-        rows: ended.map(function(t){ return mm([pn(t), trBr(t.inicio), trBr(t.statusEm), trLabel(TR_STATUS, t.status)], [fmtMoney(trFinal(t))]); })}
+        rows: ended.map(function(t){ var c = t.status === "cancelado"; return mm([pn(t), trBr(t.inicio), trBr(t.statusEm), trLabel(TR_STATUS, t.status), c ? (cancelReasonName(t) || "—") : "—", c ? (t.obsCancel || "") : ""], [fmtMoney(trFinal(t))]); })}
     ]};
   },
   "lista": function(rows, o){
@@ -9544,6 +9584,40 @@ var TR_STATUS = [
   {id: "cancelado", name: "Cancelado", color: "#b6403a"}
 ];
 var TR_TIPOS = [{id: "novo", name: "Novo"}, {id: "renegociado", name: "Renegociado"}];
+// Motivos de cancelamento (Cadastros → Motivos de cancelamento, config/cancel_reasons).
+// "Outro" é fixo e exige a observação do cancelamento. Sem cadastro no banco
+// (antes do ajuste 2026-10-03e, ou nos testes) valem os motivos iniciais.
+var CANCEL_OTHER_ID = "outro";
+var DEFAULT_CANCEL_REASONS = [
+  {id: "financeiro", name: "Financeiro"}, {id: "mudanca-de-cidade", name: "Mudança de cidade"},
+  {id: "alta-terapeutica", name: "Alta terapêutica"}, {id: "insatisfacao", name: "Insatisfação"},
+  {id: CANCEL_OTHER_ID, name: "Outro"}
+];
+function cancelReasonsList(){ return (state.cancelReasons && state.cancelReasons.length) ? state.cancelReasons.slice() : DEFAULT_CANCEL_REASONS.slice(); }
+function cancelReasonName(t){
+  var m = cancelReasonsList().filter(function(x){ return x.id === t.motivoCancel; })[0];
+  return m ? m.name : (t.motivoCancelNome || "");
+}
+// Histórico do tratamento: quem mudou o status, quando, de → para, motivo.
+function trWho(){ var me = prMe(); return me ? (me.full_name || me.email || "") : ""; }
+function trHistAdd(rec, entry){
+  rec.historico = (Array.isArray(rec.historico) ? rec.historico : []).concat([Object.assign({em: new Date().toISOString(), por: trWho()}, entry)]);
+  return rec;
+}
+function trHistHtml(t){
+  var h = (Array.isArray(t.historico) ? t.historico : []).slice().reverse();
+  if (!h.length && t.criadoEm) h = [{em: t.criadoEm, acao: "criado", para: t.status, por: ""}];
+  if (!h.length) return '<div class="hint">Sem registros.</div>';
+  return '<ul class="tr-hist">' + h.map(function(e){
+    var when = e.em ? prStamp(e.em) : "";
+    var what = e.acao === "criado" ? "Tratamento criado como <b>" + esc(trLabel(TR_STATUS, e.para)) + "</b>"
+      : e.acao === "motivo" ? "Motivo do cancelamento alterado"
+      : "Status: " + esc(trLabel(TR_STATUS, e.de)) + " → <b>" + esc(trLabel(TR_STATUS, e.para)) + "</b>" + (e.auto ? " (outro tratamento ficou ativo)" : "");
+    var mot = e.motivoNome ? " · Motivo: <b>" + esc(e.motivoNome) + "</b>" : "";
+    return '<li><span class="tr-hist-when">' + esc(when) + '</span>' + what + mot + (e.por ? ' · por ' + esc(e.por) : '') +
+      (e.obs ? '<div class="tr-hist-obs">' + esc(e.obs) + '</div>' : '') + '</li>';
+  }).join("") + '</ul>';
+}
 var TR = {last: null, lastAt: 0, loading: false, filter: "", search: "", fin: null};
 var treatmentsLoaded = false;
 function trLabel(list, id){ var x = list.filter(function(i){ return i.id === id; })[0]; return x ? x.name : (id || "—"); }
@@ -9690,7 +9764,7 @@ function writeTreatments(list){
   return db.doc("treatments/all").set({list: list}).then(function(){ return true; }).catch(function(e){
     var m = (e && e.message) || "";
     // A permissão já é avisada pelo adaptador; a regra "um só ativo" vem do banco com o motivo.
-    if (!(e && e.code === "permission")) showToast(/tratamento ativo/i.test(m) ? m : "Não foi possível salvar o tratamento.", true);
+    if (!(e && e.code === "permission")) showToast(/tratamento ativo|cancelad|motivo/i.test(m) ? m : "Não foi possível salvar o tratamento.", true);
     return false;
   });
 }
@@ -9851,6 +9925,12 @@ function openTreatmentModal(t, opts){
     obs: isNew ? "" : (t.obs || "")
   };
   var ed = treatFieldsEditor(v);
+  var wasCancelled = !isNew && t.status === "cancelado";
+  var mots = cancelReasonsList();
+  if (!isNew && t.motivoCancel && !mots.some(function(m){ return m.id === t.motivoCancel; })) mots.push({id: t.motivoCancel, name: t.motivoCancelNome || t.motivoCancel});
+  var motOpts = '<option value="">Selecione o motivo…</option>' + mots.map(function(m){
+    return '<option value="' + esc(m.id) + '"' + (!isNew && m.id === t.motivoCancel ? ' selected' : '') + '>' + esc(m.name) + '</option>';
+  }).join("");
   var pats = (state.patientsRaw || []).slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
   var patOpts = '<option value="">Selecione o paciente…</option>' + pats.map(function(p){
     var act = activeTreatment(p.id);
@@ -9877,11 +9957,19 @@ function openTreatmentModal(t, opts){
         '</div>') : '') +
         '<div class="field-row">' +
           '<div class="field"><label for="trTipo">Tipo (automático)</label><select id="trTipo" disabled>' + opt(TR_TIPOS, d.tipo) + '</select></div>' +
-          '<div class="field"><label for="trSt">Status</label><select id="trSt">' + opt(TR_STATUS, d.status) + '</select></div>' +
+          '<div class="field"><label for="trSt">Status</label><select id="trSt"' + (wasCancelled ? ' disabled' : '') + '>' + opt(TR_STATUS, d.status) + '</select></div>' +
+        '</div>' +
+        '<div class="tr-cancel" id="trCancelBox"' + (d.status === "cancelado" ? '' : ' hidden') + '>' +
+          '<p class="tr-cancel-note">' + (wasCancelled ? 'Tratamento cancelado: o status não pode mais ser alterado. Para retomar, crie um novo tratamento.' : 'Cancelado é definitivo: depois de salvo, o tratamento não volta a outro status.') + '</p>' +
+          '<div class="field-row">' +
+            '<div class="field"><label for="trMot">Motivo do cancelamento</label><select id="trMot">' + motOpts + '</select></div>' +
+          '</div>' +
+          '<div class="field"><label for="trObsCancel">Observação do cancelamento <span id="trObsCancelReq" class="hint"></span></label><textarea id="trObsCancel" rows="2" placeholder="Detalhe o motivo, se necessário">' + esc(isNew ? "" : (t.obsCancel || "")) + '</textarea></div>' +
         '</div>' +
         '<div class="tr-sec">Plano terapêutico</div>' +
         ed.html +
         '<div class="field"><label for="trObs">Observações</label><textarea id="trObs" rows="2" placeholder="Opcional">' + esc(d.obs) + '</textarea></div>' +
+        (isNew ? '' : '<div class="tr-sec">Histórico</div>' + trHistHtml(t)) +
       '</div>' +
       '<div class="modal-foot">' +
         (canDel ? '<button class="btn danger" id="trDel">Excluir</button>' : '') +
@@ -9905,6 +9993,15 @@ function openTreatmentModal(t, opts){
     document.getElementById("trVal").addEventListener("input", upFinal);
     document.getElementById("trDesp").addEventListener("input", upFinal);
   }
+  // Cancelado: mostra motivo e observação ("Outro" torna a observação obrigatória).
+  function syncCancel(){
+    var on = document.getElementById("trSt").value === "cancelado";
+    document.getElementById("trCancelBox").hidden = !on;
+    document.getElementById("trObsCancelReq").textContent = document.getElementById("trMot").value === CANCEL_OTHER_ID ? "(obrigatória para \"Outro\")" : "(opcional)";
+  }
+  document.getElementById("trSt").addEventListener("change", syncCancel);
+  document.getElementById("trMot").addEventListener("change", syncCancel);
+  syncCancel();
   // Paciente escolhido num tratamento novo: reabre já com o tipo certo e os dados dele.
   document.getElementById("trPat").addEventListener("change", function(e){
     var np = e.target.value; if (!np || np === pid) return;
@@ -9933,6 +10030,14 @@ function openTreatmentModal(t, opts){
     if (!ini){ showToast("Informe a data de início.", true); return; }
     var r = ed.read();
     var st = document.getElementById("trSt").value;
+    if (wasCancelled) st = "cancelado";   // cancelado é definitivo
+    var motId = document.getElementById("trMot").value;
+    var obsCancel = document.getElementById("trObsCancel").value.trim();
+    if (st === "cancelado"){
+      if (!motId){ showToast("Escolha o motivo do cancelamento.", true); document.getElementById("trMot").focus(); return; }
+      if (motId === CANCEL_OTHER_ID && !obsCancel){ showToast("Com o motivo \"Outro\", descreva o motivo na observação do cancelamento.", true); document.getElementById("trObsCancel").focus(); return; }
+    }
+    var motName = (mots.filter(function(m){ return m.id === motId; })[0] || {}).name || "";
     var now = new Date().toISOString();
     var rec = Object.assign({}, t || {}, r.fields, {
       id: t ? t.id : uid("tr"),
@@ -9945,6 +10050,12 @@ function openTreatmentModal(t, opts){
       atualizadoEm: now
     });
     if (!t || t.status !== st) rec.statusEm = trTodayIso();
+    if (st === "cancelado"){ rec.motivoCancel = motId; rec.motivoCancelNome = motName; rec.obsCancel = obsCancel; }
+    else { delete rec.motivoCancel; delete rec.motivoCancelNome; delete rec.obsCancel; }
+    var cancelInfo = st === "cancelado" ? {motivo: motId, motivoNome: motName, obs: obsCancel} : {};
+    if (isNew) trHistAdd(rec, Object.assign({acao: "criado", para: st}, cancelInfo));
+    else if (t.status !== st) trHistAdd(rec, Object.assign({acao: "status", de: t.status, para: st}, cancelInfo));
+    else if (st === "cancelado" && (t.motivoCancel !== motId || (t.obsCancel || "") !== obsCancel)) trHistAdd(rec, Object.assign({acao: "motivo"}, cancelInfo));
     // Valores: online vão para a tabela protegida (o documento fica sem eles); sem
     // o sistema online (testes) continuam no próprio tratamento.
     var newVal = canEditVal ? parseMoney(document.getElementById("trVal").value) : null;
@@ -9966,7 +10077,7 @@ function openTreatmentModal(t, opts){
     go.then(function(ok){
       if (!ok) return;
       if (others.length){
-        list = list.map(function(x){ return others.indexOf(x) !== -1 ? Object.assign({}, x, {status: "renegociado", statusEm: trTodayIso(), atualizadoEm: now}) : x; });
+        list = list.map(function(x){ return others.indexOf(x) !== -1 ? trHistAdd(Object.assign({}, x, {status: "renegociado", statusEm: trTodayIso(), atualizadoEm: now}), {acao: "status", de: "ativo", para: "renegociado", auto: true}) : x; });
       }
       // Tipo pela regra, já com o anterior atualizado.
       rec.tipo = trTipoFor(Object.assign({}, rec, {isNew: isNew}), list);
@@ -10198,6 +10309,23 @@ var REG_CFG = {
       return [s.name, specialtySigla(SVC_PREFIX + s.id), state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length];
     }
   },
+  motivos: {
+    title: "motivo", plural: "motivos", module: "motivos_cancelamento", newLabel: "+ Novo motivo",
+    list: function(){ return cancelReasonsList(); },   // sem cadastro no banco: os motivos iniciais
+    write: function(l){
+      // "Outro" sempre fica (exige observação ao cancelar).
+      if (!l.some(function(x){ return x.id === CANCEL_OTHER_ID; })) l = l.concat([{id: CANCEL_OTHER_ID, name: "Outro"}]);
+      return writeCancelReasons(l);
+    },
+    locked: function(m){ return m.id === CANCEL_OTHER_ID; },
+    lockedMsg: "Motivo padrão: ao escolher \"Outro\" a observação do cancelamento é obrigatória. Não pode ser renomeado nem excluído.",
+    cols: ["Nome", "Tratamentos cancelados"],
+    row: function(m){
+      var n = state.treatments.filter(function(t){ return t.status === "cancelado" && t.motivoCancel === m.id; }).length;
+      return ['<b>' + esc(m.name) + '</b>' + (m.id === CANCEL_OTHER_ID ? ' <span class="serv-lock">padrão</span>' : ''), n];
+    },
+    vals: function(m){ return [m.name, state.treatments.filter(function(t){ return t.status === "cancelado" && t.motivoCancel === m.id; }).length]; }
+  },
   especialidades: {
     title: "especialidade", plural: "especialidades", module: "especialidades", newLabel: "+ Nova especialidade",
     list: function(){ return state.specialties.slice(); },
@@ -10241,7 +10369,7 @@ function openRegistryItem(kind, item){
   host.innerHTML =
     '<div class="overlay" id="ovReg"><div class="modal" style="max-width:440px">' +
       '<div class="modal-head"><div><h3>' + (isNew ? "Novo " + cfg.title : (canSave ? "Editar " : "") + cfg.title.charAt(0).toUpperCase() + cfg.title.slice(1)) + '</h3>' +
-        (locked ? '<div class="modal-sub">Serviço padrão dos atendimentos: não pode ser renomeado nem excluído.</div>' : '') + '</div>' +
+        (locked ? '<div class="modal-sub">' + esc(cfg.lockedMsg || "Serviço padrão dos atendimentos: não pode ser renomeado nem excluído.") + '</div>' : '') + '</div>' +
         '<button class="modal-close" id="regClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="field"><label for="regName">Nome</label><input id="regName" type="text" value="' + esc(item ? item.name : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
@@ -10300,12 +10428,13 @@ var CAD_ITEMS = [
   {key: "convenios", label: "Convênios", tab: "convenios", ok: function(){ return can("convenios", "view"); }},
   {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("servicos", "view"); }},
   {key: "especialidades", label: "Especialidades", tab: "especialidades", ok: function(){ return can("especialidades", "view"); }},
+  {key: "motivos", label: "Motivos de cancelamento", tab: "motivos", ok: function(){ return can("motivos_cancelamento", "view"); }},
   {key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
   {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }}
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
-var CAD_TABS = ["pacientes", "tratamentos", "profissionais", "convenios", "servicos", "especialidades", "salas"];
+var CAD_TABS = ["pacientes", "tratamentos", "profissionais", "convenios", "servicos", "especialidades", "motivos", "salas"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "agenda", ok: function(){ return can("agenda", "view"); }},
   {key: "resumo", label: "Resumo", tab: "relatorio", ok: function(){ return can("resumo", "view"); }}
@@ -10509,7 +10638,7 @@ function wireMobileNav(){
   tabs.addEventListener("auxclick", tabNew, true);
   setTimeout(openNavFromHash, 0);
   wireMobileNav();
-  ["convenios", "servicos", "especialidades"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
     var a = document.getElementById("reg-" + k + "-add");

@@ -1190,3 +1190,28 @@ O projeto Supabase está no plano gratuito (sem backup automático restaurável)
   Lista não usam dados do tratamento.
 - Teste `tests/run_treatment_history.js` (cria `tests/page_ev.html` com
   `window.__ev` e apaga no fim) — `npm test` agora 22 arquivos.
+
+## Motivo do cancelamento e histórico dos tratamentos (Etapa 3, 2026-10-03)
+Decisões do usuário: motivo SÓ no Cancelado (Renegociado não pede); observação
+do cancelamento opcional, obrigatória com "Outro"; Cancelado é definitivo (não
+volta a outro status — para retomar, novo tratamento); histórico na janela.
+- Cadastro **Motivos de cancelamento** (Cadastros → `#tab-motivos`, `REG_CFG.motivos`,
+  documento `config/cancel_reasons` {list:[{id,name}]}, permissão própria
+  `motivos_cancelamento`). `cancelReasonsList()` usa `DEFAULT_CANCEL_REASONS`
+  (Financeiro, Mudança de cidade, Alta terapêutica, Insatisfação, Outro) enquanto
+  o banco não tem o documento. "Outro" (`CANCEL_OTHER_ID`) é travado
+  (`REG_CFG.motivos.locked` / `lockedMsg`) e sempre volta à lista ao gravar.
+- Tratamento: `motivoCancel` (id), `motivoCancelNome` (nome na data),
+  `obsCancel`; caixa `#trCancelBox` (`#trMot`, `#trObsCancel`) aparece com Status
+  = Cancelado; `#trSt` desativado quando já estava cancelado.
+- `historico: [{em, por, acao: "criado"|"status"|"motivo", de, para, motivo,
+  motivoNome, obs, auto}]` — `trHistAdd(rec, entry)` (por = `trWho()`, nome do
+  usuário logado), `trHistHtml(t)` na seção "Histórico" da janela. O ativo que vira
+  Renegociado sozinho ganha entrada com `auto: true`. Tratamentos antigos sem
+  histórico mostram "criado" a partir de `criadoEm`.
+- Relatório "Tratamentos novos e renegociados": encerrados com colunas Motivo e
+  Observação do cancelamento (`cancelReasonName`).
+- Banco: migração `supabase/2026-10-03e-motivos-de-cancelamento.sql` (caminho
+  permitido, `module_for_path`, níveis copiam o acesso de Tratamentos, motivos
+  iniciais, trigger `treatments_cancel_rules`: cancelado não muda de status e
+  cancelar exige `motivoCancel`). `writeTreatments` mostra essas mensagens.

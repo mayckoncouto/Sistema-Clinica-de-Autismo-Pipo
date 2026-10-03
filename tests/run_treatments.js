@@ -47,7 +47,22 @@ const path = require('path');
   // Cancelar o ativo → o próximo é Novo.
   await page.click('#trHost tbody tr:has(.st-ativo)'); await page.waitForSelector('#ovTreat');
   await page.$eval('#trSt', (s) => { s.value = 'cancelado'; s.dispatchEvent(new Event('change', {bubbles: true})); });
+  console.log('choosing Cancelado shows the reason box?', await page.isVisible('#trCancelBox'));
+  await page.click('#trSave'); await page.waitForTimeout(200);
+  console.log('cannot cancel without a reason?', !!(await page.$('#ovTreat')) && (await store()).some((t) => t.patientId === 'duda-vermelho' && t.status === 'ativo'));
+  await page.$eval('#trMot', (s) => { s.value = 'outro'; s.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.click('#trSave'); await page.waitForTimeout(200);
+  console.log('"Outro" requires the cancellation note?', !!(await page.$('#ovTreat')) && (await store()).some((t) => t.patientId === 'duda-vermelho' && t.status === 'ativo'));
+  await page.fill('#trObsCancel', 'Família pediu pausa');
   await save();
+  L = (await store()).filter((t) => t.patientId === 'duda-vermelho');
+  const canc = L.filter((t) => t.status === 'cancelado')[0];
+  console.log('cancelled with reason, note and history entry?', !!canc && canc.motivoCancel === 'outro' && canc.obsCancel === 'Família pediu pausa' &&
+    canc.historico.some((h) => h.de === 'ativo' && h.para === 'cancelado' && h.motivo === 'outro'));
+  console.log('auto-renegotiated treatment got a history entry?', L.some((t) => t.status === 'renegociado' && (t.historico || []).some((h) => h.auto)));
+  await page.click('#trHost tbody tr:has(.st-cancelado)'); await page.waitForSelector('#ovTreat');
+  console.log('cancelled treatment: status locked and history shown?', await page.$eval('#trSt', (s) => s.disabled) && /Ativo → Cancelado/.test(await page.textContent('#ovTreat .tr-hist')));
+  await page.click('#trCancel');
   await openNew('duda-vermelho');
   console.log('after a cancelled treatment the next one is "novo"?', (await page.$eval('#trTipo', (s) => s.value)) === 'novo');
   await page.click('#trCancel');

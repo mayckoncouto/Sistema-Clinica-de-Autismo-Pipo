@@ -22,6 +22,7 @@
     { key: "pacientes", label: "Pacientes", hint: "" },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, despesas e valor final", actions: ["view", "edit"] },
+    { key: "motivos_cancelamento", label: "Motivos de cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
     { key: "profissionais", label: "Profissionais", hint: "" },
     { key: "convenios", label: "Convênios", hint: "" },
     { key: "servicos", label: "Serviços", hint: "" },
