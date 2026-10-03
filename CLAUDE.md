@@ -1070,3 +1070,49 @@ O projeto Supabase está no plano gratuito (sem backup automático restaurável)
   de criação viram "agora".
 - O arquivo tem dados de saúde: nunca versionar (nem em `tests/`), não mandar
   por canais abertos.
+
+## Tratamentos (2026-10-03)
+- Cadastros → **Tratamentos** (`#tab-tratamentos`, `CAD_TABS`/`CAD_ITEMS`,
+  permissão própria `tratamentos`; relatório `tratamentos`). Documento
+  `treatments/all` `{list:[{id, patientId, inicio, valor, despesas, tipo
+  ("novo"|"renegociado"), status ("ativo"|"renegociado"|"cancelado"), statusEm
+  (data da última troca de status), obs, convenioId, convenio, plano,
+  pacoteHoras, aba, specHours, horarios, criadoEm, atualizadoEm}]}`. Migração
+  `supabase/2026-10-03b-tratamentos.sql` (caminho permitido, `module_for_path`,
+  níveis copiam o acesso de Pacientes, cria 1 tratamento Ativo/Novo por paciente
+  com os dados do cadastro dele; início = 1º atendimento na Agenda ou hoje).
+- **Convênio, plano, pacote, ABA, especialidades/serviços e horário saíram do
+  paciente** (`TREAT_FIELDS`). O paciente guarda nome, nascimento, idade. A
+  janela do paciente mostra o tratamento (`treatSummaryHtml`, "Abrir
+  tratamento" / "+ Novo tratamento"); paciente novo abre o tratamento ao salvar.
+- **Como o resto do app lê:** `state.patientsRaw` = `patients/all`;
+  `state.patients` = paciente + campos do tratamento atual
+  (`rebuildPatients()`, `currentTreatment` = Ativo ou, sem ativo, o mais
+  recente; `_treatId`). Planner, Agenda, cores por ABA, regra "não ABA",
+  horário do paciente, pacote × planejado, lista de Pacientes e relatórios
+  continuam lendo `p.aba`, `p.specHours`, `p.horarios`… sem mudança. Sem
+  tratamento, vale o que está no paciente (dados antigos / testes).
+  `writePatients` grava só o que é do paciente (tira `_treatId` e devolve os
+  `TREAT_FIELDS` crus).
+- Campos do tratamento na janela: `treatFieldsEditor(v)` → `{html, wire(ovId),
+  read()}` (mesmos ids de antes: `#pConv`, `#pPlano`, `#pPac`, `#pAba`,
+  `#specRowsHost`, `#pHours`…). `openTreatmentModal(t, {patientId, copyFrom,
+  renegotiateFrom})`: Paciente, Início, Término (só leitura), Valor, Despesas,
+  Valor final (automático), Tipo, Status, Plano terapêutico, Observações;
+  Excluir / **Renegociar** (novo tratamento copiando o atual; ao salvar o
+  anterior vira Renegociado) / Salvar.
+- Regras: **só um Ativo por paciente** (salvar outro ativo pede confirmação e
+  passa o anterior para Renegociado). Tipo automático (`trTipoAuto`): Novo se é
+  o primeiro ou o anterior foi Cancelado; senão Renegociado. **Término** =
+  último atendimento da Agenda (sem bloqueio, até hoje) entre o início deste e o
+  do seguinte (`trLoadLast` lê `appointments` patient/date paginado, cache 2
+  min; `trEnd`, `trEndText`; ativo = "Em andamento (último dd/mm)").
+- Tela: busca, filtro de status (+ "Pacientes sem tratamento ativo"), aviso
+  com quantos pacientes estão sem tratamento ativo, tabela `gtRender`
+  ("tratamentos"; celular mostra Paciente + Status). Valores em R$ (`parseMoney`,
+  `fmtMoney`, `trFinal`).
+- Relatório **"Tratamentos novos e renegociados"** (`RP_BUILDERS.tratamentos`,
+  lê `state.treatments`, não os atendimentos): resumo Novo × Renegociado com
+  valores, iniciados no período e encerrados no período (por `statusEm`).
+- Atenção: como todo documento, `treatments/all` é legível por qualquer usuário
+  ativo (inclusive os valores); a tela só aparece para quem tem `tratamentos.view`.

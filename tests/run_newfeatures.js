@@ -80,6 +80,10 @@ const path = require('path');
   await page.waitForTimeout(50);
   const idadeCalcVal = await page.locator('#pIdadeCalc').inputValue().catch(() => null);
   console.log('idade auto-calculada a partir do nascimento:', idadeCalcVal);
+  // Salvar o paciente novo já abre o Tratamento dele (ABA, especialidades... ficam lá).
+  await page.click('#pSave');
+  await page.waitForSelector('#ovTreat');
+  console.log('new patient opens its treatment right away?', (await page.$eval('#trPat', s => s.options[s.selectedIndex].text)) === 'Novo Paciente Teste');
   await page.$eval('#pAba', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, 'Não'); // select vira lista própria (dpEnhance)
   // add a specialty row referencing an EXISTING one, and a brand-new one
   await page.click('#specRowAdd');
@@ -94,12 +98,15 @@ const path = require('path');
   n = await rows.count();
   await rows.nth(n-1).locator('.spec-name').fill('Equoterapia'); // brand-new specialty not in catalog
   await rows.nth(n-1).locator('.spec-hours-val').fill('2');
-  await page.click('#pSave');
+  await page.click('#trSave');
   await page.waitForTimeout(200);
 
   const patientsStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['patients/all'])));
   const newPatient = patientsStore.list.find(p => p.nome === 'Novo Paciente Teste');
   console.log('=== novo paciente salvo ===', JSON.stringify(newPatient));
+  const treat = (await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['treatments/all'])))).list.find(t => t.patientId === newPatient.id);
+  console.log('=== tratamento do novo paciente ===', JSON.stringify(treat));
+  console.log('treatment saved with ABA "Não" and 2 specialties?', !!treat && treat.aba === 'Não' && treat.specHours.length === 2);
   const specialtiesStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['config/specialties'])));
   console.log('=== catálogo de especialidades após criar "Equoterapia" ===', JSON.stringify(specialtiesStore));
 

@@ -27,20 +27,27 @@ const path = require('path');
   const rowPU = page.locator('#patListHost .pat-table tbody tr', { hasText: 'Paciente Um' });
   await rowPU.click();
   await page.waitForSelector('#ovPat');
+  // Convênio, plano, pacote, ABA e especialidades ficam no Tratamento (desde 2026-10-03):
+  // paciente sem tratamento → "+ Novo tratamento", que já vem com os dados antigos dele.
+  console.log('patient modal no longer has the treatment fields?', (await page.$('#pAba')) === null);
+  await page.click('#pNewTreat');
+  await page.waitForSelector('#ovTreat');
   console.log('label "Pacote (sessão/mês)"?', (await page.locator('label[for="pPac"]').innerText()) === 'Pacote (sessão/mês)');
   console.log('label "ABA" (not "Faz ABA?")?', (await page.locator('label[for="pAba"]').innerText()) === 'ABA');
-  console.log('label "Especialidades/serviços e sessão (mês)"?', (await page.locator('#ovPat .field', { has: page.locator('#specRowsHost') }).locator('label').first().innerText()).includes('Especialidades/serviços e sessão (mês)'));
+  console.log('label "Especialidades/serviços e sessão (mês)"?', (await page.locator('#ovTreat .field', { has: page.locator('#specRowsHost') }).locator('label').first().innerText()).includes('Especialidades/serviços e sessão (mês)'));
 
   // ---- TEST: legacy convenio text resolved against catalog (Unimed matches) ----
   const convVal = await page.locator('#pConv').inputValue();
   console.log('legacy convenio "Unimed" resolved and shown?', convVal === 'Unimed');
-  await page.click('#pCancel');
+  await page.click('#trCancel');
   await page.waitForTimeout(100);
 
   // Open a patient whose legacy convenio text has NO catalog match ("Convênio Antigo")
   const rowAna = page.locator('#patListHost .pat-table tbody tr', { hasText: 'Ana Azul' });
   await rowAna.click();
   await page.waitForSelector('#ovPat');
+  await page.click('#pNewTreat');
+  await page.waitForSelector('#ovTreat');
   const convValAna = await page.locator('#pConv').inputValue();
   console.log('unresolved legacy convenio text preserved verbatim?', convValAna === 'Convênio Antigo');
 
@@ -89,12 +96,13 @@ const path = require('path');
   const row2Val = await rows.nth(n2-1).locator('.spec-name').inputValue();
   console.log('inline-created specialty auto-selected in row 2?', row2Val === 'Terapia Ocupacional');
 
-  await page.click('#pSave');
+  await page.click('#trSave');
   await page.waitForTimeout(200);
 
-  const patientsStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['patients/all'])));
-  const savedAna = patientsStore.list.find(p => p.nome === 'Ana Azul');
-  console.log('=== Ana Azul saved record ===', JSON.stringify(savedAna));
+  const treatStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['treatments/all'])));
+  const savedAna = treatStore.list.find(t => t.patientId === 'ana-azul');
+  console.log('=== Ana Azul treatment saved ===', JSON.stringify(savedAna));
+  console.log('treatment is Ativo and Novo?', savedAna.status === 'ativo' && savedAna.tipo === 'novo');
   console.log('convenioId points at newly-created "Amil Saúde"?', !!savedAna.convenioId);
 
   const conveniosStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['config/convenios'])));

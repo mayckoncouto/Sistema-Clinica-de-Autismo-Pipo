@@ -20,6 +20,7 @@
     { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
     { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)" },
     { key: "pacientes", label: "Pacientes", hint: "" },
+    { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades, horários e valores" },
     { key: "profissionais", label: "Profissionais", hint: "" },
     { key: "convenios", label: "Convênios", hint: "" },
     { key: "servicos", label: "Serviços", hint: "" },
@@ -60,7 +61,8 @@
     { key: "pendentes", label: "Evoluções pendentes" },
     { key: "ocupacao", label: "Ocupação" },
     { key: "bloqueios", label: "Bloqueios, reuniões e treinamentos" },
-    { key: "sem-atendimento", label: "Pacientes sem atendimento" }
+    { key: "sem-atendimento", label: "Pacientes sem atendimento" },
+    { key: "tratamentos", label: "Tratamentos novos e renegociados" }
   ];
   function confirmBox(opts) { return window.pipoConfirm ? window.pipoConfirm(opts) : Promise.resolve(window.confirm(opts.title)); }
   function roleById(id) { return roles.filter(function (r) { return r.id === id; })[0] || null; }

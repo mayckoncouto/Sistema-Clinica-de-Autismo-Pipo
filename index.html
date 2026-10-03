@@ -292,6 +292,13 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .rp-go{margin-top:4px}
 .rp-out{flex:1;min-width:0;overflow:auto;padding:14px 18px}
 .rp-back-bar{display:none}
+.tr-chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:800;color:#fff;background:#6b7a77}
+.tr-chip.st-ativo{background:#2c7a72}.tr-chip.st-renegociado{background:#b7791f}.tr-chip.st-cancelado{background:#b6403a}
+.tr-sec{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
+.pt-treat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
+.pt-treat-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pt-treat-txt{font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.tr-missing-btn{font-size:12px;color:var(--danger)}
 .bk-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
 .bk-card b{font-size:14px}
 .bk-txt{font-size:12.5px;color:var(--ink-2);line-height:1.45}
@@ -945,6 +952,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)){display:none}
   #profList .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)){display:none}
   :is(#reg-servicos-host,#reg-especialidades-host) .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)){display:none}
+  #trHost .pat-table.tr-main :is(col,th,td):not(:nth-child(1)):not(:nth-child(5)){display:none}
   /* Janelas no celular. O iPhone dá zoom sozinho ao tocar num campo com letra
      menor que 16px (e não volta ao sair): todo campo de digitar fica com 16px. */
   input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]),select,textarea,[contenteditable=true],[contenteditable=""]{font-size:16px!important}
@@ -996,6 +1004,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="agendadia">Agenda</button>
       <button data-tab="prontuario" hidden>Prontuário</button>
       <button data-tab="pacientes" hidden>Pacientes</button>
+      <button data-tab="tratamentos" hidden>Tratamentos</button>
       <button data-tab="profissionais" hidden>Profissionais</button>
       <button data-tab="convenios" hidden>Convênios</button>
       <button data-tab="servicos" hidden>Serviços</button>
@@ -1119,6 +1128,27 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button class="btn primary" id="addProfessionalBtn">+ Novo profissional</button>
     </div>
     <div id="profList" class="prof-list-host"></div>
+  </section>
+
+  <section id="tab-tratamentos" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="trSearch" type="text" placeholder="Buscar paciente…">
+      </div>
+      <select id="trFilter" aria-label="Status">
+        <option value="">Todos os status</option>
+        <option value="ativo">Ativos</option>
+        <option value="renegociado">Renegociados</option>
+        <option value="cancelado">Cancelados</option>
+        <option value="sem">Pacientes sem tratamento ativo</option>
+      </select>
+      <span class="pat-count" id="trCount"></span>
+      <span id="trMissing"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="trAdd">+ Novo tratamento</button>
+    </div>
+    <div id="trHost" class="reg-host"></div>
   </section>
 
   <section id="tab-convenios" class="panel reg-panel" hidden>
@@ -2116,7 +2146,9 @@ var state = {
   day: "seg",
   week: 1,
   rooms: [],             // rooms (ordered array = display order), from db
-  patients: [],          // patient directory, from db
+  patients: [],          // pacientes "somados" ao tratamento atual (rebuildPatients) — o app lê daqui
+  patientsRaw: [],       // patients/all como está no banco
+  treatments: [],        // treatments/all
   specialties: [],       // specialty registry [{id,name}], from db
   convenios: [],         // convênio registry [{id,name}], from db
   services: [],          // serviços [{id,name}] (Sessão, Triagem…), from db — tela Profissionais › Serviços
@@ -2150,7 +2182,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -2217,7 +2249,7 @@ function bookingPermDenied(changesByDoc){
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
   if (!window.pipoAuth) return;
-  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades"};
+  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -2307,6 +2339,7 @@ function boot(){
   wireZoomControl();
   wireGridDelegatedEvents();
   wireAgendaDia();
+  wireTreatmentsTab();
   renderAgendaShell();
   renderPatientsTab();
   renderProfissionaisTab();
@@ -2369,6 +2402,7 @@ function connectDb(){
     }
     subscribeRooms();
     subscribePatients();
+    subscribeTreatments();
     subscribeSpecialties();
     subscribeConvenios();
     subscribeServices();
@@ -2475,10 +2509,11 @@ function subscribeRooms(){
 function subscribePatients(){
   db.doc("patients/all").onSnapshot(function(snap){
     if (snap.exists && snap.data() && Array.isArray(snap.data().list)){
-      state.patients = snap.data().list;
+      state.patientsRaw = snap.data().list;
     } else {
-      state.patients = [];
+      state.patientsRaw = [];
     }
+    rebuildPatients();
     patientsLoaded = true;
     renderPatientsTab();
     agdRenderIfVisible(); // cores dos pacientes na Agenda
@@ -2788,6 +2823,7 @@ function wireTabs(){
       else if (state.tab === "agendadia") agdOnShow();
       else if (state.tab === "prontuario") prOnShow();
       else if (state.tab === "relatorios") rpOnShow();
+      else if (state.tab === "tratamentos") renderTreatmentsTab();
       else if (REG_CFG[state.tab]) renderRegistryTab(state.tab);
     } catch(err){
       reportAppError(err, "ao abrir a aba");
@@ -4732,10 +4768,13 @@ function readPatHours(){
   });
   return out;
 }
-function openPatientModal(p){
-  var isNew = !p;
-  var host = document.getElementById("modalHost");
-  var v = p || {nome:"",convenio:"",convenioId:null,plano:"",idade:"",pacoteHoras:"",nascimento:"",aba:""};
+// Campos do tratamento (convênio, plano, pacote, ABA, especialidades/serviços e
+// horário de atendimento). Antes ficavam no cadastro do paciente; desde 2026-10-03
+// ficam no Tratamento (openTreatmentModal). treatFieldsEditor(v) devolve o HTML,
+// wire(ovId) liga os campos depois que a janela existe e read() devolve
+// {fields, newSpecialties, newConvenios} para gravar.
+var TREAT_FIELDS = ["convenioId", "convenio", "plano", "pacoteHoras", "aba", "specHours", "horarios"];
+function treatFieldsEditor(v){
   // Per-patient specialty rows, editable independently of the global catalog.
   var draftSpecRows = patientSpecRows(v).map(function(row){
     return {specId: row.specId, name: specialtyName(row.specId), hours: row.hours == null ? "" : String(row.hours)};
@@ -4761,25 +4800,16 @@ function openPatientModal(p){
     else { initialConvenioText = v.convenio; }
   }
 
-  host.innerHTML =
-    '<div class="overlay" id="ovPat"><div class="modal wide">' +
-      '<div class="modal-head"><div><h3>'+(isNew?"Novo paciente":"Editar paciente")+'</h3></div>' +
-        '<button class="modal-close" id="closePat" aria-label="Fechar">✕</button></div>' +
-      '<div class="modal-body">' +
-        '<div class="field"><label for="pNome">Nome</label><input id="pNome" type="text" value="'+esc(v.nome)+'"></div>' +
+  var html =
         '<div class="field-row">' +
           '<div class="field"><label for="pConv">Convênio</label><div class="field-picker">' +
             '<input id="pConv" type="text" autocomplete="off" placeholder="Selecione ou cadastre um convênio" value="'+esc(initialConvenioText)+'">' +
             '<div class="autolist floating" id="pConvSuggest" hidden></div>' +
           '</div></div>' +
-          '<div class="field"><label for="pPlano">Plano</label><input id="pPlano" type="text" value="'+esc(v.plano)+'"></div>' +
+          '<div class="field"><label for="pPlano">Plano</label><input id="pPlano" type="text" value="'+esc(v.plano || "")+'"></div>' +
         '</div>' +
         '<div class="field-row">' +
-          '<div class="field"><label for="pNasc">Data de nascimento</label><input id="pNasc" type="date" value="'+esc(v.nascimento||"")+'"></div>' +
-          '<div class="field" id="pIdadeField"></div>' +
-        '</div>' +
-        '<div class="field-row">' +
-          '<div class="field"><label for="pPac">Pacote (sessão/mês)</label><input id="pPac" type="text" value="'+esc(v.pacoteHoras)+'"></div>' +
+          '<div class="field"><label for="pPac">Pacote (sessão/mês)</label><input id="pPac" type="text" value="'+esc(v.pacoteHoras == null ? "" : v.pacoteHoras)+'"></div>' +
           '<div class="field"><label for="pAba">ABA</label><select id="pAba">' +
             '<option value=""'+(v.aba?"":" selected")+'>Não definido</option>' +
             '<option value="Sim"'+(v.aba==="Sim"?" selected":"")+'>Sim</option>' +
@@ -4789,244 +4819,200 @@ function openPatientModal(p){
         '<div class="field"><label>Especialidades/serviços e sessão (mês)</label><div class="hours-list" id="specRowsHost"></div>' +
           '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ especialidade ou serviço</button>' +
         '</div>' +
-        patHoursSectionHtml(v) +
-      '</div>' +
-      '<div class="modal-foot">' +
-        (isNew ? '<span></span>' : '<button class="btn danger" id="pDelete">Excluir</button>') +
-        '<div class="spacer"></div>' +
-        '<button class="btn ghost" id="pCancel">Cancelar</button>' +
-        '<button class="btn primary" id="pSave">Salvar</button>' +
-      '</div>' +
-    '</div></div>';
-
-  var overlay = document.getElementById("ovPat");
-  wirePatHours();
-  function close(){ host.innerHTML = ""; }
-  overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
-  document.getElementById("closePat").addEventListener("click", close);
-  document.getElementById("pCancel").addEventListener("click", close);
-
-  // Idade: read-only + auto-calculated whenever a birth date is set, otherwise
-  // a plain editable field (keeps working for older records with no birth date).
-  var nascInput = document.getElementById("pNasc");
-  function renderIdadeField(){
-    var host2 = document.getElementById("pIdadeField");
-    var nascVal = nascInput.value;
-    if (nascVal){
-      var age = computeAgeFromBirth(nascVal);
-      host2.innerHTML = '<label for="pIdadeCalc">Idade</label>' +
-        '<input id="pIdadeCalc" type="text" value="'+(age!=null ? age+" anos" : "data inválida")+'" disabled>';
-    } else {
-      host2.innerHTML = '<label for="pIdade">Idade</label>' +
-        '<input id="pIdade" type="text" placeholder="ex: 7 ou Adulto" value="'+esc(v.idade)+'">';
-    }
-  }
-  renderIdadeField();
-  nascInput.addEventListener("input", renderIdadeField);
-
-  // Per-patient specialty rows (add/remove independently of the global catalog).
-  var specRowsHost = document.getElementById("specRowsHost");
-  function syncSpecRowsFromDom(){
-    specRowsHost.querySelectorAll(".hours-row").forEach(function(row, i){
-      if (!draftSpecRows[i]) return;
-      var nameInp = row.querySelector(".spec-name");
-      var hoursInp = row.querySelector(".spec-hours-val");
-      draftSpecRows[i].name = nameInp ? nameInp.value : draftSpecRows[i].name;
-      draftSpecRows[i].hours = hoursInp ? hoursInp.value : draftSpecRows[i].hours;
-    });
-  }
-  // Specialties already used by another row shouldn't be offered again — only the
-  // ones this patient doesn't have yet should appear in a row's suggestion list.
-  function usedByOtherRows(excludeIndex){
-    var used = [];
-    draftSpecRows.forEach(function(row, i){
-      if (i === excludeIndex) return;
-      if (row.specId) used.push(row.specId);
-      else if ((row.name||"").trim()) used.push("name:"+row.name.trim().toLowerCase());
-    });
-    return used;
-  }
-  function wireSpecRowPickers(){
-    specRowsHost.querySelectorAll(".hours-row").forEach(function(rowEl){
-      var i = parseInt(rowEl.getAttribute("data-i"),10);
-      var inp = rowEl.querySelector(".spec-name");
-      var sugg = rowEl.querySelector(".autolist");
-      function renderSugg(){
-        var q = inp.value.trim();
-        var used = usedByOtherRows(i);
-        var opts = localSpecialties.filter(function(s){
-          if (used.indexOf(s.id) !== -1) return false;
-          if (used.indexOf("name:"+s.name.trim().toLowerCase()) !== -1) return false;
-          return !q || normText(s.name).indexOf(normText(q)) !== -1;
-        }).slice(0,8);
-        // Serviços do cadastro, menos "Sessão" (sessão = escolher a especialidade).
-        var svcOpts = servicesList().filter(function(s){
-          if (s.id === DEFAULT_SERVICE_ID) return false;
-          if (used.indexOf(SVC_PREFIX + s.id) !== -1) return false;
-          return !q || normText(s.name).indexOf(normText(q)) !== -1;
-        }).slice(0,8);
-        var exact = localSpecialties.filter(function(s){ return normText(s.name.trim()) === normText(q); })[0];
-        var html = opts.map(function(s){
-          return '<button type="button" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'"><span class="autolist-name">'+esc(s.name)+'</span></button>';
-        }).join("");
-        html += svcOpts.map(function(s){
-          return '<button type="button" data-id="'+esc(SVC_PREFIX + s.id)+'" data-name="'+esc(s.name)+'"><span class="autolist-name">'+esc(s.name)+'</span><span class="autolist-kind">Serviço</span></button>';
-        }).join("");
-        if (!exact) exact = servicesList().filter(function(s){ return s.id !== DEFAULT_SERVICE_ID && normText(s.name.trim()) === normText(q); })[0];
-        if (q && !exact){
-          html += '<button type="button" class="autolist-new" data-new="'+esc(q)+'">+ Cadastrar nova especialidade "'+esc(q)+'"</button>';
-        }
-        if (!html){ html = '<div class="none">'+(q?'Nenhuma especialidade ou serviço encontrado.':'Todas as especialidades e serviços já foram adicionados.')+'</div>'; }
-        sugg.innerHTML = html;
-        sugg.hidden = false;
-      }
-      inp.addEventListener("focus", renderSugg);
-      inp.addEventListener("input", function(){
-        draftSpecRows[i].specId = null;
-        draftSpecRows[i].name = inp.value;
-        renderSugg();
+        patHoursSectionHtml(v);
+  // wire() define estas duas (dependem dos campos já na tela); read() usa.
+  var syncRef = function(){}, resolveRef = function(){ return draftConvenioId; };
+  function wire(ovId){
+    wirePatHours();
+    // Per-patient specialty rows (add/remove independently of the global catalog).
+    var specRowsHost = document.getElementById("specRowsHost");
+    function syncSpecRowsFromDom(){
+      specRowsHost.querySelectorAll(".hours-row").forEach(function(row, i){
+        if (!draftSpecRows[i]) return;
+        var nameInp = row.querySelector(".spec-name");
+        var hoursInp = row.querySelector(".spec-hours-val");
+        draftSpecRows[i].name = nameInp ? nameInp.value : draftSpecRows[i].name;
+        draftSpecRows[i].hours = hoursInp ? hoursInp.value : draftSpecRows[i].hours;
       });
-      // Close on blur too (not just an outside click) — focus can also move away
-      // programmatically (e.g. filling the next field), and a floating box left open
-      // can visually sit on top of whatever comes after it. The short delay lets a
-      // genuine click on one of its own option buttons register first.
-      inp.addEventListener("blur", function(){ setTimeout(function(){ sugg.hidden = true; }, 130); });
-      sugg.addEventListener("click", function(e){
-        var newBtn = e.target.closest("button[data-new]");
-        if (newBtn){
-          var name = newBtn.getAttribute("data-new");
-          var created = {id: uid(slugify(name) || "esp"), name: name, sigla: defaultSigla(name)};
-          localSpecialties.push(created);
-          newSpecialties.push(created);
-          draftSpecRows[i].specId = created.id;
-          draftSpecRows[i].name = created.name;
-          inp.value = created.name;
+    }
+    // Specialties already used by another row shouldn't be offered again — only the
+    // ones this patient doesn't have yet should appear in a row's suggestion list.
+    function usedByOtherRows(excludeIndex){
+      var used = [];
+      draftSpecRows.forEach(function(row, i){
+        if (i === excludeIndex) return;
+        if (row.specId) used.push(row.specId);
+        else if ((row.name||"").trim()) used.push("name:"+row.name.trim().toLowerCase());
+      });
+      return used;
+    }
+    function wireSpecRowPickers(){
+      specRowsHost.querySelectorAll(".hours-row").forEach(function(rowEl){
+        var i = parseInt(rowEl.getAttribute("data-i"),10);
+        var inp = rowEl.querySelector(".spec-name");
+        var sugg = rowEl.querySelector(".autolist");
+        function renderSugg(){
+          var q = inp.value.trim();
+          var used = usedByOtherRows(i);
+          var opts = localSpecialties.filter(function(s){
+            if (used.indexOf(s.id) !== -1) return false;
+            if (used.indexOf("name:"+s.name.trim().toLowerCase()) !== -1) return false;
+            return !q || normText(s.name).indexOf(normText(q)) !== -1;
+          }).slice(0,8);
+          // Serviços do cadastro, menos "Sessão" (sessão = escolher a especialidade).
+          var svcOpts = servicesList().filter(function(s){
+            if (s.id === DEFAULT_SERVICE_ID) return false;
+            if (used.indexOf(SVC_PREFIX + s.id) !== -1) return false;
+            return !q || normText(s.name).indexOf(normText(q)) !== -1;
+          }).slice(0,8);
+          var exact = localSpecialties.filter(function(s){ return normText(s.name.trim()) === normText(q); })[0];
+          var html = opts.map(function(s){
+            return '<button type="button" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'"><span class="autolist-name">'+esc(s.name)+'</span></button>';
+          }).join("");
+          html += svcOpts.map(function(s){
+            return '<button type="button" data-id="'+esc(SVC_PREFIX + s.id)+'" data-name="'+esc(s.name)+'"><span class="autolist-name">'+esc(s.name)+'</span><span class="autolist-kind">Serviço</span></button>';
+          }).join("");
+          if (!exact) exact = servicesList().filter(function(s){ return s.id !== DEFAULT_SERVICE_ID && normText(s.name.trim()) === normText(q); })[0];
+          if (q && !exact){
+            html += '<button type="button" class="autolist-new" data-new="'+esc(q)+'">+ Cadastrar nova especialidade "'+esc(q)+'"</button>';
+          }
+          if (!html){ html = '<div class="none">'+(q?'Nenhuma especialidade ou serviço encontrado.':'Todas as especialidades e serviços já foram adicionados.')+'</div>'; }
+          sugg.innerHTML = html;
+          sugg.hidden = false;
+        }
+        inp.addEventListener("focus", renderSugg);
+        inp.addEventListener("input", function(){
+          draftSpecRows[i].specId = null;
+          draftSpecRows[i].name = inp.value;
+          renderSugg();
+        });
+        // Close on blur too (not just an outside click) — focus can also move away
+        // programmatically (e.g. filling the next field), and a floating box left open
+        // can visually sit on top of whatever comes after it. The short delay lets a
+        // genuine click on one of its own option buttons register first.
+        inp.addEventListener("blur", function(){ setTimeout(function(){ sugg.hidden = true; }, 130); });
+        sugg.addEventListener("click", function(e){
+          var newBtn = e.target.closest("button[data-new]");
+          if (newBtn){
+            var name = newBtn.getAttribute("data-new");
+            var created = {id: uid(slugify(name) || "esp"), name: name, sigla: defaultSigla(name)};
+            localSpecialties.push(created);
+            newSpecialties.push(created);
+            draftSpecRows[i].specId = created.id;
+            draftSpecRows[i].name = created.name;
+            inp.value = created.name;
+            sugg.hidden = true;
+            return;
+          }
+          var b = e.target.closest("button[data-id]"); if (!b) return;
+          draftSpecRows[i].specId = b.getAttribute("data-id");
+          draftSpecRows[i].name = b.getAttribute("data-name");
+          inp.value = draftSpecRows[i].name;
           sugg.hidden = true;
-          return;
-        }
-        var b = e.target.closest("button[data-id]"); if (!b) return;
-        draftSpecRows[i].specId = b.getAttribute("data-id");
-        draftSpecRows[i].name = b.getAttribute("data-name");
-        inp.value = draftSpecRows[i].name;
-        sugg.hidden = true;
+        });
       });
-    });
-  }
-  function renderSpecRows(){
-    specRowsHost.innerHTML = draftSpecRows.length ? draftSpecRows.map(function(row, i){
-      return '<div class="hours-row" data-i="'+i+'">' +
-        '<div class="spec-name-wrap">' +
-          '<input type="text" class="spec-name" autocomplete="off" placeholder="Especialidade ou serviço" value="'+esc(row.name)+'">' +
-          '<div class="autolist floating" hidden></div>' +
-        '</div>' +
-        '<input type="text" class="spec-hours-val" placeholder="0" value="'+esc(row.hours)+'">' +
-        '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover especialidade">✕</button>' +
-      '</div>';
-    }).join("") : '<div class="hours-empty">Nenhuma especialidade ou serviço nesta ficha — clique em "+ especialidade ou serviço" para adicionar.</div>';
-    specRowsHost.querySelectorAll(".rm").forEach(function(b){
-      b.addEventListener("click", function(){
-        syncSpecRowsFromDom();
-        draftSpecRows.splice(parseInt(b.getAttribute("data-rm"),10), 1);
-        renderSpecRows();
-      });
-    });
-    wireSpecRowPickers();
-  }
-  renderSpecRows();
-  document.getElementById("specRowAdd").addEventListener("click", function(){
-    syncSpecRowsFromDom();
-    draftSpecRows.push({specId:null, name:"", hours:""});
-    renderSpecRows();
-  });
-
-  // Convênio picker: same search+select+"cadastrar novo" pattern as the specialty rows.
-  var convInput = document.getElementById("pConv");
-  var convSuggest = document.getElementById("pConvSuggest");
-  function renderConvSuggest(){
-    var q = convInput.value.trim();
-    var opts = localConvenios.filter(function(c){ return !q || normText(c.name).indexOf(normText(q)) !== -1; }).slice(0,8);
-    var exact = localConvenios.filter(function(c){ return normText(c.name.trim()) === normText(q); })[0];
-    var html = opts.map(function(c){
-      return '<button type="button" data-id="'+esc(c.id)+'" data-name="'+esc(c.name)+'"><span class="autolist-name">'+esc(c.name)+'</span></button>';
-    }).join("");
-    if (q && !exact){
-      html += '<button type="button" class="autolist-new" data-new="'+esc(q)+'">+ Cadastrar novo convênio "'+esc(q)+'"</button>';
     }
-    if (!html){ html = '<div class="none">Nenhum convênio cadastrado ainda — digite para criar um novo.</div>'; }
-    convSuggest.innerHTML = html;
-    convSuggest.hidden = false;
-  }
-  convInput.addEventListener("focus", renderConvSuggest);
-  convInput.addEventListener("input", function(){ draftConvenioId = null; renderConvSuggest(); });
-  convInput.addEventListener("blur", function(){ setTimeout(function(){ convSuggest.hidden = true; }, 130); });
-  convSuggest.addEventListener("click", function(e){
-    var newBtn = e.target.closest("button[data-new]");
-    if (newBtn){
-      var name = newBtn.getAttribute("data-new");
-      var created = {id: uid(slugify(name) || "conv"), name: name};
+    function renderSpecRows(){
+      specRowsHost.innerHTML = draftSpecRows.length ? draftSpecRows.map(function(row, i){
+        return '<div class="hours-row" data-i="'+i+'">' +
+          '<div class="spec-name-wrap">' +
+            '<input type="text" class="spec-name" autocomplete="off" placeholder="Especialidade ou serviço" value="'+esc(row.name)+'">' +
+            '<div class="autolist floating" hidden></div>' +
+          '</div>' +
+          '<input type="text" class="spec-hours-val" placeholder="0" value="'+esc(row.hours)+'">' +
+          '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover especialidade">✕</button>' +
+        '</div>';
+      }).join("") : '<div class="hours-empty">Nenhuma especialidade ou serviço nesta ficha — clique em "+ especialidade ou serviço" para adicionar.</div>';
+      specRowsHost.querySelectorAll(".rm").forEach(function(b){
+        b.addEventListener("click", function(){
+          syncSpecRowsFromDom();
+          draftSpecRows.splice(parseInt(b.getAttribute("data-rm"),10), 1);
+          renderSpecRows();
+        });
+      });
+      wireSpecRowPickers();
+    }
+    renderSpecRows();
+    document.getElementById("specRowAdd").addEventListener("click", function(){
+      syncSpecRowsFromDom();
+      draftSpecRows.push({specId:null, name:"", hours:""});
+      renderSpecRows();
+    });
+
+    // Convênio picker: same search+select+"cadastrar novo" pattern as the specialty rows.
+    var convInput = document.getElementById("pConv");
+    var convSuggest = document.getElementById("pConvSuggest");
+    function renderConvSuggest(){
+      var q = convInput.value.trim();
+      var opts = localConvenios.filter(function(c){ return !q || normText(c.name).indexOf(normText(q)) !== -1; }).slice(0,8);
+      var exact = localConvenios.filter(function(c){ return normText(c.name.trim()) === normText(q); })[0];
+      var html = opts.map(function(c){
+        return '<button type="button" data-id="'+esc(c.id)+'" data-name="'+esc(c.name)+'"><span class="autolist-name">'+esc(c.name)+'</span></button>';
+      }).join("");
+      if (q && !exact){
+        html += '<button type="button" class="autolist-new" data-new="'+esc(q)+'">+ Cadastrar novo convênio "'+esc(q)+'"</button>';
+      }
+      if (!html){ html = '<div class="none">Nenhum convênio cadastrado ainda — digite para criar um novo.</div>'; }
+      convSuggest.innerHTML = html;
+      convSuggest.hidden = false;
+    }
+    convInput.addEventListener("focus", renderConvSuggest);
+    convInput.addEventListener("input", function(){ draftConvenioId = null; renderConvSuggest(); });
+    convInput.addEventListener("blur", function(){ setTimeout(function(){ convSuggest.hidden = true; }, 130); });
+    convSuggest.addEventListener("click", function(e){
+      var newBtn = e.target.closest("button[data-new]");
+      if (newBtn){
+        var name = newBtn.getAttribute("data-new");
+        var created = {id: uid(slugify(name) || "conv"), name: name};
+        localConvenios.push(created);
+        newConvenios.push(created);
+        draftConvenioId = created.id;
+        convInput.value = created.name;
+        convSuggest.hidden = true;
+        return;
+      }
+      var b = e.target.closest("button[data-id]"); if (!b) return;
+      draftConvenioId = b.getAttribute("data-id");
+      convInput.value = b.getAttribute("data-name");
+      convSuggest.hidden = true;
+    });
+    function resolveConvenioId(){
+      var text = convInput.value.trim();
+      if (!text) return null;
+      if (draftConvenioId){
+        var found = localConvenios.filter(function(c){ return c.id === draftConvenioId; })[0];
+        if (found && normText(found.name.trim()) === normText(text)) return draftConvenioId;
+      }
+      var match = localConvenios.filter(function(c){ return normText(c.name.trim()) === normText(text); })[0];
+      if (match) return match.id;
+      var created = {id: uid(slugify(text) || "conv"), name: text};
       localConvenios.push(created);
       newConvenios.push(created);
-      draftConvenioId = created.id;
-      convInput.value = created.name;
-      convSuggest.hidden = true;
-      return;
+      return created.id;
     }
-    var b = e.target.closest("button[data-id]"); if (!b) return;
-    draftConvenioId = b.getAttribute("data-id");
-    convInput.value = b.getAttribute("data-name");
-    convSuggest.hidden = true;
-  });
-  function resolveConvenioId(){
-    var text = convInput.value.trim();
-    if (!text) return null;
-    if (draftConvenioId){
-      var found = localConvenios.filter(function(c){ return c.id === draftConvenioId; })[0];
-      if (found && normText(found.name.trim()) === normText(text)) return draftConvenioId;
-    }
-    var match = localConvenios.filter(function(c){ return normText(c.name.trim()) === normText(text); })[0];
-    if (match) return match.id;
-    var created = {id: uid(slugify(text) || "conv"), name: text};
-    localConvenios.push(created);
-    newConvenios.push(created);
-    return created.id;
-  }
 
-  // One outside-click handler closes whichever floating suggestion list is open,
-  // whether it's a specialty row's or the convênio field's.
-  // A floating suggestion box can visually sit on top of whatever follows it (the
-  // hours field, the remove button, "+ especialidade"...). Only keep it open when the
-  // click is on its own input or on one of its own option buttons — any other mousedown,
-  // including one that lands on the box's empty padding, closes it instead of trapping it.
-  document.addEventListener("mousedown", function outsidePickers(e){
-    if (!document.getElementById("ovPat")){ document.removeEventListener("mousedown", outsidePickers); return; }
-    document.querySelectorAll("#ovPat .autolist.floating").forEach(function(box){
-      if (box.hidden) return;
-      var wrap = box.closest(".spec-name-wrap, .field-picker");
-      var input = wrap ? wrap.querySelector("input") : null;
-      var onInput = input && e.target === input;
-      var onOption = box.contains(e.target) && !!e.target.closest("button[data-id], button[data-new]");
-      if (!onInput && !onOption) box.hidden = true;
-    });
-  });
-
-  if (!isNew){
-    document.getElementById("pDelete").addEventListener("click", function(){
-      confirmDialog({
-        title: "Excluir paciente",
-        message: "Excluir o paciente <b>"+esc(v.nome || "")+"</b> do cadastro?<br>Os atendimentos já marcados na agenda não são apagados.",
-        confirmLabel: "Excluir paciente"
-      }).then(function(ok){
-        if (!ok) return;
-        var list = state.patients.filter(function(x){ return x.id !== v.id; });
-        writePatients(list).then(close);
+    // One outside-click handler closes whichever floating suggestion list is open,
+    // whether it's a specialty row's or the convênio field's.
+    // A floating suggestion box can visually sit on top of whatever follows it (the
+    // hours field, the remove button, "+ especialidade"...). Only keep it open when the
+    // click is on its own input or on one of its own option buttons — any other mousedown,
+    // including one that lands on the box's empty padding, closes it instead of trapping it.
+    document.addEventListener("mousedown", function outsidePickers(e){
+      if (!document.getElementById(ovId)){ document.removeEventListener("mousedown", outsidePickers); return; }
+      document.querySelectorAll("#" + ovId + " .autolist.floating").forEach(function(box){
+        if (box.hidden) return;
+        var wrap = box.closest(".spec-name-wrap, .field-picker");
+        var input = wrap ? wrap.querySelector("input") : null;
+        var onInput = input && e.target === input;
+        var onOption = box.contains(e.target) && !!e.target.closest("button[data-id], button[data-new]");
+        if (!onInput && !onOption) box.hidden = true;
       });
     });
-  }
-  document.getElementById("pSave").addEventListener("click", function(){
-    var nome = document.getElementById("pNome").value.trim();
-    if (!nome){ document.getElementById("pNome").focus(); return; }
-    syncSpecRowsFromDom();
 
+    syncRef = syncSpecRowsFromDom; resolveRef = resolveConvenioId;
+  }
+  function read(){
+    syncRef();
     // Most rows already have a specId (picked from the list, or created inline via
     // "+ Cadastrar nova especialidade"). A row the user typed into but never picked
     // from still resolves here: match by name, or create it, same as before.
@@ -5052,8 +5038,107 @@ function openPatientModal(p){
       specHoursOut.push({specId: specId, hours: hours});
     });
 
-    var convenioId = resolveConvenioId();
+    var convenioId = resolveRef();
 
+    return {
+      fields: {
+        convenioId: convenioId,
+        convenio: "",
+        plano: document.getElementById("pPlano").value.trim(),
+        pacoteHoras: document.getElementById("pPac").value.trim(),
+        aba: document.getElementById("pAba").value,
+        horarios: readPatHours(),
+        specHours: specHoursOut
+      },
+      newSpecialties: newSpecialties,
+      newConvenios: newConvenios
+    };
+  }
+  return {html: html, wire: wire, read: read};
+}
+
+function openPatientModal(p){
+  var isNew = !p;
+  var host = document.getElementById("modalHost");
+  var v = p || {nome:"",idade:"",nascimento:""};
+  var tr = !isNew ? activeTreatment(v.id) : null;
+  var trCanView = can("tratamentos", "view"), trCanCreate = can("tratamentos", "create");
+  var trBox = isNew ? '' :
+    '<div class="pt-treat">' +
+      '<div class="pt-treat-head"><b>Tratamento</b>' +
+        (tr && trCanView ? '<button type="button" class="btn ghost" id="pOpenTreat">Abrir tratamento</button>' :
+         (!tr && trCanCreate ? '<button type="button" class="btn ghost" id="pNewTreat">+ Novo tratamento</button>' : '')) +
+      '</div>' +
+      '<div class="pt-treat-txt">' + (tr ? treatSummaryHtml(tr) : 'Nenhum tratamento ativo. Convênio, plano, pacote, ABA, especialidades e horários ficam no tratamento.') + '</div>' +
+    '</div>';
+
+  host.innerHTML =
+    '<div class="overlay" id="ovPat"><div class="modal wide">' +
+      '<div class="modal-head"><div><h3>'+(isNew?"Novo paciente":"Editar paciente")+'</h3></div>' +
+        '<button class="modal-close" id="closePat" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="field"><label for="pNome">Nome</label><input id="pNome" type="text" value="'+esc(v.nome)+'"></div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label for="pNasc">Data de nascimento</label><input id="pNasc" type="date" value="'+esc(v.nascimento||"")+'"></div>' +
+          '<div class="field" id="pIdadeField"></div>' +
+        '</div>' +
+        trBox +
+        (isNew && trCanCreate ? '<div class="pt-treat-txt">Depois de salvar, abre o cadastro do tratamento (convênio, pacote, ABA, especialidades e horários).</div>' : '') +
+      '</div>' +
+      '<div class="modal-foot">' +
+        (isNew ? '<span></span>' : '<button class="btn danger" id="pDelete">Excluir</button>') +
+        '<div class="spacer"></div>' +
+        '<button class="btn ghost" id="pCancel">Cancelar</button>' +
+        '<button class="btn primary" id="pSave">Salvar</button>' +
+      '</div>' +
+    '</div></div>';
+
+  var overlay = document.getElementById("ovPat");
+  function close(){ host.innerHTML = ""; }
+  overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
+  document.getElementById("closePat").addEventListener("click", close);
+  document.getElementById("pCancel").addEventListener("click", close);
+  var ot = document.getElementById("pOpenTreat");
+  if (ot) ot.addEventListener("click", function(){ openTreatmentModal(tr); });
+  var nt = document.getElementById("pNewTreat");
+  if (nt) nt.addEventListener("click", function(){ openTreatmentModal(null, {patientId: v.id}); });
+
+  // Idade: read-only + auto-calculated whenever a birth date is set, otherwise
+  // a plain editable field (keeps working for older records with no birth date).
+  var nascInput = document.getElementById("pNasc");
+  function renderIdadeField(){
+    var host2 = document.getElementById("pIdadeField");
+    var nascVal = nascInput.value;
+    if (nascVal){
+      var age = computeAgeFromBirth(nascVal);
+      host2.innerHTML = '<label for="pIdadeCalc">Idade</label>' +
+        '<input id="pIdadeCalc" type="text" value="'+(age!=null ? age+" anos" : "data inválida")+'" disabled>';
+    } else {
+      host2.innerHTML = '<label for="pIdade">Idade</label>' +
+        '<input id="pIdade" type="text" placeholder="ex: 7 ou Adulto" value="'+esc(v.idade)+'">';
+    }
+  }
+  renderIdadeField();
+  nascInput.addEventListener("input", renderIdadeField);
+
+  if (!isNew){
+    document.getElementById("pDelete").addEventListener("click", function(){
+      var nTr = treatmentsOf(v.id).length;
+      confirmDialog({
+        title: "Excluir paciente",
+        message: "Excluir o paciente <b>"+esc(v.nome || "")+"</b> do cadastro?<br>Os atendimentos já marcados na agenda não são apagados." +
+          (nTr ? "<br>Os tratamentos dele (" + nTr + ") continuam guardados." : ""),
+        confirmLabel: "Excluir paciente"
+      }).then(function(ok){
+        if (!ok) return;
+        var list = state.patients.filter(function(x){ return x.id !== v.id; });
+        writePatients(list).then(close);
+      });
+    });
+  }
+  document.getElementById("pSave").addEventListener("click", function(){
+    var nome = document.getElementById("pNome").value.trim();
+    if (!nome){ document.getElementById("pNome").focus(); return; }
     var nascVal = document.getElementById("pNasc").value;
     var idadeManualInp = document.getElementById("pIdade");
     var idadeOut;
@@ -5063,38 +5148,40 @@ function openPatientModal(p){
     } else {
       idadeOut = idadeManualInp ? idadeManualInp.value.trim() : (v.idade || "");
     }
-
-    var rec = {
+    // Object.assign sobre o registro antigo: campos que esta janela não mostra
+    // (inclusive os antigos de tratamento) continuam como estavam.
+    var rec = Object.assign({}, isNew ? {} : v, {
       id: isNew ? (slugify(nome) + "-" + Date.now().toString(36)) : v.id,
       nome: nome,
-      convenioId: convenioId,
-      plano: document.getElementById("pPlano").value.trim(),
       nascimento: nascVal,
-      idade: idadeOut,
-      pacoteHoras: document.getElementById("pPac").value.trim(),
-      aba: document.getElementById("pAba").value,
-      horarios: readPatHours(),
-      specHours: specHoursOut
-    };
+      idade: idadeOut
+    });
     var list = state.patients.slice();
     if (isNew){ list.push(rec); }
     else { list = list.map(function(x){ return x.id===rec.id ? rec : x; }); }
-
-    var saves = [writePatients(list)];
-    if (newSpecialties.length){
-      saves.push(writeSpecialties(state.specialties.concat(newSpecialties)));
-    }
-    if (newConvenios.length){
-      saves.push(writeConvenios(state.convenios.concat(newConvenios)));
-    }
-    Promise.all(saves).then(close);
+    writePatients(list).then(function(){
+      close();
+      // Paciente novo: já abre o tratamento dele (convênio, pacote, ABA, horários...).
+      if (isNew && can("tratamentos", "create")) openTreatmentModal(null, {patientId: rec.id});
+    });
   });
 }
 
 function writePatients(list){
-  var denied = listPermDenied("pacientes", state.patients, list);
+  // A lista que o app usa vem "somada" ao tratamento: grava só o que é do
+  // paciente (os campos antigos de tratamento ficam como estavam no banco).
+  list = list.map(function(rec){
+    var o = Object.assign({}, rec), raw = rawPatient(rec.id);
+    delete o._treatId;
+    if (raw || state.treatments.some(function(t){ return t.patientId === rec.id; })){
+      TREAT_FIELDS.forEach(function(k){ delete o[k]; if (raw && raw[k] !== undefined) o[k] = raw[k]; });
+    }
+    return o;
+  });
+  var denied = listPermDenied("pacientes", state.patientsRaw, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
-  state.patients = list;
+  state.patientsRaw = list;
+  rebuildPatients();
   renderPatientsTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
@@ -8831,7 +8918,8 @@ var RP_TYPES = [
   {id: "pendentes",       name: "Evoluções pendentes",            desc: "Atendimentos Finalizados ainda sem evolução no prontuário.", filters: []},
   {id: "ocupacao",        name: "Ocupação",                       desc: "Uso do horário de cada profissional e de cada sala.", filters: []},
   {id: "bloqueios",       name: "Bloqueios, reuniões e treinamentos", desc: "Quantidade e horas de cada tipo por profissional.", filters: []},
-  {id: "sem-atendimento", name: "Pacientes sem atendimento",      desc: "Pacientes cadastrados sem nenhum atendimento no período.", filters: ["convenio"]}
+  {id: "sem-atendimento", name: "Pacientes sem atendimento",      desc: "Pacientes cadastrados sem nenhum atendimento no período.", filters: ["convenio"]},
+  {id: "tratamentos",     name: "Tratamentos novos e renegociados", desc: "Tratamentos iniciados e encerrados no período, com valores (Novo × Renegociado).", filters: []}
 ];
 var RP = {last: null};
 function rpCan(type){ return window.pipoAuth ? window.pipoAuth.can("relatorios", type) : true; }
@@ -8946,6 +9034,32 @@ function rpGenerate(){
 // Cada construtor devolve {sections:[{title, head:[...], rows:[[...]], foot:[...]?, num:[índices numéricos]}], note?}
 function rpPatientRows(rows){ return rows.filter(function(a){ return !bookingKind(a) && a.patient; }); }
 var RP_BUILDERS = {
+  // Não usa os atendimentos: lê o cadastro de tratamentos (início e mudança de status no período).
+  "tratamentos": function(rows, o){
+    function pn(t){ var p = rawPatient(t.patientId); return p ? p.nome : "(paciente excluído)"; }
+    function conv(t){ return t.convenioId ? ((state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name || "") : (t.convenio || ""); }
+    var started = state.treatments.filter(function(t){ return t.inicio && t.inicio >= o.from && t.inicio <= o.to; })
+      .sort(function(a, b){ return String(a.inicio).localeCompare(String(b.inicio)) || pn(a).localeCompare(pn(b), "pt-BR"); });
+    var ended = state.treatments.filter(function(t){ return t.status !== "ativo" && t.statusEm && t.statusEm >= o.from && t.statusEm <= o.to; })
+      .sort(function(a, b){ return String(a.statusEm).localeCompare(String(b.statusEm)); });
+    var sum = {}, tot = {n: 0, v: 0, d: 0, f: 0};
+    TR_TIPOS.forEach(function(x){ sum[x.id] = {n: 0, v: 0, d: 0, f: 0}; });
+    started.forEach(function(t){
+      var s2 = sum[t.tipo] || (sum[t.tipo] = {n: 0, v: 0, d: 0, f: 0});
+      [s2, tot].forEach(function(a){ a.n++; a.v += parseMoney(t.valor); a.d += parseMoney(t.despesas); a.f += trFinal(t); });
+    });
+    return {sections: [
+      {title: "Resumo dos tratamentos iniciados", head: ["Tipo", "Tratamentos", "Valor", "Despesas", "Valor final"],
+        rows: TR_TIPOS.map(function(x){ var a = sum[x.id]; return [x.name, a.n, fmtMoney(a.v), fmtMoney(a.d), fmtMoney(a.f)]; }),
+        foot: ["Total", tot.n, fmtMoney(tot.v), fmtMoney(tot.d), fmtMoney(tot.f)]},
+      {title: "Tratamentos iniciados no período", head: ["Paciente", "Início", "Tipo", "Status", "Convênio", "Valor", "Despesas", "Valor final"],
+        empty: "Nenhum tratamento iniciado no período.",
+        rows: started.map(function(t){ return [pn(t), trBr(t.inicio), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), conv(t) || "—", fmtMoney(t.valor), fmtMoney(t.despesas), fmtMoney(trFinal(t))]; })},
+      {title: "Tratamentos encerrados no período (cancelados ou renegociados)", head: ["Paciente", "Início", "Encerrado em", "Status", "Valor final"],
+        empty: "Nenhum tratamento encerrado no período.",
+        rows: ended.map(function(t){ return [pn(t), trBr(t.inicio), trBr(t.statusEm), trLabel(TR_STATUS, t.status), fmtMoney(trFinal(t))]; })}
+    ]};
+  },
   "lista": function(rows, o){
     var list = rpPatientRows(rows).filter(function(a){
       if (o.status === "__aberto" && a.status) return false;
@@ -9266,6 +9380,357 @@ function rpExportCsv(){
 })();
 
 
+/* ---------------- Tratamentos (desde 2026-10-03) ----------------
+ * Documento treatments/all {list:[{id, patientId, inicio, valor, despesas, tipo,
+ * status, statusEm, obs, convenioId, convenio, plano, pacoteHoras, aba, specHours,
+ * horarios, criadoEm, atualizadoEm}]} — permissão "tratamentos".
+ * Convênio, plano, pacote, ABA, especialidades e horários saíram do paciente: o
+ * app enxerga cada paciente "somado" ao tratamento dele (rebuildPatients), então
+ * Planner, Agenda, cores, regras "não ABA" e relatórios continuam lendo p.aba,
+ * p.specHours... sem mudar. Idade/nascimento continuam no paciente.
+ * Cada paciente tem no máximo UM tratamento Ativo. Tipo: Novo = primeiro
+ * tratamento ou o anterior foi Cancelado; Renegociado = o anterior foi
+ * renegociado (trTipoAuto). Término = data do último atendimento na Agenda dentro
+ * do período do tratamento (trEnd).
+ */
+var TR_STATUS = [
+  {id: "ativo", name: "Ativo", color: "#2c7a72"},
+  {id: "renegociado", name: "Renegociado", color: "#b7791f"},
+  {id: "cancelado", name: "Cancelado", color: "#b6403a"}
+];
+var TR_TIPOS = [{id: "novo", name: "Novo"}, {id: "renegociado", name: "Renegociado"}];
+var TR = {last: null, lastAt: 0, loading: false, filter: "", search: ""};
+var treatmentsLoaded = false;
+function trLabel(list, id){ var x = list.filter(function(i){ return i.id === id; })[0]; return x ? x.name : (id || "—"); }
+function trTodayIso(){ var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function trBr(iso){ return iso ? String(iso).slice(8, 10) + "/" + String(iso).slice(5, 7) + "/" + String(iso).slice(0, 4) : "—"; }
+// Valores em reais: aceita "1.234,56", "1234.56" ou número.
+function parseMoney(v){
+  if (typeof v === "number") return isFinite(v) ? v : 0;
+  var t = String(v || "").replace(/[^\d,.-]/g, "");
+  if (!t) return 0;
+  if (t.indexOf(",") !== -1) t = t.replace(/\./g, "").replace(",", ".");
+  var n = parseFloat(t); return isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+function fmtMoney(n){ return "R$ " + Number(n || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function trFinal(t){ return Math.round((parseMoney(t.valor) - parseMoney(t.despesas)) * 100) / 100; }
+function treatmentsOf(pid){
+  return state.treatments.filter(function(t){ return t.patientId === pid; }).sort(function(a, b){
+    return String(b.inicio || "").localeCompare(String(a.inicio || "")) || String(b.criadoEm || "").localeCompare(String(a.criadoEm || ""));
+  });
+}
+function activeTreatment(pid){ return treatmentsOf(pid).filter(function(t){ return t.status === "ativo"; })[0] || null; }
+// Tratamento que vale para o paciente: o ativo; sem ativo, o mais recente.
+function currentTreatment(pid){ return activeTreatment(pid) || treatmentsOf(pid)[0] || null; }
+function trTipoAuto(pid, exceptId){
+  var prev = treatmentsOf(pid).filter(function(t){ return t.id !== exceptId; });
+  if (!prev.length) return "novo";
+  return prev[0].status === "cancelado" ? "novo" : "renegociado";
+}
+function rawPatient(id){ return (state.patientsRaw || []).filter(function(p){ return p.id === id; })[0] || null; }
+// Paciente + campos do tratamento atual. Sempre uma lista nova (o índice de busca
+// de pacientes é refeito quando state.patients é trocado).
+function rebuildPatients(){
+  var byPat = {};
+  (state.treatments || []).forEach(function(t){ (byPat[t.patientId] = byPat[t.patientId] || []).push(t); });
+  state.patients = (state.patientsRaw || []).map(function(p){
+    if (!byPat[p.id]) return p;
+    var t = currentTreatment(p.id);
+    var m = Object.assign({}, p);
+    TREAT_FIELDS.forEach(function(k){ if (t[k] === undefined) delete m[k]; else m[k] = t[k]; });
+    m._treatId = t.id;
+    return m;
+  });
+}
+function subscribeTreatments(){
+  db.doc("treatments/all").onSnapshot(function(snap){
+    state.treatments = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
+    treatmentsLoaded = true;
+    rebuildPatients();
+    afterTreatmentsChange();
+  }, function(){ treatmentsLoaded = true; });
+}
+function afterTreatmentsChange(){
+  renderPatientsTab();
+  queueGridUpdate();
+  agdRenderIfVisible();
+  if (state.tab === "tratamentos") renderTreatmentsTab();
+}
+function writeTreatments(list){
+  var denied = listPermDenied("tratamentos", state.treatments, list);
+  if (denied){ showToast(denied, true); return Promise.resolve(false); }
+  state.treatments = list;
+  rebuildPatients();
+  afterTreatmentsChange();
+  if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(false); }
+  if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(false); }
+  return db.doc("treatments/all").set({list: list}).then(function(){ return true; }).catch(function(){
+    showToast("Não foi possível salvar o tratamento.", true); return false;
+  });
+}
+function treatSummaryHtml(t){
+  var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
+  return '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span> ' +
+    'desde <b>' + esc(trBr(t.inicio)) + '</b> · ' + esc(trLabel(TR_TIPOS, t.tipo)) +
+    (conv ? ' · ' + esc(conv) : '') + (t.plano ? ' · ' + esc(t.plano) : '') +
+    (t.pacoteHoras !== "" && t.pacoteHoras != null ? ' · pacote ' + esc(t.pacoteHoras) + '/mês' : '') +
+    (t.aba ? ' · ABA: ' + esc(t.aba) : '');
+}
+
+// Último atendimento (Agenda, sem bloqueios, até hoje) de cada paciente; recarrega a cada 2 min.
+function trLoadLast(force){
+  var c = agdClient();
+  if (!c || TR.loading) return;
+  if (!force && TR.last && Date.now() - TR.lastAt < 120000) return;
+  TR.loading = true;
+  var out = {}, page = 1000, today = trTodayIso();
+  function next(from){
+    return c.from("appointments").select("patient,date").eq("blocked", false).lte("date", today)
+      .order("date").range(from, from + page - 1).then(function(r){
+        if (r.error) throw r.error;
+        (r.data || []).forEach(function(a){ var k = normText(String(a.patient || "").trim()); if (k) (out[k] = out[k] || []).push(a.date); });
+        return (r.data || []).length === page ? next(from + page) : null;
+      });
+  }
+  next(0).then(function(){ TR.last = out; TR.lastAt = Date.now(); })
+    .catch(function(){ TR.last = TR.last || {}; })
+    .then(function(){ TR.loading = false; if (state.tab === "tratamentos") renderTreatmentsTab(); });
+}
+// Término = último atendimento entre o início deste tratamento e o início do seguinte.
+function trEnd(t){
+  if (!TR.last) return "";
+  var p = rawPatient(t.patientId); if (!p) return "";
+  var dates = TR.last[normText(String(p.nome || "").trim())] || [];
+  var after = treatmentsOf(t.patientId).filter(function(x){ return x.id !== t.id && x.inicio && t.inicio && x.inicio > t.inicio; })
+    .map(function(x){ return x.inicio; }).sort()[0] || "9999-99-99";
+  var best = "";
+  dates.forEach(function(d){ if ((!t.inicio || d >= t.inicio) && d < after && d > best) best = d; });
+  return best;
+}
+function trEndText(t){
+  if (!agdClient()) return "—";
+  if (!TR.last) return "…";
+  var e = trEnd(t);
+  if (t.status === "ativo") return e ? "Em andamento (último " + trBr(e) + ")" : "Em andamento";
+  return e ? trBr(e) : "Sem atendimento";
+}
+
+function renderTreatmentsTab(){
+  var host = document.getElementById("trHost"); if (!host) return;
+  trLoadLast(false);
+  var add = document.getElementById("trAdd"); if (add) add.hidden = !can("tratamentos", "create");
+  var q = normText((document.getElementById("trSearch") || {}).value || "");
+  var filter = (document.getElementById("trFilter") || {}).value || "";
+  var pats = state.patientsRaw || [];
+  var without = pats.filter(function(p){ return !activeTreatment(p.id); });
+  var miss = document.getElementById("trMissing");
+  if (miss) miss.innerHTML = without.length
+    ? '<button type="button" class="btn ghost tr-missing-btn" id="trMissingBtn">' + without.length + ' paciente' + (without.length === 1 ? '' : 's') + ' sem tratamento ativo</button>'
+    : '';
+  var mb = document.getElementById("trMissingBtn");
+  if (mb) mb.onclick = function(){ var f = document.getElementById("trFilter"); f.value = "sem"; f.dispatchEvent(new Event("change", {bubbles: true})); };
+  if (!treatmentsLoaded && db){ host.innerHTML = '<div class="empty-state">Carregando tratamentos…</div>'; return; }
+  var cnt = document.getElementById("trCount");
+  if (filter === "sem"){
+    var list = without.filter(function(p){ return !q || normText(p.nome || "").indexOf(q) !== -1; })
+      .sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
+    if (cnt) cnt.textContent = list.length + " paciente" + (list.length === 1 ? "" : "s") + " sem tratamento ativo";
+    if (!list.length){ host.innerHTML = '<div class="empty-state"><b>Todos os pacientes têm tratamento ativo</b></div>'; return; }
+    gtRender(host, "tratamentos-sem", [
+      {key: "pac", label: "Paciente", width: 320, min: 140, cls: "pt-nome"},
+      {key: "ult", label: "Último tratamento", width: 260, min: 120, cls: "pt-muted"}
+    ], list.map(function(p){
+      var last = treatmentsOf(p.id)[0];
+      return {attrs: 'class="pr-row" data-new-pat="' + esc(p.id) + '" tabindex="0"',
+        cells: [esc(p.nome), last ? esc(trLabel(TR_STATUS, last.status)) + " desde " + esc(trBr(last.inicio)) : "Nenhum"],
+        vals: [p.nome, last ? last.inicio : ""]};
+    }), renderTreatmentsTab, "tr-sem");
+    return;
+  }
+  var all = state.treatments.slice();
+  var shown = all.filter(function(t){
+    if (filter && t.status !== filter) return false;
+    if (!q) return true;
+    var p = rawPatient(t.patientId);
+    return normText(p ? p.nome : "").indexOf(q) !== -1;
+  }).sort(function(a, b){
+    var pa = rawPatient(a.patientId), pb = rawPatient(b.patientId);
+    return String(pa ? pa.nome : "").localeCompare(String(pb ? pb.nome : ""), "pt-BR") || String(b.inicio || "").localeCompare(String(a.inicio || ""));
+  });
+  if (cnt) cnt.textContent = shown.length + " de " + all.length + " tratamento" + (all.length === 1 ? "" : "s");
+  if (!all.length){ host.innerHTML = '<div class="empty-state"><b>Nenhum tratamento cadastrado</b>Use "+ Novo tratamento".</div>'; return; }
+  if (!shown.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca ou o filtro.</div>'; return; }
+  var canFin = true;
+  gtRender(host, "tratamentos", [
+    {key: "pac", label: "Paciente", width: 260, min: 140, cls: "pt-nome"},
+    {key: "ini", label: "Início", width: 110, min: 80},
+    {key: "fim", label: "Término", width: 200, min: 90, cls: "pt-muted"},
+    {key: "tipo", label: "Tipo", width: 120, min: 80},
+    {key: "st", label: "Status", width: 130, min: 90},
+    {key: "val", label: "Valor final", width: 130, min: 90},
+    {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"}
+  ], shown.map(function(t){
+    var p = rawPatient(t.patientId);
+    var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
+    var fin = trFinal(t);
+    return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"',
+      cells: [esc(p ? p.nome : "(paciente excluído)"), esc(trBr(t.inicio)), esc(trEndText(t)), esc(trLabel(TR_TIPOS, t.tipo)),
+        '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>',
+        canFin ? esc(fmtMoney(fin)) : "—", esc(conv || "—")],
+      vals: [p ? p.nome : "", t.inicio || "", trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), fin, conv || ""]};
+  }), renderTreatmentsTab, "tr-main");
+}
+function wireTreatmentsTab(){
+  var s = document.getElementById("trSearch"), f = document.getElementById("trFilter"), a = document.getElementById("trAdd"), h = document.getElementById("trHost");
+  if (!h) return;
+  if (s) s.addEventListener("input", renderTreatmentsTab);
+  if (f) f.addEventListener("change", renderTreatmentsTab);
+  if (a) a.addEventListener("click", function(){ openTreatmentModal(null, {}); });
+  function open(e){
+    var tr = e.target.closest("tr[data-tr-id]");
+    if (tr){ var t = state.treatments.filter(function(x){ return x.id === tr.getAttribute("data-tr-id"); })[0]; if (t) openTreatmentModal(t); return; }
+    var np = e.target.closest("tr[data-new-pat]");
+    if (np){
+      if (!can("tratamentos", "create")){ showToast(permDeniedMsg("tratamentos", "create"), true); return; }
+      openTreatmentModal(null, {patientId: np.getAttribute("data-new-pat")});
+    }
+  }
+  h.addEventListener("click", open);
+  h.addEventListener("keydown", function(e){ if (e.key === "Enter") open(e); });
+}
+
+// Janela do tratamento. opts: {patientId, copyFrom, renegotiateFrom}
+function openTreatmentModal(t, opts){
+  opts = opts || {};
+  var isNew = !t;
+  if (!can("tratamentos", "view")){ showToast(permDeniedMsg("tratamentos", "view"), true); return; }
+  if (isNew && !can("tratamentos", "create")){ showToast(permDeniedMsg("tratamentos", "create"), true); return; }
+  var canSave = isNew || can("tratamentos", "edit");
+  var canDel = !isNew && can("tratamentos", "delete");
+  var pid = isNew ? (opts.patientId || "") : t.patientId;
+  var src = opts.copyFrom || t || null;
+  // Novo sem tratamento anterior: parte do que estava no cadastro antigo do paciente.
+  var base = src || (pid ? (rawPatient(pid) || {}) : {});
+  var v = {};
+  TREAT_FIELDS.forEach(function(k){ if (base[k] !== undefined) v[k] = base[k]; });
+  var d = {
+    inicio: isNew ? trTodayIso() : (t.inicio || ""),
+    valor: src && src.valor != null ? src.valor : "",
+    despesas: src && src.despesas != null ? src.despesas : "",
+    tipo: isNew ? (pid ? (opts.renegotiateFrom ? "renegociado" : trTipoAuto(pid)) : "novo") : (t.tipo || "novo"),
+    status: isNew ? "ativo" : (t.status || "ativo"),
+    obs: isNew ? "" : (t.obs || "")
+  };
+  var ed = treatFieldsEditor(v);
+  var pats = (state.patientsRaw || []).slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
+  var patOpts = '<option value="">Selecione o paciente…</option>' + pats.map(function(p){
+    var act = activeTreatment(p.id);
+    return '<option value="' + esc(p.id) + '"' + (p.id === pid ? ' selected' : '') + '>' + esc(p.nome) + (isNew && act && !opts.renegotiateFrom ? ' (já tem tratamento ativo)' : '') + '</option>';
+  }).join("");
+  function opt(list, cur){ return list.map(function(x){ return '<option value="' + x.id + '"' + (x.id === cur ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join(""); }
+  var host = document.getElementById("modalHost");
+  host.innerHTML =
+    '<div class="overlay" id="ovTreat"><div class="modal wide" style="max-width:720px">' +
+      '<div class="modal-head"><div><h3>' + (opts.renegotiateFrom ? "Renegociar tratamento" : (isNew ? "Novo tratamento" : "Tratamento")) + '</h3>' +
+        '<div class="modal-sub">Cada paciente tem só um tratamento Ativo. Tipo: Novo (primeiro, ou o anterior foi cancelado) ou Renegociado (o anterior foi renegociado).</div></div>' +
+        '<button class="modal-close" id="trClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="field"><label for="trPat">Paciente</label><select id="trPat"' + (isNew && !opts.renegotiateFrom ? '' : ' disabled') + '>' + patOpts + '</select></div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label for="trIni">Data de início</label><input type="date" id="trIni" value="' + esc(d.inicio) + '"></div>' +
+          '<div class="field"><label>Data de término</label><input type="text" id="trFim" disabled value="' + esc(isNew ? "Em andamento" : trEndText(t)) + '"></div>' +
+        '</div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label for="trVal">Valor</label><input type="text" inputmode="decimal" id="trVal" placeholder="0,00" value="' + esc(d.valor === "" ? "" : parseMoney(d.valor).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
+          '<div class="field"><label for="trDesp">Despesas</label><input type="text" inputmode="decimal" id="trDesp" placeholder="0,00" value="' + esc(d.despesas === "" ? "" : parseMoney(d.despesas).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
+          '<div class="field"><label>Valor final</label><input type="text" id="trFinal" disabled></div>' +
+        '</div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label for="trTipo">Tipo</label><select id="trTipo">' + opt(TR_TIPOS, d.tipo) + '</select></div>' +
+          '<div class="field"><label for="trSt">Status</label><select id="trSt">' + opt(TR_STATUS, d.status) + '</select></div>' +
+        '</div>' +
+        '<div class="tr-sec">Plano terapêutico</div>' +
+        ed.html +
+        '<div class="field"><label for="trObs">Observações</label><textarea id="trObs" rows="2" placeholder="Opcional">' + esc(d.obs) + '</textarea></div>' +
+      '</div>' +
+      '<div class="modal-foot">' +
+        (canDel ? '<button class="btn danger" id="trDel">Excluir</button>' : '') +
+        (!isNew && t.status === "ativo" && can("tratamentos", "create") ? '<button class="btn ghost" id="trReneg">Renegociar</button>' : '') +
+        '<div class="spacer"></div>' +
+        '<button class="btn ghost" id="trCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
+        (canSave ? '<button class="btn primary" id="trSave">Salvar</button>' : '') +
+      '</div>' +
+    '</div></div>';
+  ed.wire("ovTreat");
+  var overlay = document.getElementById("ovTreat");
+  function close(){ host.innerHTML = ""; }
+  overlay.addEventListener("mousedown", function(e){ if (e.target === overlay) close(); });
+  document.getElementById("trClose").addEventListener("click", close);
+  document.getElementById("trCancel").addEventListener("click", close);
+  function upFinal(){
+    document.getElementById("trFinal").value = fmtMoney(parseMoney(document.getElementById("trVal").value) - parseMoney(document.getElementById("trDesp").value));
+  }
+  upFinal();
+  document.getElementById("trVal").addEventListener("input", upFinal);
+  document.getElementById("trDesp").addEventListener("input", upFinal);
+  // Paciente escolhido num tratamento novo: reabre já com o tipo certo e os dados dele.
+  document.getElementById("trPat").addEventListener("change", function(e){
+    var np = e.target.value; if (!np || np === pid) return;
+    openTreatmentModal(null, {patientId: np});
+  });
+  var rn = document.getElementById("trReneg");
+  if (rn) rn.addEventListener("click", function(){ openTreatmentModal(null, {patientId: t.patientId, copyFrom: t, renegotiateFrom: t.id}); });
+  var del = document.getElementById("trDel");
+  if (del) del.addEventListener("click", function(){
+    var p = rawPatient(t.patientId);
+    confirmDialog({title: "Excluir tratamento", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Excluir tratamento"})
+      .then(function(ok){ if (!ok) return; writeTreatments(state.treatments.filter(function(x){ return x.id !== t.id; })).then(close); });
+  });
+  var sv = document.getElementById("trSave");
+  if (sv) sv.addEventListener("click", function(){
+    var patId = isNew ? document.getElementById("trPat").value : t.patientId;
+    if (!patId){ showToast("Escolha o paciente.", true); return; }
+    var ini = document.getElementById("trIni").value;
+    if (!ini){ showToast("Informe a data de início.", true); return; }
+    var r = ed.read();
+    var st = document.getElementById("trSt").value;
+    var now = new Date().toISOString();
+    var rec = Object.assign({}, t || {}, r.fields, {
+      id: t ? t.id : uid("tr"),
+      patientId: patId,
+      inicio: ini,
+      valor: parseMoney(document.getElementById("trVal").value),
+      despesas: parseMoney(document.getElementById("trDesp").value),
+      tipo: document.getElementById("trTipo").value,
+      status: st,
+      obs: document.getElementById("trObs").value.trim(),
+      criadoEm: t ? (t.criadoEm || now) : now,
+      atualizadoEm: now
+    });
+    if (!t || t.status !== st) rec.statusEm = trTodayIso();
+    var list = state.treatments.map(function(x){ return x.id === rec.id ? rec : x; });
+    if (isNew) list.push(rec);
+    // Só um Ativo por paciente: o outro ativo vira Renegociado.
+    var others = st === "ativo" ? list.filter(function(x){ return x.patientId === patId && x.id !== rec.id && x.status === "ativo"; }) : [];
+    var go = !others.length || opts.renegotiateFrom ? Promise.resolve(true) : confirmDialog({
+      title: "Já existe um tratamento ativo", confirmLabel: "Continuar",
+      message: "Este paciente já tem um tratamento ativo desde <b>" + esc(trBr(others[0].inicio)) + "</b>. Ao salvar, ele passa para <b>Renegociado</b>." +
+        (rec.tipo !== "renegociado" ? "<br>O tipo deste tratamento também passa para Renegociado." : "")
+    });
+    go.then(function(ok){
+      if (!ok) return;
+      if (others.length){
+        rec.tipo = "renegociado";
+        list = list.map(function(x){ return others.indexOf(x) !== -1 ? Object.assign({}, x, {status: "renegociado", statusEm: trTodayIso(), atualizadoEm: now}) : x; });
+      }
+      var saves = [writeTreatments(list)];
+      if (r.newSpecialties.length) saves.push(writeSpecialties(state.specialties.concat(r.newSpecialties)));
+      if (r.newConvenios.length) saves.push(writeConvenios(state.convenios.concat(r.newConvenios)));
+      Promise.all(saves).then(function(res){ if (res[0] !== false) close(); });
+    });
+  });
+}
+
 /* ---------------- Cópia de segurança (menu Acesso, só Administrador) ----------------
  * Baixar: lê no navegador (o Administrador enxerga tudo) os documentos (cadastros,
  * Planner, clínica), a Agenda (appointments), o Prontuário (clinical_records) e os
@@ -9573,6 +10038,7 @@ function openRegistryItem(kind, item){
 // do navegador: o endereço leva "#chave" e openNavFromHash() abre a tela certa.
 var CAD_ITEMS = [
   {key: "pacientes", label: "Pacientes", tab: "pacientes", ok: function(){ return can("pacientes", "view"); }},
+  {key: "tratamentos", label: "Tratamentos", tab: "tratamentos", ok: function(){ return can("tratamentos", "view"); }},
   {key: "profissionais", label: "Profissionais", tab: "profissionais", ok: function(){ return can("profissionais", "view"); }},
   {key: "convenios", label: "Convênios", tab: "convenios", ok: function(){ return can("convenios", "view"); }},
   {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("servicos", "view"); }},
@@ -9582,7 +10048,7 @@ var CAD_ITEMS = [
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
-var CAD_TABS = ["pacientes", "profissionais", "convenios", "servicos", "especialidades", "salas"];
+var CAD_TABS = ["pacientes", "tratamentos", "profissionais", "convenios", "servicos", "especialidades", "salas"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "agenda", ok: function(){ return can("agenda", "view"); }},
   {key: "resumo", label: "Resumo", tab: "relatorio", ok: function(){ return can("resumo", "view"); }}
