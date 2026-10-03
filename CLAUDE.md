@@ -1028,3 +1028,11 @@ sendo trocados pela Agenda.
   Serviço, Especialidade — nenhuma passa da tela e nenhum campo < 16px.
   Atenção: `tests/test.html` não tem meta viewport; para testar em celular
   "de verdade" (isMobile) injete `<meta name="viewport" ...>` numa cópia.
+
+## Relatórios no celular: resultado em tela cheia (2026-10-03)
+No celular a aba Relatórios mostra OU os campos OU o relatório: `rpGenerate()`
+chama `rpShowResult(true)` (classe `.rp-result` em `#tab-relatorios`), que
+esconde `.rp-form` e mostra `#rpOut` com a barra `.rp-back-bar` / botão
+`#rpBack` ("‹ Voltar") no topo; Voltar = `rpShowResult(false)`. Sem relatório
+gerado, `#rpOut` fica oculto no celular. No computador nada muda (a barra fica
+sempre oculta, form e resultado lado a lado).
