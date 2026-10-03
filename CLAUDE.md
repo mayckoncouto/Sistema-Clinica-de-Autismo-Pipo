@@ -993,6 +993,8 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   Mudou a ordem das colunas no computador? Ajustar os `:nth-child` também.
 - Usuários no celular (CSS em `injectStyles` de `js/usuarios.js`): tabela
   `.adm-users` só com Nome e Situação (esconde 2ª e 3ª colunas), busca na linha toda.
+  Janela Níveis de permissão: tabela `.adm-roles` só com Nível e Usuários (esconde o
+  resumo das permissões).
 
 ## Atualizar a página mantém a tela (2026-10-03, computador e celular)
 A tela aberta fica no endereço (`navSaveHash()` → `history.replaceState`, sem

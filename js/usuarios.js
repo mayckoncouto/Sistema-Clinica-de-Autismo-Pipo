@@ -118,6 +118,10 @@
         ".adm-users :is(th,td):nth-child(2),.adm-users :is(th,td):nth-child(3){display:none}" +
         ".adm-users td.u-name{overflow-wrap:anywhere}" +
         ".adm-users :is(th,td):last-child{width:1%;white-space:nowrap}" +
+        // Níveis de permissão: só Nível e Usuários (o resumo das permissões aparece ao abrir o nível).
+        ".adm-roles :is(th,td):nth-child(2){display:none}" +
+        ".adm-roles :is(th,td):first-child{width:auto!important;overflow-wrap:anywhere}" +
+        ".adm-roles :is(th,td):last-child{width:1%!important;white-space:nowrap}" +
       "}";
     var st = document.createElement("style");
     st.textContent = css;
@@ -441,7 +445,7 @@
           'Uma mudança vale na hora para todos os usuários daquele nível.</div></div>' +
           '<button class="modal-close" id="rlClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
-          '<table class="adm-table"><thead><tr><th style="width:24%">Nível</th><th>Permissões</th><th style="width:16%">Usuários</th></tr></thead><tbody>' +
+          '<table class="adm-table adm-roles"><thead><tr><th style="width:24%">Nível</th><th>Permissões</th><th style="width:16%">Usuários</th></tr></thead><tbody>' +
             roles.map(function (r) {
               var n = counts[r.id] || 0;
               return '<tr data-role-id="' + esc(r.id) + '" tabindex="0">' +
