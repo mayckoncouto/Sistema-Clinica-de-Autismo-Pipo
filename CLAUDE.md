@@ -702,7 +702,9 @@ recusa a troca para "finalizado" sem `clinical_records` ligada (migração
   `NAV_MENUS` / `renderNavMenus` / `navActivate` / `navMenuTab(k)`;
   `renderCadMenu()` ficou como apelido. Tela inicial sem permissão: a primeira
   permitida na ordem agenda, agendadia, prontuario, relatorio, relatorios, cadastros.
-- "Clínica" saiu do menu Acesso (`js/pipo-supabase.js`); fica só em Cadastros.
+- (2026-10-03) "Clínica" voltou para o menu Acesso (`js/pipo-supabase.js`,
+  `data-act="clinica"`, aparece com `clinica.view`) e saiu de Cadastros. O
+  endereço `#clinica` continua abrindo a janela (`CLINIC_NAV` em `navItem`).
 - Ctrl+clique (ou botão do meio) em qualquer aba ou item dos menus do topo abre
   a tela em outra aba do navegador: endereço `#chave` (ex.: `#pacientes`,
   `#grupos`, `#resumo`, `#agendadia`, `#clinica`), aberto por `openNavFromHash()`
