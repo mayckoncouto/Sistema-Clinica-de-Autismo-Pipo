@@ -1138,3 +1138,9 @@ O projeto Supabase está no plano gratuito (sem backup automático restaurável)
   não pergunta se o paciente/serviço já estava naquela célula). Agenda:
   `agdTherapistConfirm([{rec, old}])` na janela, colar/mover e trocar. Não é
   bloqueio: confirmando duas vezes, grava.
+- (2026-10-03) **Agenda também confere o horário do paciente** (antes só o
+  Planner, via `patientHoursOutside`): `agdPatientConfirm([{rec, old}])` faz
+  1) "Fora do horário do paciente" + "Tem certeza?" (`patientSlotOk` com o dia
+  da data) e depois 2) terapeuta do tratamento (`agdTherapistCheck`). Usado na
+  janela, colar/mover e trocar. Sem pergunta se paciente, data e hora não
+  mudaram. O horário vem do tratamento (via `state.patients` somado).

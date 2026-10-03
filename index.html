@@ -7279,15 +7279,33 @@ function agdOpenModal(opts){
     agdConflictsFor([rec], row ? [row.id] : []).then(function(conflict){
       saveBtn.disabled = false;
       if (conflict){ showToast(conflict, true); return; }
-      agdTherapistConfirm([{rec: rec, old: row}]).then(function(ok){ if (ok) checkRoomThenSave(); });
+      agdPatientConfirm([{rec: rec, old: row}]).then(function(ok){ if (ok) checkRoomThenSave(); });
     }).catch(function(err){ saveBtn.disabled = false; showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
   });
   var first = document.getElementById(canSave && !rowKind ? "agdPac" : "agdCancel");
   if (first) first.focus();
 }
-// Agenda: terapeuta diferente do indicado no tratamento → confirmação dupla.
-// pairs = [{rec, old}] (old = como estava; sem mudança de paciente/profissional/serviço não pergunta).
-function agdTherapistConfirm(pairs){
+// Agenda: confirmações duplas antes de gravar (mesmas do Planner):
+//  1) fora do horário de atendimento do paciente (tratamento → horarios);
+//  2) terapeuta diferente do indicado no tratamento.
+// pairs = [{rec, old}] (old = como estava; o que não mudou não pergunta de novo).
+function agdPatientConfirm(pairs){
+  var out = pairs.map(function(x){
+    var rec = x.rec, old = x.old;
+    if (!rec || !rec.patient || bookingKind(rec)) return null;
+    if (old && normText(old.patient || "") === normText(rec.patient) && old.date === rec.date && old.time === rec.time) return null;
+    var p = findPatientByName(rec.patient);
+    var dayKey = AD_WEEKDAY_KEYS[agdParse(rec.date).getDay()];
+    if (!p || patientSlotOk(p, dayKey, rec.time)) return null;
+    return "<b>" + esc(p.nome) + "</b> — " + esc(agdBrDate(rec.date)) + " às " + esc(rec.time);
+  }).filter(Boolean);
+  var first = !out.length ? Promise.resolve(true) : confirmDialog({title: "Fora do horário do paciente",
+    message: (out.length > 1 ? "Estes agendamentos ficam" : "Este agendamento fica") + " fora do horário de atendimento cadastrado no tratamento do paciente:<br>" + out.slice(0, 8).join("<br>"),
+    confirmLabel: "Continuar"})
+    .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar mesmo fora do horário do paciente?", confirmLabel: "Agendar assim mesmo"}); });
+  return first.then(function(ok){ return ok ? agdTherapistCheck(pairs) : false; });
+}
+function agdTherapistCheck(pairs){
   var msgs = pairs.map(function(x){
     var rec = x.rec, old = x.old;
     if (!rec || bookingKind(rec)) return null;
@@ -7850,7 +7868,7 @@ function agdPlace(row, td, mode, swapWith){
       professional_id: back.professional_id, room_id: back.room_id, date: back.date, time: back.time};
     agdConflictsFor([payload, occPayload], [row.id, occupant.id]).then(function(conflict){
     if (conflict){ showToast(conflict, true); return; }
-    return agdTherapistConfirm([{rec: payload, old: row}, {rec: occPayload, old: occupant}]).then(function(ok){
+    return agdPatientConfirm([{rec: payload, old: row}, {rec: occPayload, old: occupant}]).then(function(ok){
     if (!ok) return;
     // Os dois são atualizados (nada é apagado e recriado): cada um mantém o id e a evolução.
     c.from("appointments").update(payload).eq("id", row.id).select().single().then(function(r2){
@@ -7878,7 +7896,7 @@ function agdPlace(row, td, mode, swapWith){
   }
   agdConflictsFor([payload], isCopy ? [] : [row.id]).then(function(conflict){
     if (conflict){ showToast(conflict, true); return; }
-    return agdTherapistConfirm([{rec: payload, old: isCopy ? null : row}]).then(function(ok){ if (ok) write(); });
+    return agdPatientConfirm([{rec: payload, old: isCopy ? null : row}]).then(function(ok){ if (ok) write(); });
   }).catch(function(err){ showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
 }
 
