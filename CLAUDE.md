@@ -1116,3 +1116,11 @@ O projeto Supabase está no plano gratuito (sem backup automático restaurável)
   valores, iniciados no período e encerrados no período (por `statusEm`).
 - Atenção: como todo documento, `treatments/all` é legível por qualquer usuário
   ativo (inclusive os valores); a tela só aparece para quem tem `tratamentos.view`.
+- (2026-10-03, ajuste) **Tipo não se escolhe**: `trTipoFor(rec, list)` olha o
+  tratamento anterior do paciente (início antes; mesmo início = criado antes; um
+  novo vê todos): nenhum ou Cancelado → Novo; Renegociado (ou Ativo, que vira
+  Renegociado ao salvar) → Renegociado. Campo "Tipo (automático)" desabilitado;
+  recalculado ao salvar, já com o anterior atualizado.
+- Bolinha de cor: na lista de Tratamentos, antes do nome (`trColor(t)` = idade do
+  paciente + ABA do tratamento); na lista de Pacientes, a cor vem do tratamento
+  ATIVO (paciente com tratamentos e nenhum ativo fica sem bolinha).
