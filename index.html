@@ -9895,7 +9895,10 @@ function openTreatmentModal(t, opts){
     // o sistema online (testes) continuam no próprio tratamento.
     var newVal = canEditVal ? parseMoney(document.getElementById("trVal").value) : null;
     var newDesp = canEditVal ? parseMoney(document.getElementById("trDesp").value) : null;
-    if (agdClient()){ delete rec.valor; delete rec.despesas; }
+    // TR.fin só existe depois que a tabela protegida foi lida: antes de rodar o
+    // ajuste do banco, os valores continuam no documento (nada se perde).
+    var finTable = !!(agdClient() && TR.fin);
+    if (finTable){ delete rec.valor; delete rec.despesas; }
     else if (canEditVal){ rec.valor = newVal; rec.despesas = newDesp; }
     var list = state.treatments.map(function(x){ return x.id === rec.id ? rec : x; });
     if (isNew) list.push(rec);
@@ -9920,7 +9923,7 @@ function openTreatmentModal(t, opts){
       Promise.all(saves).then(function(res){
         if (res[0] === false) return;
         var money = trMoney(t || {});
-        var changed = canEditVal && (isNew || money.valor !== newVal || money.despesas !== newDesp);
+        var changed = finTable && canEditVal && (isNew || money.valor !== newVal || money.despesas !== newDesp);
         return (changed ? trSaveFinance(rec.id, newVal, newDesp) : Promise.resolve(true)).then(function(){ close(); if (state.tab === "tratamentos") renderTreatmentsTab(); });
       });
     });
