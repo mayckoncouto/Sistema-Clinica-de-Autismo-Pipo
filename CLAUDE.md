@@ -980,5 +980,14 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   `mobileLeavePlanner()` troca de tela. Só fica nelas quem não tem outra tela.
 - Menu ☰: **Cadastros** e **Acesso** são grupos recolhidos (`mnavGroup`,
   botão `.mnav-grp[data-mnav-grp]` com seta + `.mnav-items` oculto); tocar no
-  título abre/fecha as opções sem fechar o menu. Agenda, Prontuário, Resumo e
+  título abre/fecha as opções sem fechar o menu. Agenda, Prontuário e
   Relatórios ficam soltos.
+- **Daqui em diante os pedidos de ajuste são só para o celular** (CSS dentro do
+  `@media (max-width:760px)` do bloco "celular: menu ☰ no topo").
+- Cadastros no celular: tabelas na largura da tela (sem `min-width`, colunas sem
+  largura fixa, sem bordas de arrastar, texto quebra linha) e só as colunas
+  principais, escondidas por posição (`:nth-child` em col/th/td): Pacientes =
+  Nome + Plano (`p.plano`); Profissionais = Nome + Especialidade principal;
+  Serviços e Especialidades = Nome + Profissionais; Convênios = as duas que já
+  tem. Busca ocupa a linha toda. Salas/Grupos já eram cartões e cabem na tela.
+  Mudou a ordem das colunas no computador? Ajustar os `:nth-child` também.
