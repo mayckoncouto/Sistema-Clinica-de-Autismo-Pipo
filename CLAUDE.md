@@ -1044,7 +1044,10 @@ sempre oculta, form e resultado lado a lado).
 em `AD._deskView` e volta ao alargar a tela); a data é levada ao próximo dia
 aberto (`agdClampWeekday`) e, se isso mudar de semana, chama `agdLoadWeek()`.
 A troca de largura (`MOBILE_MQ`, `wireMobileNav`) redesenha a Agenda se ela
-estiver aberta. ‹ › andam de dia em dia (lógica da visão Dia que já existia).
+estiver aberta.
+No celular a seção `#tab-agendadia` cresce com a grade (`flex:none`, `.agd-main`
+`min-height:auto`, `.agd-scroll` `overflow:visible`) e a página rola; antes a caixa
+branca tinha a altura da tela e os horários passavam por fora dela (faixa branca). ‹ › andam de dia em dia (lógica da visão Dia que já existia).
 
 ## Cópia de segurança (2026-10-03, menu Acesso, só Administrador)
 O projeto Supabase está no plano gratuito (sem backup automático restaurável).
