@@ -292,6 +292,13 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .rp-go{margin-top:4px}
 .rp-out{flex:1;min-width:0;overflow:auto;padding:14px 18px}
 .rp-back-bar{display:none}
+.bk-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
+.bk-card b{font-size:14px}
+.bk-txt{font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.bk-txt.err,.bk-status.err{color:var(--danger,#b4403a)}
+.bk-warn{color:var(--ink);background:var(--accent-weak);border-radius:8px;padding:7px 10px}
+.bk-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bk-status{font-size:13px;font-weight:700;color:var(--ink);min-height:18px}
 .rp-head{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .rp-head h2{margin:0;font-size:18px}
 .rp-sub{font-size:12px;color:var(--muted);margin-top:3px}
@@ -2430,6 +2437,7 @@ window.pipoConfirm = confirmDialog; // usado por js/usuarios.js
 window.pipoProfessionals = function(){ return state.professionals.slice(); }; // idem (criar acessos)
 window.pipoStatuses = function(){ return statusesList(); }; // níveis de permissão (js/usuarios.js)
 window.pipoOpenStatuses = function(){ openStatusesModal(); }; // menu Acesso (js/pipo-supabase.js)
+window.pipoOpenBackup = function(){ openBackupModal(); }; // menu Acesso → Cópia de segurança
 window.pipoOpenClinic = function(){ openClinicModal(); }; // menu Acesso → Clínica
 function namesList(names){
   return '<ul class="confirm-list">' + names.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join("") + '</ul>';
@@ -9256,6 +9264,178 @@ function rpExportCsv(){
   document.getElementById("rpType").addEventListener("change", rpTypeChanged);
   document.querySelectorAll("[data-rp-quick]").forEach(function(b){ b.addEventListener("click", function(){ rpQuick(b.getAttribute("data-rp-quick")); }); });
 })();
+
+
+/* ---------------- Cópia de segurança (menu Acesso, só Administrador) ----------------
+ * Baixar: lê no navegador (o Administrador enxerga tudo) os documentos (cadastros,
+ * Planner, clínica), a Agenda (appointments), o Prontuário (clinical_records) e os
+ * níveis de permissão (roles, só para consulta) e baixa um arquivo .json.
+ * Restaurar: lê o arquivo e manda em lotes para /api/admin-backup (service role),
+ * que faz upsert — repõe o que estava na cópia, sem apagar o que veio depois.
+ * O arquivo tem dados de saúde: nunca versionar nem mandar por canais abertos.
+ */
+var BACKUP_TABLES = [
+  {name: "documents", order: "path", label: "Cadastros, Planner e Clínica", restore: true},
+  {name: "appointments", order: "id", label: "Atendimentos da Agenda", restore: true},
+  {name: "clinical_records", order: "id", label: "Evoluções do Prontuário", restore: true},
+  {name: "roles", order: "id", label: "Níveis de permissão (só consulta)", restore: false}
+];
+var BACKUP_LAST_KEY = "agendaPipo:lastBackup";
+function backupFetchAll(c, t){
+  var out = [], page = 1000;
+  function next(from){
+    return c.from(t.name).select("*").order(t.order).range(from, from + page - 1).then(function(r){
+      if (r.error) throw new Error(t.label + ": " + (r.error.message || "erro"));
+      out = out.concat(r.data || []);
+      return (r.data || []).length === page ? next(from + page) : out;
+    });
+  }
+  return next(0);
+}
+function backupStampName(d){
+  function p(n){ return (n < 10 ? "0" : "") + n; }
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes());
+}
+function backupDownload(onStatus){
+  var c = agdClient();
+  if (!c) return Promise.reject(new Error("A cópia de segurança funciona no sistema online."));
+  var data = {};
+  var chain = Promise.resolve();
+  BACKUP_TABLES.forEach(function(t){
+    chain = chain.then(function(){
+      onStatus("Lendo " + t.label.toLowerCase() + "…");
+      return backupFetchAll(c, t).then(function(rows){ data[t.name] = rows; });
+    });
+  });
+  return chain.then(function(){
+    var now = new Date();
+    var file = {app: "agenda-pipo", formato: 1, criado_em: now.toISOString(), clinica: clinicName(), tabelas: data};
+    var blob = new Blob([JSON.stringify(file)], {type: "application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "copia-de-seguranca-agenda-pipo-" + backupStampName(now) + ".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+    try { localStorage.setItem(BACKUP_LAST_KEY, now.toISOString()); } catch(e){}
+    return data;
+  });
+}
+// Lotes de até 400 linhas e ~1,5 MB (limite de 4,5 MB por envio na Vercel).
+function backupBatches(rows){
+  var out = [], cur = [], size = 0;
+  rows.forEach(function(r){
+    var n = JSON.stringify(r).length;
+    if (cur.length && (cur.length >= 400 || size + n > 1500000)){ out.push(cur); cur = []; size = 0; }
+    cur.push(r); size += n;
+  });
+  if (cur.length) out.push(cur);
+  return out;
+}
+function backupRestore(file, onStatus){
+  var api = window.pipoAuth && window.pipoAuth.adminApi;
+  if (!api) return Promise.reject(new Error("A restauração funciona no sistema online."));
+  var total = 0, chain = Promise.resolve();
+  BACKUP_TABLES.filter(function(t){ return t.restore; }).forEach(function(t){
+    var batches = backupBatches(file.tabelas[t.name] || []);
+    batches.forEach(function(b, i){
+      chain = chain.then(function(){
+        onStatus("Restaurando " + t.label.toLowerCase() + " (" + (i + 1) + " de " + batches.length + ")…");
+        return api({action: "restore", table: t.name, rows: b}, "/api/admin-backup").then(function(res){ total += res.count || 0; });
+      });
+    });
+  });
+  return chain.then(function(){ return total; });
+}
+function backupValidate(obj){
+  if (!obj || obj.app !== "agenda-pipo" || !obj.tabelas || typeof obj.tabelas !== "object") return "Este arquivo não é uma cópia de segurança da Agenda Pipo.";
+  if (!Array.isArray(obj.tabelas.documents)) return "A cópia está incompleta (sem os cadastros).";
+  return "";
+}
+function openBackupModal(){
+  if (window.pipoAuth && !window.pipoAuth.isAdmin()){ showToast("Só o Administrador faz a cópia de segurança.", true); return; }
+  var host = document.getElementById("modalHost");
+  var last = null; try { last = localStorage.getItem(BACKUP_LAST_KEY); } catch(e){}
+  host.innerHTML =
+    '<div class="overlay" id="ovBackup"><div class="modal wide">' +
+      '<div class="modal-head"><div><h3>Cópia de segurança</h3>' +
+        '<div class="modal-sub">Baixe um arquivo com todos os dados do sistema e guarde num lugar seguro. Se algo for apagado por engano, o arquivo traz tudo de volta.</div>' +
+      '</div><button class="modal-close" id="closeBackup" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="bk-card"><b>Baixar cópia</b>' +
+          '<div class="bk-txt">Pacientes, profissionais, salas, grupos, convênios, serviços, especialidades, status, clínica, Planner, Agenda e evoluções do Prontuário.</div>' +
+          '<div class="bk-txt bk-warn">O arquivo tem dados de saúde dos pacientes: guarde numa pasta protegida (ex.: Google Drive da clínica com acesso restrito). Não envie por WhatsApp ou e-mail.</div>' +
+          '<div class="bk-row"><button class="btn primary" id="bkDownload">Baixar cópia de segurança</button>' +
+          '<span class="bk-txt" id="bkLast">' + (last ? "Última cópia baixada neste aparelho: " + esc(prStamp(last)) : "Nenhuma cópia baixada neste aparelho ainda.") + '</span></div>' +
+        '</div>' +
+        '<div class="bk-card"><b>Restaurar a partir de um arquivo</b>' +
+          '<div class="bk-txt">Repõe tudo o que estava na cópia (o que foi apagado volta e o que foi alterado volta como era). O que foi criado depois da cópia não é apagado.</div>' +
+          '<div class="bk-row"><input type="file" id="bkFile" accept=".json,application/json" data-native></div>' +
+          '<div class="bk-txt" id="bkInfo"></div>' +
+          '<div class="bk-row"><button class="btn danger-solid" id="bkRestore" hidden>Restaurar esta cópia</button></div>' +
+        '</div>' +
+        '<div class="bk-status" id="bkStatus" aria-live="polite"></div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="bkClose">Fechar</button></div>' +
+    '</div></div>';
+  var overlay = document.getElementById("ovBackup"), busy = false, loaded = null;
+  function close(){ if (busy) return; host.innerHTML = ""; }
+  function status(t, err){ var el = document.getElementById("bkStatus"); if (el){ el.textContent = t || ""; el.classList.toggle("err", !!err); } }
+  function setBusy(on){
+    busy = on;
+    ["bkDownload", "bkRestore", "bkFile", "bkClose", "closeBackup"].forEach(function(id){ var el = document.getElementById(id); if (el) el.disabled = on; });
+  }
+  overlay.addEventListener("mousedown", function(e){ if (e.target === overlay) close(); });
+  document.getElementById("closeBackup").addEventListener("click", close);
+  document.getElementById("bkClose").addEventListener("click", close);
+  document.getElementById("bkDownload").addEventListener("click", function(){
+    setBusy(true); status("Preparando a cópia…");
+    backupDownload(status).then(function(data){
+      var n = BACKUP_TABLES.map(function(t){ return (data[t.name] || []).length; });
+      status("Cópia baixada: " + n[0] + " cadastros, " + n[1] + " atendimentos, " + n[2] + " evoluções. Confira a pasta de downloads.");
+      var l = document.getElementById("bkLast"); if (l) l.textContent = "Última cópia baixada neste aparelho: " + prStamp(new Date().toISOString());
+    }).catch(function(e){ status("Não foi possível baixar: " + (e.message || e), true); })
+      .then(function(){ setBusy(false); });
+  });
+  document.getElementById("bkFile").addEventListener("change", function(e){
+    var f = e.target.files && e.target.files[0];
+    var info = document.getElementById("bkInfo"), btn = document.getElementById("bkRestore");
+    loaded = null; btn.hidden = true; info.textContent = ""; status("");
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      var obj = null; try { obj = JSON.parse(rd.result); } catch(err){}
+      var bad = backupValidate(obj);
+      if (bad){ info.textContent = bad; info.classList.add("err"); return; }
+      info.classList.remove("err");
+      loaded = obj;
+      var T = obj.tabelas;
+      info.innerHTML = 'Cópia de <b>' + esc(prStamp(obj.criado_em)) + '</b>' + (obj.clinica ? ' — ' + esc(obj.clinica) : '') + ': ' +
+        (T.documents || []).length + ' cadastros, ' + (T.appointments || []).length + ' atendimentos, ' + (T.clinical_records || []).length + ' evoluções.';
+      btn.hidden = false;
+    };
+    rd.onerror = function(){ info.textContent = "Não foi possível ler o arquivo."; };
+    rd.readAsText(f);
+  });
+  document.getElementById("bkRestore").addEventListener("click", function(){
+    if (!loaded) return;
+    var when = prStamp(loaded.criado_em);
+    confirmDialog({title: "Restaurar a cópia?", confirmLabel: "Continuar",
+      message: "Os dados vão voltar a ficar como estavam em <b>" + esc(when) + "</b>. Alterações feitas depois disso nos mesmos cadastros, atendimentos e evoluções serão substituídas."
+    }).then(function(ok){
+      if (!ok) return false;
+      return confirmDialog({title: "Confirmar restauração", confirmLabel: "Restaurar agora",
+        message: "Tem certeza? Recomendo baixar uma cópia de agora antes de restaurar."});
+    }).then(function(ok){
+      if (!ok) return;
+      setBusy(true); status("Restaurando…");
+      backupRestore(loaded, status).then(function(n){
+        status("Restauração concluída (" + n + " registros). Atualize a página para ver tudo.");
+        showToast("Cópia restaurada.");
+      }).catch(function(e){ status("A restauração parou: " + (e.message || e) + ". O que já foi gravado fica; pode tentar de novo.", true); })
+        .then(function(){ setBusy(false); });
+    });
+  });
+}
 
 /* ---------------- Cadastros: Convênios, Serviços e Especialidades em tela ----------------
  * Abertos pelo menu "Cadastros" do topo (como Pacientes): busca, contador,

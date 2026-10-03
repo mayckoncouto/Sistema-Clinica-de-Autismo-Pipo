@@ -283,13 +283,14 @@
           (isAdmin() ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : "") +
           ((isAdmin() || can("cadastro_status", "view")) ? '<button type="button" role="menuitem" data-act="status">Status</button>' : "") +
           ((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : "") +
+          (isAdmin() ? '<button type="button" role="menuitem" data-act="backup">Cópia de segurança</button>' : "") +
           '<button type="button" role="menuitem" data-act="senha">Trocar senha</button>' +
           '<button type="button" role="menuitem" data-act="sair">Sair</button>' +
         "</div>" +
       "</div>";
   }
 
-  // Menu "Acesso" (topo): Usuários (só Administrador), Status, Clínica, Trocar senha, Sair.
+  // Menu "Acesso" (topo): Usuários (só Administrador), Status, Clínica, Cópia de segurança (só Administrador), Trocar senha, Sair.
   function setAcessoMenu(open) {
     var menu = document.getElementById("acessoMenu"), btn = document.getElementById("acessoBtn");
     if (!menu || !btn) return;
@@ -314,6 +315,8 @@
         client.auth.signOut().then(function () { location.reload(); });
       } else if (act === "clinica") {
         if (window.pipoOpenClinic) window.pipoOpenClinic();
+      } else if (act === "backup") {
+        if (window.pipoOpenBackup) window.pipoOpenBackup();
       } else if (act === "status") {
         if (window.pipoOpenStatuses) window.pipoOpenStatuses();
       } else if (act === "usuarios") {
@@ -449,9 +452,9 @@
     can: can,
     isAdmin: isAdmin,
     onRoleChange: function (fn) { roleListeners.push(fn); },
-    // Chamada à função /api/admin-users (só funciona para Administrador).
-    adminApi: function (payload) {
-      return fetch("/api/admin-users", {
+    // Chamada às funções /api/admin-* (só funcionam para Administrador).
+    adminApi: function (payload, path) {
+      return fetch(path || "/api/admin-users", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") },
         body: JSON.stringify(payload)

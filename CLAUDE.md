@@ -1044,3 +1044,29 @@ em `AD._deskView` e volta ao alargar a tela); a data é levada ao próximo dia
 aberto (`agdClampWeekday`) e, se isso mudar de semana, chama `agdLoadWeek()`.
 A troca de largura (`MOBILE_MQ`, `wireMobileNav`) redesenha a Agenda se ela
 estiver aberta. ‹ › andam de dia em dia (lógica da visão Dia que já existia).
+
+## Cópia de segurança (2026-10-03, menu Acesso, só Administrador)
+O projeto Supabase está no plano gratuito (sem backup automático restaurável).
+- Menu Acesso → **Cópia de segurança** (`data-act="backup"` em
+  `js/pipo-supabase.js` → `window.pipoOpenBackup` → `openBackupModal()`, bloco
+  "Cópia de segurança" em `index.html`).
+- **Baixar** (`backupDownload`): lê no navegador, em páginas de 1000
+  (`backupFetchAll`, `.range()`), as tabelas de `BACKUP_TABLES` — `documents`,
+  `appointments`, `clinical_records` e `roles` (só consulta) — e baixa
+  `copia-de-seguranca-agenda-pipo-AAAA-MM-DD-HHMM.json`
+  (`{app:"agenda-pipo", formato:1, criado_em, clinica, tabelas:{…}}`). Data da
+  última cópia guardada no navegador (`agendaPipo:lastBackup`).
+- **Restaurar** (`backupRestore`): valida o arquivo (`backupValidate`), dupla
+  confirmação, manda lotes (≤400 linhas / ~1,5 MB, `backupBatches`) para
+  **`api/admin-backup.js`** (`pipoAuth.adminApi(payload, "/api/admin-backup")`;
+  `adminApi` ganhou o 2º parâmetro `path`). A função confere Administrador,
+  aceita só as colunas conhecidas por tabela, troca por null usuário que não
+  existe mais (FK de auth.users) e faz **upsert** com a service role
+  (`documents` por `path`, os outros por `id`): repõe o que estava na cópia,
+  nunca apaga o que veio depois. Ordem: documentos, atendimentos, evoluções.
+- Migração `supabase/2026-10-03-copia-de-seguranca.sql`: `appointments_stamp` e
+  `clinical_records_stamp` mantêm datas/autores vindos da cópia quando não há
+  usuário logado (service role). Sem ela a restauração funciona, mas as datas
+  de criação viram "agora".
+- O arquivo tem dados de saúde: nunca versionar (nem em `tests/`), não mandar
+  por canais abertos.
