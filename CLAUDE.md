@@ -963,3 +963,12 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   ~1,2 s → ~12 ms (Todos×Todos), ~37 ms → ~2 ms (1 dia). O desenho completo
   continua marcando a busca do mesmo jeito.
 - Testado e descartado: `content-visibility` nos dias (sem ganho medido).
+
+## Versão Mobile (desde 2026-10-03, uma tela por vez)
+- Topo no celular (até 760px): abas (`#mainTabs`) e `.topbar-right` (usuário,
+  Acesso, sincronização) somem; no canto direito fica o botão ☰ `#mnavBtn`
+  (vira ✕ aberto) que abre `#mnavPanel` (`mnavRender`, `wireMobileNav`): nome e
+  nível do usuário, seção Cadastros (`CAD_ITEMS`), seção Planner (`PL_ITEMS`),
+  abas visíveis de `#mainTabs` e seção Acesso (cópias dos botões de
+  `#acessoMenu`; o clique é repassado ao botão original). Montado a cada
+  abertura, então segue as permissões atuais.

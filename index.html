@@ -885,6 +885,32 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
 .zoom-ctrl select:focus{outline:none;box-shadow:var(--ring);border-color:var(--accent)}
 .zoom-ctrl .zoom-label{font-weight:800;color:var(--ink);white-space:nowrap;min-width:30px;text-align:right;font-family:"IBM Plex Mono",ui-monospace,monospace}
 
+/* ---------- celular: menu ☰ no topo ---------- */
+.mnav-btn{display:none}
+.mnav-panel[hidden]{display:none}
+@media (max-width:760px){
+  .topbar{position:relative;flex-wrap:nowrap}
+  .topbar .maintabs,.topbar .topbar-right{display:none}
+  .brand{min-width:0}
+  .brand-text{min-width:0}
+  .brand-text h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand-text .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mnav-btn{display:inline-flex;flex-direction:column;justify-content:center;gap:5px;flex:none;width:44px;height:44px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:var(--ink);cursor:pointer}
+  .mnav-btn span{display:block;height:3px;border-radius:2px;background:currentColor;transition:transform .18s,opacity .18s}
+  .mnav-btn[aria-expanded=true]{background:var(--surface-2)}
+  .mnav-btn[aria-expanded=true] span:nth-child(1){transform:translateY(8px) rotate(45deg)}
+  .mnav-btn[aria-expanded=true] span:nth-child(2){opacity:0}
+  .mnav-btn[aria-expanded=true] span:nth-child(3){transform:translateY(-8px) rotate(-45deg)}
+  .mnav-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:80;max-height:calc(100dvh - 90px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);padding:6px;display:flex;flex-direction:column}
+  .mnav-user{padding:10px 12px 8px;border-bottom:1px solid var(--line);margin-bottom:4px;font-size:13px;color:var(--ink-2)}
+  .mnav-user b{display:block;font-size:15px;color:var(--ink)}
+  .mnav-sec{padding:10px 12px 4px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .mnav-panel button{border:0;background:transparent;text-align:left;padding:12px 14px;border-radius:8px;font:inherit;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer}
+  .mnav-panel button.sub{padding-left:24px}
+  .mnav-panel button:hover,.mnav-panel button:focus{background:var(--accent-weak);outline:none}
+  .mnav-panel button.on{background:var(--accent-weak);color:var(--accent);font-weight:800}
+  .mnav-sep{height:1px;background:var(--line);margin:6px 0}
+}
 @media (max-width:640px){
   .controls{gap:8px}
   .zoom-ctrl{right:10px;bottom:10px;padding:5px 8px 5px 10px}
@@ -930,6 +956,9 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <div class="user-pill" id="userPill" hidden></div>
       <div class="sync-pill" id="syncPill"><span class="sync-dot off" id="syncDot"></span><span id="syncText">conectando…</span></div>
     </div>
+    <!-- Celular: botão ☰ no canto que abre todas as telas e o menu Acesso (mnavOpen). -->
+    <button type="button" class="mnav-btn" id="mnavBtn" aria-label="Menu" aria-haspopup="menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    <div class="mnav-panel" id="mnavPanel" role="menu" hidden></div>
   </div>
 
 
@@ -9331,6 +9360,59 @@ function openNavFromHash(){
   navHashDone = true;
   tb.click();
 }
+// Celular (até 760px): o botão ☰ no canto do topo abre um menu único com as
+// abas, os itens dos menus Cadastros/Planner e os do menu Acesso (que repassa o
+// clique para o botão original de #acessoMenu, em js/pipo-supabase.js).
+function mnavOpen(open){
+  var p = document.getElementById("mnavPanel"), b = document.getElementById("mnavBtn");
+  if (!p || !b) return;
+  if (open) mnavRender();
+  p.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
+}
+function mnavRender(){
+  var p = document.getElementById("mnavPanel"); if (!p) return;
+  var h = "";
+  var name = document.querySelector("#userPill .user-name"), role = document.querySelector("#userPill .user-role");
+  if (name) h += '<div class="mnav-user"><b>' + esc(name.textContent) + '</b>' + (role ? esc(role.textContent) : "") + '</div>';
+  function navBtn(it, sub){
+    var on = state.tab === it.tab && (!it.view || state.salasView === it.view);
+    return '<button type="button" role="menuitem" class="' + (sub ? "sub" : "") + (on ? " on" : "") + '" data-mnav="' + it.key + '">' + esc(it.label) + '</button>';
+  }
+  function group(title, items){
+    items = items.filter(function(i){ return !window.pipoAuth || i.ok(); });
+    if (!items.length) return "";
+    return '<div class="mnav-sec">' + title + '</div>' + items.map(function(i){ return navBtn(i, true); }).join("");
+  }
+  // Mesma ordem do topo: Cadastros, Planner e depois as abas visíveis.
+  h += group("Cadastros", CAD_ITEMS) + group("Planner", PL_ITEMS);
+  var tabs = Array.prototype.slice.call(document.querySelectorAll("#mainTabs > button[data-tab]")).filter(function(b){ return !b.hidden; });
+  if (tabs.length) h += '<div class="mnav-sep"></div>' + tabs.map(function(b){
+    var k = b.getAttribute("data-tab");
+    return '<button type="button" role="menuitem" class="' + (state.tab === k ? "on" : "") + '" data-mnav-tab="' + k + '">' + esc(b.textContent) + '</button>';
+  }).join("");
+  var acc = Array.prototype.slice.call(document.querySelectorAll("#acessoMenu button[data-act]"));
+  if (acc.length) h += '<div class="mnav-sep"></div><div class="mnav-sec">Acesso</div>' + acc.map(function(b){
+    return '<button type="button" role="menuitem" class="sub" data-mnav-act="' + b.getAttribute("data-act") + '">' + esc(b.textContent) + '</button>';
+  }).join("");
+  p.innerHTML = h;
+}
+function wireMobileNav(){
+  var b = document.getElementById("mnavBtn"), p = document.getElementById("mnavPanel");
+  if (!b || !p) return;
+  b.addEventListener("click", function(e){ e.stopPropagation(); mnavOpen(p.hidden); });
+  p.addEventListener("click", function(e){
+    var x = e.target.closest("button"); if (!x) return;
+    mnavOpen(false);
+    var k = x.getAttribute("data-mnav"), t = x.getAttribute("data-mnav-tab"), a = x.getAttribute("data-mnav-act");
+    if (k){ var it = navItem(k); if (it) navActivate(it); }
+    else if (t){ var tb = document.querySelector('#mainTabs button[data-tab="' + t + '"]'); if (tb) tb.click(); }
+    else if (a){ var ab = document.querySelector('#acessoMenu button[data-act="' + a + '"]'); if (ab) ab.click(); }
+  });
+  document.addEventListener("mousedown", function(e){ if (!p.hidden && !e.target.closest("#mnavPanel,#mnavBtn")) mnavOpen(false); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !p.hidden) mnavOpen(false); });
+  // Voltou para a tela grande com o menu aberto: fecha.
+  window.addEventListener("resize", function(){ if (!p.hidden && window.innerWidth > 760) mnavOpen(false); });
+}
 (function(){
   renderNavMenus();
   NAV_MENUS.forEach(function(m){
@@ -9360,6 +9442,7 @@ function openNavFromHash(){
   tabs.addEventListener("click", tabNew, true);
   tabs.addEventListener("auxclick", tabNew, true);
   setTimeout(openNavFromHash, 0);
+  wireMobileNav();
   ["convenios", "servicos", "especialidades"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
