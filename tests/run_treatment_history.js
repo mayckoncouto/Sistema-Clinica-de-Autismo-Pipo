@@ -1,0 +1,70 @@
+// Etapa 2 dos tratamentos: cada atendimento usa o tratamento que valia NA DATA
+// dele (cor/ABA da Agenda, regras, relatórios de convênio, pacote e sem
+// atendimento). A Agenda e os relatórios precisam do sistema online, então o
+// teste chama as funções internas por um "eval" injetado numa cópia da página.
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+
+(async () => {
+  const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
+  const i = src.indexOf('"use strict";');
+  const evPage = path.join(__dirname, 'page_ev.html');
+  fs.writeFileSync(evPage, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
+  const browser = await chromium.launch(require('./launch-opts'));
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + evPage);
+  await page.waitForTimeout(800);
+  const ev = (code) => page.evaluate((c) => window.__ev(c), code);
+
+  const r = await ev(`(function(){
+    var pat = state.patientsRaw.filter(function(p){ return p.id === "duda-vermelho"; })[0];
+    var prof = state.professionals.filter(function(p){ return p.specialtyId; })[0];
+    var spec = prof.specialtyId;
+    var other = state.patientsRaw.filter(function(p){ return p.id !== pat.id; })[0];
+    state.treatments = [
+      {id: "t1", patientId: pat.id, inicio: "2026-01-01", status: "renegociado", statusEm: "2026-03-01", tipo: "novo", aba: "Não", convenio: "Conv A", plano: "P1", specHours: [{specId: spec, hours: 4}]},
+      {id: "t2", patientId: pat.id, inicio: "2026-03-01", status: "ativo", tipo: "renegociado", aba: "Sim", convenio: "Conv B", plano: "P2", specHours: [{specId: spec, hours: 8}]},
+      {id: "t3", patientId: other.id, inicio: "2025-01-01", status: "cancelado", statusEm: "2025-06-01", tipo: "novo", aba: "Sim"}
+    ];
+    rebuildPatients();
+    var name = pat.nome, out = {};
+    out.at = [treatmentAt(pat.id, "2025-12-01").id, treatmentAt(pat.id, "2026-02-10").id, treatmentAt(pat.id, "2026-03-05").id, treatmentAt(pat.id, trTodayIso()).id].join(",");
+    out.abaPast = findPatientAt(name, "2026-02-10").aba;
+    out.abaNow = findPatientByName(name).aba;
+    out.rawUntouched = pat.aba === undefined || pat.aba === state.patientsRaw.filter(function(p){ return p.id === pat.id; })[0].aba;
+    out.naoPast = isNaoABABooking({patient: name, date: "2026-02-10"});
+    out.naoPlanner = isNaoABABooking({patient: name});
+    var colPast = patientColor(findPatientAt(name, "2026-02-10")), colNow = patientColor(findPatientByName(name));
+    out.colorDiffers = colPast !== colNow;
+    out.cellPast = agdEventHtml({id: "a", patient: name, date: "2026-02-10", time: "08:00", professional_id: prof.id}, "08:00", name, null, false, false).indexOf(colPast) !== -1;
+    var appts = [
+      {id: "x1", patient: name, date: "2026-02-10", time: "08:00", professional_id: prof.id, status: "finalizado", service: "sessao"},
+      {id: "x2", patient: name, date: "2026-03-10", time: "08:00", professional_id: prof.id, status: "finalizado", service: "sessao"},
+      {id: "x3", patient: name, date: "2026-03-12", time: "08:00", professional_id: prof.id, status: "finalizado", service: "sessao"}
+    ];
+    var pk = RP_BUILDERS.pacote(appts, {from: "2026-01-01", to: "2026-04-30", pac: normText(name)}).sections[0].rows;
+    out.pacote = pk.map(function(x){ return [x[1], x[3], x[4], x[5]].join("/"); }).join(" | ");
+    var cv = RP_BUILDERS.convenios(appts, {conv: ""}).sections[0].rows;
+    out.conv = cv.map(function(x){ return x[0] + ":" + x[1] + ":" + x[3]; }).sort().join(" | ");
+    var sa = RP_BUILDERS["sem-atendimento"]([], {from: "2026-01-01", to: "2026-04-30", conv: ""}).sections[0].rows;
+    out.semHasCancelled = sa.some(function(x){ return x[0] === other.nome; });
+    out.semConv = (sa.filter(function(x){ return x[0] === name; })[0] || [])[1];
+    return out;
+  })()`);
+
+  console.log('treatment in force: before 1st, Feb, Mar, today?', r.at === 't1,t1,t2,t2', r.at);
+  console.log('past date reads ABA of the old treatment, today the current one?', r.abaPast === 'Não' && r.abaNow === 'Sim');
+  console.log('patient record itself untouched?', r.rawUntouched);
+  console.log('Agenda "não ABA" rule uses the treatment of the date (Planner keeps current)?', r.naoPast === true && r.naoPlanner === false);
+  console.log('Agenda cell in the past uses the color of that time?', r.colorDiffers && r.cellPast);
+  console.log('package report split by treatment (4/mês then 8/mês)?', /^01\/01\/2026 \(Renegociado\)\/4\/8\/1 \| 01\/03\/2026 \(Ativo\)\/8\/16\/2$/.test(r.pacote), r.pacote);
+  console.log('convênio report uses convênio of the date?', r.conv === 'Conv A:P1:1 | Conv B:P2:2', r.conv);
+  console.log('no-appointment report skips treatment closed before the period?', r.semHasCancelled === false);
+  console.log('no-appointment report shows convênio at the end of the period?', r.semConv === 'Conv B', r.semConv);
+  console.log('no JS errors?', errors.length === 0, errors);
+  await browser.close();
+  fs.unlinkSync(evPage);
+})();

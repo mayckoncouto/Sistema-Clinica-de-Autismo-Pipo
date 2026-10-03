@@ -3641,7 +3641,7 @@ function patientBusyMsg(patient, service, time, place){
 // colunas da mesma sala ficam bloqueadas (só no Planner, só em sala — não em grupo).
 function isNaoABABooking(b){
   if (!b || !b.patient || bookingKind(b)) return false;
-  var p = findPatientByName(b.patient);
+  var p = b.date ? findPatientAt(b.patient, b.date) : findPatientByName(b.patient);  // Agenda: tratamento da data
   return !!(p && patientIsNaoABA(p));
 }
 // Exceção: com um Grupo de Suporte agendado para esta sala no mesmo horário, o
@@ -4838,9 +4838,9 @@ function specProfOptions(specId, cur){
 // numa especialidade/serviço por um terapeuta específico e o agendamento está com
 // outro. Especialidade = a principal do profissional (serviço Sessão) ou o serviço.
 // Devolve o texto do aviso ou null.
-function therapistMismatchMsg(patientName, profId, serviceId){
+function therapistMismatchMsg(patientName, profId, serviceId, iso){
   if (!patientName || !profId) return null;
-  var p = findPatientByName(patientName); if (!p) return null;
+  var p = findPatientAt(patientName, iso); if (!p) return null;
   var prof = findProfessional(profId); if (!prof) return null;
   var svc = serviceId || DEFAULT_SERVICE_ID;
   var key = svc === DEFAULT_SERVICE_ID ? prof.specialtyId : SVC_PREFIX + svc;
@@ -6717,7 +6717,7 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   else if (kind === "reuniao"){ fill = MEETING_COLOR; cls = " pcolor"; }
   else if (kind === "treinamento"){ fill = TRAINING_COLOR; cls = " pcolor"; }
   else {
-    var pRec = findPatientByName(row.patient);
+    var pRec = findPatientAt(row.patient, row.date);   // cor/ABA da época do atendimento
     var room = !pRec ? findRoomByName(row.patient) : null;
     fill = pRec ? (otherService(row) ? TRAINING_COLOR : patientColor(pRec)) : (room ? roomFillColor(room) : null);
     if (fill) cls = " pcolor";
@@ -7022,7 +7022,7 @@ function agdRenderSide(){
 // Mostra os dados, o botão "Registrar / Editar Atendimento" (prontuário) e o Status.
 function agdOpenDetails(row){
   var kind = bookingKind(row);
-  var pat = !kind ? findPatientByName(row.patient) : null;
+  var pat = !kind ? findPatientAt(row.patient, row.date) : null;
   var grp = !kind && !pat ? findRoomByName(row.patient) : null;
   if (grp && !isGroup(grp)) grp = null;
   var prof = findProfessional(row.professional_id), room = row.room_id ? findRoom(row.room_id) : null;
@@ -7296,7 +7296,7 @@ function agdPatientConfirm(pairs){
     var rec = x.rec, old = x.old;
     if (!rec || !rec.patient || bookingKind(rec)) return null;
     if (old && normText(old.patient || "") === normText(rec.patient) && old.date === rec.date && old.time === rec.time) return null;
-    var p = findPatientByName(rec.patient);
+    var p = findPatientAt(rec.patient, rec.date);
     var dayKey = AD_WEEKDAY_KEYS[agdParse(rec.date).getDay()];
     if (!p || patientSlotOk(p, dayKey, rec.time)) return null;
     return "<b>" + esc(p.nome) + "</b> — " + esc(agdBrDate(rec.date)) + " às " + esc(rec.time);
@@ -7313,7 +7313,7 @@ function agdTherapistCheck(pairs){
     if (!rec || bookingKind(rec)) return null;
     if (old && old.professional_id === rec.professional_id && normText(old.patient || "") === normText(rec.patient || "") &&
         (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return null;
-    return therapistMismatchMsg(rec.patient, rec.professional_id, rec.service);
+    return therapistMismatchMsg(rec.patient, rec.professional_id, rec.service, rec.date);
   }).filter(Boolean);
   return therapistConfirm(msgs);
 }
@@ -9240,7 +9240,7 @@ var RP_BUILDERS = {
     var by = {};
     rpPatientRows(rows).forEach(function(a){
       if (a.status !== "finalizado") return;
-      var p = findPatientByName(a.patient); if (!p) return;
+      var p = findPatientAt(a.patient, a.date); if (!p) return;   // convênio/plano do tratamento da data
       var conv = patientConvenioName(p) || "Sem convênio";
       if (o.conv && conv !== o.conv) return;
       var k = conv + "|" + (p.plano || "") + "|" + bookingServiceName(a);
@@ -9249,36 +9249,53 @@ var RP_BUILDERS = {
     });
     var list = Object.keys(by).map(function(k){ return by[k]; }).sort(function(a, b){ return (a.conv + a.plano + a.serv).localeCompare(b.conv + b.plano + b.serv, "pt-BR"); });
     var total = list.reduce(function(t, s){ return t + s.n; }, 0);
-    return {note: "Só atendimentos com status Finalizado.",
+    return {note: "Só atendimentos com status Finalizado. Convênio e plano do tratamento que valia na data de cada atendimento.",
       sections: [{title: "Por convênio, plano e serviço", head: ["Convênio", "Plano", "Serviço", "Atendimentos", "Pacientes"],
         rows: list.map(function(s){ return [s.conv, s.plano, s.serv, s.n, Object.keys(s.pats).length]; }),
         foot: list.length ? ["Total", "", "", total, ""] : null}]};
   },
+  // Por tratamento: cada tratamento conta só o trecho do período em que valeu
+  // (do início dele até o início do seguinte ou o encerramento). Realizado =
+  // Finalizados atribuídos ao tratamento vigente na data do atendimento.
   "pacote": function(rows, o){
-    var days = (agdParse(o.to) - agdParse(o.from)) / 86400000 + 1;
-    var months = Math.max(days / 30.44, 0.1);
-    var done = {}; // paciente|especialidade -> sessões finalizadas
+    function dayNum(iso){ return agdParse(iso).getTime() / 86400000; }
+    function prevDay(iso){ var d = agdParse(iso); d.setDate(d.getDate() - 1); return agdIso(d); }
+    var done = {}; // tratamento|especialidade -> sessões finalizadas
     rpPatientRows(rows).forEach(function(a){
       if (a.status !== "finalizado") return;
-      var p = findPatientByName(a.patient); if (!p) return;
+      var p0 = findPatientByName(a.patient); if (!p0) return;
+      var t = treatmentAt(p0.id, a.date), tk = p0.id + "|" + (t ? t.id : "");
       var pr = findProfessional(a.professional_id);
-      var k = p.id + "|" + ((pr && pr.specialtyId) || "");
+      var k = tk + "|" + ((pr && pr.specialtyId) || "");
       done[k] = (done[k] || 0) + 1;
-      var ks = p.id + "|" + SVC_PREFIX + (a.service || DEFAULT_SERVICE_ID);
+      var ks = tk + "|" + SVC_PREFIX + (a.service || DEFAULT_SERVICE_ID);
       done[ks] = (done[ks] || 0) + 1;
     });
     var out = [];
     state.patients.slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); }).forEach(function(p){
       if (o.pac && normText(p.nome).indexOf(o.pac) === -1) return;
-      var specs = patientSpecRows(p).map(function(s){ return {specId: s.specId, hours: Number(s.hours) || 0}; }).filter(function(s){ return s.hours > 0; });
-      specs.forEach(function(s){
-        var real = done[p.id + "|" + s.specId] || 0, esperado = Math.round(s.hours * months);
-        out.push([p.nome, specialtyName(s.specId), s.hours, esperado, real, real - esperado]);
+      var L = treatmentsOf(p.id).slice().reverse();   // mais antigo primeiro
+      var segs = !L.length ? [{t: null, from: o.from, to: o.to, src: p}] : L.map(function(t, i){
+        var nx = L[i + 1];
+        var end = nx && nx.inicio ? prevDay(nx.inicio) : (t.status !== "ativo" && t.statusEm ? t.statusEm : o.to);
+        var from = t.inicio && t.inicio > o.from ? t.inicio : o.from;
+        var to = end < o.to ? end : o.to;
+        return {t: t, from: from, to: to, src: {specHours: Array.isArray(t.specHours) ? t.specHours : []}};
+      }).filter(function(sg){ return sg.from <= sg.to; });
+      segs.forEach(function(sg){
+        var months = Math.max((dayNum(sg.to) - dayNum(sg.from) + 1) / 30.44, 0.1);
+        var tk = p.id + "|" + (sg.t ? sg.t.id : "");
+        var label = sg.t ? trBr(sg.t.inicio) + " (" + trLabel(TR_STATUS, sg.t.status) + ")" : "—";
+        patientSpecRows(sg.src).forEach(function(s){
+          var hours = Number(s.hours) || 0; if (hours <= 0) return;
+          var real = done[tk + "|" + s.specId] || 0, esperado = Math.round(hours * months);
+          out.push([p.nome, label, specialtyName(s.specId), hours, esperado, real, real - esperado]);
+        });
       });
     });
-    return {note: "Contratado/mês vem do cadastro do paciente (horas por especialidade). Esperado no período = contratado × " + months.toFixed(1).replace(".", ",") +
-      " mês(es). Realizado = atendimentos Finalizados com profissional daquela especialidade.",
-      sections: [{title: "Por paciente e especialidade", head: ["Paciente", "Especialidade", "Contratado/mês", "Esperado no período", "Realizado", "Diferença"], rows: out}]};
+    return {note: "Contratado/mês vem de cada tratamento do paciente. Cada tratamento conta só a parte do período em que valeu (do início até o tratamento seguinte ou o encerramento). " +
+      "Esperado = contratado × meses desse trecho. Realizado = atendimentos Finalizados naquele tratamento com profissional da especialidade (ou com o serviço).",
+      sections: [{title: "Por paciente, tratamento e especialidade", head: ["Paciente", "Tratamento (início)", "Especialidade", "Contratado/mês", "Esperado no período", "Realizado", "Diferença"], rows: out}]};
   },
   "pendentes": function(rows, o, recIds){
     var list = rpPatientRows(rows).filter(function(a){ return a.status === "finalizado" && findPatientByName(a.patient) && !recIds[a.id]; });
@@ -9346,13 +9363,18 @@ var RP_BUILDERS = {
   "sem-atendimento": function(rows, o){
     var seen = {};
     rpPatientRows(rows).forEach(function(a){ var p = findPatientByName(a.patient); if (p) seen[p.id] = 1; });
-    var list = state.patients.filter(function(p){
-      if (seen[p.id]) return false;
+    // Só quem tinha tratamento valendo no período (o encerrado antes do período não
+    // entra); convênio e plano do tratamento vigente no fim do período.
+    function inForce(p){
+      var L = treatmentsOf(p.id); if (!L.length) return true;
+      return L.some(function(t){ return (!t.inicio || t.inicio <= o.to) && (t.status === "ativo" || !t.statusEm || t.statusEm >= o.from); });
+    }
+    var list = state.patients.filter(function(p){ return !seen[p.id] && inForce(p); }).map(function(p){ return patientAt(p, o.to); }).filter(function(p){
       if (o.conv && (patientConvenioName(p) || "Sem convênio") !== o.conv) return false;
       return true;
     }).sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
     var age = function(p){ var y = patientAgeYears(p); return y == null ? "" : Math.floor(y) + " anos"; };
-    return {note: o.prof ? "Considerando só os atendimentos do profissional escolhido." : "",
+    return {note: (o.prof ? "Considerando só os atendimentos do profissional escolhido. " : "") + "Pacientes com tratamento encerrado antes do período não aparecem.",
       sections: [{title: list.length + (list.length === 1 ? " paciente" : " pacientes"), head: ["Paciente", "Convênio", "Plano", "Idade"],
         rows: list.map(function(p){ return [p.nome, patientConvenioName(p) || "Sem convênio", p.plano || "", age(p)]; })}]};
   }
@@ -9612,6 +9634,36 @@ function rebuildPatients(){
     return m;
   });
 }
+// ---- Tratamento vigente numa data (histórico) ----
+// Datas de hoje em diante usam o tratamento atual (o mesmo de state.patients).
+// Datas passadas usam o tratamento que tinha começado naquela data: o de início
+// mais recente até a data (mesmo início = o criado depois). Antes do primeiro
+// tratamento, vale o primeiro (dados anteriores à criação dos tratamentos).
+function treatmentAt(pid, iso){
+  var L = treatmentsOf(pid);               // mais recente primeiro
+  if (!L.length) return null;
+  if (!iso || iso >= trTodayIso()) return currentTreatment(pid);
+  for (var i=0;i<L.length;i++) if (L[i].inicio && L[i].inicio <= iso) return L[i];
+  return L[L.length - 1];
+}
+// Paciente "somado" ao tratamento vigente na data (cache por paciente+tratamento,
+// refeito quando a lista de pacientes ou de tratamentos é trocada).
+var _patAt = {p: null, t: null, map: {}};
+function patientAt(p, iso){
+  if (!p || !p.id) return p;
+  var t = treatmentAt(p.id, iso);
+  if (!t || t.id === p._treatId) return p;
+  if (_patAt.p !== state.patients || _patAt.t !== state.treatments) _patAt = {p: state.patients, t: state.treatments, map: {}};
+  var k = p.id + "|" + t.id;
+  if (!_patAt.map[k]){
+    var m = Object.assign({}, rawPatient(p.id) || p);
+    TREAT_FIELDS.forEach(function(f){ if (t[f] === undefined) delete m[f]; else m[f] = t[f]; });
+    m._treatId = t.id;
+    _patAt.map[k] = m;
+  }
+  return _patAt.map[k];
+}
+function findPatientAt(name, iso){ var p = findPatientByName(name); return p && iso ? patientAt(p, iso) : p; }
 function subscribeTreatments(){
   db.doc("treatments/all").onSnapshot(function(snap){
     state.treatments = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];

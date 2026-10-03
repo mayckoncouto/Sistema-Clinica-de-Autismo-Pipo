@@ -1171,3 +1171,22 @@ O projeto Supabase está no plano gratuito (sem backup automático restaurável)
   (nota "Valores ocultos"). Com "ver" sem "editar": campos desativados.
 - Cópia de segurança inclui `treatment_finance` (`optional`: se a tabela ainda não
   existe, a cópia segue sem ela) e `api/admin-backup.js` restaura por `treatment_id`.
+
+## Tratamento vigente na data (Etapa 2, 2026-10-03)
+- `treatmentAt(pid, iso)`: hoje ou depois = `currentTreatment` (igual a
+  `state.patients`); data passada = tratamento de início mais recente até a data
+  (mesmo início = o criado depois); antes do 1º, vale o 1º. `patientAt(p, iso)` =
+  paciente somado a esse tratamento (cache `_patAt`); `findPatientAt(nome, iso)`.
+- Usam a data do atendimento: cor da célula e popup da Agenda (`agdEventHtml`,
+  `agdOpenDetails`), regra "não ABA" (`isNaoABABooking` quando o registro tem
+  `date` — só a Agenda; o Planner é grade modelo e segue o tratamento atual),
+  horário do paciente e terapeuta na Agenda (`agdPatientConfirm`,
+  `therapistMismatchMsg(..., iso)`).
+- Relatórios: Convênios (convênio/plano da data), Pacote (uma linha por
+  tratamento × especialidade; cada tratamento conta só o trecho em que valeu —
+  do início até o início do seguinte ou o `statusEm` do encerramento; Realizado =
+  Finalizados atribuídos por `treatmentAt`), Sem atendimento (só quem tinha
+  tratamento valendo no período; convênio/plano do fim do período). Frequência e
+  Lista não usam dados do tratamento.
+- Teste `tests/run_treatment_history.js` (cria `tests/page_ev.html` com
+  `window.__ev` e apaga no fim) — `npm test` agora 22 arquivos.
