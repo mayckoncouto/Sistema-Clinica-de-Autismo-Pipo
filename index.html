@@ -9597,8 +9597,11 @@ function writeTreatments(list){
   afterTreatmentsChange();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(false); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(false); }
-  return db.doc("treatments/all").set({list: list}).then(function(){ return true; }).catch(function(){
-    showToast("Não foi possível salvar o tratamento.", true); return false;
+  return db.doc("treatments/all").set({list: list}).then(function(){ return true; }).catch(function(e){
+    var m = (e && e.message) || "";
+    // A permissão já é avisada pelo adaptador; a regra "um só ativo" vem do banco com o motivo.
+    if (!(e && e.code === "permission")) showToast(/tratamento ativo/i.test(m) ? m : "Não foi possível salvar o tratamento.", true);
+    return false;
   });
 }
 function treatSummaryHtml(t){

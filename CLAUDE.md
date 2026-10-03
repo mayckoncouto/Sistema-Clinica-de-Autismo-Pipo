@@ -1144,3 +1144,11 @@ O projeto Supabase está no plano gratuito (sem backup automático restaurável)
   da data) e depois 2) terapeuta do tratamento (`agdTherapistCheck`). Usado na
   janela, colar/mover e trocar. Sem pergunta se paciente, data e hora não
   mudaram. O horário vem do tratamento (via `state.patients` somado).
+- (2026-10-03, Etapa 0) **Banco garante um só Ativo por paciente**: trigger
+  `treatments_one_active` em `documents` (migração
+  `supabase/2026-10-03c-um-tratamento-ativo.sql`) recusa gravar `treatments/all`
+  com dois Ativos do mesmo paciente (vale para todos, inclusive admin e
+  restauração). O app mostra o motivo (`writeTreatments`).
+- Teste fixo `tests/run_treatments.js` (no `npm test`, agora 21 arquivos): tipo
+  automático, só um Ativo, cancelado → Novo, valor final, bolinha, ABA lida do
+  tratamento (paciente cru intacto) e dupla verificação de terapeuta no Planner.
