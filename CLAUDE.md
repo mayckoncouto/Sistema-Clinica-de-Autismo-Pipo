@@ -1124,3 +1124,17 @@ O projeto Supabase está no plano gratuito (sem backup automático restaurável)
 - Bolinha de cor: na lista de Tratamentos, antes do nome (`trColor(t)` = idade do
   paciente + ABA do tratamento); na lista de Pacientes, a cor vem do tratamento
   ATIVO (paciente com tratamentos e nenhum ativo fica sem bolinha).
+- (2026-10-03) **Terapeuta por especialidade no tratamento**: cada linha de
+  `specHours` pode ter `profId` (vazio = "Todos os terapeutas"). Seleção
+  `.spec-prof` ao lado da quantidade (`specProfOptions` / `specProfessionals`:
+  especialidade = profissionais com essa especialidade principal; serviço
+  `svc:` = quem atende o serviço). `patientSpecRows` devolve `profId`.
+- **Dupla verificação** (`therapistMismatchMsg(paciente, profId, serviço)`): a
+  linha do tratamento é a da especialidade principal do profissional (serviço
+  Sessão) ou a do serviço; se ela tem `profId` e o agendamento é com outro →
+  "Terapeuta diferente do tratamento" + "Tem certeza?" (`therapistConfirm`).
+  Planner: `therapistMismatches(changesByDoc)` em `applyBookingChanges` (depois
+  do horário do paciente; `opts.therapistOk`; não vale para desfazer/refazer;
+  não pergunta se o paciente/serviço já estava naquela célula). Agenda:
+  `agdTherapistConfirm([{rec, old}])` na janela, colar/mover e trocar. Não é
+  bloqueio: confirmando duas vezes, grava.

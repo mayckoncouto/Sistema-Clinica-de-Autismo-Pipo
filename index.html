@@ -821,6 +821,8 @@ body.pat-col-resizing *{user-select:none}
 .hours-row .spec-name{width:100%}
 .hours-row .spec-name-wrap{flex:1;min-width:0;position:relative}
 .hours-row .spec-hours-val{width:64px;flex:none}
+.hours-row .spec-prof-wrap{flex:0 1 190px;min-width:0}
+.hours-row .spec-prof-wrap .dp-btn,.hours-row .spec-prof-wrap select{width:100%}
 .hours-row .rm{flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--danger);cursor:pointer;font-size:13px;line-height:1}
 .hours-row .rm:hover{background:var(--danger-weak)}
 .hours-empty{font-size:12px;color:var(--muted)}
@@ -965,6 +967,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .field .dp-btn{font-size:16px;padding:9px 10px}
   .modal-foot .spacer{flex-basis:0}
   .field-row{flex-wrap:wrap}
+  #specRowsHost .hours-row{flex-wrap:wrap}
+  #specRowsHost .hours-row .spec-prof-wrap{flex:1 1 100%;order:3}
   .field-row>.field{flex:1 1 140px!important;min-width:0}
   /* Tabelas de horário (profissional, paciente, clínica): compactas, sem ícones. */
   .prof-hours .dp-btn,.cl-hours .dp-btn{padding:5px 4px;gap:2px}
@@ -2014,7 +2018,7 @@ function clearValueFor(dayKey, time){
 // record still uses the old flat fields (fono/psico/...) or the newer specHours array.
 function patientSpecRows(p){
   if (!p) return [];
-  if (Array.isArray(p.specHours)) return p.specHours.map(function(row){ return {specId: row.specId, hours: row.hours}; });
+  if (Array.isArray(p.specHours)) return p.specHours.map(function(row){ return {specId: row.specId, hours: row.hours, profId: row.profId || ""}; });
   var rows = [];
   state.specialties.forEach(function(s){
     if (p[s.id] !== "" && p[s.id] != null) rows.push({specId: s.id, hours: p[s.id]});
@@ -4128,6 +4132,33 @@ function patientHoursOutside(changesByDoc){
   });
   return out;
 }
+// Planner: agendamentos com terapeuta diferente do indicado no tratamento do paciente.
+function therapistMismatches(changesByDoc){
+  var out = [];
+  Object.keys(changesByDoc).forEach(function(docId){
+    var changes = changesByDoc[docId], dayKey = docId.split("-")[0];
+    var doc = state.scheduleDocs[docId] || state.reportDocs[docId], oldB = (doc && doc.bookings) || {};
+    Object.keys(changes).forEach(function(k){
+      var rec = changes[k];
+      if (!rec || !rec.patient || bookingKind(rec)) return;
+      var kp = k.split("|"), room = findRoom(kp[1]);
+      if (!room || isGroup(room)) return;
+      var ther = findTherapist(room, kp[2]), profId = ther && ther.professionalId;
+      var old = effectiveBooking(oldB, k, dayKey, kp[0]);
+      if (old && old.patient && normText(old.patient) === normText(rec.patient) &&
+          (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return; // já estava assim
+      var m = therapistMismatchMsg(rec.patient, profId, rec.service);
+      if (m) out.push(m);
+    });
+  });
+  return out;
+}
+function therapistConfirm(msgs){
+  if (!msgs.length) return Promise.resolve(true);
+  return confirmDialog({title: "Terapeuta diferente do tratamento",
+    message: msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : ""), confirmLabel: "Continuar"})
+    .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar com um terapeuta diferente do indicado no tratamento?", confirmLabel: "Agendar assim mesmo"}); });
+}
 function applyBookingChanges(changesByDoc, opts){
   // changesByDoc: { docId: { key: {patient,note} | null, ... }, ... } — null clears that key
   // opts.history: "undo" | "redo" quando a chamada vem do desfazer/refazer.
@@ -4160,6 +4191,15 @@ function applyBookingChanges(changesByDoc, opts){
         confirmLabel: "Continuar"})
         .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar mesmo fora do horário do paciente?", confirmLabel: "Agendar assim mesmo"}); })
         .then(function(ok){ return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {patientHoursOk: true})) : false; });
+    }
+  }
+  // Terapeuta diferente do indicado no tratamento: confirmação dupla (não vale para desfazer/refazer).
+  if (!opts.history && !opts.therapistOk){
+    var mism = therapistMismatches(changesByDoc);
+    if (mism.length){
+      return therapistConfirm(mism).then(function(ok){
+        return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {therapistOk: true})) : false;
+      });
     }
   }
   var seq = ++pendingSeqCounter;
@@ -4775,11 +4815,45 @@ function readPatHours(){
 // ficam no Tratamento (openTreatmentModal). treatFieldsEditor(v) devolve o HTML,
 // wire(ovId) liga os campos depois que a janela existe e read() devolve
 // {fields, newSpecialties, newConvenios} para gravar.
+// Terapeutas que podem atender uma linha do tratamento: da especialidade (especialidade
+// principal do profissional) ou do serviço ("svc:<id>", quem atende o serviço).
+function specProfessionals(specId){
+  if (!specId) return [];
+  var svc = isSvcItem(specId) ? String(specId).slice(SVC_PREFIX.length) : null;
+  return state.professionals.filter(function(p){
+    if (svc) return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(svc) !== -1;
+    return p.specialtyId === specId;
+  }).sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
+}
+function specProfOptions(specId, cur){
+  var list = specProfessionals(specId);
+  if (cur && !list.some(function(p){ return p.id === cur; })){ var x = findProfessional(cur); if (x) list = [x].concat(list); }
+  return '<option value="">Todos os terapeutas</option>' + list.map(function(p){
+    return '<option value="' + esc(p.id) + '"' + (p.id === cur ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+  }).join("");
+}
+// Dupla verificação (Planner e Agenda): o tratamento diz que o paciente é atendido
+// numa especialidade/serviço por um terapeuta específico e o agendamento está com
+// outro. Especialidade = a principal do profissional (serviço Sessão) ou o serviço.
+// Devolve o texto do aviso ou null.
+function therapistMismatchMsg(patientName, profId, serviceId){
+  if (!patientName || !profId) return null;
+  var p = findPatientByName(patientName); if (!p) return null;
+  var prof = findProfessional(profId); if (!prof) return null;
+  var svc = serviceId || DEFAULT_SERVICE_ID;
+  var key = svc === DEFAULT_SERVICE_ID ? prof.specialtyId : SVC_PREFIX + svc;
+  if (!key) return null;
+  var row = patientSpecRows(p).filter(function(x){ return x.specId === key; })[0];
+  if (!row || !row.profId || row.profId === profId) return null;
+  var exp = findProfessional(row.profId);
+  return "<b>" + esc(p.nome) + "</b> — " + esc(specialtyName(key)) + ": o tratamento indica <b>" + esc(exp ? exp.name : "outro terapeuta") +
+    "</b>, mas o agendamento está com <b>" + esc(prof.name) + "</b>";
+}
 var TREAT_FIELDS = ["convenioId", "convenio", "plano", "pacoteHoras", "aba", "specHours", "horarios"];
 function treatFieldsEditor(v){
   // Per-patient specialty rows, editable independently of the global catalog.
   var draftSpecRows = patientSpecRows(v).map(function(row){
-    return {specId: row.specId, name: specialtyName(row.specId), hours: row.hours == null ? "" : String(row.hours)};
+    return {specId: row.specId, name: specialtyName(row.specId), hours: row.hours == null ? "" : String(row.hours), profId: row.profId || ""};
   });
   // Local shadow copies of the shared catalogs: any specialty/convênio created inline
   // while this modal is open lands here first (so filtering/suggestions see it right
@@ -4835,6 +4909,8 @@ function treatFieldsEditor(v){
         var hoursInp = row.querySelector(".spec-hours-val");
         draftSpecRows[i].name = nameInp ? nameInp.value : draftSpecRows[i].name;
         draftSpecRows[i].hours = hoursInp ? hoursInp.value : draftSpecRows[i].hours;
+        var profSel = row.querySelector(".spec-prof");
+        draftSpecRows[i].profId = profSel ? profSel.value : (draftSpecRows[i].profId || "");
       });
     }
     // Specialties already used by another row shouldn't be offered again — only the
@@ -4904,6 +4980,7 @@ function treatFieldsEditor(v){
             draftSpecRows[i].name = created.name;
             inp.value = created.name;
             sugg.hidden = true;
+            syncSpecRowsFromDom(); draftSpecRows[i].profId = ""; renderSpecRows();
             return;
           }
           var b = e.target.closest("button[data-id]"); if (!b) return;
@@ -4911,6 +4988,8 @@ function treatFieldsEditor(v){
           draftSpecRows[i].name = b.getAttribute("data-name");
           inp.value = draftSpecRows[i].name;
           sugg.hidden = true;
+          // Lista de terapeutas passa a ser a da especialidade escolhida.
+          syncSpecRowsFromDom(); draftSpecRows[i].profId = ""; renderSpecRows();
         });
       });
     }
@@ -4922,6 +5001,7 @@ function treatFieldsEditor(v){
             '<div class="autolist floating" hidden></div>' +
           '</div>' +
           '<input type="text" class="spec-hours-val" placeholder="0" value="'+esc(row.hours)+'">' +
+          '<div class="spec-prof-wrap"><select class="spec-prof" aria-label="Terapeuta">' + specProfOptions(row.specId, row.profId) + '</select></div>' +
           '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover especialidade">✕</button>' +
         '</div>';
       }).join("") : '<div class="hours-empty">Nenhuma especialidade ou serviço nesta ficha — clique em "+ especialidade ou serviço" para adicionar.</div>';
@@ -4937,7 +5017,7 @@ function treatFieldsEditor(v){
     renderSpecRows();
     document.getElementById("specRowAdd").addEventListener("click", function(){
       syncSpecRowsFromDom();
-      draftSpecRows.push({specId:null, name:"", hours:""});
+      draftSpecRows.push({specId:null, name:"", hours:"", profId:""});
       renderSpecRows();
     });
 
@@ -5037,7 +5117,9 @@ function treatFieldsEditor(v){
           specId = created.id;
         }
       }
-      specHoursOut.push({specId: specId, hours: hours});
+      var outRow = {specId: specId, hours: hours};
+    if (row.profId) outRow.profId = row.profId;
+    specHoursOut.push(outRow);
     });
 
     var convenioId = resolveRef();
@@ -7197,11 +7279,23 @@ function agdOpenModal(opts){
     agdConflictsFor([rec], row ? [row.id] : []).then(function(conflict){
       saveBtn.disabled = false;
       if (conflict){ showToast(conflict, true); return; }
-      checkRoomThenSave();
+      agdTherapistConfirm([{rec: rec, old: row}]).then(function(ok){ if (ok) checkRoomThenSave(); });
     }).catch(function(err){ saveBtn.disabled = false; showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
   });
   var first = document.getElementById(canSave && !rowKind ? "agdPac" : "agdCancel");
   if (first) first.focus();
+}
+// Agenda: terapeuta diferente do indicado no tratamento → confirmação dupla.
+// pairs = [{rec, old}] (old = como estava; sem mudança de paciente/profissional/serviço não pergunta).
+function agdTherapistConfirm(pairs){
+  var msgs = pairs.map(function(x){
+    var rec = x.rec, old = x.old;
+    if (!rec || bookingKind(rec)) return null;
+    if (old && old.professional_id === rec.professional_id && normText(old.patient || "") === normText(rec.patient || "") &&
+        (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return null;
+    return therapistMismatchMsg(rec.patient, rec.professional_id, rec.service);
+  }).filter(Boolean);
+  return therapistConfirm(msgs);
 }
 // Agenda: regras de horário (ver profBusyMsg / patientBusyMsg). rows = outras linhas
 // (do banco e/ou da mesma operação); rec = a linha que vai ser gravada.
@@ -7756,6 +7850,8 @@ function agdPlace(row, td, mode, swapWith){
       professional_id: back.professional_id, room_id: back.room_id, date: back.date, time: back.time};
     agdConflictsFor([payload, occPayload], [row.id, occupant.id]).then(function(conflict){
     if (conflict){ showToast(conflict, true); return; }
+    return agdTherapistConfirm([{rec: payload, old: row}, {rec: occPayload, old: occupant}]).then(function(ok){
+    if (!ok) return;
     // Os dois são atualizados (nada é apagado e recriado): cada um mantém o id e a evolução.
     c.from("appointments").update(payload).eq("id", row.id).select().single().then(function(r2){
       if (r2.error) return fail(r2);
@@ -7766,6 +7862,7 @@ function agdPlace(row, td, mode, swapWith){
           done("Atendimentos trocados de lugar.");
         });
       });
+    });
     });
     }).catch(function(err){ showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
     return;
@@ -7781,7 +7878,7 @@ function agdPlace(row, td, mode, swapWith){
   }
   agdConflictsFor([payload], isCopy ? [] : [row.id]).then(function(conflict){
     if (conflict){ showToast(conflict, true); return; }
-    write();
+    return agdTherapistConfirm([{rec: payload, old: isCopy ? null : row}]).then(function(ok){ if (ok) write(); });
   }).catch(function(err){ showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
 }
 
