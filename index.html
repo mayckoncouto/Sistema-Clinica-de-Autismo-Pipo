@@ -2674,6 +2674,8 @@ function wireTabs(){
   document.getElementById("mainTabs").addEventListener("click", function(e){
     var b = e.target.closest("button[data-tab]");
     if (!b) return;
+    // Celular: o Planner não é mostrado; vai para a primeira outra tela permitida.
+    if (b.getAttribute("data-tab") === "agenda" && isMobileView()){ var alt = mobileAltTab(); if (alt){ alt.click(); return; } }
     state.tab = b.getAttribute("data-tab");
     Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button"), function(x){
       x.classList.toggle("active", x === b);
@@ -9363,6 +9365,26 @@ function openNavFromHash(){
 // Celular (até 760px): o botão ☰ no canto do topo abre um menu único com as
 // abas, os itens dos menus Cadastros/Planner e os do menu Acesso (que repassa o
 // clique para o botão original de #acessoMenu, em js/pipo-supabase.js).
+// O Planner não é mostrado no celular (nem no menu ☰, nem como tela inicial).
+var MOBILE_MQ = window.matchMedia ? window.matchMedia("(max-width:760px)") : null;
+function isMobileView(){ return !!(MOBILE_MQ && MOBILE_MQ.matches); }
+// Primeira tela permitida que não é o Planner (ordem do topo).
+function mobileAltTab(){
+  var order = ["agendadia", "prontuario", "relatorio", "relatorios"].concat(CAD_TABS);
+  var navs = CAD_ITEMS.concat(PL_ITEMS);
+  for (var i = 0; i < order.length; i++){
+    var b = document.querySelector('#mainTabs button[data-tab="' + order[i] + '"]');
+    if (!b) continue;
+    if (!window.pipoAuth || !b.hidden) return b;
+    var it = navs.filter(function(n){ return n.tab === order[i]; })[0];
+    if (it && it.ok()) return b;
+  }
+  return null;
+}
+function mobileLeavePlanner(){
+  if (state.tab !== "agenda" || !isMobileView()) return;
+  var alt = mobileAltTab(); if (alt) alt.click();
+}
 function mnavOpen(open){
   var p = document.getElementById("mnavPanel"), b = document.getElementById("mnavBtn");
   if (!p || !b) return;
@@ -9384,12 +9406,17 @@ function mnavRender(){
     return '<div class="mnav-sec">' + title + '</div>' + items.map(function(i){ return navBtn(i, true); }).join("");
   }
   // Mesma ordem do topo: Cadastros, Planner e depois as abas visíveis.
-  h += group("Cadastros", CAD_ITEMS) + group("Planner", PL_ITEMS);
+  // No celular o Planner fica de fora; o Resumo entra junto com as outras telas.
+  h += group("Cadastros", CAD_ITEMS);
   var tabs = Array.prototype.slice.call(document.querySelectorAll("#mainTabs > button[data-tab]")).filter(function(b){ return !b.hidden; });
-  if (tabs.length) h += '<div class="mnav-sep"></div>' + tabs.map(function(b){
+  var resumo = navItem("resumo"), rs = (!window.pipoAuth || resumo.ok()) ? navBtn(resumo, false) : "";
+  var main = tabs.map(function(b){
     var k = b.getAttribute("data-tab");
-    return '<button type="button" role="menuitem" class="' + (state.tab === k ? "on" : "") + '" data-mnav-tab="' + k + '">' + esc(b.textContent) + '</button>';
-  }).join("");
+    var x = '<button type="button" role="menuitem" class="' + (state.tab === k ? "on" : "") + '" data-mnav-tab="' + k + '">' + esc(b.textContent) + '</button>';
+    if (k === "relatorios" && rs){ x = rs + x; rs = ""; }
+    return x;
+  }).join("") + rs;
+  if (main) h += '<div class="mnav-sep"></div>' + main;
   var acc = Array.prototype.slice.call(document.querySelectorAll("#acessoMenu button[data-act]"));
   if (acc.length) h += '<div class="mnav-sep"></div><div class="mnav-sec">Acesso</div>' + acc.map(function(b){
     return '<button type="button" role="menuitem" class="sub" data-mnav-act="' + b.getAttribute("data-act") + '">' + esc(b.textContent) + '</button>';
@@ -9410,6 +9437,12 @@ function wireMobileNav(){
   });
   document.addEventListener("mousedown", function(e){ if (!p.hidden && !e.target.closest("#mnavPanel,#mnavBtn")) mnavOpen(false); });
   document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !p.hidden) mnavOpen(false); });
+  // Abriu (ou virou) celular com o Planner na tela: troca para outra tela.
+  setTimeout(mobileLeavePlanner, 0);
+  if (MOBILE_MQ){
+    var onMq = function(){ if (isMobileView()) mobileLeavePlanner(); };
+    if (MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener("change", onMq); else if (MOBILE_MQ.addListener) MOBILE_MQ.addListener(onMq);
+  }
   // Voltou para a tela grande com o menu aberto: fecha.
   window.addEventListener("resize", function(){ if (!p.hidden && window.innerWidth > 760) mnavOpen(false); });
 }

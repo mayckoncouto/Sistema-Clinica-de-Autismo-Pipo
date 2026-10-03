@@ -972,3 +972,9 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   abas visíveis de `#mainTabs` e seção Acesso (cópias dos botões de
   `#acessoMenu`; o clique é repassado ao botão original). Montado a cada
   abertura, então segue as permissões atuais.
+- **Planner não aparece no celular** (`isMobileView()`, `MOBILE_MQ` = mesma
+  largura de 760px): fica fora do menu ☰ (o Resumo entra como item comum, antes
+  de Relatórios); clicar na aba `agenda` no celular vai para `mobileAltTab()`
+  (primeira permitida: Agenda, Prontuário, Resumo, Relatórios, cadastros); ao
+  abrir ou virar celular com o Planner na tela, `mobileLeavePlanner()` troca de
+  tela. Só fica no Planner quem não tem nenhuma outra tela.
