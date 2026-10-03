@@ -978,3 +978,7 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   (primeira permitida: Agenda, Prontuário, Resumo, Relatórios, cadastros); ao
   abrir ou virar celular com o Planner na tela, `mobileLeavePlanner()` troca de
   tela. Só fica no Planner quem não tem nenhuma outra tela.
+- Menu ☰: **Cadastros** e **Acesso** são grupos recolhidos (`mnavGroup`,
+  botão `.mnav-grp[data-mnav-grp]` com seta + `.mnav-items` oculto); tocar no
+  título abre/fecha as opções sem fechar o menu. Agenda, Prontuário, Resumo e
+  Relatórios ficam soltos.

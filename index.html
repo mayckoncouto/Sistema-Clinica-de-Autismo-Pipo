@@ -904,7 +904,11 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .mnav-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:80;max-height:calc(100dvh - 90px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);padding:6px;display:flex;flex-direction:column}
   .mnav-user{padding:10px 12px 8px;border-bottom:1px solid var(--line);margin-bottom:4px;font-size:13px;color:var(--ink-2)}
   .mnav-user b{display:block;font-size:15px;color:var(--ink)}
-  .mnav-sec{padding:10px 12px 4px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .mnav-panel .mnav-grp{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .mnav-grp svg{flex:none;color:var(--muted);transition:transform .18s}
+  .mnav-grp[aria-expanded=true] svg{transform:rotate(180deg)}
+  .mnav-items{display:flex;flex-direction:column}
+  .mnav-items[hidden]{display:none}
   .mnav-panel button{border:0;background:transparent;text-align:left;padding:12px 14px;border-radius:8px;font:inherit;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer}
   .mnav-panel button.sub{padding-left:24px}
   .mnav-panel button:hover,.mnav-panel button:focus{background:var(--accent-weak);outline:none}
@@ -9403,7 +9407,13 @@ function mnavRender(){
   function group(title, items){
     items = items.filter(function(i){ return !window.pipoAuth || i.ok(); });
     if (!items.length) return "";
-    return '<div class="mnav-sec">' + title + '</div>' + items.map(function(i){ return navBtn(i, true); }).join("");
+    return mnavGroup(title, items.map(function(i){ return navBtn(i, true); }).join(""));
+  }
+  // Grupo recolhido (Cadastros, Acesso): as opções só aparecem ao tocar no título.
+  function mnavGroup(title, inner){
+    return '<button type="button" class="mnav-grp" data-mnav-grp aria-expanded="false">' + title +
+      '<svg viewBox="0 0 10 10" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+      '<div class="mnav-items" hidden>' + inner + '</div>';
   }
   // Mesma ordem do topo: Cadastros, Planner e depois as abas visíveis.
   // No celular o Planner fica de fora; o Resumo entra junto com as outras telas.
@@ -9418,9 +9428,9 @@ function mnavRender(){
   }).join("") + rs;
   if (main) h += '<div class="mnav-sep"></div>' + main;
   var acc = Array.prototype.slice.call(document.querySelectorAll("#acessoMenu button[data-act]"));
-  if (acc.length) h += '<div class="mnav-sep"></div><div class="mnav-sec">Acesso</div>' + acc.map(function(b){
+  if (acc.length) h += '<div class="mnav-sep"></div>' + mnavGroup("Acesso", acc.map(function(b){
     return '<button type="button" role="menuitem" class="sub" data-mnav-act="' + b.getAttribute("data-act") + '">' + esc(b.textContent) + '</button>';
-  }).join("");
+  }).join(""));
   p.innerHTML = h;
 }
 function wireMobileNav(){
@@ -9429,6 +9439,11 @@ function wireMobileNav(){
   b.addEventListener("click", function(e){ e.stopPropagation(); mnavOpen(p.hidden); });
   p.addEventListener("click", function(e){
     var x = e.target.closest("button"); if (!x) return;
+    if (x.hasAttribute("data-mnav-grp")){
+      var box = x.nextElementSibling, open = box.hidden;
+      box.hidden = !open; x.setAttribute("aria-expanded", open ? "true" : "false");
+      return;
+    }
     mnavOpen(false);
     var k = x.getAttribute("data-mnav"), t = x.getAttribute("data-mnav-tab"), a = x.getAttribute("data-mnav-act");
     if (k){ var it = navItem(k); if (it) navActivate(it); }
