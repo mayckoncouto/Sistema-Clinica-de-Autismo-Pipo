@@ -2186,7 +2186,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -2827,7 +2827,7 @@ function wireTabs(){
       else if (state.tab === "agendadia") agdOnShow();
       else if (state.tab === "prontuario") prOnShow();
       else if (state.tab === "relatorios") rpOnShow();
-      else if (state.tab === "tratamentos") renderTreatmentsTab();
+      else if (state.tab === "tratamentos"){ renderTreatmentsTab(); trLoadFinance(); }
       else if (REG_CFG[state.tab]) renderRegistryTab(state.tab);
     } catch(err){
       reportAppError(err, "ao abrir a aba");
@@ -9163,18 +9163,22 @@ var RP_BUILDERS = {
     TR_TIPOS.forEach(function(x){ sum[x.id] = {n: 0, v: 0, d: 0, f: 0}; });
     started.forEach(function(t){
       var s2 = sum[t.tipo] || (sum[t.tipo] = {n: 0, v: 0, d: 0, f: 0});
-      [s2, tot].forEach(function(a){ a.n++; a.v += parseMoney(t.valor); a.d += parseMoney(t.despesas); a.f += trFinal(t); });
+      var mo = trMoney(t);
+      [s2, tot].forEach(function(a){ a.n++; a.v += mo.valor; a.d += mo.despesas; a.f += trFinal(t); });
     });
-    return {sections: [
-      {title: "Resumo dos tratamentos iniciados", head: ["Tipo", "Tratamentos", "Valor", "Despesas", "Valor final"],
-        rows: TR_TIPOS.map(function(x){ var a = sum[x.id]; return [x.name, a.n, fmtMoney(a.v), fmtMoney(a.d), fmtMoney(a.f)]; }),
-        foot: ["Total", tot.n, fmtMoney(tot.v), fmtMoney(tot.d), fmtMoney(tot.f)]},
-      {title: "Tratamentos iniciados no período", head: ["Paciente", "Início", "Tipo", "Status", "Convênio", "Valor", "Despesas", "Valor final"],
+    // Sem "Tratamentos – valores": o relatório sai só com as contagens, sem colunas de dinheiro.
+    var money = trCanSeeVal();
+    function mm(cols, vals){ return money ? cols.concat(vals) : cols; }
+    return {note: money ? "" : "Valores ocultos: o seu nível não tem a permissão \"Tratamentos – valores\".", sections: [
+      {title: "Resumo dos tratamentos iniciados", head: mm(["Tipo", "Tratamentos"], ["Valor", "Despesas", "Valor final"]),
+        rows: TR_TIPOS.map(function(x){ var a = sum[x.id]; return mm([x.name, a.n], [fmtMoney(a.v), fmtMoney(a.d), fmtMoney(a.f)]); }),
+        foot: mm(["Total", tot.n], [fmtMoney(tot.v), fmtMoney(tot.d), fmtMoney(tot.f)])},
+      {title: "Tratamentos iniciados no período", head: mm(["Paciente", "Início", "Tipo", "Status", "Convênio"], ["Valor", "Despesas", "Valor final"]),
         empty: "Nenhum tratamento iniciado no período.",
-        rows: started.map(function(t){ return [pn(t), trBr(t.inicio), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), conv(t) || "—", fmtMoney(t.valor), fmtMoney(t.despesas), fmtMoney(trFinal(t))]; })},
-      {title: "Tratamentos encerrados no período (cancelados ou renegociados)", head: ["Paciente", "Início", "Encerrado em", "Status", "Valor final"],
+        rows: started.map(function(t){ var mo = trMoney(t); return mm([pn(t), trBr(t.inicio), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), conv(t) || "—"], [fmtMoney(mo.valor), fmtMoney(mo.despesas), fmtMoney(trFinal(t))]); })},
+      {title: "Tratamentos encerrados no período (cancelados ou renegociados)", head: mm(["Paciente", "Início", "Encerrado em", "Status"], ["Valor final"]),
         empty: "Nenhum tratamento encerrado no período.",
-        rows: ended.map(function(t){ return [pn(t), trBr(t.inicio), trBr(t.statusEm), trLabel(TR_STATUS, t.status), fmtMoney(trFinal(t))]; })}
+        rows: ended.map(function(t){ return mm([pn(t), trBr(t.inicio), trBr(t.statusEm), trLabel(TR_STATUS, t.status)], [fmtMoney(trFinal(t))]); })}
     ]};
   },
   "lista": function(rows, o){
@@ -9516,7 +9520,7 @@ var TR_STATUS = [
   {id: "cancelado", name: "Cancelado", color: "#b6403a"}
 ];
 var TR_TIPOS = [{id: "novo", name: "Novo"}, {id: "renegociado", name: "Renegociado"}];
-var TR = {last: null, lastAt: 0, loading: false, filter: "", search: ""};
+var TR = {last: null, lastAt: 0, loading: false, filter: "", search: "", fin: null};
 var treatmentsLoaded = false;
 function trLabel(list, id){ var x = list.filter(function(i){ return i.id === id; })[0]; return x ? x.name : (id || "—"); }
 function trTodayIso(){ var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -9530,7 +9534,38 @@ function parseMoney(v){
   var n = parseFloat(t); return isFinite(n) ? Math.round(n * 100) / 100 : 0;
 }
 function fmtMoney(n){ return "R$ " + Number(n || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
-function trFinal(t){ return Math.round((parseMoney(t.valor) - parseMoney(t.despesas)) * 100) / 100; }
+// Valores (Etapa 1): ficam em treatment_finance, que o banco só libera para quem tem
+// "Tratamentos – valores" (tratamentos_valores: ver/editar). TR.fin = {id: {valor, despesas}}.
+// Sem o sistema online (testes) ou para tratamentos antigos, vale o que estiver no
+// próprio tratamento (t.valor / t.despesas).
+function trCanSeeVal(){ return can("tratamentos_valores", "view"); }
+function trCanEditVal(){ return can("tratamentos_valores", "edit"); }
+function trMoney(t){
+  var f = TR.fin && TR.fin[t.id];
+  return f ? {valor: parseMoney(f.valor), despesas: parseMoney(f.despesas)} : {valor: parseMoney(t.valor), despesas: parseMoney(t.despesas)};
+}
+function trFinal(t){ var m = trMoney(t); return Math.round((m.valor - m.despesas) * 100) / 100; }
+function trLoadFinance(){
+  var c = agdClient();
+  if (!c || !trCanSeeVal()) return Promise.resolve();
+  return c.from("treatment_finance").select("treatment_id,valor,despesas").then(function(r){
+    if (r.error) return; // tabela ainda não criada (falta o ajuste do banco) ou sem permissão
+    var m = {};
+    (r.data || []).forEach(function(x){ m[x.treatment_id] = {valor: x.valor, despesas: x.despesas}; });
+    TR.fin = m;
+    if (state.tab === "tratamentos") renderTreatmentsTab();
+  });
+}
+// Grava os valores de um tratamento na tabela protegida (só quem pode editar).
+function trSaveFinance(id, valor, despesas){
+  var c = agdClient();
+  if (!c || !trCanEditVal()) return Promise.resolve(true);
+  return c.from("treatment_finance").upsert({treatment_id: id, valor: valor, despesas: despesas}, {onConflict: "treatment_id"}).then(function(r){
+    if (r.error){ showToast("O tratamento foi salvo, mas os valores não: " + (r.error.message || "erro"), true); return false; }
+    TR.fin = TR.fin || {}; TR.fin[id] = {valor: valor, despesas: despesas};
+    return true;
+  });
+}
 function treatmentsOf(pid){
   return state.treatments.filter(function(t){ return t.patientId === pid; }).sort(function(a, b){
     return String(b.inicio || "").localeCompare(String(a.inicio || "")) || String(b.criadoEm || "").localeCompare(String(a.criadoEm || ""));
@@ -9581,6 +9616,7 @@ function subscribeTreatments(){
     treatmentsLoaded = true;
     rebuildPatients();
     afterTreatmentsChange();
+    if (!TR.fin) trLoadFinance();
   }, function(){ treatmentsLoaded = true; });
 }
 function afterTreatmentsChange(){
@@ -9696,8 +9732,8 @@ function renderTreatmentsTab(){
   if (cnt) cnt.textContent = shown.length + " de " + all.length + " tratamento" + (all.length === 1 ? "" : "s");
   if (!all.length){ host.innerHTML = '<div class="empty-state"><b>Nenhum tratamento cadastrado</b>Use "+ Novo tratamento".</div>'; return; }
   if (!shown.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca ou o filtro.</div>'; return; }
-  var canFin = true;
-  gtRender(host, "tratamentos", [
+  var canFin = trCanSeeVal();
+  var trCols = [
     {key: "pac", label: "Paciente", width: 260, min: 140, cls: "pt-nome"},
     {key: "ini", label: "Início", width: 110, min: 80},
     {key: "fim", label: "Término", width: 200, min: 90, cls: "pt-muted"},
@@ -9705,16 +9741,18 @@ function renderTreatmentsTab(){
     {key: "st", label: "Status", width: 130, min: 90},
     {key: "val", label: "Valor final", width: 130, min: 90},
     {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"}
-  ], shown.map(function(t){
+  ];
+  if (!canFin) trCols.splice(5, 1);
+  gtRender(host, "tratamentos", trCols, shown.map(function(t){
     var p = rawPatient(t.patientId);
     var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
     var fin = trFinal(t);
     return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"',
       cells: [(function(){ var c = trColor(t); return c ? '<span class="pcolor-dot" style="background:' + c + '" title="Cor por idade/ABA"></span>' : ''; })() + esc(p ? p.nome : "(paciente excluído)"), esc(trBr(t.inicio)), esc(trEndText(t)), esc(trLabel(TR_TIPOS, t.tipo)),
         '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>',
-        canFin ? esc(fmtMoney(fin)) : "—", esc(conv || "—")],
+        esc(fmtMoney(fin)), esc(conv || "—")],
       vals: [p ? p.nome : "", t.inicio || "", trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), fin, conv || ""]};
-  }), renderTreatmentsTab, "tr-main");
+  }).map(function(row){ if (!canFin){ row.cells.splice(5, 1); row.vals.splice(5, 1); } return row; }), renderTreatmentsTab, "tr-main");
 }
 function wireTreatmentsTab(){
   var s = document.getElementById("trSearch"), f = document.getElementById("trFilter"), a = document.getElementById("trAdd"), h = document.getElementById("trHost");
@@ -9743,6 +9781,7 @@ function openTreatmentModal(t, opts){
   if (isNew && !can("tratamentos", "create")){ showToast(permDeniedMsg("tratamentos", "create"), true); return; }
   var canSave = isNew || can("tratamentos", "edit");
   var canDel = !isNew && can("tratamentos", "delete");
+  var canSeeVal = trCanSeeVal(), canEditVal = canSeeVal && trCanEditVal();
   var pid = isNew ? (opts.patientId || "") : t.patientId;
   var src = opts.copyFrom || t || null;
   // Novo sem tratamento anterior: parte do que estava no cadastro antigo do paciente.
@@ -9751,8 +9790,8 @@ function openTreatmentModal(t, opts){
   TREAT_FIELDS.forEach(function(k){ if (base[k] !== undefined) v[k] = base[k]; });
   var d = {
     inicio: isNew ? trTodayIso() : (t.inicio || ""),
-    valor: src && src.valor != null ? src.valor : "",
-    despesas: src && src.despesas != null ? src.despesas : "",
+    valor: src ? trMoney(src).valor : "",
+    despesas: src ? trMoney(src).despesas : "",
     tipo: isNew ? (pid ? (opts.renegotiateFrom ? "renegociado" : trTipoAuto(pid)) : "novo") : trTipoFor(t),
     status: isNew ? "ativo" : (t.status || "ativo"),
     obs: isNew ? "" : (t.obs || "")
@@ -9776,11 +9815,12 @@ function openTreatmentModal(t, opts){
           '<div class="field"><label for="trIni">Data de início</label><input type="date" id="trIni" value="' + esc(d.inicio) + '"></div>' +
           '<div class="field"><label>Data de término</label><input type="text" id="trFim" disabled value="' + esc(isNew ? "Em andamento" : trEndText(t)) + '"></div>' +
         '</div>' +
+        (canSeeVal ? (
         '<div class="field-row">' +
-          '<div class="field"><label for="trVal">Valor</label><input type="text" inputmode="decimal" id="trVal" placeholder="0,00" value="' + esc(d.valor === "" ? "" : parseMoney(d.valor).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
-          '<div class="field"><label for="trDesp">Despesas</label><input type="text" inputmode="decimal" id="trDesp" placeholder="0,00" value="' + esc(d.despesas === "" ? "" : parseMoney(d.despesas).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
+          '<div class="field"><label for="trVal">Valor</label><input type="text" inputmode="decimal" id="trVal" placeholder="0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.valor === "" ? "" : parseMoney(d.valor).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
+          '<div class="field"><label for="trDesp">Despesas</label><input type="text" inputmode="decimal" id="trDesp" placeholder="0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.despesas === "" ? "" : parseMoney(d.despesas).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
           '<div class="field"><label>Valor final</label><input type="text" id="trFinal" disabled></div>' +
-        '</div>' +
+        '</div>') : '') +
         '<div class="field-row">' +
           '<div class="field"><label for="trTipo">Tipo (automático)</label><select id="trTipo" disabled>' + opt(TR_TIPOS, d.tipo) + '</select></div>' +
           '<div class="field"><label for="trSt">Status</label><select id="trSt">' + opt(TR_STATUS, d.status) + '</select></div>' +
@@ -9806,9 +9846,11 @@ function openTreatmentModal(t, opts){
   function upFinal(){
     document.getElementById("trFinal").value = fmtMoney(parseMoney(document.getElementById("trVal").value) - parseMoney(document.getElementById("trDesp").value));
   }
-  upFinal();
-  document.getElementById("trVal").addEventListener("input", upFinal);
-  document.getElementById("trDesp").addEventListener("input", upFinal);
+  if (canSeeVal){
+    upFinal();
+    document.getElementById("trVal").addEventListener("input", upFinal);
+    document.getElementById("trDesp").addEventListener("input", upFinal);
+  }
   // Paciente escolhido num tratamento novo: reabre já com o tipo certo e os dados dele.
   document.getElementById("trPat").addEventListener("change", function(e){
     var np = e.target.value; if (!np || np === pid) return;
@@ -9820,7 +9862,14 @@ function openTreatmentModal(t, opts){
   if (del) del.addEventListener("click", function(){
     var p = rawPatient(t.patientId);
     confirmDialog({title: "Excluir tratamento", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Excluir tratamento"})
-      .then(function(ok){ if (!ok) return; writeTreatments(state.treatments.filter(function(x){ return x.id !== t.id; })).then(close); });
+      .then(function(ok){
+        if (!ok) return;
+        writeTreatments(state.treatments.filter(function(x){ return x.id !== t.id; })).then(function(done){
+          var c = agdClient();
+          if (done !== false && c) c.from("treatment_finance").delete().eq("treatment_id", t.id).then(function(){});
+          close();
+        });
+      });
   });
   var sv = document.getElementById("trSave");
   if (sv) sv.addEventListener("click", function(){
@@ -9835,8 +9884,6 @@ function openTreatmentModal(t, opts){
       id: t ? t.id : uid("tr"),
       patientId: patId,
       inicio: ini,
-      valor: parseMoney(document.getElementById("trVal").value),
-      despesas: parseMoney(document.getElementById("trDesp").value),
       tipo: d.tipo,
       status: st,
       obs: document.getElementById("trObs").value.trim(),
@@ -9844,6 +9891,12 @@ function openTreatmentModal(t, opts){
       atualizadoEm: now
     });
     if (!t || t.status !== st) rec.statusEm = trTodayIso();
+    // Valores: online vão para a tabela protegida (o documento fica sem eles); sem
+    // o sistema online (testes) continuam no próprio tratamento.
+    var newVal = canEditVal ? parseMoney(document.getElementById("trVal").value) : null;
+    var newDesp = canEditVal ? parseMoney(document.getElementById("trDesp").value) : null;
+    if (agdClient()){ delete rec.valor; delete rec.despesas; }
+    else if (canEditVal){ rec.valor = newVal; rec.despesas = newDesp; }
     var list = state.treatments.map(function(x){ return x.id === rec.id ? rec : x; });
     if (isNew) list.push(rec);
     // Só um Ativo por paciente: o outro ativo vira Renegociado.
@@ -9864,7 +9917,12 @@ function openTreatmentModal(t, opts){
       var saves = [writeTreatments(list)];
       if (r.newSpecialties.length) saves.push(writeSpecialties(state.specialties.concat(r.newSpecialties)));
       if (r.newConvenios.length) saves.push(writeConvenios(state.convenios.concat(r.newConvenios)));
-      Promise.all(saves).then(function(res){ if (res[0] !== false) close(); });
+      Promise.all(saves).then(function(res){
+        if (res[0] === false) return;
+        var money = trMoney(t || {});
+        var changed = canEditVal && (isNew || money.valor !== newVal || money.despesas !== newDesp);
+        return (changed ? trSaveFinance(rec.id, newVal, newDesp) : Promise.resolve(true)).then(function(){ close(); if (state.tab === "tratamentos") renderTreatmentsTab(); });
+      });
     });
   });
 }
@@ -9881,6 +9939,7 @@ var BACKUP_TABLES = [
   {name: "documents", order: "path", label: "Cadastros, Planner e Clínica", restore: true},
   {name: "appointments", order: "id", label: "Atendimentos da Agenda", restore: true},
   {name: "clinical_records", order: "id", label: "Evoluções do Prontuário", restore: true},
+  {name: "treatment_finance", order: "treatment_id", label: "Valores dos tratamentos", restore: true, optional: true},
   {name: "roles", order: "id", label: "Níveis de permissão (só consulta)", restore: false}
 ];
 var BACKUP_LAST_KEY = "agendaPipo:lastBackup";
@@ -9888,7 +9947,10 @@ function backupFetchAll(c, t){
   var out = [], page = 1000;
   function next(from){
     return c.from(t.name).select("*").order(t.order).range(from, from + page - 1).then(function(r){
-      if (r.error) throw new Error(t.label + ": " + (r.error.message || "erro"));
+      if (r.error){
+        if (t.optional) return out;   // tabela ainda não criada no banco (migração não rodada)
+        throw new Error(t.label + ": " + (r.error.message || "erro"));
+      }
       out = out.concat(r.data || []);
       return (r.data || []).length === page ? next(from + page) : out;
     });
@@ -9965,7 +10027,7 @@ function openBackupModal(){
       '</div><button class="modal-close" id="closeBackup" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="bk-card"><b>Baixar cópia</b>' +
-          '<div class="bk-txt">Pacientes, profissionais, salas, grupos, convênios, serviços, especialidades, status, clínica, Planner, Agenda e evoluções do Prontuário.</div>' +
+          '<div class="bk-txt">Pacientes, profissionais, salas, grupos, convênios, serviços, especialidades, status, clínica, Planner, Agenda, tratamentos (com valores) e evoluções do Prontuário.</div>' +
           '<div class="bk-txt bk-warn">O arquivo tem dados de saúde dos pacientes: guarde numa pasta protegida (ex.: Google Drive da clínica com acesso restrito). Não envie por WhatsApp ou e-mail.</div>' +
           '<div class="bk-row"><button class="btn primary" id="bkDownload">Baixar cópia de segurança</button>' +
           '<span class="bk-txt" id="bkLast">' + (last ? "Última cópia baixada neste aparelho: " + esc(prStamp(last)) : "Nenhuma cópia baixada neste aparelho ainda.") + '</span></div>' +

@@ -1152,3 +1152,21 @@ O projeto Supabase está no plano gratuito (sem backup automático restaurável)
 - Teste fixo `tests/run_treatments.js` (no `npm test`, agora 21 arquivos): tipo
   automático, só um Ativo, cancelado → Novo, valor final, bolinha, ABA lida do
   tratamento (paciente cru intacto) e dupla verificação de terapeuta no Planner.
+
+## Valores dos tratamentos protegidos por nível (2026-10-03)
+- Valor e despesas saíram do documento `treatments/all` (que todo usuário ativo lê)
+  para a tabela `public.treatment_finance (treatment_id pk, valor, despesas,
+  updated_at, updated_by)` com RLS: ler = `has_perm('tratamentos_valores','view')`,
+  gravar = `edit`, apagar = `edit` ou `tratamentos.delete`. Migração
+  `supabase/2026-10-03d-valores-dos-tratamentos.sql` (copia os valores atuais,
+  tira `valor`/`despesas` da lista e cria o módulo com tudo desligado: o
+  Administrador marca "Tratamentos – valores" em Níveis de permissão; ele mesmo
+  sempre vê).
+- App: `trCanSeeVal()` / `trCanEditVal()`, `trMoney(t)` (lê `TR.fin[id]`; sem
+  linha na tabela usa `t.valor` — dados antigos e testes), `trLoadFinance()` (ao
+  abrir a aba e na 1ª assinatura), `trSaveFinance(id, valor, despesas)` depois de
+  gravar o tratamento. Sem "ver": some a coluna "Valor final", a linha
+  Valor/Despesas/Valor final da janela e as colunas de dinheiro do relatório
+  (nota "Valores ocultos"). Com "ver" sem "editar": campos desativados.
+- Cópia de segurança inclui `treatment_finance` (`optional`: se a tabela ainda não
+  existe, a cópia segue sem ela) e `api/admin-backup.js` restaura por `treatment_id`.
