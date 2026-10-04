@@ -1759,3 +1759,7 @@ para profissional e não profissional). Remuneração continua com `rh_remunerac
 - Banco: migração `supabase/2026-10-05f-profissionais-no-rh.sql` —
   `module_for_path('config/professionals') = 'rh_funcionarios'` e cada nível recebe
   em `rh_funcionarios` o que tinha em `profissionais` (OR com o que já tinha).
+- (2026-10-05) Tipos na janela = lista suspensa de várias opções (`#sfTypesMs`, painel
+  `#sfTypes` com `.ms-opt`, mesmo padrão de Serviços) + "+". Migração
+  `supabase/2026-10-05g-funcionarios-dos-usuarios.sql`: usuário ativo sem cadastro
+  ganha funcionário `user-<id>` (nome, e-mail, tipo pelo nível) ligado por `staff_id`.

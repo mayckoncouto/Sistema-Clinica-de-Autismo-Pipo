@@ -474,10 +474,7 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .prof-hours input:focus{outline:none;box-shadow:var(--ring);border-color:var(--accent)}
 .prof-hours input:disabled{opacity:.6}
 .sf-hours-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between}
-.sf-types{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.sf-type{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer;background:var(--surface)}
-.sf-type.on{border-color:var(--accent);background:var(--accent-weak);font-weight:700}
-.sf-type input{margin:0}
+.sf-types-pick .reg-pick-add{flex:none}
 .pm-sec[hidden]{display:none}
 .pm-sec-sub{font-size:12px;font-weight:800;color:var(--ink-2)}
 .sf-pays{display:flex;flex-direction:column;gap:8px}
@@ -7699,12 +7696,14 @@ function openStaffModal(entry, opts){
     return '<option value="' + esc(s.id) + '"' + (s.id === v.specialtyId ? ' selected' : '') + '>' + esc(s.name) + '</option>';
   }).join("");
   var end = d.endereco || {};
-  // Tipos: caixas de marcar (Profissional precisa da permissão de Profissionais).
-  var typesHtml = '<div class="sf-types" id="sfTypes">' + staffTypesList().filter(function(t){ return isActive(t) || d.tipos.indexOf(t.id) !== -1; }).map(function(t){
-    var on = d.tipos.indexOf(t.id) !== -1;
-    var lock = !hrSave;
-    return '<label class="sf-type' + (on ? ' on' : '') + '"><input type="checkbox" value="' + esc(t.id) + '"' + (on ? ' checked' : '') + (lock ? ' disabled' : '') + '> ' + esc(t.name) + '</label>';
-  }).join("") + (hr && can("rh_funcionarios", "create") ? '<button type="button" class="btn ghost reg-pick-add" data-regadd="tiposfunc" data-for="sfTypeNew" title="Incluir tipo">+</button><select id="sfTypeNew" data-native hidden></select>' : '') + '</div>';
+  // Tipos: lista suspensa com várias opções marcáveis (igual a Serviços) + "+" para incluir um tipo.
+  function typeOptHtml(t, on){ return '<label class="ms-opt"><input type="checkbox" value="' + esc(t.id) + '"' + (on ? ' checked' : '') + (hrSave ? '' : ' disabled') + '><span>' + esc(t.name) + '</span></label>'; }
+  var typesHtml = '<div class="field"><div class="reg-pick sf-types-pick"><div class="ms" id="sfTypesMs" style="flex:1;min-width:0">' +
+    '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Tipos"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
+    '<div class="ms-panel" id="sfTypes" hidden role="listbox" aria-multiselectable="true">' +
+      staffTypesList().filter(function(t){ return isActive(t) || d.tipos.indexOf(t.id) !== -1; }).map(function(t){ return typeOptHtml(t, d.tipos.indexOf(t.id) !== -1); }).join("") +
+    '</div></div>' +
+    (hr && can("rh_funcionarios", "create") ? '<button type="button" class="btn ghost reg-pick-add" data-regadd="tiposfunc" data-for="sfTypeNew" title="Incluir tipo" aria-label="Incluir tipo">+</button><select id="sfTypeNew" data-native hidden></select>' : '') + '</div></div>';
   // Horário de trabalho = horário de atendimento: todos os dias, horas livres.
   var hoursRows = ALL_WEEKDAYS.map(function(wd){
     var pp = staffDayInit(prof ? prof.horarios : d.horarios, wd.key, prof);
@@ -7801,8 +7800,21 @@ function openStaffModal(entry, opts){
   }
   function isProfNow(){ var c = overlay.querySelector('#sfTypes input[value="' + STAFF_PROF_TYPE + '"]'); return !!(c && c.checked); }
   function tiposNow(){ return Array.prototype.map.call(overlay.querySelectorAll("#sfTypes input:checked"), function(c){ return c.value; }); }
-  $("sfTypes").addEventListener("change", function(e){
-    var lab = e.target.closest(".sf-type"); if (lab) lab.classList.toggle("on", e.target.checked);
+  var tms = $("sfTypesMs"), tBtn = tms.querySelector(".ms-btn"), tPanel = $("sfTypes");
+  function typesRefresh(){
+    var names = Array.prototype.map.call(tPanel.querySelectorAll("input:checked"), function(c){ return c.closest("label").textContent.trim(); });
+    var sum = tms.querySelector(".ms-sum");
+    sum.textContent = names.length ? names.join(", ") : "Selecione os tipos…";
+    sum.classList.toggle("ms-placeholder", !names.length);
+    tBtn.title = names.join(", ");
+  }
+  function typesOpen(open){ tPanel.hidden = !open; tBtn.setAttribute("aria-expanded", open ? "true" : "false"); if (open){ var f = tPanel.querySelector("input:not(:disabled)"); if (f) f.focus(); } }
+  tBtn.addEventListener("click", function(){ typesOpen(tPanel.hidden); });
+  tPanel.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); typesOpen(false); tBtn.focus(); } });
+  overlay.addEventListener("mousedown", function(e){ if (!tms.contains(e.target)) typesOpen(false); });
+  typesRefresh();
+  tPanel.addEventListener("change", function(e){
+    typesRefresh();
     var on = isProfNow();
     overlay.querySelector('[data-sfsec="atend"]').hidden = !on;
     $("sfHoursHint").textContent = (on ? "É também o horário de atendimento no Planner e na Agenda: fora dele não dá para agendar." : "Dias e horários de trabalho.") + " Deixe o início em branco no período em que não trabalha.";
@@ -7812,9 +7824,8 @@ function openStaffModal(entry, opts){
   var tn = $("sfTypeNew");
   if (tn) tn.addEventListener("change", function(){
     var id = tn.value; if (!id || overlay.querySelector('#sfTypes input[value="' + id + '"]')) return;
-    var lab = document.createElement("label"); lab.className = "sf-type on";
-    lab.innerHTML = '<input type="checkbox" value="' + esc(id) + '" checked> ' + esc(staffTypeName(id));
-    $("sfTypes").insertBefore(lab, $("sfTypes").querySelector(".reg-pick-add"));
+    tPanel.insertAdjacentHTML("beforeend", typeOptHtml({id: id, name: staffTypeName(id)}, true));
+    typesRefresh();
   });
 
   // Serviços: caixa de seleção flutuante.
