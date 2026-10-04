@@ -39,7 +39,9 @@ function errMsg(resp, fallback) {
   return b.msg || b.message || b.error_description || b.error || fallback;
 }
 
-async function currentAdmin(req) {
+// Quem está chamando: Administrador ou nível com a permissão "Usuários" (usuarios:
+// ver/incluir/editar/excluir). Volta {id, isAdmin, perms} ou null.
+async function currentActor(req) {
   var auth = req.headers.authorization || "";
   var token = auth.replace(/^Bearer\s+/i, "");
   if (!token) return null;
@@ -48,12 +50,20 @@ async function currentAdmin(req) {
   });
   if (!me.ok || !me.body || !me.body.id) return null;
   var prof = await call(
-    "/rest/v1/profiles?select=id,active,role:roles(is_admin)&id=eq." + encodeURIComponent(me.body.id),
+    "/rest/v1/profiles?select=id,active,role:roles(is_admin,permissions)&id=eq." + encodeURIComponent(me.body.id),
     { headers: adminHeaders() }
   );
   var row = prof.ok && Array.isArray(prof.body) ? prof.body[0] : null;
-  if (!row || !row.active || !row.role || !row.role.is_admin) return null;
-  return row;
+  if (!row || !row.active || !row.role) return null;
+  var u = (row.role.permissions && row.role.permissions.usuarios) || {};
+  return { id: row.id, isAdmin: !!row.role.is_admin, perms: u };
+}
+function allowed(actor, action) { return actor.isAdmin || !!actor.perms[action]; }
+// O usuário alvo é administrador? (quem não é Administrador não mexe em administrador)
+async function targetIsAdmin(id) {
+  var r = await call("/rest/v1/profiles?select=id,role:roles(is_admin)&id=eq." + encodeURIComponent(id), { headers: adminHeaders() });
+  var row = r.ok && Array.isArray(r.body) ? r.body[0] : null;
+  return !!(row && row.role && row.role.is_admin);
 }
 
 function validPassword(p) {
@@ -77,14 +87,23 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  var admin = await currentAdmin(req);
+  var admin = await currentActor(req);
   if (!admin) {
-    res.status(403).json({ error: "Apenas administradores podem gerenciar usuários." });
+    res.status(403).json({ error: "Sem permissão para gerenciar usuários." });
     return;
   }
 
   var body = await readJson(req);
   var action = body.action;
+  var need = { create: "create", set_password: "edit", set_active: "edit", "delete": "delete" }[action];
+  if (need && !allowed(admin, need)) {
+    res.status(403).json({ error: "Seu nível não tem permissão para esta ação em Usuários." });
+    return;
+  }
+  if (!admin.isAdmin && body.id && await targetIsAdmin(body.id)) {
+    res.status(403).json({ error: "Só o Administrador altera uma conta de administrador." });
+    return;
+  }
 
   try {
     if (action === "create") {
@@ -96,9 +115,12 @@ module.exports = async function handler(req, res) {
         res.status(400).json({ error: "A senha precisa ter pelo menos 8 caracteres." }); return;
       }
       var roleId = String(body.role_id || "");
-      var roleCheck = await call("/rest/v1/roles?select=id&id=eq." + encodeURIComponent(roleId), { headers: adminHeaders() });
+      var roleCheck = await call("/rest/v1/roles?select=id,is_admin&id=eq." + encodeURIComponent(roleId), { headers: adminHeaders() });
       if (!roleId || !roleCheck.ok || !Array.isArray(roleCheck.body) || !roleCheck.body.length) {
         res.status(400).json({ error: "Escolha um nível de permissão válido." }); return;
+      }
+      if (!admin.isAdmin && roleCheck.body[0].is_admin) {
+        res.status(403).json({ error: "Só o Administrador cria usuários no nível Administrador." }); return;
       }
       var created = await call("/auth/v1/admin/users", {
         method: "POST",

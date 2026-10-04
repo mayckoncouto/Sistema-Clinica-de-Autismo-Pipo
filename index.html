@@ -190,6 +190,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
    era o que fazia as abas inativas aparecerem umas por baixo das outras fora
    do Claude Artifact (que injetava esta regra por conta própria). */
 [hidden]{display:none !important}
+body.no-help .help-q{display:none!important}
 .brand-home{cursor:pointer}
 #tab-agenda.perm-no-create :is(.book-copy,.book-move,.empty-plus),
 #tab-agenda.perm-no-edit :is([data-period-action=lock],[data-row-action=lock]),
@@ -2480,6 +2481,10 @@ function applyPermissionsUI(){
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : can(tabModule[k], "view"); }
   var activeHidden = false;
+  // Ajuda (menu Acesso e botões "?"): segue o nível; sem o item gravado, vale para todos.
+  var helpOk = window.pipoAuth.canDefault ? window.pipoAuth.canDefault("ajuda", "view", true) : true;
+  document.body.classList.toggle("no-help", !helpOk);
+  if (state.tab === "ajuda" && !helpOk) activeHidden = true;
   Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button[data-tab]"), function(b){
     var k = b.getAttribute("data-tab");
     if (k === "ajuda"){ b.hidden = true; return; }   // Guia: abre pelo menu Acesso → Ajuda; todos podem ver
@@ -2487,7 +2492,7 @@ function applyPermissionsUI(){
     if (k === "usuarios"){
       // Botão sempre oculto (abre pelo menu "Acesso"); só o Administrador pode ficar nessa tela.
       b.hidden = true;
-      if (k === state.tab && !window.pipoAuth.isAdmin()) activeHidden = true;
+      if (k === state.tab && !(window.pipoAuth.isAdmin() || window.pipoAuth.can("usuarios", "view"))) activeHidden = true;
       return;
     }
     var visible = tabCan(k);
@@ -6303,7 +6308,7 @@ function openProfessionalModal(p){
       periodCells("m", pp.m, "manhã "+d.label) + periodCells("t", pp.t, "tarde "+d.label) + '<td class="ph-count" data-count="'+d.key+'"></td></tr>';
   }).join("");
   // Usuário e senha: só o Administrador cria/ajusta acesso (e só ele enxerga os usuários).
-  var canManageUser = !!(window.pipoAuth && window.pipoAuth.isAdmin());
+  var canManageUser = !!(window.pipoAuth && (window.pipoAuth.isAdmin() || (window.pipoAuth.can("usuarios", "create") && window.pipoAuth.can("usuarios", "edit"))));
 
   host.innerHTML =
     '<div class="overlay" id="ovProf"><div class="modal wide" style="max-width:720px">' +
@@ -11290,21 +11295,22 @@ var HELP_TOPICS = [
   {id: "senha", group: "Acesso", title: "Trocar senha e sair", mod: null,
     purpose: "Manter o seu acesso seguro.",
     steps: ["Acesso ▾ → <b>Trocar senha</b>.", "Acesso ▾ → <b>Sair</b> ao terminar, principalmente em computador compartilhado."],
-    rules: ["Esqueceu a senha? O Administrador define uma nova em Usuários."],
-    who: "Todos os usuários."},
-  {id: "usuarios", group: "Acesso", title: "Usuários e níveis de permissão", mod: "admin", tab: "usuarios",
+    rules: ["Esqueceu a senha? Quem cuida de Usuários define uma nova.", "Sair aparece sempre no menu Acesso."],
+    who: "Permissão <b>Trocar senha</b> (marcada em todos os níveis, salvo se o Administrador desmarcar)."},
+  {id: "usuarios", group: "Acesso", title: "Usuários e níveis de permissão", mod: "usuarios", tab: "usuarios",
     purpose: "Quem acessa o sistema e o que cada nível pode fazer.",
     steps: [
       "Acesso ▾ → <b>Usuários</b> → <b>+ Incluir</b>: nome, e-mail, senha e nível.",
-      "<b>Níveis de permissão</b>: clique num nível e marque, por tela, Ver / Incluir / Editar / Excluir, os status e os relatórios liberados.",
+      "<b>Níveis de permissão</b> (só o Administrador): clique num nível e marque, por tela, Ver / Incluir / Editar / Excluir, os status e os relatórios liberados. O grupo <b>Menu Acesso</b> libera Usuários, Status, Clínica, Backup, Ajuda e Trocar senha.",
       "Para bloquear alguém, desative o usuário (ele sai na hora)."
     ],
     rules: [
       "O nível Administrador tem acesso total e não pode ser alterado.",
+      "Com a permissão <b>Usuários</b>, o nível vê e altera as contas conforme as caixas marcadas, mas não mexe em contas de administrador, não dá o nível Administrador e não abre Níveis de permissão.",
       "Ninguém muda o próprio nível. Nível com usuários não pode ser excluído.",
       "Mudanças de permissão valem na hora para todos daquele nível."
     ],
-    who: "Só o <b>Administrador</b>."},
+    who: "Permissão <b>Usuários</b> (Níveis de permissão: só o Administrador)."},
   {id: "status-cadastro", group: "Acesso", title: "Cadastro de status", mod: "cadastro_status",
     purpose: "Lista de status dos atendimentos (nome e cor).",
     steps: ["Acesso ▾ → <b>Status</b>: inclua, renomeie, mude a cor ou exclua."],
@@ -11319,18 +11325,19 @@ var HELP_TOPICS = [
       "A <b>cor do botão</b> vale para todos os botões, caixas de marcar e destaques do sistema, inclusive a tela de login. <b>Restaurar padrão</b> volta ao verde do sistema."
     ],
     who: "Permissão <b>Clínica</b> (ver/editar)."},
-  {id: "backup", group: "Acesso", title: "Backup", mod: "admin",
+  {id: "backup", group: "Acesso", title: "Backup", mod: "backup",
     purpose: "Guardar e restaurar todos os dados do sistema.",
     steps: [
       "Acesso ▾ → <b>Backup</b> → <b>Baixar</b>. Guarde o arquivo numa pasta protegida.",
       "Para restaurar, escolha o arquivo e confirme duas vezes."
     ],
     rules: [
-      "Restaurar repõe o que estava no backup e não apaga o que foi criado depois.",
+      "Restaurar é só com o Administrador. Repõe o que estava no backup e não apaga o que foi criado depois.",
+      "Quem não é Administrador baixa só o que o seu nível pode ver.",
       "O arquivo tem dados de saúde: não envie por WhatsApp ou e-mail.",
       "Baixe um backup antes de qualquer atualização do banco."
     ],
-    who: "Só o <b>Administrador</b>."}
+    who: "Permissão <b>Backup</b> para baixar; restaurar, só o <b>Administrador</b>."}
 ];
 // Novidades: desligadas a pedido do usuário (2026-10-04) — o guia explica só a
 // função de cada tela, não as mudanças. A seção "Novidades" só aparece no menu
@@ -11536,7 +11543,8 @@ function backupValidate(obj){
   return "";
 }
 function openBackupModal(){
-  if (window.pipoAuth && !window.pipoAuth.isAdmin()){ showToast("Só o Administrador faz o backup.", true); return; }
+  var bkAdmin = !window.pipoAuth || window.pipoAuth.isAdmin();
+  if (!bkAdmin && !window.pipoAuth.can("backup", "view")){ showToast("Seu nível não tem acesso ao Backup.", true); return; }
   var host = document.getElementById("modalHost");
   var last = null; try { last = localStorage.getItem(BACKUP_LAST_KEY); } catch(e){}
   host.innerHTML =
@@ -11551,7 +11559,8 @@ function openBackupModal(){
           '<div class="bk-row"><button class="btn primary" id="bkDownload">Baixar backup</button>' +
           '<span class="bk-txt" id="bkLast">' + (last ? "Último backup baixado neste aparelho: " + esc(prStamp(last)) : "Nenhum backup baixado neste aparelho ainda.") + '</span></div>' +
         '</div>' +
-        '<div class="bk-card"><b>Restaurar a partir de um arquivo</b>' +
+        (bkAdmin ? '' : '<div class="bk-txt">O backup traz só o que o seu nível pode ver. Restaurar é só com o Administrador.</div>') +
+        '<div class="bk-card"' + (bkAdmin ? '' : ' hidden') + '><b>Restaurar a partir de um arquivo</b>' +
           '<div class="bk-txt">Repõe tudo o que estava no backup (o que foi apagado volta e o que foi alterado volta como era). O que foi criado depois do backup não é apagado.</div>' +
           '<div class="bk-row"><input type="file" id="bkFile" accept=".json,application/json" data-native></div>' +
           '<div class="bk-txt" id="bkInfo"></div>' +
@@ -11952,7 +11961,8 @@ function openNavFromHash(final){
   }
   var tb = document.querySelector('#mainTabs button[data-tab="' + key + '"]');
   // Usuários: botão sempre oculto, só o Administrador abre.
-  var ok = tb && (!window.pipoAuth || (key === "usuarios" ? window.pipoAuth.isAdmin() : (key === "ajuda" || !tb.hidden)));
+  var ok = tb && (!window.pipoAuth || (key === "usuarios" ? (window.pipoAuth.isAdmin() || window.pipoAuth.can("usuarios", "view")) :
+    key === "ajuda" ? window.pipoAuth.canDefault("ajuda", "view", true) : (key === "inicio" || !tb.hidden)));
   if (!ok){ if (final || !tb){ navHashDone = true; navSaveHash(); } return; }
   navHashDone = true;
   tb.click();

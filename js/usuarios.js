@@ -29,10 +29,18 @@
     { key: "especialidades", label: "Especialidades", hint: "" },
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
+    // Itens do menu Acesso (Sair aparece sempre).
+    { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)", group: "Menu Acesso" },
+    { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" },
     { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"] },
-    { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" }
+    { key: "backup", label: "Backup", hint: "baixar o backup (restaurar: só o Administrador)", actions: ["view"] },
+    { key: "ajuda", label: "Ajuda", hint: "guia do sistema", actions: ["view"], dflt: true },
+    { key: "senha", label: "Trocar senha", hint: "trocar a própria senha", actions: ["view"], dflt: true }
   ];
   function modActs(m) { return m.actions || ["view", "create", "edit", "delete"]; }
+  // Permissão "Usuários" do nível (o Administrador pode tudo). Níveis de permissão e
+  // contas de administrador continuam só com o Administrador (a API e o banco conferem).
+  function uCan(a) { return auth.isAdmin() || auth.can("usuarios", a); }
   var ACTIONS = [
     { key: "view", label: "Ver" },
     { key: "create", label: "Incluir" },
@@ -94,6 +102,7 @@
       ".perm-grid th:first-child,.perm-grid td:first-child{text-align:left}" +
       ".perm-grid th{font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted)}" +
       ".perm-grid td small{display:block;color:var(--muted);font-size:10.5px;font-weight:500}" +
+      ".perm-grid tr.perm-group td{background:var(--surface-2);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:left}" +
       ".perm-grid input{width:16px;height:16px;cursor:pointer}" +
       ".perm-grid input:disabled{cursor:default}" +
       // Um nível por linha: bolinha · nome · resumo (cortado com "…", texto inteiro no title).
@@ -208,8 +217,10 @@
       document.getElementById("rolesBtn").addEventListener("click", function () { openRolesModal(); });
       document.getElementById("bulkProfBtn").addEventListener("click", function () { openBulkProfModal(); });
     }
+    document.getElementById("rolesBtn").hidden = !auth.isAdmin();
+    document.getElementById("addUserBtn").hidden = !uCan("create");
     // Só aparece enquanto houver profissional sem usuário ligado.
-    document.getElementById("bulkProfBtn").hidden = !(loaded.users && profsWithoutUser().length);
+    document.getElementById("bulkProfBtn").hidden = !(uCan("create") && loaded.users && profsWithoutUser().length);
     var host = document.getElementById("usersListHost");
     var countEl = document.getElementById("userCount");
     if (!(loaded.users && loaded.roles)) {
@@ -252,7 +263,8 @@
   }
 
   function rolePickerHtml(selectedId, disabled) {
-    return '<div class="role-pick" id="uRolePick">' + roles.map(function (r) {
+    // Quem não é Administrador não vê (nem escolhe) o nível Administrador.
+    return '<div class="role-pick" id="uRolePick">' + roles.filter(function (r) { return auth.isAdmin() || !r.is_admin || r.id === selectedId; }).map(function (r) {
       var sum = roleSummary(r);
       return '<label class="' + (disabled ? "disabled" : "") + '" title="' + esc(r.name + " — " + sum) + '">' +
         '<input type="radio" name="uRole" value="' + esc(r.id) + '"' +
@@ -265,18 +277,22 @@
     var isNew = !u;
     var me = auth.profile();
     var isMe = !!(u && me && u.id === me.id);
+    var tRole = u ? roleById(u.role_id) : null;
+    // Somente leitura: sem "editar" em Usuários, ou conta de administrador vista por quem não é Administrador.
+    var ro = !auth.isAdmin() && !isNew && ((tRole && tRole.is_admin) || !uCan("edit"));
+    var canDel = !ro && uCan("delete"), canEd = !ro && uCan("edit");
     var defaultRole = roleById("secretaria") ? "secretaria" : (roles.filter(function (x) { return !x.is_admin; })[0] || {}).id;
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
       '<div class="overlay" id="ovUser"><div class="modal wide" style="max-width:560px">' +
-        '<div class="modal-head"><div><h3>' + (isNew ? "Novo usuário" : "Editar usuário") + "</h3>" +
+        '<div class="modal-head"><div><h3>' + (isNew ? "Novo usuário" : ro ? "Usuário" : "Editar usuário") + "</h3>" +
           '<div class="modal-sub">' + (isNew
             ? "A pessoa entra com este e-mail e a senha inicial, e pode trocar a senha depois no menu \"Acesso\" do topo."
             : esc(u.email)) + "</div></div>" +
           '<button class="modal-close" id="uClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
           // Usuário ligado a um profissional: o nome vem do cadastro do profissional (o banco também garante).
-          '<div class="field"><label for="uName">Nome</label><input id="uName" type="text" value="' + esc(u ? u.full_name : "") + '"' + (u && u.professional_id ? " disabled" : "") + '>' +
+          '<div class="field"><label for="uName">Nome</label><input id="uName" type="text" value="' + esc(u ? u.full_name : "") + '"' + ((u && u.professional_id) || ro ? " disabled" : "") + '>' +
             (u && u.professional_id ? '<div class="pat-count" style="margin-top:6px">Igual ao cadastro do profissional. Para mudar, altere em Cadastros → Profissionais.</div>' : "") + "</div>" +
           (isNew
             ? '<div class="field-row">' +
@@ -284,22 +300,23 @@
                 '<div class="field"><label for="uPass">Senha inicial (mín. 8)</label><input id="uPass" type="text" autocomplete="off"></div>' +
               "</div>"
             : "") +
-          '<div class="field"><label>Nível de permissão</label>' + rolePickerHtml(isNew ? defaultRole : u.role_id, isMe) +
-            (isMe ? '<div class="pat-count" style="margin-top:6px">Você não pode mudar o seu próprio nível.</div>' : "") + "</div>" +
-          (!isNew
+          '<div class="field"><label>Nível de permissão</label>' + rolePickerHtml(isNew ? defaultRole : u.role_id, isMe || ro) +
+            (isMe ? '<div class="pat-count" style="margin-top:6px">Você não pode mudar o seu próprio nível.</div>' :
+              (ro && tRole && tRole.is_admin ? '<div class="pat-count" style="margin-top:6px">Conta de administrador: só o Administrador altera.</div>' : "")) + "</div>" +
+          (!isNew && canEd
             ? '<div class="field" style="margin-top:4px"><label>Senha e acesso</label><div class="u-actions">' +
                 '<div class="field"><input id="uNewPass" type="text" placeholder="Nova senha (mín. 8)" autocomplete="off"></div>' +
                 '<button type="button" class="btn" id="uSetPass">Definir senha</button>' +
               "</div>" +
               (isMe ? "" : '<div class="u-actions" style="margin-top:8px">' +
                 '<button type="button" class="btn" id="uToggle">' + (u.active ? "Desativar acesso" : "Reativar acesso") + "</button>" +
-                '<button type="button" class="btn danger" id="uDelete">Excluir usuário</button></div>') +
+                (canDel ? '<button type="button" class="btn danger" id="uDelete">Excluir usuário</button>' : "") + "</div>") +
               "</div>"
             : "") +
         "</div>" +
         '<div class="modal-foot"><div class="spacer"></div>' +
-          '<button class="btn ghost" id="uCancel">Cancelar</button>' +
-          '<button class="btn primary" id="uSave">' + (isNew ? "Criar usuário" : "Salvar") + "</button></div>" +
+          '<button class="btn ghost" id="uCancel">' + (ro ? "Fechar" : "Cancelar") + "</button>" +
+          (ro ? "" : '<button class="btn primary" id="uSave">' + (isNew ? "Criar usuário" : "Salvar") + "</button>") + "</div>" +
       "</div></div>";
 
     var ov = document.getElementById("ovUser");
@@ -314,7 +331,7 @@
     }
 
     var saveBtn = document.getElementById("uSave");
-    saveBtn.addEventListener("click", function () {
+    if (saveBtn) saveBtn.addEventListener("click", function () {
       var name = document.getElementById("uName").value.trim();
       if (!name) { toast("Informe o nome.", true); return; }
       var roleId = selectedRole();
@@ -344,7 +361,7 @@
       });
     });
 
-    if (!isNew) {
+    if (!isNew && canEd) {
       document.getElementById("uSetPass").addEventListener("click", function () {
         var pw = document.getElementById("uNewPass").value;
         if (pw.length < 8) { toast("A senha precisa ter pelo menos 8 caracteres.", true); return; }
@@ -390,7 +407,8 @@
     p = p || {};
     MODULES.forEach(function (m) {
       out[m.key] = {};
-      ACTIONS.forEach(function (a) { out[m.key][a.key] = modActs(m).indexOf(a.key) !== -1 && !!(p[m.key] && p[m.key][a.key]); });
+      // Item ainda não gravado no nível: vale o padrão (Ajuda e Trocar senha = marcados).
+      ACTIONS.forEach(function (a) { out[m.key][a.key] = modActs(m).indexOf(a.key) !== -1 && (p[m.key] ? !!p[m.key][a.key] : !!m.dflt); });
     });
     // Status dos atendimentos que o nível pode usar na Agenda: {id: true}.
     out.status = {};
@@ -435,6 +453,7 @@
   // Janela "Níveis de permissão" (aberta pelo botão na tela de Usuários, como
   // "Especialidades" em Pacientes): lista dos níveis + "Novo nível".
   function openRolesModal() {
+    if (!auth.isAdmin()) return;   // Níveis de permissão: só o Administrador
     var counts = {};
     users.forEach(function (u) { counts[u.role_id] = (counts[u.role_id] || 0) + 1; });
     var mh = document.getElementById("modalHost");
@@ -480,10 +499,11 @@
       ACTIONS.map(function (a) { return "<th>" + a.label + "</th>"; }).join("") +
       "</tr></thead><tbody>" +
       MODULES.map(function (m) {
-        return "<tr><td><b>" + m.label + "</b>" + (m.hint ? "<small>" + m.hint + "</small>" : "") + "</td>" +
+        return (m.group ? '<tr class="perm-group"><td colspan="' + (ACTIONS.length + 1) + '">' + m.group + "</td></tr>" : "") +
+          "<tr><td><b>" + m.label + "</b>" + (m.hint ? "<small>" + m.hint + "</small>" : "") + "</td>" +
           ACTIONS.map(function (a) {
             if (modActs(m).indexOf(a.key) === -1) return '<td class="pt-muted">—</td>';
-            var on = locked || !!(perms[m.key] && perms[m.key][a.key]);
+            var on = locked || (perms[m.key] ? !!perms[m.key][a.key] : !!m.dflt);
             return '<td><input type="checkbox" data-m="' + m.key + '" data-a="' + a.key + '"' + (on ? " checked" : "") +
               (locked ? " disabled" : "") + ' aria-label="' + a.label + " em " + m.label + '"></td>';
           }).join("") + "</tr>";
@@ -723,13 +743,13 @@
     var tabs = document.getElementById("mainTabs");
     if (tabs) tabs.addEventListener("click", function (e) {
       var b = e.target.closest('button[data-tab="usuarios"]');
-      if (!b || !auth.isAdmin()) return;
+      if (!b || !uCan("view")) return;
       if (!(loaded.users && loaded.roles)) renderAll();
       reloadAll();
     });
     // Outro administrador criou/mudou/excluiu um nível: atualiza a lista.
     if (auth.onRoleChange) auth.onRoleChange(function () {
-      if (loaded.roles && auth.isAdmin()) reloadAll();
+      if (loaded.roles && uCan("view")) reloadAll();
     });
   }
 

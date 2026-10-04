@@ -1418,6 +1418,31 @@ Clicar na logo ou no nome da clínica (`.brand`, `wireBrandHome`) também abre o
 `test_race.html` põem `#planner` no endereço antes da carga, para continuarem
 começando no Planner.
 
+## Menu Acesso nos Níveis de permissão (2026-10-04)
+Decisões do usuário: Usuários com ver/incluir/editar/excluir; Backup = baixar
+(restaurar só Administrador); Ajuda e Trocar senha marcados para todos nos níveis
+existentes; Status (`cadastro_status`) e Clínica (`clinica`) como já eram.
+- `MODULES` (js/usuarios.js) ganhou o grupo "Menu Acesso" (`group`, linha
+  `.perm-group` na grade): usuarios, cadastro_status, clinica, backup (view),
+  ajuda (view, `dflt: true`), senha (view, `dflt: true`). `normalizePerms` usa
+  `dflt` quando o nível não tem o item gravado.
+- `pipoAuth.canDefault(mod, ação, padrão)` (js/pipo-supabase.js): Ajuda e Trocar
+  senha valem para todos até o item existir no nível. Menu Acesso: cada item segue a
+  permissão; Sair sempre aparece. Sem Ajuda: `body.no-help` esconde os "?" e a
+  tela `#ajuda` não abre.
+- Usuários para quem não é Administrador (`uCan(a)` em js/usuarios.js): botão
+  Níveis de permissão só Administrador (`openRolesModal` recusa); nível
+  Administrador some da escolha; conta de administrador abre só leitura; "+ Incluir",
+  "Criar acessos dos profissionais", senha/ativar e Excluir conforme as caixas.
+  `api/admin-users.js`: `currentActor` (admin ou permissão `usuarios`), ação →
+  create/edit/delete, recusa mexer em conta de administrador e criar no nível
+  Administrador. Backup: `openBackupModal` abre com `backup.view`; o cartão de
+  restaurar só aparece para o Administrador (`api/admin-backup.js` continua só admin).
+- Banco: migração `supabase/2026-10-04b-permissoes-menu-acesso.sql` (valores
+  iniciais nos níveis; `profiles_select`/`profiles_update` com `has_perm('usuarios',…)`;
+  trigger `profiles_nonadmin_guard`: não-admin não altera administrador, não dá nível
+  Administrador, não muda o próprio nível).
+
 ## Botões de incluir = "+ Incluir" (2026-10-04)
 Todo botão que cria um registro novo (Pacientes, Tratamentos, Profissionais,
 Convênios, Serviços, Especialidades, Motivos, Salas/Grupos, Agenda, Prontuário,

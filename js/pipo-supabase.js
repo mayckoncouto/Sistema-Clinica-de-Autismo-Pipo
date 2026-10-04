@@ -151,6 +151,14 @@
     var p = profile.role.permissions || {};
     return !!(p[module] && p[module][action]);
   }
+  // Permissão com valor padrão quando o nível ainda não tem o item gravado
+  // (ex.: Ajuda e Trocar senha valem para todos até o Administrador desmarcar).
+  function canDefault(module, action, dflt) {
+    if (!profile || !profile.active || !profile.role) return false;
+    if (profile.role.is_admin) return true;
+    var p = profile.role.permissions || {};
+    return p[module] ? !!p[module][action] : !!dflt;
+  }
   function canWriteAnything() {
     return MODULES.some(function (m) { return can(m, "create") || can(m, "edit") || can(m, "delete"); });
   }
@@ -280,18 +288,19 @@
         '<button type="button" class="acesso-btn" id="acessoBtn" aria-haspopup="menu" aria-expanded="false">Acesso ' +
           '<svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
         '<div class="acesso-menu" id="acessoMenu" role="menu" hidden>' +
-          (isAdmin() ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : "") +
+          ((isAdmin() || can("usuarios", "view")) ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : "") +
           ((isAdmin() || can("cadastro_status", "view")) ? '<button type="button" role="menuitem" data-act="status">Status</button>' : "") +
           ((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : "") +
-          (isAdmin() ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : "") +
-          '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' +
-          '<button type="button" role="menuitem" data-act="senha">Trocar senha</button>' +
+          ((isAdmin() || can("backup", "view")) ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : "") +
+          (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : "") +
+          (canDefault("senha", "view", true) ? '<button type="button" role="menuitem" data-act="senha">Trocar senha</button>' : "") +
           '<button type="button" role="menuitem" data-act="sair">Sair</button>' +
         "</div>" +
       "</div>";
   }
 
-  // Menu "Acesso" (topo): Usuários (só Administrador), Status, Clínica, Cópia de segurança (só Administrador), Trocar senha, Sair.
+  // Menu "Acesso" (topo): cada item segue o nível de permissão (usuarios, cadastro_status,
+  // clinica, backup, ajuda, senha); Sair sempre aparece.
   function setAcessoMenu(open) {
     var menu = document.getElementById("acessoMenu"), btn = document.getElementById("acessoBtn");
     if (!menu || !btn) return;
@@ -455,6 +464,7 @@
     ACTIONS: ACTIONS,
     ready: ready,
     can: can,
+    canDefault: canDefault,
     isAdmin: isAdmin,
     onRoleChange: function (fn) { roleListeners.push(fn); },
     // Chamada às funções /api/admin-* (só funcionam para Administrador).

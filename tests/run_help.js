@@ -36,9 +36,9 @@ const path = require('path');
   console.log('every main screen has a "?" button (12+)?', qCount >= 12, qCount);
 
   // Permissão: sem "Tratamentos – valores" o tópico de valores some.
-  await page.evaluate(() => { window.pipoAuth = { can: (m) => m !== 'tratamentos_valores', isAdmin: () => false, onProfile(){}, profile: () => null }; window.pipoOpenHelp(); });
+  await page.evaluate(() => { window.pipoAuth = { can: (m) => m !== 'tratamentos_valores' && m !== 'usuarios', isAdmin: () => false, onProfile(){}, profile: () => null }; window.pipoOpenHelp(); });
   await page.waitForTimeout(200);
-  console.log('topics follow the permission level (values and admin-only hidden)?', !(await page.$('#helpNav [data-help-go="tratamentos-valores"]')) && !(await page.$('#helpNav [data-help-go="usuarios"]')) && !!(await page.$('#helpNav [data-help-go="tratamentos"]')));
+  console.log('topics follow the permission level (values and Usuários hidden without the permission)?', !(await page.$('#helpNav [data-help-go="tratamentos-valores"]')) && !(await page.$('#helpNav [data-help-go="usuarios"]')) && !!(await page.$('#helpNav [data-help-go="tratamentos"]')));
   await page.evaluate(() => { delete window.pipoAuth; });
 
   // Celular: tópicos recolhidos atrás do botão.
