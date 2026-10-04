@@ -1599,3 +1599,14 @@ extras: documentos, clínicos, endereço completo, administrativos; data de entr
   níveis copiam Pacientes/Profissionais, Campos começa desligado, CBO semeado com
   sugestões + os dos profissionais).
 - Teste `tests/run_patient_form.js` (29 arquivos no `npm test`).
+
+## Cadastro de Conselhos (2026-10-05)
+Cadastros → **Conselhos** (`#tab-conselhos`, `REG_CFG.conselhos`, documento
+`config/councils {list:[{id, sigla, name}]}`, permissão `conselhos`; id =
+`councilKey(sigla)`, sigla única). Sem documento no banco, `councilList()` =
+`DEFAULT_COUNCILS` (CRP, CRFa, CREFITO, CRN, CRM, CREF, CRESS, ABPp) + os já
+gravados nos profissionais. No profissional, `#profConselho` virou
+`regPickHtml("conselhos", …)` (valor = sigla, texto "sigla — nome", "+" inclui).
+`REG_CFG` ganhou ganchos genéricos usados por CBO e Conselhos: `dupKey`, `newId`,
+`label`, `pickValue`, `optsHtml` (`regDupKey`, `regItemLabel`). Migração
+`supabase/2026-10-05b-conselhos.sql` (precisa da 2026-10-05 antes).

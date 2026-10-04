@@ -31,6 +31,7 @@
     { key: "medicos", label: "Médicos", hint: "médicos dos pacientes" },
     { key: "escolas", label: "Escolas", hint: "escolas dos pacientes" },
     { key: "cbo", label: "CBO", hint: "lista de CBO usada no cadastro dos profissionais" },
+    { key: "conselhos", label: "Conselhos", hint: "conselhos profissionais (CRP, CRFa…) do cadastro dos profissionais" },
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
     // Itens do menu Acesso (Sair aparece sempre).

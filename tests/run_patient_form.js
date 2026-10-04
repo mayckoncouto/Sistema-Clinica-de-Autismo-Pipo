@@ -85,6 +85,20 @@ const path = require('path');
   await page.fill('#regf-code', '223505'); await page.fill('#qkName', 'Repetido'); await page.click('#qkSave'); await page.waitForTimeout(150);
   console.log('duplicate CBO code refused?', await page.isVisible('#ovQuick'));
 
+  await page.click('#ovQuick #qkCancel'); await page.waitForTimeout(100);
+  // Conselho: lista do cadastro de Conselhos + "+".
+  console.log('professional Conselho is a registry list?', !!(await page.$('[data-dp-for="profConselho"].dp-combo')));
+  await page.click('[data-regadd="conselhos"]'); await page.waitForSelector('#ovQuick');
+  await page.fill('#regf-sigla', 'CRBM'); await page.fill('#qkName', 'Conselho Regional de Biomedicina'); await page.click('#qkSave'); await page.waitForTimeout(200);
+  console.log('"+" adds a council and selects it (defaults kept)?', (await page.inputValue('#profConselho')) === 'CRBM' &&
+    (await page.evaluate(() => { const l = (window.__STORE__['config/councils'] || {list: []}).list; return l.some((c) => c.sigla === 'CRBM') && l.some((c) => c.sigla === 'CRP'); })));
+  await page.click('[data-regadd="conselhos"]'); await page.waitForSelector('#ovQuick');
+  await page.fill('#regf-sigla', 'crp'); await page.fill('#qkName', 'Repetido'); await page.click('#qkSave'); await page.waitForTimeout(150);
+  console.log('duplicate council sigla refused?', await page.isVisible('#ovQuick'));
+  await page.click('#ovQuick #qkCancel'); await page.click('#profCancel').catch(() => {}); await page.waitForTimeout(100);
+  await page.$eval('#mainTabs button[data-tab=conselhos]', (b) => b.click()); await page.waitForTimeout(250);
+  console.log('Conselhos registry lists sigla and name?', /CRBM/.test(await page.textContent('#reg-conselhos-host')) && /Fonoaudiologia/.test(await page.textContent('#reg-conselhos-host')));
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

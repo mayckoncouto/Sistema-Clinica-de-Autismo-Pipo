@@ -169,7 +169,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .cad-menu[hidden]{display:none}
 .cad-menu button{border:0;background:transparent;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 .cad-menu button:hover,.cad-menu button:focus{background:var(--accent-weak);outline:none}
-#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-cbo{flex:1;min-height:0;display:flex;flex-direction:column}
+#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-cbo,#tab-conselhos{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-host{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-table tbody tr{cursor:pointer}
 .reg-table tbody tr:hover td{background:var(--accent-weak)}
@@ -1200,7 +1200,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #profList .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)){display:none}
   :is(#reg-servicos-host,#reg-especialidades-host) .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)){display:none}
   #reg-convenios-host .pat-table :is(col,th,td):nth-child(n+3){display:none}
-  :is(#reg-medicos-host,#reg-escolas-host,#reg-cbo-host) .pat-table :is(col,th,td):nth-child(n+3){display:none}
+  :is(#reg-medicos-host,#reg-escolas-host,#reg-cbo-host,#reg-conselhos-host) .pat-table :is(col,th,td):nth-child(n+3){display:none}
   #trHost .pat-table.tr-main :is(col,th,td):not(:nth-child(1)):not(:nth-child(5)){display:none}
   /* Janelas no celular. O iPhone dá zoom sozinho ao tocar num campo com letra
      menor que 16px (e não volta ao sair): todo campo de digitar fica com 16px. */
@@ -1265,6 +1265,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="medicos" hidden>Médicos</button>
       <button data-tab="escolas" hidden>Escolas</button>
       <button data-tab="cbo" hidden>CBO</button>
+      <button data-tab="conselhos" hidden>Conselhos</button>
       <button data-tab="salas" hidden>Salas</button>
       <button data-tab="relatorio" hidden>Resumo</button>
       <button data-tab="relatorios" hidden>Relatórios</button>
@@ -1513,6 +1514,18 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button class="btn primary" id="reg-cbo-add">+ Incluir</button>
     </div>
     <div id="reg-cbo-host" class="reg-host"></div>
+  </section>
+  <section id="tab-conselhos" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-conselhos-search" type="text" placeholder="Buscar sigla ou nome…">
+      </div>
+      <span class="pat-count" id="reg-conselhos-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-conselhos-add">+ Incluir</button>
+    </div>
+    <div id="reg-conselhos-host" class="reg-host"></div>
   </section>
 
   <!-- SALAS TAB -->
@@ -2487,6 +2500,7 @@ var state = {
   convenios: [],         // convênio registry [{id,name}], from db
   doctors: [],           // médicos [{id,name,especialidade,crm,telefone}] (config/doctors)
   schools: [],           // escolas [{id,name,telefone,contato}] (config/schools)
+  councils: [],          // conselhos [{id,sigla,name}] (config/councils); vazio = padrão (councilList)
   cbos: [],              // CBO [{id,code,name}] (config/cbo); vazio = sugestões (cboList)
   patientFields: {},     // {campo:{show,req}} (config/patient_fields)
   cancelReasons: [],     // motivos de cancelamento dos tratamentos [{id,name}] (config/cancel_reasons)
@@ -2521,7 +2535,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -2600,7 +2614,7 @@ function permToolClasses(){
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
   if (!window.pipoAuth) return;
-  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo"};
+  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -2877,6 +2891,7 @@ function useTxt(n, one, many){ return n ? n + " " + (n === 1 ? one : many) : nul
 var USAGE = {
   medicos: function(m){ return Promise.resolve([useTxt(patientsUsing("medicoId", m.id), "paciente", "pacientes")].filter(Boolean)); },
   escolas: function(e){ return Promise.resolve([useTxt(patientsUsing("escolaId", e.id), "paciente", "pacientes")].filter(Boolean)); },
+  conselhos: function(c){ return Promise.resolve([useTxt(councilUseCount(c), "profissional", "profissionais")].filter(Boolean)); },
   cbo: function(c){ return Promise.resolve([useTxt(state.professionals.filter(function(p){ return cboKey(p.cbos) && cboKey(p.cbos) === cboKey(c.code); }).length, "profissional", "profissionais")].filter(Boolean)); },
   pacientes: function(p){
     var key = normText(String(p.nome || "").trim());
@@ -3075,8 +3090,9 @@ document.addEventListener("click", function(e){
   var kind = b.getAttribute("data-regadd"), sel = document.getElementById(b.getAttribute("data-for"));
   quickAddRegistry(kind).then(function(rec){
     if (!rec || !sel) return;
-    sel.innerHTML = kind === "cbo" ? cboOptionsHtml(rec.code) : regOptionsHtml(kind, rec.id, sel.options[0] ? sel.options[0].textContent : "");
-    dpCommit(sel, kind === "cbo" ? rec.code : rec.id);
+    var cf = REG_CFG[kind], val = cf.pickValue ? cf.pickValue(rec) : rec.id;
+    sel.innerHTML = cf.optsHtml ? cf.optsHtml(val) : regOptionsHtml(kind, rec.id, sel.options[0] ? sel.options[0].textContent : "");
+    dpCommit(sel, val);
   });
 });
 function quickAddRegistry(kind){
@@ -3105,9 +3121,10 @@ function quickAddRegistry(kind){
       var nameEl = document.getElementById("qkName"), name = nameEl.value.trim();
       var extra = readRegFields(cfg, ov); if (!extra) return;
       if (!name){ nameEl.focus(); showToast("Preencha o campo " + (cfg.nameLabel || "Nome") + ".", true); return; }
-      var dup = cfg.list().filter(function(x){ return kind === "cbo" ? cboKey(x.code) === cboKey(extra.code) : normText(x.name) === normText(name); })[0];
-      if (dup){ showToast('Já existe "' + (kind === "cbo" ? dup.code + " — " + dup.name : dup.name) + '" no cadastro. Escolha na lista.', true); return; }
-      var rec = Object.assign({}, extra, {id: kind === "cbo" ? cboKey(extra.code) : uid(slugify(name) || kind), name: name});
+      var probe = Object.assign({}, extra, {name: name});
+      var dup = cfg.list().filter(function(x){ return regDupKey(cfg, x) === regDupKey(cfg, probe); })[0];
+      if (dup){ showToast('Já existe "' + regItemLabel(cfg, dup) + '" no cadastro. Escolha na lista.', true); return; }
+      var rec = Object.assign({}, extra, {id: cfg.newId ? cfg.newId(probe) : uid(slugify(name) || kind), name: name});
       Promise.resolve(cfg.write(cfg.list().concat([rec]))).then(function(ok){ if (ok === false) return; showToast("Cadastrado."); done(rec); });
     });
   });
@@ -3195,7 +3212,8 @@ function subscribeCancelReasons(){
 var SIMPLE_LISTS = {
   medicos: {path: "config/doctors", key: "doctors", module: "medicos", label: "médicos"},
   escolas: {path: "config/schools", key: "schools", module: "escolas", label: "escolas"},
-  cbo: {path: "config/cbo", key: "cbos", module: "cbo", label: "CBO"}
+  cbo: {path: "config/cbo", key: "cbos", module: "cbo", label: "CBO"},
+  conselhos: {path: "config/councils", key: "councils", module: "conselhos", label: "conselhos"}
 };
 function subscribeSimpleLists(){
   Object.keys(SIMPLE_LISTS).forEach(function(k){
@@ -6898,10 +6916,9 @@ function openProfessionalModal(p){
           '<div class="field" style="flex:2"><label for="profCbos">CBO</label>' + regPickHtml("cbo", "profCbos", cboOptionsHtml(v.cbos)) + '</div>' +
         '</div>' +
         '<div class="field-row">' +
-          '<div class="field"><label for="profConselho">Conselho</label><input id="profConselho" type="text" list="conselhoList" placeholder="Ex.: CRP" value="'+esc(v.conselho||"")+'"></div>' +
+          '<div class="field" style="flex:2"><label for="profConselho">Conselho</label>' + regPickHtml("conselhos", "profConselho", councilOptionsHtml(v.conselho)) + '</div>' +
           '<div class="field"><label for="profRegistro">Registro</label><input id="profRegistro" type="text" placeholder="Nº do registro" value="'+esc(v.registro||"")+'"></div>' +
         '</div>' +
-        '<datalist id="conselhoList">' + ["CRP","CRFa","CREFITO","CRN","CRM","CREF","CRESS","ABPp"].map(function(c){ return '<option value="'+c+'">'; }).join("") + '</datalist>' +
         '<div class="field"><label id="profServLabel">Serviços</label>' +
           '<div class="ms" id="profServ">' +
             '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="profServLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
@@ -7209,6 +7226,29 @@ function cboLabel(code){
   var k = cboKey(code); if (!k) return "";
   var c = cboList().filter(function(x){ return cboKey(x.code) === k; })[0];
   return c ? c.code + " — " + c.name : String(code);
+}
+// Conselhos profissionais (config/councils); sem cadastro no banco = lista padrão + os já usados.
+var DEFAULT_COUNCILS = [["CRP", "Conselho Regional de Psicologia"], ["CRFa", "Conselho Regional de Fonoaudiologia"],
+  ["CREFITO", "Conselho Regional de Fisioterapia e Terapia Ocupacional"], ["CRN", "Conselho Regional de Nutricionistas"],
+  ["CRM", "Conselho Regional de Medicina"], ["CREF", "Conselho Regional de Educação Física"],
+  ["CRESS", "Conselho Regional de Serviço Social"], ["ABPp", "Associação Brasileira de Psicopedagogia"]];
+function councilKey(s){ return normText(String(s || "").trim()).replace(/[^a-z0-9]/g, ""); }
+function councilList(){
+  if (state.councils && state.councils.length) return state.councils.slice();
+  var out = DEFAULT_COUNCILS.map(function(c){ return {id: councilKey(c[0]), sigla: c[0], name: c[1]}; });
+  (state.professionals || []).forEach(function(p){
+    var k = councilKey(p.conselho);
+    if (k && !out.some(function(c){ return councilKey(c.sigla) === k; })) out.push({id: k, sigla: String(p.conselho).trim(), name: String(p.conselho).trim()});
+  });
+  return out;
+}
+function councilUseCount(c){ return (state.professionals || []).filter(function(p){ return councilKey(p.conselho) && councilKey(p.conselho) === councilKey(c.sigla); }).length; }
+function councilOptionsHtml(cur){
+  var list = councilList().filter(function(c){ return isActive(c) || councilKey(c.sigla) === councilKey(cur); })
+    .sort(function(a, b){ return String(a.sigla).localeCompare(String(b.sigla), "pt-BR"); });
+  var has = !cur || list.some(function(c){ return councilKey(c.sigla) === councilKey(cur); });
+  return '<option value="">Sem conselho</option>' + (has ? '' : '<option value="' + esc(cur) + '" selected>' + esc(cur) + '</option>') +
+    list.map(function(c){ return '<option value="' + esc(c.sigla) + '"' + (cur && councilKey(c.sigla) === councilKey(cur) ? ' selected' : '') + '>' + esc(c.sigla + " — " + c.name) + '</option>'; }).join("");
 }
 function patientsUsing(field, id){ return (state.patientsRaw || []).filter(function(p){ return p[field] === id; }).length; }
 function formatPhone(s){
@@ -11799,7 +11839,7 @@ function openTreatmentModal(t, opts){
   addInactiveToggle("tab-pacientes", "pacientes", function(){ renderPatientsTab(); });
   addInactiveToggle("tab-profissionais", "profissionais", function(){ renderProfissionaisTab(); });
   addInactiveToggle("tab-salas", "salas", function(){ renderSalasTab(); });
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos"].forEach(function(k){
     addInactiveToggle("tab-" + k, k, function(){ renderRegistryTab(k); });
   });
 })();
@@ -11993,7 +12033,7 @@ var HELP_TOPICS = [
     steps: [
       "Cadastros → <b>Profissionais</b> → <b>+ Incluir</b>.",
       "Preencha Nome, Nome social, CPF, Especialidade principal, CBO, Conselho, Registro e Serviços.",
-      "O CBO é escolhido na lista do cadastro de CBO (digite o código ou a descrição). O botão <b>+</b> ao lado inclui um CBO novo.",
+      "O CBO e o Conselho são escolhidos nas listas dos cadastros de CBO e de Conselhos (digite para buscar). O botão <b>+</b> ao lado de cada um inclui um novo sem sair da janela.",
       "Em <b>Horários</b>, preencha manhã e tarde de cada dia (\"Copiar segunda para todos\" ajuda).",
       "Administrador: na seção <b>Usuário</b>, crie o acesso (e-mail e senha) ligado ao profissional."
     ],
@@ -12050,6 +12090,11 @@ var HELP_TOPICS = [
     steps: ["Cadastros → <b>Escolas</b> → <b>+ Incluir</b>: nome, telefone e contato na escola.", "No cadastro do paciente, aba Médico e escola, o botão <b>+</b> também cadastra uma escola nova."],
     rules: ["A lista mostra quantos pacientes estudam em cada escola.", "Escola ligada a paciente não é excluída: é <b>Inativada</b>."],
     who: "Permissão <b>Escolas</b>."},
+  {id: "conselhos", group: "Cadastros", title: "Conselhos", mod: "conselhos", tab: "conselhos",
+    purpose: "Conselhos profissionais (CRP, CRFa, CREFITO, CRN…) usados no cadastro dos profissionais.",
+    steps: ["Cadastros → <b>Conselhos</b> → <b>+ Incluir</b>: sigla (ex.: CRP) e nome.", "No cadastro do profissional, o botão <b>+</b> ao lado do Conselho também inclui um novo."],
+    rules: ["Não pode haver dois conselhos com a mesma sigla.", "A coluna Profissionais mostra quantos usam cada conselho; conselho em uso não é excluído: é <b>Inativado</b>."],
+    who: "Permissão <b>Conselhos</b>."},
   {id: "cbo", group: "Cadastros", title: "CBO", mod: "cbo", tab: "cbo",
     purpose: "Lista de CBO (Classificação Brasileira de Ocupações) usada no cadastro dos profissionais.",
     steps: ["Cadastros → <b>CBO</b> → <b>+ Incluir</b>: código (ex.: 2515-10) e descrição.", "No cadastro do profissional, o botão <b>+</b> ao lado do CBO também inclui um novo."],
@@ -12241,7 +12286,7 @@ var HELP_NEWS = [];
 var HELP = {topic: "inicio", search: ""};
 var HELP_TAB_TOPIC = {inicio: "inicio", agenda: "planner", relatorio: "resumo", agendadia: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "profissionais", convenios: "convenios", servicos: "servicos",
-  especialidades: "especialidades", motivos: "motivos", medicos: "medicos", escolas: "escolas", cbo: "cbo", usuarios: "usuarios"};
+  especialidades: "especialidades", motivos: "motivos", medicos: "medicos", escolas: "escolas", cbo: "cbo", conselhos: "conselhos", usuarios: "usuarios"};
 function helpCan(t){
   if (!t.mod) return true;
   if (!window.pipoAuth) return true;
@@ -12587,11 +12632,27 @@ var REG_CFG = {
     title: "CBO", plural: "CBO", module: "cbo", newLabel: "+ Incluir", nameLabel: "Descrição", male: true,
     list: function(){ return cboList(); },
     write: function(l){ return writeSimpleList("cbo", l); },
+    dupKey: function(x){ return cboKey(x.code); }, newId: function(x){ return cboKey(x.code); },
+    label: function(x){ return x.code + " — " + x.name; },
+    pickValue: function(x){ return x.code; }, optsHtml: function(v){ return cboOptionsHtml(v); },
     fields: [{key: "code", label: "Código", ph: "Ex.: 2515-10", first: true, required: true}],
     search: function(c){ return (c.code || "") + " " + c.name; },
     cols: ["Código", "Descrição", "Profissionais"],
     row: function(c){ return ['<b class="mono">' + esc(c.code || "—") + '</b>', esc(c.name), state.professionals.filter(function(p){ return cboKey(p.cbos) && cboKey(p.cbos) === cboKey(c.code); }).length]; },
     vals: function(c){ return [c.code || "", c.name, state.professionals.filter(function(p){ return cboKey(p.cbos) && cboKey(p.cbos) === cboKey(c.code); }).length]; }
+  },
+  conselhos: {
+    title: "conselho", plural: "conselhos", module: "conselhos", newLabel: "+ Incluir",
+    list: function(){ return councilList(); },
+    write: function(l){ return writeSimpleList("conselhos", l); },
+    fields: [{key: "sigla", label: "Sigla", ph: "Ex.: CRP", first: true, required: true}],
+    search: function(c){ return (c.sigla || "") + " " + c.name; },
+    dupKey: function(x){ return councilKey(x.sigla); }, newId: function(x){ return councilKey(x.sigla); },
+    label: function(x){ return x.sigla + " — " + x.name; },
+    pickValue: function(x){ return x.sigla; }, optsHtml: function(v){ return councilOptionsHtml(v); },
+    cols: ["Sigla", "Nome", "Profissionais"],
+    row: function(c){ return ['<b>' + esc(c.sigla || "—") + '</b>', esc(c.name), councilUseCount(c)]; },
+    vals: function(c){ return [c.sigla || "", c.name, councilUseCount(c)]; }
   },
   motivos: {
     title: "motivo", plural: "motivos", module: "motivos_cancelamento", newLabel: "+ Incluir",
@@ -12645,6 +12706,9 @@ function renderRegistryTab(kind){
   }), function(){ renderRegistryTab(kind); }, "reg-table");
 }
 // Campos a mais de um cadastro simples (REG_CFG[k].fields): telefone, CRM, código do CBO…
+// Chave de "repetido": por padrão o nome; CBO pelo código, Conselho pela sigla.
+function regDupKey(cfg, x){ return cfg.dupKey ? cfg.dupKey(x) : normText(x.name); }
+function regItemLabel(cfg, x){ return cfg.label ? cfg.label(x) : x.name; }
 function regFieldsHtml(cfg, item, canSave, first){
   return (cfg.fields || []).filter(function(f){ return !!f.first === first; }).map(function(f){
     return '<div class="field"><label for="regf-' + f.key + '">' + esc(f.label) + '</label><input id="regf-' + f.key + '" data-regf="' + f.key + '" type="text"' +
@@ -12808,9 +12872,10 @@ function openRegistryItem(kind, item){
     var name = nameEl.value.trim();
     if (!name){ nameEl.focus(); return; }
     var extra = readRegFields(cfg); if (!extra) return;
-    var dup = cfg.list().filter(function(x){ return (!item || x.id !== item.id) && (kind === "cbo" ? cboKey(x.code) === cboKey(extra.code) : normText(x.name) === normText(name)); })[0];
-    if (dup){ showToast('Já existe "' + (kind === "cbo" ? dup.code + " — " + dup.name : dup.name) + '" no cadastro.', true); return; }
-    var rec = Object.assign({}, item || {}, extra, {id: item ? item.id : (kind === "cbo" ? cboKey(extra.code) : uid(slugify(name) || kind)), name: name});
+    var probe = Object.assign({}, extra, {name: name});
+    var dup = cfg.list().filter(function(x){ return (!item || x.id !== item.id) && regDupKey(cfg, x) === regDupKey(cfg, probe); })[0];
+    if (dup){ showToast('Já existe "' + regItemLabel(cfg, dup) + '" no cadastro.', true); return; }
+    var rec = Object.assign({}, item || {}, extra, {id: item ? item.id : (cfg.newId ? cfg.newId(probe) : uid(slugify(name) || kind)), name: name});
     if (kind === "especialidades"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); rec.color = color; }
     if (kind === "servicos"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); }
     if (kind === "especialidades" && lib) rec.libera = libSel();
@@ -12846,12 +12911,13 @@ var CAD_ITEMS = [
   {key: "medicos", label: "Médicos", tab: "medicos", ok: function(){ return can("medicos", "view"); }},
   {key: "escolas", label: "Escolas", tab: "escolas", ok: function(){ return can("escolas", "view"); }},
   {key: "cbo", label: "CBO", tab: "cbo", ok: function(){ return can("cbo", "view"); }},
+  {key: "conselhos", label: "Conselhos", tab: "conselhos", ok: function(){ return can("conselhos", "view"); }},
   {key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
   {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }}
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
-var CAD_TABS = ["pacientes", "tratamentos", "profissionais", "convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "salas"];
+var CAD_TABS = ["pacientes", "tratamentos", "profissionais", "convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "salas"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "agenda", ok: function(){ return can("agenda", "view"); }},
   {key: "resumo", label: "Resumo", tab: "relatorio", ok: function(){ return can("resumo", "view"); }}
@@ -13056,7 +13122,7 @@ function wireMobileNav(){
   tabs.addEventListener("auxclick", tabNew, true);
   setTimeout(openNavFromHash, 0);
   wireMobileNav();
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
     var a = document.getElementById("reg-" + k + "-add");
