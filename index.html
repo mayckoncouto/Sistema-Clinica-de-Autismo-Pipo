@@ -787,6 +787,7 @@ body.pat-col-resizing *{user-select:none}
 .dp-btn.dp-date.dp-disabled{opacity:.5;cursor:default}
 .dp-btn .dp-in{border:0;background:transparent;padding:0;margin:0;font:inherit;color:inherit;outline:none;cursor:text;width:100%;box-shadow:none}
 .dp-btn .dp-in::placeholder{color:var(--muted)}
+.inicio-panel{flex:1;min-height:0;background:transparent;border:0;box-shadow:none}
 .spec-sum-label{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .hours-row[data-cover]{flex-wrap:wrap}
 .hours-row[data-cover]::after{content:attr(data-cover);flex:1 1 100%;margin:-2px 0 2px;font-size:11.5px;font-weight:600;color:var(--muted)}
@@ -9687,7 +9688,8 @@ var RP_TYPES = [
   {id: "ocupacao",        name: "Ocupação",                       desc: "Uso do horário de cada profissional e de cada sala.", filters: []},
   {id: "bloqueios",       name: "Bloqueios, reuniões e treinamentos", desc: "Quantidade e horas de cada tipo por profissional.", filters: []},
   {id: "sem-atendimento", name: "Pacientes sem atendimento",      desc: "Pacientes cadastrados sem nenhum atendimento no período.", filters: ["convenio"]},
-  {id: "tratamentos",     name: "Tratamentos novos e renegociados", desc: "Tratamentos iniciados e encerrados no período, com valores (Novo × Renegociado).", filters: []}
+  {id: "tratamentos",     name: "Tratamentos novos e renegociados", desc: "Tratamentos iniciados e encerrados no período, com valores (Novo × Renegociado).", filters: []},
+  {id: "financeiro",      name: "Relatório financeiro",               desc: "Uma linha por mês: tratamentos ativos, novos, renegociados, cancelados, receita prevista e ticket médio; lista dos ativos com valor.", filters: []}
 ];
 var RP = {last: null};
 function rpCan(type){ return window.pipoAuth ? window.pipoAuth.can("relatorios", type) : true; }
@@ -9777,12 +9779,24 @@ function rpGenerate(){
     conv: document.getElementById("rpConv").value
   };
   out.innerHTML = '<div class="empty-state">Gerando relatório…</div>';
-  var q = c.from("appointments").select("*").gte("date", from).lte("date", to);
-  if (prof) q = q.eq("professional_id", prof);
+  // Em páginas de 1000 (o Supabase devolve no máximo 1000 linhas por consulta).
+  function page(fromRow){
+    var q = c.from("appointments").select("*").gte("date", from).lte("date", to).order("id").range(fromRow, fromRow + 999);
+    if (prof) q = q.eq("professional_id", prof);
+    return q.then(function(r){
+      if (r.error) return r;
+      var got = r.data || [];
+      if (got.length < 1000) return {data: got};
+      return page(fromRow + 1000).then(function(r2){ return r2.error ? r2 : {data: got.concat(r2.data || [])}; });
+    });
+  }
+  var q = page(0);
+  // Relatório financeiro: garante os valores dos tratamentos carregados antes de montar.
+  var finP = type === "financeiro" && !TR.fin ? trLoadFinance() : Promise.resolve();
   var withRec = type === "pendentes"
     ? c.rpc("report_appointments_with_records", {p_from: from, p_to: to})
     : Promise.resolve({data: []});
-  Promise.all([q, withRec]).then(function(res){
+  Promise.all([q, withRec, finP]).then(function(res){
     var r = res[0], wr = res[1];
     if (r.error) throw r.error;
     if (wr.error) throw wr.error;
@@ -9803,6 +9817,32 @@ function rpGenerate(){
 function rpPatientRows(rows){ return rows.filter(function(a){ return !bookingKind(a) && a.patient; }); }
 var RP_BUILDERS = {
   // Não usa os atendimentos: lê o cadastro de tratamentos (início e mudança de status no período).
+  "financeiro": function(rows, o){
+    // Valores do mês (valor do tratamento é mensal). Profissional: não se aplica.
+    var months = [], ym = finYm(o.from), last = finYm(o.to);
+    for (; ym <= last; ym = finYmAdd(ym, 1)) months.push(finMonth(ym));
+    var tot = {ativos: 0, novos: 0, reneg: 0, canc: 0, receita: 0};
+    months.forEach(function(m){ tot.ativos += m.ativos; tot.novos += m.novos; tot.reneg += m.reneg; tot.canc += m.canc; tot.receita += m.receita; });
+    tot.receita = Math.round(tot.receita * 100) / 100;
+    // Ativos no período: meses do período em que o tratamento valeu × valor final do mês.
+    function pn(t){ var p = rawPatient(t.patientId); return p ? p.nome : "(paciente excluído)"; }
+    function conv(t){ return t.convenioId ? ((state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name || "") : (t.convenio || ""); }
+    var act = (state.treatments || []).filter(function(t){ return finActive(t, o.from, o.to); }).map(function(t){
+      var n = months.filter(function(m){ var s = m.ym + "-01"; return finActive(t, s, trMonthEnd(s)); }).length, f = trFinal(t);
+      return {t: t, meses: n, mes: f, total: Math.round(f * n * 100) / 100};
+    }).sort(function(a, b){ return pn(a.t).localeCompare(pn(b.t), "pt-BR"); });
+    var totList = act.reduce(function(a, x){ return a + x.total; }, 0);
+    return {note: o.prof ? "O filtro de profissional não se aplica a este relatório (os números são da clínica toda)." : "", sections: [
+      {title: "Mês a mês", head: ["Mês", "Tratamentos ativos", "Novos", "Renegociados", "Cancelados", "Receita prevista", "Ticket médio"],
+        rows: months.map(function(m){ return [finYmLabel(m.ym), m.ativos, m.novos, m.reneg, m.canc, fmtMoney(m.receita), fmtMoney(m.ticket)]; }),
+        foot: ["Total do período (" + months.length + (months.length === 1 ? " mês)" : " meses)"), "média " + (months.length ? Math.round(tot.ativos / months.length * 10) / 10 : 0).toLocaleString("pt-BR"),
+          tot.novos, tot.reneg, tot.canc, fmtMoney(tot.receita), fmtMoney(tot.ativos ? Math.round(tot.receita / tot.ativos * 100) / 100 : 0)]},
+      {title: "Tratamentos ativos no período", head: ["Paciente", "Convênio", "Início", "Tipo", "Status", "Valor final (mês)", "Meses no período", "Total no período"],
+        empty: "Nenhum tratamento ativo no período.",
+        rows: act.map(function(x){ return [pn(x.t), conv(x.t) || "—", trBr(x.t.inicio), trLabel(TR_TIPOS, x.t.tipo), trLabel(TR_STATUS, x.t.status), fmtMoney(x.mes), x.meses, fmtMoney(x.total)]; }),
+        foot: ["Total", "", "", "", "", "", "", fmtMoney(Math.round(totList * 100) / 100)]}
+    ]};
+  },
   "tratamentos": function(rows, o){
     function pn(t){ var p = rawPatient(t.patientId); return p ? p.nome : "(paciente excluído)"; }
     function conv(t){ return t.convenioId ? ((state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name || "") : (t.convenio || ""); }
@@ -10294,7 +10334,7 @@ function trMoney(t){
 function trFinal(t){ var m = trMoney(t); return Math.round((m.valor - m.despesas) * 100) / 100; }
 function trLoadFinance(){
   var c = agdClient();
-  if (!c || !trCanSeeVal()) return Promise.resolve();
+  if (!c || !(trCanSeeVal() || finCanSee())) return Promise.resolve();
   return c.from("treatment_finance").select("treatment_id,valor,despesas").then(function(r){
     if (r.error) return; // tabela ainda não criada (falta o ajuste do banco) ou sem permissão
     var m = {};
@@ -10970,6 +11010,41 @@ function openTreatmentModal(t, opts){
     addInactiveToggle("tab-" + k, k, function(){ renderRegistryTab(k); });
   });
 })();
+/* ---------------- Relatório financeiro (Etapa 6) ----------------
+ * Relatório "Relatório financeiro" (Relatórios → tipo "financeiro"; permissão própria
+ * relatorios.financeiro em Níveis de permissão). Valor do tratamento = MENSAL.
+ * Uma linha por mês do período:
+ *  - ativos: tratamentos que valeram em algum dia do mês (início ≤ fim do mês e
+ *    fim do período — trPeriodEnd — vazio ou ≥ início do mês);
+ *  - novos / renegociados: iniciados no mês, pelo tipo; cancelados: status
+ *    cancelado com statusEm no mês;
+ *  - receita prevista = soma do valor final (valor − despesas) dos ativos;
+ *    ticket médio = receita ÷ ativos.
+ * Os valores vêm de treatment_finance, que o banco libera para quem tem
+ * "Tratamentos – valores: ver" OU o relatório "Relatório financeiro"
+ * (migração 2026-10-04c-painel-financeiro.sql).
+ */
+function finYm(iso){ return String(iso).slice(0, 7); }
+function finYmAdd(ym, n){ var d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
+var TR_MONTHS_LONG = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+function finYmLabel(ym){ return TR_MONTHS_LONG[+ym.slice(5, 7) - 1] + "/" + ym.slice(0, 4); }
+function finCanSee(){ return trCanSeeVal() || (window.pipoAuth ? window.pipoAuth.can("relatorios", "financeiro") : true); }
+// Tratamento valeu em algum dia entre s e e?
+function finActive(t, s, e){ if (!t.inicio || t.inicio > e) return false; var pe = trPeriodEnd(t); return !pe || pe >= s; }
+function finMonth(ym){
+  var s = ym + "-01", e = trMonthEnd(s), list = state.treatments || [];
+  var inM = function(d){ return d && d >= s && d <= e; };
+  var act = list.filter(function(t){ return finActive(t, s, e); });
+  var r = {ym: ym, ativos: act.length,
+    novos: list.filter(function(t){ return inM(t.inicio) && t.tipo === "novo"; }).length,
+    reneg: list.filter(function(t){ return inM(t.inicio) && t.tipo === "renegociado"; }).length,
+    canc: list.filter(function(t){ return t.status === "cancelado" && inM(t.statusEm); }).length,
+    receita: 0};
+  act.forEach(function(t){ r.receita += trFinal(t); });
+  r.receita = Math.round(r.receita * 100) / 100;
+  r.ticket = r.ativos ? Math.round(r.receita / r.ativos * 100) / 100 : 0;
+  return r;
+}
 /* ---------------- Guia (Ajuda) ----------------
  * Menu Acesso → Ajuda (window.pipoOpenHelp) ou o botão "?" de cada tela abre a
  * tela "Guia" (#tab-ajuda, endereço #ajuda): menu lateral por área, busca (sem
@@ -11285,7 +11360,8 @@ var HELP_TOPICS = [
       "Clique no título de uma coluna para ordenar. Use <b>Imprimir/PDF</b> ou <b>Exportar Excel</b>."
     ],
     rules: [
-      "Tipos: Lista de atendimentos, Produtividade, Frequência, Atendimentos por convênio, Pacote contratado × realizado, Evoluções pendentes, Ocupação, Bloqueios/reuniões/treinamentos, Pacientes sem atendimento, Tratamentos novos e renegociados.",
+      "Tipos: Lista de atendimentos, Produtividade, Frequência, Atendimentos por convênio, Pacote contratado × realizado, Evoluções pendentes, Ocupação, Bloqueios/reuniões/treinamentos, Pacientes sem atendimento, Tratamentos novos e renegociados, Relatório financeiro.",
+      "<b>Relatório financeiro</b>: uma linha por mês do período com tratamentos ativos (que valeram em algum dia do mês), novos, renegociados, cancelados, receita prevista (soma do valor final mensal dos ativos) e ticket médio (receita ÷ ativos), com a linha de totais; embaixo, a lista dos tratamentos ativos no período com o valor do mês, os meses no período e o total.",
       "Convênio, plano e sessões vêm do tratamento que valia na data de cada atendimento.",
       "Cada nível vê só os tipos liberados; o Profissional vê só os próprios atendimentos."
     ],

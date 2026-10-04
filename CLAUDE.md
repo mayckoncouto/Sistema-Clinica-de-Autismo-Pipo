@@ -1443,6 +1443,29 @@ existentes; Status (`cadastro_status`) e Clínica (`clinica`) como já eram.
   trigger `profiles_nonadmin_guard`: não-admin não altera administrador, não dá nível
   Administrador, não muda o próprio nível).
 
+## Relatório financeiro (Etapa 6, 2026-10-04)
+Decisões do usuário (refeitas na revisão): é um RELATÓRIO (não painel; o Início
+continua em branco), só em Relatórios; valor do tratamento = MENSAL; indicadores:
+contagens + receita prevista + ticket médio (sem taxas e sem realizado nos
+convênios); permissão própria em Níveis de permissão → **Relatórios** →
+"Relatório financeiro" (`relatorios.financeiro`); uma linha por mês do período;
+"ativo" = valeu em algum dia do mês; lista dos ativos com valor + totais.
+- `RP_TYPES` id `financeiro`, `RP_BUILDERS.financeiro`; bloco "Relatório
+  financeiro (Etapa 6)" no script: `finMonth(ym)` → {ativos, novos (tipo novo
+  iniciado no mês), reneg (tipo renegociado iniciado no mês), canc (cancelado com
+  statusEm no mês), receita (soma `trFinal` dos ativos), ticket}; `finActive(t, s, e)`
+  usa `trPeriodEnd`. Seções: "Mês a mês" (+ linha Total do período: média de ativos,
+  somas, receita total, ticket = receita ÷ soma de ativos) e "Tratamentos ativos no
+  período" (valor final do mês, meses no período, total).
+- Valores: `treatment_finance` passa a ser lida também por quem tem o relatório —
+  migração `supabase/2026-10-04c-relatorio-financeiro.sql` (policy
+  `treatment_finance_select`). `finCanSee()`; `trLoadFinance` carrega com
+  `tratamentos_valores` OU o relatório; `rpGenerate` espera `trLoadFinance` no tipo
+  financeiro.
+- `rpGenerate` busca os atendimentos em páginas de 1000 (antes todo relatório
+  parava em 1000 linhas — limite do Supabase).
+- Teste `tests/run_financeiro.js` (26 arquivos no `npm test`).
+
 ## Botões de incluir = "+ Incluir" (2026-10-04)
 Todo botão que cria um registro novo (Pacientes, Tratamentos, Profissionais,
 Convênios, Serviços, Especialidades, Motivos, Salas/Grupos, Agenda, Prontuário,
