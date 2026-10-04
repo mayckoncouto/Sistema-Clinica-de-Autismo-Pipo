@@ -306,6 +306,9 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .pt-treat-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .pt-treat-txt{font-size:12.5px;color:var(--ink-2);line-height:1.5}
 .tr-missing-btn{font-size:12px;color:var(--danger)}
+.tr-due-btn{font-size:12px;color:#9a6512}
+.tr-venc{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:800;color:#fff;white-space:nowrap}
+.tr-venc.vencido{background:#b6403a}.tr-venc.vencendo{background:#b7791f}
 .bk-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
 .bk-card b{font-size:14px}
 .bk-txt{font-size:12.5px;color:var(--ink-2);line-height:1.45}
@@ -1161,10 +1164,13 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <option value="ativo">Ativos</option>
         <option value="renegociado">Renegociados</option>
         <option value="cancelado">Cancelados</option>
+        <option value="vencendo">Vencendo (próximos 30 dias)</option>
+        <option value="vencidos">Vencidos</option>
         <option value="sem">Pacientes sem tratamento ativo</option>
       </select>
       <span class="pat-count" id="trCount"></span>
       <span id="trMissing"></span>
+      <span id="trDue"></span>
       <div class="spacer"></div>
       <button class="btn primary" id="trAdd">+ Novo tratamento</button>
     </div>
@@ -9626,6 +9632,28 @@ function trHistHtml(t){
 }
 var TR = {last: null, done: null, lastAt: 0, loading: false, loadP: null, filter: "", search: "", fin: null};
 var treatmentsLoaded = false;
+// Vencimento ("Válido até"): opcional; só conta para tratamento Ativo.
+// Aviso a partir de TR_DUE_DAYS dias antes; depois da data continua Ativo, marcado "Vencido".
+var TR_DUE_DAYS = 30;
+function trAddMonths(iso, n){
+  if (!iso || !(n > 0)) return "";
+  var d = agdParse(iso), day = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() + Number(n));
+  var last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, last));
+  d.setDate(d.getDate() - 1);   // 6 meses a partir de 01/01 = válido até 30/06
+  return agdIso(d);
+}
+function trDue(t){
+  if (!t || t.status !== "ativo" || !t.validoAte) return null;
+  var days = Math.round((agdParse(t.validoAte) - agdParse(trTodayIso())) / 86400000);
+  return {days: days, state: days < 0 ? "vencido" : (days <= TR_DUE_DAYS ? "vencendo" : "")};
+}
+function trDueChip(t){
+  var d = trDue(t); if (!d || !d.state) return "";
+  var txt = d.state === "vencido" ? "Vencido" : (d.days === 0 ? "Vence hoje" : "Vence em " + d.days + (d.days === 1 ? " dia" : " dias"));
+  return '<span class="tr-venc ' + d.state + '">' + txt + '</span>';
+}
 function trLabel(list, id){ var x = list.filter(function(i){ return i.id === id; })[0]; return x ? x.name : (id || "—"); }
 function trTodayIso(){ var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function trBr(iso){ return iso ? String(iso).slice(8, 10) + "/" + String(iso).slice(5, 7) + "/" + String(iso).slice(0, 4) : "—"; }
@@ -9856,6 +9884,15 @@ function renderTreatmentsTab(){
   if (miss) miss.innerHTML = without.length
     ? '<button type="button" class="btn ghost tr-missing-btn" id="trMissingBtn">' + without.length + ' paciente' + (without.length === 1 ? '' : 's') + ' sem tratamento ativo</button>'
     : '';
+  var dueN = state.treatments.filter(function(t){ var d = trDue(t); return d && d.state === "vencendo"; }).length;
+  var overN = state.treatments.filter(function(t){ var d = trDue(t); return d && d.state === "vencido"; }).length;
+  var due = document.getElementById("trDue");
+  if (due) due.innerHTML =
+    (dueN ? '<button type="button" class="btn ghost tr-due-btn" data-tr-due="vencendo">' + dueN + (dueN === 1 ? ' vence' : ' vencem') + ' nos próximos ' + TR_DUE_DAYS + ' dias</button>' : '') +
+    (overN ? '<button type="button" class="btn ghost tr-missing-btn" data-tr-due="vencidos">' + overN + (overN === 1 ? ' vencido' : ' vencidos') + '</button>' : '');
+  Array.prototype.forEach.call(due ? due.querySelectorAll("[data-tr-due]") : [], function(b){
+    b.onclick = function(){ var f = document.getElementById("trFilter"); f.value = b.getAttribute("data-tr-due"); f.dispatchEvent(new Event("change", {bubbles: true})); };
+  });
   var mb = document.getElementById("trMissingBtn");
   if (mb) mb.onclick = function(){ var f = document.getElementById("trFilter"); f.value = "sem"; f.dispatchEvent(new Event("change", {bubbles: true})); };
   if (!treatmentsLoaded && db){ host.innerHTML = '<div class="empty-state">Carregando tratamentos…</div>'; return; }
@@ -9878,7 +9915,8 @@ function renderTreatmentsTab(){
   }
   var all = state.treatments.slice();
   var shown = all.filter(function(t){
-    if (filter && t.status !== filter) return false;
+    if (filter === "vencendo" || filter === "vencidos"){ var dd = trDue(t); if (!dd || dd.state !== (filter === "vencidos" ? "vencido" : "vencendo")) return false; }
+    else if (filter && t.status !== filter) return false;
     if (!q) return true;
     var p = rawPatient(t.patientId);
     return normText(p ? p.nome : "").indexOf(q) !== -1;
@@ -9897,7 +9935,8 @@ function renderTreatmentsTab(){
     {key: "tipo", label: "Tipo", width: 120, min: 80},
     {key: "st", label: "Status", width: 130, min: 90},
     {key: "val", label: "Valor final", width: 130, min: 90},
-    {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"}
+    {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"},
+    {key: "venc", label: "Vencimento", width: 190, min: 100}
   ];
   if (!canFin) trCols.splice(5, 1);
   gtRender(host, "tratamentos", trCols, shown.map(function(t){
@@ -9907,8 +9946,8 @@ function renderTreatmentsTab(){
     return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"',
       cells: [(function(){ var c = trColor(t); return c ? '<span class="pcolor-dot" style="background:' + c + '" title="Cor por idade/ABA"></span>' : ''; })() + esc(p ? p.nome : "(paciente excluído)"), esc(trBr(t.inicio)), esc(trEndText(t)), esc(trLabel(TR_TIPOS, t.tipo)),
         '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>',
-        esc(fmtMoney(fin)), esc(conv || "—")],
-      vals: [p ? p.nome : "", t.inicio || "", trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), fin, conv || ""]};
+        esc(fmtMoney(fin)), esc(conv || "—"), (t.validoAte ? esc(trBr(t.validoAte)) : '<span class="pt-muted">—</span>') + trDueChip(t)],
+      vals: [p ? p.nome : "", t.inicio || "", trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), fin, conv || "", t.validoAte || ""]};
   }).map(function(row){ if (!canFin){ row.cells.splice(5, 1); row.vals.splice(5, 1); } return row; }), renderTreatmentsTab, "tr-main");
 }
 function wireTreatmentsTab(){
@@ -9951,7 +9990,10 @@ function openTreatmentModal(t, opts){
     despesas: src ? trMoney(src).despesas : "",
     tipo: isNew ? (pid ? (opts.renegotiateFrom ? "renegociado" : trTipoAuto(pid)) : "novo") : trTipoFor(t),
     status: isNew ? "ativo" : (t.status || "ativo"),
-    obs: isNew ? "" : (t.obs || "")
+    obs: isNew ? "" : (t.obs || ""),
+    // Renegociar/novo: duração e vencimento começam em branco.
+    duracao: isNew ? "" : (t.duracaoMeses || ""),
+    validoAte: isNew ? "" : (t.validoAte || "")
   };
   var ed = treatFieldsEditor(v);
   var wasCancelled = !isNew && t.status === "cancelado";
@@ -9978,6 +10020,10 @@ function openTreatmentModal(t, opts){
         '<div class="field-row">' +
           '<div class="field"><label for="trIni">Data de início</label><input type="date" id="trIni" value="' + esc(d.inicio) + '"></div>' +
           '<div class="field"><label>Data de término</label><input type="text" id="trFim" disabled value="' + esc(isNew ? "Em andamento" : trEndText(t)) + '"></div>' +
+        '</div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label for="trDur">Duração (meses)</label><input type="number" min="1" max="60" step="1" inputmode="numeric" id="trDur" placeholder="Opcional" value="' + esc(d.duracao) + '"></div>' +
+          '<div class="field"><label for="trVenc">Válido até <span id="trVencChip">' + (isNew ? '' : trDueChip(t)) + '</span></label><input type="date" id="trVenc" value="' + esc(d.validoAte) + '"></div>' +
         '</div>' +
         (canSeeVal ? (
         '<div class="field-row">' +
@@ -10023,6 +10069,13 @@ function openTreatmentModal(t, opts){
     document.getElementById("trVal").addEventListener("input", upFinal);
     document.getElementById("trDesp").addEventListener("input", upFinal);
   }
+  // Vencimento: duração (meses) + início calculam o "Válido até" (que pode ser ajustado à mão).
+  function syncVenc(){
+    var n = parseInt(document.getElementById("trDur").value, 10), ini = document.getElementById("trIni").value;
+    if (n > 0 && ini){ var v = document.getElementById("trVenc"); v.value = trAddMonths(ini, n); v.dispatchEvent(new Event("change", {bubbles: true})); }
+  }
+  document.getElementById("trDur").addEventListener("input", syncVenc);
+  document.getElementById("trIni").addEventListener("change", syncVenc);
   // Com atendimentos Finalizados: não exclui e não muda a quantidade de sessões
   // (pacote e especialidades/serviços) — para isso, Renegociar ou Cancelar.
   var doneN = isNew ? 0 : trDoneCount(t);
@@ -10080,6 +10133,9 @@ function openTreatmentModal(t, opts){
     if (!patId){ showToast("Escolha o paciente.", true); return; }
     var ini = document.getElementById("trIni").value;
     if (!ini){ showToast("Informe a data de início.", true); return; }
+    var durV = parseInt(document.getElementById("trDur").value, 10);
+    var vencV = document.getElementById("trVenc").value;
+    if (vencV && vencV < ini){ showToast("A data de vencimento não pode ser antes do início.", true); return; }
     var r = ed.read();
     if (!isNew && trDoneCount(t) && trQtyKey(r.fields) !== trQtyKey(t)){
       showToast("Já há atendimentos realizados neste tratamento: a quantidade de sessões não pode ser alterada. Use Renegociar.", true); return;
@@ -10105,6 +10161,8 @@ function openTreatmentModal(t, opts){
       atualizadoEm: now
     });
     if (!t || t.status !== st) rec.statusEm = trTodayIso();
+    rec.duracaoMeses = durV > 0 ? durV : "";
+    rec.validoAte = vencV || "";
     if (st === "cancelado"){ rec.motivoCancel = motId; rec.motivoCancelNome = motName; rec.obsCancel = obsCancel; }
     else { delete rec.motivoCancel; delete rec.motivoCancelNome; delete rec.obsCancel; }
     var cancelInfo = st === "cancelado" ? {motivo: motId, motivoNome: motName, obs: obsCancel} : {};

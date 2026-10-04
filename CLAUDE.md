@@ -1233,3 +1233,16 @@ serviços (`.spec-name`, `.spec-hours-val`, `.rm`, `#specRowAdd`) — o terapeut
 linha continua editável. Salvar compara `trQtyKey` (pacote + specId/quantidade)
 e recusa mudança; excluir recusa. Para mudar: Renegociar (ou Cancelar). Só no
 app (o banco não confere). Teste no fim de `tests/run_treatment_history.js`.
+
+## Vencimento dos tratamentos (Etapa 4, 2026-10-04)
+Decisões do usuário: vencimento por duração em meses (ajustável), opcional, aviso
+30 dias antes só na tela de Tratamentos; ao vencer continua Ativo com etiqueta
+"Vencido"; renegociação começa com duração/vencimento em branco.
+- Campos `duracaoMeses` e `validoAte` (iso) no tratamento; janela: `#trDur` +
+  `#trVenc` (`trAddMonths(inicio, n)` = início + n meses − 1 dia, recalcula ao
+  mudar duração ou início); vencimento antes do início é recusado.
+- `trDue(t)` (só Ativo com `validoAte`) → `{days, state: "vencido"|"vencendo"|""}`,
+  `TR_DUE_DAYS = 30`, etiqueta `trDueChip`. Tela: botões `#trDue`
+  ("N vencem nos próximos 30 dias" / "N vencidos") que aplicam os filtros
+  `vencendo` / `vencidos` de `#trFilter`; coluna "Vencimento" no FIM da tabela
+  (não muda os `:nth-child` do celular). Sem SQL (campos no documento).

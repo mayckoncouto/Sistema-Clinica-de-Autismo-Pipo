@@ -87,6 +87,41 @@ const path = require('path');
   await page.waitForSelector('#ovTreat');
   console.log('treatment without done sessions can still be deleted and edited?', await page.isVisible('#trDel') && !(await page.$eval('#pPac', (i) => i.disabled)));
   await page.click('#trCancel');
+
+  // Etapa 4: vencimento.
+  const v = await ev(`(function(){
+    function plus(n){ var d = agdParse(trTodayIso()); d.setDate(d.getDate() + n); return agdIso(d); }
+    var pats = state.patientsRaw;
+    state.treatments = [
+      {id: "v1", patientId: pats[0].id, inicio: "2026-01-01", status: "ativo", tipo: "novo", validoAte: plus(10)},
+      {id: "v2", patientId: pats[1].id, inicio: "2026-01-01", status: "ativo", tipo: "novo", validoAte: plus(-3)},
+      {id: "v3", patientId: pats[2].id, inicio: "2026-01-01", status: "ativo", tipo: "novo", validoAte: plus(90)},
+      {id: "v4", patientId: pats[3].id, inicio: "2026-01-01", status: "cancelado", tipo: "novo", validoAte: plus(-30), motivoCancel: "outro"},
+      {id: "v5", patientId: pats[4].id, inicio: "2026-01-01", status: "ativo", tipo: "novo"}
+    ];
+    rebuildPatients();
+    return {m6: trAddMonths("2026-01-01", 6), m1: trAddMonths("2026-01-31", 1), d: ["v1","v2","v3","v4","v5"].map(function(id){ var x = trDue(state.treatments.filter(function(t){ return t.id === id; })[0]); return x ? x.state : "-"; }).join(",")};
+  })()`);
+  console.log('6 months from 01/01 = valid until 30/06; 1 month from 31/01 = 27/02?', v.m6 === '2026-06-30' && v.m1 === '2026-02-27', v.m6, v.m1);
+  console.log('due states: 10 days = vencendo, past = vencido, 90 days/cancelled/no date = nothing?', v.d === 'vencendo,vencido,,-,-', v.d);
+  await page.$eval('#mainTabs button[data-tab=tratamentos]', (b) => b.click()); await page.waitForTimeout(300);
+  console.log('banner shows 1 due and 1 overdue?', /1 vence nos próximos 30 dias/.test(await page.textContent('#trDue')) && /1 vencido/.test(await page.textContent('#trDue')));
+  await page.click('#trDue [data-tr-due=vencidos]'); await page.waitForTimeout(200);
+  console.log('"Vencidos" filter shows only the overdue one with the red tag?', (await page.$$('#trHost tbody tr')).length === 1 && /Vencido/.test(await page.textContent('#trHost tbody tr')));
+  await page.$eval('#trFilter', (f) => { f.value = ''; f.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.click('#trAdd'); await page.waitForSelector('#ovTreat');
+  await page.$eval('#trPat', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, await ev('state.patientsRaw[5].id'));
+  await page.waitForTimeout(200);
+  await page.$eval('#trIni', (i) => { i.value = '2026-03-15'; i.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.fill('#trDur', '6'); await page.dispatchEvent('#trDur', 'input');
+  console.log('duration 6 months from 15/03 fills valid until 14/09?', (await page.$eval('#trVenc', (i) => i.value)) === '2026-09-14');
+  await page.click('#trSave'); await page.waitForTimeout(300);
+  const saved = await ev(`(function(){ var t = state.treatments.filter(function(x){ return x.patientId === state.patientsRaw[5].id; })[0]; return t ? [t.duracaoMeses, t.validoAte].join("|") : ""; })()`);
+  console.log('duration and valid-until saved?', saved === '6|2026-09-14', saved);
+  await page.click('#trHost tbody tr:has-text("' + (await ev('state.patientsRaw[5].nome')) + '")'); await page.waitForSelector('#ovTreat');
+  await page.click('#trReneg'); await page.waitForTimeout(300);
+  console.log('renegotiation starts with blank duration and valid-until?', (await page.$eval('#trDur', (i) => i.value)) === '' && (await page.$eval('#trVenc', (i) => i.value)) === '');
+  await page.click('#trCancel');
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
