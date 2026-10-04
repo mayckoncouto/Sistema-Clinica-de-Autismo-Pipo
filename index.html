@@ -986,7 +986,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
 .help-body a{color:var(--accent)}
 .help-q{flex:none;width:28px;height:28px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-weight:800;font-size:14px;cursor:pointer;margin-left:4px}
 .help-q:hover{color:var(--accent);border-color:var(--accent)}
-.rp-form > .help-q{align-self:flex-end;margin:0 0 -4px}
+.rp-go-row{display:flex;align-items:center;gap:8px;margin-top:4px}.rp-go-row .rp-go{flex:1;margin-top:0}.rp-go-row .help-q{margin:0}
 
 /* ---------- celular: menu ☰ no topo ---------- */
 .mnav-btn{display:none}
@@ -1043,7 +1043,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #tab-agendadia .agd-toolbar{column-gap:6px}
   #tab-agendadia .agd-toolbar > .dp-btn{order:1;flex:1 1 0;min-width:0;padding-inline:8px}
   #tab-agendadia .agd-nav{order:2}
-  #tab-agendadia .agd-toolbar .help-q{order:4;width:36px;height:36px}
+  #tab-agendadia .agd-toolbar .help-q{order:6;width:36px;height:36px}
   #tab-agendadia .agd-nav button{padding:7px 11px}
   #tab-agendadia .agd-toolbar .agd-search{order:10;flex:1 1 100%;max-width:none}
   /* Botão ☰ igual ao do topo (três traços de 3px, sem borda); abre o menu da Agenda */
@@ -1075,9 +1075,16 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
      Serviços e Especialidades: Nome + Profissionais; Convênios: as duas. */
   :is(#tab-pacientes,#tab-profissionais,.reg-panel,#tab-salas,#tab-prontuario) .pat-toolbar{flex-wrap:wrap}
   :is(#tab-pacientes,#tab-profissionais,.reg-panel,#tab-salas,#tab-prontuario) .pat-toolbar .search-wrap{flex:1 1 100%;max-width:none!important}
-  /* Contador ("110 de 110 …") numa linha própria, embaixo dos botões. */
-  :is(#tab-pacientes,#tab-profissionais,#tab-tratamentos,.reg-panel,#tab-salas,#tab-prontuario) .pat-toolbar .pat-count{order:90;flex:1 1 100%}
+  /* Botões e contador na mesma linha sempre que couber: o contador ocupa o
+     espaço que sobra e quebra o texto em duas linhas se precisar. */
+  :is(#tab-pacientes,#tab-profissionais,#tab-tratamentos,.reg-panel,#tab-salas,#tab-prontuario) .pat-toolbar{column-gap:8px}
+  :is(#tab-pacientes,#tab-profissionais,#tab-tratamentos,.reg-panel,#tab-salas,#tab-prontuario) .pat-toolbar .pat-count{flex:1 1 64px;min-width:0;white-space:normal;line-height:1.25}
+  :is(#tab-pacientes,#tab-profissionais,#tab-tratamentos,.reg-panel,#tab-salas,#tab-prontuario) .pat-toolbar .spacer{display:none}
   #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue){order:91}
+  /* Salas: botões demais para uma linha — contador e "Inativos" descem juntos. */
+  #tab-salas .pat-toolbar .pat-count{order:90;flex:0 1 auto}
+  #tab-salas .pat-toolbar .inact-toggle{order:91}
+  #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue):not(:empty){flex:1 1 100%}
   :is(#tab-pacientes,#tab-profissionais,.reg-panel,#tab-prontuario) .pat-table{min-width:0!important;width:100%;table-layout:fixed}
   :is(#tab-pacientes,#tab-profissionais,.reg-panel,#tab-prontuario) .pat-table col{width:auto!important}
   :is(#tab-pacientes,#tab-profissionais,.reg-panel,#tab-prontuario) .pat-table col:first-child{width:58%!important}
@@ -10839,7 +10846,7 @@ var HELP_TOPICS = [
       "Toque em <b>☰</b> no canto superior para abrir o menu (Cadastros e Acesso abrem ao tocar no título).",
       "A Agenda aparece só na visão <b>Dia</b>. Use ‹ › para trocar de dia.",
       "Na Agenda, toque em <b>Profissionais</b> ou <b>Salas</b> e escolha no seletor logo abaixo (dá para digitar para buscar).",
-      "O botão <b>☰</b>, ao lado do <b>?</b>, abre o menu da Agenda: <b>Incluir agendamento</b>, ir para Amanhã / Próxima segunda / Mesmo dia da semana que vem, <b>Resumo do dia</b>, <b>Bloquear o dia</b>, <b>Liberar o dia</b> e <b>Limpar semana</b>.",
+      "O botão <b>☰</b>, antes do <b>?</b>, abre o menu da Agenda: <b>Incluir agendamento</b>, ir para Amanhã / Próxima segunda / Mesmo dia da semana que vem, <b>Resumo do dia</b>, <b>Bloquear o dia</b>, <b>Liberar o dia</b> e <b>Limpar semana</b>.",
       "Nos Relatórios, depois de gerar, o resultado ocupa a tela toda. Use <b>‹ Voltar</b> para escolher outro."
     ],
     rules: [
@@ -11230,7 +11237,12 @@ function helpAddQButtons(){
     b.type = "button"; b.className = "help-q"; b.textContent = "?";
     b.title = "Ajuda sobre esta tela"; b.setAttribute("aria-label", "Ajuda sobre esta tela");
     b.addEventListener("click", function(){ openHelp(helpTopicForTab(tab)); });
-    if (bar.classList.contains("rp-form")) bar.insertBefore(b, bar.firstChild); else bar.appendChild(b);
+    // Relatórios: o "?" fica ao lado de "Gerar relatório" (último botão da linha).
+    var go = bar.classList.contains("rp-form") && bar.querySelector(".rp-go");
+    if (go){
+      var row = document.createElement("div"); row.className = "rp-go-row";
+      go.parentNode.insertBefore(row, go); row.appendChild(go); row.appendChild(b);
+    } else bar.appendChild(b);
   });
 }
 (function(){

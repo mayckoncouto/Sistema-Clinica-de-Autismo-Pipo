@@ -1001,8 +1001,12 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   principais, escondidas por posição (`:nth-child` em col/th/td): Pacientes =
   Nome + Plano (`p.plano`); Profissionais = Nome + Especialidade principal;
   Serviços e Especialidades = Nome + Profissionais; Convênios = as duas que já
-  tem. Busca ocupa a linha toda; o contador ("110 de 110 …") fica numa linha
-  própria embaixo dos filtros e botões (`order:90`), também em Tratamentos. Salas/Grupos já eram cartões e cabem na tela.
+  tem. Busca ocupa a linha toda; na linha seguinte ficam filtros, contador e
+  botões juntos sempre que couber (contador `flex:1 1 64px`, quebra o texto em
+  duas linhas se precisar; `.spacer` oculto). Salas (botões demais): contador e
+  "Inativos" descem para a linha de baixo. Regra do usuário (2026-10-04): o
+  botão **?** é sempre o ÚLTIMO da barra (Agenda: data, ‹ Hoje ›, ☰, ?;
+  Relatórios: ao lado de "Gerar relatório", `.rp-go-row`). Salas/Grupos já eram cartões e cabem na tela.
   Mudou a ordem das colunas no computador? Ajustar os `:nth-child` também.
 - Usuários no celular (CSS em `injectStyles` de `js/usuarios.js`): tabela
   `.adm-users` só com Nome e Situação (esconde 2ª e 3ª colunas), busca na linha toda.
@@ -1073,7 +1077,7 @@ Agenda no celular (2026-10-04): no lugar da lista lateral e do filtro, um seleto
 `agdResources()` do modo Profissionais/Salas; vira lista própria com busca);
 barra em duas linhas, `#agdNewBtn` e `#agdClearWeekBtn` escondidos; botões de período, cadeados e
 desfazer maiores. No computador `.agd-pick`/`.agd-more-wrap`/`.agd-plus-btn` ficam ocultos.
-(2026-10-04, pedido do usuário) Barra no celular: linha 1 = data, ‹ Hoje ›, ?, `#agdMoreBtn`
+(2026-10-04, pedido do usuário) Barra no celular: linha 1 = data, ‹ Hoje ›, `#agdMoreBtn`, ?
 (☰ com três traços de 3px, igual ao botão do menu do topo, sem borda); linha 2 =
 busca na largura toda. O ☰ abre `#agdMoreMenu`: primeiro **+ Incluir agendamento**
 (repassa o clique a `#agdNewBtn`, só com permissão de incluir), depois Ir para
