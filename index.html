@@ -781,6 +781,11 @@ body.pat-col-resizing *{user-select:none}
 .dp-day.sel:focus{background:var(--accent);box-shadow:inset 0 0 0 2px rgba(0,0,0,.2)}
 .dp-btn .dp-txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .dp-btn.dp-empty .dp-txt{color:var(--muted)}
+.dp-btn.dp-date:focus-within{box-shadow:var(--ring);border-color:var(--accent)}
+.dp-btn.dp-date.dp-disabled{opacity:.5;cursor:default}
+.dp-btn .dp-in{border:0;background:transparent;padding:0;margin:0;font:inherit;color:inherit;outline:none;cursor:text;width:100%;box-shadow:none}
+.dp-btn .dp-in::placeholder{color:var(--muted)}
+.dp-btn .dp-in:focus,.dp-btn .dp-in:focus-visible{outline:none!important;box-shadow:none!important;border:0!important;background:transparent!important}
 .dp-btn .dp-chev{display:inline-flex;color:var(--muted);flex:none}
 .field .dp-btn,.prof-hours .dp-btn,.cl-hours .dp-btn,.rp-form .dp-btn{width:100%}
 .prof-hours .dp-btn,.cl-hours .dp-btn{padding:5px 8px;font-size:12.5px}
@@ -10821,6 +10826,7 @@ var HELP_TOPICS = [
       "Use o menu do topo: <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>.",
       "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Ajuda, Trocar senha e Sair. Para o Administrador, também Usuários, Status, Clínica e Backup.",
       "Em cada tela, o botão <b>?</b> abre este guia direto no assunto daquela tela.",
+      "Nos campos de data, digite a data (só os números, ex.: 15032026 vira 15/03/2026) e tecle Enter, ou clique no ícone do calendário para escolher.",
       "Ctrl+clique (ou o botão do meio do mouse) numa aba abre a tela em outra aba do navegador. Atualizar a página (F5) mantém a tela aberta."
     ],
     rules: [
@@ -11894,11 +11900,63 @@ function dpMakeButton(el, icon){
   if (el.id){ var lb = document.querySelector('label[for="' + el.id + '"]'); if (lb) lb.addEventListener("click", function(e){ e.preventDefault(); b.focus(); b.click(); }); }
   return b;
 }
+// Data digitada ("dd/mm/aaaa", "ddmmaaaa", "d/m/aa"…) → "aaaa-mm-dd" ou null.
+function dpParseBr(t){
+  var d = String(t || "").replace(/\D/g, ""), m;
+  if (/^\d{8}$/.test(d)) m = [d.slice(0, 2), d.slice(2, 4), d.slice(4)];
+  else if (/^\d{6}$/.test(d) && !/[\/.-]/.test(t)) m = [d.slice(0, 2), d.slice(2, 4), "20" + d.slice(4)];
+  else { var p = String(t || "").split(/[\/.-]/); if (p.length !== 3) return null; m = p.map(function(x){ return x.trim(); }); if (m[2].length === 2) m[2] = "20" + m[2]; }
+  var dd = +m[0], mm = +m[1], yy = +m[2];
+  if (!dd || !mm || !yy || String(yy).length !== 4) return null;
+  var dt = new Date(yy, mm - 1, dd);
+  if (dt.getFullYear() !== yy || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return null;
+  return dpIso(dt);
+}
+// Campo de data: dá para DIGITAR a data (máscara dd/mm/aaaa) ou escolher no
+// calendário (ícone, seta ou ↓). A caixa é um <div class="dp-btn dp-date"> com um
+// <input class="dp-txt dp-in"> dentro; o campo original continua escondido.
 function dpEnhanceDate(el){
-  var b = dpMakeButton(el, DP_CAL);
-  function sync(){ b.querySelector(".dp-txt").textContent = dpBr(el.value) || "dd/mm/aaaa"; b.classList.toggle("dp-empty", !el.value); b.disabled = el.disabled; }
+  var b = document.createElement("div");
+  b.className = "dp-btn dp-date " + (el.className || "");
+  if (el.getAttribute("style")) b.setAttribute("style", el.getAttribute("style"));
+  if (el.id) b.setAttribute("data-dp-for", el.id);
+  b.innerHTML = '<span class="dp-ico" data-dp-open>' + DP_CAL + '</span><input type="text" class="dp-txt dp-in" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" autocomplete="off"><span class="dp-chev" data-dp-open>' + DP_CHEV + '</span>';
+  var inp = b.querySelector(".dp-in");
+  inp.setAttribute("aria-label", el.getAttribute("aria-label") || "Data");
+  el.parentNode.insertBefore(b, el);
+  el.style.display = "none";
+  el.setAttribute("data-dp", "1");
+  if (el.id){ var lb = document.querySelector('label[for="' + el.id + '"]'); if (lb) lb.addEventListener("click", function(e){ e.preventDefault(); inp.focus(); }); }
+  function sync(){
+    if (document.activeElement !== inp) inp.value = dpBr(el.value);
+    b.classList.toggle("dp-empty", !el.value);
+    inp.disabled = el.disabled; b.classList.toggle("dp-disabled", !!el.disabled);
+  }
   dpWatchValue(el, HTMLInputElement.prototype, sync); sync();
-  b.addEventListener("click", function(){
+  // Máscara: só números, barras automáticas.
+  inp.addEventListener("input", function(){
+    var d = inp.value.replace(/\D/g, "").slice(0, 8);
+    inp.value = d.length > 4 ? d.slice(0, 2) + "/" + d.slice(2, 4) + "/" + d.slice(4) : d.length > 2 ? d.slice(0, 2) + "/" + d.slice(2) : d;
+  });
+  function commitTyped(){
+    var t = inp.value.trim();
+    if (!t){ if (el.value && !el.required) dpCommit(el, ""); sync(); return; }
+    var iso = dpParseBr(t);
+    if (!iso){ showToast("Data inválida. Use dd/mm/aaaa.", true); inp.value = dpBr(el.value); return; }
+    if (iso !== el.value) dpCommit(el, iso);
+    inp.value = dpBr(el.value);
+  }
+  inp.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); commitTyped(); }
+    else if (e.key === "ArrowDown" && !document.getElementById("dpPop")){ e.preventDefault(); commitTyped(); open(); }
+    else if (e.key === "Escape" && inp.value !== dpBr(el.value) && !document.getElementById("dpPop")){ e.stopPropagation(); inp.value = dpBr(el.value); }
+  });
+  inp.addEventListener("blur", function(){ if (inp.value !== dpBr(el.value)) commitTyped(); });
+  b.addEventListener("click", function(e){
+    if (el.disabled || e.target === inp) return;
+    open();
+  });
+  function open(){
     if (document.getElementById("dpPop") && document.getElementById("dpPop").__btn === b){ dpClose(); return; }
     var sel = dpParse(el.value), view = sel || new Date();
     var focusIso = dpIso(sel || new Date());
@@ -11932,11 +11990,11 @@ function dpEnhanceDate(el){
       pop.addEventListener("click", function(e){
         var t = e.target.closest("button"); if (!t) return;
         if (t.classList.contains("dp-nav")){ view = new Date(view.getFullYear(), view.getMonth() + (+t.getAttribute("data-n")), 1); render(); var nb = pop.querySelector('.dp-nav[data-n="' + t.getAttribute("data-n") + '"]'); if (nb) nb.focus(); return; }
-        if (t.classList.contains("dp-today")){ dpClose(); dpCommit(el, dpIso(new Date())); b.focus(); return; }
-        if (t.classList.contains("dp-day")){ dpClose(); dpCommit(el, t.getAttribute("data-iso")); b.focus(); }
+        if (t.classList.contains("dp-today")){ dpClose(); dpCommit(el, dpIso(new Date())); inp.focus(); return; }
+        if (t.classList.contains("dp-day")){ dpClose(); dpCommit(el, t.getAttribute("data-iso")); inp.focus(); }
       });
     });
-  });
+  }
 }
 // Lista de horários: <select> de horários (usa as opções dele) ou <input type="time">.
 function dpEnhanceTimeList(el){

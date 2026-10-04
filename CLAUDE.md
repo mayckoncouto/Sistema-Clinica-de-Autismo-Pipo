@@ -692,6 +692,11 @@ recusa a troca para "finalizado" sem `clinical_records` ligada (migração
 `supabase/2026-10-02i-finalizado-exige-evolucao.sql`).
 
 ## Menus suspensos e seletores no padrão do sistema (2026-10-02)
+- (2026-10-04) Campos de DATA aceitam digitação: `dpEnhanceDate` cria um
+  `<div class="dp-btn dp-date">` com `<input class="dp-txt dp-in">` (máscara
+  dd/mm/aaaa; Enter, Tab ou sair do campo grava via `dpParseBr` → `dpCommit`; data
+  inválida avisa e volta; vazio limpa se o campo não é `required`). Ícone, seta,
+  clique fora do texto ou ↓ abrem o calendário. Horários e listas continuam botões.
 - Todo `<input type="date">`, `<input type="time">` e `<select>` simples (sem
   `multiple`, sem `data-native`) vira um botão `.dp-btn` que abre uma janela
   própria flutuante `#dpPop` (calendário ou lista). O campo original fica
