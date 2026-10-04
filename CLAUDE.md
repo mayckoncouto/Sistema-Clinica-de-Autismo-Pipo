@@ -998,6 +998,9 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   `.adm-users` só com Nome e Situação (esconde 2ª e 3ª colunas), busca na linha toda.
   Janela Níveis de permissão: tabela `.adm-roles` só com Nível e Usuários (esconde o
   resumo das permissões).
+- Prontuário no celular: `#tab-prontuario` entra nas mesmas regras das tabelas de
+  cadastro (largura da tela, busca na linha toda) e `#prListHost` esconde da 3ª
+  coluna em diante (fica Paciente + Registros).
 
 ## Atualizar a página mantém a tela (2026-10-03, computador e celular)
 A tela aberta fica no endereço (`navSaveHash()` → `history.replaceState`, sem
