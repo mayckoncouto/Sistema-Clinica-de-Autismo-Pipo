@@ -2810,7 +2810,7 @@ window.pipoConfirm = confirmDialog; // usado por js/usuarios.js
 window.pipoProfessionals = function(){ return state.professionals.slice(); }; // idem (criar acessos)
 window.pipoStatuses = function(){ return statusesList(); }; // níveis de permissão (js/usuarios.js)
 window.pipoOpenStatuses = function(){ openStatusesModal(); }; // menu Acesso (js/pipo-supabase.js)
-window.pipoOpenBackup = function(){ openBackupModal(); }; // menu Acesso → Cópia de segurança
+window.pipoOpenBackup = function(){ openBackupModal(); }; // menu Acesso → Backup
 window.pipoOpenClinic = function(){ openClinicModal(); }; // menu Acesso → Clínica
 function namesList(names){
   return '<ul class="confirm-list">' + names.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join("") + '</ul>';
@@ -10808,7 +10808,7 @@ var HELP_TOPICS = [
     purpose: "O sistema reúne o cadastro dos pacientes e da clínica, o Planner (a grade modelo de 4 semanas), a Agenda com as datas reais, o Prontuário e os Relatórios.",
     steps: [
       "Use o menu do topo: <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>.",
-      "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Ajuda, Trocar senha e Sair. Para o Administrador, também Usuários, Status, Clínica e Cópia de segurança.",
+      "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Ajuda, Trocar senha e Sair. Para o Administrador, também Usuários, Status, Clínica e Backup.",
       "Em cada tela, o botão <b>?</b> abre este guia direto no assunto daquela tela.",
       "Ctrl+clique (ou o botão do meio do mouse) numa aba abre a tela em outra aba do navegador. Atualizar a página (F5) mantém a tela aberta."
     ],
@@ -11127,16 +11127,16 @@ var HELP_TOPICS = [
       "A <b>cor do botão</b> vale para todos os botões, caixas de marcar e destaques do sistema, inclusive a tela de login. <b>Restaurar padrão</b> volta ao verde do sistema."
     ],
     who: "Permissão <b>Clínica</b> (ver/editar)."},
-  {id: "backup", group: "Acesso", title: "Cópia de segurança", mod: "admin",
+  {id: "backup", group: "Acesso", title: "Backup", mod: "admin",
     purpose: "Guardar e restaurar todos os dados do sistema.",
     steps: [
-      "Acesso ▾ → <b>Cópia de segurança</b> → <b>Baixar</b>. Guarde o arquivo numa pasta protegida.",
+      "Acesso ▾ → <b>Backup</b> → <b>Baixar</b>. Guarde o arquivo numa pasta protegida.",
       "Para restaurar, escolha o arquivo e confirme duas vezes."
     ],
     rules: [
-      "Restaurar repõe o que estava na cópia e não apaga o que foi criado depois.",
+      "Restaurar repõe o que estava no backup e não apaga o que foi criado depois.",
       "O arquivo tem dados de saúde: não envie por WhatsApp ou e-mail.",
-      "Baixe uma cópia antes de qualquer atualização do banco."
+      "Baixe um backup antes de qualquer atualização do banco."
     ],
     who: "Só o <b>Administrador</b>."}
 ];
@@ -11284,7 +11284,7 @@ function backupStampName(d){
 }
 function backupDownload(onStatus){
   var c = agdClient();
-  if (!c) return Promise.reject(new Error("A cópia de segurança funciona no sistema online."));
+  if (!c) return Promise.reject(new Error("O backup funciona no sistema online."));
   var data = {};
   var chain = Promise.resolve();
   BACKUP_TABLES.forEach(function(t){
@@ -11299,7 +11299,7 @@ function backupDownload(onStatus){
     var blob = new Blob([JSON.stringify(file)], {type: "application/json"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "copia-de-seguranca-agenda-pipo-" + backupStampName(now) + ".json";
+    a.download = "backup-agenda-pipo-" + backupStampName(now) + ".json";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
     try { localStorage.setItem(BACKUP_LAST_KEY, now.toISOString()); } catch(e){}
@@ -11333,31 +11333,31 @@ function backupRestore(file, onStatus){
   return chain.then(function(){ return total; });
 }
 function backupValidate(obj){
-  if (!obj || obj.app !== "agenda-pipo" || !obj.tabelas || typeof obj.tabelas !== "object") return "Este arquivo não é uma cópia de segurança da Agenda Pipo.";
-  if (!Array.isArray(obj.tabelas.documents)) return "A cópia está incompleta (sem os cadastros).";
+  if (!obj || obj.app !== "agenda-pipo" || !obj.tabelas || typeof obj.tabelas !== "object") return "Este arquivo não é um backup da Agenda Pipo.";
+  if (!Array.isArray(obj.tabelas.documents)) return "O backup está incompleto (sem os cadastros).";
   return "";
 }
 function openBackupModal(){
-  if (window.pipoAuth && !window.pipoAuth.isAdmin()){ showToast("Só o Administrador faz a cópia de segurança.", true); return; }
+  if (window.pipoAuth && !window.pipoAuth.isAdmin()){ showToast("Só o Administrador faz o backup.", true); return; }
   var host = document.getElementById("modalHost");
   var last = null; try { last = localStorage.getItem(BACKUP_LAST_KEY); } catch(e){}
   host.innerHTML =
     '<div class="overlay" id="ovBackup"><div class="modal wide">' +
-      '<div class="modal-head"><div><h3>Cópia de segurança</h3>' +
+      '<div class="modal-head"><div><h3>Backup</h3>' +
         '<div class="modal-sub">Baixe um arquivo com todos os dados do sistema e guarde num lugar seguro. Se algo for apagado por engano, o arquivo traz tudo de volta.</div>' +
       '</div><button class="modal-close" id="closeBackup" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
-        '<div class="bk-card"><b>Baixar cópia</b>' +
+        '<div class="bk-card"><b>Baixar backup</b>' +
           '<div class="bk-txt">Pacientes, profissionais, salas, grupos, convênios, serviços, especialidades, status, clínica, Planner, Agenda, tratamentos (com valores) e evoluções do Prontuário.</div>' +
           '<div class="bk-txt bk-warn">O arquivo tem dados de saúde dos pacientes: guarde numa pasta protegida (ex.: Google Drive da clínica com acesso restrito). Não envie por WhatsApp ou e-mail.</div>' +
-          '<div class="bk-row"><button class="btn primary" id="bkDownload">Baixar cópia de segurança</button>' +
-          '<span class="bk-txt" id="bkLast">' + (last ? "Última cópia baixada neste aparelho: " + esc(prStamp(last)) : "Nenhuma cópia baixada neste aparelho ainda.") + '</span></div>' +
+          '<div class="bk-row"><button class="btn primary" id="bkDownload">Baixar backup</button>' +
+          '<span class="bk-txt" id="bkLast">' + (last ? "Último backup baixado neste aparelho: " + esc(prStamp(last)) : "Nenhum backup baixado neste aparelho ainda.") + '</span></div>' +
         '</div>' +
         '<div class="bk-card"><b>Restaurar a partir de um arquivo</b>' +
-          '<div class="bk-txt">Repõe tudo o que estava na cópia (o que foi apagado volta e o que foi alterado volta como era). O que foi criado depois da cópia não é apagado.</div>' +
+          '<div class="bk-txt">Repõe tudo o que estava no backup (o que foi apagado volta e o que foi alterado volta como era). O que foi criado depois do backup não é apagado.</div>' +
           '<div class="bk-row"><input type="file" id="bkFile" accept=".json,application/json" data-native></div>' +
           '<div class="bk-txt" id="bkInfo"></div>' +
-          '<div class="bk-row"><button class="btn danger-solid" id="bkRestore" hidden>Restaurar esta cópia</button></div>' +
+          '<div class="bk-row"><button class="btn danger-solid" id="bkRestore" hidden>Restaurar este backup</button></div>' +
         '</div>' +
         '<div class="bk-status" id="bkStatus" aria-live="polite"></div>' +
       '</div>' +
@@ -11374,11 +11374,11 @@ function openBackupModal(){
   document.getElementById("closeBackup").addEventListener("click", close);
   document.getElementById("bkClose").addEventListener("click", close);
   document.getElementById("bkDownload").addEventListener("click", function(){
-    setBusy(true); status("Preparando a cópia…");
+    setBusy(true); status("Preparando o backup…");
     backupDownload(status).then(function(data){
       var n = BACKUP_TABLES.map(function(t){ return (data[t.name] || []).length; });
-      status("Cópia baixada: " + n[0] + " cadastros, " + n[1] + " atendimentos, " + n[2] + " evoluções. Confira a pasta de downloads.");
-      var l = document.getElementById("bkLast"); if (l) l.textContent = "Última cópia baixada neste aparelho: " + prStamp(new Date().toISOString());
+      status("Backup baixado: " + n[0] + " cadastros, " + n[1] + " atendimentos, " + n[2] + " evoluções. Confira a pasta de downloads.");
+      var l = document.getElementById("bkLast"); if (l) l.textContent = "Último backup baixado neste aparelho: " + prStamp(new Date().toISOString());
     }).catch(function(e){ status("Não foi possível baixar: " + (e.message || e), true); })
       .then(function(){ setBusy(false); });
   });
@@ -11395,7 +11395,7 @@ function openBackupModal(){
       info.classList.remove("err");
       loaded = obj;
       var T = obj.tabelas;
-      info.innerHTML = 'Cópia de <b>' + esc(prStamp(obj.criado_em)) + '</b>' + (obj.clinica ? ' — ' + esc(obj.clinica) : '') + ': ' +
+      info.innerHTML = 'Backup de <b>' + esc(prStamp(obj.criado_em)) + '</b>' + (obj.clinica ? ' — ' + esc(obj.clinica) : '') + ': ' +
         (T.documents || []).length + ' cadastros, ' + (T.appointments || []).length + ' atendimentos, ' + (T.clinical_records || []).length + ' evoluções.';
       btn.hidden = false;
     };
@@ -11405,18 +11405,18 @@ function openBackupModal(){
   document.getElementById("bkRestore").addEventListener("click", function(){
     if (!loaded) return;
     var when = prStamp(loaded.criado_em);
-    confirmDialog({title: "Restaurar a cópia?", confirmLabel: "Continuar",
+    confirmDialog({title: "Restaurar o backup?", confirmLabel: "Continuar",
       message: "Os dados vão voltar a ficar como estavam em <b>" + esc(when) + "</b>. Alterações feitas depois disso nos mesmos cadastros, atendimentos e evoluções serão substituídas."
     }).then(function(ok){
       if (!ok) return false;
       return confirmDialog({title: "Confirmar restauração", confirmLabel: "Restaurar agora",
-        message: "Tem certeza? Recomendo baixar uma cópia de agora antes de restaurar."});
+        message: "Tem certeza? Recomendo baixar um backup de agora antes de restaurar."});
     }).then(function(ok){
       if (!ok) return;
       setBusy(true); status("Restaurando…");
       backupRestore(loaded, status).then(function(n){
         status("Restauração concluída (" + n + " registros). Atualize a página para ver tudo.");
-        showToast("Cópia restaurada.");
+        showToast("Backup restaurado.");
       }).catch(function(e){ status("A restauração parou: " + (e.message || e) + ". O que já foi gravado fica; pode tentar de novo.", true); })
         .then(function(){ setBusy(false); });
     });

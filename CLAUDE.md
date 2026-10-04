@@ -1083,13 +1083,13 @@ busca na largura toda. O "+" abre `#agdMoreMenu`: primeiro **+ Incluir agendamen
 
 ## Cópia de segurança (2026-10-03, menu Acesso, só Administrador)
 O projeto Supabase está no plano gratuito (sem backup automático restaurável).
-- Menu Acesso → **Cópia de segurança** (`data-act="backup"` em
+- Menu Acesso → **Backup** (nome na tela desde 2026-10-04; antes "Cópia de segurança") (`data-act="backup"` em
   `js/pipo-supabase.js` → `window.pipoOpenBackup` → `openBackupModal()`, bloco
   "Cópia de segurança" em `index.html`).
 - **Baixar** (`backupDownload`): lê no navegador, em páginas de 1000
   (`backupFetchAll`, `.range()`), as tabelas de `BACKUP_TABLES` — `documents`,
   `appointments`, `clinical_records` e `roles` (só consulta) — e baixa
-  `copia-de-seguranca-agenda-pipo-AAAA-MM-DD-HHMM.json`
+  `backup-agenda-pipo-AAAA-MM-DD-HHMM.json`
   (`{app:"agenda-pipo", formato:1, criado_em, clinica, tabelas:{…}}`). Data da
   última cópia guardada no navegador (`agendaPipo:lastBackup`).
 - **Restaurar** (`backupRestore`): valida o arquivo (`backupValidate`), dupla
