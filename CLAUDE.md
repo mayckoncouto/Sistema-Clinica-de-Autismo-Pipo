@@ -1696,3 +1696,50 @@ Enviar, botão `#genMonthBtn` ao lado de "Enviar para a Agenda".
   "à mão", avisos com caixa; grava em lotes e entra no desfazer da Agenda.
   "Enviar para a Agenda" só avisa quando a data é feriado.
 - Migração `supabase/2026-10-05d-feriados.sql`. Teste `tests/run_holidays.js`.
+
+## RH: Funcionários e Prestadores (2026-10-05)
+Decisões do usuário: cadastro ÚNICO (profissional = funcionário com o tipo
+"Profissional"); tipos múltiplos e editáveis; usuário criado só na janela do
+funcionário (Administrador ainda pode criar conta sem funcionário); horário de
+trabalho = horário de atendimento (UMA tabela, qualquer dia e hora; fora dele não
+agenda); nível novo "Recursos Humanos"; Ausências e Controle de jornada virão depois
+no mesmo menu.
+- Topo: menu **RH ▾** (`#rhBtn`/`#rhMenu`, `RH_ITEMS`, `RH_TABS` em `NAV_MENUS`;
+  grupo "RH" no ☰ do celular): **Funcionários e Prestadores** (`#tab-funcionarios`,
+  `renderStaffTab`, `wireStaffTab`, `staffOnShow`; busca nome/cargo/CPF, filtro de
+  tipo `#staffTypeFilter`, Inativos; celular = Nome + Tipos) e **Tipos de
+  funcionário** (`REG_CFG.tiposfunc`, `SIMPLE_LISTS.tiposfunc` → `config/staff_types`,
+  `DEFAULT_STAFF_TYPES`; "Profissional" travado, `STAFF_PROF_TYPE`).
+- Banco (migração `supabase/2026-10-05e-rh-funcionarios.sql`): `public.staff (id,
+  professional_id, data jsonb)` — RLS `rh_funcionarios` — e `public.staff_pay
+  (staff_id, data jsonb)` — RLS `rh_remuneracao` (view/edit); `profiles.staff_id`;
+  nível `recursos-humanos`; Financeiro e RH com tudo do RH; cada profissional virou
+  uma linha `prof-<id>`. Backup inclui `staff` e `staff_pay` (optional).
+- App: `STAFF.rows` (`staffLoad`, `staffSaveRow`, `staffDeleteRow`), remuneração
+  `staffPayLoad`/`staffPaySave`; sem sistema online fica em memória (`STAFF_PAY_MEM`).
+  `staffEntries()` = linhas do RH + profissionais sem linha; `staffView(e)` junta os
+  dados (nome/CPF/nome social vêm do profissional).
+- Janela `openStaffModal(entry, opts)` (ids antigos mantidos: `#ovProf`, `#profName`,
+  `#profSpecialty`, `#profCbos`, `#profConselho`, `#profSave`…). `openProfessionalModal(p)`
+  virou atalho para ela (Cadastros → Profissionais; "+ Incluir" já marca Profissional).
+  Seções (`data-sfsec`): Identificação, Tipos (`#sfTypes`, "+" inclui tipo), Atendimento
+  (só com Profissional), Horário de trabalho (`#profHours`, 7 dias, campos texto HH:MM
+  `.ph-start/.ph-end`, `staffTime`, `staffDayInit` = salvo ou o da clínica; total de
+  horas, atendimentos para profissional, aviso `#sfJornadaNote` × jornada), Contato
+  (CEP ViaCEP, ids `sa-*`), Contrato (`sf-vinculo`, `sf-cargo`, `sf-admissao`,
+  `sf-deslig`, `sf-jornada`), Remuneração (`#sf-valor` + linhas `.sf-pay` com
+  descrição/valor/forma/favorecido/PIX ou banco/obs, `#sfPayAdd`, soma × contratado
+  `#sfPaySum`), Contato de emergência, Acesso ao sistema (e-mail, `#sfRole`, senha,
+  ativo — `userForStaff`/`userForProfessional`, `adminApi create` com `staff_id` e/ou
+  `professional_id`; evento `pipo:users-changed` atualiza a tela Usuários), Observações.
+  Seções do RH só com `rh_funcionarios.view`; remuneração com `rh_remuneracao`.
+- Salvar: profissional grava `config/professionals` (Object.assign; `horarios` dos 7
+  dias = o que a Agenda/Planner leem); desmarcar Profissional deixa o profissional
+  inativo; RH grava `staff` e `staff_pay`. Desligamento ≤ hoje (confirmação): pessoa e
+  profissional inativos, usuário desativado (`set_active`), aviso se há atendimentos
+  na Agenda a partir da data.
+- Usuários → "+ Incluir" (`newUser` em `js/usuarios.js`): abre funcionário novo
+  (`window.pipoOpenStaffNew`); Administrador escolhe também "Conta sem funcionário".
+- Permissões: `rh_funcionarios` (ver/incluir/editar/excluir) e `rh_remuneracao`
+  (ver/editar), grupo "RH" em Níveis de permissão (`MODULES` nos dois js).
+- Teste `tests/run_staff.js` (30 arquivos no `npm test`).

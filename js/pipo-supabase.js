@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var MODULES = ["agendamentos", "agenda", "resumo", "pacientes", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "cbo", "conselhos", "feriados", "campos_paciente", "profissionais", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario"];
+  var MODULES = ["agendamentos", "agenda", "resumo", "pacientes", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "cbo", "conselhos", "feriados", "campos_paciente", "profissionais", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "rh_funcionarios", "rh_remuneracao"];
   var ACTIONS = ["view", "create", "edit", "delete"];
 
   var client = null;
@@ -494,6 +494,12 @@
           return b;
         });
       });
+    },
+    // Usuário ligado a um funcionário do RH (profiles.staff_id) ou null.
+    userForStaff: function (staffId) {
+      if (!client || !staffId) return Promise.resolve(null);
+      return client.from("profiles").select("id,email,full_name,active,role_id").eq("staff_id", staffId).maybeSingle()
+        .then(function (r) { return r.error ? null : r.data; });
     },
     // Usuário ligado a um profissional (ou null). Só administrador enxerga todos os perfis.
     userForProfessional: function (profId) {

@@ -6,7 +6,7 @@
 // níveis é feito direto pelo app (as políticas RLS só deixam admin alterar).
 //
 // POST /api/admin-users   Authorization: Bearer <access_token do usuário>
-//   { action: "create", email, password, full_name, role_id, professional_id? }
+//   { action: "create", email, password, full_name, role_id, professional_id?, staff_id? }
 //   { action: "set_password", id, password }
 //   { action: "set_active", id, active }
 //   { action: "delete", id }
@@ -143,6 +143,8 @@ module.exports = async function handler(req, res) {
       var patch = { full_name: String(body.full_name || "").trim(), role_id: roleId };
       // Usuário criado pelo cadastro de profissional: fica ligado a ele.
       if (body.professional_id) patch.professional_id = String(body.professional_id);
+      // Usuário criado pelo cadastro de funcionário (RH) que não é profissional.
+      if (body.staff_id) patch.staff_id = String(body.staff_id);
       var upd = await call("/rest/v1/profiles?id=eq." + encodeURIComponent(newId), {
         method: "PATCH",
         headers: Object.assign(adminHeaders(), { Prefer: "return=representation" }),

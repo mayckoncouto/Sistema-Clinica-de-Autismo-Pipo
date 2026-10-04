@@ -35,6 +35,9 @@
     { key: "feriados", label: "Feriados e recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
+    // RH (menu RH do topo): cadastro de funcionários e prestadores e a remuneração deles.
+    { key: "rh_funcionarios", label: "Funcionários e Prestadores", hint: "cadastro do RH: dados pessoais, contrato, contato e tipos", group: "RH" },
+    { key: "rh_remuneracao", label: "Remuneração", hint: "valor mensal contratado e formas de pagamento", actions: ["view", "edit"] },
     // Itens do menu Acesso (Sair aparece sempre).
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)", group: "Menu Acesso" },
     { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" },
@@ -125,6 +128,7 @@
       ".field .role-pick b{color:var(--ink);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
       ".field .role-pick span{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
       ".u-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end}" +
+      ".u-kind{display:flex;flex-direction:column;gap:8px}.u-kind .btn{justify-content:center;padding:10px 12px}" +
       ".u-actions .field{flex:1;min-width:160px;margin:0}" +
       // Celular: lista de usuários só com Nome e Situação; busca na linha toda.
       "@media (max-width:760px){" +
@@ -220,7 +224,7 @@
         "</div>" +
         '<div class="adm-wrap" id="usersListHost"></div>';
       document.getElementById("userSearch").addEventListener("input", renderUsers);
-      document.getElementById("addUserBtn").addEventListener("click", function () { openUserModal(null); });
+      document.getElementById("addUserBtn").addEventListener("click", function () { newUser(); });
       document.getElementById("rolesBtn").addEventListener("click", function () { openRolesModal(); });
       document.getElementById("bulkProfBtn").addEventListener("click", function () { openBulkProfModal(); });
     }
@@ -267,6 +271,35 @@
       tr.addEventListener("click", open);
       tr.addEventListener("keydown", function (e) { if (e.key === "Enter") open(); });
     });
+  }
+
+  // "+ Incluir": o usuário nasce no cadastro do funcionário (RH → Funcionários e
+  // Prestadores, seção "Acesso ao sistema"). Só o Administrador pode criar uma
+  // conta sem funcionário (ex.: contador externo).
+  function newUser() {
+    if (!window.pipoOpenStaffNew) { openUserModal(null); return; }
+    var canStaff = auth.can("rh_funcionarios", "create") || auth.can("profissionais", "create");
+    if (!auth.isAdmin()) {
+      if (canStaff) window.pipoOpenStaffNew();
+      else toast("O usuário é criado no cadastro da pessoa (RH → Funcionários e Prestadores). Seu nível não tem permissão para incluir.", true);
+      return;
+    }
+    var mh = document.getElementById("modalHost");
+    mh.innerHTML =
+      '<div class="overlay" id="ovUserKind"><div class="modal" style="max-width:460px">' +
+        '<div class="modal-head"><div><h3>Incluir usuário</h3><div class="modal-sub">O acesso fica ligado ao cadastro da pessoa.</div></div>' +
+          '<button class="modal-close" id="ukClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-body"><div class="u-kind">' +
+          '<button type="button" class="btn primary" id="ukStaff">Novo funcionário ou prestador (recomendado)</button>' +
+          '<button type="button" class="btn ghost" id="ukPlain">Conta sem funcionário (ex.: contador)</button>' +
+        "</div></div></div></div>";
+    var ov = document.getElementById("ovUserKind");
+    function close() { mh.innerHTML = ""; }
+    ov.addEventListener("mousedown", function (e) { if (e.target === ov) close(); });
+    document.getElementById("ukClose").addEventListener("click", close);
+    document.getElementById("ukStaff").addEventListener("click", function () { close(); window.pipoOpenStaffNew(); });
+    document.getElementById("ukPlain").addEventListener("click", function () { openUserModal(null); });
+    document.getElementById("ukStaff").focus();
   }
 
   function rolePickerHtml(selectedId, disabled) {
@@ -754,6 +787,8 @@
       if (!(loaded.users && loaded.roles)) renderAll();
       reloadAll();
     });
+    // Usuário criado/alterado pela janela do funcionário (index.html): atualiza a lista.
+    document.addEventListener("pipo:users-changed", function () { if (loaded.users && uCan("view")) reloadAll(); });
     // Outro administrador criou/mudou/excluiu um nível: atualiza a lista.
     if (auth.onRoleChange) auth.onRoleChange(function () {
       if (loaded.roles && uCan("view")) reloadAll();
