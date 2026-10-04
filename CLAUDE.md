@@ -411,7 +411,10 @@ importação da migração ficam fora do repositório (`.gitignore` bloqueia `ex
 3. Mudança no banco: criar um arquivo novo em `supabase/` (ex.:
    `supabase/2026-10-xx-descricao.sql`) e rodar no SQL Editor do Supabase;
    manter `schema.sql` como o retrato completo e atual.
-4. Commit + push na `main` → a Vercel publica sozinha em ~1 minuto.
+4. **Guia (Ajuda):** toda função nova ou regra mudada precisa atualizar o tópico
+   correspondente em `HELP_TOPICS` (ou criar um) e ganhar uma linha datada em
+   `HELP_NEWS` (bloco "Guia (Ajuda)" do script). Pedido do usuário em 2026-10-04.
+5. Commit + push na `main` → a Vercel publica sozinha em ~1 minuto.
 
 ## Nunca usar prefixo `ad` / `ad-` em classes, ids ou atributos
 Bloqueadores de anúncio (AdBlock, uBlock etc.) escondem elementos chamados
@@ -1275,3 +1278,25 @@ e filtro.
   `.tr-falta/.tr-sobra/.tr-ok`, + chip do mês anterior se faltou). Filtro
   `abaixo` em `#trFilter` (só Ativos; `trMonthSummary(t).below` = falta no mês
   atual projetado ou no mês anterior).
+
+## Guia de ajuda (2026-10-04)
+Decisões do usuário: tela própria; busca; botão "?" em cada tela; cada nível vê só
+o que pode usar; "Novidades" com data; tópicos com "para que serve + passo a passo
++ regras + quem pode usar"; sem impressão. **Toda função nova entra no guia.**
+- Menu Acesso → **Ajuda** (`data-act="ajuda"` em `js/pipo-supabase.js` →
+  `window.pipoOpenHelp`) abre `#tab-ajuda` (botão de aba sempre oculto
+  `data-tab="ajuda"`, endereço `#ajuda`; `applyPermissionsUI` e `openNavFromHash`
+  deixam qualquer usuário abrir).
+- Conteúdo no bloco "Guia (Ajuda)" do script: `HELP_GROUPS`, `HELP_TOPICS`
+  (`{id, group, title, mod, tab, purpose, steps[], rules[], who}`; `mod` =
+  módulo de permissão "ver", `"admin"` = só Administrador, null = todos;
+  `helpCan`), `HELP_NEWS` (`{date, topic, text}`, mais nova primeiro).
+  `renderHelp()` (menu lateral `#helpNav`, corpo `#helpBody`, busca `#helpSearch`
+  com `normText`, todas as palavras), `helpGo(id)`, `openHelp(topicId)`.
+- Botão "?" (`.help-q`) colocado por `helpAddQButtons()` na barra de cada tela
+  (`.pat-toolbar`, `.controls`, `.agd-toolbar`, `.rp-form`), tópico por
+  `HELP_TAB_TOPIC` / `helpTopicForTab` (Salas/Grupos conforme `state.salasView`).
+  Refeito a cada troca de aba (a barra de Usuários nasce depois).
+- Celular: `#tab-ajuda` em coluna, tópicos escondidos até "Tópicos ▾"
+  (`.help-nav-open`), página rola.
+- Teste `tests/run_help.js` (no `npm test`, agora 23 arquivos).

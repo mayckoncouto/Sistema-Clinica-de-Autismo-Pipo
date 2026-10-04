@@ -284,6 +284,7 @@
           ((isAdmin() || can("cadastro_status", "view")) ? '<button type="button" role="menuitem" data-act="status">Status</button>' : "") +
           ((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : "") +
           (isAdmin() ? '<button type="button" role="menuitem" data-act="backup">Cópia de segurança</button>' : "") +
+          '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' +
           '<button type="button" role="menuitem" data-act="senha">Trocar senha</button>' +
           '<button type="button" role="menuitem" data-act="sair">Sair</button>' +
         "</div>" +
@@ -315,6 +316,8 @@
         client.auth.signOut().then(function () { location.reload(); });
       } else if (act === "clinica") {
         if (window.pipoOpenClinic) window.pipoOpenClinic();
+      } else if (act === "ajuda") {
+        if (window.pipoOpenHelp) window.pipoOpenHelp();
       } else if (act === "backup") {
         if (window.pipoOpenBackup) window.pipoOpenBackup();
       } else if (act === "status") {

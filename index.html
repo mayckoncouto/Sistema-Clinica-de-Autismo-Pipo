@@ -920,6 +920,30 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
 .zoom-ctrl select:focus{outline:none;box-shadow:var(--ring);border-color:var(--accent)}
 .zoom-ctrl .zoom-label{font-weight:800;color:var(--ink);white-space:nowrap;min-width:30px;text-align:right;font-family:"IBM Plex Mono",ui-monospace,monospace}
 
+/* ---------- Guia (Ajuda) ---------- */
+#tab-ajuda{flex:1;min-height:0;display:flex}
+#tab-ajuda[hidden]{display:none}
+.help-side{width:270px;flex:none;border-right:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto}
+.help-nav{display:flex;flex-direction:column;gap:2px}
+.help-nav-toggle{display:none}
+.help-grp{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:10px 0 2px 6px}
+.help-link{border:0;background:transparent;text-align:left;padding:6px 8px;border-radius:7px;font:inherit;font-size:13px;color:var(--ink-2);cursor:pointer}
+.help-link:hover{background:var(--surface-2)}
+.help-link.active{background:var(--accent-weak);color:var(--accent);font-weight:700}
+.help-body{flex:1;min-width:0;overflow:auto;padding:18px 26px 30px;max-width:900px;line-height:1.55}
+.help-title{font-family:Manrope,Inter,sans-serif;font-size:20px;margin:0 0 8px}
+.help-body h3{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:18px 0 6px}
+.help-purpose{font-size:14px;color:var(--ink);margin:0}
+.help-steps,.help-rules,.help-news,.help-results{margin:0;padding-left:20px}
+.help-steps li,.help-rules li{margin:4px 0}
+.help-news,.help-results{list-style:none;padding:0}
+.help-news li,.help-results li{padding:8px 0;border-bottom:1px solid var(--line)}
+.help-news-date{display:inline-block;min-width:86px;color:var(--muted);font-variant-numeric:tabular-nums}
+.help-body a{color:var(--accent)}
+.help-q{flex:none;width:28px;height:28px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-weight:800;font-size:14px;cursor:pointer;margin-left:4px}
+.help-q:hover{color:var(--accent);border-color:var(--accent)}
+.rp-form > .help-q{align-self:flex-end;margin:0 0 -4px}
+
 /* ---------- celular: menu ☰ no topo ---------- */
 .mnav-btn{display:none}
 .mnav-panel[hidden]{display:none}
@@ -953,6 +977,12 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .mnav-sep{height:1px;background:var(--line);margin:6px 0}
   /* Agenda no celular: só a visão Dia. */
   #agdViewSeg{display:none!important}
+  /* Guia: menu de tópicos recolhido no topo (botão "Tópicos ▾"); a busca fica sempre à vista. */
+  #tab-ajuda{flex-direction:column;flex:none;min-height:auto}
+  .help-side{width:auto;border-right:0;border-bottom:1px solid var(--line);overflow:visible}
+  .help-nav-toggle{display:block;text-align:left}
+  #tab-ajuda:not(.help-nav-open) .help-nav{display:none}
+  .help-body{padding:14px 14px 24px;overflow:visible}
   /* Agenda: a seção cresce com os horários e a própria página rola (antes a caixa
      branca tinha a altura da tela e a grade passava por fora dela). O cabeçalho
      da coluna continua preso no topo ao rolar. */
@@ -1045,6 +1075,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="relatorios" hidden>Relatórios</button>
       <!-- Sempre oculto: a tela de Usuários abre pelo menu "Acesso" do topo (js/pipo-supabase.js). -->
       <button data-tab="usuarios" hidden>Usuários</button>
+      <button data-tab="ajuda" hidden>Ajuda</button>
     </div>
     <div class="topbar-right">
       <div class="user-pill" id="userPill" hidden></div>
@@ -1307,6 +1338,19 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
 
   <!-- USUÁRIOS TAB (só administradores; conteúdo montado por js/usuarios.js) -->
   <section id="tab-usuarios" class="panel" hidden></section>
+
+  <!-- GUIA (menu Acesso → Ajuda, ou o "?" de cada tela) -->
+  <section id="tab-ajuda" class="panel help-panel" hidden>
+    <aside class="help-side">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="helpSearch" type="text" placeholder="Buscar no guia…">
+      </div>
+      <button type="button" class="btn ghost help-nav-toggle" id="helpNavToggle">Tópicos ▾</button>
+      <nav class="help-nav" id="helpNav"></nav>
+    </aside>
+    <article class="help-body" id="helpBody"></article>
+  </section>
 
 </div>
 
@@ -2304,6 +2348,7 @@ function applyPermissionsUI(){
   var activeHidden = false;
   Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button[data-tab]"), function(b){
     var k = b.getAttribute("data-tab");
+    if (k === "ajuda"){ b.hidden = true; return; }   // Guia: abre pelo menu Acesso → Ajuda; todos podem ver
     if (k === "usuarios"){
       // Botão sempre oculto (abre pelo menu "Acesso"); só o Administrador pode ficar nessa tela.
       b.hidden = true;
@@ -2891,6 +2936,7 @@ function wireTabs(){
       else if (state.tab === "prontuario") prOnShow();
       else if (state.tab === "relatorios") rpOnShow();
       else if (state.tab === "tratamentos"){ renderTreatmentsTab(); trLoadFinance(); }
+      else if (state.tab === "ajuda") renderHelp();
       else if (REG_CFG[state.tab]) renderRegistryTab(state.tab);
     } catch(err){
       reportAppError(err, "ao abrir a aba");
@@ -10366,6 +10412,449 @@ function openTreatmentModal(t, opts){
   });
 }
 
+/* ---------------- Guia (Ajuda) ----------------
+ * Menu Acesso → Ajuda (window.pipoOpenHelp) ou o botão "?" de cada tela abre a
+ * tela "Guia" (#tab-ajuda, endereço #ajuda): menu lateral por área, busca (sem
+ * acento/maiúscula) e um tópico por vez. Cada pessoa vê só os tópicos das telas
+ * que o nível dela libera (HELP_TOPICS[].mod; "admin" = só Administrador).
+ * TODA FUNÇÃO NOVA DO SISTEMA DEVE GANHAR (OU ATUALIZAR) UM TÓPICO AQUI E UMA
+ * LINHA EM HELP_NEWS.
+ */
+var HELP_GROUPS = ["Início", "Cadastros", "Planner", "Agenda", "Prontuário", "Relatórios", "Acesso"];
+var HELP_TOPICS = [
+  {id: "inicio", group: "Início", title: "Visão geral do sistema", mod: null,
+    purpose: "O sistema reúne o cadastro dos pacientes e da clínica, o Planner (a grade modelo de 4 semanas), a Agenda com as datas reais, o Prontuário e os Relatórios.",
+    steps: [
+      "Use o menu do topo: <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>.",
+      "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Ajuda, Trocar senha e Sair. Para o Administrador, também Usuários, Status, Clínica e Cópia de segurança.",
+      "Em cada tela, o botão <b>?</b> abre este guia direto no assunto daquela tela.",
+      "Ctrl+clique (ou o botão do meio do mouse) numa aba abre a tela em outra aba do navegador. Atualizar a página (F5) mantém a tela aberta."
+    ],
+    rules: [
+      "Você só vê as telas e os botões que o seu nível de permissão libera. Se faltar algo, fale com o Administrador.",
+      "Toda exclusão pede confirmação.",
+      "No celular, o menu fica no botão ☰ do canto superior. Planner e Resumo não aparecem no celular."
+    ],
+    who: "Todos os usuários."},
+  {id: "celular", group: "Início", title: "Usando no celular", mod: null,
+    purpose: "Versão adaptada para a tela do celular.",
+    steps: [
+      "Toque em <b>☰</b> no canto superior para abrir o menu (Cadastros e Acesso abrem ao tocar no título).",
+      "A Agenda aparece só na visão <b>Dia</b>. Use ‹ › para trocar de dia.",
+      "Nos Relatórios, depois de gerar, o resultado ocupa a tela toda. Use <b>‹ Voltar</b> para escolher outro."
+    ],
+    rules: [
+      "Planner e Resumo ficam só no computador.",
+      "As listas de cadastro mostram só as colunas principais. Toque na linha para ver tudo."
+    ],
+    who: "Todos os usuários."},
+
+  // ---------- Cadastros ----------
+  {id: "pacientes", group: "Cadastros", title: "Pacientes", mod: "pacientes", tab: "pacientes",
+    purpose: "Cadastro dos pacientes: nome, data de nascimento e idade. Convênio, plano, pacote, ABA, especialidades e horário ficam no <b>Tratamento</b> do paciente.",
+    steps: [
+      "Cadastros → <b>Pacientes</b> → <b>+ Novo paciente</b>.",
+      "Preencha os dados e salve. Em seguida o sistema abre o tratamento do paciente.",
+      "Clique numa linha para editar. Na janela aparece o resumo do tratamento, com <b>Abrir tratamento</b> ou <b>+ Novo tratamento</b>.",
+      "A busca ignora acento e maiúscula. Clique no título de uma coluna para ordenar e arraste a borda para mudar a largura."
+    ],
+    rules: [
+      "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",
+      "A cor do paciente vem do tratamento ativo: Não faz ABA = vermelho; senão pela idade (0–4 azul, 5–9 verde, 10+ laranja).",
+      "Excluir pede confirmação."
+    ],
+    who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir)."},
+  {id: "tratamentos", group: "Cadastros", title: "Tratamentos", mod: "tratamentos", tab: "tratamentos",
+    purpose: "O plano terapêutico de cada paciente: convênio, plano, pacote, ABA, especialidades/serviços com o terapeuta, horário de atendimento, vencimento e valores.",
+    steps: [
+      "Cadastros → <b>Tratamentos</b> → <b>+ Novo tratamento</b> e escolha o paciente.",
+      "Preencha início, vencimento (por data ou por quantidade de sessões), plano terapêutico e horário. Salve.",
+      "Para mudar o pacote de um tratamento que já tem atendimentos, use <b>Renegociar</b>: ele cria um novo tratamento copiando o atual, e o anterior vira Renegociado.",
+      "Para encerrar, mude o Status para <b>Cancelado</b> e escolha o motivo.",
+      "Na tela, use os filtros: status, Vencendo, Vencidos, Abaixo do contratado e Pacientes sem tratamento ativo."
+    ],
+    rules: [
+      "Cada paciente tem <b>só um tratamento Ativo</b>. Salvar outro como Ativo passa o anterior para Renegociado (o banco também confere).",
+      "O <b>Tipo</b> é automático: <b>Novo</b> se não há anterior ou o anterior foi Cancelado; <b>Renegociado</b> se o anterior foi Renegociado.",
+      "<b>Cancelado é definitivo</b> e exige motivo. A observação é obrigatória quando o motivo é \"Outro\".",
+      "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b> e a quantidade de sessões fica travada. Para mudar, use Renegociar.",
+      "A <b>Data de término</b> é o último atendimento da Agenda no período do tratamento.",
+      "Atendimentos antigos usam o tratamento que valia <b>na data</b> deles (cor, regras e relatórios).",
+      "O histórico na janela mostra cada troca de status: quem, quando e o motivo."
+    ],
+    who: "Permissão <b>Tratamentos</b>. Os valores dependem de <b>Tratamentos – valores</b>."},
+  {id: "tratamentos-terapeuta", group: "Cadastros", title: "Tratamento: terapeuta e horário do paciente", mod: "tratamentos", tab: "tratamentos",
+    purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido.",
+    steps: [
+      "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
+      "Em <b>Horário de atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente."
+    ],
+    rules: [
+      "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda)."
+    ],
+    who: "Permissão <b>Tratamentos</b> (editar)."},
+  {id: "tratamentos-vencimento", group: "Cadastros", title: "Tratamento: vencimento e renovação", mod: "tratamentos", tab: "tratamentos",
+    purpose: "Avisa quando o tratamento está perto de acabar, por data ou por quantidade de sessões.",
+    steps: [
+      "Na janela, escolha <b>Vencimento por</b>: <b>Data</b> (digite a duração em meses; o \"Válido até\" é calculado e pode ser ajustado) ou <b>Quantidade de sessões</b> (digite o total contratado).",
+      "Na tela de Tratamentos, os botões \"N vencem nos próximos 30 dias\" e \"N vencidos\" filtram a lista."
+    ],
+    rules: [
+      "Por data: aviso 30 dias antes. Depois da data aparece \"Vencido\", mas o tratamento continua Ativo até ser renegociado ou cancelado.",
+      "Por sessões: contam as <b>Finalizadas</b> e as faltas <b>Não compareceu</b>. Com 4 ou menos restando aparece \"Restam N sessões\"; zeradas, \"Sessões esgotadas\".",
+      "Só tratamentos Ativos entram nos avisos. Renegociar começa com o vencimento em branco."
+    ],
+    who: "Permissão <b>Tratamentos</b>."},
+  {id: "tratamentos-mes", group: "Cadastros", title: "Tratamento: contratado × realizado", mod: "tratamentos", tab: "tratamentos",
+    purpose: "Compara, mês a mês, as sessões contratadas com as realizadas, por especialidade e serviço.",
+    steps: [
+      "Abra o tratamento: a seção <b>Contratado × realizado</b> mostra uma tabela por mês.",
+      "Na lista, a coluna <b>Mês</b> mostra o mês atual (ex.: \"6 + 8 agend. de 16\").",
+      "Use o filtro <b>Abaixo do contratado</b> para achar quem está com sessões faltando."
+    ],
+    rules: [
+      "Realizado = Finalizado + Não compareceu (falta justificada não conta).",
+      "Mês atual = realizado + agendados até o fim do mês ainda sem status.",
+      "Primeiro e último mês do tratamento: contratado proporcional aos dias.",
+      "Vermelho = falta; âmbar = sobra; verde = fechado."
+    ],
+    who: "Permissão <b>Tratamentos</b>."},
+  {id: "tratamentos-valores", group: "Cadastros", title: "Tratamento: valores", mod: "tratamentos_valores", tab: "tratamentos",
+    purpose: "Valor, despesas e valor final (valor − despesas) de cada tratamento.",
+    steps: [
+      "Na janela do tratamento, preencha Valor e Despesas. O Valor final é calculado.",
+      "O relatório \"Tratamentos novos e renegociados\" soma os valores do período."
+    ],
+    rules: [
+      "Só vê os valores quem tem <b>Tratamentos – valores: ver</b>. Só altera quem tem <b>editar</b>.",
+      "Sem a permissão, a coluna Valor final e os campos de valor somem, e o relatório avisa \"Valores ocultos\"."
+    ],
+    who: "Permissão <b>Tratamentos – valores</b> (o Administrador sempre vê)."},
+  {id: "profissionais", group: "Cadastros", title: "Profissionais", mod: "profissionais", tab: "profissionais",
+    purpose: "Cadastro dos terapeutas: dados, especialidade principal, serviços que atende, horários e o usuário de acesso.",
+    steps: [
+      "Cadastros → <b>Profissionais</b> → <b>+ Novo profissional</b>.",
+      "Preencha Nome, Nome social, CPF, Especialidade principal, CBOS, Conselho, Registro e Serviços.",
+      "Em <b>Horários</b>, preencha manhã e tarde de cada dia (\"Copiar segunda para todos\" ajuda).",
+      "Administrador: na seção <b>Usuário</b>, crie o acesso (e-mail e senha) ligado ao profissional."
+    ],
+    rules: [
+      "Fora do horário do profissional, a célula fica hachurada e não aceita agendamento (Planner e Agenda).",
+      "O nome do usuário ligado é sempre o nome do cadastro do profissional.",
+      "O nome social (ou o primeiro nome) aparece no cabeçalho das colunas do Planner."
+    ],
+    who: "Permissão <b>Profissionais</b>."},
+  {id: "convenios", group: "Cadastros", title: "Convênios", mod: "convenios", tab: "convenios",
+    purpose: "Lista de convênios usada nos tratamentos e nos relatórios.",
+    steps: ["Cadastros → <b>Convênios</b> → <b>+ Novo convênio</b>. Clique na linha para editar ou excluir."],
+    rules: ["Também é possível criar um convênio direto na janela do tratamento, digitando o nome.", "A coluna Pacientes mostra quantos usam o convênio."],
+    who: "Permissão <b>Convênios</b>."},
+  {id: "servicos", group: "Cadastros", title: "Serviços", mod: "servicos", tab: "servicos",
+    purpose: "Tipos de atendimento: Sessão, Triagem, Avaliação, Orientação Familiar etc.",
+    steps: ["Cadastros → <b>Serviços</b> → <b>+ Novo serviço</b> (nome e sigla).", "No cadastro do profissional, marque quais serviços ele atende."],
+    rules: [
+      "<b>Sessão</b> é o serviço padrão e não pode ser renomeado nem excluído.",
+      "Atendimento com serviço diferente de Sessão aparece na cor ciano (Treinamento ou Outros serviços).",
+      "Na janela do atendimento, o campo Serviço oferece só os serviços do profissional."
+    ],
+    who: "Permissão <b>Serviços</b>."},
+  {id: "especialidades", group: "Cadastros", title: "Especialidades", mod: "especialidades", tab: "especialidades",
+    purpose: "Especialidades dos profissionais (Psicologia, Fonoaudiologia…), com sigla e cor.",
+    steps: ["Cadastros → <b>Especialidades</b> → <b>+ Nova especialidade</b>; escolha a cor no seletor."],
+    rules: ["A cor da especialidade aparece nos agendamentos e nos cabeçalhos.", "O pacote do tratamento é contado por especialidade."],
+    who: "Permissão <b>Especialidades</b>."},
+  {id: "motivos", group: "Cadastros", title: "Motivos de cancelamento", mod: "motivos_cancelamento", tab: "motivos",
+    purpose: "Lista de motivos escolhida ao cancelar um tratamento.",
+    steps: ["Cadastros → <b>Motivos de cancelamento</b> → <b>+ Novo motivo</b>."],
+    rules: ["\"Outro\" é fixo: não pode ser excluído e exige a observação do cancelamento.", "A coluna mostra quantos tratamentos foram cancelados por cada motivo."],
+    who: "Permissão <b>Motivos de cancelamento</b>."},
+  {id: "salas", group: "Cadastros", title: "Salas", mod: "salas", tab: "salas",
+    purpose: "Salas da clínica e as colunas (terapeutas) de cada uma no Planner.",
+    steps: [
+      "Cadastros → <b>Salas</b> → <b>+ Nova sala</b>: nome, cor e colunas (um profissional por coluna).",
+      "Use as setas ▲▼ para mudar a ordem das salas e das colunas."
+    ],
+    rules: [
+      "Sala <b>com \"ABA\" no nome</b>: paciente que não faz ABA ocupa só o horário do mesmo profissional. Sala <b>sem \"ABA\"</b>: ocupa a sala toda.",
+      "Tirar uma coluna da sala pede confirmação."
+    ],
+    who: "Permissão <b>Salas</b>."},
+  {id: "grupos", group: "Cadastros", title: "Grupos de Suporte", mod: "grupos", tab: "salas",
+    purpose: "Colunas especiais do Planner (ex.: Coordenador, Aplicador ABA) em que se agenda uma <b>sala</b>, não um paciente.",
+    steps: ["Cadastros → <b>Grupos de Suporte</b> → <b>+ Novo grupo</b>."],
+    rules: [
+      "Na célula de grupo só se agenda o nome de uma sala; na célula de sala, só paciente.",
+      "Profissional com agendamento num grupo fica bloqueado nas outras salas no mesmo horário (exceto a própria sala do grupo).",
+      "Um grupo agendado para a sala libera o mesmo profissional a ter dois pacientes que não fazem ABA na sala."
+    ],
+    who: "Permissão <b>Grupos de Suporte</b>."},
+
+  // ---------- Planner ----------
+  {id: "planner", group: "Planner", title: "Planner: a grade modelo", mod: "agenda", tab: "agenda",
+    purpose: "Grade de 4 semanas que se repetem (dias × salas × terapeutas × horários): o modelo da rotina da clínica.",
+    steps: [
+      "Planner ▾ → <b>Planner</b>. Escolha o dia e a semana (ou \"Todos\"), filtre por sala e busque o paciente.",
+      "Clique numa célula vazia (+) para agendar: paciente, serviço, observação, ou marque Bloqueado / Reunião Clínica / Treinamento.",
+      "Passe o mouse no agendamento para Excluir, Mover ou Copiar. Também dá para arrastar e soltar (em cima de outro agendamento, troca os dois).",
+      "Na linha antes das 07:20 e na do almoço: botões <b>liberar / bloquear / limpar</b> do período (dois cliques para confirmar). Ao lado de cada horário: liberar/bloquear a linha.",
+      "Desfazer/refazer: botões no canto da grade ou Ctrl+Z / Ctrl+Y (a setinha ▾ lista as ações)."
+    ],
+    rules: [
+      "Bloquear só preenche horários livres; liberar só tira bloqueios; limpar apaga tudo do período.",
+      "Na segunda às 11:20 há a Reunião Clínica automática.",
+      "Célula cinza ou listrada = fora do horário do profissional ou bloqueada por regra (passe o mouse para ver o motivo)."
+    ],
+    who: "Permissão <b>Planner</b>."},
+  {id: "planner-regras", group: "Planner", title: "Regras de agendamento", mod: "agenda", tab: "agenda",
+    purpose: "Conferências que o sistema faz ao agendar (Planner e Agenda).",
+    steps: ["O sistema confere sozinho. Quando algo não pode, aparece o motivo na tela."],
+    rules: [
+      "Profissional não pode estar em dois lugares (salas/grupos diferentes) no mesmo horário.",
+      "Paciente não pode ter o mesmo serviço em dois lugares no mesmo horário, nem dois atendimentos com o mesmo profissional.",
+      "Paciente que <b>não faz ABA</b> ocupa o horário do profissional (sala com ABA no nome) ou a sala toda (sala sem ABA).",
+      "Fora do horário do paciente ou com terapeuta diferente do tratamento: pede confirmação duas vezes.",
+      "Bloqueado, Reunião Clínica e Treinamento não entram nas regras."
+    ],
+    who: "Vale para todos que agendam."},
+  {id: "planner-ferramentas", group: "Planner", title: "Ferramentas do Planner", mod: "agenda", tab: "agenda",
+    purpose: "Botões da barra do Planner para mudanças em lote.",
+    steps: [
+      "<b>Editar agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
+      "<b>Trocar profissional</b>: passa as colunas de um profissional para outro.",
+      "<b>Enviar para a Agenda</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes.",
+      "<b>Limpar semana</b>: apaga todos os agendamentos de uma semana do Planner (dupla confirmação, desfazível).",
+      "<b>Exportar Excel</b>: baixa uma planilha com os agendamentos das 4 semanas."
+    ],
+    rules: [
+      "Enviar para a Agenda só acrescenta: nunca altera nem apaga o que já está na Agenda. Pula horários ocupados, bloqueados ou fora do horário.",
+      "Trocar profissional não entra no desfazer; para voltar, troque ao contrário."
+    ],
+    who: "Permissão <b>Planner</b>. Enviar exige incluir na <b>Agenda</b>; Trocar profissional exige editar <b>Salas</b>."},
+  {id: "resumo", group: "Planner", title: "Resumo do Planner", mod: "resumo", tab: "relatorio",
+    purpose: "Total de sessões por paciente, profissional e especialidade, somando as 4 semanas do Planner.",
+    steps: ["Planner ▾ → <b>Resumo</b>. Busque o paciente; os cabeçalhos ficam fixos ao rolar."],
+    rules: ["Conta só o que está agendado no Planner (paciente sem agendamento não aparece)."],
+    who: "Permissão <b>Resumo</b>."},
+
+  // ---------- Agenda ----------
+  {id: "agenda", group: "Agenda", title: "Agenda (datas reais)", mod: "agendamentos", tab: "agendadia",
+    purpose: "Os atendimentos do dia a dia, em datas reais, por profissional ou por sala.",
+    steps: [
+      "Abra <b>Agenda</b>. Escolha <b>Dia</b> ou <b>Semana</b>, <b>Profissionais</b> ou <b>Salas</b>, e navegue com ‹ Hoje ›.",
+      "Clique no + de um horário para marcar: paciente (ou grupo de suporte), serviço, sala, observação; ou marque Bloqueado / Reunião Clínica / Treinamento.",
+      "Vários atendimentos no mesmo horário ficam lado a lado (botão + para mais um).",
+      "Copiar, mover e arrastar funcionam como no Planner. Desfazer: Ctrl+Z / Ctrl+Y.",
+      "Busca: destaca o paciente na tela e mostra quantos há na semana."
+    ],
+    rules: [
+      "Fora do horário do profissional a célula é hachurada e não aceita marcação.",
+      "<b>Limpar semana</b> apaga tudo da semana aberta (dupla confirmação); atendimentos com evolução ficam.",
+      "Atendimento com evolução no prontuário <b>só o Administrador</b> exclui.",
+      "Datas passadas mostram a cor do tratamento que valia na época."
+    ],
+    who: "Permissão <b>Agenda</b>. Profissional sem \"editar\" vê só a própria agenda."},
+  {id: "agenda-status", group: "Agenda", title: "Status do atendimento", mod: "agendamentos", tab: "agendadia",
+    purpose: "Marcar o que aconteceu: Finalizado, Não compareceu, Falta justificada…",
+    steps: [
+      "Clique no atendimento e escolha o <b>Status</b> (quem não pode editar vê a janela de detalhes e também pode marcar).",
+      "Ao marcar <b>Finalizado</b> sem evolução, o sistema abre a evolução do prontuário; o status só é gravado depois de salvar a evolução."
+    ],
+    rules: [
+      "Cada nível só usa os status liberados para ele (Níveis de permissão → Status dos atendimentos).",
+      "Finalizado e Não compareceu contam como sessão usada no tratamento."
+    ],
+    who: "Conforme a permissão de cada status."},
+
+  // ---------- Prontuário ----------
+  {id: "prontuario", group: "Prontuário", title: "Prontuário (evoluções)", mod: "prontuario", tab: "prontuario",
+    purpose: "Evoluções dos atendimentos de cada paciente, em linha do tempo.",
+    steps: [
+      "Abra <b>Prontuário</b>, busque o paciente e veja a linha do tempo.",
+      "<b>+ Nova evolução</b> para escrever (negrito, títulos, listas, tabelas). Ou marque o atendimento como Finalizado na Agenda.",
+      "O ícone de agenda antes da data leva ao atendimento ligado à evolução."
+    ],
+    rules: [
+      "Só o autor edita a própria evolução; excluir: autor com permissão ou Administrador.",
+      "Evolução ligada a um atendimento impede que ele seja excluído (só o Administrador)."
+    ],
+    who: "Permissão <b>Prontuário</b>."},
+
+  // ---------- Relatórios ----------
+  {id: "relatorios", group: "Relatórios", title: "Relatórios", mod: "relatorios", tab: "relatorios",
+    purpose: "Relatórios da Agenda e dos Tratamentos por período, com impressão/PDF e Excel.",
+    steps: [
+      "Abra <b>Relatórios</b>, escolha o tipo, o período (ou os atalhos) e os filtros; clique em <b>Gerar</b>.",
+      "Clique no título de uma coluna para ordenar. Use <b>Imprimir/PDF</b> ou <b>Exportar Excel</b>."
+    ],
+    rules: [
+      "Tipos: Lista de atendimentos, Produtividade, Frequência, Atendimentos por convênio, Pacote contratado × realizado, Evoluções pendentes, Ocupação, Bloqueios/reuniões/treinamentos, Pacientes sem atendimento, Tratamentos novos e renegociados.",
+      "Convênio, plano e pacote vêm do tratamento que valia na data de cada atendimento.",
+      "Cada nível vê só os tipos liberados; o Profissional vê só os próprios atendimentos."
+    ],
+    who: "Permissão <b>Relatórios</b> (por tipo)."},
+
+  // ---------- Acesso ----------
+  {id: "senha", group: "Acesso", title: "Trocar senha e sair", mod: null,
+    purpose: "Manter o seu acesso seguro.",
+    steps: ["Acesso ▾ → <b>Trocar senha</b>.", "Acesso ▾ → <b>Sair</b> ao terminar, principalmente em computador compartilhado."],
+    rules: ["Esqueceu a senha? O Administrador define uma nova em Usuários."],
+    who: "Todos os usuários."},
+  {id: "usuarios", group: "Acesso", title: "Usuários e níveis de permissão", mod: "admin", tab: "usuarios",
+    purpose: "Quem acessa o sistema e o que cada nível pode fazer.",
+    steps: [
+      "Acesso ▾ → <b>Usuários</b> → <b>+ Novo usuário</b>: nome, e-mail, senha e nível.",
+      "<b>Níveis de permissão</b>: clique num nível e marque, por tela, Ver / Incluir / Editar / Excluir, os status e os relatórios liberados.",
+      "Para bloquear alguém, desative o usuário (ele sai na hora)."
+    ],
+    rules: [
+      "O nível Administrador tem acesso total e não pode ser alterado.",
+      "Ninguém muda o próprio nível. Nível com usuários não pode ser excluído.",
+      "Mudanças de permissão valem na hora para todos daquele nível."
+    ],
+    who: "Só o <b>Administrador</b>."},
+  {id: "status-cadastro", group: "Acesso", title: "Cadastro de status", mod: "cadastro_status",
+    purpose: "Lista de status dos atendimentos (nome e cor).",
+    steps: ["Acesso ▾ → <b>Status</b>: inclua, renomeie, mude a cor ou exclua."],
+    rules: ["Quem pode usar cada status é definido em Níveis de permissão."],
+    who: "Permissão <b>Status</b>."},
+  {id: "clinica", group: "Acesso", title: "Cadastro da Clínica", mod: "clinica",
+    purpose: "Dados da clínica, dias e horários de funcionamento, duração do atendimento, cores, nome e logo.",
+    steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve."],
+    rules: [
+      "Os dias e horários abertos definem as linhas do Planner e da Agenda.",
+      "Mudar a duração pede confirmação: horários que deixam de existir somem da grade (os agendamentos ficam guardados)."
+    ],
+    who: "Permissão <b>Clínica</b> (ver/editar)."},
+  {id: "backup", group: "Acesso", title: "Cópia de segurança", mod: "admin",
+    purpose: "Guardar e restaurar todos os dados do sistema.",
+    steps: [
+      "Acesso ▾ → <b>Cópia de segurança</b> → <b>Baixar</b>. Guarde o arquivo numa pasta protegida.",
+      "Para restaurar, escolha o arquivo e confirme duas vezes."
+    ],
+    rules: [
+      "Restaurar repõe o que estava na cópia e não apaga o que foi criado depois.",
+      "O arquivo tem dados de saúde: não envie por WhatsApp ou e-mail.",
+      "Baixe uma cópia antes de qualquer atualização do banco."
+    ],
+    who: "Só o <b>Administrador</b>."}
+];
+// Novidades (a mais nova primeiro). Toda mudança visível ganha uma linha aqui.
+var HELP_NEWS = [
+  {date: "2026-10-04", topic: "inicio", text: "Guia de ajuda: menu Acesso → Ajuda e botão ? em cada tela."},
+  {date: "2026-10-04", topic: "tratamentos-mes", text: "Tratamentos: contratado × realizado mês a mês, coluna Mês e filtro \"Abaixo do contratado\"."},
+  {date: "2026-10-04", topic: "tratamentos-vencimento", text: "Tratamentos: vencimento por data ou por quantidade de sessões, com avisos e filtros Vencendo/Vencidos."},
+  {date: "2026-10-03", topic: "tratamentos", text: "Tratamento com atendimentos realizados não pode ser excluído nem ter a quantidade de sessões alterada (use Renegociar)."},
+  {date: "2026-10-03", topic: "motivos", text: "Motivo do cancelamento, cancelado definitivo e histórico do tratamento. Novo cadastro Motivos de cancelamento."},
+  {date: "2026-10-03", topic: "tratamentos", text: "Atendimentos antigos usam o tratamento que valia na data (cor, regras e relatórios)."},
+  {date: "2026-10-03", topic: "tratamentos-valores", text: "Valores dos tratamentos protegidos pela permissão \"Tratamentos – valores\"."},
+  {date: "2026-10-03", topic: "tratamentos", text: "Novo cadastro de Tratamentos (convênio, pacote, ABA, especialidades e horário saíram do paciente)."},
+  {date: "2026-10-03", topic: "backup", text: "Cópia de segurança no menu Acesso."},
+  {date: "2026-10-03", topic: "celular", text: "Versão para celular: menu ☰, Agenda na visão Dia e telas ajustadas."}
+];
+var HELP = {topic: "inicio", search: ""};
+var HELP_TAB_TOPIC = {agenda: "planner", relatorio: "resumo", agendadia: "agenda", prontuario: "prontuario", relatorios: "relatorios",
+  pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "profissionais", convenios: "convenios", servicos: "servicos",
+  especialidades: "especialidades", motivos: "motivos", usuarios: "usuarios"};
+function helpCan(t){
+  if (!t.mod) return true;
+  if (!window.pipoAuth) return true;
+  if (t.mod === "admin") return window.pipoAuth.isAdmin();
+  return can(t.mod, "view");
+}
+function helpTopics(){ return HELP_TOPICS.filter(helpCan); }
+function helpTopic(id){ return helpTopics().filter(function(t){ return t.id === id; })[0] || null; }
+function helpText(t){ return normText([t.title, t.purpose, (t.steps || []).join(" "), (t.rules || []).join(" "), t.who].join(" ").replace(/<[^>]+>/g, " ")); }
+function helpTopicHtml(t){
+  return '<h2 class="help-title">' + esc(t.title) + '</h2>' +
+    '<p class="help-purpose">' + t.purpose + '</p>' +
+    (t.steps && t.steps.length ? '<h3>Como fazer</h3><ol class="help-steps">' + t.steps.map(function(x){ return '<li>' + x + '</li>'; }).join("") + '</ol>' : '') +
+    (t.rules && t.rules.length ? '<h3>Regras e avisos</h3><ul class="help-rules">' + t.rules.map(function(x){ return '<li>' + x + '</li>'; }).join("") + '</ul>' : '') +
+    '<h3>Quem pode usar</h3><p class="help-who">' + t.who + '</p>';
+}
+function helpNewsHtml(){
+  var mine = HELP_NEWS.filter(function(n){ return !n.topic || helpTopic(n.topic); });
+  if (!mine.length) return '<h2 class="help-title">Novidades</h2><p class="hint">Nenhuma novidade.</p>';
+  var html = '<h2 class="help-title">Novidades</h2><p class="help-purpose">Mudanças recentes do sistema, da mais nova para a mais antiga. Clique para ver o tópico.</p><ul class="help-news">';
+  mine.forEach(function(n){
+    html += '<li><span class="help-news-date">' + esc(trBr(n.date)) + '</span>' +
+      (n.topic ? '<a href="#" data-help-go="' + esc(n.topic) + '">' + esc(n.text) + '</a>' : esc(n.text)) + '</li>';
+  });
+  return html + '</ul>';
+}
+function renderHelp(){
+  var nav = document.getElementById("helpNav"), body = document.getElementById("helpBody");
+  if (!nav || !body) return;
+  var q = normText((document.getElementById("helpSearch") || {}).value || "").trim();
+  var list = helpTopics();
+  var hits = q ? list.filter(function(t){ return q.split(/\s+/).every(function(w){ return helpText(t).indexOf(w) !== -1; }); }) : list;
+  var html = '';
+  HELP_GROUPS.forEach(function(g){
+    var items = hits.filter(function(t){ return t.group === g; });
+    if (g === "Início" && !q) items = items.concat([{id: "novidades", title: "Novidades"}]);
+    if (!items.length) return;
+    html += '<div class="help-grp">' + esc(g) + '</div>' + items.map(function(t){
+      return '<button type="button" class="help-link' + (t.id === HELP.topic ? ' active' : '') + '" data-help-go="' + esc(t.id) + '">' + esc(t.title) + '</button>';
+    }).join("");
+  });
+  nav.innerHTML = html || '<div class="hint" style="padding:8px">Nada encontrado.</div>';
+  if (q){
+    body.innerHTML = '<h2 class="help-title">Busca: ' + esc((document.getElementById("helpSearch") || {}).value) + '</h2>' +
+      (hits.length ? '<ul class="help-results">' + hits.map(function(t){
+        return '<li><a href="#" data-help-go="' + esc(t.id) + '"><b>' + esc(t.title) + '</b></a> <span class="hint">' + esc(t.group) + '</span><div class="hint">' + t.purpose.replace(/<[^>]+>/g, "") + '</div></li>';
+      }).join("") + '</ul>' : '<p class="hint">Nenhum tópico encontrado. Tente outra palavra.</p>');
+    return;
+  }
+  if (HELP.topic === "novidades"){ body.innerHTML = helpNewsHtml(); return; }
+  var t = helpTopic(HELP.topic) || list[0];
+  if (t){ HELP.topic = t.id; body.innerHTML = helpTopicHtml(t); }
+  body.scrollTop = 0;
+}
+function helpGo(id){
+  HELP.topic = id;
+  var s = document.getElementById("helpSearch"); if (s) s.value = "";
+  var sec = document.getElementById("tab-ajuda"); if (sec) sec.classList.remove("help-nav-open");
+  renderHelp();
+}
+// Abre o guia (menu Acesso → Ajuda, ou o "?" de uma tela com o tópico dela).
+function openHelp(topicId){
+  if (topicId) HELP.topic = topicId;
+  var s = document.getElementById("helpSearch"); if (s) s.value = "";
+  var tb = document.querySelector('#mainTabs button[data-tab="ajuda"]');
+  if (tb) tb.click();
+  renderHelp();
+}
+window.pipoOpenHelp = function(){ openHelp(null); };
+// Botão "?" na barra de cada tela: abre o guia no tópico daquela tela.
+function helpTopicForTab(tab){
+  if (tab === "salas") return state.salasView === "grupos" ? "grupos" : "salas";
+  return HELP_TAB_TOPIC[tab] || "inicio";
+}
+function helpAddQButtons(){
+  Object.keys(HELP_TAB_TOPIC).concat(["salas"]).forEach(function(tab){
+    var sec = document.getElementById("tab-" + tab); if (!sec || sec.querySelector(".help-q")) return;
+    var bar = sec.querySelector(".pat-toolbar, .controls, .agd-toolbar, .rp-form");
+    if (!bar) return;
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "help-q"; b.textContent = "?";
+    b.title = "Ajuda sobre esta tela"; b.setAttribute("aria-label", "Ajuda sobre esta tela");
+    b.addEventListener("click", function(){ openHelp(helpTopicForTab(tab)); });
+    if (bar.classList.contains("rp-form")) bar.insertBefore(b, bar.firstChild); else bar.appendChild(b);
+  });
+}
+(function(){
+  var sec = document.getElementById("tab-ajuda"); if (!sec) return;
+  sec.addEventListener("click", function(e){
+    var a = e.target.closest("[data-help-go]");
+    if (a){ e.preventDefault(); helpGo(a.getAttribute("data-help-go")); return; }
+    if (e.target.closest("#helpNavToggle")) sec.classList.toggle("help-nav-open");
+  });
+  var s = document.getElementById("helpSearch");
+  if (s) s.addEventListener("input", function(){ if (s.value.trim()) sec.classList.add("help-nav-open"); renderHelp(); });
+  helpAddQButtons();
+  // A tela de Usuários monta a barra depois (js/usuarios.js): tenta de novo ao trocar de tela.
+  document.getElementById("mainTabs").addEventListener("click", function(){ setTimeout(helpAddQButtons, 0); });
+})();
+
 /* ---------------- Cópia de segurança (menu Acesso, só Administrador) ----------------
  * Baixar: lê no navegador (o Administrador enxerga tudo) os documentos (cadastros,
  * Planner, clínica), a Agenda (appointments), o Prontuário (clinical_records) e os
@@ -10765,7 +11254,7 @@ function openNavFromHash(final){
   }
   var tb = document.querySelector('#mainTabs button[data-tab="' + key + '"]');
   // Usuários: botão sempre oculto, só o Administrador abre.
-  var ok = tb && (!window.pipoAuth || (key === "usuarios" ? window.pipoAuth.isAdmin() : !tb.hidden));
+  var ok = tb && (!window.pipoAuth || (key === "usuarios" ? window.pipoAuth.isAdmin() : (key === "ajuda" || !tb.hidden)));
   if (!ok){ if (final || !tb){ navHashDone = true; navSaveHash(); } return; }
   navHashDone = true;
   tb.click();
