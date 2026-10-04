@@ -1726,7 +1726,7 @@ no mesmo menu.
   (só com Profissional), Horário de trabalho (`#profHours`, 7 dias, campos texto HH:MM
   `.ph-start/.ph-end`, `staffTime`, `staffDayInit` = salvo ou o da clínica; total de
   horas, atendimentos para profissional, aviso `#sfJornadaNote` × jornada), Contato
-  (CEP ViaCEP, ids `sa-*`), Contrato (`sf-vinculo`, `sf-cargo`, `sf-admissao`,
+  (telefone + `#sf-telvia` WhatsApp/Ligação → `telefoneVia`; CEP ViaCEP, ids `sa-*`; grade `.sf-grid` com `data-ga`, 2 colunas no celular), Contrato (`sf-vinculo`, `sf-cargo`, `sf-admissao`,
   `sf-deslig`, `sf-jornada`), Remuneração (`#sf-valor` + linhas `.sf-pay` com
   descrição/valor/forma/favorecido/PIX ou banco/obs, `#sfPayAdd`, soma × contratado
   `#sfPaySum`), Contato de emergência, Acesso ao sistema (e-mail, `#sfRole`, senha,

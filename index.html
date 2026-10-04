@@ -475,6 +475,14 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .prof-hours input:disabled{opacity:.6}
 .sf-hours-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between}
 .sf-types-pick .reg-pick-add{flex:none}
+/* Colaborador: Contato e endereço em grade (computador: 4 colunas; celular: 2). */
+.sf-grid{display:grid;gap:10px 12px}
+.sf-grid > .field{margin:0;min-width:0}
+.sf-contact{grid-template-columns:1.2fr 1fr 2fr;grid-template-areas:"tel via email"}
+.sf-addr{grid-template-columns:1fr 2fr 0.8fr;grid-template-areas:"cep rua num" "compl bairro bairro" "cidade cidade uf"}
+.sf-grid [data-ga="tel"]{grid-area:tel}.sf-grid [data-ga="via"]{grid-area:via}.sf-grid [data-ga="email"]{grid-area:email}
+.sf-grid [data-ga="cep"]{grid-area:cep}.sf-grid [data-ga="rua"]{grid-area:rua}.sf-grid [data-ga="num"]{grid-area:num}
+.sf-grid [data-ga="compl"]{grid-area:compl}.sf-grid [data-ga="bairro"]{grid-area:bairro}.sf-grid [data-ga="cidade"]{grid-area:cidade}.sf-grid [data-ga="uf"]{grid-area:uf}
 .pm-sec[hidden]{display:none}
 .pm-sec-sub{font-size:12px;font-weight:800;color:var(--ink-2)}
 .sf-pays{display:flex;flex-direction:column;gap:8px}
@@ -1297,6 +1305,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .field .dp-btn{font-size:16px;padding:9px 10px}
   .reg-pick > .btn.reg-pick-add{width:44px;min-width:44px;font-size:24px;padding:0!important}
   .field .ms-btn{font-size:16px;padding:10px 10px}
+  .sf-contact{grid-template-columns:1.4fr 1fr;grid-template-areas:"tel via" "email email"}
+  .sf-addr{grid-template-columns:1.4fr 1fr;grid-template-areas:"cep num" "rua rua" "compl bairro" "cidade uf"}
   .modal-foot .spacer{flex-basis:0}
   .field-row{flex-wrap:wrap}
   #specRowsHost .hours-row{flex-wrap:wrap}
@@ -7693,6 +7703,7 @@ function openStaffModal(entry, opts){
   var isProf0 = d.tipos.indexOf(STAFF_PROF_TYPE) !== -1;
   function sec(id, title, inner, hidden){ return '<section class="pm-sec" data-sfsec="' + id + '"' + (hidden ? ' hidden' : '') + '><div class="pm-sec-head"><span class="pm-sec-title">' + title + '</span></div>' + inner + '</section>'; }
   function fld(id, label, val, attrs, flex){ return '<div class="field"' + (flex ? ' style="flex:' + flex + '"' : '') + '><label for="' + id + '">' + label + '</label><input id="' + id + '" type="text" value="' + esc(val || "") + '"' + (attrs || "") + '></div>'; }
+  function ga(html, area){ return html.replace('<div class="field"', '<div class="field" data-ga="' + area + '"'); }
   function sel(id, label, list, val, flex){ return '<div class="field"' + (flex ? ' style="flex:' + flex + '"' : '') + '><label for="' + id + '">' + label + '</label><select id="' + id + '">' +
     list.map(function(o){ return '<option value="' + esc(o[0]) + '"' + (o[0] === (val || "") ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join("") + '</select></div>'; }
   var specOptions = '<option value="">Sem especialidade</option>' + activeOnly(state.specialties, v.specialtyId).map(function(s){
@@ -7751,10 +7762,14 @@ function openStaffModal(entry, opts){
             '<tfoot><tr><td colspan="6" class="ph-total-label">Total: <span class="ph-total" id="profHoursTotal"></span></td></tr></tfoot></table>' +
           '<div class="pm-note" id="sfJornadaNote" hidden></div>') +
         (hr ? sec("contato", "Contato",
-          '<div class="field-row">' + fld("sf-tel", "Telefone", d.telefone ? formatPhone(d.telefone) : "", ' inputmode="tel" placeholder="(00) 00000-0000"') + fld("sf-email", "E-mail", d.email, ' inputmode="email"', 2) + '</div>' +
-          '<div class="field-row">' + fld("sa-cep", "CEP", end.cep, ' inputmode="numeric" maxlength="9" placeholder="00000-000"') + fld("sa-rua", "Rua", end.rua, '', 3) + fld("sa-numero", "Número", end.numero) + '</div>' +
-          '<div class="pat-count" id="saCepMsg"></div>' +
-          '<div class="field-row">' + fld("sa-compl", "Complemento", end.compl) + fld("sa-bairro", "Bairro", end.bairro) + fld("sa-cidade", "Cidade", end.cidade) + fld("sa-uf", "UF", end.uf, ' maxlength="2"') + '</div>') : '') +
+          '<div class="sf-grid sf-contact">' + ga(fld("sf-tel", "Telefone", d.telefone ? formatPhone(d.telefone) : "", ' inputmode="tel" placeholder="(00) 00000-0000"'), "tel") +
+            ga(sel("sf-telvia", "Contato por", [["whatsapp", "WhatsApp"], ["ligacao", "Ligação"]], d.telefoneVia || "whatsapp"), "via") +
+            ga(fld("sf-email", "E-mail", d.email, ' inputmode="email" placeholder="nome@exemplo.com"'), "email") + '</div>' +
+          '<div class="sf-grid sf-addr">' + ga(fld("sa-cep", "CEP", end.cep, ' inputmode="numeric" maxlength="9" placeholder="00000-000"'), "cep") +
+            ga(fld("sa-rua", "Rua", end.rua), "rua") + ga(fld("sa-numero", "Número", end.numero), "num") +
+            ga(fld("sa-compl", "Complemento", end.compl, ' placeholder="Apto, bloco…"'), "compl") + ga(fld("sa-bairro", "Bairro", end.bairro), "bairro") +
+            ga(fld("sa-cidade", "Cidade", end.cidade), "cidade") + ga(fld("sa-uf", "UF", end.uf, ' maxlength="2"'), "uf") + '</div>' +
+          '<div class="pat-count" id="saCepMsg"></div>') : '') +
         (hr ? sec("contrato", "Contrato",
           '<div class="field-row">' + sel("sf-vinculo", "Vínculo", STAFF_VINCULOS, d.vinculo) + fld("sf-cargo", "Cargo / função", d.cargo, '', 2) + '</div>' +
           '<div class="field-row"><div class="field"><label for="sf-admissao">Admissão / início</label><input id="sf-admissao" type="date" value="' + esc(d.admissao || "") + '"></div>' +
@@ -8140,7 +8155,7 @@ function openStaffModal(entry, opts){
       if (hr && hrSave){
         var dataOut = Object.assign({}, row ? row.data : {}, {
           nome: name, nomeSocial: val("profSocial"), cpf: digitsOnly(cpf), rg: val("sf-rg"), nascimento: val("sf-nasc"), sexo: val("sf-sexo"),
-          tipos: tipos, telefone: digitsOnly(val("sf-tel")), email: mail,
+          tipos: tipos, telefone: digitsOnly(val("sf-tel")), telefoneVia: val("sf-telvia") || "whatsapp", email: mail,
           endereco: {cep: val("sa-cep"), rua: val("sa-rua"), numero: val("sa-numero"), compl: val("sa-compl"), bairro: val("sa-bairro"), cidade: val("sa-cidade"), uf: val("sa-uf").toUpperCase()},
           vinculo: val("sf-vinculo"), cargo: val("sf-cargo"), admissao: adm, desligamento: desl, jornada: val("sf-jornada"),
           emergencia: {nome: val("sf-em-nome"), rel: val("sf-em-rel"), telefone: digitsOnly(val("sf-em-tel"))},
@@ -13401,7 +13416,7 @@ var HELP_TOPICS = [
       "<b>Tipos</b>: marque um ou mais (Profissional, Coordenação, Recepção…). O <b>+</b> inclui um tipo novo.",
       "Com <b>Profissional</b> marcado aparece a seção <b>Atendimento</b> (especialidade principal, CBO, conselho, registro e serviços) e a pessoa passa a aparecer no Planner e na Agenda. O CBO e o Conselho vêm dos cadastros de CBO e de Conselhos; o <b>+</b> ao lado inclui um novo sem sair da janela.",
       "<b>Horário de trabalho</b>: manhã e tarde de cada dia, com o total de horas por semana (e de atendimentos, para profissionais). Se a jornada do contrato for diferente da soma, aparece um aviso.",
-      "<b>Contato</b> (telefone, e-mail, endereço — o CEP preenche rua, bairro e cidade), <b>Contrato</b> (vínculo, cargo, admissão, desligamento, jornada semanal) e <b>Contato de emergência</b>.",
+      "<b>Contato</b> (telefone com a forma de contato — WhatsApp ou Ligação —, e-mail e endereço; o CEP preenche rua, bairro e cidade), <b>Contrato</b> (vínculo, cargo, admissão, desligamento, jornada semanal) e <b>Contato de emergência</b>.",
       "<b>Remuneração</b>: valor mensal contratado e as formas de pagamento (salário, pensão alimentícia…): descrição, valor, forma (PIX, transferência, depósito, dinheiro, boleto, desconto em folha), favorecido, chave PIX ou banco/agência/conta e observação. Use <b>+ Incluir forma de pagamento</b> para mais uma linha.",
       "<b>Acesso ao sistema</b>: e-mail, nível de permissão e senha do usuário; depois, nova senha e acesso ativo.",
       "Busque por nome, cargo ou CPF e filtre pelo tipo. \"Inativos\" mostra também os desligados."
