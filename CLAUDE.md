@@ -1743,3 +1743,19 @@ no mesmo menu.
 - Permissões: `rh_funcionarios` (ver/incluir/editar/excluir) e `rh_remuneracao`
   (ver/editar), grupo "RH" em Níveis de permissão (`MODULES` nos dois js).
 - Teste `tests/run_staff.js` (30 arquivos no `npm test`).
+
+## Profissionais dentro de Funcionários e Prestadores (2026-10-05)
+Decisão do usuário: não existe mais cadastro de profissional separado nem
+permissão "Profissionais". Cadastrar/editar qualquer pessoa (inclusive quem atende)
+segue a permissão **Funcionários e Prestadores** (`rh_funcionarios`: ver, incluir,
+editar, excluir), com as regras de antes: só ver = janela em leitura; em uso
+(atendimentos, colunas de sala, tratamentos ou usuário de acesso) não exclui,
+**Inativar**; inativo tem **Reativar** (`setupInactivate` com `mod: "rh_funcionarios"`
+para profissional e não profissional). Remuneração continua com `rh_remuneracao`.
+- "Profissionais" saiu do menu Cadastros (`CAD_ITEMS`) e dos Níveis de permissão
+  (`MODULES` de `js/usuarios.js`); a aba `#tab-profissionais` continua no código,
+  oculta (testes e `openProfessionalModal`). `writeProfessionals` confere
+  `rh_funcionarios`. Tópico de ajuda "profissionais" juntou-se a "funcionarios".
+- Banco: migração `supabase/2026-10-05f-profissionais-no-rh.sql` —
+  `module_for_path('config/professionals') = 'rh_funcionarios'` e cada nível recebe
+  em `rh_funcionarios` o que tinha em `profissionais` (OR com o que já tinha).

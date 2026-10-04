@@ -21,6 +21,8 @@ const path = require('path');
 
   // Menu RH e lista: os profissionais já cadastrados aparecem como tipo Profissional.
   const menu = await ev(`(function(){ renderNavMenus(); return Array.prototype.map.call(document.querySelectorAll("#rhMenu [data-nav]"), function(b){ return b.textContent; }); })()`);
+  const cad = await ev(`Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav"); })`);
+  console.log('Profissionais is no longer in the Cadastros menu?', cad.indexOf('profissionais') === -1, JSON.stringify(cad));
   console.log('RH menu has Funcionários e Prestadores and Tipos?', menu.join('|') === 'Funcionários e Prestadores|Tipos de funcionário', JSON.stringify(menu));
   await page.$eval('#mainTabs button[data-tab=funcionarios]', (b) => b.click()); await page.waitForTimeout(300);
   const nProf = await ev('state.professionals.filter(function(p){ return !p.inativo; }).length');
@@ -111,6 +113,16 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab=tiposfunc]', (b) => b.click()); await page.waitForTimeout(200);
   const types = await page.$$eval('#reg-tiposfunc-host tbody tr', (r) => r.length);
   console.log('Tipos de funcionário lists the 10 default types?', types === 10, types);
+
+  // Funcionário com usuário/atendimentos: Excluir vira Inativar (mesma regra dos profissionais); inativo ganha Reativar.
+  await page.$eval('#mainTabs button[data-tab=funcionarios]', (b) => b.click()); await page.waitForTimeout(200);
+  await page.$eval('#staffSearch', (e) => { e.value = ''; e.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.click('#tab-funcionarios .inact-toggle input');
+  await page.$eval('#staffSearch', (e) => { e.value = 'rita'; e.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.click('#staffListHost tbody tr'); await page.waitForSelector('#ovProf'); await page.waitForTimeout(300);
+  const react = await page.$('#profDeleteReactivate');
+  console.log('inactive person shows "Reativar"?', !!react);
+  await page.click('#profCancel');
 
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();

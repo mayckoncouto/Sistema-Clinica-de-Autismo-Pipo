@@ -2750,7 +2750,7 @@ function permToolClasses(){
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
   if (!window.pipoAuth) return;
-  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados", funcionarios:"rh_funcionarios", tiposfunc:"rh_funcionarios"};
+  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"rh_funcionarios", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados", funcionarios:"rh_funcionarios", tiposfunc:"rh_funcionarios"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -2791,7 +2791,7 @@ function applyPermissionsUI(){
   }
   function show(id, on){ var el = document.getElementById(id); if (el) el.hidden = !on; }
   show("addPatientBtn", can("pacientes","create"));
-  show("addProfessionalBtn", can("profissionais","create"));
+  show("addProfessionalBtn", can("rh_funcionarios","create"));
   show("addRoomBtn", can(state.salasView === "grupos" ? "grupos" : "salas", "create"));
   show("toggleGroupsBtn", can("salas", "view") && can("grupos", "view"));
   if (state.salasView !== "grupos" && !can("salas", "view") && can("grupos", "view")) state.salasView = "grupos";
@@ -7562,7 +7562,7 @@ function staffPaySave(id, data){
   return c.from("staff_pay").upsert({staff_id: id, data: data}).then(function(r){ if (r.error) throw new Error(r.error.message); return true; });
 }
 // Lista da tela: linhas do RH + profissionais que ainda não têm linha (ex.: cadastrados
-// em Cadastros → Profissionais por quem não é do RH).
+// antes do RH existir).
 function staffEntries(){
   var out = STAFF.rows.map(function(r){ return {row: r, prof: r.professional_id ? findProfessional(r.professional_id) : null}; });
   (state.professionals || []).forEach(function(p){
@@ -7596,7 +7596,7 @@ var STAFF_COLS = [{key: "nome", label: "Nome", width: 300, min: 140}, {key: "tip
 function renderStaffTab(){
   var host = document.getElementById("staffListHost"); if (!host) return;
   var addBtn = document.getElementById("staffAddBtn");
-  if (addBtn) addBtn.hidden = !(can("rh_funcionarios", "create") || can("profissionais", "create"));
+  if (addBtn) addBtn.hidden = !can("rh_funcionarios", "create");
   var tf = document.getElementById("staffTypeFilter");
   if (tf && tf.options.length !== staffTypesList().length + 1){
     var cur = tf.value;
@@ -7642,7 +7642,7 @@ function wireStaffTab(){
   host.addEventListener("keydown", function(e){ if (e.key === "Enter") open(e); });
 }
 function staffOnShow(){ renderStaffTab(); staffLoad(); }
-// Cadastros → Profissionais e o resto do app continuam chamando esta função.
+// Atalho usado pelo resto do app (e pelos testes) para abrir um profissional.
 function openProfessionalModal(p){ openStaffModal(p ? staffEntryForProf(p) : null, {profissional: true}); }
 window.pipoOpenStaffNew = function(){ openStaffModal(null, {forUser: true}); }; // Usuários → + Incluir (js/usuarios.js)
 
@@ -7685,7 +7685,7 @@ function openStaffModal(entry, opts){
   var v = prof || {};
   var hr = staffCanSee();
   var hrSave = row ? can("rh_funcionarios", "edit") : can("rh_funcionarios", "create");
-  var profSave = prof ? can("profissionais", "edit") : can("profissionais", "create");
+  var profSave = hrSave; // profissional = funcionário: mesma permissão (Funcionários e Prestadores)
   var payView = hr && can("rh_remuneracao", "view"), payEdit = payView && can("rh_remuneracao", "edit");
   var canManageUser = !!(window.pipoAuth && (window.pipoAuth.isAdmin() || (window.pipoAuth.can("usuarios", "create") && window.pipoAuth.can("usuarios", "edit"))));
   var anySave = hrSave || profSave;
@@ -7702,7 +7702,7 @@ function openStaffModal(entry, opts){
   // Tipos: caixas de marcar (Profissional precisa da permissão de Profissionais).
   var typesHtml = '<div class="sf-types" id="sfTypes">' + staffTypesList().filter(function(t){ return isActive(t) || d.tipos.indexOf(t.id) !== -1; }).map(function(t){
     var on = d.tipos.indexOf(t.id) !== -1;
-    var lock = t.id === STAFF_PROF_TYPE ? !(on ? (prof ? can("profissionais", "edit") : true) : can("profissionais", "create")) : !hrSave;
+    var lock = !hrSave;
     return '<label class="sf-type' + (on ? ' on' : '') + '"><input type="checkbox" value="' + esc(t.id) + '"' + (on ? ' checked' : '') + (lock ? ' disabled' : '') + '> ' + esc(t.name) + '</label>';
   }).join("") + (hr && can("rh_funcionarios", "create") ? '<button type="button" class="btn ghost reg-pick-add" data-regadd="tiposfunc" data-for="sfTypeNew" title="Incluir tipo">+</button><select id="sfTypeNew" data-native hidden></select>' : '') + '</div>';
   // Horário de trabalho = horário de atendimento: todos os dias, horas livres.
@@ -8033,12 +8033,20 @@ function openStaffModal(entry, opts){
   // Excluir: profissional em uso vira Inativar (como sempre); só do RH = apaga a linha.
   if (!isNew){
     var delBtn = $("profDelete");
-    var delOk = prof ? can("profissionais", "delete") && (!row || can("rh_funcionarios", "delete")) : can("rh_funcionarios", "delete");
-    if (!delOk) delBtn.hidden = true;
-    else if (prof) setupInactivate({btn: "profDelete", mod: "profissionais", item: prof, name: prof.name, usage: USAGE.profissionais, close: close,
+    // Mesmas regras do antigo cadastro de profissional: em uso (atendimentos, salas,
+    // tratamentos ou usuário de acesso) não exclui, inativa; inativo ganha "Reativar".
+    if (!can("rh_funcionarios", "delete")) delBtn.hidden = true;
+    var stItem = prof ? prof : {id: row.id, inativo: !!d.inativo};
+    setupInactivate({btn: "profDelete", mod: "rh_funcionarios", item: stItem, name: d.nome || "", close: close,
+      usage: function(){
+        var u = window.pipoAuth && row ? window.pipoAuth.userForStaff(row.id) : Promise.resolve(null);
+        return Promise.all([prof ? USAGE.profissionais(prof) : [], u]).then(function(x){ return x[0].concat(x[1] ? ["usuário de acesso ao sistema"] : []); });
+      },
       save: function(it){
-        var w = writeProfessionals(state.professionals.map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; }));
-        return row && hrSave ? Promise.all([w, staffSaveRow(Object.assign({}, row, {data: Object.assign({}, row.data, {inativo: it.inativo})}))]).catch(function(e){ showToast(e.message, true); }) : w;
+        var steps = [];
+        if (prof) steps.push(writeProfessionals(state.professionals.map(function(x){ return x.id === prof.id ? Object.assign({}, x, {inativo: it.inativo}) : x; })));
+        if (row) steps.push(staffSaveRow(Object.assign({}, row, {data: Object.assign({}, row.data, {inativo: it.inativo})})));
+        return Promise.all(steps).then(function(){ renderStaffTab(); }).catch(function(e){ showToast(e.message, true); });
       }});
     delBtn.addEventListener("click", function(){
       if (delBlocked(this)) return;
@@ -8062,8 +8070,7 @@ function openStaffModal(entry, opts){
     var tipos = tiposNow();
     if (!tipos.length){ showToast("Marque pelo menos um tipo.", true); return; }
     var isProf = tipos.indexOf(STAFF_PROF_TYPE) !== -1;
-    if (isProf && !prof && !can("profissionais", "create")){ showToast(permDeniedMsg("profissionais", "create"), true); return; }
-    if (!isProf && !hr){ showToast("Sem permissão para Funcionários e Prestadores (RH).", true); return; }
+    if (!hrSave){ showToast(permDeniedMsg("rh_funcionarios", row || prof ? "edit" : "create"), true); return; }
     var hh = readHours();
     if (hh.err){ showToast(hh.err.msg, true); hh.err.el.focus(); return; }
     var cpf = formatCpf(cpfEl.value);
@@ -8109,7 +8116,7 @@ function openStaffModal(entry, opts){
         if (desligado) rec.inativo = true;
         var list = prof ? state.professionals.map(function(x){ return x.id === rec.id ? rec : x; }) : state.professionals.concat([rec]);
         profStep = writeProfessionals(list);
-      } else if (!isProf && prof && !prof.inativo && can("profissionais", "edit")){
+      } else if (!isProf && prof && !prof.inativo){
         // Deixou de ser profissional: fica inativo (os atendimentos antigos continuam com ele).
         profStep = writeProfessionals(state.professionals.map(function(x){ return x.id === prof.id ? Object.assign({}, x, {inativo: true}) : x; }));
       }
@@ -8312,7 +8319,7 @@ function cpfValido(s){
 }
 
 function writeProfessionals(list){
-  var denied = listPermDenied("profissionais", state.professionals, list);
+  var denied = listPermDenied("rh_funcionarios", state.professionals, list); // profissional = funcionário (RH)
   if (denied){ showToast(denied, true); return Promise.resolve(); }
   state.professionals = list;
   renderProfissionaisTab();
@@ -13372,28 +13379,13 @@ var HELP_TOPICS = [
       "Sem a permissão, a coluna Valor final e os campos de valor somem, e o relatório avisa \"Valores ocultos\"."
     ],
     who: "Permissão <b>Tratamentos – valores</b> (o Administrador sempre vê)."},
-  {id: "profissionais", group: "Cadastros", title: "Profissionais", mod: "profissionais", tab: "profissionais",
-    purpose: "Lista de quem atende pacientes. Cada profissional é um cadastro de RH → Funcionários e Prestadores com o tipo \"Profissional\": a janela é a mesma.",
-    steps: [
-      "Cadastros → <b>Profissionais</b> → <b>+ Incluir</b> (abre a janela do funcionário com o tipo Profissional já marcado).",
-      "Em <b>Atendimento</b>, preencha Especialidade principal, CBO, Conselho, Registro e Serviços. O CBO e o Conselho vêm dos cadastros de CBO e de Conselhos (digite para buscar); o <b>+</b> ao lado inclui um novo sem sair da janela.",
-      "Em <b>Horário de trabalho</b>, preencha manhã e tarde de cada dia (qualquer dia e hora; deixe o início em branco onde não trabalha). \"Copiar segunda para todos\" copia para os dias em que a clínica abre.",
-      "Quem tem a permissão de Usuários cria o acesso na seção <b>Acesso ao sistema</b> (e-mail, nível e senha)."
-    ],
-    rules: [
-      "O horário de trabalho é o horário de atendimento: fora dele a célula fica hachurada e não aceita agendamento (Planner e Agenda).",
-      "O Planner e a Agenda mostram só os dias em que a clínica abre (Acesso → Clínica).",
-      "O nome do usuário ligado é sempre o nome do cadastro do profissional.",
-      "O nome social (ou o primeiro nome) aparece no cabeçalho das colunas do Planner.",
-      "Os dados pessoais, de contrato e a remuneração só aparecem para quem tem as permissões de RH."
-    ],
-    who: "Permissão <b>Profissionais</b>."},
   {id: "funcionarios", group: "RH", title: "Funcionários e Prestadores", mod: "rh_funcionarios", tab: "funcionarios",
-    purpose: "Cadastro de todas as pessoas que trabalham na clínica (CLT, prestadores, estágio, sócios…), com dados pessoais, contrato, horário, contato de emergência, remuneração e acesso ao sistema.",
+    purpose: "Cadastro de todas as pessoas que trabalham na clínica (CLT, prestadores, estágio, sócios…), inclusive os profissionais que atendem pacientes: dados pessoais, atendimento, horário, contrato, contato de emergência, remuneração e acesso ao sistema.",
     steps: [
       "RH ▾ → <b>Funcionários e Prestadores</b> → <b>+ Incluir</b>.",
       "<b>Identificação</b>: nome, nome social, CPF, RG, nascimento e sexo.",
-      "<b>Tipos</b>: marque um ou mais (Profissional, Coordenação, Recepção…). Com <b>Profissional</b> aparece a seção <b>Atendimento</b> e a pessoa passa a aparecer no Planner e na Agenda. O <b>+</b> inclui um tipo novo.",
+      "<b>Tipos</b>: marque um ou mais (Profissional, Coordenação, Recepção…). O <b>+</b> inclui um tipo novo.",
+      "Com <b>Profissional</b> marcado aparece a seção <b>Atendimento</b> (especialidade principal, CBO, conselho, registro e serviços) e a pessoa passa a aparecer no Planner e na Agenda. O CBO e o Conselho vêm dos cadastros de CBO e de Conselhos; o <b>+</b> ao lado inclui um novo sem sair da janela.",
       "<b>Horário de trabalho</b>: manhã e tarde de cada dia, com o total de horas por semana (e de atendimentos, para profissionais). Se a jornada do contrato for diferente da soma, aparece um aviso.",
       "<b>Contato</b> (telefone, e-mail, endereço — o CEP preenche rua, bairro e cidade), <b>Contrato</b> (vínculo, cargo, admissão, desligamento, jornada semanal) e <b>Contato de emergência</b>.",
       "<b>Remuneração</b>: valor mensal contratado e as formas de pagamento (salário, pensão alimentícia…): descrição, valor, forma (PIX, transferência, depósito, dinheiro, boleto, desconto em folha), favorecido, chave PIX ou banco/agência/conta e observação. Use <b>+ Incluir forma de pagamento</b> para mais uma linha.",
@@ -13403,7 +13395,10 @@ var HELP_TOPICS = [
     rules: [
       "A soma das formas de pagamento é comparada com o valor contratado (aviso quando não confere).",
       "Com data de desligamento até hoje, a pessoa fica inativa, o acesso ao sistema é desativado e, se for profissional, ela sai das listas do Planner e da Agenda (aviso se ainda há atendimentos marcados depois do desligamento).",
-      "Profissional com atendimentos não é excluído: fica inativo.",
+      "Quem está em uso (atendimentos, colunas de sala, tratamentos ou usuário de acesso) não é excluído: o botão vira <b>Inativar</b>. Inativo some das listas e das opções; <b>Reativar</b> volta ao normal.",
+      "Sem permissão de editar, a janela abre só para leitura.",
+      "O horário de trabalho do profissional é o horário de atendimento: fora dele a célula fica hachurada e não aceita agendamento. O Planner e a Agenda mostram só os dias em que a clínica abre.",
+      "O nome do usuário ligado a um profissional é sempre o nome do cadastro; o nome social (ou o primeiro nome) aparece no cabeçalho das colunas do Planner.",
       "Quem não tem a permissão de Remuneração não vê a seção Remuneração."
     ],
     who: "Permissão <b>Funcionários e Prestadores</b> (Remuneração: permissão própria)."},
@@ -13430,7 +13425,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Convênios</b>."},
   {id: "servicos", group: "Cadastros", title: "Serviços", mod: "servicos", tab: "servicos",
     purpose: "Tipos de atendimento: Sessão, Triagem, Avaliação, Orientação Familiar etc.",
-    steps: ["Cadastros → <b>Serviços</b> → <b>+ Incluir</b> (nome e sigla).", "No cadastro do profissional, marque quais serviços ele atende."],
+    steps: ["Cadastros → <b>Serviços</b> → <b>+ Incluir</b> (nome e sigla).", "No cadastro do funcionário com o tipo Profissional (RH → Funcionários e Prestadores), marque quais serviços ele atende."],
     rules: [
       "<b>Sessão</b> é o serviço padrão e não pode ser renomeado nem excluído.",
       "Atendimento com serviço diferente de Sessão aparece na cor ciano (Treinamento ou Outros serviços).",
@@ -13475,12 +13470,12 @@ var HELP_TOPICS = [
     who: "Permissão <b>Feriados e recessos</b>."},
   {id: "conselhos", group: "Cadastros", title: "Conselhos", mod: "conselhos", tab: "conselhos",
     purpose: "Conselhos profissionais (CRP, CRFa, CREFITO, CRN…) usados no cadastro dos profissionais.",
-    steps: ["Cadastros → <b>Conselhos</b> → <b>+ Incluir</b>: sigla (ex.: CRP) e nome.", "No cadastro do profissional, o botão <b>+</b> ao lado do Conselho também inclui um novo."],
+    steps: ["Cadastros → <b>Conselhos</b> → <b>+ Incluir</b>: sigla (ex.: CRP) e nome.", "No cadastro do funcionário com o tipo Profissional, o botão <b>+</b> ao lado do Conselho também inclui um novo."],
     rules: ["Não pode haver dois conselhos com a mesma sigla.", "A coluna Profissionais mostra quantos usam cada conselho; conselho em uso não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>Conselhos</b>."},
   {id: "cbo", group: "Cadastros", title: "CBO", mod: "cbo", tab: "cbo",
     purpose: "Lista de CBO (Classificação Brasileira de Ocupações) usada no cadastro dos profissionais.",
-    steps: ["Cadastros → <b>CBO</b> → <b>+ Incluir</b>: código (ex.: 2515-10) e descrição.", "No cadastro do profissional, o botão <b>+</b> ao lado do CBO também inclui um novo."],
+    steps: ["Cadastros → <b>CBO</b> → <b>+ Incluir</b>: código (ex.: 2515-10) e descrição.", "No cadastro do funcionário com o tipo Profissional, o botão <b>+</b> ao lado do CBO também inclui um novo."],
     rules: ["Não pode haver dois CBO com o mesmo código.", "A coluna Profissionais mostra quantos usam cada CBO; CBO em uso não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>CBO</b>."},
   {id: "motivos", group: "Cadastros", title: "Motivos de cancelamento", mod: "motivos_cancelamento", tab: "motivos",
@@ -13672,7 +13667,7 @@ var HELP_TOPICS = [
 var HELP_NEWS = [];
 var HELP = {topic: "inicio", search: ""};
 var HELP_TAB_TOPIC = {inicio: "inicio", agenda: "planner", relatorio: "resumo", agendadia: "agenda", prontuario: "prontuario", relatorios: "relatorios",
-  pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "profissionais", convenios: "convenios", servicos: "servicos",
+  pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "funcionarios", convenios: "convenios", servicos: "servicos",
   especialidades: "especialidades", motivos: "motivos", medicos: "medicos", escolas: "escolas", cbo: "cbo", conselhos: "conselhos", feriados: "feriados", usuarios: "usuarios", funcionarios: "funcionarios", tiposfunc: "tiposfunc"};
 function helpCan(t){
   if (!t.mod) return true;
@@ -14317,7 +14312,6 @@ function openRegistryItem(kind, item){
 var CAD_ITEMS = [
   {key: "pacientes", label: "Pacientes", tab: "pacientes", ok: function(){ return can("pacientes", "view"); }},
   {key: "tratamentos", label: "Tratamentos", tab: "tratamentos", ok: function(){ return can("tratamentos", "view"); }},
-  {key: "profissionais", label: "Profissionais", tab: "profissionais", ok: function(){ return can("profissionais", "view"); }},
   {key: "convenios", label: "Convênios", tab: "convenios", ok: function(){ return can("convenios", "view"); }},
   {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("servicos", "view"); }},
   {key: "especialidades", label: "Especialidades", tab: "especialidades", ok: function(){ return can("especialidades", "view"); }},

@@ -24,7 +24,6 @@
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, despesas e valor final", actions: ["view", "edit"] },
     { key: "motivos_cancelamento", label: "Motivos de cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
-    { key: "profissionais", label: "Profissionais", hint: "" },
     { key: "convenios", label: "Convênios", hint: "" },
     { key: "servicos", label: "Serviços", hint: "" },
     { key: "especialidades", label: "Especialidades", hint: "" },
@@ -36,7 +35,7 @@
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
     // RH (menu RH do topo): cadastro de funcionários e prestadores e a remuneração deles.
-    { key: "rh_funcionarios", label: "Funcionários e Prestadores", hint: "cadastro do RH: dados pessoais, contrato, contato e tipos", group: "RH" },
+    { key: "rh_funcionarios", label: "Funcionários e Prestadores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)", group: "RH" },
     { key: "rh_remuneracao", label: "Remuneração", hint: "valor mensal contratado e formas de pagamento", actions: ["view", "edit"] },
     // Itens do menu Acesso (Sair aparece sempre).
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)", group: "Menu Acesso" },
@@ -278,7 +277,7 @@
   // conta sem funcionário (ex.: contador externo).
   function newUser() {
     if (!window.pipoOpenStaffNew) { openUserModal(null); return; }
-    var canStaff = auth.can("rh_funcionarios", "create") || auth.can("profissionais", "create");
+    var canStaff = auth.can("rh_funcionarios", "create");
     if (!auth.isAdmin()) {
       if (canStaff) window.pipoOpenStaffNew();
       else toast("O usuário é criado no cadastro da pessoa (RH → Funcionários e Prestadores). Seu nível não tem permissão para incluir.", true);
@@ -333,7 +332,7 @@
         '<div class="modal-body">' +
           // Usuário ligado a um profissional: o nome vem do cadastro do profissional (o banco também garante).
           '<div class="field"><label for="uName">Nome</label><input id="uName" type="text" value="' + esc(u ? u.full_name : "") + '"' + ((u && u.professional_id) || ro ? " disabled" : "") + '>' +
-            (u && u.professional_id ? '<div class="pat-count" style="margin-top:6px">Igual ao cadastro do profissional. Para mudar, altere em Cadastros → Profissionais.</div>' : "") + "</div>" +
+            (u && u.professional_id ? '<div class="pat-count" style="margin-top:6px">Igual ao cadastro do profissional. Para mudar, altere em RH → Funcionários e Prestadores.</div>' : "") + "</div>" +
           (isNew
             ? '<div class="field-row">' +
                 '<div class="field"><label for="uEmail">E-mail</label><input id="uEmail" type="email" autocomplete="off"></div>' +
@@ -565,7 +564,7 @@
           '<button class="modal-close" id="rClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
           '<div class="field"><label for="rName">Nome do nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
-          roleGridHtml(role ? (role.permissions || {}) : { agendamentos: { view: true }, agenda: { view: true }, resumo: { view: true }, pacientes: { view: true }, profissionais: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
+          roleGridHtml(role ? (role.permissions || {}) : { agendamentos: { view: true }, agenda: { view: true }, resumo: { view: true }, pacientes: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
           statusPermsHtml(role ? (role.permissions || {}) : {}, locked) +
           reportPermsHtml(role ? (role.permissions || {}) : {}, locked) +
           (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +
