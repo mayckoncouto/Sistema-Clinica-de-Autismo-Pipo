@@ -75,7 +75,7 @@ const path = require('path');
   await page.waitForTimeout(100);
   await page.click('#addPatientBtn');
   await page.waitForSelector('#ovPat');
-  await page.fill('#pNome', 'Novo Paciente Teste');
+  await page.fill('#pNome', 'Novo Paciente Teste'); await page.fill('#pf-cpf', '11144477735'); // CPF é obrigatório
   await page.$eval('#pNasc', (el) => { el.value = '2020-01-15'; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }); // campo de data vira calendário próprio
   await page.waitForTimeout(50);
   const idadeCalcVal = await page.locator('#pIdadeCalc').inputValue().catch(() => null);

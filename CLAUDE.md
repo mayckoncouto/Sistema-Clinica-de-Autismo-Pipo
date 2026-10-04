@@ -1610,3 +1610,40 @@ gravados nos profissionais. No profissional, `#profConselho` virou
 `REG_CFG` ganhou ganchos genéricos usados por CBO e Conselhos: `dupKey`, `newId`,
 `label`, `pickValue`, `optsHtml` (`regDupKey`, `regItemLabel`). Migração
 `supabase/2026-10-05b-conselhos.sql` (precisa da 2026-10-05 antes).
+
+## Cadastro do paciente em janela única (2026-10-05, substitui as abas)
+Decisões do usuário: uma janela com rolagem (mesma largura no computador, tela
+cheia no celular), grupos nesta ordem — Identificação, Endereço, Filiação,
+Responsáveis pela rotina, Contato, Responsável financeiro, Escola, Saúde,
+Administrativo, Tratamento (`PAT_SECTIONS`, `PAT_FIELDS`, `.pm-sec`).
+- Formato no paciente: `mae`/`pai` {nome, cpf}; `rotina` [{nome, src?}] (Mãe/Pai
+  entram sozinhos com `src`, tirados ficam em `rotinaOff`); `telefones`
+  [{numero, nome, via: "whatsapp"|"ligacao"}]; `emails` [{email, nome}];
+  `financeiro` {nome, doc, telefone, email, endereco, link: ""|"mae"|"pai"};
+  `professor` (antes `escolaContato`). `patNormalize(p)` converte o formato das
+  abas (`responsaveis`, `finOutro`, `telefone`, `email`, `prefContato`) ao abrir;
+  salvar apaga essas chaves (`PAT_LEGACY_KEYS`).
+- Botão **Responsável** ao lado da Mãe/Pai: liga nome e CPF do financeiro
+  (somente leitura, acompanha as correções) enquanto marcado. Copiar telefone /
+  e-mail (lista quando há mais de um) / endereço do paciente; pergunta antes de
+  trocar valor diferente.
+- **CPF do paciente obrigatório** (também ao editar cadastros antigos), válido e
+  único (`cpfDup`). CPF de mãe/pai igual ao de outro paciente = só aviso
+  (`patSameParent`). Contador "N faltando" no título de cada grupo (`pendUpdate`).
+- Data de entrada: hoje no paciente novo; não pode passar do início do 1º
+  tratamento (`patFirstTreatmentStart`); o tratamento não começa antes dela
+  (`trPatEntrada`, dica "Cadastrado em" em `#trEntradaHint`).
+- Cartão do tratamento mostra o horário (`trHoursText`: só dias/períodos em que
+  vem, "Seg 07:20–12:00 · Qua 13:30–17:30") no lugar das especialidades.
+- Lista: `#patSearchBy` (Paciente, Mãe, Pai, Responsável financeiro — nome ou CPF).
+  Menu **Outras opções ▾** (`#patMoreBtn`/`#patMoreMenu`): Campos obrigatórios
+  (`openPatientFieldsModal`; Nome e CPF travados, Filiação e Financeiro sempre
+  aparecem), Imprimir ficha cadastral (`openPatientPrintPick` → `patientPrint`,
+  iframe A4 com logo), **Mesclar cadastros** (`openPatientMergeModal`, só
+  Administrador, fora dos Níveis): 1º fica, 2º é excluído; RPC
+  `merge_patient_records` (Agenda + Prontuário), Planner renomeado via
+  `applyBookingChanges`, tratamentos passam (Ativo do 2º vira Renegociado com
+  histórico se o 1º tem Ativo), vazios do 1º completados com o 2º.
+- Migração `supabase/2026-10-05c-mesclar-e-data-de-entrada.sql` (flag
+  `pipo.merging` em `clinical_records_stamp`, função de mesclar, acerto único da
+  data de entrada = menor entre 01/01/2026 e o início do 1º tratamento).
