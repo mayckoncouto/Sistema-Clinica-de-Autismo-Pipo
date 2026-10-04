@@ -797,6 +797,10 @@ body.pat-col-resizing *{user-select:none}
 .cv-row .cv-spec-wrap .dp-btn,.cv-row .cv-spec{width:100%}
 .cv-row .cv-val{width:130px;flex:none}
 .cv-add-row{display:flex;gap:4px;flex-wrap:wrap}
+.send-warns summary{color:#9a6212}
+.send-warn-opt{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;cursor:pointer;font-weight:500}
+.send-warn-opt input{margin:0;flex:none;align-self:center}
+.send-warn-why{color:#9a6212;font-weight:700;font-size:11.5px}
 .lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
 .field .lib-opt{display:flex;align-items:center;gap:8px;margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;text-transform:none;letter-spacing:0}
 .field .lib-opt:hover{border-color:var(--accent)}
@@ -2820,6 +2824,44 @@ function setupInactivate(o){
   });
 }
 function delBlocked(btn){ return !!(btn && btn.dataset && btn.dataset.mode); }
+// Paciente inativado com tratamento Ativo: pergunta se cancela o tratamento também
+// (com motivo, como no cadastro do tratamento). Sem permissão de editar
+// Tratamentos, só avisa que o tratamento continua ativo.
+function offerCancelActiveTreatment(pat){
+  var t = (state.treatments || []).filter(function(x){ return x.patientId === pat.id && x.status === "ativo"; })[0];
+  if (!t) return Promise.resolve();
+  if (!can("tratamentos", "edit")){ showToast("O tratamento ativo de " + (pat.nome || "") + " continua ativo (seu nível não altera Tratamentos).", true); return Promise.resolve(); }
+  var mots = cancelReasonsList().filter(isActive);
+  return new Promise(function(resolve){
+    var host = document.getElementById("confirmHost");
+    if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
+    host.innerHTML =
+      '<div class="overlay confirm-overlay" id="ovCancTr" role="alertdialog" aria-modal="true" aria-labelledby="ctTitle"><div class="modal" style="max-width:440px">' +
+        '<div class="modal-head"><div><h3 id="ctTitle">Cancelar o tratamento ativo?</h3></div></div>' +
+        '<div class="modal-body"><div class="confirm-msg"><b>' + esc(pat.nome || "") + '</b> foi inativado e tem um tratamento <b>Ativo</b> (início ' + esc(trBr(t.inicio)) + '). Cancelar também o tratamento?</div>' +
+          '<div class="field" style="margin-top:10px"><label for="ctMot">Motivo do cancelamento</label><select id="ctMot"><option value="">Escolha…</option>' +
+            mots.map(function(m){ return '<option value="' + esc(m.id) + '">' + esc(m.name) + '</option>'; }).join("") + '</select></div>' +
+          '<div class="field"><label for="ctObs">Observação do cancelamento</label><textarea id="ctObs" rows="2" placeholder="Obrigatória com o motivo \"Outro\""></textarea></div>' +
+        '</div>' +
+        '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="ctNo">Manter ativo</button><button class="btn danger-solid" id="ctYes">Cancelar tratamento</button></div>' +
+      '</div></div>';
+    function done(){ host.innerHTML = ""; resolve(); }
+    document.getElementById("ctNo").addEventListener("click", done);
+    document.getElementById("ctYes").addEventListener("click", function(){
+      var mot = document.getElementById("ctMot").value, obs = document.getElementById("ctObs").value.trim();
+      if (!mot){ showToast("Escolha o motivo do cancelamento.", true); return; }
+      if (mot === CANCEL_OTHER_ID && !obs){ showToast("Com o motivo \"Outro\", descreva o motivo na observação.", true); return; }
+      var name = (mots.filter(function(m){ return m.id === mot; })[0] || {}).name || "";
+      var rec = trHistAdd(Object.assign({}, t, {status: "cancelado", statusEm: trTodayIso(), motivoCancel: mot, motivoCancelNome: name, obsCancel: obs, atualizadoEm: new Date().toISOString()}),
+        {acao: "status", de: "ativo", para: "cancelado", motivo: mot, motivoNome: name, obs: obs});
+      Promise.resolve(writeTreatments(state.treatments.map(function(x){ return x.id === t.id ? rec : x; }))).then(function(ok){
+        if (ok !== false) showToast("Tratamento cancelado.");
+        done();
+      });
+    });
+    document.getElementById("ctNo").focus();
+  });
+}
 // "Mostrar inativos" nas listas de cadastro.
 var SHOW_INACTIVE = {};
 function addInactiveToggle(sectionId, key, rerender){
@@ -5708,7 +5750,10 @@ function openPatientModal(p){
   var overlay = document.getElementById("ovPat");
   function close(){ host.innerHTML = ""; }
   if (!isNew) setupInactivate({btn: "pDelete", mod: "pacientes", item: v, name: v.nome, usage: USAGE.pacientes, close: close,
-    save: function(it){ return writePatients(state.patients.map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; })); }});
+    save: function(it){
+      return Promise.resolve(writePatients(state.patients.map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; })))
+        .then(function(){ if (it.inativo) return offerCancelActiveTreatment(it); });
+    }});
   overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
   document.getElementById("closePat").addEventListener("click", close);
   document.getElementById("pCancel").addEventListener("click", close);
@@ -9064,7 +9109,7 @@ function plannerSendPlan(dayKey, week, dateIso){
     var date = agdParse(dateIso), day = findDayObj(dayKey);
     var times = day.morning.concat(day.afternoon);
     var taken = (r.data || []).slice(); // o que já existe + o que este envio vai criar
-    var plan = {send: [], skipped: []};
+    var plan = {send: [], skipped: [], warns: []};
     function sameSlot(a, rec){ return a.time === rec.time && a.professional_id === rec.professional_id; }
     plannerRooms().forEach(function(room){
       (room.therapists || []).forEach(function(t){
@@ -9104,6 +9149,13 @@ function plannerSendPlan(dayKey, week, dateIso){
           if (conflictMsg){ plan.skipped.push(Object.assign(info, {why: "conflict", detail: conflictMsg})); return; }
           taken.push(rec);
           plan.send.push(rec);
+          // Avisos (não impedem): fora do horário do paciente / terapeuta diferente do tratamento.
+          if (!kind && !isGroup(room)){
+            var msgs = [], pa = findPatientAt(rec.patient, dateIso);
+            if (pa && !patientSlotOk(pa, dayKey, time)) msgs.push("Fora do horário do paciente");
+            if (therapistMismatchMsg(rec.patient, prof.id, rec.service, dateIso)) msgs.push("Terapeuta diferente do tratamento");
+            if (msgs.length) plan.warns.push({rec: rec, info: info, msgs: msgs});
+          }
         });
       });
     });
@@ -9151,6 +9203,31 @@ function openSendToAgendaModal(){
   var daySel = document.getElementById("sendDay"), weekSel = document.getElementById("sendWeek"), dateEl = document.getElementById("sendDate");
   var okBtn = document.getElementById("sendOk"), prev = document.getElementById("sendPreview");
   var current = null, seq = 0;
+  // Agendamentos com aviso: cada um tem uma caixa (começa marcada) para enviar ou não.
+  function warnHtml(warns){
+    if (!warns.length) return "";
+    return '<details class="send-skip send-warns" open><summary>' + warns.length + ' com aviso — confira (desmarque o que não deve ir)</summary><ul>' +
+      warns.map(function(w, i){
+        return '<li><label class="send-warn-opt"><input type="checkbox" data-warn="' + i + '" checked> <span class="mono">' + esc(w.info.time) + '</span> ' + esc(w.info.what) + ' · ' + esc(w.info.who) + ' · ' + esc(w.info.where) +
+          ' <span class="send-warn-why">' + esc(w.msgs.join(" · ")) + '</span></label></li>';
+      }).join("") + '</ul></details>';
+  }
+  function sendList(){
+    if (!current) return [];
+    var off = current.off || [];
+    return current.plan.send.filter(function(r){ return off.indexOf(r) === -1; });
+  }
+  function syncOk(){
+    var n = sendList().length;
+    okBtn.disabled = !n; okBtn.textContent = n ? "Enviar (" + n + ")" : "Enviar";
+  }
+  prev.addEventListener("change", function(e){
+    var cb = e.target.closest("[data-warn]"); if (!cb || !current) return;
+    var rec = current.plan.warns[+cb.getAttribute("data-warn")].rec;
+    current.off = (current.off || []).filter(function(r){ return r !== rec; });
+    if (!cb.checked) current.off.push(rec);
+    syncOk();
+  });
   function refresh(){
     var my = ++seq; current = null; okBtn.disabled = true;
     var dk = daySel.value, wk = weekSel.value, iso = dateEl.value;
@@ -9173,8 +9250,8 @@ function openSendToAgendaModal(){
         html += '<details class="send-skip"><summary>'+list.length+' '+(list.length === 1 ? 'pulado' : 'pulados')+' — '+esc(SEND_SKIP_LABELS[k])+'</summary><ul>' +
           list.map(function(s){ return '<li'+(s.detail ? ' title="'+esc(s.detail)+'"' : '')+'><span class="mono">'+esc(s.time)+'</span> '+esc(s.what)+' · '+esc(s.who)+' · '+esc(s.where)+'</li>'; }).join("") + '</ul></details>';
       });
-      prev.innerHTML = html;
-      okBtn.disabled = !plan.send.length;
+      prev.innerHTML = html + warnHtml(plan.warns);
+      syncOk();
     }).catch(function(err){
       if (my !== seq) return;
       prev.innerHTML = '<div class="send-warn">Não foi possível calcular: '+esc(agdErr(err))+'</div>';
@@ -9195,13 +9272,14 @@ function openSendToAgendaModal(){
     prev.innerHTML = "Calculando…";
     Promise.all(future.map(function(x){ return plannerSendPlan(x.d.key, wk, x.iso); })).then(function(plans){
       if (my !== seq) return;
-      var send = [], skipped = [], perDay = [];
+      var send = [], skipped = [], perDay = [], warns = [];
       plans.forEach(function(pl, i){
         send = send.concat(pl.send);
+        warns = warns.concat(pl.warns.map(function(w){ return {rec: w.rec, msgs: w.msgs, info: Object.assign({}, w.info, {time: future[i].d.name.slice(0, 3) + " " + w.info.time})}; }));
         perDay.push(esc(future[i].d.name) + " " + agdBrDate(future[i].iso) + ": <b>" + pl.send.length + "</b>");
         skipped = skipped.concat(pl.skipped.map(function(s){ return Object.assign({}, s, {time: future[i].d.name.slice(0, 3) + " " + s.time}); }));
       });
-      current = {plan: {send: send, skipped: skipped}, dk: "semana", wk: wk, iso: agdIso(monday), week: true};
+      current = {plan: {send: send, skipped: skipped, warns: warns}, dk: "semana", wk: wk, iso: agdIso(monday), week: true};
       var html = '<div class="send-total"><b>' + send.length + '</b> ' + (send.length === 1 ? 'agendamento será enviado' : 'agendamentos serão enviados') + ' para a semana de <b>' + agdBrDate(agdIso(monday)) + '</b>.</div>' +
         '<div class="pat-count" style="margin:4px 0 8px">' + perDay.join(" · ") + (future.length < targets.length ? " · dias que já passaram ficam de fora" : "") + '</div>';
       var byWhy = {};
@@ -9211,8 +9289,8 @@ function openSendToAgendaModal(){
         html += '<details class="send-skip"><summary>' + list.length + ' ' + (list.length === 1 ? 'pulado' : 'pulados') + ' — ' + esc(SEND_SKIP_LABELS[k]) + '</summary><ul>' +
           list.map(function(s){ return '<li' + (s.detail ? ' title="' + esc(s.detail) + '"' : '') + '><span class="mono">' + esc(s.time) + '</span> ' + esc(s.what) + ' · ' + esc(s.who) + ' · ' + esc(s.where) + '</li>'; }).join("") + '</ul></details>';
       });
-      prev.innerHTML = html;
-      okBtn.disabled = !send.length;
+      prev.innerHTML = html + warnHtml(warns);
+      syncOk();
     }).catch(function(err){
       if (my !== seq) return;
       prev.innerHTML = '<div class="send-warn">Não foi possível calcular: ' + esc(agdErr(err)) + '</div>';
@@ -9222,10 +9300,11 @@ function openSendToAgendaModal(){
   weekSel.addEventListener("change", refresh);
   dateEl.addEventListener("change", refresh);
   okBtn.addEventListener("click", function(){
-    if (!current || !current.plan.send.length) return;
-    var cur = current, c = agdClient();
+    var toSend = sendList();
+    if (!current || !toSend.length) return;
+    var cur = current, c = agdClient(), left = cur.plan.send.length - toSend.length;
     okBtn.disabled = true; okBtn.textContent = "Enviando…";
-    agdChunks(cur.plan.send, 200).reduce(function(p, part){
+    agdChunks(toSend, 200).reduce(function(p, part){
       return p.then(function(acc){
         return c.from("appointments").insert(part).select().then(function(r){
           if (r.error) throw r.error;
@@ -9237,7 +9316,8 @@ function openSendToAgendaModal(){
       agdRecord("Enviar do Planner · " + dayObj.name + " " + WEEK_LABEL[cur.wk] + " → " + (cur.week ? "semana de " : "") + agdBrDate(cur.iso), [], created);
       close();
       showToast(created.length + (created.length === 1 ? " agendamento enviado" : " agendamentos enviados") + " para a Agenda (" + (cur.week ? "semana de " : "") + agdBrDate(cur.iso) + ")" +
-        (cur.plan.skipped.length ? ", " + cur.plan.skipped.length + (cur.plan.skipped.length === 1 ? " pulado." : " pulados.") : "."));
+        (cur.plan.skipped.length ? ", " + cur.plan.skipped.length + (cur.plan.skipped.length === 1 ? " pulado" : " pulados") : "") +
+        (left ? ", " + left + (left === 1 ? " desmarcado" : " desmarcados") : "") + ".");
       if (AD.loaded && (cur.week || (cur.iso >= AD.rangeFrom && cur.iso <= AD.rangeTo))) agdLoadWeek();
     }).catch(function(err){
       okBtn.textContent = "Enviar"; okBtn.disabled = false;
@@ -10445,12 +10525,22 @@ function afterTreatmentsChange(){
 function writeTreatments(list){
   var denied = listPermDenied("tratamentos", state.treatments, list);
   if (denied){ showToast(denied, true); return Promise.resolve(false); }
+  // Grava só os tratamentos alterados/novos e tira os excluídos (patch_list):
+  // duas pessoas salvando tratamentos diferentes ao mesmo tempo não se apagam.
+  var before = {}, ups = [], dels = [];
+  (state.treatments || []).forEach(function(t){ before[t.id] = JSON.stringify(t); });
+  list.forEach(function(t){ if (before[t.id] !== JSON.stringify(t)) ups.push(t); delete before[t.id]; });
+  dels = Object.keys(before);
   state.treatments = list;
   rebuildPatients();
   afterTreatmentsChange();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(false); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(false); }
-  return db.doc("treatments/all").set({list: list}).then(function(){ return true; }).catch(function(e){
+  var ref = db.doc("treatments/all");
+  var save = ref.patchList
+    ? ref.patchList(ups, dels).catch(function(e){ if (e && e.code === "nofunc") return ref.set({list: list}); throw e; })
+    : ref.set({list: list});
+  return save.then(function(){ return true; }).catch(function(e){
     var m = (e && e.message) || "";
     // A permissão já é avisada pelo adaptador; a regra "um só ativo" vem do banco com o motivo.
     if (!(e && e.code === "permission")) showToast(/tratamento ativo|cancelad|motivo/i.test(m) ? m : "Não foi possível salvar o tratamento.", true);
@@ -10478,22 +10568,39 @@ function trLoadLast(force){
   TR.loading = true;
   var out = {}, done = {}, used = {}, appts = {}, page = 1000, today = trTodayIso();
   var monthEnd = trMonthEnd(today);   // agendados até o fim do mês atual (Contratado × realizado)
+  function add(a, n){
+    var k = normText(String(a.patient || "").trim()); if (!k) return;
+    for (var i = 0; i < (n || 1); i++){
+      (appts[k] = appts[k] || []).push({d: a.date, prof: a.professional_id || "", svc: a.service || DEFAULT_SERVICE_ID, st: a.status || ""});
+      if (a.date > today) continue;
+      (out[k] = out[k] || []).push(a.date);
+      if (a.status === FINAL_STATUS) (done[k] = done[k] || []).push(a.date);
+      if (TR_USED_STATUS.indexOf(a.status) !== -1) (used[k] = used[k] || []).push(a.date);
+    }
+  }
+  // Resumo agrupado pelo banco (treatment_appt_summary). Sem a função (falta o SQL):
+  // lê linha por linha como antes.
+  function nextSum(from){
+    return c.rpc("treatment_appt_summary", {p_until: monthEnd}).range(from, from + page - 1).then(function(r){
+      if (r.error) throw r.error;
+      (r.data || []).forEach(function(x){ add({patient: x.patient, date: x.d, professional_id: x.prof, service: x.svc, status: x.st}, x.n); });
+      return (r.data || []).length === page ? nextSum(from + page) : null;
+    });
+  }
   function next(from){
     return c.from("appointments").select("patient,date,status,professional_id,service").eq("blocked", false).lte("date", monthEnd)
       .order("date").range(from, from + page - 1).then(function(r){
         if (r.error) throw r.error;
-        (r.data || []).forEach(function(a){
-          var k = normText(String(a.patient || "").trim()); if (!k) return;
-          (appts[k] = appts[k] || []).push({d: a.date, prof: a.professional_id || "", svc: a.service || DEFAULT_SERVICE_ID, st: a.status || ""});
-          if (a.date > today) return;
-          (out[k] = out[k] || []).push(a.date);
-          if (a.status === FINAL_STATUS) (done[k] = done[k] || []).push(a.date);
-          if (TR_USED_STATUS.indexOf(a.status) !== -1) (used[k] = used[k] || []).push(a.date);
-        });
+        (r.data || []).forEach(function(a){ add(a, 1); });
         return (r.data || []).length === page ? next(from + page) : null;
       });
   }
-  TR.loadP = next(0).then(function(){ TR.last = out; TR.done = done; TR.used = used; TR.appts = appts; TR.lastAt = Date.now(); })
+  TR.loadP = nextSum(0).catch(function(e){
+    var m = (e && e.message) || "";
+    if (!/treatment_appt_summary/i.test(m)) throw e;
+    out = {}; done = {}; used = {}; appts = {};
+    return next(0);
+  }).then(function(){ TR.last = out; TR.done = done; TR.used = used; TR.appts = appts; TR.lastAt = Date.now(); })
     .catch(function(){ TR.last = TR.last || {}; })
     .then(function(){ TR.loading = false; if (state.tab === "tratamentos") renderTreatmentsTab(); });
   return TR.loadP;
@@ -11115,7 +11222,8 @@ var HELP_TOPICS = [
     rules: [
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",
       "A cor do paciente vem do tratamento ativo: Não faz ABA = vermelho; senão pela idade (0–4 azul, 5–9 verde, 10+ laranja).",
-      "Excluir pede confirmação."
+      "Excluir pede confirmação. Paciente com tratamento ou atendimento não é excluído: é <b>Inativado</b>.",
+      "Ao inativar um paciente com tratamento Ativo, o sistema pergunta se cancela também o tratamento (com motivo). \"Manter ativo\" deixa o tratamento como está."
     ],
     who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir)."},
   {id: "tratamentos", group: "Cadastros", title: "Tratamentos", mod: "tratamentos", tab: "tratamentos",
@@ -11294,7 +11402,7 @@ var HELP_TOPICS = [
     steps: [
       "<b>Editar agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar profissional</b>: passa as colunas de um profissional para outro.",
-      "<b>Enviar para a Agenda</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes.",
+      "<b>Enviar para a Agenda</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes. Na prévia, \"com aviso\" lista os que ficam fora do horário do paciente ou com terapeuta diferente do tratamento: desmarque os que não devem ir.",
       "<b>Limpar semana</b>: apaga todos os agendamentos de uma semana do Planner (dupla confirmação, desfazível).",
       "<b>Exportar Excel</b>: baixa uma planilha com os agendamentos das 4 semanas."
     ],

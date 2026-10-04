@@ -1472,3 +1472,25 @@ Convênios, Serviços, Especialidades, Motivos, Salas/Grupos, Agenda, Prontuári
 Usuários, Níveis) tem o texto **"+ Incluir"** (antes "+ Novo …"/"+ Nova …").
 Botões de linha dentro das janelas ("+ terapeuta", "+ status", "+ especialidade ou
 serviço") continuam como estão. Novo botão de inclusão: usar "+ Incluir".
+
+## Robustez (Etapa 7, 2026-10-04)
+- **Tratamentos gravam só o que mudou:** `writeTreatments(list)` compara com
+  `state.treatments` e chama `ref.patchList(alterados/novos, idsExcluídos)`
+  (`js/pipo-supabase.js` → RPC `patch_list(p_path, p_upserts, p_deletes)`, trava a
+  linha e troca/acrescenta/remove itens por id; não aceita `schedule/*`). Sem a
+  função no banco (erro `code "nofunc"`) ou nos testes, grava a lista inteira.
+  Migração `supabase/2026-10-04d-gravar-so-o-tratamento.sql`.
+- **"Enviar para a Agenda" com avisos:** `plannerSendPlan` devolve também `warns`
+  (`{rec, info, msgs}`: "Fora do horário do paciente" — `patientSlotOk` com o
+  tratamento da data —, "Terapeuta diferente do tratamento" — `therapistMismatchMsg`).
+  A prévia mostra `details.send-warns` com uma caixa por item (`[data-warn]`,
+  marcada); desmarcado não vai, e o botão mostra "Enviar (N)".
+- **Término/realizado dos tratamentos pelo banco:** `trLoadLast` lê a RPC
+  `treatment_appt_summary(p_until)` (agrupado por paciente/data/profissional/
+  serviço/status com `n`); sem a função, volta a ler `appointments` página a página.
+  Migração `supabase/2026-10-04e-resumo-atendimentos-tratamentos.sql`.
+- **Inativar paciente encerra o tratamento ativo:** depois de inativar,
+  `offerCancelActiveTreatment(paciente)` abre `#ovCancTr` (motivo `#ctMot`,
+  observação `#ctObs`, obrigatória com "Outro"; "Manter ativo" / "Cancelar
+  tratamento"). Precisa de editar em Tratamentos (senão só avisa).
+- Teste `tests/run_robustez.js` (no `npm test`, agora 27 arquivos).

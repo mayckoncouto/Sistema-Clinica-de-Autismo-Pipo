@@ -131,6 +131,21 @@
           }
         });
       },
+      // Listas (ex.: treatments/all): grava só os itens alterados/novos e tira os
+      // excluídos, numa transação com trava (patch_list no schema.sql). Sem a
+      // função no banco (falta o SQL), o erro tem code "nofunc" e o app usa o set.
+      patchList: function (upserts, deletes) {
+        return client.rpc("patch_list", { p_path: path, p_upserts: upserts || [], p_deletes: deletes || [] }).then(function (r) {
+          if (r.error) {
+            var m = r.error.message || "";
+            if (/patch_list/i.test(m) && /does not exist|not find|schema cache|could not find/i.test(m)) { var nf = new Error(m); nf.code = "nofunc"; throw nf; }
+            fetchDoc(path).then(function (d) { lastData[path] = d; emit(path); }).catch(function () {});
+            var e = friendlyError(r.error);
+            if (e.code === "permission") toast(e.message, true);
+            throw e;
+          }
+        });
+      },
       // Gravação atômica só das chaves alteradas (ver patch_bookings no schema.sql).
       patchBookings: function (changes) {
         return client.rpc("patch_bookings", { p_path: path, p_changes: changes }).then(function (r) {
