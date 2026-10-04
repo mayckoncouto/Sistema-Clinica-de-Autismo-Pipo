@@ -1315,3 +1315,38 @@ o que pode usar; "Novidades" com data; tópicos com "para que serve + passo a pa
 - Celular: `#tab-ajuda` em coluna, tópicos escondidos até "Tópicos ▾"
   (`.help-nav-open`), página rola.
 - Teste `tests/run_help.js` (no `npm test`, agora 23 arquivos).
+
+## Botões por permissão, confirmação de exclusão e Inativar (2026-10-04)
+Decisões do usuário: só ver = janela em leitura; Excluir + janela "Confirmar
+exclusão" (todos os cadastros, evoluções e Agenda; o Planner fica como estava);
+item em uso não exclui, inativa (todos os cadastros em uso); rodapé padrão
+(Excluir à esquerda, Cancelar, Salvar; "Remover"/"Desmarcar" viraram "Excluir");
+ferramentas do Planner e da Agenda somem sem permissão.
+- `modalApplyPerms(mod, isNew, {ov, save, del, cancel})`: sem incluir/editar →
+  esconde Salvar, Cancelar vira "Fechar" e `modalReadOnly(ov)` trava campos e
+  botões do corpo (menos `data-ro-ok`; `.modal-ro` esconde `.rm`/`.add-row-btn`);
+  sem excluir → esconde Excluir. Usado em Paciente, Profissional, Sala/Grupo e
+  agendamento do Planner; Status tem a mesma regra feita à mão.
+- Confirmações de exclusão: título e botão "Confirmar exclusão".
+- `permToolClasses()` (em `applyPermissionsUI` e quando `state.writable` chega)
+  põe `perm-no-create/edit/delete` em `#tab-agenda` (módulo agenda) e
+  `#tab-agendadia` (agendamentos); o CSS esconde "+", copiar, mover,
+  bloquear/liberar/limpar conforme a falta. `fixPatientBtn` e `swapProfBtn` saem
+  sem permissão.
+- **Inativar**: `inativo: true` no item (documento; sem SQL). `USAGE[kind](item)`
+  → Promise de textos de uso (tratamentos, Planner via `plannerUseCount` sobre os
+  20 documentos, Agenda via `apptUseCount(col, val)` com count no banco, outros
+  cadastros). `setupInactivate({btn, mod, item, name, usage, save, close})`:
+  "Verificando…" → "Excluir" (livre) ou "Inativar" (em uso; precisa editar) e
+  botão "Reativar" (`<btn>Reactivate`) para inativo; o clique de exclusão
+  original sai cedo com `delBlocked(this)`. Inativos: `isActive`, `activeOnly`;
+  fora das listas (checkbox `.inact-toggle` "Mostrar inativos",
+  `SHOW_INACTIVE[key]`, etiqueta `inactTag`), das sugestões de paciente
+  (Planner/Agenda), do select de paciente do tratamento novo, de
+  `physicalRooms()/supportGroups()` (logo, do Planner e da Agenda; `(true)` traz
+  todos), de `professionalSelectOptions`, `specProfessionals`, `agdResources`
+  (inativo aparece só com atendimento na semana), especialidade e serviços do
+  profissional, `serviceOptionsHtml`, sugestões de convênio/especialidade/serviço
+  do tratamento e motivos de cancelamento. Relatórios continuam vendo todos.
+  Status e Tratamentos não usam Inativar (Tratamentos já tem as regras dele).
+- Teste `tests/run_perm_buttons.js` (no `npm test`, agora 24 arquivos).

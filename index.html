@@ -165,6 +165,19 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
    era o que fazia as abas inativas aparecerem umas por baixo das outras fora
    do Claude Artifact (que injetava esta regra por conta própria). */
 [hidden]{display:none !important}
+#tab-agenda.perm-no-create :is(.book-copy,.book-move,.empty-plus),
+#tab-agenda.perm-no-edit :is([data-period-action=lock],[data-row-action=lock]),
+#tab-agenda.perm-no-delete :is([data-period-action=unlock],[data-period-action=clear],[data-row-action=unlock],.book-move),
+#tab-agendadia.perm-no-create :is(.book-copy,.empty-plus,.agd-add,[data-agd-action=lock],[data-agd-row-action=lock]),
+#tab-agendadia.perm-no-edit .book-move,
+#tab-agendadia.perm-no-delete :is([data-agd-action=unlock],[data-agd-action=clear],[data-agd-row-action=unlock]){display:none!important}
+:is(#tab-agenda,#tab-agendadia).perm-no-create .book-main:has(.empty-plus){pointer-events:none}
+.inact-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap;cursor:pointer}
+.inact-toggle input{width:15px;height:15px;margin:0}
+.inact-tag{display:inline-block;padding:0 6px;border-radius:999px;font-size:10.5px;font-weight:800;background:var(--surface-2);color:var(--muted);vertical-align:middle}
+tr.is-inactive td{color:var(--muted)}
+.modal-ro .modal-body .rm,.modal-ro .modal-body .add-row-btn,.modal-nodel .modal-body .rm{display:none!important}
+.modal-ro .modal-body :is(input,select,textarea,.dp-btn){pointer-events:none}
 #patListHost,#reportHost{flex:1;min-height:0;display:flex;flex-direction:column}
 .controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 14px}
 .seg{display:flex;background:var(--surface-2);border-radius:9px;padding:3px;gap:2px}
@@ -1969,8 +1982,8 @@ function findPatientByName(name){
 // Célula de grupo só aceita agendar uma SALA; célula de sala só aceita PACIENTE
 // (Bloqueado / Reunião Clínica / Treinamento valem nos dois).
 function isGroup(r){ return !!(r && r.group); }
-function physicalRooms(){ return state.rooms.filter(function(r){ return !r.group; }); }
-function supportGroups(){ return state.rooms.filter(isGroup); }
+function physicalRooms(all){ return state.rooms.filter(function(r){ return !r.group && (all || isActive(r)); }); }
+function supportGroups(all){ return state.rooms.filter(function(r){ return isGroup(r) && (all || isActive(r)); }); }
 function plannerRooms(){ return supportGroups().concat(physicalRooms()); }
 var GROUP_ONLY_ROOMS_MSG = "Nos grupos de suporte só é possível agendar salas.";
 var ROOM_ONLY_PATIENTS_MSG = "Nas salas só é possível agendar pacientes cadastrados.";
@@ -2074,6 +2087,7 @@ function serviceOptionsHtml(selected, profId){
   // Lista vazia = sem escolha (cadastros salvos antes de existirem serviços): todos.
   var allowed = prof && Array.isArray(prof.servicos) && prof.servicos.length ? prof.servicos : null;
   return servicesList().filter(function(s){
+    if (!isActive(s) && s.id !== selected) return false;
     return !allowed || allowed.indexOf(s.id) !== -1 || s.id === selected || s.id === DEFAULT_SERVICE_ID;
   }).map(function(s){
     return '<option value="'+esc(s.id)+'"'+(s.id === selected ? ' selected' : '')+'>'+esc(s.name)+'</option>';
@@ -2250,6 +2264,7 @@ function professionalSelectOptions(selectedId){
     var label = g.specialty ? g.specialty.name : "Sem especialidade";
     html += '<optgroup label="'+esc(label)+'">';
     g.professionals.forEach(function(p){
+      if (!isActive(p) && p.id !== selectedId) return;   // inativo só aparece onde já está
       html += '<option value="'+esc(p.id)+'"'+(p.id===selectedId?' selected':'')+'>'+esc(p.name)+'</option>';
     });
     html += '</optgroup>';
@@ -2378,6 +2393,18 @@ function bookingPermDenied(changesByDoc){
   }
   return null;
 }
+// Ferramentas das grades conforme a permissão (classes na seção; o CSS esconde):
+// Planner (agenda) e Agenda (agendamentos): sem incluir = sem "+", copiar e
+// bloquear (Agenda); sem editar = sem mover (Agenda) e bloquear (Planner); sem
+// excluir = sem liberar/limpar e mover (Planner, que move = incluir + excluir).
+function permToolClasses(){
+  [["tab-agenda", "agenda"], ["tab-agendadia", "agendamentos"]].forEach(function(x){
+    var sec = document.getElementById(x[0]); if (!sec) return;
+    sec.classList.toggle("perm-no-create", !can(x[1], "create"));
+    sec.classList.toggle("perm-no-edit", !can(x[1], "edit"));
+    sec.classList.toggle("perm-no-delete", !can(x[1], "delete"));
+  });
+}
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
   if (!window.pipoAuth) return;
@@ -2424,6 +2451,9 @@ function applyPermissionsUI(){
   if (state.salasView === "grupos" && !can("grupos", "view") && can("salas", "view")) state.salasView = "salas";
   show("sendToAgendaBtn", can("agendamentos","create"));
   show("plClearWeekBtn", can("agenda","delete"));
+  show("fixPatientBtn", can("agenda","create") || can("agenda","edit") || can("agenda","delete"));
+  show("swapProfBtn", can("salas","edit") || can("grupos","edit"));
+  permToolClasses();
   show("agdClearWeekBtn", can("agendamentos","delete"));
   var agendaWrite = can("agenda","create") || can("agenda","edit") || can("agenda","delete");
   var banner = document.getElementById("readonlyBanner");
@@ -2529,7 +2559,7 @@ function connectDb(){
     if (userCap){
       userCap.can("data.write").then(function(can){
         state.writable = (can !== false);
-        setReadonlyBanner(!state.writable);
+        setReadonlyBanner(!state.writable); permToolClasses();
         if (window.pipoAuth) applyPermissionsUI();
       }).catch(function(){});
     }
@@ -2565,6 +2595,154 @@ function setReadonlyBanner(on){
  * uma Promise<boolean>. opts: {title, message (HTML já escapado), confirmLabel}.
  * Enter confirma só se o foco estiver no botão; Esc e clique fora cancelam.
  */
+// ---- Botões das janelas conforme a permissão ----
+// Sem "editar" (ou "incluir", num cadastro novo): janela só de leitura — campos
+// travados, sem Salvar e Cancelar vira "Fechar". Sem "excluir": sem o botão Excluir.
+// ids = {ov, save, del, cancel}; botões do corpo com data-ro-ok continuam ativos.
+function modalApplyPerms(mod, isNew, ids){
+  var canSave = isNew ? can(mod, "create") : can(mod, "edit");
+  var canDel = !isNew && can(mod, "delete");
+  var el = function(id){ return id ? document.getElementById(id) : null; };
+  if (el(ids.del) && !canDel) el(ids.del).hidden = true;
+  if (!canSave){
+    if (el(ids.save)) el(ids.save).hidden = true;
+    if (el(ids.cancel)) el(ids.cancel).textContent = "Fechar";
+    modalReadOnly(ids.ov);
+  }
+  return {save: canSave, del: canDel};
+}
+function modalReadOnly(ovId){
+  var ov = document.getElementById(ovId); if (!ov) return;
+  var m = ov.querySelector(".modal"); if (m) m.classList.add("modal-ro");
+  Array.prototype.forEach.call(ov.querySelectorAll(".modal-body input, .modal-body select, .modal-body textarea, .modal-body button:not([data-ro-ok])"), function(x){ x.disabled = true; });
+  Array.prototype.forEach.call(ov.querySelectorAll(".modal-body [contenteditable=true]"), function(x){ x.setAttribute("contenteditable", "false"); });
+}
+// ---- Item em uso: não exclui, inativa ----
+// Cadastro usado em outro cadastro ou em agendamentos (Planner/Agenda) não pode
+// ser excluído: o botão Excluir vira "Inativar". Inativo (inativo:true) some das
+// listas (há "Mostrar inativos") e das opções para novos cadastros e agendamentos,
+// mas continua valendo nos registros antigos. "Reativar" volta ao normal.
+function isActive(x){ return !(x && x.inativo); }
+function activeOnly(list, keepId){ return (list || []).filter(function(x){ return isActive(x) || (keepId && x.id === keepId); }); }
+function plannerAllDocIds(){ var ids = []; DAYS.forEach(function(d){ for (var w = 1; w <= 4; w++) ids.push(d.key + "-" + w); }); return ids; }
+// Conta agendamentos do Planner (as 4 semanas) que passam no teste pred(chave, registro).
+function plannerUseCount(pred){
+  if (!db) return Promise.resolve(0);
+  return currentBookingsFor(plannerAllDocIds()).then(function(all){
+    var n = 0;
+    Object.keys(all).forEach(function(docId){
+      var bk = all[docId] || {};
+      Object.keys(bk).forEach(function(k){
+        var v = bk[k]; if (!v) return;
+        var rec = typeof v === "string" ? {patient: v} : v;
+        if (pred(k, rec)) n++;
+      });
+    });
+    return n;
+  }).catch(function(){ return 0; });
+}
+// Conta atendimentos da Agenda com coluna = valor (sem sistema online: 0).
+function apptUseCount(col, val){
+  var c = agdClient(); if (!c || !val) return Promise.resolve(0);
+  return c.from("appointments").select("id", {count: "exact", head: true}).eq(col, val)
+    .then(function(r){ return r.error ? 0 : (r.count || 0); }, function(){ return 0; });
+}
+function useTxt(n, one, many){ return n ? n + " " + (n === 1 ? one : many) : null; }
+// Onde cada cadastro está em uso (lista de textos; vazia = livre para excluir).
+var USAGE = {
+  pacientes: function(p){
+    var key = normText(String(p.nome || "").trim());
+    return Promise.all([
+      plannerUseCount(function(k, r){ return normText(String(r.patient || "").trim()) === key; }),
+      apptUseCount("patient", p.nome)
+    ]).then(function(n){
+      return [useTxt(treatmentsOf(p.id).length, "tratamento", "tratamentos"), useTxt(n[0], "agendamento no Planner", "agendamentos no Planner"), useTxt(n[1], "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean);
+    });
+  },
+  profissionais: function(p){
+    var cols = state.rooms.filter(function(r){ return (r.therapists || []).some(function(t){ return t.professionalId === p.id; }); }).length;
+    var trs = state.treatments.filter(function(t){ return (t.specHours || []).some(function(h){ return h.profId === p.id; }); }).length;
+    return apptUseCount("professional_id", p.id).then(function(n){
+      return [useTxt(cols, "sala/grupo do Planner", "salas/grupos do Planner"), useTxt(trs, "tratamento", "tratamentos"), useTxt(n, "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean);
+    });
+  },
+  salas: function(r){
+    var name = normText(String(r.name || "").trim());
+    return Promise.all([
+      plannerUseCount(function(k, rec){ return k.split("|")[1] === r.id || normText(String(rec.patient || "").trim()) === name; }),
+      apptUseCount("room_id", r.id)
+    ]).then(function(n){ return [useTxt(n[0], "agendamento no Planner", "agendamentos no Planner"), useTxt(n[1], "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean); });
+  },
+  convenios: function(c){
+    var hit = function(x){ return x.convenioId === c.id || (!x.convenioId && normText(x.convenio || "") === normText(c.name)); };
+    return Promise.resolve([useTxt(state.treatments.filter(hit).length, "tratamento", "tratamentos"), useTxt((state.patientsRaw || []).filter(hit).length, "paciente", "pacientes")].filter(Boolean));
+  },
+  servicos: function(sv){
+    var profs = state.professionals.filter(function(p){ return Array.isArray(p.servicos) && p.servicos.indexOf(sv.id) !== -1; }).length;
+    var trs = state.treatments.filter(function(t){ return (t.specHours || []).some(function(h){ return h.specId === SVC_PREFIX + sv.id; }); }).length;
+    return Promise.all([plannerUseCount(function(k, r){ return r.service === sv.id; }), apptUseCount("service", sv.id)]).then(function(n){
+      return [useTxt(profs, "profissional", "profissionais"), useTxt(trs, "tratamento", "tratamentos"), useTxt(n[0], "agendamento no Planner", "agendamentos no Planner"), useTxt(n[1], "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean);
+    });
+  },
+  especialidades: function(sp){
+    var profs = state.professionals.filter(function(p){ return p.specialtyId === sp.id; }).length;
+    var trs = state.treatments.filter(function(t){ return (t.specHours || []).some(function(h){ return h.specId === sp.id; }); }).length;
+    return Promise.resolve([useTxt(profs, "profissional", "profissionais"), useTxt(trs, "tratamento", "tratamentos")].filter(Boolean));
+  },
+  motivos: function(m){
+    return Promise.resolve([useTxt(state.treatments.filter(function(t){ return t.motivoCancel === m.id; }).length, "tratamento cancelado", "tratamentos cancelados")].filter(Boolean));
+  }
+};
+// Liga o botão Excluir da janela: confere o uso; em uso vira "Inativar" (e, se o item
+// já está inativo, some). Item inativo ganha "Reativar". O clique de exclusão
+// original só roda com o botão no modo "Excluir" (ver delBlocked).
+// o = {btn, mod, item, name, usage: fn→Promise<[textos]>, save: fn(item)→Promise, close}
+function setupInactivate(o){
+  var b = document.getElementById(o.btn);
+  var foot = b ? b.parentNode : null;
+  if (o.item.inativo && can(o.mod, "edit")){
+    var host = foot || document.querySelector("#modalHost .modal-foot");
+    if (host){
+      var rb = document.createElement("button");
+      rb.type = "button"; rb.className = "btn ghost"; rb.textContent = "Reativar"; rb.id = o.btn + "Reactivate";
+      rb.addEventListener("click", function(){
+        Promise.resolve(o.save(Object.assign({}, o.item, {inativo: false}))).then(function(){ o.close(); showToast("Reativado."); });
+      });
+      host.insertBefore(rb, b ? b.nextSibling : host.firstChild);
+    }
+  }
+  if (!b || b.hidden) return;
+  b.dataset.mode = "checking"; b.disabled = true; var label = b.textContent; b.textContent = "Verificando…";
+  var uses = [];
+  Promise.resolve(o.usage(o.item)).then(function(u){ uses = u || []; }, function(){ uses = []; }).then(function(){
+    if (!document.body.contains(b)) return;
+    b.disabled = false;
+    if (!uses.length){ b.dataset.mode = ""; b.textContent = label; return; }
+    if (o.item.inativo || !can(o.mod, "edit")){ b.hidden = true; return; }
+    b.dataset.mode = "inactivate"; b.textContent = "Inativar"; b.title = "Em uso: " + uses.join(", ");
+  });
+  b.addEventListener("click", function(){
+    if (b.dataset.mode !== "inactivate") return;
+    confirmDialog({title: "Inativar", confirmLabel: "Inativar",
+      message: "<b>" + esc(o.name) + "</b> está em uso (" + esc(uses.join(", ")) + ") e por isso não pode ser excluído." +
+        "<br>Inativar? Some das listas e das opções para novos cadastros e agendamentos; os registros antigos continuam. Dá para reativar depois."})
+      .then(function(ok){ if (ok) Promise.resolve(o.save(Object.assign({}, o.item, {inativo: true}))).then(function(){ o.close(); showToast("Inativado."); }); });
+  });
+}
+function delBlocked(btn){ return !!(btn && btn.dataset && btn.dataset.mode); }
+// "Mostrar inativos" nas listas de cadastro.
+var SHOW_INACTIVE = {};
+function addInactiveToggle(sectionId, key, rerender){
+  var sec = document.getElementById(sectionId); if (!sec) return;
+  var bar = sec.querySelector(".pat-toolbar"); if (!bar || bar.querySelector(".inact-toggle")) return;
+  var lab = document.createElement("label");
+  lab.className = "inact-toggle";
+  lab.innerHTML = '<input type="checkbox"> Mostrar inativos';
+  lab.querySelector("input").addEventListener("change", function(e){ SHOW_INACTIVE[key] = e.target.checked; rerender(); });
+  var cnt = bar.querySelector(".pat-count");
+  bar.insertBefore(lab, cnt ? cnt.nextSibling : bar.firstChild);
+}
+function inactTag(x){ return x && x.inativo ? ' <span class="inact-tag">Inativo</span>' : ''; }
 function confirmDialog(opts){
   return new Promise(function(resolve){
     var host = document.getElementById("confirmHost");
@@ -3902,7 +4080,7 @@ function openBookingModal(ctx){
           '<div class="field" id="bkKindField"><label>Ou marque o horário como</label>' + slotKindPickerHtml(existingKind) + '</div>' +
         '</div>' +
         '<div class="modal-foot">' +
-          (existing ? '<button class="btn danger" id="bkClear">Desmarcar</button>' : '<span></span>') +
+          (existing ? '<button class="btn danger" id="bkClear">Excluir</button>' : '<span></span>') +
           '<div class="spacer"></div>' +
           '<button class="btn ghost" id="bkCancel">Cancelar</button>' +
           '<button class="btn primary" id="bkSave">Salvar</button>' +
@@ -3912,6 +4090,7 @@ function openBookingModal(ctx){
 
   var overlay = document.getElementById("ovBook");
   function close(){ host.innerHTML = ""; }
+  modalApplyPerms("agenda", !existing, {ov: "ovBook", save: "bkSave", del: "bkClear", cancel: "bkCancel"});
   overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
   document.getElementById("closeBook").addEventListener("click", close);
   document.getElementById("bkCancel").addEventListener("click", close);
@@ -3922,7 +4101,7 @@ function openBookingModal(ctx){
     var q = normText(input.value.trim());
     if (!q){ suggest.hidden = true; return; }
     // Coluna de grupo de suporte: só salas. Coluna de sala: só pacientes.
-    var patientMatches = groupCell ? [] : state.patients.filter(function(p){
+    var patientMatches = groupCell ? [] : activeOnly(state.patients).filter(function(p){
       return normText(p.nome).indexOf(q) !== -1;
     }).slice(0,8).map(function(p){ return {name:p.nome, kind:"Paciente", p:p}; });
     var roomMatches = !groupCell ? [] : physicalRooms().filter(function(r){
@@ -4828,6 +5007,7 @@ function renderPatientsTab(){
   var host = document.getElementById("patListHost");
   var q = normText((document.getElementById("patientListSearch").value||"").trim());
   var list = state.patients.filter(function(p){
+    if (!SHOW_INACTIVE.pacientes && !isActive(p)) return false;
     if (!q) return true;
     return normText(p.nome||"").indexOf(q)!==-1 || normText(patientConvenioName(p)).indexOf(q)!==-1;
   });
@@ -4857,8 +5037,8 @@ function renderPatientsTab(){
     var hasTr = state.treatments.some(function(t){ return t.patientId === p.id; });
     var col = (!hasTr || activeTreatment(p.id)) ? patientColor(p) : null;
     var dot = col ? '<span class="pcolor-dot" style="background:'+col+'" title="Cor por idade/ABA"></span>' : '';
-    return '<tr data-id="'+esc(p.id)+'">' +
-      '<td class="pt-nome">'+dot+esc(p.nome)+'</td>' +
+    return '<tr data-id="'+esc(p.id)+'"'+(p.inativo ? ' class="is-inactive"' : '')+'>' +
+      '<td class="pt-nome">'+dot+esc(p.nome)+inactTag(p)+'</td>' +
       '<td>'+esc(patientConvenioName(p)||"—")+'</td>' +
       '<td class="pt-muted">'+esc(p.plano||"—")+'</td>' +
       '<td class="pt-muted">'+idadeTxt+'</td>' +
@@ -4969,6 +5149,7 @@ function specProfessionals(specId){
   if (!specId) return [];
   var svc = isSvcItem(specId) ? String(specId).slice(SVC_PREFIX.length) : null;
   return state.professionals.filter(function(p){
+    if (!isActive(p)) return false;
     if (svc) return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(svc) !== -1;
     return p.specialtyId === specId;
   }).sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
@@ -5081,13 +5262,14 @@ function treatFieldsEditor(v){
           var q = inp.value.trim();
           var used = usedByOtherRows(i);
           var opts = localSpecialties.filter(function(s){
+            if (!isActive(s)) return false;
             if (used.indexOf(s.id) !== -1) return false;
             if (used.indexOf("name:"+s.name.trim().toLowerCase()) !== -1) return false;
             return !q || normText(s.name).indexOf(normText(q)) !== -1;
           }).slice(0,8);
           // Serviços do cadastro, menos "Sessão" (sessão = escolher a especialidade).
           var svcOpts = servicesList().filter(function(s){
-            if (s.id === DEFAULT_SERVICE_ID) return false;
+            if (s.id === DEFAULT_SERVICE_ID || !isActive(s)) return false;
             if (used.indexOf(SVC_PREFIX + s.id) !== -1) return false;
             return !q || normText(s.name).indexOf(normText(q)) !== -1;
           }).slice(0,8);
@@ -5174,7 +5356,7 @@ function treatFieldsEditor(v){
     var convSuggest = document.getElementById("pConvSuggest");
     function renderConvSuggest(){
       var q = convInput.value.trim();
-      var opts = localConvenios.filter(function(c){ return !q || normText(c.name).indexOf(normText(q)) !== -1; }).slice(0,8);
+      var opts = localConvenios.filter(function(c){ return isActive(c) && (!q || normText(c.name).indexOf(normText(q)) !== -1); }).slice(0,8);
       var exact = localConvenios.filter(function(c){ return normText(c.name.trim()) === normText(q); })[0];
       var html = opts.map(function(c){
         return '<button type="button" data-id="'+esc(c.id)+'" data-name="'+esc(c.name)+'"><span class="autolist-name">'+esc(c.name)+'</span></button>';
@@ -5298,8 +5480,8 @@ function openPatientModal(p){
   var trBox = isNew ? '' :
     '<div class="pt-treat">' +
       '<div class="pt-treat-head"><b>Tratamento</b>' +
-        (tr && trCanView ? '<button type="button" class="btn ghost" id="pOpenTreat">Abrir tratamento</button>' :
-         (!tr && trCanCreate ? '<button type="button" class="btn ghost" id="pNewTreat">+ Novo tratamento</button>' : '')) +
+        (tr && trCanView ? '<button type="button" class="btn ghost" id="pOpenTreat" data-ro-ok>Abrir tratamento</button>' :
+         (!tr && trCanCreate ? '<button type="button" class="btn ghost" id="pNewTreat" data-ro-ok>+ Novo tratamento</button>' : '')) +
       '</div>' +
       '<div class="pt-treat-txt">' + (tr ? treatSummaryHtml(tr) : 'Nenhum tratamento ativo. Convênio, plano, pacote, ABA, especialidades e horários ficam no tratamento.') + '</div>' +
     '</div>';
@@ -5325,8 +5507,11 @@ function openPatientModal(p){
       '</div>' +
     '</div></div>';
 
+  modalApplyPerms("pacientes", isNew, {ov: "ovPat", save: "pSave", del: "pDelete", cancel: "pCancel"});
   var overlay = document.getElementById("ovPat");
   function close(){ host.innerHTML = ""; }
+  if (!isNew) setupInactivate({btn: "pDelete", mod: "pacientes", item: v, name: v.nome, usage: USAGE.pacientes, close: close,
+    save: function(it){ return writePatients(state.patients.map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; })); }});
   overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
   document.getElementById("closePat").addEventListener("click", close);
   document.getElementById("pCancel").addEventListener("click", close);
@@ -5355,12 +5540,13 @@ function openPatientModal(p){
 
   if (!isNew){
     document.getElementById("pDelete").addEventListener("click", function(){
+      if (delBlocked(this)) return;
       var nTr = treatmentsOf(v.id).length;
       confirmDialog({
-        title: "Excluir paciente",
+        title: "Confirmar exclusão",
         message: "Excluir o paciente <b>"+esc(v.nome || "")+"</b> do cadastro?<br>Os atendimentos já marcados na agenda não são apagados." +
           (nTr ? "<br>Os tratamentos dele (" + nTr + ") continuam guardados." : ""),
-        confirmLabel: "Excluir paciente"
+        confirmLabel: "Confirmar exclusão"
       }).then(function(ok){
         if (!ok) return;
         var list = state.patients.filter(function(x){ return x.id !== v.id; });
@@ -5723,6 +5909,13 @@ function openStatusesModal(){
     '</div></div>';
   var overlay = document.getElementById("ovStatus");
   function close(){ host.innerHTML = ""; }
+  setTimeout(function(){
+    if (!document.getElementById("ovStatus")) return;
+    var stCanSave = can("cadastro_status", "edit") || can("cadastro_status", "create") || can("cadastro_status", "delete");
+    document.getElementById("statusAdd").hidden = !can("cadastro_status", "create");
+    if (!can("cadastro_status", "delete")) overlay.querySelector(".modal").classList.add("modal-nodel");
+    if (!stCanSave){ document.getElementById("statusSave").hidden = true; document.getElementById("statusCancel").textContent = "Fechar"; modalReadOnly("ovStatus"); }
+  }, 0);
   overlay.addEventListener("mousedown", function(e){ if (e.target === overlay) close(); });
   document.getElementById("closeStatus").addEventListener("click", close);
   document.getElementById("statusCancel").addEventListener("click", close);
@@ -5833,6 +6026,7 @@ function renderProfissionaisTab(){
   var searchEl = document.getElementById("profListSearch");
   var q = normText(((searchEl && searchEl.value) || "").trim());
   var list = rowsData.filter(function(d){
+    if (!SHOW_INACTIVE.profissionais && !isActive(d.p)) return false;
     if (!q) return true;
     return normText(d.p.name || "").indexOf(q) !== -1 || normText(d.spec).indexOf(q) !== -1 || normText(d.rooms).indexOf(q) !== -1;
   });
@@ -5862,8 +6056,8 @@ function renderProfissionaisTab(){
       '<span class="pat-col-resizer" data-col="'+c.key+'" title="Arrastar para ajustar a largura" aria-hidden="true"></span></th>';
   }).join("") + '</tr>';
   var rows = list.map(function(d){
-    return '<tr data-id="'+esc(d.p.id)+'" tabindex="0">' +
-      '<td class="pt-nome">'+esc(d.p.name)+'</td>' +
+    return '<tr data-id="'+esc(d.p.id)+'" tabindex="0"'+(d.p.inativo ? ' class="is-inactive"' : '')+'>' +
+      '<td class="pt-nome">'+esc(d.p.name)+inactTag(d.p)+'</td>' +
       '<td>'+(d.spec ? esc(d.spec) : '<span class="pt-muted">Sem especialidade</span>')+'</td>' +
       '<td class="pt-muted" title="'+esc(d.rooms)+'">'+(d.rooms ? esc(d.rooms) : '—')+'</td>' +
     '</tr>';
@@ -5898,7 +6092,7 @@ function openProfessionalModal(p){
   var draftName = p ? p.name : "";
   var draftSpecialtyId = p ? (p.specialtyId || "") : "";
 
-  var specOptions = '<option value="">Sem especialidade</option>' + state.specialties.map(function(s){
+  var specOptions = '<option value="">Sem especialidade</option>' + activeOnly(state.specialties, draftSpecialtyId).map(function(s){
     return '<option value="'+esc(s.id)+'"'+(s.id===draftSpecialtyId?' selected':'')+'>'+esc(s.name)+'</option>';
   }).join("");
   var v = p || {};
@@ -5944,7 +6138,7 @@ function openProfessionalModal(p){
           '<div class="ms" id="profServ">' +
             '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="profServLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
             '<div class="ms-panel" hidden role="listbox" aria-multiselectable="true">' +
-              (state.services.length ? state.services.map(function(s){
+              (state.services.length ? state.services.filter(function(s){ return isActive(s) || (Array.isArray(v.servicos) && v.servicos.indexOf(s.id) !== -1); }).map(function(s){
                 // Sem escolha salva (cadastros antigos e novos): todos os serviços marcados.
                 var on = !Array.isArray(v.servicos) || !v.servicos.length || v.servicos.indexOf(s.id) !== -1;
                 return '<label class="ms-opt"><input type="checkbox" value="'+esc(s.id)+'"'+(on?' checked':'')+'><span>'+esc(s.name)+'</span></label>';
@@ -5969,7 +6163,7 @@ function openProfessionalModal(p){
           '</div>' : '') +
       '</div>' +
       '<div class="modal-foot">' +
-        (isNew ? '<span></span>' : '<button class="btn danger" id="profDelete">Remover profissional</button>') +
+        (isNew ? '<span></span>' : '<button class="btn danger" id="profDelete">Excluir</button>') +
         '<div class="spacer"></div>' +
         '<button class="btn ghost" id="profCancel">Cancelar</button>' +
         '<button class="btn primary" id="profSave">Salvar</button>' +
@@ -5978,16 +6172,23 @@ function openProfessionalModal(p){
 
   var overlay = document.getElementById("ovProf");
   function close(){ host.innerHTML = ""; }
+  setTimeout(function(){
+    if (!document.getElementById("ovProf")) return;
+    modalApplyPerms("profissionais", isNew, {ov: "ovProf", save: "profSave", del: "profDelete", cancel: "profCancel"});
+    if (!isNew) setupInactivate({btn: "profDelete", mod: "profissionais", item: p, name: p.name, usage: USAGE.profissionais, close: close,
+      save: function(it){ return writeProfessionals(state.professionals.map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; })); }});
+  }, 0);
   overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
   document.getElementById("closeProf").addEventListener("click", close);
   document.getElementById("profCancel").addEventListener("click", close);
 
   if (!isNew){
     document.getElementById("profDelete").addEventListener("click", function(){
+      if (delBlocked(this)) return;
       confirmDialog({
-        title: "Excluir profissional",
+        title: "Confirmar exclusão",
         message: "Excluir o profissional <b>"+esc(p.name || "")+"</b> do cadastro?<br>As colunas de sala onde ele atende continuam na agenda com o último nome salvo.",
-        confirmLabel: "Excluir profissional"
+        confirmLabel: "Confirmar exclusão"
       }).then(function(ok){
         if (!ok) return;
         var list = state.professionals.filter(function(x){ return x.id !== p.id; });
@@ -6273,7 +6474,7 @@ function renderSalasTab(){
   if (!roomsLoaded){ host.innerHTML = '<div class="empty-state">Carregando salas…</div>'; return; }
   var countEl = document.getElementById("roomCount"), hintEl = document.getElementById("roomHint");
   // Lista do cadastro aberto (salas ou grupos); as setas trocam com o vizinho do mesmo tipo.
-  var all = groupsView ? supportGroups() : physicalRooms();
+  var all = (groupsView ? supportGroups(true) : physicalRooms(true)).filter(function(r){ return SHOW_INACTIVE.salas || isActive(r); });
   var noun = groupsView ? ["grupo", "grupos"] : ["sala", "salas"];
   if (!all.length){
     if (countEl) countEl.textContent = "";
@@ -6364,7 +6565,7 @@ function openRoomModal(r, asGroup){
         '</div>' +
       '</div>' +
       '<div class="modal-foot">' +
-        (isNew ? '<span></span>' : '<button class="btn danger" id="rmDelete">Remover '+noun+'</button>') +
+        (isNew ? '<span></span>' : '<button class="btn danger" id="rmDelete">Excluir</button>') +
         '<div class="spacer"></div>' +
         '<button class="btn ghost" id="rmCancel">Cancelar</button>' +
         '<button class="btn primary" id="rmSave">Salvar</button>' +
@@ -6373,6 +6574,12 @@ function openRoomModal(r, asGroup){
 
   var overlay = document.getElementById("ovRoom");
   function close(){ host.innerHTML = ""; }
+  setTimeout(function(){
+    if (!document.getElementById("ovRoom")) return;
+    modalApplyPerms(grp ? "grupos" : "salas", isNew, {ov: "ovRoom", save: "rmSave", del: "rmDelete", cancel: "rmCancel"});
+    if (!isNew) setupInactivate({btn: "rmDelete", mod: grp ? "grupos" : "salas", item: r, name: r.name, usage: USAGE.salas, close: close,
+      save: function(it){ return writeRooms(state.rooms.map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; })); }});
+  }, 0);
   overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
   document.getElementById("closeRoom").addEventListener("click", close);
   document.getElementById("rmCancel").addEventListener("click", close);
@@ -6437,10 +6644,11 @@ function openRoomModal(r, asGroup){
 
   if (!isNew){
     document.getElementById("rmDelete").addEventListener("click", function(){
+      if (delBlocked(this)) return;
       confirmDialog({
-        title: "Excluir " + noun,
+        title: "Confirmar exclusão",
         message: "Excluir "+(grp ? "o grupo" : "a sala")+" <b>"+esc(r.name || "")+"</b>?<br>"+(grp ? "Ele some" : "Ela some")+" da agenda, e os atendimentos marcados nas colunas "+(grp ? "dele" : "dela")+" deixam de aparecer.",
-        confirmLabel: "Excluir " + noun
+        confirmLabel: "Confirmar exclusão"
       }).then(function(ok){
         if (!ok) return;
         var list = state.rooms.filter(function(x){ return x.id !== r.id; });
@@ -6781,7 +6989,10 @@ function agdOwnProfId(){
 function agdResources(){
   var own = agdOwnProfId();
   if (own) return state.professionals.filter(function(p){ return p.id === own; });
-  if (AD.mode === "prof") return state.professionals.slice().sort(function(a,b){ return (a.name||"").localeCompare(b.name||"", "pt-BR"); });
+  // Inativo só aparece se tiver atendimento na semana carregada (histórico).
+  if (AD.mode === "prof") return state.professionals.filter(function(p){
+    return isActive(p) || Object.keys(AD.rows || {}).some(function(id){ return AD.rows[id].professional_id === p.id; });
+  }).sort(function(a,b){ return (a.name||"").localeCompare(b.name||"", "pt-BR"); });
   return physicalRooms();
 }
 function agdFindRes(id){ return agdResources().filter(function(r){ return r.id === id; })[0] || null; }
@@ -7311,7 +7522,7 @@ function agdOpenModal(opts){
         statusHtml +
       '</div>' +
       '<div class="modal-foot">' +
-        (canDel ? '<button class="btn danger" id="agdDelete">Desmarcar</button>' : '<span></span>') +
+        (canDel ? '<button class="btn danger" id="agdDelete">Excluir</button>' : '<span></span>') +
         '<div class="spacer"></div>' +
         '<button class="btn ghost" id="agdCancel">'+(canSave ? "Cancelar" : "Fechar")+'</button>' +
         (canSave ? '<button class="btn primary" id="agdSave">Salvar</button>' : (canChangeStatus ? '<button class="btn primary" id="agdSaveStatus">Salvar status</button>' : '')) +
@@ -7350,12 +7561,12 @@ function agdOpenModal(opts){
   var del = document.getElementById("agdDelete");
   if (del) del.addEventListener("click", function(){
     confirmDialog({
-      title: "Desmarcar atendimento",
-      message: "Desmarcar <b>"+esc(row.blocked ? "o bloqueio" : row.patient)+"</b> em "+agdBrDate(row.date)+" às "+row.time+"?",
-      confirmLabel: "Desmarcar"
+      title: "Confirmar exclusão",
+      message: "Excluir <b>"+esc(row.blocked ? "o bloqueio" : row.patient)+"</b> em "+agdBrDate(row.date)+" às "+row.time+"?",
+      confirmLabel: "Confirmar exclusão"
     }).then(function(ok){
       if (!ok) return;
-      agdDeleteRow(row, "Atendimento desmarcado.").then(function(done){ if (done) close(); });
+      agdDeleteRow(row, "Atendimento excluído. Use desfazer (Ctrl+Z) se foi engano.").then(function(done){ if (done) close(); });
     });
   });
 
@@ -7366,7 +7577,7 @@ function agdOpenModal(opts){
   pacEl.addEventListener("input", function(){
     var q = normText(pacEl.value.trim());
     if (!q){ pacSuggest.hidden = true; return; }
-    var matches = state.patients.filter(function(p){ return normText(p.nome).indexOf(q) !== -1; })
+    var matches = activeOnly(state.patients).filter(function(p){ return normText(p.nome).indexOf(q) !== -1; })
       .slice(0,8).map(function(p){ return {name:p.nome, kind:"Paciente", p:p}; });
     // Grupos de suporte também podem ser agendados na Agenda (bolinha na cor do grupo).
     matches = matches.concat(supportGroups().filter(function(g){ return normText(g.name).indexOf(q) !== -1; })
@@ -7723,9 +7934,9 @@ function wireAgendaDia(){
       e.stopPropagation();
       if (!can("agendamentos","delete")){ showToast(permDeniedMsg("agendamentos","delete"), true); return; }
       confirmDialog({
-        title: "Excluir agendamento",
+        title: "Confirmar exclusão",
         message: "Excluir <b>"+esc(row.blocked ? "o bloqueio" : row.patient)+"</b> em "+agdBrDate(row.date)+" às "+esc(row.time)+"?",
-        confirmLabel: "Excluir"
+        confirmLabel: "Confirmar exclusão"
       }).then(function(ok){
         if (ok) agdDeleteRow(row, "Agendamento excluído. Use desfazer (Ctrl+Z) se foi engano.");
       });
@@ -9086,9 +9297,9 @@ function prRenderDetail(){
       var rec = PR.records.filter(function(x){ return x.id === b.getAttribute("data-pr-del"); })[0];
       if (!rec) return;
       confirmDialog({
-        title: "Excluir evolução",
+        title: "Confirmar exclusão",
         message: "Excluir a evolução de <b>" + esc(prWhenText(rec)) + "</b>" + (prRecordProfName(rec) ? " (" + esc(prRecordProfName(rec)) + ")" : "") + "?<br>Essa ação não pode ser desfeita.",
-        confirmLabel: "Excluir"
+        confirmLabel: "Confirmar exclusão"
       }).then(function(ok){
         if (!ok) return;
         agdClient().from("clinical_records").delete().eq("id", rec.id).then(function(r){
@@ -10305,12 +10516,12 @@ function openTreatmentModal(t, opts){
   };
   var ed = treatFieldsEditor(v);
   var wasCancelled = !isNew && t.status === "cancelado";
-  var mots = cancelReasonsList();
+  var mots = activeOnly(cancelReasonsList(), isNew ? "" : t.motivoCancel);
   if (!isNew && t.motivoCancel && !mots.some(function(m){ return m.id === t.motivoCancel; })) mots.push({id: t.motivoCancel, name: t.motivoCancelNome || t.motivoCancel});
   var motOpts = '<option value="">Selecione o motivo…</option>' + mots.map(function(m){
     return '<option value="' + esc(m.id) + '"' + (!isNew && m.id === t.motivoCancel ? ' selected' : '') + '>' + esc(m.name) + '</option>';
   }).join("");
-  var pats = (state.patientsRaw || []).slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
+  var pats = activeOnly(state.patientsRaw, pid).sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
   var patOpts = '<option value="">Selecione o paciente…</option>' + pats.map(function(p){
     var act = activeTreatment(p.id);
     return '<option value="' + esc(p.id) + '"' + (p.id === pid ? ' selected' : '') + '>' + esc(p.nome) + (isNew && act && !opts.renegotiateFrom ? ' (já tem tratamento ativo)' : '') + '</option>';
@@ -10449,7 +10660,7 @@ function openTreatmentModal(t, opts){
     var n0 = trDoneCount(t);
     if (n0 === null && agdClient()){ trLoadLast(false).then(function(){ applyLock(); var n1 = trDoneCount(t); if (n1 === null) showToast("Não foi possível conferir os atendimentos deste tratamento. Tente de novo.", true); else if (n1) showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); else del.click(); }); return; }
     if (n0){ showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); return; }
-    confirmDialog({title: "Excluir tratamento", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Excluir tratamento"})
+    confirmDialog({title: "Confirmar exclusão", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Confirmar exclusão"})
       .then(function(ok){
         if (!ok) return;
         writeTreatments(state.treatments.filter(function(x){ return x.id !== t.id; })).then(function(done){
@@ -10544,6 +10755,15 @@ function openTreatmentModal(t, opts){
   });
 }
 
+// "Mostrar inativos" nas telas de cadastro (ver setupInactivate).
+(function(){
+  addInactiveToggle("tab-pacientes", "pacientes", function(){ renderPatientsTab(); });
+  addInactiveToggle("tab-profissionais", "profissionais", function(){ renderProfissionaisTab(); });
+  addInactiveToggle("tab-salas", "salas", function(){ renderSalasTab(); });
+  ["convenios", "servicos", "especialidades", "motivos"].forEach(function(k){
+    addInactiveToggle("tab-" + k, k, function(){ renderRegistryTab(k); });
+  });
+})();
 /* ---------------- Guia (Ajuda) ----------------
  * Menu Acesso → Ajuda (window.pipoOpenHelp) ou o botão "?" de cada tela abre a
  * tela "Guia" (#tab-ajuda, endereço #ajuda): menu lateral por área, busca (sem
@@ -10568,6 +10788,22 @@ var HELP_TOPICS = [
       "No celular, o menu fica no botão ☰ do canto superior. Planner e Resumo não aparecem no celular."
     ],
     who: "Todos os usuários."},
+  {id: "excluir", group: "Início", title: "Excluir, inativar e permissões", mod: null,
+    purpose: "Como funcionam os botões das janelas de cadastro e a exclusão.",
+    steps: [
+      "Toda janela de cadastro tem, nesta ordem: <b>Excluir</b> (ou <b>Inativar</b>) à esquerda, <b>Cancelar</b> e <b>Salvar</b> à direita.",
+      "Ao clicar em Excluir, abre a janela <b>Confirmar exclusão</b>; só exclui depois de clicar em \"Confirmar exclusão\".",
+      "Se o cadastro está em uso (tratamento, Planner, Agenda ou outro cadastro), o botão vira <b>Inativar</b>. O inativo some das listas e das opções para novos agendamentos, mas o histórico continua.",
+      "Para ver os inativos, marque <b>Mostrar inativos</b> na barra da lista. Abra o inativo e use <b>Reativar</b> para voltar."
+    ],
+    rules: [
+      "Sem permissão de <b>ver</b>, a tela não aparece no menu.",
+      "Só com <b>ver</b>, a janela abre só para leitura (campos travados e botão \"Fechar\").",
+      "Sem <b>incluir</b>, somem os botões \"+ Novo\" e o \"+\" das grades; sem <b>editar</b>, some o Salvar; sem <b>excluir</b>, some o Excluir.",
+      "No Planner e na Agenda, as ferramentas (copiar, mover, bloquear, liberar, limpar, Editar agendamento, Trocar profissional) também seguem a permissão.",
+      "Vale para Pacientes, Profissionais, Salas, Grupos, Convênios, Serviços, Especialidades e Motivos."
+    ],
+    who: "Todos os usuários (cada um vê os botões do seu nível)."},
   {id: "celular", group: "Início", title: "Usando no celular", mod: null,
     purpose: "Versão adaptada para a tela do celular.",
     steps: [
@@ -10876,6 +11112,7 @@ var HELP_TOPICS = [
 ];
 // Novidades (a mais nova primeiro). Toda mudança visível ganha uma linha aqui.
 var HELP_NEWS = [
+  {date: "2026-10-04", topic: "excluir", text: "Botões das janelas seguem a permissão (só ver = leitura), exclusão com \"Confirmar exclusão\" e Inativar para cadastros em uso."},
   {date: "2026-10-04", topic: "celular", text: "Prontuário no celular: lista só com Paciente e Registros, na largura da tela."},
   {date: "2026-10-04", topic: "celular", text: "Agenda no celular: botão + para novo atendimento e menu ⋯ com atalhos de data, Resumo do dia e Bloquear/Liberar o dia."},
   {date: "2026-10-04", topic: "celular", text: "Agenda no celular: seletor único de profissional/sala, barra em duas linhas com menu ⋯ e botões maiores."},
@@ -11244,7 +11481,7 @@ function renderRegistryTab(kind){
   var host = document.getElementById("reg-" + kind + "-host"); if (!host) return;
   var search = document.getElementById("reg-" + kind + "-search");
   var q = normText((search && search.value || "").trim());
-  var all = cfg.list(), shown = all.filter(function(x){ return !q || normText(x.name).indexOf(q) !== -1; })
+  var all = cfg.list(), shown = all.filter(function(x){ return (SHOW_INACTIVE[kind] || isActive(x)) && (!q || normText(x.name).indexOf(q) !== -1); })
     .sort(function(a, b){ return (cfg.locked && cfg.locked(a) ? -1 : 0) - (cfg.locked && cfg.locked(b) ? -1 : 0) || String(a.name).localeCompare(String(b.name), "pt-BR"); });
   var cnt = document.getElementById("reg-" + kind + "-count");
   if (cnt) cnt.textContent = shown.length + " de " + all.length + " " + (all.length === 1 ? cfg.title : cfg.plural);
@@ -11254,7 +11491,8 @@ function renderRegistryTab(kind){
   if (!shown.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca.</div>'; return; }
   var cols = cfg.cols.map(function(c, i){ return {key: "c" + i, label: c, width: i ? 180 : 360, min: i ? 70 : 140, cls: i ? "pt-muted" : "pt-nome"}; });
   gtRender(host, "reg-" + kind, cols, shown.map(function(x){
-    return {attrs: 'class="pr-row" data-reg-id="' + esc(x.id) + '" tabindex="0"', cells: cfg.row(x), vals: cfg.vals(x)};
+    var cells = cfg.row(x).slice(); cells[0] = cells[0] + inactTag(x);
+    return {attrs: 'class="pr-row' + (x.inativo ? ' is-inactive' : '') + '" data-reg-id="' + esc(x.id) + '" tabindex="0"', cells: cells, vals: cfg.vals(x)};
   }), function(){ renderRegistryTab(kind); }, "reg-table");
 }
 function openRegistryItem(kind, item){
@@ -11296,8 +11534,11 @@ function openRegistryItem(kind, item){
   var nameEl = document.getElementById("regName");
   if (canSave) nameEl.focus();
   var del = document.getElementById("regDel");
+  if (del && USAGE[kind]) setupInactivate({btn: "regDel", mod: cfg.module, item: item, name: item.name, usage: USAGE[kind], close: close,
+    save: function(it){ return Promise.resolve(cfg.write(cfg.list().map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; }))).then(function(){ renderRegistryTab(kind); }); }});
   if (del) del.addEventListener("click", function(){
-    confirmDialog({title: "Excluir " + cfg.title, message: "Excluir <b>" + esc(item.name) + "</b> do cadastro de " + cfg.plural + "?", confirmLabel: "Excluir"})
+    if (delBlocked(this)) return;
+    confirmDialog({title: "Confirmar exclusão", message: "Excluir <b>" + esc(item.name) + "</b> do cadastro de " + cfg.plural + "?<br>Essa ação não pode ser desfeita.", confirmLabel: "Confirmar exclusão"})
       .then(function(ok){
         if (!ok) return;
         Promise.resolve(cfg.write(cfg.list().filter(function(x){ return x.id !== item.id; }))).then(function(){ close(); renderRegistryTab(kind); });
