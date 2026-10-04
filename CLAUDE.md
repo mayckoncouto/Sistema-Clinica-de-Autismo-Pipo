@@ -1773,3 +1773,9 @@ exibidas como **Colaboradores** e **Colaboradores – valores** (ids continuam
 `rh_funcionarios` / `rh_remuneracao`, sem grupo próprio na grade de Níveis). Tópicos de
 ajuda no grupo Cadastros. O nível "Recursos Humanos" continua com esse nome.
 Nas seções acima, onde se lê "RH → Funcionários e Prestadores" vale "Cadastros → Colaboradores".
+
+## Botões "+" das janelas (2026-10-05)
+`.reg-pick > .btn.reg-pick-add` ("+" ao lado das listas de cadastro) e
+`.modal .btn.add-row-btn` ("+ telefone", "+ especialidade", "+ terapeuta"…): mesmo
+visual — fundo `--accent-weak`, texto e borda na cor do sistema, cantos 8px; hover
+preenchido. O "+" é quadrado da altura do campo (44px no celular).
