@@ -36,6 +36,7 @@ returns text language sql immutable as $$
     when p_path = 'config/staff_types'      then 'rh_funcionarios'
     when p_path = 'config/patient_fields'   then 'campos_paciente'
   end;
+$$;
 
 -- 2. Copia o acesso de "Profissionais" para "Funcionários e Prestadores".
 update public.roles r set permissions = r.permissions || jsonb_build_object('rh_funcionarios', jsonb_build_object(
