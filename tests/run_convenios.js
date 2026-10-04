@@ -20,6 +20,7 @@ const path = require('path');
 
   await page.evaluate(async () => {
     const db = await window.claude.use('db');
+    await db.doc('config/services').set({ list: [{ id: 'sessao', name: 'Sessão' }, { id: 'triagem', name: 'Triagem' }, { id: 'avaliacao', name: 'Avaliação' }] });
     await db.doc('config/specialties').set({ list: [{ id: 'fono', name: 'Fonoaudiologia', sigla: 'FN' }, { id: 'psico', name: 'Psicologia' }, { id: 'musico', name: 'Musicoterapia' }] });
   });
   await page.waitForTimeout(300);
@@ -49,7 +50,19 @@ const path = require('path');
   // Reabrir mostra o valor salvo.
   await page.click('#reg-convenios-host tr:has-text("Unimed")'); await page.waitForTimeout(300);
   console.log('reopening shows the saved value?', (await page.inputValue('#cvRows .cv-val')) === '120,50');
+  // "Inserir todos": todas as especialidades e serviços (menos Sessão) que faltam.
+  const expected = await ev(`state.specialties.filter(isActive).length + servicesList().filter(function(x){ return x.id !== DEFAULT_SERVICE_ID && isActive(x); }).length`);
+  await page.click('#cvAll'); await page.waitForTimeout(200);
+  const rows = await page.$$eval('#cvRows .cv-row', (a) => a.length);
+  console.log('"Inserir todos" adds every specialty and service once (value kept)?', rows === expected && (await page.inputValue('#cvRows .cv-val')) === '120,50', rows, expected);
+  const svcOpt = await page.$$eval('#cvRows .cv-spec option', (a) => a.some((o) => o.value.indexOf('svc:') === 0));
+  console.log('services are offered as options?', svcOpt);
   await page.click('#regCancel');
+  console.log('service coverage: only checked when the convênio lists a service?',
+    (await ev(`(function(){ var c = state.convenios.filter(function(x){ return x.id === "unimed"; })[0];
+      var a = convCoverage("unimed", "svc:triagem");
+      c.especialidades = ["psico", "svc:avaliacao"]; var b = convCoverage("unimed", "svc:triagem"), d = convCoverage("unimed", "svc:avaliacao");
+      c.especialidades = ["psico"]; return JSON.stringify([a, b, d]); })()`)) === '[null,{"none":true},{"direct":true}]');
 
   // Tratamento com Unimed: Fonoaudiologia (não coberta) e Musicoterapia (via Psicologia).
   await page.$eval('#mainTabs button[data-tab=tratamentos]', (b) => b.click()); await page.waitForTimeout(300);

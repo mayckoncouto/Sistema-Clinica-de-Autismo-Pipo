@@ -1300,6 +1300,13 @@ com a mesma permissão de "Tratamentos – valores".
   `data-cover` ("Coberta pelo convênio via X" / "Não coberta pelo convênio",
   `.cover-none` em vermelho), refeito ao mudar convênio ou linhas (`coverRender`).
 - Celular: lista de Convênios continua só com Nome + Pacientes (esconde a 3ª coluna).
+- (2026-10-04) Convênio também cobre SERVIÇOS (`"svc:<id>"` na mesma lista
+  `especialidades`, opções de `cvChoices()`, menos Sessão), botão
+  "+ especialidades/serviços" e **Inserir todos** (`#cvAll`, inclui todos os ativos
+  que faltam). `convCoverage` de serviço: só confere se o convênio tem algum
+  serviço na lista; "libera" não vale para serviços.
+  Especialidade/serviço que está num convênio (ou que outra especialidade libera)
+  conta como "em uso" em `USAGE` → Inativar em vez de Excluir.
 
 ## Vencimento dos tratamentos (Etapa 4, 2026-10-04)
 Decisões do usuário: vencimento por duração em meses (ajustável), opcional, aviso
