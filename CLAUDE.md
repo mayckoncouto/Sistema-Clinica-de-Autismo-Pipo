@@ -1648,6 +1648,11 @@ Administrativo, Tratamento (`PAT_SECTIONS`, `PAT_FIELDS`, `.pm-sec`).
   `merge_patient_records` (Agenda + Prontuário), Planner renomeado via
   `applyBookingChanges`, tratamentos passam (Ativo do 2º vira Renegociado com
   histórico se o 1º tem Ativo), vazios do 1º completados com o 2º.
+- (2026-10-05) **Administrador tem controle total dos Campos obrigatórios** (menos o Nome,
+  sempre obrigatório): CPF nasce obrigatório (`dfltReq`) e Filiação/Financeiro nascem
+  visíveis (`fixed`), mas o Administrador pode tirar; os outros níveis com
+  `campos_paciente.edit` não mexem nesses três. Mãe/Pai escondidos somem da janela e o
+  vínculo "Responsável" com eles é ignorado.
 - Migração `supabase/2026-10-05c-mesclar-e-data-de-entrada.sql` (flag
   `pipo.merging` em `clinical_records_stamp`, função de mesclar, acerto único da
   data de entrada = menor entre 01/01/2026 e o início do 1º tratamento).

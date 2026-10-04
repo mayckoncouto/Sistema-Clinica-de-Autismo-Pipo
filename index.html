@@ -6047,7 +6047,8 @@ function treatFieldsEditor(v){
  * Filiação (Mãe e Pai fixos), Responsáveis pela rotina, Contato, Responsável
  * financeiro (sempre), Escola, Saúde, Administrativo e o resumo do Tratamento.
  * Pacientes → "Outras opções ▾" → Campos obrigatórios (config/patient_fields
- * {fields:{chave:{show,req}}}). Nome e CPF são sempre obrigatórios.
+ * {fields:{chave:{show,req}}}). Nome é sempre obrigatório; CPF nasce obrigatório e
+ * Filiação/Responsável financeiro nascem visíveis — só o Administrador muda esses três.
  */
 var PAT_SECTIONS = [
   {id: "ident", label: "Identificação"}, {id: "endereco", label: "Endereço"},
@@ -6063,7 +6064,7 @@ var PAT_FIELDS = [
   {key: "nomeSocial", label: "Nome social / apelido", sec: "ident"},
   {key: "nascimento", label: "Data de nascimento", sec: "ident", type: "date"},
   {key: "sexo", label: "Sexo", sec: "ident", type: "select", opts: ["Feminino", "Masculino", "Outro"]},
-  {key: "cpf", label: "CPF", sec: "ident", type: "cpf", lock: true},
+  {key: "cpf", label: "CPF", sec: "ident", type: "cpf", dfltReq: true},
   {key: "rg", label: "RG", sec: "ident"},
   {key: "cns", label: "Cartão SUS (CNS)", sec: "ident", type: "digits", max: 15},
   {key: "entrada", label: "Data de entrada", sec: "ident", type: "date"},
@@ -6095,10 +6096,11 @@ var PAT_LEGACY_KEYS = ["responsaveis", "finOutro", "telefone", "email", "prefCon
 function patFieldCfg(key){
   var f = PAT_FIELDS.filter(function(x){ return x.key === key; })[0];
   if (!f) return {show: false, req: false};
-  if (f.lock) return {show: true, req: true};
-  var c = (state.patientFields || {})[key] || {};
-  var show = f.fixed ? true : c.show !== false;
-  return {show: show, req: show && !!c.req};
+  if (f.lock) return {show: true, req: true};          // Nome: sempre aparece e é obrigatório
+  var c = (state.patientFields || {})[key];
+  var show = c ? c.show !== false : true;
+  var req = c ? !!c.req : !!f.dfltReq;                   // CPF nasce obrigatório
+  return {show: show, req: show && req};
 }
 function digitsOnly(s){ return String(s || "").replace(/\D/g, ""); }
 // Dados do paciente no formato novo (converte o que veio do formato anterior).
@@ -6197,6 +6199,7 @@ function openPatientModal(p){
       (tr ? '<div class="trc">' + treatCardHtml(tr) + '</div>' : '<div class="pt-treat-txt">Nenhum tratamento ativo. Convênio, plano, sessões/mês, ABA, especialidades e horários ficam no tratamento.</div>') +
     '</div>';
   var fin = Object.assign({nome: "", doc: "", telefone: "", email: "", endereco: "", link: ""}, v.financeiro);
+  if (fin.link && !patFieldCfg(fin.link).show) fin.link = "";   // mãe/pai escondidos: o financeiro fica como está gravado
   var phones = (v.telefones || []).map(function(x){ return Object.assign({}, x); });
   var mails = (v.emails || []).map(function(x){ return Object.assign({}, x); });
   var rotina = (v.rotina || []).map(function(x){ return Object.assign({}, x); });
@@ -6219,7 +6222,7 @@ function openPatientModal(p){
     if (!fs.length) return "";
     var html = "";
     if (sec.id === "endereco") html = patAddressHtml(v.endereco);
-    else if (sec.id === "filiacao") html = parentHtml("mae", "Mãe") + parentHtml("pai", "Pai");
+    else if (sec.id === "filiacao") html = (patFieldCfg("mae").show ? parentHtml("mae", "Mãe") : "") + (patFieldCfg("pai").show ? parentHtml("pai", "Pai") : "");
     else if (sec.id === "rotina") html = '<div class="pat-count">Só podem retirar o paciente as pessoas desta lista.</div><div id="rotHost" class="pm-list"></div>' +
       '<button type="button" class="btn ghost add-row-btn" id="rotAdd">+ Incluir</button>';
     else if (sec.id === "contato"){
@@ -6558,17 +6561,19 @@ function openPatientFieldsModal(){
   if (!can("campos_paciente", "view")){ showToast(permDeniedMsg("campos_paciente", "view"), true); return; }
   var canEdit = can("campos_paciente", "edit");
   var host = document.getElementById("modalHost");
+  var admin = patIsAdmin();
   var rows = PAT_SECTIONS.map(function(sec){
     return '<tr class="pf-sec"><td colspan="3">' + esc(sec.label) + '</td></tr>' + PAT_FIELDS.filter(function(f){ return f.sec === sec.id; }).map(function(f){
-      var raw = (state.patientFields || {})[f.key] || {};
-      var show = f.lock || f.fixed ? true : raw.show !== false, req = f.lock ? true : !!raw.req;
+      // Administrador: controle total (menos o Nome). Outros níveis não mexem no CPF nem em Filiação/Financeiro.
+      var cfg = patFieldCfg(f.key), show = cfg.show, req = cfg.req;
+      var lockShow = f.lock || (!admin && (f.fixed || f.dfltReq)), lockReq = f.lock || (!admin && f.dfltReq);
       return '<tr data-pfk="' + f.key + '"><td>' + esc(f.label) + (f.hint ? '<div class="pat-count">' + esc(f.hint) + '</div>' : '') + '</td>' +
-        '<td class="pf-chk"><input type="checkbox" data-pfx="show"' + (show ? ' checked' : '') + ((f.lock || f.fixed || !canEdit) ? ' disabled' : '') + ' aria-label="Aparece: ' + esc(f.label) + '"></td>' +
-        '<td class="pf-chk"><input type="checkbox" data-pfx="req"' + (req ? ' checked' : '') + ((f.lock || !canEdit) ? ' disabled' : '') + ' aria-label="Obrigatório: ' + esc(f.label) + '"></td></tr>';
+        '<td class="pf-chk"><input type="checkbox" data-pfx="show"' + (show ? ' checked' : '') + ((lockShow || !canEdit) ? ' disabled' : '') + ' aria-label="Aparece: ' + esc(f.label) + '"></td>' +
+        '<td class="pf-chk"><input type="checkbox" data-pfx="req"' + (req ? ' checked' : '') + ((lockReq || !canEdit) ? ' disabled' : '') + ' aria-label="Obrigatório: ' + esc(f.label) + '"></td></tr>';
     }).join("");
   }).join("");
   host.innerHTML = '<div class="overlay" id="ovPf"><div class="modal" style="max-width:560px">' +
-    '<div class="modal-head"><div><h3>Campos obrigatórios</h3><div class="modal-sub">Escolha quais campos aparecem no cadastro de pacientes e quais precisam ser preenchidos para salvar. Nome e CPF são sempre obrigatórios; Filiação e Responsável financeiro sempre aparecem. Esconder um campo não apaga o que já foi gravado nele.</div></div>' +
+    '<div class="modal-head"><div><h3>Campos obrigatórios</h3><div class="modal-sub">Escolha quais campos aparecem no cadastro de pacientes e quais precisam ser preenchidos para salvar. ' + (admin ? 'O Nome é sempre obrigatório; os demais campos você define.' : 'O Nome é sempre obrigatório. CPF, Filiação e Responsável financeiro só o Administrador muda.') + ' Esconder um campo não apaga o que já foi gravado nele.</div></div>' +
       '<button class="modal-close" id="pfClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body"><table class="pf-table"><thead><tr><th>Campo</th><th>Aparece</th><th>Obrigatório</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="pfCancel">' + (canEdit ? "Cancelar" : "Fechar") + '</button>' +
@@ -6588,7 +6593,7 @@ function openPatientFieldsModal(){
   if (sv) sv.addEventListener("click", function(){
     var fields = {};
     ov.querySelectorAll("tr[data-pfk]").forEach(function(tr){
-      var k = tr.getAttribute("data-pfk"); if (k === "nome" || k === "cpf") return;
+      var k = tr.getAttribute("data-pfk"); if (k === "nome") return;
       fields[k] = {show: tr.querySelector('[data-pfx="show"]').checked, req: tr.querySelector('[data-pfx="req"]').checked};
     });
     state.patientFields = fields;
@@ -12381,10 +12386,10 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",
-      "<b>CPF do paciente é obrigatório</b> e não pode repetir: o sistema não salva dois pacientes com o mesmo CPF.",
+      "<b>CPF do paciente é obrigatório</b> (o Administrador pode mudar em Campos obrigatórios) e não pode repetir: o sistema não salva dois pacientes com o mesmo CPF.",
       "CPF da mãe ou do pai igual ao de outro paciente mostra só um aviso (irmãos em tratamento são permitidos).",
       "A data de entrada não pode ser depois do início do primeiro tratamento do paciente, e o tratamento não pode começar antes da data de entrada.",
-      "<b>Campos obrigatórios</b> define quais campos aparecem e quais precisam ser preenchidos (marcados com *). Nome e CPF são sempre obrigatórios; Filiação e Responsável financeiro sempre aparecem. Esconder um campo não apaga o que já estava gravado.",
+      "<b>Campos obrigatórios</b> define quais campos aparecem e quais precisam ser preenchidos (marcados com *). O Nome é sempre obrigatório. O Administrador decide todos os outros campos; os demais níveis não mudam CPF, Filiação e Responsável financeiro. Esconder um campo não apaga o que já estava gravado.",
       "<b>Mesclar cadastros</b> junta dois cadastros do mesmo paciente: o 1º fica e o 2º é excluído. Tratamentos, agendamentos do Planner, atendimentos da Agenda e evoluções do Prontuário do 2º passam para o 1º; campos vazios do 1º são completados com os do 2º. Se os dois têm tratamento Ativo, o do 2º vira Renegociado. Pede confirmação dupla e não pode ser desfeito.",
       "CPFs são conferidos pelos dígitos; e-mail precisa ser válido.",
       "A cor do paciente vem do tratamento ativo: Não faz ABA = vermelho; senão pela idade (0–4 azul, 5–9 verde, 10+ laranja).",

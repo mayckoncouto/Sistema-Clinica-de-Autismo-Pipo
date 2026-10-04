@@ -100,7 +100,8 @@ const path = require('path');
 
   // Campos obrigatórios: RG obrigatório, Sexo escondido.
   await page.click('#patMoreBtn'); await page.click('#patFieldsBtn'); await page.waitForSelector('#ovPf');
-  console.log('Nome and CPF locked as required?', await page.$eval('tr[data-pfk="nome"] [data-pfx="req"]', (c) => c.checked && c.disabled) && await page.$eval('tr[data-pfk="cpf"] [data-pfx="req"]', (c) => c.checked && c.disabled));
+  console.log('Nome locked; admin controls CPF and Filiação/Financeiro?', await page.$eval('tr[data-pfk="nome"] [data-pfx="req"]', (c) => c.checked && c.disabled) &&
+    await page.$eval('tr[data-pfk="cpf"] [data-pfx="req"]', (c) => c.checked && !c.disabled) && await page.$eval('tr[data-pfk="mae"] [data-pfx="show"]', (c) => c.checked && !c.disabled));
   await page.check('tr[data-pfk="rg"] [data-pfx="req"]');
   console.log('marking required also marks "Aparece"?', await page.isChecked('tr[data-pfk="rg"] [data-pfx="show"]'));
   await page.uncheck('tr[data-pfk="sexo"] [data-pfx="show"]');
@@ -112,6 +113,19 @@ const path = require('path');
   console.log('saving without a required field is refused?', await page.isVisible('#ovPat'));
   await page.fill('#pf-rg', '1234567'); await page.click('#pSave'); await page.waitForTimeout(200);
   console.log('after filling it, saves?', !(await page.$('#ovPat')) && (await raw('bruno-verde')).rg === '1234567');
+
+  // Administrador: CPF opcional e Pai escondido.
+  await page.click('#patMoreBtn'); await page.click('#patFieldsBtn'); await page.waitForSelector('#ovPf');
+  await page.uncheck('tr[data-pfk="cpf"] [data-pfx="req"]'); await page.uncheck('tr[data-pfk="pai"] [data-pfx="show"]');
+  await page.click('#pfSave'); await page.waitForTimeout(200);
+  await page.click('#addPatientBtn'); await page.waitForTimeout(300);
+  console.log('hidden Pai is not in the window?', !(await page.$('#pm-pai-nome')) && !!(await page.$('#pm-mae-nome')));
+  await page.fill('#pNome', 'Sem Cpf Teste'); await page.fill('#pf-rg', '999');
+  await page.click('#pSave'); await page.waitForTimeout(250);
+  console.log('with CPF optional, a patient without CPF saves?', await page.evaluate(() => window.__STORE__['patients/all'].list.some((p) => p.nome === 'Sem Cpf Teste')));
+  await page.click('#ovTreat #trClose').catch(() => {}); await page.waitForTimeout(100);
+  await page.evaluate(async () => { const db = await window.claude.use('db'); await db.doc('config/patient_fields').set({fields: {rg: {show: true, req: true}}}); });
+  await page.waitForTimeout(200);
 
   // Paciente novo: data de entrada = hoje.
   await page.click('#addPatientBtn'); await page.waitForTimeout(300);
