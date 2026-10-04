@@ -1054,7 +1054,14 @@ A troca de largura (`MOBILE_MQ`, `wireMobileNav`) redesenha a Agenda se ela
 estiver aberta.
 No celular a seção `#tab-agendadia` cresce com a grade (`flex:none`, `.agd-main`
 `min-height:auto`, `.agd-scroll` `overflow:visible`) e a página rola; antes a caixa
-branca tinha a altura da tela e os horários passavam por fora dela (faixa branca). ‹ › andam de dia em dia (lógica da visão Dia que já existia).
+branca tinha a altura da tela e os horários passavam por fora dela (faixa branca).
+Agenda no celular (2026-10-04): no lugar da lista lateral e do filtro, um seletor
+único `#agdPickSel` (`.agd-pick`, preenchido em `agdRenderSide` com
+`agdResources()` do modo Profissionais/Salas; vira lista própria com busca);
+barra em duas linhas (data, ‹ Hoje ›, ?, ⋯ / busca), `#agdNewBtn` e
+`#agdClearWeekBtn` escondidos e oferecidos no menu `#agdMoreBtn`/`#agdMoreMenu`
+(repassa o clique ao original visível); botões de período, cadeados e
+desfazer maiores. No computador `.agd-pick`/`.agd-more-wrap` ficam ocultos. ‹ › andam de dia em dia (lógica da visão Dia que já existia).
 
 ## Cópia de segurança (2026-10-03, menu Acesso, só Administrador)
 O projeto Supabase está no plano gratuito (sem backup automático restaurável).

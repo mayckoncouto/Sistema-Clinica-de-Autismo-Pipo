@@ -357,6 +357,9 @@ td.agd-slot:hover .agd-add{opacity:1}
 .book .book-main.off-box,.book .book-main.off-box:hover{background:var(--off-bg);border-color:var(--line);cursor:not-allowed;box-shadow:none}
 .agd-side{width:250px;flex:none;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
 .agd-panel.agd-solo .agd-side{display:none}
+.agd-pick,.agd-more-wrap{display:none}
+.agd-more-wrap{position:relative}
+#agdMoreMenu.agd-more-menu{position:absolute;left:auto;right:0;top:calc(100% + 4px);z-index:30;min-width:200px;width:max-content}
 .agd-mode{margin:10px 10px 8px}
 .agd-mode button{flex:1}
 .agd-filter{margin:0 10px 8px;max-width:none;flex:none}
@@ -989,6 +992,30 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #tab-agendadia{flex:none;min-height:auto}
   #tab-agendadia .agd-main{min-height:auto}
   #tab-agendadia .agd-scroll{overflow:visible}
+  /* Agenda: Profissionais | Salas + um seletor só (sem a lista nem o filtro) */
+  #tab-agendadia .agd-side{max-height:none;padding:10px 12px;gap:8px}
+  #tab-agendadia .agd-side .agd-filter,#tab-agendadia #agdResList{display:none}
+  #tab-agendadia .agd-pick{display:block}
+  #tab-agendadia .agd-pick .dp-btn{width:100%}
+  /* Barra em duas linhas: data, ‹ Hoje ›, ? e ⋯ / busca na largura toda */
+  #tab-agendadia .agd-toolbar{flex-wrap:wrap;overflow:visible;row-gap:8px;padding:10px 12px}
+  #tab-agendadia .agd-toolbar{column-gap:6px}
+  #tab-agendadia .agd-toolbar > .dp-btn{order:1;flex:1 1 0;min-width:0;padding-inline:8px}
+  #tab-agendadia .agd-nav{order:2}
+  #tab-agendadia .agd-toolbar .help-q{order:3;width:36px;height:36px}
+  #tab-agendadia .agd-more-wrap{display:block;order:4}
+  #tab-agendadia .agd-more-btn{width:38px;height:36px;padding:0;font-size:20px;line-height:1;border:1px solid var(--line);background:var(--surface)}
+  #tab-agendadia .agd-nav button{padding:7px 11px}
+  #tab-agendadia .agd-toolbar .agd-search{order:10;flex:1 1 100%;max-width:none}
+  #tab-agendadia #agdMatchCount{order:11}
+  #tab-agendadia .agd-title,#tab-agendadia .agd-toolbar .spacer,#tab-agendadia #agdClearWeekBtn,#tab-agendadia #agdNewBtn{display:none!important}
+  /* Botões da grade maiores e mais fáceis de tocar */
+  #tab-agendadia .period-btn{width:32px;height:32px;opacity:.75}
+  #tab-agendadia .period-btn:empty::before{width:16px;height:16px}
+  #tab-agendadia .row-lock{gap:2px}
+  #tab-agendadia .row-lock .period-btn{width:26px;height:26px;opacity:.75}
+  #tab-agendadia .row-lock .period-btn:empty::before{width:14px;height:14px}
+  #tab-agendadia .hist-btn{width:30px;height:32px}
   /* Relatórios no celular: campos OU relatório (tela cheia, com "Voltar"). */
   #tab-relatorios{flex-direction:column}
   #tab-relatorios .rp-form{width:auto;border:0;flex:1;min-height:0}
@@ -1127,6 +1154,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   <section id="tab-agendadia" class="panel agd-panel" hidden>
     <aside class="agd-side">
       <div class="seg agd-mode" id="agdModeSeg"><button data-m="prof" class="active">Profissionais</button><button data-m="sala">Salas</button></div>
+      <!-- Celular: um seletor só (profissionais ou salas, conforme o botão acima) no lugar da lista -->
+      <div class="agd-pick"><select id="agdPickSel" aria-label="Profissional ou sala"></select></div>
       <div class="search-wrap agd-filter">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
         <input id="agdFilter" type="text" placeholder="Filtrar">
@@ -1148,6 +1177,9 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <span class="agd-who" id="agdWho"></span>
         <button class="btn ghost" id="agdClearWeekBtn" title="Apaga todos os registros da semana aberta" hidden>Limpar semana</button>
         <button class="btn primary" id="agdNewBtn">+ Novo atendimento</button>
+        <!-- Celular: Limpar semana e + Novo atendimento ficam no menu "⋯" -->
+        <div class="agd-more-wrap"><button type="button" class="btn ghost agd-more-btn" id="agdMoreBtn" aria-label="Mais opções" title="Mais opções">⋯</button>
+          <div class="agd-more-menu cad-menu" id="agdMoreMenu" hidden></div></div>
       </div>
       <div class="clipboard-bar" id="agdClipboardBar"></div>
       <div class="agd-scroll"><div id="agdGrid"></div></div>
@@ -7087,6 +7119,13 @@ function agdSearchHit(row){
 function agdRenderSide(){
   var host = document.getElementById("agdResList");
   if (!host) return;
+  var pick = document.getElementById("agdPickSel");
+  if (pick){
+    var res = agdResources();
+    var optsHtml = res.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>'; }).join("") || '<option value="">' + (AD.mode === "prof" ? "Nenhum profissional" : "Nenhuma sala") + '</option>';
+    if (pick._html !== optsHtml){ pick.innerHTML = optsHtml; pick._html = optsHtml; }
+    pick.value = res.some(function(r){ return r.id === AD.sel; }) ? AD.sel : ((res[0] && res[0].id) || "");
+  }
   var q = normText(AD.filter.trim()), idx = agdIndex();
   var counts = {};
   Object.keys(AD.rows).forEach(function(id){
@@ -7538,6 +7577,26 @@ function wireAgendaDia(){
   });
   document.getElementById("agdFilter").addEventListener("input", function(e){ AD.filter = e.target.value; agdRenderSide(); });
   document.getElementById("agdSearch").addEventListener("input", function(e){ AD.search = e.target.value; agdRender(); });
+  document.getElementById("agdPickSel").addEventListener("change", function(e){
+    if (!e.target.value || e.target.value === AD.sel) return;
+    AD.sel = e.target.value; agdRender();
+  });
+  // Menu "⋯" (celular): repassa o clique para os botões originais que o nível pode ver.
+  var moreBtn = document.getElementById("agdMoreBtn"), moreMenu = document.getElementById("agdMoreMenu");
+  moreBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    if (!moreMenu.hidden){ moreMenu.hidden = true; return; }
+    moreMenu.innerHTML = ["agdNewBtn", "agdClearWeekBtn"].filter(function(id){ var b = document.getElementById(id); return b && !b.hidden; }).map(function(id){
+      return '<button type="button" data-agd-more="' + id + '">' + esc(document.getElementById(id).textContent) + '</button>';
+    }).join("") || '<div class="hint" style="padding:8px 12px">Sem opções.</div>';
+    moreMenu.hidden = false;
+  });
+  moreMenu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-agd-more]"); if (!b) return;
+    moreMenu.hidden = true;
+    document.getElementById(b.getAttribute("data-agd-more")).click();
+  });
+  document.addEventListener("mousedown", function(e){ if (!moreMenu.hidden && !e.target.closest(".agd-more-wrap")) moreMenu.hidden = true; });
   document.getElementById("agdResList").addEventListener("click", function(e){
     var r = e.target.closest(".agd-res"); if (!r) return;
     AD.sel = r.getAttribute("data-id"); agdRender();
@@ -10441,6 +10500,8 @@ var HELP_TOPICS = [
     steps: [
       "Toque em <b>☰</b> no canto superior para abrir o menu (Cadastros e Acesso abrem ao tocar no título).",
       "A Agenda aparece só na visão <b>Dia</b>. Use ‹ › para trocar de dia.",
+      "Na Agenda, toque em <b>Profissionais</b> ou <b>Salas</b> e escolha no seletor logo abaixo (dá para digitar para buscar).",
+      "<b>+ Novo atendimento</b> e <b>Limpar semana</b> ficam no botão <b>⋯</b>, ao lado de Hoje.",
       "Nos Relatórios, depois de gerar, o resultado ocupa a tela toda. Use <b>‹ Voltar</b> para escolher outro."
     ],
     rules: [
@@ -10740,6 +10801,7 @@ var HELP_TOPICS = [
 ];
 // Novidades (a mais nova primeiro). Toda mudança visível ganha uma linha aqui.
 var HELP_NEWS = [
+  {date: "2026-10-04", topic: "celular", text: "Agenda no celular: seletor único de profissional/sala, barra em duas linhas com menu ⋯ e botões maiores."},
   {date: "2026-10-04", topic: "inicio", text: "Guia de ajuda: menu Acesso → Ajuda e botão ? em cada tela."},
   {date: "2026-10-04", topic: "tratamentos-mes", text: "Tratamentos: contratado × realizado mês a mês, coluna Mês e filtro \"Abaixo do contratado\"."},
   {date: "2026-10-04", topic: "tratamentos-vencimento", text: "Tratamentos: vencimento por data ou por quantidade de sessões, com avisos e filtros Vencendo/Vencidos."},
