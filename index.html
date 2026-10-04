@@ -307,6 +307,14 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .pt-treat-txt{font-size:12.5px;color:var(--ink-2);line-height:1.5}
 .tr-missing-btn{font-size:12px;color:var(--danger)}
 .tr-due-btn{font-size:12px;color:#9a6512}
+.tr-mchip{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;background:var(--surface-2);color:var(--ink-2)}
+.tr-mchip.tr-falta{background:#fbe4e2;color:#a3352f}.tr-mchip.tr-sobra{background:#fbefd9;color:#8a5a10}.tr-mchip.tr-ok{background:#e3f1e2;color:#3d7a39}
+.tr-month-wrap{overflow-x:auto;margin:6px 0 10px}
+.tr-month{width:100%;border-collapse:collapse;font-size:12.5px}
+.tr-month th{font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px;border-bottom:1px solid var(--line)}
+.tr-month td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.tr-month tr.tr-month-first td{border-top:2px solid var(--line)}
+.tr-month td.tr-falta{color:#a3352f;font-weight:800}.tr-month td.tr-sobra{color:#8a5a10;font-weight:800}
 .tr-venc{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:800;color:#fff;white-space:nowrap}
 .tr-venc.vencido{background:#b6403a}.tr-venc.vencendo{background:#b7791f}
 .bk-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
@@ -1166,6 +1174,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <option value="cancelado">Cancelados</option>
         <option value="vencendo">Vencendo (próximos 30 dias)</option>
         <option value="vencidos">Vencidos</option>
+        <option value="abaixo">Abaixo do contratado</option>
         <option value="sem">Pacientes sem tratamento ativo</option>
       </select>
       <span class="pat-count" id="trCount"></span>
@@ -9630,7 +9639,7 @@ function trHistHtml(t){
       (e.obs ? '<div class="tr-hist-obs">' + esc(e.obs) + '</div>' : '') + '</li>';
   }).join("") + '</ul>';
 }
-var TR = {last: null, done: null, used: null, lastAt: 0, loading: false, loadP: null, filter: "", search: "", fin: null};
+var TR = {last: null, done: null, used: null, appts: null, lastAt: 0, loading: false, loadP: null, filter: "", search: "", fin: null};
 var treatmentsLoaded = false;
 // Vencimento ("Válido até"): opcional; só conta para tratamento Ativo.
 // Aviso a partir de TR_DUE_DAYS dias antes; depois da data continua Ativo, marcado "Vencido".
@@ -9839,13 +9848,16 @@ function trLoadLast(force){
   if (TR.loading) return TR.loadP;
   if (!force && TR.last && Date.now() - TR.lastAt < 120000) return Promise.resolve();
   TR.loading = true;
-  var out = {}, done = {}, used = {}, page = 1000, today = trTodayIso();
+  var out = {}, done = {}, used = {}, appts = {}, page = 1000, today = trTodayIso();
+  var monthEnd = trMonthEnd(today);   // agendados até o fim do mês atual (Contratado × realizado)
   function next(from){
-    return c.from("appointments").select("patient,date,status").eq("blocked", false).lte("date", today)
+    return c.from("appointments").select("patient,date,status,professional_id,service").eq("blocked", false).lte("date", monthEnd)
       .order("date").range(from, from + page - 1).then(function(r){
         if (r.error) throw r.error;
         (r.data || []).forEach(function(a){
           var k = normText(String(a.patient || "").trim()); if (!k) return;
+          (appts[k] = appts[k] || []).push({d: a.date, prof: a.professional_id || "", svc: a.service || DEFAULT_SERVICE_ID, st: a.status || ""});
+          if (a.date > today) return;
           (out[k] = out[k] || []).push(a.date);
           if (a.status === FINAL_STATUS) (done[k] = done[k] || []).push(a.date);
           if (TR_USED_STATUS.indexOf(a.status) !== -1) (used[k] = used[k] || []).push(a.date);
@@ -9853,13 +9865,102 @@ function trLoadLast(force){
         return (r.data || []).length === page ? next(from + page) : null;
       });
   }
-  TR.loadP = next(0).then(function(){ TR.last = out; TR.done = done; TR.used = used; TR.lastAt = Date.now(); })
+  TR.loadP = next(0).then(function(){ TR.last = out; TR.done = done; TR.used = used; TR.appts = appts; TR.lastAt = Date.now(); })
     .catch(function(){ TR.last = TR.last || {}; })
     .then(function(){ TR.loading = false; if (state.tab === "tratamentos") renderTreatmentsTab(); });
   return TR.loadP;
 }
 // Atendimentos Finalizados deste tratamento (pela regra do tratamento vigente na
 // data). null = ainda não se sabe (sem sistema online ou carregando).
+// ---- Contratado × realizado, mês a mês (Etapa 5) ----
+// Realizado = Finalizado + Não compareceu (TR_USED_STATUS). Mês atual: realizado +
+// agendados ainda sem status de hoje até o fim do mês. Primeiro/último mês do
+// tratamento: contratado proporcional aos dias. Atendimento vai para a linha da
+// especialidade principal do profissional (Sessão) ou do serviço ("svc:").
+function trMonthEnd(iso){ var d = agdParse(iso); return agdIso(new Date(d.getFullYear(), d.getMonth() + 1, 0)); }
+var TR_MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+function trSpecKey(a){
+  if (a.svc && a.svc !== DEFAULT_SERVICE_ID) return SVC_PREFIX + a.svc;
+  var pr = findProfessional(a.prof); return (pr && pr.specialtyId) || "";
+}
+// Fim do período do tratamento: véspera do início do seguinte, ou o encerramento.
+function trPeriodEnd(t){
+  var nx = treatmentsOf(t.patientId).filter(function(x){ return x.id !== t.id && x.inicio && t.inicio && x.inicio > t.inicio; })
+    .map(function(x){ return x.inicio; }).sort()[0];
+  if (nx){ var d = agdParse(nx); d.setDate(d.getDate() - 1); return agdIso(d); }
+  if (t.status !== "ativo" && t.statusEm) return t.statusEm;
+  return "";
+}
+function trMonthly(t){
+  if (!t || !t.inicio || !TR.appts) return null;
+  var p = rawPatient(t.patientId); if (!p) return null;
+  var today = trTodayIso(), curYm = today.slice(0, 7);
+  var end = trPeriodEnd(t) || trMonthEnd(today);
+  if (end > trMonthEnd(today)) end = trMonthEnd(today);
+  if (end < t.inicio) return {months: []};
+  var specs = (Array.isArray(t.specHours) ? t.specHours : []).filter(function(r){ return Number(r.hours) > 0; });
+  var mine = (TR.appts[normText(String(p.nome || "").trim())] || []).filter(function(a){
+    if (a.d < t.inicio || a.d > end) return false;
+    var x = treatmentAt(t.patientId, a.d); return x && x.id === t.id;
+  });
+  var months = [], y = +t.inicio.slice(0, 4), m = +t.inicio.slice(5, 7) - 1;
+  while (true){
+    var first = agdIso(new Date(y, m, 1)), last = agdIso(new Date(y, m + 1, 0));
+    if (first > end) break;
+    var ym = first.slice(0, 7), dim = +last.slice(8, 10);
+    var from = t.inicio > first ? t.inicio : first, to = end < last ? end : last;
+    var frac = (+to.slice(8, 10) - +from.slice(8, 10) + 1) / dim;
+    var cur = ym === curYm, rows = {};
+    specs.forEach(function(r){ rows[r.specId] = {specId: r.specId, contr: Math.round(Number(r.hours) * frac), real: 0, sched: 0}; });
+    mine.forEach(function(a){
+      if (a.d.slice(0, 7) !== ym) return;
+      var k = trSpecKey(a); if (!k) return;
+      var row = rows[k] || (rows[k] = {specId: k, contr: 0, real: 0, sched: 0});
+      if (TR_USED_STATUS.indexOf(a.st) !== -1) row.real++;
+      else if (cur && !a.st && a.d >= today) row.sched++;
+    });
+    var list = Object.keys(rows).map(function(k){ var r = rows[k]; r.diff = r.real + r.sched - r.contr; return r; });
+    var tot = list.reduce(function(s2, r){ s2.contr += r.contr; s2.real += r.real; s2.sched += r.sched; return s2; }, {contr: 0, real: 0, sched: 0});
+    tot.diff = tot.real + tot.sched - tot.contr;
+    months.push({ym: ym, label: TR_MONTHS[m] + "/" + String(y).slice(2), current: cur, partial: frac < 1, rows: list, tot: tot,
+      falta: list.some(function(r){ return r.diff < 0; }), sobra: list.some(function(r){ return r.diff > 0; })});
+    m++; if (m > 11){ m = 0; y++; }
+  }
+  return {months: months};
+}
+// Resumo para a lista: mês atual (se o tratamento ainda vale nele) ou o último mês.
+function trMonthSummary(t){
+  var r = trMonthly(t); if (!r || !r.months.length) return null;
+  var cur = r.months[r.months.length - 1];
+  var prev = r.months.length > 1 ? r.months[r.months.length - 2] : null;
+  return {m: cur, prev: prev, below: cur.falta || !!(cur.current && prev && prev.falta)};
+}
+function trDiffCls(d){ return d < 0 ? "tr-falta" : (d > 0 ? "tr-sobra" : ""); }
+function trMonthCell(t){
+  var s = trMonthSummary(t);
+  if (!s) return TR.appts || !agdClient() ? '<span class="pt-muted">—</span>' : '<span class="pt-muted">…</span>';
+  var m = s.m.tot;
+  var txt = m.real + (m.sched ? " + " + m.sched + " agend." : "") + " de " + m.contr;
+  var cls = s.m.falta ? "tr-falta" : (s.m.sobra ? "tr-sobra" : "tr-ok");
+  return '<span class="tr-mchip ' + cls + '" title="' + esc(s.m.label + (s.m.current ? " (mês atual: realizados + agendados)" : "")) + '">' + esc(txt) + '</span>' +
+    (s.prev && s.prev.falta ? ' <span class="tr-mchip tr-falta" title="Mês anterior abaixo do contratado">' + esc(s.prev.label) + ' ↓</span>' : '');
+}
+function trMonthlyHtml(t){
+  var r = trMonthly(t);
+  if (!r) return '<div class="hint">' + (agdClient() ? "Carregando atendimentos…" : "Disponível no sistema online.") + '</div>';
+  if (!r.months.length) return '<div class="hint">Sem meses no período do tratamento.</div>';
+  var html = '<div class="tr-month-wrap"><table class="tr-month"><thead><tr><th>Mês</th><th>Especialidade / serviço</th><th>Contratado</th><th>Realizado</th><th>Agendado</th><th>Diferença</th></tr></thead><tbody>';
+  r.months.slice().reverse().forEach(function(mo){
+    var rows = mo.rows.length ? mo.rows : [{specId: "", contr: 0, real: 0, sched: 0, diff: 0}];
+    rows.forEach(function(row, i){
+      html += '<tr' + (i === 0 ? ' class="tr-month-first"' : '') + '>' +
+        (i === 0 ? '<td rowspan="' + rows.length + '"><b>' + esc(mo.label) + '</b>' + (mo.current ? '<div class="hint">em andamento</div>' : (mo.partial ? '<div class="hint">mês parcial</div>' : '')) + '</td>' : '') +
+        '<td>' + esc(row.specId ? specialtyName(row.specId) : "—") + '</td><td>' + row.contr + '</td><td>' + row.real + '</td><td>' + (mo.current ? row.sched : "—") + '</td>' +
+        '<td class="' + trDiffCls(row.diff) + '">' + (row.diff > 0 ? "+" : "") + row.diff + '</td></tr>';
+    });
+  });
+  return html + '</tbody></table></div>';
+}
 function trCountIn(map, t){
   if (!t || !map) return null;
   var p = rawPatient(t.patientId); if (!p) return 0;
@@ -9940,7 +10041,8 @@ function renderTreatmentsTab(){
   }
   var all = state.treatments.slice();
   var shown = all.filter(function(t){
-    if (filter === "vencendo" || filter === "vencidos"){ var dd = trDue(t); if (!dd || dd.state !== (filter === "vencidos" ? "vencido" : "vencendo")) return false; }
+    if (filter === "abaixo"){ if (t.status !== "ativo") return false; var ms = trMonthSummary(t); if (!ms || !ms.below) return false; }
+    else if (filter === "vencendo" || filter === "vencidos"){ var dd = trDue(t); if (!dd || dd.state !== (filter === "vencidos" ? "vencido" : "vencendo")) return false; }
     else if (filter && t.status !== filter) return false;
     if (!q) return true;
     var p = rawPatient(t.patientId);
@@ -9961,7 +10063,8 @@ function renderTreatmentsTab(){
     {key: "st", label: "Status", width: 130, min: 90},
     {key: "val", label: "Valor final", width: 130, min: 90},
     {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"},
-    {key: "venc", label: "Vencimento", width: 190, min: 100}
+    {key: "venc", label: "Vencimento", width: 190, min: 100},
+    {key: "mes", label: "Mês (realizado/contratado)", width: 200, min: 110}
   ];
   if (!canFin) trCols.splice(5, 1);
   gtRender(host, "tratamentos", trCols, shown.map(function(t){
@@ -9971,8 +10074,8 @@ function renderTreatmentsTab(){
     return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"',
       cells: [(function(){ var c = trColor(t); return c ? '<span class="pcolor-dot" style="background:' + c + '" title="Cor por idade/ABA"></span>' : ''; })() + esc(p ? p.nome : "(paciente excluído)"), esc(trBr(t.inicio)), esc(trEndText(t)), esc(trLabel(TR_TIPOS, t.tipo)),
         '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>',
-        esc(fmtMoney(fin)), esc(conv || "—"), (trDueText(t) ? esc(trDueText(t)) : '<span class="pt-muted">—</span>') + trDueChip(t)],
-      vals: [p ? p.nome : "", t.inicio || "", trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), fin, conv || "", t.vencPor === "sessoes" ? (trDue(t) ? trDue(t).rest : "") : (t.validoAte || "")]};
+        esc(fmtMoney(fin)), esc(conv || "—"), (trDueText(t) ? esc(trDueText(t)) : '<span class="pt-muted">—</span>') + trDueChip(t), trMonthCell(t)],
+      vals: [p ? p.nome : "", t.inicio || "", trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), fin, conv || "", t.vencPor === "sessoes" ? (trDue(t) ? trDue(t).rest : "") : (t.validoAte || ""), (function(){ var ms = trMonthSummary(t); return ms ? ms.m.tot.diff : ""; })()]};
   }).map(function(row){ if (!canFin){ row.cells.splice(5, 1); row.vals.splice(5, 1); } return row; }), renderTreatmentsTab, "tr-main");
 }
 function wireTreatmentsTab(){
@@ -10078,6 +10181,9 @@ function openTreatmentModal(t, opts){
         '<div class="tr-sec">Plano terapêutico</div>' +
         ed.html +
         '<div class="field"><label for="trObs">Observações</label><textarea id="trObs" rows="2" placeholder="Opcional">' + esc(d.obs) + '</textarea></div>' +
+        (isNew ? '' : '<div class="tr-sec">Contratado × realizado (mês a mês)</div>' +
+          '<div class="hint">Realizado = Finalizado + Não compareceu. No mês atual, "Agendado" são os atendimentos marcados até o fim do mês ainda sem status. Primeiro e último mês: contratado proporcional aos dias.</div>' +
+          '<div id="trMonthly">' + trMonthlyHtml(t) + '</div>') +
         (isNew ? '' : '<div class="tr-sec">Histórico</div>' + trHistHtml(t)) +
       '</div>' +
       '<div class="modal-foot">' +
@@ -10118,7 +10224,11 @@ function openTreatmentModal(t, opts){
   }
   document.getElementById("trVencPor").addEventListener("change", syncVencPor);
   syncVencPor();
-  if (!isNew && trUsedCount(t) === null && agdClient()) trLoadLast(false).then(function(){ if (document.getElementById("ovTreat")) syncVencPor(); });
+  if (!isNew && (trUsedCount(t) === null || !TR.appts) && agdClient()) trLoadLast(false).then(function(){
+    if (!document.getElementById("ovTreat")) return;
+    syncVencPor();
+    var mh = document.getElementById("trMonthly"); if (mh) mh.innerHTML = trMonthlyHtml(t);
+  });
   document.getElementById("trIni").addEventListener("change", syncVenc);
   // Com atendimentos Finalizados: não exclui e não muda a quantidade de sessões
   // (pacote e especialidades/serviços) — para isso, Renegociar ou Cancelar.

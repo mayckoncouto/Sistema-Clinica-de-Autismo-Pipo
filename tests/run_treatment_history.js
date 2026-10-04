@@ -145,6 +145,45 @@ const path = require('path');
   await page.$eval('#trVencPor', (s) => { s.value = 'data'; s.dispatchEvent(new Event('change', {bubbles: true})); });
   console.log('switching to Data shows duration/valid-until?', await page.isVisible('#trDur') && !(await page.isVisible('#trTotal')));
   await page.click('#trCancel');
+
+  // Etapa 5: contratado × realizado mês a mês.
+  const mm = await ev(`(function(){
+    var today = trTodayIso(), d0 = agdParse(today);
+    function iso(y, m, d){ return agdIso(new Date(y, m, d)); }
+    var Y = d0.getFullYear(), M = d0.getMonth();
+    var ini = iso(Y, M - 2, 20);                      // começou dia 20, dois meses atrás
+    var dimFirst = new Date(Y, M - 1, 0).getDate();   // dias desse primeiro mês
+    var prof = state.professionals.filter(function(p){ return p.specialtyId; })[0];
+    var pat = state.patientsRaw[1];
+    state.treatments = [{id: "m1", patientId: pat.id, inicio: ini, status: "ativo", tipo: "novo",
+      specHours: [{specId: prof.specialtyId, hours: 8}, {specId: "svc:avaliacao", hours: 1}]}];
+    rebuildPatients();
+    var k = normText(pat.nome), A = [];
+    function add(dt, st, svc){ A.push({d: dt, prof: prof.id, svc: svc || "sessao", st: st || ""}); }
+    add(iso(Y, M - 2, 22), "finalizado"); add(iso(Y, M - 2, 25), "nao-compareceu");          // 1º mês: 2 de round(8*(dim-19)/dim)
+    for (var i = 1; i <= 8; i++) add(iso(Y, M - 1, i), "finalizado");                          // mês passado: 8 de 8 sessão
+    add(iso(Y, M - 1, 15), "falta-justificada");                                                // não conta
+    add(iso(Y, M - 1, 16), "finalizado", "avaliacao");                                          // 1 de 1 avaliação
+    add(today, "finalizado");                                                                   // mês atual: 1 realizado
+    var fut = new Date(Y, M + 1, 0).getDate(); if (d0.getDate() < fut) add(iso(Y, M, fut), "");// +1 agendado no fim do mês
+    TR.appts = {}; TR.appts[k] = A;
+    var r = trMonthly(state.treatments[0]);
+    var f = r.months[0], last = r.months[1], cur = r.months[2];
+    function row(mo, id){ return mo.rows.filter(function(x){ return x.specId === id; })[0] || {}; }
+    return {n: r.months.length, firstContr: row(f, prof.specialtyId).contr, expFirst: Math.round(8 * (dimFirst - 19) / dimFirst), firstReal: row(f, prof.specialtyId).real,
+      lastSess: row(last, prof.specialtyId).real + "/" + row(last, prof.specialtyId).contr, lastAval: row(last, "svc:avaliacao").real + "/" + row(last, "svc:avaliacao").contr,
+      lastFalta: last.falta, curReal: row(cur, prof.specialtyId).real, curSched: row(cur, prof.specialtyId).sched, curFalta: cur.falta, curHasFuture: d0.getDate() < fut,
+      below: trMonthSummary(state.treatments[0]).below};
+  })()`);
+  console.log('3 months, first one proportional to the days?', mm.n === 3 && mm.firstContr === mm.expFirst && mm.firstReal === 2, JSON.stringify(mm));
+  console.log('last month 8 of 8 sessions and 1 of 1 evaluation (justified absence not counted), no shortfall?', mm.lastSess === '8/8' && mm.lastAval === '1/1' && mm.lastFalta === false);
+  console.log('current month counts realized + scheduled and flags shortfall?', mm.curReal === 1 && mm.curSched === (mm.curHasFuture ? 1 : 0) && mm.curFalta === true && mm.below === true);
+  await page.$eval('#trFilter', (f) => { f.value = 'abaixo'; f.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.waitForTimeout(200);
+  console.log('"Abaixo do contratado" filter lists it with a red month chip?', (await page.$$('#trHost tbody tr')).length === 1 && !!(await page.$('#trHost tbody tr .tr-mchip.tr-falta')));
+  await page.click('#trHost tbody tr'); await page.waitForSelector('#ovTreat');
+  console.log('modal shows the monthly table with 3 months?', (await page.$$('#trMonthly .tr-month tr.tr-month-first')).length === 3);
+  await page.click('#trCancel');
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

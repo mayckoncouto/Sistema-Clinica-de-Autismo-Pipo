@@ -1254,3 +1254,24 @@ Decisões do usuário: vencimento por duração em meses (ajustável), opcional,
   ("Restam N sessões"), ≤ 0 = "vencido" ("Sessões esgotadas"); `trDueText` na
   coluna ("6 de 10 sessões"). Total e tipo de vencimento entram em `trQtyKey`
   (travados com atendimentos realizados). Renegociar começa em "Data", vazio.
+
+## Contratado × realizado mês a mês (Etapa 5, 2026-10-04)
+Decisões do usuário: mês a mês; realizado = Finalizado + Não compareceu; mês
+atual = realizado + agendados (sem status, de hoje ao fim do mês); primeiro e
+último mês proporcionais aos dias; vermelho falta / âmbar sobra; janela, coluna
+e filtro.
+- `trLoadLast` agora lê até o fim do mês atual (`trMonthEnd`) com
+  professional_id e service e guarda `TR.appts` (nome → [{d, prof, svc, st}]);
+  `TR.last`/`done`/`used` continuam só até hoje.
+- `trMonthly(t)` → `{months:[{ym, label, current, partial, rows:[{specId, contr,
+  real, sched, diff}], tot, falta, sobra}]}`: período = início até
+  `trPeriodEnd(t)` (véspera do seguinte ou `statusEm`) limitado ao fim do mês
+  atual; atendimento atribuído pelo `treatmentAt` da data; linha =
+  `trSpecKey(a)` (especialidade principal do profissional na Sessão, ou
+  `svc:<serviço>`); especialidade não contratada aparece com contratado 0.
+- Janela: seção "Contratado × realizado (mês a mês)" (`#trMonthly`,
+  `trMonthlyHtml`, recarrega depois de `trLoadLast`). Lista: coluna
+  "Mês (realizado/contratado)" no fim (`trMonthCell`, chip `.tr-mchip`
+  `.tr-falta/.tr-sobra/.tr-ok`, + chip do mês anterior se faltou). Filtro
+  `abaixo` em `#trFilter` (só Ativos; `trMonthSummary(t).below` = falta no mês
+  atual projetado ou no mês anterior).
