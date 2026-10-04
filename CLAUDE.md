@@ -1671,3 +1671,28 @@ retirada). Observação só para quem pode marcar "Finalizado" ou Administrador
 - Lista de Pacientes: escudo vermelho ao lado do nome com medida ativa
   (`patHasProtetiva`). Ficha impressa: retirada + medidas (com "vencida").
 - `patPickup(p)` → {ret, prot (ativas), old (vencidas)}. Sem SQL (dados em `patients/all`).
+
+## Feriados e recessos + "Gerar mês" (2026-10-05)
+Decisões do usuário: feriado NÃO bloqueia marcação (Agenda cinza + confirmação);
+pré-cadastrar nacionais + Corpus Christi + Aniversário de Blumenau (2/9); repetição
+automática (fixos com "Repete todo ano"; Sexta-feira Santa/Corpus Christi pela Páscoa);
+meio período (dia/manhã/tarde); permissão própria `feriados` (níveis copiam
+`agendamentos`). Gerar mês: só 4 semanas (5ª sempre à mão), Semana 1 = primeira semana
+que começa numa segunda dentro do mês, feriados SEMPRE pulados, leva o mesmo que o
+Enviar, botão `#genMonthBtn` ao lado de "Enviar para a Agenda".
+- Documento `config/holidays {list:[{id, name, tipo, inicio, fim, periodo, anual,
+  movel}]}` (`SIMPLE_LISTS.feriados`, `state.holidays`; sem documento =
+  `DEFAULT_HOLIDAYS`). `holCovers`, `holidaysOn(iso)`, `holidayAt(iso, time)` (sem
+  horário = só dia inteiro; manhã/tarde pelo almoço de `agdSlots`), `holEaster`,
+  `holMovelIso`. Tela Cadastros → Feriados e recessos (`REG_CFG.feriados` com os
+  ganchos novos `open` e `sort`; janela própria `openHolidayModal`).
+- Agenda: `td.agd-hol` (listrado cinza, `title` com o nome), cabeçalho do dia
+  `.agd-hol-th`/`.agd-hol-name`, etiqueta `.agd-hol-tag` na visão Dia.
+  `agdPatientConfirm` pergunta "Feriado ou recesso" antes das outras checagens
+  (o resto passou para `agdPatientConfirmHours`).
+- `openGenMonthModal` / `genMonthWeeks(ym)`: `plannerSendPlan(dia, semana, data,
+  skipTime)` ganhou o 4º parâmetro (pula com motivo `holiday`); dias fora do mês,
+  passados ou feriado de dia inteiro ficam de fora; prévia por semana, notas dos dias
+  "à mão", avisos com caixa; grava em lotes e entra no desfazer da Agenda.
+  "Enviar para a Agenda" só avisa quando a data é feriado.
+- Migração `supabase/2026-10-05d-feriados.sql`. Teste `tests/run_holidays.js`.

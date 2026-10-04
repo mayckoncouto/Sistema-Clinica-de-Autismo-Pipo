@@ -169,7 +169,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .cad-menu[hidden]{display:none}
 .cad-menu button{border:0;background:transparent;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 .cad-menu button:hover,.cad-menu button:focus{background:var(--accent-weak);outline:none}
-#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-cbo,#tab-conselhos{flex:1;min-height:0;display:flex;flex-direction:column}
+#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-cbo,#tab-conselhos,#tab-feriados{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-host{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-table tbody tr{cursor:pointer}
 .reg-table tbody tr:hover td{background:var(--accent-weak)}
@@ -857,6 +857,10 @@ body.pat-col-resizing *{user-select:none}
 .pickup-alert-title{display:flex;align-items:center;gap:6px;font-weight:800;color:var(--danger)}
 .pickup-prot b{color:var(--danger)}
 .pickup-obs{font-size:12px;color:var(--muted);margin-top:2px}
+.agd-slot.agd-hol{background:repeating-linear-gradient(135deg,var(--surface-2) 0 6px,color-mix(in srgb,var(--surface-2) 55%,var(--line)) 6px 12px)}
+.agd-hol-th{background:var(--surface-2)!important}
+.agd-hol-name{display:block;font-size:10px;font-weight:700;color:var(--danger);text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agd-hol-tag{display:inline-block;margin-left:6px;font-size:12px;font-weight:700;color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent);border-radius:999px;padding:1px 8px}
 .pm-tag{flex:none;font-size:11px;font-weight:700;color:var(--muted);background:var(--surface-2);border-radius:999px;padding:2px 8px}
 .pm-modal .add-row-btn{align-self:flex-start}
 .pm-menu-wrap{position:relative}
@@ -1258,7 +1262,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #profList .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)){display:none}
   :is(#reg-servicos-host,#reg-especialidades-host) .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)){display:none}
   #reg-convenios-host .pat-table :is(col,th,td):nth-child(n+3){display:none}
-  :is(#reg-medicos-host,#reg-escolas-host,#reg-cbo-host,#reg-conselhos-host) .pat-table :is(col,th,td):nth-child(n+3){display:none}
+  :is(#reg-medicos-host,#reg-escolas-host,#reg-cbo-host,#reg-conselhos-host,#reg-feriados-host) .pat-table :is(col,th,td):nth-child(n+3){display:none}
   #trHost .pat-table.tr-main :is(col,th,td):not(:nth-child(1)):not(:nth-child(5)){display:none}
   /* Janelas no celular. O iPhone dá zoom sozinho ao tocar num campo com letra
      menor que 16px (e não volta ao sair): todo campo de digitar fica com 16px. */
@@ -1324,6 +1328,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="escolas" hidden>Escolas</button>
       <button data-tab="cbo" hidden>CBO</button>
       <button data-tab="conselhos" hidden>Conselhos</button>
+      <button data-tab="feriados" hidden>Feriados e recessos</button>
       <button data-tab="salas" hidden>Salas</button>
       <button data-tab="relatorio" hidden>Resumo</button>
       <button data-tab="relatorios" hidden>Relatórios</button>
@@ -1357,6 +1362,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <div class="spacer"></div>
       <span class="pat-count" id="matchCount"></span>
       <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do dia e semana abertos para uma data da Agenda" hidden>Enviar para a Agenda</button>
+      <button class="btn ghost" id="genMonthBtn" title="Gera as 4 semanas do Planner num mês da Agenda" hidden>Gerar mês</button>
       <!-- Opções do Planner (antes "Ferramentas"): menu suspenso (os botões mantêm os ids; o "?" da ajuda entra depois) -->
       <div class="cad-wrap pl-tools-wrap"><button type="button" class="btn ghost" id="plToolsBtn" aria-haspopup="menu" aria-expanded="false">Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>
       <div class="cad-menu pl-tools-menu" id="plToolsMenu" role="menu" hidden>
@@ -1593,6 +1599,18 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button class="btn primary" id="reg-conselhos-add">+ Incluir</button>
     </div>
     <div id="reg-conselhos-host" class="reg-host"></div>
+  </section>
+  <section id="tab-feriados" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-feriados-search" type="text" placeholder="Buscar feriado ou recesso…">
+      </div>
+      <span class="pat-count" id="reg-feriados-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-feriados-add">+ Incluir</button>
+    </div>
+    <div id="reg-feriados-host" class="reg-host"></div>
   </section>
 
   <!-- SALAS TAB -->
@@ -2567,6 +2585,7 @@ var state = {
   convenios: [],         // convênio registry [{id,name}], from db
   doctors: [],           // médicos [{id,name,especialidade,crm,telefone}] (config/doctors)
   schools: [],           // escolas [{id,name,telefone,contato}] (config/schools)
+  holidays: [],          // feriados e recessos (config/holidays); vazio = padrão (holidaysList)
   councils: [],          // conselhos [{id,sigla,name}] (config/councils); vazio = padrão (councilList)
   cbos: [],              // CBO [{id,code,name}] (config/cbo); vazio = sugestões (cboList)
   patientFields: {},     // {campo:{show,req}} (config/patient_fields)
@@ -2602,7 +2621,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", relatorios:"Relatórios"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -2681,7 +2700,7 @@ function permToolClasses(){
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
   if (!window.pipoAuth) return;
-  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos"};
+  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"profissionais", salas:"salas", prontuario:"prontuario", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -2728,6 +2747,7 @@ function applyPermissionsUI(){
   if (state.salasView !== "grupos" && !can("salas", "view") && can("grupos", "view")) state.salasView = "grupos";
   if (state.salasView === "grupos" && !can("grupos", "view") && can("salas", "view")) state.salasView = "salas";
   show("sendToAgendaBtn", can("agendamentos","create"));
+  show("genMonthBtn", can("agendamentos","create"));
   show("plClearWeekBtn", can("agenda","delete"));
   show("fixPatientBtn", can("agenda","create") || can("agenda","edit") || can("agenda","delete"));
   show("swapProfBtn", can("salas","edit") || can("grupos","edit"));
@@ -3280,7 +3300,8 @@ var SIMPLE_LISTS = {
   medicos: {path: "config/doctors", key: "doctors", module: "medicos", label: "médicos"},
   escolas: {path: "config/schools", key: "schools", module: "escolas", label: "escolas"},
   cbo: {path: "config/cbo", key: "cbos", module: "cbo", label: "CBO"},
-  conselhos: {path: "config/councils", key: "councils", module: "conselhos", label: "conselhos"}
+  conselhos: {path: "config/councils", key: "councils", module: "conselhos", label: "conselhos"},
+  feriados: {path: "config/holidays", key: "holidays", module: "feriados", label: "feriados"}
 };
 function subscribeSimpleLists(){
   Object.keys(SIMPLE_LISTS).forEach(function(k){
@@ -3288,6 +3309,7 @@ function subscribeSimpleLists(){
     db.doc(c.path).onSnapshot(function(snap){
       state[c.key] = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
       if (state.tab === k) renderRegistryTab(k);
+      if (k === "feriados") holAfterChange();
     }, function(){});
   });
   db.doc("config/patient_fields").onSnapshot(function(snap){
@@ -3303,7 +3325,7 @@ function writeSimpleList(k, list){
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(false); }
   return db.doc(c.path).set({list: list}).then(function(){ return true; }).catch(function(e){
     var m = (e && e.message) || "";
-    showToast(/check constraint|documents_path_valid/i.test(m) ? "Falta rodar a atualização do banco (cadastro do paciente)." : "Não foi possível salvar " + c.label + ".", true);
+    showToast(/check constraint|documents_path_valid/i.test(m) ? "Falta rodar a atualização do banco (" + c.label + ")." : "Não foi possível salvar " + c.label + ".", true);
     return false;
   });
 }
@@ -3681,6 +3703,7 @@ function wireControls(){
   document.getElementById("addRoomBtn").addEventListener("click", function(){ openRoomModal(null, state.salasView === "grupos"); });
   // Salas <-> Grupos de suporte: a mesma tela mostra um cadastro ou o outro.
   document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
+  document.getElementById("genMonthBtn").addEventListener("click", function(){ openGenMonthModal(); });
   document.getElementById("plClearWeekBtn").addEventListener("click", function(){ plannerClearWeek(); });
   document.getElementById("fixPatientBtn").addEventListener("click", function(){ openFixPatientModal(); });
   // Menu "Opções ▾" do Planner (antes "Ferramentas"): abre/fecha; escolher um item fecha o menu.
@@ -3719,6 +3742,8 @@ function visibleRooms(){
 function renderAgendaShell(){
   var sendBtn = document.getElementById("sendToAgendaBtn");
   if (sendBtn) sendBtn.hidden = !can("agendamentos", "create");
+  var genBtn = document.getElementById("genMonthBtn");
+  if (genBtn) genBtn.hidden = !can("agendamentos", "create");
   var clrBtn = document.getElementById("plClearWeekBtn");
   if (clrBtn) clrBtn.hidden = !can("agenda", "delete");
   renderRoomChips();
@@ -8618,7 +8643,8 @@ function agdRender(){
     var anyHit = searching && list.some(agdSearchHit);
     if (anyHit) shownHits += list.filter(agdSearchHit).length;
     var isOff = (off || closed) && !has;
-    var cls = "agd-slot" + (isOff ? " agd-off" : (AD.clipboard ? " paste-target" : "")) + (anyHit ? " search-hit" : "") + (!has && !canCreate ? " agd-ro" : "") + (has && !canEdit ? " agd-ro" : "");
+    var hol = !isOff ? holidayAt(dateIso, t) : null;
+    var cls = "agd-slot" + (isOff ? " agd-off" : (AD.clipboard ? " paste-target" : "")) + (hol ? " agd-hol" : "") + (anyHit ? " search-hit" : "") + (!has && !canCreate ? " agd-ro" : "") + (has && !canEdit ? " agd-ro" : "");
     var items = list.map(function(row){
       var label = "", color = agdResColor(res);
       if (AD.mode === "prof"){
@@ -8639,7 +8665,7 @@ function agdRender(){
       return html1;
     }).join("");
     return '<td class="'+cls+'" data-d="'+dateIso+'" data-t="'+t+'" data-r="'+esc(res.id)+'"'+
-      (isOff ? ' title="'+(closed ? "Clínica fechada neste horário" : "Fora do horário do profissional")+'"' : '')+'>' +
+      (isOff ? ' title="'+(closed ? "Clínica fechada neste horário" : "Fora do horário do profissional")+'"' : (hol ? ' title="'+esc("Feriado: " + hol.name + " (marcar pede confirmação)")+'"' : ''))+'>' +
       (has ? '<div class="agd-multi">' + items + (canCreate && !off && !closed ? '<button type="button" class="agd-add" title="Marcar mais um atendimento neste horário" aria-label="Marcar mais um atendimento">+</button>' : '') + '</div>'
            : (isOff ? '<div class="book"><div class="book-main off-box" aria-hidden="true"></div></div>' : '<div class="book"><button type="button" class="book-main"><span class="empty-plus">+</span></button></div>')) + '</td>';
   }
@@ -8649,7 +8675,9 @@ function agdRender(){
     AD.sel = res.id;
     whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(res.name)+"</b>";
     html += '<thead><tr><th class="agd-tcol"></th>' + days.map(function(d){
-      return '<th class="'+(agdSameDay(d, today) ? "today" : "")+'">'+agdDayObj(d).name.slice(0,3).toLowerCase()+' <span class="agd-dnum">'+d.getDate()+'/'+(d.getMonth()+1)+'</span></th>';
+      var hs = holidaysOn(agdIso(d));
+      return '<th class="'+(agdSameDay(d, today) ? "today" : "")+(hs.length ? " agd-hol-th" : "")+'"'+(hs.length ? ' title="'+esc(hs.map(function(h){ return h.name; }).join(", "))+'"' : '')+'>'+agdDayObj(d).name.slice(0,3).toLowerCase()+' <span class="agd-dnum">'+d.getDate()+'/'+(d.getMonth()+1)+'</span>' +
+        (hs.length ? '<span class="agd-hol-name">'+esc(hs[0].name)+'</span>' : '')+'</th>';
     }).join("") + '</tr></thead><tbody>';
     // Linha antes das 07:20 com os botões da manhã; a do almoço leva os da tarde (igual ao Planner).
     html += '<tr class="agd-periodrow"><td class="agd-tcol agd-tcol-hist">'+agdHistoryButtonsHtml()+'</td>' + days.map(function(d){ return agdPeriodCell("morning", agdIso(d), res.id); }).join("") + '</tr>';
@@ -8667,7 +8695,9 @@ function agdRender(){
     // Dia + Salas: ao lado da sala, uma coluna com os agendamentos dos grupos de suporte nessa sala.
     var daySplit = AD.mode === "sala";
     if (daySplit) cols = [Object.assign({}, selRes, {_split: "prof"}), Object.assign({}, selRes, {_split: "grupos", _label: "Grupos de suporte"})];
-    whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(selRes.name)+"</b>";
+    var dHols = holidaysOn(dIso);
+    whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(selRes.name)+"</b>" +
+      (dHols.length ? ' <span class="agd-hol-tag">'+esc(dHols.map(function(h){ return h.name + (h.periodo === "manha" ? " (manhã)" : h.periodo === "tarde" ? " (tarde)" : ""); }).join(", "))+'</span>' : '');
     html += '<thead><tr><th class="agd-tcol"></th>' + cols.map(function(r){
       var sub = AD.mode === "prof" ? (r.specialtyId ? specialtyName(r.specialtyId) : "") : "Sala";
       if (r._split === "grupos") return '<th class="agd-grp-col" title="Agendamentos dos grupos de suporte nesta sala">'+esc(r._label)+'<span class="agd-hsub">em '+esc(r.name)+'</span></th>';
@@ -9060,6 +9090,20 @@ function agdOpenModal(opts){
 //  2) terapeuta diferente do indicado no tratamento.
 // pairs = [{rec, old}] (old = como estava; o que não mudou não pergunta de novo).
 function agdPatientConfirm(pairs){
+  // Feriado/recesso: não bloqueia, só pede confirmação (vale para pacientes e grupos).
+  var hols = pairs.map(function(x){
+    var rec = x.rec, old = x.old;
+    if (!rec || !rec.patient || bookingKind(rec) || !rec.date) return null;
+    if (old && old.date === rec.date && old.time === rec.time) return null;
+    var h = holidayAt(rec.date, rec.time);
+    return h ? esc(agdBrDate(rec.date)) + " às " + esc(rec.time) + " — <b>" + esc(h.name) + "</b>" : null;
+  }).filter(Boolean);
+  if (hols.length) return confirmDialog({title: "Feriado ou recesso",
+    message: (hols.length > 1 ? "Estes horários caem" : "Este horário cai") + " em feriado ou recesso:<br>" + hols.slice(0, 8).join("<br>") + "<br>Marcar mesmo assim?",
+    confirmLabel: "Marcar assim mesmo"}).then(function(ok){ return ok ? agdPatientConfirmHours(pairs) : false; });
+  return agdPatientConfirmHours(pairs);
+}
+function agdPatientConfirmHours(pairs){
   var out = pairs.map(function(x){
     var rec = x.rec, old = x.old;
     if (!rec || !rec.patient || bookingKind(rec)) return null;
@@ -10345,9 +10389,10 @@ var SEND_SKIP_LABELS = {
   busy: "Bloqueio em horário que já tem atendimento",
   conflict: "Profissional ou paciente já ocupado nesse horário",
   off: "Fora do horário do profissional",
-  noProf: "Coluna sem profissional"
+  noProf: "Coluna sem profissional",
+  holiday: "Feriado ou recesso"
 };
-function plannerSendPlan(dayKey, week, dateIso){
+function plannerSendPlan(dayKey, week, dateIso, skipTime){
   var c = agdClient();
   var snapP = db ? db.doc("schedule/" + dayKey + "-" + week).get() : Promise.resolve(null);
   return Promise.all([snapP, c.from("appointments").select("*").eq("date", dateIso)]).then(function(res){
@@ -10384,6 +10429,8 @@ function plannerSendPlan(dayKey, week, dateIso){
             rec.room_id = room.id;
           }
           if (!agdInHours(prof, time, date)){ plan.skipped.push(Object.assign(info, {why: "off"})); return; }
+          var holName = skipTime ? skipTime(time) : "";
+          if (holName){ plan.skipped.push(Object.assign(info, {why: "holiday", detail: holName})); return; }
           var here = taken.filter(function(a){ return sameSlot(a, rec); });
           var twin = here.filter(function(a){ return normText(a.patient) === normText(rec.patient) && (kind || (a.room_id || null) === (rec.room_id || null)); })[0];
           if (twin){
@@ -10492,6 +10539,8 @@ function openSendToAgendaModal(){
       if (my !== seq) return;
       current = {plan: plan, dk: dk, wk: wk, iso: iso};
       var html = '<div class="send-total"><b>'+plan.send.length+'</b> '+(plan.send.length === 1 ? 'agendamento será enviado' : 'agendamentos serão enviados')+' para <b>'+esc(dayObj.name.toLowerCase())+' '+agdBrDate(iso)+'</b>.</div>';
+      var holHere = holidaysOn(iso);
+      if (holHere.length) html += '<div class="send-warn">Atenção: '+agdBrDate(iso)+' é '+esc(holHere.map(function(h){ return h.name + (h.periodo === "manha" ? " (manhã)" : h.periodo === "tarde" ? " (tarde)" : ""); }).join(", "))+'.</div>';
       var byWhy = {};
       plan.skipped.forEach(function(s){ (byWhy[s.why] = byWhy[s.why] || []).push(s); });
       Object.keys(SEND_SKIP_LABELS).forEach(function(k){
@@ -10573,6 +10622,277 @@ function openSendToAgendaModal(){
       var m = (err && err.message) || "";
       showToast(/source/i.test(m) ? "Falta rodar a atualização do banco (origem do Planner) antes de enviar." : "Não foi possível enviar: " + agdErr(err), true);
       agdLoadWeek();
+    });
+  });
+  refresh();
+}
+
+/* ---------------- Feriados e recessos ----------------
+ * Cadastros → Feriados e recessos (documento config/holidays {list:[{id, name,
+ * tipo, inicio, fim, periodo, anual, movel}]}, permissão própria "feriados").
+ *  - periodo: "dia" | "manha" | "tarde"
+ *  - anual: repete todo ano pela data (dia/mês) de início e fim (recesso pode
+ *    virar o ano, ex.: 24/12 a 05/01)
+ *  - movel: "sexta-santa" | "corpus-christi" — calculados pela Páscoa a cada ano
+ * Na Agenda o horário de feriado fica cinza e só avisa (não bloqueia).
+ * O "Gerar mês" (Planner) sempre pula os horários de feriado.
+ */
+var HOLIDAY_TIPOS = [{id: "nacional", name: "Nacional"}, {id: "municipal", name: "Municipal"}, {id: "recesso", name: "Recesso da clínica"}, {id: "outro", name: "Outro"}];
+var HOLIDAY_PERIODOS = [{id: "dia", name: "Dia inteiro"}, {id: "manha", name: "Só manhã"}, {id: "tarde", name: "Só tarde"}];
+var HOLIDAY_MOVEIS = {"sexta-santa": {name: "Sexta-feira Santa", off: -2}, "corpus-christi": {name: "Corpus Christi", off: 60}};
+var DEFAULT_HOLIDAYS = [
+  {id: "confraternizacao", name: "Confraternização Universal", tipo: "nacional", inicio: "2026-01-01", fim: "2026-01-01", periodo: "dia", anual: true},
+  {id: "sexta-santa", name: "Sexta-feira Santa", tipo: "nacional", periodo: "dia", movel: "sexta-santa"},
+  {id: "tiradentes", name: "Tiradentes", tipo: "nacional", inicio: "2026-04-21", fim: "2026-04-21", periodo: "dia", anual: true},
+  {id: "trabalho", name: "Dia do Trabalho", tipo: "nacional", inicio: "2026-05-01", fim: "2026-05-01", periodo: "dia", anual: true},
+  {id: "corpus-christi", name: "Corpus Christi", tipo: "nacional", periodo: "dia", movel: "corpus-christi"},
+  {id: "blumenau", name: "Aniversário de Blumenau", tipo: "municipal", inicio: "2026-09-02", fim: "2026-09-02", periodo: "dia", anual: true},
+  {id: "independencia", name: "Independência do Brasil", tipo: "nacional", inicio: "2026-09-07", fim: "2026-09-07", periodo: "dia", anual: true},
+  {id: "aparecida", name: "Nossa Senhora Aparecida", tipo: "nacional", inicio: "2026-10-12", fim: "2026-10-12", periodo: "dia", anual: true},
+  {id: "finados", name: "Finados", tipo: "nacional", inicio: "2026-11-02", fim: "2026-11-02", periodo: "dia", anual: true},
+  {id: "republica", name: "Proclamação da República", tipo: "nacional", inicio: "2026-11-15", fim: "2026-11-15", periodo: "dia", anual: true},
+  {id: "consciencia-negra", name: "Dia da Consciência Negra", tipo: "nacional", inicio: "2026-11-20", fim: "2026-11-20", periodo: "dia", anual: true},
+  {id: "natal", name: "Natal", tipo: "nacional", inicio: "2026-12-25", fim: "2026-12-25", periodo: "dia", anual: true}
+];
+function holidaysList(){ return (state.holidays && state.holidays.length) ? state.holidays.slice() : DEFAULT_HOLIDAYS.map(function(h){ return Object.assign({}, h); }); }
+function holEaster(y){
+  var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  var h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  var month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, month - 1, day);
+}
+function holIsoOf(d){ return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+// Data (iso) do feriado móvel no ano.
+function holMovelIso(movel, y){ var m = HOLIDAY_MOVEIS[movel]; if (!m) return ""; var d = holEaster(y); d.setDate(d.getDate() + m.off); return holIsoOf(d); }
+// O feriado vale na data (iso)?
+function holCovers(h, iso){
+  if (!h || h.inativo) return false;
+  if (h.movel) return holMovelIso(h.movel, +iso.slice(0, 4)) === iso;
+  if (!h.inicio) return false;
+  var fim = h.fim || h.inicio;
+  if (!h.anual) return iso >= h.inicio && iso <= fim;
+  var md = iso.slice(5), a = h.inicio.slice(5), b = fim.slice(5);
+  return a <= b ? (md >= a && md <= b) : (md >= a || md <= b);   // recesso que vira o ano
+}
+function holidaysOn(iso){ return holidaysList().filter(function(h){ return holCovers(h, iso); }); }
+// O horário (ex.: "13:30") é da manhã? Usa o almoço do dia no cadastro da clínica.
+function holIsMorning(iso, time){
+  var slots = typeof agdSlots === "function" ? agdSlots(agdParse(iso)) : [];
+  var lunch = slots.indexOf("ALMOCO");
+  if (lunch === -1) return time < "12:30";
+  return slots.indexOf(time) !== -1 ? slots.indexOf(time) < lunch : time < "12:30";
+}
+// Feriado que pega este horário (null = nenhum). Sem horário: só os de dia inteiro.
+function holidayAt(iso, time){
+  return holidaysOn(iso).filter(function(h){
+    var p = h.periodo || "dia";
+    if (p === "dia") return true;
+    if (!time) return false;
+    return p === "manha" ? holIsMorning(iso, time) : !holIsMorning(iso, time);
+  })[0] || null;
+}
+function holWhenText(h){
+  if (h.movel) return trBr(holMovelIso(h.movel, new Date().getFullYear())).slice(0, 5) + " (pela Páscoa, muda todo ano)";
+  var a = h.inicio ? (h.anual ? trBr(h.inicio).slice(0, 5) : trBr(h.inicio)) : "—";
+  var b = h.fim && h.fim !== h.inicio ? (h.anual ? trBr(h.fim).slice(0, 5) : trBr(h.fim)) : "";
+  return a + (b ? " a " + b : "") + (h.anual ? " (todo ano)" : "");
+}
+function holSortKey(h){
+  var y = new Date().getFullYear();
+  if (h.movel) return holMovelIso(h.movel, y).slice(5);
+  return h.anual ? (h.inicio || "").slice(5) : (h.inicio || "");
+}
+function openHolidayModal(item){
+  var isNew = !item;
+  if (isNew && !can("feriados", "create")){ showToast(permDeniedMsg("feriados", "create"), true); return; }
+  var canSave = isNew ? true : can("feriados", "edit");
+  var canDel = !isNew && can("feriados", "delete");
+  var v = Object.assign({name: "", tipo: "recesso", inicio: "", fim: "", periodo: "dia", anual: false}, item || {});
+  var dis = canSave ? "" : " disabled";
+  function opts(list, cur){ return list.map(function(x){ return '<option value="' + x.id + '"' + (x.id === cur ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join(""); }
+  var host = document.getElementById("modalHost");
+  host.innerHTML = '<div class="overlay" id="ovHol"><div class="modal" style="max-width:520px">' +
+    '<div class="modal-head"><div><h3>' + (isNew ? "Novo feriado ou recesso" : (canSave ? "Editar " : "") + "Feriado ou recesso") + '</h3>' +
+      '<div class="modal-sub">Na Agenda os horários ficam cinza e marcar pede confirmação. O "Gerar mês" do Planner pula esses horários.</div></div>' +
+      '<button class="modal-close" id="holClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body">' +
+      '<div class="field"><label for="holName">Nome</label><input id="holName" type="text" value="' + esc(v.name) + '" placeholder="Ex.: Recesso de fim de ano"' + dis + '></div>' +
+      '<div class="field-row"><div class="field"><label for="holTipo">Tipo</label><select id="holTipo"' + dis + '>' + opts(HOLIDAY_TIPOS, v.tipo) + '</select></div>' +
+        '<div class="field"><label for="holPer">Vale para</label><select id="holPer"' + dis + '>' + opts(HOLIDAY_PERIODOS, v.periodo || "dia") + '</select></div></div>' +
+      (v.movel ? '<div class="pm-note">Data calculada todo ano pela Páscoa: em ' + new Date().getFullYear() + ' cai em <b>' + esc(trBr(holMovelIso(v.movel, new Date().getFullYear()))) + '</b>; em ' + (new Date().getFullYear() + 1) + ', em <b>' + esc(trBr(holMovelIso(v.movel, new Date().getFullYear() + 1))) + '</b>.</div>' :
+        '<div class="field-row"><div class="field"><label for="holIni">Início</label><input id="holIni" type="date" value="' + esc(v.inicio) + '"' + dis + '></div>' +
+          '<div class="field"><label for="holFim">Fim</label><input id="holFim" type="date" value="' + esc(v.fim || v.inicio) + '"' + dis + '></div></div>' +
+        '<label class="inact-toggle" style="margin-top:4px"><input type="checkbox" id="holAnual"' + (v.anual ? ' checked' : '') + dis + '> Repete todo ano (mesmo dia e mês)</label>') +
+    '</div>' +
+    '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="holDel">Excluir</button>' : '<span></span>') +
+      '<div class="spacer"></div><button class="btn ghost" id="holCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
+      (canSave ? '<button class="btn primary" id="holSave">Salvar</button>' : '') + '</div></div></div>';
+  var ov = document.getElementById("ovHol");
+  function close(){ host.innerHTML = ""; }
+  function $(id){ return document.getElementById(id); }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  $("holClose").addEventListener("click", close);
+  $("holCancel").addEventListener("click", close);
+  var ini = $("holIni"), fim = $("holFim");
+  if (ini) ini.addEventListener("change", function(){ if (fim && (!fim.value || fim.value < ini.value)){ fim.value = ini.value; fim.dispatchEvent(new Event("change", {bubbles: true})); } });
+  var del = $("holDel");
+  if (del) del.addEventListener("click", function(){
+    confirmDialog({title: "Confirmar exclusão", message: "Excluir <b>" + esc(v.name) + "</b> dos feriados e recessos?", confirmLabel: "Confirmar exclusão"}).then(function(ok){
+      if (!ok) return;
+      writeSimpleList("feriados", holidaysList().filter(function(h){ return h.id !== v.id; })).then(function(done){ if (done){ close(); renderRegistryTab("feriados"); holAfterChange(); } });
+    });
+  });
+  var sv = $("holSave");
+  if (sv) sv.addEventListener("click", function(){
+    var name = $("holName").value.trim();
+    if (!name){ $("holName").focus(); showToast("Preencha o nome.", true); return; }
+    var rec = Object.assign({}, item || {}, {name: name, tipo: $("holTipo").value, periodo: $("holPer").value});
+    if (!v.movel){
+      rec.inicio = ini.value; rec.fim = fim.value || ini.value; rec.anual = $("holAnual").checked;
+      if (!rec.inicio){ showToast("Informe a data de início.", true); return; }
+      if (rec.fim < rec.inicio && !rec.anual){ showToast("O fim não pode ser antes do início.", true); return; }
+    }
+    if (isNew) rec.id = slugify(name) + "-" + Date.now().toString(36);
+    var list = holidaysList();
+    list = isNew ? list.concat([rec]) : list.map(function(h){ return h.id === rec.id ? rec : h; });
+    writeSimpleList("feriados", list).then(function(done){ if (done){ close(); renderRegistryTab("feriados"); holAfterChange(); } });
+  });
+}
+function holAfterChange(){ if (state.tab === "agendadia" && typeof agdRender === "function") agdRender(); }
+
+/* ---- Planner → Agenda: "Gerar mês" ----
+ * Gera as 4 semanas do Planner num mês: a Semana 1 é a primeira semana que
+ * começa numa segunda-feira dentro do mês; seguem 2, 3 e 4. Dias antes dela,
+ * depois da 4ª semana ou fora do mês ficam para fazer à mão. Só acrescenta
+ * (mesmas regras do "Enviar para a Agenda"); dias que já passaram e horários
+ * de feriado/recesso ficam sempre de fora.
+ */
+function genMonthWeeks(ym){
+  var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1;
+  var d = new Date(y, m, 1);
+  while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
+  return WEEKS.slice(0, 4).map(function(w, i){
+    var mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7 * i);
+    return {week: w, monday: mon, days: DAYS.map(function(dd){
+      var off = AD_WEEKDAY_KEYS.indexOf(dd.key);
+      var dt = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + (off === 0 ? 6 : off - 1));
+      return {d: dd, iso: holIsoOf(dt), inMonth: dt.getMonth() === m};
+    })};
+  });
+}
+function openGenMonthModal(){
+  if (!agdClient()){ showToast("O Gerar mês funciona no sistema online.", true); return; }
+  if (!can("agendamentos", "create")){ showToast(permDeniedMsg("agendamentos", "create"), true); return; }
+  var now = new Date(), months = [];
+  for (var i = 0; i < 13; i++){ var md = new Date(now.getFullYear(), now.getMonth() + i, 1); months.push({ym: holIsoOf(md).slice(0, 7), label: AD_MONTHS[md.getMonth()] + " de " + md.getFullYear()}); }
+  var host = document.getElementById("modalHost");
+  host.innerHTML = '<div class="overlay" id="ovGen"><div class="modal" style="max-width:600px">' +
+    '<div class="modal-head"><div><h3>Gerar mês na Agenda</h3>' +
+      '<div class="modal-sub">Leva as 4 semanas do Planner para o mês escolhido. A 1ª semana é a primeira que começa numa segunda-feira dentro do mês. Dias antes dela, depois da 4ª semana, dias que já passaram e feriados ficam de fora (faça à mão). Nada que já está na Agenda é apagado.</div></div>' +
+      '<button class="modal-close" id="genClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body">' +
+      '<div class="field"><label for="genMonth">Mês</label><select id="genMonth">' + months.map(function(m, i){ return '<option value="' + m.ym + '"' + (i === 1 ? ' selected' : '') + '>' + esc(m.label) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="send-preview" id="genPreview">Calculando…</div>' +
+    '</div>' +
+    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="genCancel">Cancelar</button><button class="btn primary" id="genOk" disabled>Gerar</button></div></div></div>';
+  var ov = document.getElementById("ovGen");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("genClose").addEventListener("click", close);
+  document.getElementById("genCancel").addEventListener("click", close);
+  var sel = document.getElementById("genMonth"), prev = document.getElementById("genPreview"), okBtn = document.getElementById("genOk");
+  var current = null, seq = 0;
+  function sendList(){ if (!current) return []; var off = current.off; return current.send.filter(function(r){ return off.indexOf(r) === -1; }); }
+  function syncOk(){ var n = sendList().length; okBtn.disabled = !n; okBtn.textContent = n ? "Gerar (" + n + ")" : "Gerar"; }
+  prev.addEventListener("change", function(e){
+    var cb = e.target.closest("[data-warn]"); if (!cb || !current) return;
+    var rec = current.warns[+cb.getAttribute("data-warn")].rec;
+    current.off = current.off.filter(function(r){ return r !== rec; });
+    if (!cb.checked) current.off.push(rec);
+    syncOk();
+  });
+  function refresh(){
+    var my = ++seq; current = null; okBtn.disabled = true; okBtn.textContent = "Gerar";
+    var weeks = genMonthWeeks(sel.value), today = holIsoOf(new Date());
+    var jobs = [], holDays = [], pastDays = 0, outDays = 0;
+    weeks.forEach(function(w){
+      w.days.forEach(function(x){
+        if (!x.inMonth){ outDays++; return; }
+        if (x.iso < today){ pastDays++; return; }
+        var whole = holidayAt(x.iso, "");
+        if (whole){ holDays.push(trBr(x.iso).slice(0, 5) + " " + whole.name); return; }
+        jobs.push({w: w, x: x});
+      });
+    });
+    if (!jobs.length){ prev.innerHTML = '<div class="send-warn">Nenhum dia desse mês pode ser gerado (já passaram ou são feriado).</div>'; return; }
+    prev.innerHTML = "Calculando…";
+    Promise.all(jobs.map(function(j){
+      return plannerSendPlan(j.x.d.key, j.w.week, j.x.iso, function(time){ var h = holidayAt(j.x.iso, time); return h ? h.name : ""; });
+    })).then(function(plans){
+      if (my !== seq) return;
+      var send = [], skipped = [], warns = [], perWeek = {};
+      plans.forEach(function(pl, i){
+        var j = jobs[i], tag = j.x.d.name.slice(0, 3) + " " + trBr(j.x.iso).slice(0, 5) + " ";
+        send = send.concat(pl.send);
+        perWeek[j.w.week] = (perWeek[j.w.week] || 0) + pl.send.length;
+        skipped = skipped.concat(pl.skipped.map(function(s){ return Object.assign({}, s, {time: tag + s.time}); }));
+        warns = warns.concat(pl.warns.map(function(w){ return {rec: w.rec, msgs: w.msgs, info: Object.assign({}, w.info, {time: tag + w.info.time})}; }));
+      });
+      current = {send: send, warns: warns, skipped: skipped, off: [], ym: sel.value};
+      var html = '<div class="send-total"><b>' + send.length + '</b> ' + (send.length === 1 ? 'agendamento será gerado' : 'agendamentos serão gerados') + ' em <b>' + esc(sel.options[sel.selectedIndex].text) + '</b>.</div>' +
+        '<div class="pat-count" style="margin:4px 0 8px">' + weeks.map(function(w){
+          var ds = w.days.filter(function(x){ return x.inMonth; });
+          return esc(WEEK_LABEL[w.week]) + (ds.length ? " (" + trBr(ds[0].iso).slice(0, 5) + " a " + trBr(ds[ds.length - 1].iso).slice(0, 5) + ")" : "") + ": <b>" + (perWeek[w.week] || 0) + "</b>";
+        }).join(" · ") + '</div>';
+      var notes = [];
+      if (holDays.length) notes.push("Feriados pulados: " + holDays.join(", "));
+      if (pastDays) notes.push(pastDays + (pastDays === 1 ? " dia que já passou ficou" : " dias que já passaram ficaram") + " de fora");
+      if (outDays) notes.push(outDays + (outDays === 1 ? " dia da 4ª semana cai" : " dias da 4ª semana caem") + " no mês seguinte e ficam de fora");
+      var lastW = weeks[3].days.filter(function(x){ return x.inMonth; }), lastDay = lastW.length ? lastW[lastW.length - 1].iso : "";
+      var y = +sel.value.slice(0, 4), m = +sel.value.slice(5, 7);
+      var monthEnd = holIsoOf(new Date(y, m, 0)), firstMon = weeks[0].days[0].iso;
+      if (firstMon.slice(8) !== "01") notes.push("Dias de 01/" + sel.value.slice(5, 7) + " até a véspera de " + trBr(firstMon).slice(0, 5) + " ficam para fazer à mão");
+      if (lastDay && lastDay < monthEnd) notes.push("Dias depois de " + trBr(lastDay).slice(0, 5) + " até " + trBr(monthEnd).slice(0, 5) + " ficam para fazer à mão");
+      if (notes.length) html += '<div class="pm-note" style="margin-bottom:8px">' + notes.map(esc).join("<br>") + '</div>';
+      var byWhy = {};
+      skipped.forEach(function(s){ (byWhy[s.why] = byWhy[s.why] || []).push(s); });
+      Object.keys(SEND_SKIP_LABELS).forEach(function(k){
+        var list = byWhy[k]; if (!list) return;
+        html += '<details class="send-skip"><summary>' + list.length + ' ' + (list.length === 1 ? 'pulado' : 'pulados') + ' — ' + esc(SEND_SKIP_LABELS[k]) + '</summary><ul>' +
+          list.map(function(s){ return '<li' + (s.detail ? ' title="' + esc(s.detail) + '"' : '') + '><span class="mono">' + esc(s.time) + '</span> ' + esc(s.what) + ' · ' + esc(s.who) + ' · ' + esc(s.where) + '</li>'; }).join("") + '</ul></details>';
+      });
+      if (warns.length) html += '<details class="send-skip send-warns" open><summary>' + warns.length + ' com aviso — confira (desmarque o que não deve ir)</summary><ul>' +
+        warns.map(function(w, i){
+          return '<li><label class="send-warn-opt"><input type="checkbox" data-warn="' + i + '" checked> <span class="mono">' + esc(w.info.time) + '</span> ' + esc(w.info.what) + ' · ' + esc(w.info.who) + ' · ' + esc(w.info.where) +
+            ' <span class="send-warn-why">' + esc(w.msgs.join(" · ")) + '</span></label></li>';
+        }).join("") + '</ul></details>';
+      prev.innerHTML = html;
+      syncOk();
+    }).catch(function(err){
+      if (my !== seq) return;
+      prev.innerHTML = '<div class="send-warn">Não foi possível calcular: ' + esc(agdErr(err)) + '</div>';
+    });
+  }
+  sel.addEventListener("change", refresh);
+  okBtn.addEventListener("click", function(){
+    var toSend = sendList();
+    if (!current || !toSend.length) return;
+    var cur = current, c = agdClient(), label = sel.options[sel.selectedIndex].text;
+    okBtn.disabled = true; okBtn.textContent = "Gerando…";
+    agdChunks(toSend, 200).reduce(function(p, part){
+      return p.then(function(acc){
+        return c.from("appointments").insert(part).select().then(function(r){ if (r.error) throw r.error; return acc.concat(r.data || []); });
+      });
+    }, Promise.resolve([])).then(function(created){
+      agdRecord("Gerar mês do Planner · " + label, [], created);
+      close();
+      showToast(created.length + (created.length === 1 ? " agendamento gerado" : " agendamentos gerados") + " em " + label +
+        (cur.skipped.length ? ", " + cur.skipped.length + (cur.skipped.length === 1 ? " pulado" : " pulados") : "") + ".");
+      if (AD.loaded) agdLoadWeek();
+    }).catch(function(err){
+      okBtn.textContent = "Gerar"; okBtn.disabled = false;
+      showToast("Não foi possível gerar: " + agdErr(err) + ". O que já foi gravado continua na Agenda; gere de novo para completar (não duplica).", true);
+      if (AD.loaded) agdLoadWeek();
     });
   });
   refresh();
@@ -12642,6 +12962,20 @@ var HELP_TOPICS = [
     steps: ["Cadastros → <b>Escolas</b> → <b>+ Incluir</b>: nome, telefone e contato na escola.", "No cadastro do paciente, aba Médico e escola, o botão <b>+</b> também cadastra uma escola nova."],
     rules: ["A lista mostra quantos pacientes estudam em cada escola.", "Escola ligada a paciente não é excluída: é <b>Inativada</b>."],
     who: "Permissão <b>Escolas</b>."},
+  {id: "feriados", group: "Cadastros", title: "Feriados e recessos", mod: "feriados", tab: "feriados",
+    purpose: "Datas em que a clínica não atende (ou atende só meio período): feriados nacionais, municipais e recessos.",
+    steps: [
+      "Cadastros → <b>Feriados e recessos</b> → <b>+ Incluir</b>: nome, tipo (nacional, municipal, recesso, outro), <b>Vale para</b> (dia inteiro, só manhã ou só tarde), início e fim.",
+      "Marque <b>Repete todo ano</b> para datas fixas (ex.: Natal). Um recesso pode virar o ano (ex.: 24/12 a 05/01).",
+      "Sexta-feira Santa e Corpus Christi mudam de data todo ano: o sistema calcula sozinho pela Páscoa.",
+      "O cadastro já vem com os feriados nacionais e o Aniversário de Blumenau (2/9)."
+    ],
+    rules: [
+      "Na <b>Agenda</b>, os horários do feriado ficam cinza e o dia mostra o nome do feriado. Marcar nesses horários não é bloqueado: o sistema só pede confirmação.",
+      "O <b>Gerar mês</b> do Planner sempre pula os dias e horários de feriado e recesso.",
+      "No <b>Enviar para a Agenda</b>, a prévia avisa quando a data é feriado."
+    ],
+    who: "Permissão <b>Feriados e recessos</b>."},
   {id: "conselhos", group: "Cadastros", title: "Conselhos", mod: "conselhos", tab: "conselhos",
     purpose: "Conselhos profissionais (CRP, CRFa, CREFITO, CRN…) usados no cadastro dos profissionais.",
     steps: ["Cadastros → <b>Conselhos</b> → <b>+ Incluir</b>: sigla (ex.: CRP) e nome.", "No cadastro do profissional, o botão <b>+</b> ao lado do Conselho também inclui um novo."],
@@ -12710,15 +13044,17 @@ var HELP_TOPICS = [
     steps: [
       "<b>Editar agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar profissional</b>: passa as colunas de um profissional para outro.",
+      "<b>Gerar mês</b> (ao lado do Enviar): escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda. A 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª. A prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
       "<b>Enviar para a Agenda</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes. Na prévia, \"com aviso\" lista os que ficam fora do horário do paciente ou com terapeuta diferente do tratamento: desmarque os que não devem ir.",
       "<b>Limpar semana</b>: apaga todos os agendamentos de uma semana do Planner (dupla confirmação, desfazível).",
       "<b>Exportar Excel</b>: baixa uma planilha com os agendamentos das 4 semanas."
     ],
     rules: [
       "Enviar para a Agenda só acrescenta: nunca altera nem apaga o que já está na Agenda. Pula horários ocupados, bloqueados ou fora do horário.",
+      "Gerar mês segue as mesmas regras do Enviar e também pula feriados e recessos e os dias que já passaram. Dias antes da 1ª semana, depois da 4ª (a 5ª semana) e os que caem no mês seguinte ficam para fazer à mão. Pode gerar de novo: o que já está na Agenda não é duplicado.",
       "Trocar profissional não entra no desfazer; para voltar, troque ao contrário."
     ],
-    who: "Permissão <b>Planner</b>. Enviar exige incluir na <b>Agenda</b>; Trocar profissional exige editar <b>Salas</b>."},
+    who: "Permissão <b>Planner</b>. Enviar e Gerar mês exigem incluir na <b>Agenda</b>; Trocar profissional exige editar <b>Salas</b>."},
   {id: "resumo", group: "Planner", title: "Resumo do Planner", mod: "resumo", tab: "relatorio",
     purpose: "Total de sessões por paciente, profissional e especialidade, somando as 4 semanas do Planner.",
     steps: ["Planner ▾ → <b>Resumo</b>. Busque o paciente; os cabeçalhos ficam fixos ao rolar."],
@@ -12740,6 +13076,7 @@ var HELP_TOPICS = [
       "<b>Limpar semana</b> apaga tudo da semana aberta (dupla confirmação); atendimentos com evolução ficam.",
       "Atendimento com evolução no prontuário <b>só o Administrador</b> exclui.",
       "Datas passadas mostram a cor do tratamento que valia na época.",
+      "Feriados e recessos (Cadastros → Feriados e recessos): os horários ficam cinza com o nome do feriado; marcar neles pede confirmação.",
       "Paciente com <b>medida protetiva</b>: o último atendimento dele no dia fica com borda e escudo vermelhos. Ao abrir o atendimento aparece quem NÃO pode retirar e quem pode (cadastro do paciente)."
     ],
     who: "Permissão <b>Agenda</b>. Profissional sem \"editar\" vê só a própria agenda."},
@@ -12839,7 +13176,7 @@ var HELP_NEWS = [];
 var HELP = {topic: "inicio", search: ""};
 var HELP_TAB_TOPIC = {inicio: "inicio", agenda: "planner", relatorio: "resumo", agendadia: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "profissionais", convenios: "convenios", servicos: "servicos",
-  especialidades: "especialidades", motivos: "motivos", medicos: "medicos", escolas: "escolas", cbo: "cbo", conselhos: "conselhos", usuarios: "usuarios"};
+  especialidades: "especialidades", motivos: "motivos", medicos: "medicos", escolas: "escolas", cbo: "cbo", conselhos: "conselhos", feriados: "feriados", usuarios: "usuarios"};
 function helpCan(t){
   if (!t.mod) return true;
   if (!window.pipoAuth) return true;
@@ -13207,6 +13544,16 @@ var REG_CFG = {
     row: function(c){ return ['<b>' + esc(c.sigla || "—") + '</b>', esc(c.name), councilUseCount(c)]; },
     vals: function(c){ return [c.sigla || "", c.name, councilUseCount(c)]; }
   },
+  feriados: {
+    title: "feriado", plural: "feriados e recessos", module: "feriados", newLabel: "+ Incluir",
+    list: function(){ return holidaysList(); },
+    write: function(l){ return writeSimpleList("feriados", l); },
+    open: function(item){ openHolidayModal(item); },
+    sort: function(a, b){ return holSortKey(a).localeCompare(holSortKey(b)); },
+    cols: ["Nome", "Quando", "Vale para", "Tipo"],
+    row: function(h){ return ['<b>' + esc(h.name) + '</b>', esc(holWhenText(h)), esc(trLabel(HOLIDAY_PERIODOS, h.periodo || "dia")), esc(trLabel(HOLIDAY_TIPOS, h.tipo))]; },
+    vals: function(h){ return [h.name, holSortKey(h), h.periodo || "dia", h.tipo || ""]; }
+  },
   motivos: {
     title: "motivo", plural: "motivos", module: "motivos_cancelamento", newLabel: "+ Incluir",
     list: function(){ return cancelReasonsList(); },   // sem cadastro no banco: os motivos iniciais
@@ -13245,7 +13592,7 @@ function renderRegistryTab(kind){
   var search = document.getElementById("reg-" + kind + "-search");
   var q = normText((search && search.value || "").trim());
   var all = cfg.list(), shown = all.filter(function(x){ return (SHOW_INACTIVE[kind] || isActive(x)) && (!q || normText(cfg.search ? cfg.search(x) : x.name).indexOf(q) !== -1); })
-    .sort(function(a, b){ return (cfg.locked && cfg.locked(a) ? -1 : 0) - (cfg.locked && cfg.locked(b) ? -1 : 0) || String(a.name).localeCompare(String(b.name), "pt-BR"); });
+    .sort(cfg.sort || function(a, b){ return (cfg.locked && cfg.locked(a) ? -1 : 0) - (cfg.locked && cfg.locked(b) ? -1 : 0) || String(a.name).localeCompare(String(b.name), "pt-BR"); });
   var cnt = document.getElementById("reg-" + kind + "-count");
   if (cnt) cnt.textContent = shown.length + " de " + all.length + " " + (all.length === 1 ? cfg.title : cfg.plural);
   var addBtn = document.getElementById("reg-" + kind + "-add");
@@ -13283,6 +13630,7 @@ function readRegFields(cfg, root){
 }
 function openRegistryItem(kind, item){
   var cfg = REG_CFG[kind], isNew = !item;
+  if (cfg.open) return cfg.open(item);
   if (isNew && !can(cfg.module, "create")){ showToast(permDeniedMsg(cfg.module, "create"), true); return; }
   var locked = !!(item && cfg.locked && cfg.locked(item));
   var canSave = !locked && (isNew || can(cfg.module, "edit"));
@@ -13465,12 +13813,13 @@ var CAD_ITEMS = [
   {key: "escolas", label: "Escolas", tab: "escolas", ok: function(){ return can("escolas", "view"); }},
   {key: "cbo", label: "CBO", tab: "cbo", ok: function(){ return can("cbo", "view"); }},
   {key: "conselhos", label: "Conselhos", tab: "conselhos", ok: function(){ return can("conselhos", "view"); }},
+  {key: "feriados", label: "Feriados e recessos", tab: "feriados", ok: function(){ return can("feriados", "view"); }},
   {key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
   {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }}
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
-var CAD_TABS = ["pacientes", "tratamentos", "profissionais", "convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "salas"];
+var CAD_TABS = ["pacientes", "tratamentos", "profissionais", "convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "feriados", "salas"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "agenda", ok: function(){ return can("agenda", "view"); }},
   {key: "resumo", label: "Resumo", tab: "relatorio", ok: function(){ return can("resumo", "view"); }}
@@ -13675,7 +14024,7 @@ function wireMobileNav(){
   tabs.addEventListener("auxclick", tabNew, true);
   setTimeout(openNavFromHash, 0);
   wireMobileNav();
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "feriados"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
     var a = document.getElementById("reg-" + k + "-add");
