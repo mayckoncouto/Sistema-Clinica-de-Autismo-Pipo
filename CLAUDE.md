@@ -1707,7 +1707,7 @@ no mesmo menu.
 - Topo: menu **RH ▾** (`#rhBtn`/`#rhMenu`, `RH_ITEMS`, `RH_TABS` em `NAV_MENUS`;
   grupo "RH" no ☰ do celular): **Funcionários e Prestadores** (`#tab-funcionarios`,
   `renderStaffTab`, `wireStaffTab`, `staffOnShow`; busca nome/cargo/CPF, filtro de
-  tipo `#staffTypeFilter`, Inativos; celular = Nome + Tipos) e **Tipos de
+  tipo `#staffTypeFilter`, Inativos; celular = Nome + Tipos; barra no celular: busca + tipo na 1ª linha, contador, Inativos, + Incluir e ? na 2ª) e **Tipos de
   funcionário** (`REG_CFG.tiposfunc`, `SIMPLE_LISTS.tiposfunc` → `config/staff_types`,
   `DEFAULT_STAFF_TYPES`; "Profissional" travado, `STAFF_PROF_TYPE`).
 - Banco (migração `supabase/2026-10-05e-rh-funcionarios.sql`): `public.staff (id,
