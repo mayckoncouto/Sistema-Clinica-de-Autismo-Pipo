@@ -1513,3 +1513,13 @@ que não existe volta ao valor anterior; no celular igual ao computador.
   outro texto = volta. Entrar no campo marca todo o texto.
 - Listas que não são de cadastro (Sim/Não, status do tratamento, Vencimento por,
   semana/dia…) continuam botão com lista. Teste `tests/run_combo.js` (28 arquivos).
+
+## Planner: "Horário livre" (2026-10-04)
+Botão `#freeSlotBtn` → `openFreeSlotModal()`: paciente + Especialidade (Todas) +
+Profissional (Todos, filtrado pela especialidade). Varre as 4 semanas × dias abertos
+× horários × colunas de SALA com profissional: célula vazia (sem paciente nem
+bloqueio), `seatAvailable`, `patientSlotOk` (fora do horário do paciente não
+aparece) e `plannerConflict` com serviço Sessão. Resultado por semana (recolhível)
+e dia; clicar fecha a janela, abre o dia/semana e `openBookingModal` da célula com
+o paciente já preenchido. Garante `state.scheduleDocs` das 4 semanas carregados
+(as regras leem dali). Teste `tests/run_free_slot.js` (8 checagens).

@@ -472,6 +472,13 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .cl-cards{display:flex;flex-direction:column;gap:12px;margin:2px 0 4px}
 .fx-report{margin:4px 0 12px}
 .fx-top-row{margin:-4px 0 10px}
+.fr-week{border:1px solid var(--line);border-radius:10px;margin:6px 0;padding:0 10px}
+.fr-week summary{cursor:pointer;padding:8px 2px;font-weight:700;font-size:13px}
+.fr-day{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line);font-size:12.5px}
+.fr-day > b{width:110px;flex:none;padding-top:4px}
+.fr-slots{display:flex;flex-wrap:wrap;gap:6px}
+.fr-slot{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:4px 8px;font:inherit;font-size:12px;color:var(--ink);cursor:pointer}
+.fr-slot:hover{background:var(--surface-2);border-color:var(--accent)}
 .fx-seat{display:inline-flex;align-items:center;gap:6px;margin:4px 14px 4px 0;font-size:13px}
 .fx-seat input{accent-color:var(--accent)}
 .fx-item span.fx-neg{color:var(--danger);font-weight:700}
@@ -1232,6 +1239,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <div class="spacer"></div>
       <span class="pat-count" id="matchCount"></span>
+      <button class="btn ghost" id="freeSlotBtn" title="Ver os horários livres para agendar um paciente">Horário livre</button>
       <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar profissional</button>
       <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar agendamento</button>
       <button class="btn ghost" id="plExportBtn" title="Baixa o Planner (4 semanas) em planilha para abrir no Excel">Exportar Excel</button>
@@ -3355,6 +3363,7 @@ function wireControls(){
   document.getElementById("plClearWeekBtn").addEventListener("click", function(){ plannerClearWeek(); });
   document.getElementById("fixPatientBtn").addEventListener("click", function(){ openFixPatientModal(); });
   document.getElementById("swapProfBtn").addEventListener("click", function(){ openSwapProfModal(); });
+  document.getElementById("freeSlotBtn").addEventListener("click", function(){ openFreeSlotModal(); });
   document.getElementById("plExportBtn").addEventListener("click", function(){ plannerExportCsv(); });
   document.getElementById("toggleGroupsBtn").addEventListener("click", function(){
     state.salasView = state.salasView === "grupos" ? "salas" : "grupos";
@@ -9086,6 +9095,125 @@ function plannerExportCsv(){
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
     showToast(rows.length + " agendamentos exportados.");
   }).catch(function(){ showToast("Não foi possível ler o Planner.", true); });
+}
+
+/* ---- Planner: botão "Horário livre" ----
+ * Para um paciente, lista os horários das 4 semanas em que um profissional (da
+ * especialidade escolhida, ou o profissional escolhido) tem a coluna vazia numa
+ * SALA e a marcação passaria em todas as regras (plannerConflict: dois lugares,
+ * mesmo paciente, "não ABA"…), dentro do horário do profissional (seatAvailable)
+ * e do horário do paciente (patientSlotOk). Clicar abre o dia/semana no Planner e a
+ * janela de agendamento daquela célula já com o paciente.
+ */
+function openFreeSlotModal(){
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var host = document.getElementById("modalHost");
+  var pats = state.patients.slice().sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); });
+  var seatProfIds = {};
+  physicalRooms().forEach(function(r){ (r.therapists || []).forEach(function(t){ if (t.professionalId) seatProfIds[t.professionalId] = true; }); });
+  var profs = state.professionals.filter(function(p){ return seatProfIds[p.id]; }).sort(function(a, b){ return String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"); });
+  var specIds = {}; profs.forEach(function(p){ if (p.specialtyId) specIds[p.specialtyId] = true; });
+  var specs = state.specialties.filter(function(s){ return specIds[s.id]; });
+  host.innerHTML =
+    '<div class="overlay" id="ovFree"><div class="modal wide" style="max-width:720px">' +
+      '<div class="modal-head"><div><h3>Horário livre</h3><div class="modal-sub">Horários das 4 semanas em que dá para agendar o paciente (respeita as regras, o horário do profissional e o do paciente).</div></div>' +
+        '<button class="modal-close" id="frClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="field"><label for="frPat">Paciente</label><select id="frPat"><option value="">Selecione um paciente…</option>' +
+          pats.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field-row"><div class="field"><label for="frSpec">Especialidade</label><select id="frSpec"><option value="">Todas</option>' +
+          specs.map(function(s){ return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field"><label for="frProf">Profissional</label><select id="frProf"></select></div></div>' +
+        '<div id="frResult" class="fx-report"><div class="pat-count">Escolha um paciente.</div></div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="frCancel">Fechar</button></div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovFree");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("frClose").addEventListener("click", close);
+  document.getElementById("frCancel").addEventListener("click", close);
+  var specSel = document.getElementById("frSpec"), profSel = document.getElementById("frProf"), patSel = document.getElementById("frPat"), out = document.getElementById("frResult");
+  function fillProfs(){
+    var sp = specSel.value, keep = profSel.value;
+    var list = profs.filter(function(p){ return !sp || p.specialtyId === sp; });
+    profSel.innerHTML = '<option value="">Todos</option>' + list.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("");
+    profSel.value = list.some(function(p){ return p.id === keep; }) ? keep : "";
+  }
+  fillProfs();
+  var docIds = [];
+  WEEKS.forEach(function(w){ DAYS.forEach(function(d){ docIds.push(d.key + "-" + w); }); });
+  var loaded = false;
+  out.innerHTML = '<div class="pat-count">Carregando o Planner…</div>';
+  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+    snaps.forEach(function(snap, i){
+      var data = snap && snap.exists ? snap.data() : null;
+      // as regras (plannerConflict) leem state.scheduleDocs: garante as 4 semanas carregadas
+      if (!state.scheduleDocs[docIds[i]]) state.scheduleDocs[docIds[i]] = {bookings: JSON.parse(JSON.stringify((data && data.bookings) || {}))};
+    });
+    loaded = true;
+    refresh();
+  }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o Planner.</div>'; });
+  var found = [];
+  function refresh(){
+    if (!loaded) return;
+    var p = state.patients.filter(function(x){ return x.id === patSel.value; })[0];
+    if (!p){ out.innerHTML = '<div class="pat-count">Escolha um paciente.</div>'; return; }
+    var sp = specSel.value, pf = profSel.value;
+    var rec = {patient: p.nome, note: "", service: DEFAULT_SERVICE_ID};
+    found = [];
+    WEEKS.forEach(function(w){
+      DAYS.forEach(function(d){
+        var docId = d.key + "-" + w, bk = (state.scheduleDocs[docId] && state.scheduleDocs[docId].bookings) || {};
+        d.morning.concat(d.afternoon).forEach(function(time){
+          if (!patientSlotOk(p, d.key, time)) return;
+          physicalRooms().forEach(function(r){
+            (r.therapists || []).forEach(function(t){
+              if (!t.professionalId) return;
+              var prof = findProfessional(t.professionalId); if (!prof) return;
+              if (pf && prof.id !== pf) return;
+              if (sp && prof.specialtyId !== sp) return;
+              var key = time + "|" + r.id + "|" + t.id, cur = effectiveBooking(bk, key, d.key, time);
+              if (cur && (cur.patient || cur.blocked)) return;
+              if (!seatAvailable(t, d.key, time)) return;
+              if (plannerConflict(docId, key, rec)) return;
+              found.push({w: w, d: d, time: time, room: r, seat: t, prof: prof, docId: docId, key: key});
+            });
+          });
+        });
+      });
+    });
+    if (!found.length){ out.innerHTML = '<div class="pat-count">Nenhum horário livre para <b>' + esc(p.nome) + '</b> com esse filtro.</div>'; return; }
+    var html = '<div class="pat-count" style="margin-bottom:6px"><b>' + found.length + '</b> ' + (found.length === 1 ? "horário livre" : "horários livres") + ' para <b>' + esc(p.nome) + '</b>. Clique para agendar.</div>';
+    WEEKS.forEach(function(w, wi){
+      var inW = found.filter(function(x){ return x.w === w; });
+      if (!inW.length) return;
+      html += '<details class="fr-week"' + (wi === 0 || w === state.week ? " open" : "") + '><summary>' + esc(WEEK_LABEL[w]) + ' — ' + inW.length + '</summary>';
+      DAYS.forEach(function(d){
+        var inD = inW.filter(function(x){ return x.d.key === d.key; });
+        if (!inD.length) return;
+        html += '<div class="fr-day"><b>' + esc(d.full) + '</b><div class="fr-slots">' + inD.map(function(x){
+          return '<button type="button" class="fr-slot" data-i="' + found.indexOf(x) + '" title="' + esc(x.prof.name + " · " + x.room.name) + '"><span class="mono">' + x.time + '</span> ' + esc(profShortName(x.prof)) + ' · ' + esc(x.room.name) + '</button>';
+        }).join("") + '</div></div>';
+      });
+      html += '</details>';
+    });
+    out.innerHTML = html;
+  }
+  patSel.addEventListener("change", refresh);
+  specSel.addEventListener("change", function(){ fillProfs(); refresh(); });
+  profSel.addEventListener("change", refresh);
+  out.addEventListener("click", function(e){
+    var b = e.target.closest(".fr-slot"); if (!b) return;
+    var x = found[+b.getAttribute("data-i")], p = state.patients.filter(function(y){ return y.id === patSel.value; })[0];
+    if (!x || !p) return;
+    close();
+    var db1 = document.querySelector('#daySeg button[data-day="' + x.d.key + '"]'); if (db1) db1.click();
+    var wb = document.querySelector('#weekSeg button[data-week="' + x.w + '"]'); if (wb) wb.click();
+    openBookingModal({key: x.key, docId: x.docId, dayKey: x.d.key, week: x.w, roomId: x.room.id, therapistId: x.seat.id, time: x.time});
+    var inp = document.getElementById("bkPatient");
+    if (inp){ inp.value = p.nome; inp.dispatchEvent(new Event("input", {bubbles: true})); var sg = document.getElementById("bkSuggest"); if (sg) sg.hidden = true; }
+  });
 }
 
 /* ---- Planner -> Agenda: botão "Enviar para a Agenda" ----
