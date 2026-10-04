@@ -785,6 +785,12 @@ body.pat-col-resizing *{user-select:none}
 .dp-btn.dp-date.dp-disabled{opacity:.5;cursor:default}
 .dp-btn .dp-in{border:0;background:transparent;padding:0;margin:0;font:inherit;color:inherit;outline:none;cursor:text;width:100%;box-shadow:none}
 .dp-btn .dp-in::placeholder{color:var(--muted)}
+.spec-sum-label{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.spec-sum{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:0;text-transform:none}
+.spec-sum[hidden]{display:none}
+.spec-sum-ok{background:#e3f4ea;color:#1f7a45}
+.spec-sum-falta{background:#fdf1dc;color:#9a6212}
+.spec-sum-sobra{background:#fbe4e2;color:#b6403a}
 .dp-btn .dp-in:focus,.dp-btn .dp-in:focus-visible{outline:none!important;box-shadow:none!important;border:0!important;background:transparent!important}
 .dp-btn .dp-chev{display:inline-flex;color:var(--muted);flex:none}
 .field .dp-btn,.prof-hours .dp-btn,.cl-hours .dp-btn,.rp-form .dp-btn{width:100%}
@@ -4818,7 +4824,7 @@ var SORT_COLS = [
   {key:"convenio", label:"Convênio"},
   {key:"plano", label:"Plano"},
   {key:"idade", label:"Idade"},
-  {key:"pacote", label:"Pacote"},
+  {key:"pacote", label:"Sessão/Mês"},
   {key:"aba", label:"ABA"}
 ];
 
@@ -5222,6 +5228,30 @@ function therapistMismatchMsg(patientName, profId, serviceId, iso){
     "</b>, mas o agendamento está com <b>" + esc(prof.name) + "</b>";
 }
 var TREAT_FIELDS = ["convenioId", "convenio", "plano", "pacoteHoras", "aba", "specHours", "horarios"];
+// Sessão/Mês (total) × soma das sessões das especialidades/serviços da janela.
+function specSumNum(x){ var n = parseFloat(String(x == null ? "" : x).replace(",", ".")); return isFinite(n) ? n : null; }
+function specSumRead(){
+  var pac = document.getElementById("pPac"), rows = document.getElementById("specRowsHost");
+  if (!pac || !rows) return null;
+  var sum = 0, any = false;
+  rows.querySelectorAll(".spec-hours-val").forEach(function(i){ var n = specSumNum(i.value); if (n != null){ sum += n; any = true; } });
+  return {total: specSumNum(pac.value), sum: Math.round(sum * 100) / 100, any: any};
+}
+function specSumRender(){
+  var el = document.getElementById("specSum"), r = specSumRead();
+  if (!el || !r) return;
+  if (r.total == null && !r.any){ el.hidden = true; return; }
+  var fmt = function(n){ return String(n).replace(".", ","); };
+  var cls, txt;
+  if (r.total == null){ cls = "falta"; txt = "Especialidades " + fmt(r.sum) + " · Sessão/Mês não informada"; }
+  else {
+    var d = Math.round((r.total - r.sum) * 100) / 100;
+    cls = d === 0 ? "ok" : d > 0 ? "falta" : "sobra";
+    txt = "Sessão/Mês " + fmt(r.total) + " · Especialidades " + fmt(r.sum) + " · " +
+      (d === 0 ? "Confere" : d > 0 ? "Faltam " + fmt(d) : "Passou " + fmt(-d));
+  }
+  el.className = "spec-sum spec-sum-" + cls; el.textContent = txt; el.hidden = false;
+}
 function treatFieldsEditor(v){
   // Per-patient specialty rows, editable independently of the global catalog.
   var draftSpecRows = patientSpecRows(v).map(function(row){
@@ -5257,14 +5287,14 @@ function treatFieldsEditor(v){
           '<div class="field"><label for="pPlano">Plano</label><input id="pPlano" type="text" value="'+esc(v.plano || "")+'"></div>' +
         '</div>' +
         '<div class="field-row">' +
-          '<div class="field"><label for="pPac">Pacote (sessão/mês)</label><input id="pPac" type="text" value="'+esc(v.pacoteHoras == null ? "" : v.pacoteHoras)+'"></div>' +
+          '<div class="field"><label for="pPac">Sessão/Mês</label><input id="pPac" type="text" value="'+esc(v.pacoteHoras == null ? "" : v.pacoteHoras)+'"></div>' +
           '<div class="field"><label for="pAba">ABA</label><select id="pAba">' +
             '<option value=""'+(v.aba?"":" selected")+'>Não definido</option>' +
             '<option value="Sim"'+(v.aba==="Sim"?" selected":"")+'>Sim</option>' +
             '<option value="Não"'+(v.aba==="Não"?" selected":"")+'>Não</option>' +
           '</select></div>' +
         '</div>' +
-        '<div class="field"><label>Especialidades/serviços e sessão (mês)</label><div class="hours-list" id="specRowsHost"></div>' +
+        '<div class="field"><label class="spec-sum-label">Especialidades/serviços e sessão (mês) <span class="spec-sum" id="specSum" hidden></span></label><div class="hours-list" id="specRowsHost"></div>' +
           '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ especialidade ou serviço</button>' +
         '</div>' +
         patHoursSectionHtml(v);
@@ -5272,6 +5302,11 @@ function treatFieldsEditor(v){
   var syncRef = function(){}, resolveRef = function(){ return draftConvenioId; };
   function wire(ovId){
     wirePatHours();
+    // Conta ao lado do título: Sessão/Mês × soma das especialidades/serviços.
+    var pacEl = document.getElementById("pPac"), rowsEl = document.getElementById("specRowsHost");
+    if (pacEl) pacEl.addEventListener("input", specSumRender);
+    if (rowsEl){ rowsEl.addEventListener("input", specSumRender); new MutationObserver(specSumRender).observe(rowsEl, {childList: true, subtree: true}); }
+    setTimeout(specSumRender, 0);
     // Per-patient specialty rows (add/remove independently of the global catalog).
     var specRowsHost = document.getElementById("specRowsHost");
     function syncSpecRowsFromDom(){
@@ -5526,7 +5561,7 @@ function openPatientModal(p){
         (tr && trCanView ? '<button type="button" class="btn ghost" id="pOpenTreat" data-ro-ok>Abrir tratamento</button>' :
          (!tr && trCanCreate ? '<button type="button" class="btn ghost" id="pNewTreat" data-ro-ok>+ Incluir</button>' : '')) +
       '</div>' +
-      '<div class="pt-treat-txt">' + (tr ? treatSummaryHtml(tr) : 'Nenhum tratamento ativo. Convênio, plano, pacote, ABA, especialidades e horários ficam no tratamento.') + '</div>' +
+      '<div class="pt-treat-txt">' + (tr ? treatSummaryHtml(tr) : 'Nenhum tratamento ativo. Convênio, plano, sessões/mês, ABA, especialidades e horários ficam no tratamento.') + '</div>' +
     '</div>';
 
   host.innerHTML =
@@ -5540,7 +5575,7 @@ function openPatientModal(p){
           '<div class="field" id="pIdadeField"></div>' +
         '</div>' +
         trBox +
-        (isNew && trCanCreate ? '<div class="pt-treat-txt">Depois de salvar, abre o cadastro do tratamento (convênio, pacote, ABA, especialidades e horários).</div>' : '') +
+        (isNew && trCanCreate ? '<div class="pt-treat-txt">Depois de salvar, abre o cadastro do tratamento (convênio, sessões/mês, ABA, especialidades e horários).</div>' : '') +
       '</div>' +
       '<div class="modal-foot">' +
         (isNew ? '<span></span>' : '<button class="btn danger" id="pDelete">Excluir</button>') +
@@ -10269,7 +10304,7 @@ function treatSummaryHtml(t){
   return '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span> ' +
     'desde <b>' + esc(trBr(t.inicio)) + '</b> · ' + esc(trLabel(TR_TIPOS, t.tipo)) +
     (conv ? ' · ' + esc(conv) : '') + (t.plano ? ' · ' + esc(t.plano) : '') +
-    (t.pacoteHoras !== "" && t.pacoteHoras != null ? ' · pacote ' + esc(t.pacoteHoras) + '/mês' : '') +
+    (t.pacoteHoras !== "" && t.pacoteHoras != null ? ' · ' + esc(t.pacoteHoras) + ' sessões/mês' : '') +
     (t.aba ? ' · ABA: ' + esc(t.aba) : '');
 }
 
@@ -10675,7 +10710,7 @@ function openTreatmentModal(t, opts){
     var note = document.getElementById("trLockNote");
     note.hidden = false;
     document.getElementById("trLockText").textContent = "Este tratamento já tem " + doneN + (doneN === 1 ? " atendimento realizado (Finalizado)" : " atendimentos realizados (Finalizados)") +
-      ": não pode ser excluído e a quantidade de sessões (pacote e especialidades/serviços) não pode ser alterada. Para mudar, use Renegociar (ou Cancelar).";
+      ": não pode ser excluído e a quantidade de sessões (Sessão/Mês e especialidades/serviços) não pode ser alterada. Para mudar, use Renegociar (ou Cancelar).";
     var d0 = document.getElementById("trDel"); if (d0) d0.hidden = true;
     var lockSel = "#trTotal, #trVencPor, #pPac, #specRowsHost .spec-name, #specRowsHost .spec-hours-val, #specRowsHost .rm, #specRowAdd";
     Array.prototype.forEach.call(document.querySelectorAll(lockSel), function(el){ el.disabled = true; el.title = "Já há atendimentos realizados: use Renegociar."; });
@@ -10725,6 +10760,13 @@ function openTreatmentModal(t, opts){
     var durV = parseInt(document.getElementById("trDur").value, 10);
     var vencV = document.getElementById("trVenc").value;
     if (vencV && vencV < ini){ showToast("A data de vencimento não pode ser antes do início.", true); return; }
+    var sm = specSumRead();
+    if (!sv._sumOk && sm && sm.total != null && sm.any && sm.total !== sm.sum){
+      confirmDialog({title: "Sessão/Mês diferente da soma",
+        message: "A soma das especialidades/serviços (<b>" + String(sm.sum).replace(".", ",") + "</b>) é diferente de Sessão/Mês (<b>" + String(sm.total).replace(".", ",") + "</b>). Salvar assim mesmo?",
+        confirmLabel: "Salvar assim mesmo"}).then(function(ok){ if (ok){ sv._sumOk = true; try { sv.click(); } finally { sv._sumOk = false; } } });
+      return;
+    }
     var r = ed.read();
     var qtyNew = Object.assign({}, r.fields, {vencPor: document.getElementById("trVencPor").value, totalSessoes: parseInt(document.getElementById("trTotal").value, 10) || ""});
     if (!isNew && trDoneCount(t) && trQtyKey(qtyNew) !== trQtyKey(Object.assign({vencPor: "data"}, t))){
@@ -10869,7 +10911,7 @@ var HELP_TOPICS = [
 
   // ---------- Cadastros ----------
   {id: "pacientes", group: "Cadastros", title: "Pacientes", mod: "pacientes", tab: "pacientes",
-    purpose: "Cadastro dos pacientes: nome, data de nascimento e idade. Convênio, plano, pacote, ABA, especialidades e horário ficam no <b>Tratamento</b> do paciente.",
+    purpose: "Cadastro dos pacientes: nome, data de nascimento e idade. Convênio, plano, sessões/mês, ABA, especialidades e horário ficam no <b>Tratamento</b> do paciente.",
     steps: [
       "Cadastros → <b>Pacientes</b> → <b>+ Incluir</b>.",
       "Preencha os dados e salve. Em seguida o sistema abre o tratamento do paciente.",
@@ -10883,16 +10925,17 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir)."},
   {id: "tratamentos", group: "Cadastros", title: "Tratamentos", mod: "tratamentos", tab: "tratamentos",
-    purpose: "O plano terapêutico de cada paciente: convênio, plano, pacote, ABA, especialidades/serviços com o terapeuta, horário de atendimento, vencimento e valores.",
+    purpose: "O plano terapêutico de cada paciente: convênio, plano, Sessão/Mês, ABA, especialidades/serviços com o terapeuta, horário de atendimento, vencimento e valores.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Preencha início, vencimento (por data ou por quantidade de sessões), plano terapêutico e horário. Salve.",
-      "Para mudar o pacote de um tratamento que já tem atendimentos, use <b>Renegociar</b>: ele cria um novo tratamento copiando o atual, e o anterior vira Renegociado.",
+      "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: ele cria um novo tratamento copiando o atual, e o anterior vira Renegociado.",
       "Para encerrar, mude o Status para <b>Cancelado</b> e escolha o motivo.",
       "Na tela, use os filtros: status, Vencendo, Vencidos, Abaixo do contratado e Pacientes sem tratamento ativo."
     ],
     rules: [
       "Cada paciente tem <b>só um tratamento Ativo</b>. Salvar outro como Ativo passa o anterior para Renegociado (o banco também confere).",
+      "Ao lado de \"Especialidades/serviços e sessão (mês)\" aparece a conta: <b>Sessão/Mês</b> (o total) × a soma das especialidades/serviços. Verde = confere, âmbar = faltam sessões para distribuir, vermelho = passou do total. Salvar com diferença pede confirmação.",
       "O <b>Tipo</b> é automático: <b>Novo</b> se não há anterior ou o anterior foi Cancelado; <b>Renegociado</b> se o anterior foi Renegociado.",
       "<b>Cancelado é definitivo</b> e exige motivo. A observação é obrigatória quando o motivo é \"Outro\".",
       "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b> e a quantidade de sessões fica travada. Para mudar, use Renegociar.",
@@ -11106,7 +11149,7 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Tipos: Lista de atendimentos, Produtividade, Frequência, Atendimentos por convênio, Pacote contratado × realizado, Evoluções pendentes, Ocupação, Bloqueios/reuniões/treinamentos, Pacientes sem atendimento, Tratamentos novos e renegociados.",
-      "Convênio, plano e pacote vêm do tratamento que valia na data de cada atendimento.",
+      "Convênio, plano e sessões vêm do tratamento que valia na data de cada atendimento.",
       "Cada nível vê só os tipos liberados; o Profissional vê só os próprios atendimentos."
     ],
     who: "Permissão <b>Relatórios</b> (por tipo)."},

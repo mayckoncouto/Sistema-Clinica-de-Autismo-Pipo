@@ -1271,6 +1271,15 @@ linha continua editável. Salvar compara `trQtyKey` (pacote + specId/quantidade)
 e recusa mudança; excluir recusa. Para mudar: Renegociar (ou Cancelar). Só no
 app (o banco não confere). Teste no fim de `tests/run_treatment_history.js`.
 
+## Sessão/Mês × soma das especialidades (2026-10-04)
+O campo `pacoteHoras` aparece como **Sessão/Mês** em todo o sistema (janela do
+tratamento, coluna da lista de Pacientes, resumo do tratamento, guia). Ao lado do
+título "Especialidades/serviços e sessão (mês)" fica a etiqueta `#specSum`
+(`specSumRead`/`specSumRender`, atualiza ao digitar e ao incluir/tirar linha):
+"Sessão/Mês 32 · Especialidades 15 · Faltam 17" — `.spec-sum-ok` (verde, confere),
+`-falta` (âmbar, falta distribuir), `-sobra` (vermelho, passou). Salvar o
+tratamento com diferença pede confirmação (`sv._sumOk`). Sem SQL.
+
 ## Vencimento dos tratamentos (Etapa 4, 2026-10-04)
 Decisões do usuário: vencimento por duração em meses (ajustável), opcional, aviso
 30 dias antes só na tela de Tratamentos; ao vencer continua Ativo com etiqueta

@@ -32,7 +32,7 @@ const path = require('path');
   console.log('patient modal no longer has the treatment fields?', (await page.$('#pAba')) === null);
   await page.click('#pNewTreat');
   await page.waitForSelector('#ovTreat');
-  console.log('label "Pacote (sessão/mês)"?', (await page.locator('label[for="pPac"]').innerText()) === 'Pacote (sessão/mês)');
+  console.log('label "Sessão/Mês"?', (await page.locator('label[for="pPac"]').innerText()) === 'Sessão/Mês');
   console.log('label "ABA" (not "Faz ABA?")?', (await page.locator('label[for="pAba"]').innerText()) === 'ABA');
   console.log('label "Especialidades/serviços e sessão (mês)"?', (await page.locator('#ovTreat .field', { has: page.locator('#specRowsHost') }).locator('label').first().innerText()).includes('Especialidades/serviços e sessão (mês)'));
 
