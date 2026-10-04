@@ -1556,3 +1556,46 @@ Teste `tests/run_planner_view.js`.
   "Ativo" (`.tr-chip.st-ativo`, em todo o sistema) e números na cor do sistema
   (`--accent`). `treatSummaryHtml` continua para os outros lugares.
 - Menu do Planner renomeado de "Ferramentas" para **Opções** (`#plToolsBtn`).
+
+## Cadastro completo do paciente; Médicos, Escolas e CBO (2026-10-05)
+Decisões do usuário: dados novos JUNTO com o cadastro atual (`patients/all`, legível
+por todo usuário ativo — o usuário foi avisado do risco LGPD e escolheu assim);
+Médico e Escola como cadastros próprios com "+" na janela do paciente; campos
+extras: documentos, clínicos, endereço completo, administrativos; data de entrada
+= data do cadastro (editável); configuração "Campos" num botão da tela Pacientes.
+- `PAT_SECTIONS` / `PAT_FIELDS` (bloco "Cadastro do paciente: seções e campos
+  configuráveis"): janela com abas (`.pm-tab[data-pmtab]`, `.pm-panel[data-pmsec]`):
+  Paciente (nome `#pNome`, nomeSocial, nascimento `#pNasc` + `#pIdadeField`, sexo,
+  cpf, rg, cns + cartão do tratamento), Responsáveis (`responsaveis: [{nome,
+  parentesco, cpf, telefone, email, financeiro, principal, buscar}]`, rádio
+  `name="respFin"` — um só financeiro — ou "outra pessoa" → `finOutro: {ativo, nome,
+  doc, telefone, email, endereco}`), Contato e endereço (telefone, email,
+  prefContato, `endereco: {cep, rua, numero, compl, bairro, cidade, uf}`; CEP busca
+  no ViaCEP e preenche só os vazios), Clínico (cid com sugestões `CID_SUGGESTIONS`,
+  diagData, suporte, comunicacao, alergias, medicacoes, restricoes), Médico e escola
+  (medicoId, escolaId, escolaSerie, escolaTurno, escolaContato, mediador),
+  Administrativo (entrada — hoje no paciente novo —, comoConheceu, obs). Ids
+  `pf-<campo>`, `pa-<parte do endereço>`, `fo-<campo do financeiro>`. CPF/telefone
+  gravados só com dígitos (máscaras `data-mask`). `criadoEm` no paciente novo.
+- Botão `#patFieldsBtn` "Campos" (permissão `campos_paciente` ver/editar) →
+  `openPatientFieldsModal()`: tabela Aparece/Obrigatório por campo, grava
+  `config/patient_fields {fields:{campo:{show,req}}}` (`state.patientFields`,
+  `patFieldCfg`). Nome sempre visível e obrigatório; obrigatório marca Aparece.
+  Salvar o paciente recusa com "Preencha: …" e abre a aba do 1º que falta.
+  Campo escondido não é apagado (Object.assign sobre o registro antigo).
+- Cadastros novos (REG_CFG + `SIMPLE_LISTS`/`writeSimpleList`): **Médicos**
+  (`config/doctors`, nome/especialidade/CRM/telefone), **Escolas**
+  (`config/schools`, nome/telefone/contato), **CBO** (`config/cbo`, `code` +
+  `name`="Descrição", id = só dígitos, código único — `cboKey`). `REG_CFG[k].fields`
+  = campos extras genéricos (`regFieldsHtml`/`readRegFields`). Sem documento no
+  banco, `cboList()` = `CBOS_SUGGESTIONS` + CBO já gravados nos profissionais.
+- Lista de cadastro com "+": `regPickHtml(kind, id, opts)` (`.reg-pick`, select vira
+  campo de digitar) + `quickAddRegistry(kind)` (janela por cima no `#confirmHost`,
+  salva e já escolhe). Usado em Médico/Escola do paciente e no CBO do profissional
+  (`#profCbos`, valor = código, texto "código — descrição").
+- Permissões novas: `medicos`, `escolas`, `cbo`, `campos_paciente` (MODULES em
+  `js/usuarios.js` e `js/pipo-supabase.js`). Migração
+  `supabase/2026-10-05-cadastro-do-paciente.sql` (caminhos, `module_for_path`,
+  níveis copiam Pacientes/Profissionais, Campos começa desligado, CBO semeado com
+  sugestões + os dos profissionais).
+- Teste `tests/run_patient_form.js` (29 arquivos no `npm test`).

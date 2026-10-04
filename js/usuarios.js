@@ -20,6 +20,7 @@
     { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
     { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)" },
     { key: "pacientes", label: "Pacientes", hint: "" },
+    { key: "campos_paciente", label: "Pacientes – campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, despesas e valor final", actions: ["view", "edit"] },
     { key: "motivos_cancelamento", label: "Motivos de cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
@@ -27,6 +28,9 @@
     { key: "convenios", label: "Convênios", hint: "" },
     { key: "servicos", label: "Serviços", hint: "" },
     { key: "especialidades", label: "Especialidades", hint: "" },
+    { key: "medicos", label: "Médicos", hint: "médicos dos pacientes" },
+    { key: "escolas", label: "Escolas", hint: "escolas dos pacientes" },
+    { key: "cbo", label: "CBO", hint: "lista de CBO usada no cadastro dos profissionais" },
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
     // Itens do menu Acesso (Sair aparece sempre).
