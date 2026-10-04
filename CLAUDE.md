@@ -1638,6 +1638,8 @@ Administrativo, Tratamento (`PAT_SECTIONS`, `PAT_FIELDS`, `.pm-sec`).
 - Lista: `#patSearchBy` (Paciente, Mãe, Pai, Responsável financeiro — nome ou CPF).
   Celular: busca + seletor na 1ª linha; contador, Inativos, "Opções" (texto curto
   `.pm-sm`), + Incluir e ? na 2ª (regras com `section#tab-pacientes` para vencer as gerais).
+  Lista no celular (Pacientes e Tratamentos): coluna da situação com 122px (só a etiqueta,
+  sem quebrar) e o nome com o resto da largura.
   Menu **Outras opções ▾** (`#patMoreBtn`/`#patMoreMenu`): Campos obrigatórios
   (`openPatientFieldsModal`; Nome e CPF travados, Filiação e Financeiro sempre
   aparecem), Imprimir ficha cadastral (`openPatientPrintPick` → `patientPrint`,
