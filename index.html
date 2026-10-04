@@ -357,7 +357,9 @@ td.agd-slot:hover .agd-add{opacity:1}
 .book .book-main.off-box,.book .book-main.off-box:hover{background:var(--off-bg);border-color:var(--line);cursor:not-allowed;box-shadow:none}
 .agd-side{width:250px;flex:none;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
 .agd-panel.agd-solo .agd-side{display:none}
-.agd-pick,.agd-more-wrap{display:none}
+.agd-pick,.agd-more-wrap,.agd-plus-btn{display:none}
+.agd-more-grp{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:8px 12px 2px}
+.agd-day-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .agd-more-wrap{position:relative}
 #agdMoreMenu.agd-more-menu{position:absolute;left:auto;right:0;top:calc(100% + 4px);z-index:30;min-width:200px;width:max-content}
 .agd-mode{margin:10px 10px 8px}
@@ -1002,12 +1004,14 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #tab-agendadia .agd-toolbar{column-gap:6px}
   #tab-agendadia .agd-toolbar > .dp-btn{order:1;flex:1 1 0;min-width:0;padding-inline:8px}
   #tab-agendadia .agd-nav{order:2}
-  #tab-agendadia .agd-toolbar .help-q{order:3;width:36px;height:36px}
-  #tab-agendadia .agd-more-wrap{display:block;order:4}
+  #tab-agendadia .agd-more-wrap{display:block;order:3}
+  #tab-agendadia .agd-toolbar .help-q{order:4;width:36px;height:36px}
   #tab-agendadia .agd-more-btn{width:38px;height:36px;padding:0;font-size:20px;line-height:1;border:1px solid var(--line);background:var(--surface)}
   #tab-agendadia .agd-nav button{padding:7px 11px}
-  #tab-agendadia .agd-toolbar .agd-search{order:10;flex:1 1 100%;max-width:none}
-  #tab-agendadia #agdMatchCount{order:11}
+  #tab-agendadia .agd-toolbar .agd-search{order:10;flex:1 1 0;max-width:none}
+  #tab-agendadia .agd-plus-btn{display:inline-flex;align-items:center;justify-content:center;order:11;width:44px;height:40px;padding:0;font-size:24px;font-weight:700;line-height:1}
+  #tab-agendadia #agdMatchCount{order:12;flex:1 1 100%}
+  #tab-agendadia #agdMatchCount:empty{display:none}
   #tab-agendadia .agd-title,#tab-agendadia .agd-toolbar .spacer,#tab-agendadia #agdClearWeekBtn,#tab-agendadia #agdNewBtn{display:none!important}
   /* Botões da grade maiores e mais fáceis de tocar */
   #tab-agendadia .period-btn{width:32px;height:32px;opacity:.75}
@@ -1178,6 +1182,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <button class="btn ghost" id="agdClearWeekBtn" title="Apaga todos os registros da semana aberta" hidden>Limpar semana</button>
         <button class="btn primary" id="agdNewBtn">+ Novo atendimento</button>
         <!-- Celular: Limpar semana e + Novo atendimento ficam no menu "⋯" -->
+        <button type="button" class="btn primary agd-plus-btn" id="agdPlusBtn" aria-label="Novo atendimento" title="Novo atendimento">+</button>
         <div class="agd-more-wrap"><button type="button" class="btn ghost agd-more-btn" id="agdMoreBtn" aria-label="Mais opções" title="Mais opções">⋯</button>
           <div class="agd-more-menu cad-menu" id="agdMoreMenu" hidden></div></div>
       </div>
@@ -7164,6 +7169,38 @@ function agdRenderSide(){
   }).join("") || '<div class="empty-state" style="padding:16px">Nada encontrado.</div>';
 }
 
+// Resumo do dia (menu ⋯ do celular): atendimentos do profissional/sala na data
+// aberta, contagem por status e a lista por horário.
+function agdDaySummary(iso){
+  var res = AD.mode === "prof" ? findProfessional(AD.sel) : findRoom(AD.sel);
+  var rows = Object.keys(AD.rows).map(function(id){ return AD.rows[id]; }).filter(function(r){
+    return r.date === iso && (AD.mode === "prof" ? r.professional_id === AD.sel : r.room_id === AD.sel);
+  }).sort(function(a, b){ return String(a.time).localeCompare(String(b.time)); });
+  var pats = rows.filter(function(r){ return !bookingKind(r); });
+  var by = {}, open = 0;
+  pats.forEach(function(r){ if (r.status) by[r.status] = (by[r.status] || 0) + 1; else open++; });
+  var kinds = rows.length - pats.length;
+  var chips = '<span class="tr-mchip">' + pats.length + (pats.length === 1 ? ' atendimento' : ' atendimentos') + '</span> ' +
+    Object.keys(by).map(function(id){ return '<span class="tr-mchip">' + esc(rpStatusName(id)) + ': ' + by[id] + '</span>'; }).join(" ") +
+    (open ? ' <span class="tr-mchip tr-sobra">Em aberto: ' + open + '</span>' : '') +
+    (kinds ? ' <span class="tr-mchip">Bloqueios/reuniões/treinos: ' + kinds + '</span>' : '');
+  var list = rows.length ? '<table class="tr-month"><thead><tr><th>Hora</th><th>Atendimento</th><th>Status</th></tr></thead><tbody>' + rows.map(function(r){
+    var k = bookingKind(r);
+    return '<tr><td>' + esc(r.time) + '</td><td>' + esc(k ? SLOT_KINDS.filter(function(x){ return x.key === k; })[0].label : r.patient) +
+      (r.service && r.service !== DEFAULT_SERVICE_ID && !k ? ' <span class="hint">(' + esc(bookingServiceName(r)) + ')</span>' : '') + '</td><td>' + esc(k ? "—" : (rpStatusName(r.status) || "Sem status")) + '</td></tr>';
+  }).join("") + '</tbody></table>' : '<p class="hint">Nenhum atendimento neste dia.</p>';
+  var host = document.getElementById("modalHost");
+  host.innerHTML = '<div class="overlay" id="ovAgdDay"><div class="modal" style="max-width:520px">' +
+    '<div class="modal-head"><div><h3>Resumo do dia</h3><div class="modal-sub">' + esc((res ? res.name + " · " : "") + agdBrDate(iso)) + '</div></div>' +
+    '<button class="modal-close" id="agdDayClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="agd-day-chips">' + chips + '</div>' + list + '</div>' +
+    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="agdDayOk">Fechar</button></div></div></div>';
+  function close(){ host.innerHTML = ""; }
+  document.getElementById("agdDayClose").addEventListener("click", close);
+  document.getElementById("agdDayOk").addEventListener("click", close);
+  document.getElementById("ovAgdDay").addEventListener("mousedown", function(e){ if (e.target.id === "ovAgdDay") close(); });
+}
+
 // ---- popup "Detalhes do Agendamento" (quem não pode editar) ----
 // Mostra os dados, o botão "Registrar / Editar Atendimento" (prontuário) e o Status.
 function agdOpenDetails(row){
@@ -7586,16 +7623,48 @@ function wireAgendaDia(){
   moreBtn.addEventListener("click", function(e){
     e.stopPropagation();
     if (!moreMenu.hidden){ moreMenu.hidden = true; return; }
-    moreMenu.innerHTML = ["agdNewBtn", "agdClearWeekBtn"].filter(function(id){ var b = document.getElementById(id); return b && !b.hidden; }).map(function(id){
-      return '<button type="button" data-agd-more="' + id + '">' + esc(document.getElementById(id).textContent) + '</button>';
-    }).join("") || '<div class="hint" style="padding:8px 12px">Sem opções.</div>';
+    var dayIso = agdIso(agdClampWeekday(AD.date)), dayName = agdBrDate(dayIso);
+    var items = [
+      '<div class="agd-more-grp">Ir para</div>',
+      '<button type="button" data-agd-go="amanha">Amanhã</button>',
+      '<button type="button" data-agd-go="segunda">Próxima segunda</button>',
+      '<button type="button" data-agd-go="semana">Mesmo dia da semana que vem</button>',
+      '<div class="agd-more-grp">' + esc(dayName) + '</div>',
+      '<button type="button" data-agd-day="resumo">Resumo do dia</button>'
+    ];
+    if (AD.sel && can("agendamentos", "create")) items.push('<button type="button" data-agd-day="lock">Bloquear o dia</button>');
+    if (AD.sel && can("agendamentos", "delete")) items.push('<button type="button" data-agd-day="unlock">Liberar o dia</button>');
+    var cw = document.getElementById("agdClearWeekBtn");
+    if (cw && !cw.hidden) items.push('<button type="button" data-agd-more="agdClearWeekBtn">' + esc(cw.textContent) + '</button>');
+    moreMenu.innerHTML = items.join("");
     moreMenu.hidden = false;
   });
   moreMenu.addEventListener("click", function(e){
-    var b = e.target.closest("[data-agd-more]"); if (!b) return;
+    var go = e.target.closest("[data-agd-go]"), dy = e.target.closest("[data-agd-day]"), b = e.target.closest("[data-agd-more]");
+    if (!go && !dy && !b) return;
     moreMenu.hidden = true;
-    document.getElementById(b.getAttribute("data-agd-more")).click();
+    if (b){ document.getElementById(b.getAttribute("data-agd-more")).click(); return; }
+    if (go){
+      var base = agdStartOfDay(new Date()), cur = agdClampWeekday(AD.date), d;
+      var k = go.getAttribute("data-agd-go");
+      if (k === "amanha"){ d = new Date(base); d.setDate(d.getDate() + 1); }
+      else if (k === "segunda"){ d = agdMonday(base); d.setDate(d.getDate() + 7); }
+      else { d = new Date(cur); d.setDate(d.getDate() + 7); }
+      var before = agdIso(agdMonday(AD.date));
+      AD.date = agdClampWeekday(d);
+      if (agdIso(agdMonday(AD.date)) !== before) agdLoadWeek(); else agdRender();
+      return;
+    }
+    var act = dy.getAttribute("data-agd-day"), iso = agdIso(agdClampWeekday(AD.date));
+    if (act === "resumo"){ agdDaySummary(iso); return; }
+    var res = AD.mode === "prof" ? findProfessional(AD.sel) : findRoom(AD.sel);
+    confirmDialog({title: act === "lock" ? "Bloquear o dia" : "Liberar o dia",
+      message: (act === "lock" ? "Bloquear todos os horários <b>livres</b>" : "Tirar todos os <b>bloqueios</b>") + " de <b>" + esc(res ? res.name : "") + "</b> em " + esc(agdBrDate(iso)) + "?" +
+        (act === "lock" ? "<br>Atendimentos já marcados não mudam." : "<br>Atendimentos de pacientes não mudam."),
+      confirmLabel: act === "lock" ? "Bloquear" : "Liberar"})
+      .then(function(ok){ if (ok) agdPeriodAction(act, "day", iso, AD.sel); });
   });
+  document.getElementById("agdPlusBtn").addEventListener("click", function(){ document.getElementById("agdNewBtn").click(); });
   document.addEventListener("mousedown", function(e){ if (!moreMenu.hidden && !e.target.closest(".agd-more-wrap")) moreMenu.hidden = true; });
   document.getElementById("agdResList").addEventListener("click", function(e){
     var r = e.target.closest(".agd-res"); if (!r) return;
@@ -7928,8 +7997,10 @@ function agdPeriodCell(period, dateIso, resId){
 function agdPeriodAction(action, period, dateIso, resId){
   var c = agdClient(); if (!c) return;
   var date = agdParse(dateIso), day = agdDayObj(date);
-  var times = (period === "morning" ? day.morning : day.afternoon).slice();
-  var label = period === "morning" ? "manhã" : "tarde";
+  // period "day" = manhã + tarde (menu ⋯ do celular: bloquear/liberar o dia).
+  var times = period === "day" ? day.morning.concat(day.afternoon) : (period === "morning" ? day.morning : day.afternoon).slice();
+  var label = period === "day" ? "dia" : (period === "morning" ? "manhã" : "tarde");
+  var when = period === "day" ? " no dia" : " pela " + label;
   var res = AD.mode === "prof" ? findProfessional(resId) : findRoom(resId);
   var who = res ? " de " + res.name : "";
   var all = Object.keys(AD.rows).map(function(id){ return AD.rows[id]; });
@@ -7937,8 +8008,8 @@ function agdPeriodAction(action, period, dateIso, resId){
     return r.date === dateIso && times.indexOf(r.time) !== -1 && (AD.mode === "prof" ? r.professional_id === resId : r.room_id === resId);
   });
   function finish(n, verb){
-    showToast(n ? (n + (n === 1 ? " horário" : " horários") + who + " pela " + label + " " + verb + (n === 1 ? "." : "s.")) :
-      ("Nada para " + {bloqueado:"bloquear", liberado:"liberar", limpo:"limpar"}[verb] + who + " pela " + label + "."));
+    showToast(n ? (n + (n === 1 ? " horário" : " horários") + who + when + " " + verb + (n === 1 ? "." : "s.")) :
+      ("Nada para " + {bloqueado:"bloquear", liberado:"liberar", limpo:"limpar"}[verb] + who + when + "."));
     agdLoadWeek();
   }
   if (action === "lock"){
@@ -10501,7 +10572,8 @@ var HELP_TOPICS = [
       "Toque em <b>☰</b> no canto superior para abrir o menu (Cadastros e Acesso abrem ao tocar no título).",
       "A Agenda aparece só na visão <b>Dia</b>. Use ‹ › para trocar de dia.",
       "Na Agenda, toque em <b>Profissionais</b> ou <b>Salas</b> e escolha no seletor logo abaixo (dá para digitar para buscar).",
-      "<b>+ Novo atendimento</b> e <b>Limpar semana</b> ficam no botão <b>⋯</b>, ao lado de Hoje.",
+      "O botão verde <b>+</b>, ao lado da busca, abre um novo atendimento.",
+      "O botão <b>⋯</b>, ao lado de Hoje, tem: ir para Amanhã / Próxima segunda / Mesmo dia da semana que vem, <b>Resumo do dia</b>, <b>Bloquear o dia</b>, <b>Liberar o dia</b> e <b>Limpar semana</b>.",
       "Nos Relatórios, depois de gerar, o resultado ocupa a tela toda. Use <b>‹ Voltar</b> para escolher outro."
     ],
     rules: [
@@ -10801,6 +10873,7 @@ var HELP_TOPICS = [
 ];
 // Novidades (a mais nova primeiro). Toda mudança visível ganha uma linha aqui.
 var HELP_NEWS = [
+  {date: "2026-10-04", topic: "celular", text: "Agenda no celular: botão + para novo atendimento e menu ⋯ com atalhos de data, Resumo do dia e Bloquear/Liberar o dia."},
   {date: "2026-10-04", topic: "celular", text: "Agenda no celular: seletor único de profissional/sala, barra em duas linhas com menu ⋯ e botões maiores."},
   {date: "2026-10-04", topic: "inicio", text: "Guia de ajuda: menu Acesso → Ajuda e botão ? em cada tela."},
   {date: "2026-10-04", topic: "tratamentos-mes", text: "Tratamentos: contratado × realizado mês a mês, coluna Mês e filtro \"Abaixo do contratado\"."},
