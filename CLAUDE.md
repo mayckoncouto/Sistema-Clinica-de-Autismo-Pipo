@@ -1636,6 +1636,8 @@ Administrativo, Tratamento (`PAT_SECTIONS`, `PAT_FIELDS`, `.pm-sec`).
 - Cartão do tratamento mostra o horário (`trHoursText`: só dias/períodos em que
   vem, "Seg 07:20–12:00 · Qua 13:30–17:30") no lugar das especialidades.
 - Lista: `#patSearchBy` (Paciente, Mãe, Pai, Responsável financeiro — nome ou CPF).
+  Celular: busca + seletor na 1ª linha; contador, Inativos, "Opções" (texto curto
+  `.pm-sm`), + Incluir e ? na 2ª (regras com `section#tab-pacientes` para vencer as gerais).
   Menu **Outras opções ▾** (`#patMoreBtn`/`#patMoreMenu`): Campos obrigatórios
   (`openPatientFieldsModal`; Nome e CPF travados, Filiação e Financeiro sempre
   aparecem), Imprimir ficha cadastral (`openPatientPrintPick` → `patientPrint`,
