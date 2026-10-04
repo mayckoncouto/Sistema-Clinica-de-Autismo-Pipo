@@ -1779,3 +1779,10 @@ Nas seções acima, onde se lê "RH → Funcionários e Prestadores" vale "Cadas
 `.modal .btn.add-row-btn` ("+ telefone", "+ especialidade", "+ terapeuta"…): mesmo
 visual — fundo `--accent-weak`, texto e borda na cor do sistema, cantos 8px; hover
 preenchido. O "+" é quadrado da altura do campo (44px no celular).
+
+## Listas flutuantes acompanham o campo (2026-10-05)
+`dpPlace(pop)` posiciona `#dpPop` (calendário, listas, campos de digitar) junto do
+campo; `dpReplace` roda em todo `scroll` (captura), `resize` e `visualViewport`
+(teclado do celular), então a lista acompanha o campo ao rolar a janela; se o campo
+sai da área visível da janela/tela, a lista fica escondida até ele voltar. O seletor
+de cor (`#cpPop`, `pop.__place`) faz o mesmo.

@@ -2149,6 +2149,10 @@ function cpToHex(c){
   if (k){ var v = getComputedStyle(document.documentElement).getPropertyValue("--sw-" + k).trim(); if (isHexColor(v)) return v.toLowerCase(); }
   return "#2e9b6a";
 }
+document.addEventListener("scroll", function(e){
+  var p = document.getElementById("cpPop");
+  if (p && p.__place && !(e.target instanceof Node && p.contains(e.target))) p.__place();
+}, true);
 function closeColorPicker(){
   var el = document.getElementById("cpPop");
   if (el){ el.remove(); }
@@ -2169,6 +2173,7 @@ function openColorPicker(anchor, current, onPick){
     var top = r.bottom + 6; if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
     pop.style.left = left + "px"; pop.style.top = top + "px";
   }
+  pop.__place = place; // acompanha o campo ao rolar a janela (ver o ouvinte de "scroll" abaixo)
   function pick(hex){ closeColorPicker(); onPick(hex.toLowerCase()); }
   function dot(hex){ return '<button type="button" class="cp-dot' + (cur === hex ? " on" : "") + '" data-hex="' + hex + '" style="background:' + hex + '" title="' + hex.toUpperCase() + '" aria-label="Cor ' + hex.toUpperCase() + '"></button>'; }
   function renderList(){
@@ -14602,6 +14607,28 @@ function dpPad(n){ return (n < 10 ? "0" : "") + n; }
 function dpIso(d){ return d.getFullYear() + "-" + dpPad(d.getMonth() + 1) + "-" + dpPad(d.getDate()); }
 function dpParse(s){ var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
 function dpBr(s){ var d = dpParse(s); return d ? dpPad(d.getDate()) + "/" + dpPad(d.getMonth() + 1) + "/" + d.getFullYear() : ""; }
+// Posição da lista flutuante: logo abaixo (ou acima, se não couber) do campo.
+// Chamada ao abrir e sempre que a janela/página rola ou muda de tamanho (inclusive
+// o teclado do celular), para a lista acompanhar o campo.
+function dpPlace(pop){
+  var btn = pop.__btn; if (!btn || !document.body.contains(btn)) return;
+  var r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+  var vv = window.visualViewport, vh = vv ? vv.height + vv.offsetTop : window.innerHeight;
+  var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+  var top = r.bottom + 6; if (top + h > vh - 8 && r.top - h - 6 >= 8) top = r.top - h - 6;
+  pop.style.left = left + "px"; pop.style.top = top + "px";
+  // Campo saiu da área visível da janela (rolou para trás do cabeçalho/rodapé): esconde a lista.
+  var box = btn.closest(".modal-body") || btn.closest(".panel"), b = box ? box.getBoundingClientRect() : null;
+  pop.style.visibility = (b && (r.bottom < b.top || r.top > b.bottom)) ? "hidden" : "";
+}
+function dpReplace(e){
+  var p = document.getElementById("dpPop"); if (!p) return;
+  if (e && e.type === "scroll" && e.target instanceof Node && p.contains(e.target)) return; // rolar a própria lista
+  dpPlace(p);
+}
+document.addEventListener("scroll", dpReplace, true);
+window.addEventListener("resize", dpReplace);
+if (window.visualViewport){ window.visualViewport.addEventListener("resize", dpReplace); window.visualViewport.addEventListener("scroll", dpReplace); }
 function dpClose(){
   var p = document.getElementById("dpPop"); if (p) p.remove();
   document.removeEventListener("mousedown", dpOutside, true);
@@ -14615,10 +14642,7 @@ function dpOpenPop(btn, build){
   pop.id = "dpPop"; pop.className = "dp-pop"; pop.__btn = btn;
   document.body.appendChild(pop);
   build(pop);
-  var r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
-  var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
-  var top = r.bottom + 6; if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
-  pop.style.left = left + "px"; pop.style.top = top + "px";
+  dpPlace(pop);
   setTimeout(function(){ document.addEventListener("mousedown", dpOutside, true); document.addEventListener("keydown", dpKey, true); }, 0);
   return pop;
 }
