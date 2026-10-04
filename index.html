@@ -842,6 +842,21 @@ body.pat-col-resizing *{user-select:none}
 .pm-row .dp-btn{flex:0 0 130px}
 .pm-row .rm{flex:none;width:30px;height:30px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--danger);cursor:pointer}
 .pm-row input[readonly]{background:var(--surface-2)}
+.pm-rel{flex:0 0 150px!important}
+.pm-prot{display:flex;flex-direction:column;gap:6px;border:1px solid color-mix(in srgb,var(--danger) 35%,var(--line));border-radius:10px;padding:8px;background:color-mix(in srgb,var(--danger) 5%,transparent)}
+.pm-prot.pm-prot-old{opacity:.6;border-color:var(--line);background:transparent}
+.pm-ate{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--muted);flex:none}
+.pm-ate .dp-btn{min-width:140px}
+[data-pmsec="protetiva"] .pm-sec-title{color:var(--danger)}
+.prot-shield{display:inline-flex;vertical-align:-2px;margin-right:4px;color:var(--danger)}
+.book-main.prot-last{box-shadow:inset 0 0 0 2px var(--danger)}
+.book-main.prot-last .prot-shield{color:#b42318;background:#fff;border-radius:50%;padding:1px}
+.pickup-box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;display:flex;flex-direction:column;gap:6px}
+.pickup-box ul{margin:4px 0 0;padding-left:18px}
+.pickup-box.pickup-alert{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,transparent)}
+.pickup-alert-title{display:flex;align-items:center;gap:6px;font-weight:800;color:var(--danger)}
+.pickup-prot b{color:var(--danger)}
+.pickup-obs{font-size:12px;color:var(--muted);margin-top:2px}
 .pm-tag{flex:none;font-size:11px;font-weight:700;color:var(--muted);background:var(--surface-2);border-radius:999px;padding:2px 8px}
 .pm-modal .add-row-btn{align-self:flex-start}
 .pm-menu-wrap{position:relative}
@@ -1156,6 +1171,11 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .pm-grid .pm-span2{grid-column:auto}
   .pm-row{flex-wrap:wrap}
   .pm-row-tel > input:first-child{flex:1 1 100%}
+  .pm-row > input:first-child:not(:only-of-type){flex:1 1 100%}
+  .pm-rel{flex:1 1 0!important;min-width:0}
+  .pm-prot [data-pk="obs"]{flex:1 1 100%!important}
+  .pm-ate{flex:1 1 100%}
+  .pm-ate .dp-btn{flex:1}
   .pm-inline{flex-wrap:wrap}
   .pm-inline input{flex:1 1 100%}
   .pm-modal .pm-inline .btn{flex:1 1 auto;min-height:40px}
@@ -5505,7 +5525,7 @@ function renderPatientsTab(){
     var col = (!hasTr || activeTreatment(p.id)) ? patientColor(p) : null;
     var dot = col ? '<span class="pcolor-dot" style="background:'+col+'" title="Cor por idade/ABA"></span>' : '';
     return '<tr data-id="'+esc(p.id)+'"'+(p.inativo ? ' class="is-inactive"' : '')+'>' +
-      '<td class="pt-nome">'+dot+esc(p.nome)+inactTag(p)+'</td>' +
+      '<td class="pt-nome">'+dot+esc(p.nome)+(patHasProtetiva(p) ? ' '+protShieldHtml() : '')+inactTag(p)+'</td>' +
       '<td class="pt-muted">'+trBr(p.nascimento)+'</td>' +
       '<td class="pt-muted">'+idadeTxt+'</td>' +
       '<td class="pt-trat">'+trTxt+'</td>' +
@@ -6044,7 +6064,7 @@ function treatFieldsEditor(v){
 
 /* ---------------- Cadastro do paciente: grupos e campos configuráveis ----------------
  * Janela única (sem abas), grupos um embaixo do outro: Identificação, Endereço,
- * Filiação (Mãe e Pai fixos), Responsáveis pela rotina, Contato, Responsável
+ * Filiação (Mãe e Pai fixos), Responsáveis pela retirada, Medida protetiva, Contato, Responsável
  * financeiro (sempre), Escola, Saúde, Administrativo e o resumo do Tratamento.
  * Pacientes → "Outras opções ▾" → Campos obrigatórios (config/patient_fields
  * {fields:{chave:{show,req}}}). Nome é sempre obrigatório; CPF nasce obrigatório e
@@ -6052,7 +6072,7 @@ function treatFieldsEditor(v){
  */
 var PAT_SECTIONS = [
   {id: "ident", label: "Identificação"}, {id: "endereco", label: "Endereço"},
-  {id: "filiacao", label: "Filiação"}, {id: "rotina", label: "Responsáveis pela rotina"},
+  {id: "filiacao", label: "Filiação"}, {id: "rotina", label: "Responsáveis pela retirada"}, {id: "protetiva", label: "Medida protetiva"},
   {id: "contato", label: "Contato"}, {id: "financeiro", label: "Responsável financeiro"},
   {id: "escola", label: "Escola"}, {id: "saude", label: "Saúde"}, {id: "admin", label: "Administrativo"}
 ];
@@ -6071,7 +6091,8 @@ var PAT_FIELDS = [
   {key: "endereco", label: "Endereço", sec: "endereco", type: "address", hint: "CEP, rua, número, bairro, cidade e UF"},
   {key: "mae", label: "Mãe", sec: "filiacao", type: "parent", fixed: true, hint: "nome"},
   {key: "pai", label: "Pai", sec: "filiacao", type: "parent", fixed: true, hint: "nome"},
-  {key: "rotina", label: "Responsáveis pela rotina", sec: "rotina", type: "rotina", hint: "pelo menos um nome"},
+  {key: "rotina", label: "Responsáveis pela retirada", sec: "rotina", type: "rotina", hint: "pelo menos um nome"},
+  {key: "protetiva", label: "Medida protetiva", sec: "protetiva", type: "protetiva", hint: "pessoas que não podem retirar o paciente"},
   {key: "telefones", label: "Telefones", sec: "contato", type: "phones", hint: "pelo menos um"},
   {key: "emails", label: "E-mails", sec: "contato", type: "emails", hint: "pelo menos um"},
   {key: "financeiro", label: "Responsável financeiro", sec: "financeiro", type: "fin", fixed: true, hint: "nome e CPF/CNPJ"},
@@ -6138,7 +6159,7 @@ function patValueEmpty(f, d){
   var v = d[f.key];
   if (f.type === "address"){ var e = v || {}; return ["cep", "rua", "numero", "bairro", "cidade", "uf"].some(function(k){ return !String(e[k] || "").trim(); }); }
   if (f.type === "parent") return !(v && String(v.nome || "").trim());
-  if (f.type === "rotina") return !(v || []).some(function(r){ return String(r.nome || "").trim(); });
+  if (f.type === "rotina" || f.type === "protetiva") return !(v || []).some(function(r){ return String(r.nome || "").trim(); });
   if (f.type === "phones") return !(v || []).some(function(t){ return digitsOnly(t.numero).length >= 8; });
   if (f.type === "emails") return !(v || []).some(function(m){ return String(m.email || "").trim(); });
   if (f.type === "fin") return !(v && String(v.nome || "").trim() && digitsOnly(v.doc));
@@ -6180,6 +6201,48 @@ function patSameParent(cpf, selfId){
     return digitsOnly(n.mae.cpf) === d || digitsOnly(n.pai.cpf) === d;
   }).map(function(p){ return p.nome; });
 }
+// ---- Retirada do paciente e medida protetiva ----
+// rotina: [{nome, rel?, src?}] = quem pode retirar; protetiva: [{nome, rel, obs, ate}] = quem NÃO pode.
+// A observação da medida só aparece para quem pode marcar "Finalizado" (e o Administrador).
+function protCanSeeObs(){ return patIsAdmin() || canUseStatus(FINAL_STATUS); }
+function protActive(m){ return !!(m && String(m.nome || "").trim()) && (!m.ate || m.ate >= trTodayIso()); }
+function patPickup(p){
+  if (!p) return {ret: [], prot: [], old: []};
+  var raw = p.id ? (rawPatient(p.id) || p) : p, n = patNormalize(raw);
+  var prot = (Array.isArray(raw.protetiva) ? raw.protetiva : []).filter(function(m){ return m && String(m.nome || "").trim(); });
+  return {
+    ret: (n.rotina || []).filter(function(r){ return String(r.nome || "").trim(); }).map(function(r){
+      return {nome: r.nome, rel: r.src === "mae" ? "Mãe" : r.src === "pai" ? "Pai" : (r.rel || "")};
+    }),
+    prot: prot.filter(protActive), old: prot.filter(function(m){ return !protActive(m); })
+  };
+}
+function patHasProtetiva(p){ return patPickup(p).prot.length > 0; }
+var SHIELD_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3zm-1 5h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg>';
+function protShieldHtml(){ return '<span class="prot-shield" title="Medida protetiva: há pessoa que não pode retirar o paciente">' + SHIELD_SVG + '</span>'; }
+// Quadro "Retirada" (detalhes/janela da Agenda): só aparece se houver alguém cadastrado.
+function pickupBoxHtml(p, alert){
+  var k = patPickup(p);
+  if (!k.ret.length && !k.prot.length) return "";
+  var seeObs = protCanSeeObs();
+  function who(x){ return esc(x.nome) + (x.rel ? ' <span class="pt-muted">(' + esc(x.rel) + ')</span>' : ''); }
+  return '<div class="pickup-box' + (alert && k.prot.length ? ' pickup-alert' : '') + '">' +
+    (alert && k.prot.length ? '<div class="pickup-alert-title">' + SHIELD_SVG + ' Último atendimento do dia — confira quem vai retirar</div>' : '') +
+    (k.prot.length ? '<div class="pickup-prot"><b>Medida protetiva — não podem retirar:</b><ul>' + k.prot.map(function(m){
+      return '<li>' + who(m) + (m.ate ? ' <span class="pt-muted">até ' + esc(trBr(m.ate)) + '</span>' : '') + (seeObs && m.obs ? '<div class="pickup-obs">' + esc(m.obs) + '</div>' : '') + '</li>';
+    }).join("") + '</ul></div>' : '') +
+    (k.ret.length ? '<div class="pickup-ret"><b>Podem retirar:</b> ' + k.ret.map(who).join(", ") + '</div>' : '') +
+  '</div>';
+}
+// Último atendimento do paciente no dia (Agenda), sem bloqueio/reunião/treinamento.
+function agdIsLastOfDay(row){
+  if (!row || bookingKind(row) || !row.patient) return false;
+  var n = normText(String(row.patient).trim());
+  return !Object.keys(AD.rows || {}).some(function(id){
+    var r = AD.rows[id];
+    return r.id !== row.id && r.date === row.date && !bookingKind(r) && normText(String(r.patient || "").trim()) === n && r.time > row.time;
+  });
+}
 function patFirstTreatmentStart(pid){
   return treatmentsOf(pid).map(function(t){ return t.inicio; }).filter(Boolean).sort()[0] || "";
 }
@@ -6204,6 +6267,7 @@ function openPatientModal(p){
   var mails = (v.emails || []).map(function(x){ return Object.assign({}, x); });
   var rotina = (v.rotina || []).map(function(x){ return Object.assign({}, x); });
   var rotOff = Object.assign({}, v.rotinaOff || {});
+  var prot = (Array.isArray(v.protetiva) ? v.protetiva : []).map(function(x){ return Object.assign({}, x); });
   if (!phones.length) phones.push({numero: "", nome: "", via: "whatsapp"});
   if (!mails.length) mails.push({email: "", nome: ""});
   function reqMark(key){ return patFieldCfg(key).req ? ' <span class="pm-req" title="Obrigatório">*</span>' : ''; }
@@ -6223,8 +6287,11 @@ function openPatientModal(p){
     var html = "";
     if (sec.id === "endereco") html = patAddressHtml(v.endereco);
     else if (sec.id === "filiacao") html = (patFieldCfg("mae").show ? parentHtml("mae", "Mãe") : "") + (patFieldCfg("pai").show ? parentHtml("pai", "Pai") : "");
-    else if (sec.id === "rotina") html = '<div class="pat-count">Só podem retirar o paciente as pessoas desta lista.</div><div id="rotHost" class="pm-list"></div>' +
+    else if (sec.id === "rotina") html = '<div class="pat-count">Só podem retirar o paciente as pessoas desta lista. Mãe e Pai entram sozinhos quando preenchidos.</div><div id="rotHost" class="pm-list"></div>' +
       '<button type="button" class="btn ghost add-row-btn" id="rotAdd">+ Incluir</button>';
+    else if (sec.id === "protetiva") html = '<div class="pat-count">Pessoas que NÃO podem retirar o paciente. O aviso aparece no último atendimento do dia na Agenda.' +
+      (protCanSeeObs() ? '' : ' A observação só aparece para quem pode finalizar atendimentos.') + '</div><div id="protHost" class="pm-list"></div>' +
+      '<button type="button" class="btn ghost add-row-btn" id="protAdd">+ Incluir pessoa impedida</button>';
     else if (sec.id === "contato"){
       html = (patFieldCfg("telefones").show ? '<div class="pm-sub">Telefones' + reqMark("telefones") + '</div><div id="telHost" class="pm-list"></div><button type="button" class="btn ghost add-row-btn" id="telAdd">+ telefone</button>' : '') +
         (patFieldCfg("emails").show ? '<div class="pm-sub">E-mails' + reqMark("emails") + '</div><div id="mailHost" class="pm-list"></div><button type="button" class="btn ghost add-row-btn" id="mailAdd">+ e-mail</button>' : '');
@@ -6273,11 +6340,12 @@ function openPatientModal(p){
   function val(id){ var el = $(id); return el ? el.value.trim() : ""; }
   function parentNow(role){ return {nome: val("pm-" + role + "-nome"), cpf: digitsOnly(val("pm-" + role + "-cpf"))}; }
 
-  // Responsáveis pela rotina: Mãe e Pai entram sozinhos (quando têm nome) e podem ser tirados.
+  // Responsáveis pela retirada: Mãe e Pai entram sozinhos (quando têm nome) e podem ser tirados.
   var rotHost = $("rotHost");
   function rotSync(){
     if (!rotHost) return;
     rotHost.querySelectorAll("[data-ri]").forEach(function(i){ var r = rotina[+i.getAttribute("data-ri")]; if (r && !r.src) r.nome = i.value.trim(); });
+    rotHost.querySelectorAll("[data-rr]").forEach(function(i){ var r = rotina[+i.getAttribute("data-rr")]; if (r && !r.src) r.rel = i.value.trim(); });
   }
   function rotRender(){
     if (!rotHost) return;
@@ -6291,7 +6359,7 @@ function openPatientModal(p){
     rotina = rotina.filter(function(r){ return r.src; }).sort(function(a, b){ return ord[a.src] - ord[b.src]; }).concat(rotina.filter(function(r){ return !r.src; }));
     rotHost.innerHTML = rotina.length ? rotina.map(function(r, i){
       return '<div class="pm-row">' + (r.src ? '<input type="text" value="' + esc(r.nome) + '" readonly title="Vem da Filiação"><span class="pm-tag">' + (r.src === "mae" ? "Mãe" : "Pai") + '</span>'
-        : '<input type="text" data-ri="' + i + '" placeholder="Nome" value="' + esc(r.nome || "") + '">') +
+        : '<input type="text" data-ri="' + i + '" placeholder="Nome" value="' + esc(r.nome || "") + '"><input type="text" class="pm-rel" data-rr="' + i + '" placeholder="Parentesco" value="' + esc(r.rel || "") + '">') +
         '<button type="button" class="rm" data-rotrm="' + i + '" aria-label="Tirar da lista">✕</button></div>';
     }).join("") : '<div class="hours-empty">Ninguém cadastrado para retirar o paciente.</div>';
   }
@@ -6304,6 +6372,32 @@ function openPatientModal(p){
     });
   }
   rotRender();
+
+  // Medida protetiva: nome, relação, observação (só para quem finaliza atendimentos) e "válida até".
+  var protHost = $("protHost"), seeObs = protCanSeeObs();
+  function protSync(){
+    if (!protHost) return;
+    protHost.querySelectorAll(".pm-prot").forEach(function(row, i){ var m = prot[i]; if (!m) return;
+      m.nome = row.querySelector('[data-pk="nome"]').value.trim(); m.rel = row.querySelector('[data-pk="rel"]').value.trim();
+      m.ate = row.querySelector('[data-pk="ate"]').value;
+      var o = row.querySelector('[data-pk="obs"]'); if (o) m.obs = o.value.trim(); });
+  }
+  function protRender(){
+    if (!protHost) return;
+    protHost.innerHTML = prot.length ? prot.map(function(m, i){
+      var old = m.nome && !protActive(m);
+      return '<div class="pm-prot' + (old ? ' pm-prot-old' : '') + '"><div class="pm-row"><input type="text" data-pk="nome" placeholder="Nome" value="' + esc(m.nome || "") + '">' +
+        '<input type="text" class="pm-rel" data-pk="rel" placeholder="Relação" value="' + esc(m.rel || "") + '">' +
+        '<button type="button" class="rm" data-protrm="' + i + '" aria-label="Tirar da lista">✕</button></div>' +
+        '<div class="pm-row">' + (seeObs ? '<input type="text" data-pk="obs" placeholder="Observação (ex.: nº do processo)" value="' + esc(m.obs || "") + '">' : '') +
+        '<label class="pm-ate">Válida até <input type="date" data-pk="ate" value="' + esc(m.ate || "") + '"></label>' + (old ? '<span class="pm-tag">Vencida</span>' : '') + '</div></div>';
+    }).join("") : '<div class="hours-empty">Nenhuma medida protetiva cadastrada.</div>';
+  }
+  if (protHost){
+    $("protAdd").addEventListener("click", function(){ protSync(); prot.push({nome: "", rel: "", obs: "", ate: ""}); protRender(); var l = protHost.querySelector(".pm-prot:last-child input"); if (l) l.focus(); });
+    protHost.addEventListener("click", function(e){ var b = e.target.closest("[data-protrm]"); if (!b) return; protSync(); prot.splice(+b.getAttribute("data-protrm"), 1); protRender(); pendUpdate(); });
+  }
+  protRender();
 
   // Telefones (número + quem atende + WhatsApp/Ligação) e e-mails (e-mail + de quem é).
   var telHost = $("telHost"), mailHost = $("mailHost");
@@ -6436,13 +6530,14 @@ function openPatientModal(p){
   // Lê o que está na tela (só os grupos/campos que aparecem).
   function readForm(){
     var out = {};
-    telSync(); rotSync();
+    telSync(); rotSync(); protSync();
     PAT_FIELDS.forEach(function(f){
       if (!patFieldCfg(f.key).show) return;
       var t = f.type || "text";
       if (t === "address"){ out.endereco = readAddress(); return; }
       if (t === "parent"){ out[f.key] = parentNow(f.key); return; }
-      if (t === "rotina"){ out.rotina = rotina.filter(function(r){ return r.nome; }).map(function(r){ return r.src ? {nome: r.nome, src: r.src} : {nome: r.nome}; }); out.rotinaOff = rotOff; return; }
+      if (t === "rotina"){ out.rotina = rotina.filter(function(r){ return r.nome; }).map(function(r){ return r.src ? {nome: r.nome, src: r.src} : (r.rel ? {nome: r.nome, rel: r.rel} : {nome: r.nome}); }); out.rotinaOff = rotOff; return; }
+      if (t === "protetiva"){ protSync(); out.protetiva = prot.filter(function(m){ return m.nome; }).map(function(m){ return {nome: m.nome, rel: m.rel || "", obs: m.obs || "", ate: m.ate || ""}; }); return; }
       if (t === "phones"){ out.telefones = phones.filter(function(x){ return x.numero; }).map(function(x){ return {numero: x.numero, nome: x.nome, via: x.via || "whatsapp"}; }); return; }
       if (t === "emails"){ out.emails = mails.filter(function(x){ return x.email; }).map(function(x){ return {email: x.email, nome: x.nome}; }); return; }
       if (t === "fin"){
@@ -6547,11 +6642,24 @@ function openPatientModal(p){
     });
     PAT_LEGACY_KEYS.forEach(function(k){ delete rec[k]; });
     if (isNew) rec.criadoEm = new Date().toISOString();
+    // A mesma pessoa não pode estar em "Podem retirar" e na medida protetiva.
+    var protNames = (rec.protetiva || []).filter(protActive).map(function(m){ return normText(m.nome); });
+    var both = (rec.rotina || []).filter(function(r){ return protNames.indexOf(normText(r.nome)) !== -1; });
+    var go = !both.length ? Promise.resolve(true) : confirmDialog({title: "Pessoa nas duas listas",
+      message: "<b>" + esc(both.map(function(r){ return r.nome; }).join(", ")) + "</b> está em Responsáveis pela retirada e também na Medida protetiva.<br>Tirar dos Responsáveis pela retirada?",
+      confirmLabel: "Tirar e salvar"}).then(function(ok){
+        if (!ok) return false;
+        both.forEach(function(r){ if (r.src) rec.rotinaOff = Object.assign({}, rec.rotinaOff, (function(o){ o[r.src] = true; return o; })({})); });
+        rec.rotina = rec.rotina.filter(function(r){ return both.indexOf(r) === -1; });
+        return true;
+      });
+    go.then(function(ok){ if (!ok) return;
     var list = state.patients.slice();
     if (isNew) list.push(rec); else list = list.map(function(x){ return x.id === rec.id ? rec : x; });
     writePatients(list).then(function(){
       close();
       if (isNew && can("tratamentos", "create")) openTreatmentModal(null, {patientId: rec.id});
+    });
     });
   });
 }
@@ -6636,7 +6744,9 @@ function patientFichaHtml(p){
       row("Sexo", v.sexo) + row("CPF", v.cpf ? formatCpf(v.cpf) : "") + row("RG", v.rg) + row("Cartão SUS", v.cns) + row("Data de entrada", v.entrada ? trBr(v.entrada) : "")],
     ["Endereço", row("Endereço", patAddressText(v.endereco))],
     ["Filiação", row("Mãe", v.mae.nome + (v.mae.cpf ? " — CPF " + formatCpf(v.mae.cpf) : "")) + row("Pai", v.pai.nome + (v.pai.cpf ? " — CPF " + formatCpf(v.pai.cpf) : ""))],
-    ["Responsáveis pela rotina", row("Podem retirar", (v.rotina || []).map(function(r){ return r.nome; }).filter(Boolean).join(", "))],
+    (function(){ var k = patPickup(v), seeObs = protCanSeeObs();
+      return ["Responsáveis pela retirada", row("Podem retirar", k.ret.map(function(r){ return r.nome + (r.rel ? " (" + r.rel + ")" : ""); }).join(", ")) +
+        k.prot.concat(k.old).map(function(m){ return row("Medida protetiva" + (protActive(m) ? "" : " (vencida)"), m.nome + (m.rel ? " (" + m.rel + ")" : "") + (m.ate ? " — até " + trBr(m.ate) : "") + (seeObs && m.obs ? " — " + m.obs : "")); }).join("")]; })(),
     ["Contato", (v.telefones || []).map(function(t){ return row("Telefone", formatPhone(t.numero) + (t.nome ? " — " + t.nome : "") + " (" + (t.via === "ligacao" ? "Ligação" : "WhatsApp") + ")"); }).join("") +
       (v.emails || []).map(function(m){ return row("E-mail", m.email + (m.nome ? " — " + m.nome : "")); }).join("")],
     ["Responsável financeiro", row("Nome", v.financeiro.nome) + row("CPF/CNPJ", v.financeiro.doc && v.financeiro.doc.length === 11 ? formatCpf(v.financeiro.doc) : v.financeiro.doc) +
@@ -6779,7 +6889,7 @@ function patientMerge(I){
       var emptyA = a == null || a === "" || (Array.isArray(a) && !a.length) || (typeof a === "object" && !Array.isArray(a) && !Object.keys(a).some(function(x){ return a[x]; }));
       if (emptyA && b != null && b !== "") out[key] = b;
     });
-    ["mae", "pai", "financeiro", "telefones", "emails", "rotina"].forEach(function(key){ if (out[key] == null) out[key] = k[key]; });
+    ["mae", "pai", "financeiro", "telefones", "emails", "rotina", "protetiva"].forEach(function(key){ if (out[key] == null) out[key] = k[key]; });
     PAT_LEGACY_KEYS.forEach(function(x){ delete out[x]; });
     var list = state.patients.filter(function(p){ return p.id !== drop.id; }).map(function(p){ return p.id === keep.id ? Object.assign({}, p, out) : p; });
     return writePatients(list);
@@ -8349,10 +8459,11 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
     var gRoom = row.room_id ? findRoom(row.room_id) : null;
     serv = gRoom ? gRoom.name : "";
   }
+  var protAlert = pRec && patHasProtetiva(pRec) && agdIsLastOfDay(row);
   return '<div class="book filled'+(isMoveSource ? ' move-source' : '')+'" data-id="'+esc(row.id)+'">' +
-    '<button type="button" class="book-main'+cls+'" style="border-left-color:'+color+(fill ? ';background:'+fill : '')+'"'+(canDrag ? ' draggable="true"' : '')+
-      ' title="'+esc(name + (sub ? " — " + sub : ""))+'">' +
-      '<span class="pname">'+esc(name)+'</span>' + (serv ? '<span class="pserv">'+esc(serv)+'</span>' : '') + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
+    '<button type="button" class="book-main'+cls+(protAlert ? ' prot-last' : '')+'" style="border-left-color:'+color+(fill ? ';background:'+fill : '')+'"'+(canDrag ? ' draggable="true"' : '')+
+      ' title="'+esc(name + (sub ? " — " + sub : "") + (protAlert ? " — Medida protetiva: confira quem vai retirar" : ""))+'">' +
+      '<span class="pname">'+(protAlert ? protShieldHtml() : '')+esc(name)+'</span>' + (serv ? '<span class="pserv">'+esc(serv)+'</span>' : '') + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
       (st ? '<span class="agd-status" style="background:'+esc(st.color || "#5b6b68")+'" title="Status: '+esc(st.name)+'">'+esc(st.name)+'</span>' : '') +
     '</button>' +
     (can("agendamentos","delete") ? '<button type="button" class="book-del" title="Excluir agendamento" aria-label="Excluir agendamento"></button>' : "") +
@@ -8696,6 +8807,7 @@ function agdOpenDetails(row){
       '<div class="modal-body">' +
         '<div class="agd-det-top"><div class="agd-det-name">' + (col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + '<span>' + esc(name) + '</span></div>' +
           '</div>' +
+        (pat ? pickupBoxHtml(pat, agdIsLastOfDay(row)) : '') +
         '<div class="agd-det">' +
         (kind ? '' : line(grp ? "Tipo" : "Serviço", grp ? "Grupo de suporte" : bookingServiceName(row))) +
         line("Profissional", prof ? prof.name : "") +
@@ -8765,6 +8877,7 @@ function agdOpenModal(opts){
         '<div class="modal-sub">'+agdBrDate(date)+(time ? ' às '+time : '')+'</div></div>' +
         '<div class="agd-head-actions">' +         '<button class="modal-close" id="agdClose" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' +
+        (row && !rowKind && findPatientAt(row.patient, row.date) ? pickupBoxHtml(findPatientAt(row.patient, row.date), agdIsLastOfDay(row)) : '') +
         '<div class="field"><label for="agdPac">Paciente ou grupo de suporte</label><input id="agdPac" type="text" autocomplete="off" placeholder="Nome do paciente ou do grupo…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'><div class="autolist" id="agdSuggest" hidden></div></div>' +
         '<div class="field"><label for="agdServ">Serviço</label><select id="agdServ"'+(canSave && !rowKind?'':' disabled')+'>' +
           serviceOptionsHtml((row && row.service) || DEFAULT_SERVICE_ID, profId) + '</select></div>' +
@@ -12371,10 +12484,11 @@ var HELP_TOPICS = [
     purpose: "Cadastro dos pacientes: identificação, endereço, filiação, quem pode retirar o paciente, contatos, responsável financeiro, escola, saúde e dados administrativos. Convênio, plano, sessões/mês, ABA, especialidades e horário ficam no <b>Tratamento</b> do paciente.",
     steps: [
       "Cadastros → <b>Pacientes</b> → <b>+ Incluir</b>.",
-      "A janela mostra todos os grupos, um embaixo do outro: <b>Identificação</b> (nome, nome social, nascimento, sexo, CPF, RG, Cartão SUS, data de entrada), <b>Endereço</b>, <b>Filiação</b>, <b>Responsáveis pela rotina</b>, <b>Contato</b>, <b>Responsável financeiro</b>, <b>Escola</b>, <b>Saúde</b>, <b>Administrativo</b> e o resumo do <b>Tratamento</b>.",
+      "A janela mostra todos os grupos, um embaixo do outro: <b>Identificação</b> (nome, nome social, nascimento, sexo, CPF, RG, Cartão SUS, data de entrada), <b>Endereço</b>, <b>Filiação</b>, <b>Responsáveis pela retirada</b>, <b>Medida protetiva</b>, <b>Contato</b>, <b>Responsável financeiro</b>, <b>Escola</b>, <b>Saúde</b>, <b>Administrativo</b> e o resumo do <b>Tratamento</b>.",
       "No <b>Endereço</b>, digite o CEP: rua, bairro, cidade e UF são preenchidos sozinhos; complete o número.",
       "Em <b>Filiação</b> ficam Mãe e Pai (nome e CPF). O botão <b>Responsável</b> ao lado do nome faz da mãe ou do pai o responsável financeiro: nome e CPF passam para o grupo Responsável financeiro e acompanham as correções enquanto o botão estiver marcado. Desmarcado, o responsável financeiro é digitado à parte.",
-      "<b>Responsáveis pela rotina</b>: só as pessoas desta lista podem retirar o paciente. Mãe e Pai entram sozinhos (dá para tirar com ✕); use <b>+ Incluir</b> para outras pessoas.",
+      "<b>Responsáveis pela retirada</b>: só as pessoas desta lista podem retirar o paciente. Mãe e Pai entram sozinhos quando preenchidos (dá para tirar com ✕); use <b>+ Incluir</b> para outras pessoas, com o parentesco.",
+      "<b>Medida protetiva</b>: use <b>+ Incluir pessoa impedida</b> para quem NÃO pode retirar o paciente (nome, relação, observação — ex.: nº do processo — e <b>Válida até</b>, opcional). Depois da data, a medida fica como vencida e para de avisar.",
       "Em <b>Contato</b>, cadastre quantos telefones precisar, com o nome de quem atende e como fazer contato (<b>WhatsApp</b> ou <b>Ligação</b>), e os e-mails com o nome de quem é.",
       "No <b>Responsável financeiro</b>, os botões <b>Copiar telefone</b> e <b>Copiar e-mail</b> trazem um dos contatos já cadastrados (com mais de um, escolha na lista); <b>Copiar endereço</b> traz o endereço do paciente. Se o campo já tiver outro valor, o sistema pergunta antes de trocar.",
       "Médico e Escola são escolhidos na lista (digite para buscar). O botão <b>+</b> ao lado cadastra um novo sem sair da janela.",
@@ -12386,6 +12500,8 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",
+      "Paciente com medida protetiva ativa tem o escudo vermelho ao lado do nome na lista. Na Agenda, o último atendimento do paciente no dia fica com borda e escudo vermelhos, e a janela do atendimento mostra quem não pode e quem pode retirar.",
+      "A observação da medida protetiva só aparece (na janela, na Agenda e na ficha impressa) para quem pode marcar o status Finalizado. A mesma pessoa não pode estar nas duas listas: ao salvar, o sistema oferece tirá-la dos Responsáveis pela retirada.",
       "<b>CPF do paciente é obrigatório</b> (o Administrador pode mudar em Campos obrigatórios) e não pode repetir: o sistema não salva dois pacientes com o mesmo CPF.",
       "CPF da mãe ou do pai igual ao de outro paciente mostra só um aviso (irmãos em tratamento são permitidos).",
       "A data de entrada não pode ser depois do início do primeiro tratamento do paciente, e o tratamento não pode começar antes da data de entrada.",
@@ -12623,7 +12739,8 @@ var HELP_TOPICS = [
       "Fora do horário do profissional a célula é hachurada e não aceita marcação.",
       "<b>Limpar semana</b> apaga tudo da semana aberta (dupla confirmação); atendimentos com evolução ficam.",
       "Atendimento com evolução no prontuário <b>só o Administrador</b> exclui.",
-      "Datas passadas mostram a cor do tratamento que valia na época."
+      "Datas passadas mostram a cor do tratamento que valia na época.",
+      "Paciente com <b>medida protetiva</b>: o último atendimento dele no dia fica com borda e escudo vermelhos. Ao abrir o atendimento aparece quem NÃO pode retirar e quem pode (cadastro do paciente)."
     ],
     who: "Permissão <b>Agenda</b>. Profissional sem \"editar\" vê só a própria agenda."},
   {id: "agenda-status", group: "Agenda", title: "Status do atendimento", mod: "agendamentos", tab: "agendadia",

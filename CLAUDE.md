@@ -1656,3 +1656,19 @@ Administrativo, Tratamento (`PAT_SECTIONS`, `PAT_FIELDS`, `.pm-sec`).
 - Migração `supabase/2026-10-05c-mesclar-e-data-de-entrada.sql` (flag
   `pipo.merging` em `clinical_records_stamp`, função de mesclar, acerto único da
   data de entrada = menor entre 01/01/2026 e o início do 1º tratamento).
+
+## Retirada do paciente e medida protetiva (2026-10-05)
+Decisões do usuário: "Responsáveis pela rotina" virou **Responsáveis pela retirada**
+(Mãe/Pai entram sozinhos quando preenchidos; outros com nome + parentesco `rel`);
+grupo novo **Medida protetiva** (`protetiva: [{nome, rel, obs, ate}]` no paciente,
+`ate` = válida até, vazia = sem prazo; vencida fica guardada e para de avisar —
+`protActive`). A mesma pessoa não fica nas duas listas (ao salvar, oferece tirar da
+retirada). Observação só para quem pode marcar "Finalizado" ou Administrador
+(`protCanSeeObs`; sem isso o campo nem aparece e o valor gravado é mantido).
+- Agenda: alerta SÓ no último atendimento do paciente no dia (`agdIsLastOfDay`, entre
+  as linhas carregadas em `AD.rows`): `.book-main.prot-last` (borda + escudo
+  `protShieldHtml`). Janela e detalhes do atendimento mostram o quadro
+  `pickupBoxHtml(p, alerta)` (quem não pode / quem pode retirar) — só se houver alguém.
+- Lista de Pacientes: escudo vermelho ao lado do nome com medida ativa
+  (`patHasProtetiva`). Ficha impressa: retirada + medidas (com "vencida").
+- `patPickup(p)` → {ret, prot (ativas), old (vencidas)}. Sem SQL (dados em `patients/all`).

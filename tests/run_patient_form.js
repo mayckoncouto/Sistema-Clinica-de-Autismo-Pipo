@@ -29,7 +29,7 @@ const path = require('path');
   // Ana Azul: janela única com os grupos.
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
   const secs = await page.$$eval('#ovPat .pm-sec-title', (a) => a.map((x) => x.textContent));
-  console.log('single window with the groups in order?', JSON.stringify(secs) === '["Identificação","Endereço","Filiação","Responsáveis pela rotina","Contato","Responsável financeiro","Escola","Saúde","Administrativo","Tratamento"]', JSON.stringify(secs));
+  console.log('single window with the groups in order?', JSON.stringify(secs) === '["Identificação","Endereço","Filiação","Responsáveis pela retirada","Medida protetiva","Contato","Responsável financeiro","Escola","Saúde","Administrativo","Tratamento"]', JSON.stringify(secs));
   console.log('no tabs anymore?', !(await page.$('#ovPat .pm-tab')));
   await page.click('#pSave'); await page.waitForTimeout(200);
   console.log('CPF required when editing (window stays, pending chip)?', await page.isVisible('#ovPat') && /1 faltando/.test(await page.textContent('[data-pend="ident"]')));
@@ -173,7 +173,28 @@ const path = require('path');
   console.log('merge: 2nd removed, Planner renamed, treatment moved and Renegociado, empty fields filled?', mg.gone && mg.planner === 'Ana Azul' && mg.tp === 'ana-azul' && mg.st === 'renegociado' && mg.hist === 1 && mg.rg === '7654321' && mg.cns === '123', JSON.stringify(mg));
 
   const ficha = await ev(`patientFichaHtml(state.patients.filter(function(p){ return p.id === "ana-azul"; })[0])`);
-  console.log('ficha cadastral has the groups, doctor and schedule?', /Filiação/.test(ficha) && /Maria Azul Souza/.test(ficha) && /Dra\. Teste Neuro/.test(ficha) && /Responsáveis pela rotina/.test(ficha), ficha.slice(0, 120));
+  console.log('ficha cadastral has the groups, doctor and schedule?', /Filiação/.test(ficha) && /Maria Azul Souza/.test(ficha) && /Dra\. Teste Neuro/.test(ficha) && /Responsáveis pela retirada/.test(ficha), ficha.slice(0, 120));
+
+  // Medida protetiva: nome + parentesco na retirada; impedido não pode estar nas duas listas.
+  await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
+  await page.click('#protAdd'); await page.fill('#protHost [data-pk="nome"]', 'Vó Azul'); await page.fill('#protHost [data-pk="rel"]', 'Avó');
+  await page.fill('#protHost [data-pk="obs"]', 'Processo 123');
+  await page.click('#pSave'); await page.waitForTimeout(200);
+  console.log('person in both lists asks to remove from pickup?', await page.isVisible('#cfOk'));
+  await page.click('#cfOk'); await page.waitForTimeout(300);
+  const an = await raw('ana-azul');
+  console.log('saved: protective measure kept, removed from pickup list?', an.protetiva.length === 1 && an.protetiva[0].obs === 'Processo 123' && !an.rotina.some((r) => r.nome === 'Vó Azul'), JSON.stringify([an.protetiva, an.rotina]));
+  console.log('shield next to the name in the patient list?', !!(await page.$('#patListHost tbody tr:has-text("Ana Azul") .prot-shield')));
+  const pk = await ev(`(function(){
+    AD.rows = {a1: {id: "a1", date: "2030-01-07", time: "08:00", patient: "Ana Azul", professional_id: "x"}, a2: {id: "a2", date: "2030-01-07", time: "13:30", patient: "Ana Azul", professional_id: "x"}};
+    var p = findPatientByName("Ana Azul");
+    var h1 = agdEventHtml(AD.rows.a1, "08:00", "", "#000", false, false), h2 = agdEventHtml(AD.rows.a2, "13:30", "", "#000", false, false);
+    var box = pickupBoxHtml(p, true);
+    return {first: /prot-last/.test(h1), last: /prot-last/.test(h2), box: /Vó Azul/.test(box) && /Processo 123/.test(box) && /Podem retirar/.test(box)};
+  })()`);
+  console.log('Agenda: alert only on the last appointment of the day; box lists both?', !pk.first && pk.last && pk.box, JSON.stringify(pk));
+  const expired = await ev(`(function(){ return protActive({nome: "X", ate: "2020-01-01"}) === false && protActive({nome: "X", ate: ""}) === true; })()`);
+  console.log('expired measure stops alerting?', expired);
 
   // Cadastros: Médicos (lista), CBO (sugestões + profissional com lista e "+").
   await page.$eval('#mainTabs button[data-tab=medicos]', (b) => b.click()); await page.waitForTimeout(250);
