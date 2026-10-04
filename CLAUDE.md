@@ -1003,7 +1003,7 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   Serviços e Especialidades = Nome + Profissionais; Convênios = as duas que já
   tem. Busca ocupa a linha toda; na linha seguinte ficam filtros, contador e
   botões juntos sempre que couber (contador `flex:1 1 64px`, quebra o texto em
-  duas linhas se precisar; `.spacer` oculto). Salas (botões demais): contador e
+  duas linhas se precisar; `.spacer` oculto). Tratamentos: contador + Incluir + ? em cima e a seleção de status embaixo (`order:90`). Salas (botões demais): contador e
   "Inativos" descem para a linha de baixo. Regra do usuário (2026-10-04): o
   botão **?** é sempre o ÚLTIMO da barra (Agenda: data, ‹ Hoje ›, ☰, ?;
   Relatórios: ao lado de "Gerar relatório", `.rp-go-row`). Salas/Grupos já eram cartões e cabem na tela.
