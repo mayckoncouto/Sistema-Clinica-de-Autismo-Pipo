@@ -122,6 +122,29 @@ const path = require('path');
   await page.click('#trReneg'); await page.waitForTimeout(300);
   console.log('renegotiation starts with blank duration and valid-until?', (await page.$eval('#trDur', (i) => i.value)) === '' && (await page.$eval('#trVenc', (i) => i.value)) === '');
   await page.click('#trCancel');
+
+  // Vencimento por quantidade de sessões (Finalizados + Não compareceu).
+  const sv = await ev(`(function(){
+    var p6 = state.patientsRaw[2], p7 = state.patientsRaw[4];
+    state.treatments = state.treatments.map(function(t){
+      if (t.id === "v3") return Object.assign({}, t, {id: "s1", vencPor: "sessoes", totalSessoes: 10, validoAte: ""});
+      if (t.id === "v5") return Object.assign({}, t, {id: "s2", vencPor: "sessoes", totalSessoes: 3});
+      return t;
+    });
+    rebuildPatients();
+    TR.used = {}; TR.done = TR.done || {};
+    TR.used[normText(p6.nome)] = ["2026-02-01","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06"];   // 6 de 10 → restam 4
+    TR.used[normText(p7.nome)] = ["2026-02-01","2026-02-02","2026-02-03"];                                         // 3 de 3 → esgotado
+    function st(id){ var t = state.treatments.filter(function(x){ return x.id === id; })[0]; var d = t && trDue(t); return d ? d.state + ":" + d.rest : "-"; }
+    return {s1: st("s1"), s2: st("s2"), txt: trDueText(state.treatments.filter(function(x){ return x.id === "s1"; })[0] || {})};
+  })()`);
+  console.log('sessions: 6 of 10 used = vencendo (4 left), 3 of 3 = esgotado?', sv.s1 === 'vencendo:4' && sv.s2 === 'vencido:0', JSON.stringify(sv));
+  await ev(`openTreatmentModal(state.treatments.filter(function(x){ return x.id === "s1"; })[0])`);
+  await page.waitForSelector('#ovTreat');
+  console.log('modal by sessions: total shown, date fields hidden, used count shown?', await page.isVisible('#trTotal') && !(await page.isVisible('#trDur')) && /usadas: 6/.test(await page.textContent('#trUsedInfo')));
+  await page.$eval('#trVencPor', (s) => { s.value = 'data'; s.dispatchEvent(new Event('change', {bubbles: true})); });
+  console.log('switching to Data shows duration/valid-until?', await page.isVisible('#trDur') && !(await page.isVisible('#trTotal')));
+  await page.click('#trCancel');
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

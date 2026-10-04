@@ -1246,3 +1246,11 @@ Decisões do usuário: vencimento por duração em meses (ajustável), opcional,
   ("N vencem nos próximos 30 dias" / "N vencidos") que aplicam os filtros
   `vencendo` / `vencidos` de `#trFilter`; coluna "Vencimento" no FIM da tabela
   (não muda os `:nth-child` do celular). Sem SQL (campos no documento).
+- (2026-10-04) **Vencimento por data OU por sessões** (`vencPor: "data"|"sessoes"`,
+  select `#trVencPor`; `#trDateBox` com duração/válido até ou `#trTotalBox` com
+  `totalSessoes`). Sessões usadas = Finalizado + "Não compareceu"
+  (`TR_USED_STATUS`; `trLoadLast` guarda `TR.used`; `trUsedCount(t)` pela regra
+  da data). `trDue` por sessões: restam ≤ `TR_DUE_SESSIONS` (4) = "vencendo"
+  ("Restam N sessões"), ≤ 0 = "vencido" ("Sessões esgotadas"); `trDueText` na
+  coluna ("6 de 10 sessões"). Total e tipo de vencimento entram em `trQtyKey`
+  (travados com atendimentos realizados). Renegociar começa em "Data", vazio.
