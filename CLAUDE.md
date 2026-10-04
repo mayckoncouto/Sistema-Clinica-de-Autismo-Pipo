@@ -1071,15 +1071,13 @@ branca tinha a altura da tela e os horários passavam por fora dela (faixa branc
 Agenda no celular (2026-10-04): no lugar da lista lateral e do filtro, um seletor
 único `#agdPickSel` (`.agd-pick`, preenchido em `agdRenderSide` com
 `agdResources()` do modo Profissionais/Salas; vira lista própria com busca);
-barra em duas linhas (data, ‹ Hoje ›, ⋯, ? / busca), `#agdNewBtn` e
-`#agdClearWeekBtn` escondidos e oferecidos no menu `#agdMoreBtn`/`#agdMoreMenu`
-(repassa o clique ao original visível); botões de período, cadeados e
+barra em duas linhas, `#agdNewBtn` e `#agdClearWeekBtn` escondidos; botões de período, cadeados e
 desfazer maiores. No computador `.agd-pick`/`.agd-more-wrap`/`.agd-plus-btn` ficam ocultos.
-Ordem da linha 1: data, ‹ Hoje ›, ⋯, ?; linha 2: busca + botão verde `#agdPlusBtn` ("+", clica
-`#agdNewBtn`). Menu ⋯: Ir para (Amanhã, Próxima segunda, Mesmo dia da semana
-que vem), Resumo do dia (`agdDaySummary(iso)`: contagem por status + lista por
-horário), Bloquear/Liberar o dia (`agdPeriodAction(action, "day", iso, AD.sel)`,
-período "day" = manhã + tarde, com confirmação) e Limpar semana. ‹ › andam de dia em dia (lógica da visão Dia que já existia).
+(2026-10-04, pedido do usuário) Barra no celular: linha 1 = data, ‹ Hoje ›, ?, `#agdPlusBtn`
+("+", mesmo visual do antigo ⋯, clica `#agdNewBtn`); linha 2 = busca na largura toda.
+O menu ⋯ (`#agdMoreBtn`/`#agdMoreMenu`: Ir para, Resumo do dia `agdDaySummary`,
+Bloquear/Liberar o dia, Limpar semana) continua no código, mas fica OCULTO
+(`.agd-more-wrap` sem regra de mostrar no celular). ‹ › andam de dia em dia.
 
 ## Cópia de segurança (2026-10-03, menu Acesso, só Administrador)
 O projeto Supabase está no plano gratuito (sem backup automático restaurável).
