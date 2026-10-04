@@ -1407,6 +1407,17 @@ ferramentas do Planner e da Agenda somem sem permissão.
   Status e Tratamentos não usam Inativar (Tratamentos já tem as regras dele).
 - Teste `tests/run_perm_buttons.js` (no `npm test`, agora 24 arquivos). `tests/run_convenios.js` (convênios/libera, 25 arquivos).
 
+## Início (2026-10-04)
+Botão **Início** (`data-tab="inicio"`, `#tab-inicio`, endereço `#inicio`) é o
+PRIMEIRO do topo e a tela que abre ao entrar (computador e celular; `state.tab`
+começa em "inicio"). Página em branco por enquanto (o usuário vai definir o
+conteúdo). Todos veem (`applyPermissionsUI` não esconde); é a primeira da lista de
+recuo quando a tela atual não é permitida e o destino do Planner/Resumo no celular.
+Clicar na logo ou no nome da clínica (`.brand`, `wireBrandHome`) também abre o Início.
+`#zoomCtrl` nasce oculto (só aparece no Planner). Testes: `tests/test.html` e
+`test_race.html` põem `#planner` no endereço antes da carga, para continuarem
+começando no Planner.
+
 ## Botões de incluir = "+ Incluir" (2026-10-04)
 Todo botão que cria um registro novo (Pacientes, Tratamentos, Profissionais,
 Convênios, Serviços, Especialidades, Motivos, Salas/Grupos, Agenda, Prontuário,

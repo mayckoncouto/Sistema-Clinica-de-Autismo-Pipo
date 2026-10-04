@@ -190,6 +190,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
    era o que fazia as abas inativas aparecerem umas por baixo das outras fora
    do Claude Artifact (que injetava esta regra por conta própria). */
 [hidden]{display:none !important}
+.brand-home{cursor:pointer}
 #tab-agenda.perm-no-create :is(.book-copy,.book-move,.empty-plus),
 #tab-agenda.perm-no-edit :is([data-period-action=lock],[data-row-action=lock]),
 #tab-agenda.perm-no-delete :is([data-period-action=unlock],[data-period-action=clear],[data-row-action=unlock],.book-move),
@@ -1174,9 +1175,10 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
     <div class="maintabs" id="mainTabs">
       <!-- "agenda" = Planner (grade de 4 semanas que se repete); "agendadia" = Agenda por data real. -->
       <!-- Cadastros: menu suspenso; as abas de cadastro ficam ocultas e são abertas por ele. -->
+      <button class="active" data-tab="inicio">Início</button>
       <div class="cad-wrap"><button type="button" class="cad-btn" id="cadBtn" aria-haspopup="menu" aria-expanded="false">Cadastros <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="cadMenu" role="menu" hidden></div></div>
-      <div class="cad-wrap"><button type="button" class="cad-btn active" id="plBtn" aria-haspopup="menu" aria-expanded="false">Planner <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="plMenu" role="menu" hidden></div></div>
-      <button class="active" data-tab="agenda" hidden>Planner</button>
+      <div class="cad-wrap"><button type="button" class="cad-btn" id="plBtn" aria-haspopup="menu" aria-expanded="false">Planner <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="plMenu" role="menu" hidden></div></div>
+      <button data-tab="agenda" hidden>Planner</button>
       <button data-tab="agendadia">Agenda</button>
       <button data-tab="prontuario" hidden>Prontuário</button>
       <button data-tab="pacientes" hidden>Pacientes</button>
@@ -1204,7 +1206,9 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
 
 
   <!-- AGENDA TAB -->
-  <section id="tab-agenda" class="panel">
+  <!-- Início: página inicial (em branco por enquanto). -->
+  <section id="tab-inicio" class="panel inicio-panel"></section>
+  <section id="tab-agenda" class="panel" hidden>
     <div class="controls">
       <div class="seg" id="daySeg"></div>
       <div class="seg" id="weekSeg"></div>
@@ -1476,7 +1480,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
 
 </div>
 
-<div class="zoom-ctrl" id="zoomCtrl">
+<div class="zoom-ctrl" id="zoomCtrl" hidden>
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
   <select id="zoomSelect" aria-label="Zoom da agenda">
     <option value="100">Zoom normal (100%)</option>
@@ -2352,7 +2356,7 @@ function patientConvenioName(p){
 
 /* ---------------- state ---------------- */
 var state = {
-  tab: "agenda",
+  tab: "inicio",
   day: "seg",
   week: 1,
   rooms: [],             // rooms (ordered array = display order), from db
@@ -2479,6 +2483,7 @@ function applyPermissionsUI(){
   Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button[data-tab]"), function(b){
     var k = b.getAttribute("data-tab");
     if (k === "ajuda"){ b.hidden = true; return; }   // Guia: abre pelo menu Acesso → Ajuda; todos podem ver
+    if (k === "inicio"){ b.hidden = false; return; } // Início: todos veem
     if (k === "usuarios"){
       // Botão sempre oculto (abre pelo menu "Acesso"); só o Administrador pode ficar nessa tela.
       b.hidden = true;
@@ -2495,8 +2500,8 @@ function applyPermissionsUI(){
   var curSec = document.getElementById("tab-" + state.tab);
   if (activeHidden || !curSec){
     var first = null;
-    ["agenda", "agendadia", "prontuario", "relatorio", "relatorios"].concat(CAD_TABS).some(function(k){
-      if (!tabCan(k)) return false;
+    ["inicio", "agenda", "agendadia", "prontuario", "relatorio", "relatorios"].concat(CAD_TABS).some(function(k){
+      if (k !== "inicio" && !tabCan(k)) return false;
       first = document.querySelector('#mainTabs button[data-tab="' + k + '"]'); return !!first;
     });
     if (first) first.click();
@@ -2541,9 +2546,9 @@ function navInitialTab(){
   var tab = ({planner: "agenda", resumo: "relatorio", grupos: "salas"})[key] || key;
   if (!tab || !document.getElementById("tab-" + tab) || !document.querySelector('#mainTabs button[data-tab="' + tab + '"]')) tab = "";
   var mobile = !!(window.matchMedia && window.matchMedia("(max-width:760px)").matches);
-  if (mobile && (!tab || tab === "agenda" || tab === "relatorio")){
-    tab = "agendadia";
-    try { history.replaceState(history.state, "", location.pathname + location.search + "#agendadia"); } catch(e){}
+  if (mobile && (tab === "agenda" || tab === "relatorio")){
+    tab = "inicio";
+    try { history.replaceState(history.state, "", location.pathname + location.search + "#inicio"); } catch(e){}
   }
   if (!tab) return;
   if (key === "grupos") state.salasView = "grupos";
@@ -2557,10 +2562,21 @@ function navInitialTab(){
   var zc = document.getElementById("zoomCtrl");
   if (zc) zc.hidden = (tab !== "agenda");
 }
+// Logo e nome da clínica no topo levam à página Início.
+function wireBrandHome(){
+  var br = document.querySelector(".topbar .brand") || document.querySelector(".brand");
+  if (!br) return;
+  br.classList.add("brand-home");
+  br.setAttribute("role", "link"); br.setAttribute("tabindex", "0"); br.title = "Início";
+  function go(){ var b = document.querySelector('#mainTabs button[data-tab="inicio"]'); if (b) b.click(); }
+  br.addEventListener("click", go);
+  br.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } });
+}
 function boot(){
   buildDaySeg();
   buildWeekSeg();
   wireTabs();
+  wireBrandHome();
   navInitialTab();
   wireControls();
   wireZoomControl();
@@ -10962,7 +10978,8 @@ var HELP_TOPICS = [
   {id: "inicio", group: "Início", title: "Visão geral do sistema", mod: null,
     purpose: "O sistema reúne o cadastro dos pacientes e da clínica, o Planner (a grade modelo de 4 semanas), a Agenda com as datas reais, o Prontuário e os Relatórios.",
     steps: [
-      "Use o menu do topo: <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>.",
+      "<b>Início</b> é o primeiro botão do topo e a tela que abre ao entrar no sistema. Clicar na logo ou no nome da clínica também volta para o Início.",
+      "Use o menu do topo: <b>Início</b>, <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>.",
       "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Ajuda, Trocar senha e Sair. Para o Administrador, também Usuários, Status, Clínica e Backup.",
       "Em cada tela, o botão <b>?</b> abre este guia direto no assunto daquela tela.",
       "Nos campos de data, digite a data (só os números, ex.: 15032026 vira 15/03/2026) e tecle Enter, ou clique no ícone do calendário para escolher.",
@@ -11320,7 +11337,7 @@ var HELP_TOPICS = [
 // quando esta lista tiver itens ({date, topic, text}, a mais nova primeiro).
 var HELP_NEWS = [];
 var HELP = {topic: "inicio", search: ""};
-var HELP_TAB_TOPIC = {agenda: "planner", relatorio: "resumo", agendadia: "agenda", prontuario: "prontuario", relatorios: "relatorios",
+var HELP_TAB_TOPIC = {inicio: "inicio", agenda: "planner", relatorio: "resumo", agendadia: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "profissionais", convenios: "convenios", servicos: "servicos",
   especialidades: "especialidades", motivos: "motivos", usuarios: "usuarios"};
 function helpCan(t){
@@ -11962,7 +11979,7 @@ var MOBILE_MQ = window.matchMedia ? window.matchMedia("(max-width:760px)") : nul
 function isMobileView(){ return !!(MOBILE_MQ && MOBILE_MQ.matches); }
 // Primeira tela permitida que aparece no celular (ordem do topo).
 function mobileAltTab(){
-  var order = ["agendadia", "prontuario", "relatorios"].concat(CAD_TABS);
+  var order = ["inicio", "agendadia", "prontuario", "relatorios"].concat(CAD_TABS);
   var navs = CAD_ITEMS.concat(PL_ITEMS);
   for (var i = 0; i < order.length; i++){
     var b = document.querySelector('#mainTabs button[data-tab="' + order[i] + '"]');
