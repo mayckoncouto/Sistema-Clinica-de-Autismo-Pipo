@@ -28,7 +28,7 @@ const path = require('path');
   // Especialidades: Psicologia libera Musicoterapia.
   await page.$eval('#mainTabs button[data-tab=especialidades]', (b) => b.click()); await page.waitForTimeout(300);
   await page.click('#reg-especialidades-host tr:has-text("Psicologia")'); await page.waitForTimeout(300);
-  await page.click('#regLib .ms-btn'); await page.click('#regLib input[value="musico"]');
+  await page.click('#regLib input[value="musico"]');
   await page.click('#regSave'); await page.waitForTimeout(300);
   console.log('specialty saves what it releases?', (await ev(`JSON.stringify(state.specialties.filter(function(s){ return s.id === "psico"; })[0].libera)`)) === '["musico"]');
   console.log('list shows the "Libera atender também" column?', /Musicoterapia/.test(await page.textContent('#reg-especialidades-host tr:has-text("Psicologia")')));

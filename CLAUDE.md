@@ -1285,7 +1285,7 @@ Decisões do usuário: a liberação é igual para todos os convênios; valor PO
 especialidade liberada usa o valor da que liberou; no tratamento só aviso; valores
 com a mesma permissão de "Tratamentos – valores".
 - Especialidades: `libera: [specIds]` no item de `config/specialties` (campo
-  "Libera atender também", multi-seleção `#regLib`; coluna na lista). `specLibera(id)`.
+  "Libera atender também": caixas de marcar em grade `#regLib .lib-opt`, sem lista suspensa; coluna na lista). `specLibera(id)`.
 - Convênios: `especialidades: [specIds]` no item de `config/convenios` (janela com
   linhas `#cvRows`: especialidade + valor; mostra "Libera também: …"). Valor por
   sessão na tabela protegida `public.convenio_finance (id = "conv|spec",
