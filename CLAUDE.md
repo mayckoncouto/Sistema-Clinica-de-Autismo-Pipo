@@ -1494,3 +1494,22 @@ serviço") continuam como estão. Novo botão de inclusão: usar "+ Incluir".
   observação `#ctObs`, obrigatória com "Outro"; "Manter ativo" / "Cancelar
   tratamento"). Precisa de editar em Tratamentos (senão só avisa).
 - Teste `tests/run_robustez.js` (no `npm test`, agora 27 arquivos).
+
+## Listas de cadastro: digitar direto no campo (2026-10-04)
+Decisões do usuário: só as listas de CADASTRO (paciente, profissional,
+especialidade, serviço, convênio, sala, status, motivo — qualquer tamanho); texto
+que não existe volta ao valor anterior; no celular igual ao computador.
+- `DP_COMBO_SEL` (ids/classes dos `<select>` de cadastro + `[data-combo]` para
+  novos) → `dpEnhanceCombo(el)` (chamado por `dpEnhanceTimeList`): `<div class="dp-btn
+  dp-date dp-combo">` com `<input class="dp-txt dp-in" role="combobox">` + seta; o
+  `<select>` continua escondido (`.value`/`change` como sempre). **Não copia as
+  classes do select** (o código acha `.spec-prof`/`.cv-spec`/`.rm-prof-select` por
+  classe). Opção de valor vazio ("Escolha…", "Todos", "Sem sala") aparece como
+  placeholder.
+- Lista flutuante `#dpPop` (mesmo visual): digitar filtra com `normText` e marca o
+  primeiro (`.dp-opt.kb`); ↑ ↓ andam, Enter/Tab/clique escolhem; "Nenhum item
+  encontrado" (`.dp-none`); Esc fecha e volta o texto (`pop.__onEsc`, também usado
+  por `dpKey`); ao sair: nome exato = escolhe, vazio = opção vazia (se houver),
+  outro texto = volta. Entrar no campo marca todo o texto.
+- Listas que não são de cadastro (Sim/Não, status do tratamento, Vencimento por,
+  semana/dia…) continuam botão com lista. Teste `tests/run_combo.js` (28 arquivos).

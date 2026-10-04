@@ -787,6 +787,12 @@ body.pat-col-resizing *{user-select:none}
 .dp-btn.dp-date.dp-disabled{opacity:.5;cursor:default}
 .dp-btn .dp-in{border:0;background:transparent;padding:0;margin:0;font:inherit;color:inherit;outline:none;cursor:text;width:100%;box-shadow:none}
 .dp-btn .dp-in::placeholder{color:var(--muted)}
+.dp-btn.dp-combo{cursor:text}
+.therapist-row .dp-combo{flex:1}
+.dp-btn.dp-combo.dp-empty .dp-in{color:var(--ink)}
+.dp-btn.dp-combo .dp-chev{cursor:pointer}
+.dp-opt.kb{background:var(--surface-2)}
+.dp-pop .dp-none{padding:9px 14px;font-size:13px;color:var(--muted)}
 .inicio-panel{flex:1;min-height:0;background:transparent;border:0;box-shadow:none}
 .spec-sum-label{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .hours-row[data-cover]{flex-wrap:wrap}
@@ -11170,6 +11176,7 @@ var HELP_TOPICS = [
       "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Ajuda, Trocar senha e Sair. Para o Administrador, também Usuários, Status, Clínica e Backup.",
       "Em cada tela, o botão <b>?</b> abre este guia direto no assunto daquela tela.",
       "Nos campos de data, digite a data (só os números, ex.: 15032026 vira 15/03/2026) e tecle Enter, ou clique no ícone do calendário para escolher.",
+      "Nos campos que escolhem um item de cadastro (paciente, profissional, especialidade, serviço, convênio, sala, status, motivo), digite parte do nome direto no campo: a lista abaixo mostra só os que combinam (sem diferenciar acento e maiúscula). Escolha com as setas ↑ ↓ e Enter, ou clique. Se o texto não combinar com nenhum item, o campo volta ao que estava.",
       "Ctrl+clique (ou o botão do meio do mouse) numa aba abre a tela em outra aba do navegador. Atualizar a página (F5) mantém a tela aberta."
     ],
     rules: [
@@ -12327,7 +12334,7 @@ function dpClose(){
   document.removeEventListener("keydown", dpKey, true);
 }
 function dpOutside(e){ var p = document.getElementById("dpPop"); if (p && !p.contains(e.target) && !(p.__btn && p.__btn.contains(e.target))) dpClose(); }
-function dpKey(e){ if (e.key === "Escape" && document.getElementById("dpPop")){ e.preventDefault(); e.stopImmediatePropagation(); var b = document.getElementById("dpPop").__btn; dpClose(); if (b) b.focus(); } }
+function dpKey(e){ if (e.key === "Escape" && document.getElementById("dpPop")){ e.preventDefault(); e.stopImmediatePropagation(); var p = document.getElementById("dpPop"), b = p.__btn, cb = p.__onEsc; dpClose(); if (cb) cb(); else if (b) b.focus(); } }
 function dpOpenPop(btn, build){
   dpClose(); closeColorPicker();
   var pop = document.createElement("div");
@@ -12470,8 +12477,129 @@ function dpEnhanceDate(el){
   }
 }
 // Lista de horários: <select> de horários (usa as opções dele) ou <input type="time">.
+// Listas de cadastro (paciente, profissional, especialidade, serviço, convênio,
+// sala, status, motivo): campo de digitar com a lista flutuante (dpEnhanceCombo).
+var DP_COMBO_SEL = "[data-combo], #agdPickSel, #rpProf, #rpStatus, #rpServ, #rpConv, #ctMot, #bkService, .spec-prof, #profSpecialty, .rm-prof-select, #agdDetStatus, #agdStatus, #agdServ, #agdProf, #agdSala, #fxPat, #fxNew, #swFrom, #swTo, #trPat, #trMot, .cv-spec";
+function dpEnhanceCombo(el){
+  var b = document.createElement("div");
+  b.className = "dp-btn dp-date dp-combo";   // sem copiar as classes do <select>: o código as usa para achar o campo
+  if (el.getAttribute("style")) b.setAttribute("style", el.getAttribute("style"));
+  if (el.id) b.setAttribute("data-dp-for", el.id);
+  b.innerHTML = '<input type="text" class="dp-txt dp-in" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false"><span class="dp-chev" data-dp-open>' + DP_CHEV + '</span>';
+  var inp = b.querySelector(".dp-in");
+  el.parentNode.insertBefore(b, el);
+  el.style.display = "none";
+  el.setAttribute("data-dp", "1");
+  var lb = el.id ? document.querySelector('label[for="' + el.id + '"]') : null;
+  inp.setAttribute("aria-label", el.getAttribute("aria-label") || (lb ? lb.textContent : ""));
+  if (lb) lb.addEventListener("click", function(e){ e.preventDefault(); inp.focus(); });
+  function cur(){ return el.options[el.selectedIndex] || null; }
+  function text(){ var o = cur(); return o && o.value ? o.textContent : ""; }
+  function hasEmpty(){ return Array.prototype.some.call(el.options, function(o){ return !o.value; }); }
+  function sync(){
+    var o = cur();
+    if (document.activeElement !== inp) inp.value = text();
+    inp.placeholder = o && !o.value ? o.textContent : (hasEmpty() ? "" : "Escolha…");
+    b.classList.toggle("dp-empty", !el.value);
+    inp.disabled = el.disabled; b.classList.toggle("dp-disabled", !!el.disabled);
+  }
+  dpWatchValue(el, HTMLSelectElement.prototype, sync); sync();
+  el.addEventListener("change", sync);
+  function pop(){ var p = document.getElementById("dpPop"); return p && p.__btn === b ? p : null; }
+  function visible(){ var p = pop(); return p ? Array.prototype.slice.call(p.querySelectorAll(".dp-opt:not(:disabled):not([hidden])")) : []; }
+  function mark(o){
+    var p = pop(); if (!p) return;
+    Array.prototype.forEach.call(p.querySelectorAll(".dp-opt.kb"), function(x){ x.classList.remove("kb"); });
+    if (o){ o.classList.add("kb"); o.scrollIntoView({block: "nearest"}); }
+  }
+  function filter(){
+    var p = pop(); if (!p) return;
+    var q = normText(inp.value.trim()), first = null;
+    Array.prototype.forEach.call(p.querySelectorAll(".dp-opt"), function(o){
+      o.hidden = !!q && o.getAttribute("data-n").indexOf(q) === -1;
+      if (!o.hidden && !o.disabled && !first) first = o;
+    });
+    var none = p.querySelector(".dp-none"); if (none) none.hidden = !!first;
+    mark(first);
+  }
+  function pick(o){
+    dpClose(); inp.setAttribute("aria-expanded", "false");
+    var v = o.getAttribute("data-v");
+    if (v !== el.value) dpCommit(el, v);
+    inp.value = text(); sync();
+  }
+  function open(all){
+    if (el.disabled) return;
+    if (pop()) return;
+    dpOpenPop(b, function(p){
+      p.classList.add("dp-pop-list");
+      p.style.minWidth = Math.max(160, b.offsetWidth) + "px";
+      p.innerHTML = '<div class="dp-list">' + Array.prototype.map.call(el.options, function(o){
+        return '<button type="button" tabindex="-1" class="dp-opt' + (o.value === el.value ? ' sel' : '') + '" data-v="' + esc(o.value) + '" data-n="' + esc(normText(o.textContent)) + '"' + (o.disabled ? ' disabled' : '') + (o.hidden ? ' hidden' : '') + '>' + esc(o.textContent) + '</button>';
+      }).join("") + '<div class="dp-none" hidden>Nenhum item encontrado</div></div>';
+      p.__onEsc = function(){ inp.value = text(); inp.setAttribute("aria-expanded", "false"); inp.focus(); };
+      // clicar na lista não tira o foco do campo
+      p.addEventListener("mousedown", function(e){ e.preventDefault(); });
+      p.addEventListener("click", function(e){ var t = e.target.closest(".dp-opt"); if (t && !t.disabled) pick(t); });
+      p.addEventListener("mouseover", function(e){ var t = e.target.closest(".dp-opt"); if (t && !t.disabled) mark(t); });
+    });
+    inp.setAttribute("aria-expanded", "true");
+    if (all){ var s = pop().querySelector(".dp-opt.sel"); mark(s); if (s) s.scrollIntoView({block: "center"}); }
+    else filter();
+  }
+  // Ao sair do campo: texto igual a um item = escolhe; vazio = "nenhum" (se a lista tiver);
+  // qualquer outra coisa volta ao que estava.
+  function resolve(){
+    var t = normText(inp.value.trim());
+    if (inp.value === text()) return;
+    if (!t){ if (hasEmpty() && el.value){ var e0 = Array.prototype.filter.call(el.options, function(o){ return !o.value; })[0]; dpCommit(el, e0.value); } inp.value = text(); return; }
+    var m = Array.prototype.filter.call(el.options, function(o){ return !o.disabled && normText(o.textContent) === t; })[0];
+    if (m && m.value !== el.value) dpCommit(el, m.value);
+    inp.value = text();
+  }
+  // Ao entrar no campo o texto fica todo marcado: digitar já troca a busca.
+  var justFocused = false;
+  inp.addEventListener("focus", function(){ justFocused = true; inp.select(); setTimeout(function(){ justFocused = false; }, 300); });
+  inp.addEventListener("mouseup", function(e){ if (justFocused){ e.preventDefault(); inp.select(); justFocused = false; } });
+  inp.addEventListener("input", function(){ if (!pop()) open(false); else filter(); });
+  inp.addEventListener("keydown", function(e){
+    var p = pop();
+    if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault();
+      if (!p){ open(true); return; }
+      var opts = visible(), i = opts.indexOf(p.querySelector(".dp-opt.kb"));
+      i = e.key === "ArrowDown" ? Math.min(opts.length - 1, i + 1) : Math.max(0, i - 1);
+      mark(opts[i]);
+    } else if (e.key === "Enter"){
+      if (!p) return;
+      e.preventDefault(); e.stopPropagation();
+      var k = p.querySelector(".dp-opt.kb") || visible()[0];
+      if (k) pick(k);
+    } else if (e.key === "Escape" && p){
+      e.preventDefault(); e.stopPropagation();
+      dpClose(); inp.value = text(); inp.select(); inp.setAttribute("aria-expanded", "false");
+    } else if (e.key === "Tab" && p && inp.value !== text()){
+      var k2 = p.querySelector(".dp-opt.kb"); if (k2) pick(k2);
+    }
+  });
+  inp.addEventListener("blur", function(){
+    setTimeout(function(){
+      if (document.activeElement === inp) return;
+      if (pop()) dpClose();
+      inp.setAttribute("aria-expanded", "false");
+      resolve(); sync();
+    }, 0);
+  });
+  b.addEventListener("click", function(e){
+    if (el.disabled) return;
+    if (e.target !== inp && pop()){ dpClose(); return; }
+    if (e.target !== inp) inp.focus();
+    open(true);
+  });
+}
 function dpEnhanceTimeList(el){
   var isSel = el.tagName === "SELECT";
+  if (isSel && el.matches(DP_COMBO_SEL)) return dpEnhanceCombo(el);
   var b = dpMakeButton(el, (!isSel || dpIsTimeSelect(el)) ? DP_CLOCK : "");
   if (isSel && !dpIsTimeSelect(el)) b.classList.add("dp-plain");
   function label(){
