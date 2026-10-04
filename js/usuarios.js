@@ -200,7 +200,7 @@
           '<div class="spacer"></div>' +
           '<button class="btn ghost" id="bulkProfBtn" hidden>Criar acessos dos profissionais</button>' +
           '<button class="btn ghost" id="rolesBtn">Níveis de permissão</button>' +
-          '<button class="btn primary" id="addUserBtn">+ Novo usuário</button>' +
+          '<button class="btn primary" id="addUserBtn">+ Incluir</button>' +
         "</div>" +
         '<div class="adm-wrap" id="usersListHost"></div>';
       document.getElementById("userSearch").addEventListener("input", renderUsers);
@@ -457,7 +457,7 @@
           "</tbody></table>" +
         "</div>" +
         '<div class="modal-foot">' +
-          '<button class="btn primary" id="addRoleBtn">+ Novo nível</button>' +
+          '<button class="btn primary" id="addRoleBtn">+ Incluir</button>' +
           '<div class="spacer"></div>' +
           '<button class="btn ghost" id="rlDone">Fechar</button>' +
         "</div>" +

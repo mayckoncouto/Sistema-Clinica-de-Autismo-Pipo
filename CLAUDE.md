@@ -1350,3 +1350,10 @@ ferramentas do Planner e da Agenda somem sem permissão.
   do tratamento e motivos de cancelamento. Relatórios continuam vendo todos.
   Status e Tratamentos não usam Inativar (Tratamentos já tem as regras dele).
 - Teste `tests/run_perm_buttons.js` (no `npm test`, agora 24 arquivos).
+
+## Botões de incluir = "+ Incluir" (2026-10-04)
+Todo botão que cria um registro novo (Pacientes, Tratamentos, Profissionais,
+Convênios, Serviços, Especialidades, Motivos, Salas/Grupos, Agenda, Prontuário,
+Usuários, Níveis) tem o texto **"+ Incluir"** (antes "+ Novo …"/"+ Nova …").
+Botões de linha dentro das janelas ("+ terapeuta", "+ status", "+ especialidade ou
+serviço") continuam como estão. Novo botão de inclusão: usar "+ Incluir".
