@@ -9,7 +9,7 @@ const path = require('path');
   // holds when the wrapper is narrower than the table's natural (summed) width —
   // i.e. the table is pinned at its min-width, not stretched. A default-size (or
   // wider) viewport would inflate every column beyond its configured default.
-  const context = await browser.newContext({ viewport: { width: 900, height: 720 } });
+  const context = await browser.newContext({ viewport: { width: 780, height: 720 } });
   const page = await context.newPage();
   page.on('pageerror', err => console.log('[pageerror]', err.message));
 
@@ -24,12 +24,12 @@ const path = require('path');
   await page.waitForTimeout(150);
 
   // ---- TEST: colgroup + resizer handles are present, one per column (7 columns) ----
-  console.log('colgroup has 7 <col> elements?', (await page.locator('#patListHost .pat-table colgroup col').count()) === 7);
-  console.log('7 resizer handles present (one per column)?', (await page.locator('#patListHost .pat-col-resizer').count()) === 7);
+  console.log('colgroup has 4 <col> elements?', (await page.locator('#patListHost .pat-table colgroup col').count()) === 4);
+  console.log('4 resizer handles present (one per column)?', (await page.locator('#patListHost .pat-col-resizer').count()) === 4);
 
   const nomeCol = page.locator('#patListHost col[data-col="nome"]');
   const startWidth = await nomeCol.evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('Nome column starts at its default width (230px)?', startWidth === 230);
+  console.log('Nome column starts at its default width (340px)?', startWidth === 340);
 
   const tableBefore = await page.locator('#patListHost table.pat-table').evaluate(el => el.getBoundingClientRect().width);
 
@@ -43,19 +43,19 @@ const path = require('path');
   await page.waitForTimeout(80);
 
   const widthAfterDrag = await nomeCol.evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('dragging +80px widened the Nome column to ~310px?', Math.abs(widthAfterDrag - 310) <= 2);
+  console.log('dragging +80px widened the Nome column to ~420px?', Math.abs(widthAfterDrag - 420) <= 2);
 
   const tableAfter = await page.locator('#patListHost table.pat-table').evaluate(el => el.getBoundingClientRect().width);
   console.log('the table itself grew by the same amount (other columns untouched)?', Math.abs((tableAfter - tableBefore) - 80) <= 2);
 
-  const convenioColWidth = await page.locator('#patListHost col[data-col="convenio"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('a different column (Convênio) is unaffected by resizing Nome?', convenioColWidth === 150);
+  const convenioColWidth = await page.locator('#patListHost col[data-col="nascimento"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
+  console.log('a different column (Nascimento) is unaffected by resizing Nome?', convenioColWidth === 150);
 
   // ---- TEST: the resized width is persisted to localStorage ----
   const stored = await page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem('agendaPipo:patColWidths') || '{}'); } catch(e) { return null; }
   });
-  console.log('localStorage holds the new Nome width after the drag?', stored && stored.nome === 310);
+  console.log('localStorage holds the new Nome width after the drag?', stored && stored.nome === 420);
 
   // ---- TEST: the width survives a full reload (simulating the user coming back later) ----
   await page.reload();
@@ -66,29 +66,29 @@ const path = require('path');
   }, { timeout: 5000 });
   console.log('reload stays on Pacientes (#pacientes)?', await page.evaluate(() => location.hash === '#pacientes'));
   const widthAfterReload = await page.locator('#patListHost col[data-col="nome"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('after reload, Nome column keeps the saved 310px width?', widthAfterReload === 310);
+  console.log('after reload, Nome column keeps the saved 420px width?', widthAfterReload === 420);
 
   // ---- TEST: double-clicking a handle resets that column back to its default ----
   const handle2 = page.locator('#patListHost .pat-col-resizer[data-col="nome"]');
   await handle2.dblclick();
   await page.waitForTimeout(80);
   const widthAfterReset = await page.locator('#patListHost col[data-col="nome"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('double-click resets Nome column back to its default (230px)?', widthAfterReset === 230);
+  console.log('double-click resets Nome column back to its default (340px)?', widthAfterReset === 340);
   const storedAfterReset = await page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem('agendaPipo:patColWidths') || '{}'); } catch(e) { return null; }
   });
   console.log('the reset is also persisted (nome key removed from storage)?', storedAfterReset && !('nome' in storedAfterReset));
 
   // ---- TEST: a column cannot be dragged below its configured minimum width ----
-  const abaHandle = page.locator('#patListHost .pat-col-resizer[data-col="aba"]');
+  const abaHandle = page.locator('#patListHost .pat-col-resizer[data-col="idade"]');
   const abaBox = await abaHandle.boundingBox();
   await page.mouse.move(abaBox.x + abaBox.width / 2, abaBox.y + abaBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(abaBox.x - 500, abaBox.y + abaBox.height / 2, { steps: 5 });
   await page.mouse.up();
   await page.waitForTimeout(80);
-  const abaWidth = await page.locator('#patListHost col[data-col="aba"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('ABA column clamped at its minimum (60px), not collapsed?', abaWidth === 60);
+  const abaWidth = await page.locator('#patListHost col[data-col="idade"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
+  console.log('Idade column clamped at its minimum (70px), not collapsed?', abaWidth === 70);
 
   // ---- TEST: sorting still works (resize wiring didn't break the sort buttons) ----
   await page.locator('#patListHost .pat-table .sort-btn[data-sort-col="idade"]').click();

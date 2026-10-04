@@ -719,6 +719,7 @@ table.pat-table{border-collapse:collapse;table-layout:fixed;width:100%}
 .pat-table tbody tr:hover{background:var(--surface-2)}
 .pat-table td{padding:9px 12px;border-bottom:1px solid var(--line);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
 .pat-table td.pt-nome{font-weight:700;color:var(--ink)}
+.pat-table td.pt-trat .pt-muted{color:var(--muted)}
 .pat-table td.pt-especialidades{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--ink-2)}
 .pat-table td.pt-muted{color:var(--muted)}
 .sort-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0;margin-left:3px;border-radius:4px;vertical-align:middle}
@@ -1142,7 +1143,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   :is(#tab-pacientes,#tab-profissionais,.reg-panel,#tab-prontuario) .pat-table :is(th,td){white-space:normal;overflow-wrap:anywhere}
   /* Prontuário: só Paciente e Registros */
   #prListHost .pat-table :is(col,th,td):nth-child(n+3){display:none}
-  #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)){display:none}
+  #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(4)){display:none}
   #profList .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)){display:none}
   :is(#reg-servicos-host,#reg-especialidades-host) .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)){display:none}
   #reg-convenios-host .pat-table :is(col,th,td):nth-child(n+3){display:none}
@@ -1315,7 +1316,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
     <div class="pat-toolbar">
       <div class="search-wrap" style="max-width:280px">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
-        <input id="patientListSearch" type="text" placeholder="Buscar por nome ou convênio…">
+        <input id="patientListSearch" type="text" placeholder="Buscar por nome…">
       </div>
       <span class="pat-count" id="patCount"></span>
       <div class="spacer"></div>
@@ -4917,19 +4918,19 @@ function openPasteConfirmModal(toDocId, toKey, existing){
 }
 
 /* ---------------- patients tab (list view) ---------------- */
+// Lista de Pacientes: só dados do paciente + situação do tratamento (convênio,
+// plano, sessões, ABA e especialidades ficam na tela de Tratamentos).
 var SORT_COLS = [
   {key:"nome", label:"Nome"},
-  {key:"convenio", label:"Convênio"},
-  {key:"plano", label:"Plano"},
+  {key:"nascimento", label:"Nascimento"},
   {key:"idade", label:"Idade"},
-  {key:"pacote", label:"Sessão/Mês"},
-  {key:"aba", label:"ABA"}
+  {key:"tratamento", label:"Tratamento"}
 ];
 
 // ---- patients-list column widths: user-resizable, persisted per browser ----
-var PAT_COL_KEYS = SORT_COLS.map(function(c){ return c.key; }).concat(["especialidades"]);
-var PAT_COL_DEFAULT_WIDTH = {nome:230, convenio:150, plano:130, idade:90, pacote:100, aba:80, especialidades:260};
-var PAT_COL_MIN_WIDTH = {nome:140, convenio:90, plano:90, idade:70, pacote:70, aba:60, especialidades:140};
+var PAT_COL_KEYS = SORT_COLS.map(function(c){ return c.key; });
+var PAT_COL_DEFAULT_WIDTH = {nome:340, nascimento:150, idade:110, tratamento:200};
+var PAT_COL_MIN_WIDTH = {nome:140, nascimento:100, idade:70, tratamento:110};
 var PAT_COL_WIDTHS_STORAGE_KEY = "agendaPipo:patColWidths";
 
 function loadPatColWidths(){
@@ -5128,11 +5129,9 @@ function gtRender(host, id, cols, rows, render, extraClass){
 function patSortKey(p, col){
   switch(col){
     case "nome": return p.nome || "";
-    case "convenio": return patientConvenioName(p) || "";
-    case "plano": return p.plano || "";
+    case "nascimento": return p.nascimento || "";
     case "idade": { var a = patientAgeYears(p); return (a==null) ? null : a; }
-    case "pacote": return (p.pacoteHoras!==""&&p.pacoteHoras!=null) ? Number(p.pacoteHoras) : null;
-    case "aba": return p.aba || "";
+    case "tratamento": { var t = currentTreatment(p.id); return t ? trLabel(TR_STATUS, t.status) : ""; }
     default: return "";
   }
 }
@@ -5156,7 +5155,7 @@ function renderPatientsTab(){
   var list = state.patients.filter(function(p){
     if (!SHOW_INACTIVE.pacientes && !isActive(p)) return false;
     if (!q) return true;
-    return normText(p.nome||"").indexOf(q)!==-1 || normText(patientConvenioName(p)).indexOf(q)!==-1;
+    return normText(p.nome||"").indexOf(q)!==-1;
   });
   if (state.patSort.col && state.patSort.dir){
     list.sort(patSortComparator(state.patSort.col, state.patSort.dir));
@@ -5174,24 +5173,20 @@ function renderPatientsTab(){
   }
 
   var rows = list.map(function(p){
-    var specSummary = patientSpecSummary(p);
     var ageForDisplay = patientAgeYears(p);
     var idadeTxt = p.nascimento ? (ageForDisplay!=null ? ageForDisplay+" anos" : "—") :
       ((p.idade!==""&&p.idade!=null) ? esc(p.idade)+(typeof p.idade==="number"?" anos":"") : "—");
-    var pacoteTxt = (p.pacoteHoras!==""&&p.pacoteHoras!=null) ? esc(p.pacoteHoras)+"x/mês" : "—";
-    var abaTxt = p.aba ? esc(p.aba) : "—";
+    var tr = currentTreatment(p.id);
+    var trTxt = tr ? '<span class="tr-chip st-' + esc(tr.status) + '">' + esc(trLabel(TR_STATUS, tr.status)) + '</span>' : '<span class="pt-muted">Sem tratamento</span>';
     // Bolinha: cor do tratamento ATIVO (idade + ABA); com tratamentos mas nenhum ativo, sem cor.
     var hasTr = state.treatments.some(function(t){ return t.patientId === p.id; });
     var col = (!hasTr || activeTreatment(p.id)) ? patientColor(p) : null;
     var dot = col ? '<span class="pcolor-dot" style="background:'+col+'" title="Cor por idade/ABA"></span>' : '';
     return '<tr data-id="'+esc(p.id)+'"'+(p.inativo ? ' class="is-inactive"' : '')+'>' +
       '<td class="pt-nome">'+dot+esc(p.nome)+inactTag(p)+'</td>' +
-      '<td>'+esc(patientConvenioName(p)||"—")+'</td>' +
-      '<td class="pt-muted">'+esc(p.plano||"—")+'</td>' +
+      '<td class="pt-muted">'+trBr(p.nascimento)+'</td>' +
       '<td class="pt-muted">'+idadeTxt+'</td>' +
-      '<td class="pt-muted">'+pacoteTxt+'</td>' +
-      '<td class="pt-muted">'+abaTxt+'</td>' +
-      '<td class="pt-especialidades" title="'+esc(specSummary)+'">'+(specSummary || '<span class="pt-muted">—</span>')+'</td>' +
+      '<td class="pt-trat">'+trTxt+'</td>' +
     '</tr>';
   }).join("");
 
@@ -5208,7 +5203,7 @@ function renderPatientsTab(){
     return '<th><span class="th-label">'+c.label+'</span>' +
       '<button type="button" class="sort-btn'+(active?' active':'')+'" data-sort-col="'+c.key+'" title="Ordenar por '+c.label+'" aria-label="Ordenar por '+c.label+'">'+glyph+'</button>' +
       colResizer(c.key) + '</th>';
-  }).join("") + '<th>Especialidades/Serviços (sessão/mês)'+colResizer("especialidades")+'</th></tr>';
+  }).join("") + '</tr>';
 
   host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table" style="min-width:'+patTableWidthPx()+'px">' +
     colgroupHtml +
@@ -11352,7 +11347,8 @@ var HELP_TOPICS = [
       "Cadastros → <b>Pacientes</b> → <b>+ Incluir</b>.",
       "Preencha os dados e salve. Em seguida o sistema abre o tratamento do paciente.",
       "Clique numa linha para editar. Na janela aparece o resumo do tratamento, com <b>Abrir tratamento</b> ou <b>+ Incluir</b>.",
-      "A busca ignora acento e maiúscula. Clique no título de uma coluna para ordenar e arraste a borda para mudar a largura."
+      "A lista mostra nome, nascimento, idade e a situação do tratamento (Ativo, Renegociado, Cancelado ou Sem tratamento). Convênio, plano, sessões, ABA e especialidades ficam em Cadastros → <b>Tratamentos</b>.",
+      "A busca procura pelo nome e ignora acento e maiúscula. Clique no título de uma coluna para ordenar e arraste a borda para mudar a largura."
     ],
     rules: [
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",

@@ -1004,7 +1004,7 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
 - Cadastros no celular: tabelas na largura da tela (sem `min-width`, colunas sem
   largura fixa, sem bordas de arrastar, texto quebra linha) e só as colunas
   principais, escondidas por posição (`:nth-child` em col/th/td): Pacientes =
-  Nome + Plano (`p.plano`); Profissionais = Nome + Especialidade principal;
+  Nome + Tratamento; Profissionais = Nome + Especialidade principal;
   Serviços e Especialidades = Nome + Profissionais; Convênios = as duas que já
   tem. Busca ocupa a linha toda; na linha seguinte ficam filtros, contador e
   botões juntos sempre que couber (contador `flex:1 1 64px`, quebra o texto em
@@ -1523,3 +1523,12 @@ aparece) e `plannerConflict` com serviço Sessão. Resultado por semana (recolh�
 e dia; clicar fecha a janela, abre o dia/semana e `openBookingModal` da célula com
 o paciente já preenchido. Garante `state.scheduleDocs` das 4 semanas carregados
 (as regras leem dali). Teste `tests/run_free_slot.js` (8 checagens).
+
+## Lista de Pacientes só com dados do paciente (2026-10-04)
+Decisões do usuário: colunas **Nome, Nascimento, Idade, Tratamento** (situação do
+tratamento atual — `currentTreatment` — com a etiqueta `.tr-chip`, ou "Sem
+tratamento"); busca só pelo nome. Convênio, plano, Sessão/Mês, ABA e
+especialidades saíram da lista (ficam em Tratamentos). `SORT_COLS` /
+`PAT_COL_KEYS` = nome, nascimento, idade, tratamento (todas ordenáveis,
+`patSortKey`); larguras padrão 340/150/110/200. Celular: Nome + Tratamento
+(`:nth-child(1)` e `(4)`). A bolinha de cor continua (tratamento ativo).

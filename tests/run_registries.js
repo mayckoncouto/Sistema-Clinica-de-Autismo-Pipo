@@ -20,7 +20,7 @@ const path = require('path');
   // thead cells are CSS text-transform:uppercase, so read raw HTML rather than the
   // rendered innerText (which comes back uppercased) to check the literal label text.
   const tableHeaderHtml = await page.locator('#patListHost .pat-table thead').innerHTML();
-  console.log('table header uses "Especialidades/Serviços (sessão/mês)"?', tableHeaderHtml.includes('Especialidades/Serviços (sessão/mês)'));
+  console.log('patients table no longer shows treatment columns (Especialidades/Convênio)?', !tableHeaderHtml.includes('Especialidades') && !tableHeaderHtml.includes('Convênio'));
   console.log('table header no longer says "(h/mês)"?', !tableHeaderHtml.includes('(h/mês)'));
 
   // Open an existing patient (Paciente Um, legacy convenio:"Unimed" string, matches catalog "unimed")
@@ -116,7 +116,7 @@ const path = require('path');
 
   // ---- TEST: patients list shows resolved convênio name + "x/mês" units ----
   const listHtml = await page.locator('#patListHost').innerText();
-  console.log('patients list shows resolved "Amil Saúde" for Ana Azul?', listHtml.includes('Amil Saúde'));
+  console.log('patients list does not show convênio (it lives in the treatment)?', !listHtml.includes('Amil Saúde'));
   console.log('patients list never uses the old "h/mês" unit?', !listHtml.includes('h/mês'));
 
   // ---- TEST: Convênios (Cadastros → Convênios, desde 2026-10-02) ----

@@ -76,8 +76,8 @@ const path = require('path');
   await page.$eval('#specRowsHost .hours-row:nth-child(1) .spec-prof', (s) => { s.value = 'andrelisa-terapeuta'; s.dispatchEvent(new Event('change', {bubbles: true})); });
   await save();
   await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); await page.waitForTimeout(200);
-  const brunoAba = await page.$$eval('#patListHost tbody tr', (trs) => { const r = trs.find((t) => t.textContent.includes('Bruno Verde')); return r ? r.children[5].textContent.trim() : null; });
-  console.log('patient list reads ABA from the active treatment?', brunoAba === 'Não');
+  const brunoRow = await page.$$eval('#patListHost tbody tr', (trs) => { const r = trs.find((t) => t.textContent.includes('Bruno Verde')); const d = r && r.querySelector('.pcolor-dot'); return r ? {st: r.querySelector('.pt-trat').textContent.trim(), dot: d ? d.getAttribute('style') : ''} : null; });
+  console.log('patient list shows the treatment status and the "não ABA" color from the active treatment?', !!brunoRow && brunoRow.st === 'Ativo' && /#F4B7B7/i.test(brunoRow.dot), JSON.stringify(brunoRow));
   console.log('patient record itself keeps no treatment copy for Bruno (ABA stays as before)?', await page.evaluate(() => window.__STORE__['patients/all'].list.find((p) => p.id === 'bruno-verde').aba === 'Sim'));
 
   // Planner: Bruno (Psicologia indicada para Andrelisa) na coluna da Ana → dupla verificação.
