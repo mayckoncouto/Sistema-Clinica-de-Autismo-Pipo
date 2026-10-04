@@ -20,10 +20,8 @@ const path = require('path');
   const setv = (sel, v) => page.$eval(sel, (e, x) => { e.value = x; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }, v);
 
   // Menu RH e lista: os profissionais já cadastrados aparecem como tipo Profissional.
-  const menu = await ev(`(function(){ renderNavMenus(); return Array.prototype.map.call(document.querySelectorAll("#rhMenu [data-nav]"), function(b){ return b.textContent; }); })()`);
-  const cad = await ev(`Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav"); })`);
-  console.log('Profissionais is no longer in the Cadastros menu?', cad.indexOf('profissionais') === -1, JSON.stringify(cad));
-  console.log('RH menu has Funcionários e Prestadores and Tipos?', menu.join('|') === 'Funcionários e Prestadores|Tipos de funcionário', JSON.stringify(menu));
+  const cad = await ev(`(function(){ renderNavMenus(); return Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav") + "=" + b.textContent; }); })()`);
+  console.log('Profissionais left Cadastros; Colaboradores and Tipos de colaborador are there; no RH menu?', !cad.some((x) => x.startsWith('profissionais=')) && cad.indexOf('funcionarios=Colaboradores') !== -1 && cad.indexOf('tiposfunc=Tipos de colaborador') !== -1 && !(await page.$('#rhBtn')), JSON.stringify(cad));
   await page.$eval('#mainTabs button[data-tab=funcionarios]', (b) => b.click()); await page.waitForTimeout(300);
   const nProf = await ev('state.professionals.filter(function(p){ return !p.inativo; }).length');
   const rows0 = await page.$$eval('#staffListHost tbody tr', (r) => r.map((x) => x.cells[1].textContent));

@@ -23,6 +23,9 @@
     { key: "campos_paciente", label: "Pacientes – campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, despesas e valor final", actions: ["view", "edit"] },
+    // Colaboradores (Cadastros): todas as pessoas, inclusive os profissionais; valores com permissão exclusiva.
+    { key: "rh_funcionarios", label: "Colaboradores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)" },
+    { key: "rh_remuneracao", label: "Colaboradores – valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
     { key: "motivos_cancelamento", label: "Motivos de cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
     { key: "convenios", label: "Convênios", hint: "" },
     { key: "servicos", label: "Serviços", hint: "" },
@@ -34,9 +37,6 @@
     { key: "feriados", label: "Feriados e recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
-    // RH (menu RH do topo): cadastro de funcionários e prestadores e a remuneração deles.
-    { key: "rh_funcionarios", label: "Funcionários e Prestadores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)", group: "RH" },
-    { key: "rh_remuneracao", label: "Funcionários e Prestadores – valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
     // Itens do menu Acesso (Sair aparece sempre).
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)", group: "Menu Acesso" },
     { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" },
@@ -272,15 +272,15 @@
     });
   }
 
-  // "+ Incluir": o usuário nasce no cadastro do funcionário (RH → Funcionários e
+  // seção "Acesso ao sistema"). Só o Administrador pode criar uma
   // Prestadores, seção "Acesso ao sistema"). Só o Administrador pode criar uma
-  // conta sem funcionário (ex.: contador externo).
+  // conta sem colaborador (ex.: contador externo).
   function newUser() {
     if (!window.pipoOpenStaffNew) { openUserModal(null); return; }
     var canStaff = auth.can("rh_funcionarios", "create");
     if (!auth.isAdmin()) {
       if (canStaff) window.pipoOpenStaffNew();
-      else toast("O usuário é criado no cadastro da pessoa (RH → Funcionários e Prestadores). Seu nível não tem permissão para incluir.", true);
+      else toast("O usuário é criado no cadastro da pessoa (Cadastros → Colaboradores). Seu nível não tem permissão para incluir.", true);
       return;
     }
     var mh = document.getElementById("modalHost");
@@ -289,8 +289,8 @@
         '<div class="modal-head"><div><h3>Incluir usuário</h3><div class="modal-sub">O acesso fica ligado ao cadastro da pessoa.</div></div>' +
           '<button class="modal-close" id="ukClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body"><div class="u-kind">' +
-          '<button type="button" class="btn primary" id="ukStaff">Novo funcionário ou prestador (recomendado)</button>' +
-          '<button type="button" class="btn ghost" id="ukPlain">Conta sem funcionário (ex.: contador)</button>' +
+          '<button type="button" class="btn primary" id="ukStaff">Novo colaborador (recomendado)</button>' +
+          '<button type="button" class="btn ghost" id="ukPlain">Conta sem colaborador (ex.: contador)</button>' +
         "</div></div></div></div>";
     var ov = document.getElementById("ovUserKind");
     function close() { mh.innerHTML = ""; }
@@ -332,7 +332,7 @@
         '<div class="modal-body">' +
           // Usuário ligado a um profissional: o nome vem do cadastro do profissional (o banco também garante).
           '<div class="field"><label for="uName">Nome</label><input id="uName" type="text" value="' + esc(u ? u.full_name : "") + '"' + ((u && u.professional_id) || ro ? " disabled" : "") + '>' +
-            (u && u.professional_id ? '<div class="pat-count" style="margin-top:6px">Igual ao cadastro do profissional. Para mudar, altere em RH → Funcionários e Prestadores.</div>' : "") + "</div>" +
+            (u && u.professional_id ? '<div class="pat-count" style="margin-top:6px">Igual ao cadastro do profissional. Para mudar, altere em Cadastros → Colaboradores.</div>' : "") + "</div>" +
           (isNew
             ? '<div class="field-row">' +
                 '<div class="field"><label for="uEmail">E-mail</label><input id="uEmail" type="email" autocomplete="off"></div>' +
@@ -786,7 +786,7 @@
       if (!(loaded.users && loaded.roles)) renderAll();
       reloadAll();
     });
-    // Usuário criado/alterado pela janela do funcionário (index.html): atualiza a lista.
+    // Usuário criado/alterado pela janela do colaborador (index.html): atualiza a lista.
     document.addEventListener("pipo:users-changed", function () { if (loaded.users && uCan("view")) reloadAll(); });
     // Outro administrador criou/mudou/excluiu um nível: atualiza a lista.
     if (auth.onRoleChange) auth.onRoleChange(function () {

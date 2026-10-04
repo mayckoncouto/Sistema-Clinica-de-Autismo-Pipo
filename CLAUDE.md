@@ -1763,3 +1763,13 @@ para profissional e não profissional). Remuneração continua com `rh_remunerac
   `#sfTypes` com `.ms-opt`, mesmo padrão de Serviços) + "+". Migração
   `supabase/2026-10-05g-funcionarios-dos-usuarios.sql`: usuário ativo sem cadastro
   ganha funcionário `user-<id>` (nome, e-mail, tipo pelo nível) ligado por `staff_id`.
+
+## Colaboradores em Cadastros (2026-10-05, substitui o menu RH)
+Pedido do usuário: sem botão RH no topo. **Cadastros → Colaboradores** (antes "RH →
+Funcionários e Prestadores"; aba `funcionarios`) e **Cadastros → Tipos de colaborador**
+(antes "Tipos de funcionário"; aba `tiposfunc`), logo depois de Tratamentos em
+`CAD_ITEMS`/`CAD_TABS` (`RH_ITEMS`/`RH_TABS`/`#rhBtn` não existem mais). Permissões
+exibidas como **Colaboradores** e **Colaboradores – valores** (ids continuam
+`rh_funcionarios` / `rh_remuneracao`, sem grupo próprio na grade de Níveis). Tópicos de
+ajuda no grupo Cadastros. O nível "Recursos Humanos" continua com esse nome.
+Nas seções acima, onde se lê "RH → Funcionários e Prestadores" vale "Cadastros → Colaboradores".
