@@ -1541,3 +1541,10 @@ antes do "?" da ajuda. Os botões mantêm os ids (listeners e `applyPermissionsU
 continuam iguais). Abre para a esquerda quando não cabe (`.to-left`); fecha ao
 escolher, clicar fora ou Esc. A busca do Planner encolhe até 140px antes de a barra
 quebrar linha. Testes abrem o menu antes de clicar nesses botões.
+
+## Planner lembra o dia e a semana (2026-10-04)
+Decisão do usuário: só dia e semana, neste computador. `savePlannerView()` grava
+`{day, week}` em `localStorage["agendaPipo:plannerView"]` ao trocar dia/semana;
+`restorePlannerView()` no início do `boot()` (dia inválido cai no primeiro dia
+aberto pela regra de `dayEnabled`). Filtro de sala, zoom e busca NÃO são lembrados.
+Teste `tests/run_planner_view.js`.

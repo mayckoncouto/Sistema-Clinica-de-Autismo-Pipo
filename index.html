@@ -2607,7 +2607,23 @@ function wireBrandHome(){
   br.addEventListener("click", go);
   br.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } });
 }
+// Planner: lembra o dia e a semana abertos neste computador (pedido do usuário,
+// 2026-10-04). Guardado no navegador; dia que não existe mais (clínica fechada)
+// cai no primeiro dia aberto pela regra de sempre (dayEnabled).
+var PLANNER_VIEW_KEY = "agendaPipo:plannerView";
+function savePlannerView(){
+  try { localStorage.setItem(PLANNER_VIEW_KEY, JSON.stringify({day: state.day, week: state.week})); } catch(e){}
+}
+function restorePlannerView(){
+  try {
+    var v = JSON.parse(localStorage.getItem(PLANNER_VIEW_KEY) || "null");
+    if (!v) return;
+    if (v.day === "todos" || ALL_WEEKDAYS.some(function(d){ return d.key === v.day; })) state.day = v.day;
+    if (v.week === "todos" || WEEKS.indexOf(+v.week) !== -1) state.week = v.week === "todos" ? "todos" : +v.week;
+  } catch(e){}
+}
 function boot(){
+  restorePlannerView();
   buildDaySeg();
   buildWeekSeg();
   wireTabs();
@@ -3345,6 +3361,7 @@ function wireControls(){
   document.getElementById("daySeg").addEventListener("click", function(e){
     var b = e.target.closest("button[data-day]"); if(!b) return;
     state.day = b.getAttribute("data-day");
+    savePlannerView();
     Array.prototype.forEach.call(document.querySelectorAll("#daySeg button"), function(x){ x.classList.toggle("active", x===b); });
     // subscribeSchedule() (or renderGrid() directly, offline) already re-renders the
     // grid below — no need for renderAgendaShell()'s own grid render first too.
@@ -3356,6 +3373,7 @@ function wireControls(){
     var b = e.target.closest("button[data-week]"); if(!b) return;
     var wv = b.getAttribute("data-week");
     state.week = (wv === "todos") ? "todos" : parseInt(wv,10);
+    savePlannerView();
     Array.prototype.forEach.call(document.querySelectorAll("#weekSeg button"), function(x){ x.classList.toggle("active", x===b); });
     if (db) subscribeSchedule(); else renderGrid();
   });
