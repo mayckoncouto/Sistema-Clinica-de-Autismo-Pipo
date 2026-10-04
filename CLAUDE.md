@@ -1548,3 +1548,11 @@ Decisão do usuário: só dia e semana, neste computador. `savePlannerView()` gr
 `restorePlannerView()` no início do `boot()` (dia inválido cai no primeiro dia
 aberto pela regra de `dayEnabled`). Filtro de sala, zoom e busca NÃO são lembrados.
 Teste `tests/run_planner_view.js`.
+
+## Cartão do tratamento na janela do paciente; menu "Opções" (2026-10-04)
+- `treatCardHtml(t)`: etiqueta de status + vencimento (`trDueChip`), grade
+  (Início, Tipo, Convênio, Plano, Sessões/mês, ABA, Válido até/Sessões usadas) e
+  especialidades/serviços como etiquetas com sessões/mês. Borda esquerda, etiqueta
+  "Ativo" (`.tr-chip.st-ativo`, em todo o sistema) e números na cor do sistema
+  (`--accent`). `treatSummaryHtml` continua para os outros lugares.
+- Menu do Planner renomeado de "Ferramentas" para **Opções** (`#plToolsBtn`).
