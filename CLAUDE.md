@@ -1074,8 +1074,8 @@ Agenda no celular (2026-10-04): no lugar da lista lateral e do filtro, um seleto
 barra em duas linhas, `#agdNewBtn` e `#agdClearWeekBtn` escondidos; botões de período, cadeados e
 desfazer maiores. No computador `.agd-pick`/`.agd-more-wrap`/`.agd-plus-btn` ficam ocultos.
 (2026-10-04, pedido do usuário) Barra no celular: linha 1 = data, ‹ Hoje ›, ?, `#agdMoreBtn`
-("+" desenhado com dois traços de 3px, no estilo do ☰ do topo, sem borda); linha 2 =
-busca na largura toda. O "+" abre `#agdMoreMenu`: primeiro **+ Incluir agendamento**
+(☰ com três traços de 3px, igual ao botão do menu do topo, sem borda); linha 2 =
+busca na largura toda. O ☰ abre `#agdMoreMenu`: primeiro **+ Incluir agendamento**
 (repassa o clique a `#agdNewBtn`, só com permissão de incluir), depois Ir para
 (Amanhã, Próxima segunda, Mesmo dia da semana que vem), Resumo do dia
 (`agdDaySummary`), Bloquear/Liberar o dia e Limpar semana. `#agdPlusBtn` fica oculto.
