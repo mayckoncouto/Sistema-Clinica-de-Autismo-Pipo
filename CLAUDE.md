@@ -1614,8 +1614,8 @@ gravados nos profissionais. No profissional, `#profConselho` virou
 ## Cadastro do paciente em janela única (2026-10-05, substitui as abas)
 Decisões do usuário: uma janela com rolagem (mesma largura no computador, tela
 cheia no celular), grupos nesta ordem — Identificação, Endereço, Filiação,
-Responsáveis pela rotina, Contato, Responsável financeiro, Escola, Saúde,
-Administrativo, Tratamento (`PAT_SECTIONS`, `PAT_FIELDS`, `.pm-sec`).
+Responsáveis pela retirada, Medida protetiva, Contato, Responsável financeiro,
+Escola, Saúde, Administrativo, Tratamento (`PAT_SECTIONS`, `PAT_FIELDS`, `.pm-sec`).
 - Formato no paciente: `mae`/`pai` {nome, cpf}; `rotina` [{nome, src?}] (Mãe/Pai
   entram sozinhos com `src`, tirados ficam em `rotinaOff`); `telefones`
   [{numero, nome, via: "whatsapp"|"ligacao"}]; `emails` [{email, nome}];
@@ -1641,8 +1641,7 @@ Administrativo, Tratamento (`PAT_SECTIONS`, `PAT_FIELDS`, `.pm-sec`).
   Lista no celular (Pacientes e Tratamentos): coluna da situação com 122px (só a etiqueta,
   sem quebrar) e o nome com o resto da largura.
   Menu **Outras opções ▾** (`#patMoreBtn`/`#patMoreMenu`): Campos obrigatórios
-  (`openPatientFieldsModal`; Nome e CPF travados, Filiação e Financeiro sempre
-  aparecem), Imprimir ficha cadastral (`openPatientPrintPick` → `patientPrint`,
+  (`openPatientFieldsModal`; ver o item do Administrador abaixo), Imprimir ficha cadastral (`openPatientPrintPick` → `patientPrint`,
   iframe A4 com logo), **Mesclar cadastros** (`openPatientMergeModal`, só
   Administrador, fora dos Níveis): 1º fica, 2º é excluído; RPC
   `merge_patient_records` (Agenda + Prontuário), Planner renomeado via
