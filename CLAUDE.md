@@ -1073,11 +1073,13 @@ Agenda no celular (2026-10-04): no lugar da lista lateral e do filtro, um seleto
 `agdResources()` do modo Profissionais/Salas; vira lista própria com busca);
 barra em duas linhas, `#agdNewBtn` e `#agdClearWeekBtn` escondidos; botões de período, cadeados e
 desfazer maiores. No computador `.agd-pick`/`.agd-more-wrap`/`.agd-plus-btn` ficam ocultos.
-(2026-10-04, pedido do usuário) Barra no celular: linha 1 = data, ‹ Hoje ›, ?, `#agdPlusBtn`
-("+", mesmo visual do antigo ⋯, clica `#agdNewBtn`); linha 2 = busca na largura toda.
-O menu ⋯ (`#agdMoreBtn`/`#agdMoreMenu`: Ir para, Resumo do dia `agdDaySummary`,
-Bloquear/Liberar o dia, Limpar semana) continua no código, mas fica OCULTO
-(`.agd-more-wrap` sem regra de mostrar no celular). ‹ › andam de dia em dia.
+(2026-10-04, pedido do usuário) Barra no celular: linha 1 = data, ‹ Hoje ›, ?, `#agdMoreBtn`
+("+" desenhado com dois traços de 3px, no estilo do ☰ do topo, sem borda); linha 2 =
+busca na largura toda. O "+" abre `#agdMoreMenu`: primeiro **+ Incluir agendamento**
+(repassa o clique a `#agdNewBtn`, só com permissão de incluir), depois Ir para
+(Amanhã, Próxima segunda, Mesmo dia da semana que vem), Resumo do dia
+(`agdDaySummary`), Bloquear/Liberar o dia e Limpar semana. `#agdPlusBtn` fica oculto.
+‹ › andam de dia em dia.
 
 ## Cópia de segurança (2026-10-03, menu Acesso, só Administrador)
 O projeto Supabase está no plano gratuito (sem backup automático restaurável).
