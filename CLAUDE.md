@@ -412,8 +412,10 @@ importação da migração ficam fora do repositório (`.gitignore` bloqueia `ex
    `supabase/2026-10-xx-descricao.sql`) e rodar no SQL Editor do Supabase;
    manter `schema.sql` como o retrato completo e atual.
 4. **Guia (Ajuda):** toda função nova ou regra mudada precisa atualizar o tópico
-   correspondente em `HELP_TOPICS` (ou criar um) e ganhar uma linha datada em
-   `HELP_NEWS` (bloco "Guia (Ajuda)" do script). Pedido do usuário em 2026-10-04.
+   correspondente em `HELP_TOPICS` (ou criar um), bloco "Guia (Ajuda)" do script.
+   O texto explica só a função da tela como ela é hoje — **nunca** o que mudou
+   ("agora", "antes era"…). **Não** acrescentar linhas em `HELP_NEWS`: a seção
+   Novidades foi tirada a pedido do usuário (2026-10-04) e fica para o futuro.
 5. Commit + push na `main` → a Vercel publica sozinha em ~1 minuto.
 
 ## Nunca usar prefixo `ad` / `ad-` em classes, ids ou atributos
@@ -655,6 +657,13 @@ formato antigo ao abrir; "Copiar segunda para todos" copia os 4 campos.
 `--accent`, `--accent-ink`, `--accent-weak` (color-mix 16% com a superfície) e
 `--ring`; sem cor escolhida remove e volta ao tema padrão (inclusive o escuro).
 Campos ao lado da duração, com prévia e botão "Padrão".
+- (2026-10-04) A aplicação mora em `window.pipoTheme(cor, corTexto)` (script no
+  início do `APP-HEAD`), que também guarda a cor no navegador
+  (`agendaPipo:theme`) e a aplica na carga, antes do login. `api/config.js` lê
+  `config/clinic` com a service role e devolve só `theme: {corBotoes, corTexto}`
+  (null = padrão; ausente = não conseguiu ler); `pipo-supabase.js` aplica antes de
+  montar a tela de login — aparelho novo já abre na cor da clínica.
+  `html{accent-color:var(--accent)}`: caixas de marcar/rádios nativos seguem a cor.
 
 ## Nome, subtítulo e logo da clínica; desfazer na linha de bloquear (2026-10-02)
 - `config/clinic.nome`, `subtitulo` (padrão "Clínica Multidisciplinar") e `logo`
@@ -992,7 +1001,8 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, ~75% ocupa
   principais, escondidas por posição (`:nth-child` em col/th/td): Pacientes =
   Nome + Plano (`p.plano`); Profissionais = Nome + Especialidade principal;
   Serviços e Especialidades = Nome + Profissionais; Convênios = as duas que já
-  tem. Busca ocupa a linha toda. Salas/Grupos já eram cartões e cabem na tela.
+  tem. Busca ocupa a linha toda; o contador ("110 de 110 …") fica numa linha
+  própria embaixo dos filtros e botões (`order:90`), também em Tratamentos. Salas/Grupos já eram cartões e cabem na tela.
   Mudou a ordem das colunas no computador? Ajustar os `:nth-child` também.
 - Usuários no celular (CSS em `injectStyles` de `js/usuarios.js`): tabela
   `.adm-users` só com Nome e Situação (esconde 2ª e 3ª colunas), busca na linha toda.
@@ -1296,7 +1306,7 @@ e filtro.
 
 ## Guia de ajuda (2026-10-04)
 Decisões do usuário: tela própria; busca; botão "?" em cada tela; cada nível vê só
-o que pode usar; "Novidades" com data; tópicos com "para que serve + passo a passo
+o que pode usar; ("Novidades" com data — retirada em 2026-10-04, `HELP_NEWS = []`, o item só volta ao menu se a lista tiver itens); tópicos com "para que serve + passo a passo
 + regras + quem pode usar"; sem impressão. **Toda função nova entra no guia.**
 - Menu Acesso → **Ajuda** (`data-act="ajuda"` em `js/pipo-supabase.js` →
   `window.pipoOpenHelp`) abre `#tab-ajuda` (botão de aba sempre oculto
@@ -1305,7 +1315,7 @@ o que pode usar; "Novidades" com data; tópicos com "para que serve + passo a pa
 - Conteúdo no bloco "Guia (Ajuda)" do script: `HELP_GROUPS`, `HELP_TOPICS`
   (`{id, group, title, mod, tab, purpose, steps[], rules[], who}`; `mod` =
   módulo de permissão "ver", `"admin"` = só Administrador, null = todos;
-  `helpCan`), `HELP_NEWS` (`{date, topic, text}`, mais nova primeiro).
+  `helpCan`), `HELP_NEWS` (vazia; ver regra 4 de "Como publicar").
   `renderHelp()` (menu lateral `#helpNav`, corpo `#helpBody`, busca `#helpSearch`
   com `normText`, todas as palavras), `helpGo(id)`, `openHelp(topicId)`.
 - Botão "?" (`.help-q`) colocado por `helpAddQButtons()` na barra de cada tela
@@ -1340,7 +1350,7 @@ ferramentas do Planner e da Agenda somem sem permissão.
   "Verificando…" → "Excluir" (livre) ou "Inativar" (em uso; precisa editar) e
   botão "Reativar" (`<btn>Reactivate`) para inativo; o clique de exclusão
   original sai cedo com `delBlocked(this)`. Inativos: `isActive`, `activeOnly`;
-  fora das listas (checkbox `.inact-toggle` "Mostrar inativos",
+  fora das listas (checkbox `.inact-toggle` "Inativos", na mesma linha da barra, logo após o contador,
   `SHOW_INACTIVE[key]`, etiqueta `inactTag`), das sugestões de paciente
   (Planner/Agenda), do select de paciente do tratamento novo, de
   `physicalRooms()/supportGroups()` (logo, do Planner e da Agenda; `(true)` traz

@@ -56,7 +56,7 @@ const path = require('path');
   const nm = raw.nome;
   console.log('inactive patient hidden from the list by default?', !(await page.textContent('#patListHost')).includes(nm));
   await page.click('#tab-pacientes .inact-toggle input'); await page.waitForTimeout(150);
-  console.log('"Mostrar inativos" shows it with the Inativo tag?', (await page.textContent('#patListHost')).includes(nm) && !!(await page.$('#patListHost .inact-tag')));
+  console.log('"Inativos" shows it with the Inativo tag?', (await page.textContent('#patListHost')).includes(nm) && !!(await page.$('#patListHost .inact-tag')));
   const sugg = await ev(`activeOnly(state.patients).some(function(p){ return p.id === "${patId}"; })`);
   console.log('inactive patient left out of booking suggestions?', sugg === false);
   await ev(`openPatientModal(state.patients.filter(function(p){ return p.id === "${patId}"; })[0])`);

@@ -1,5 +1,5 @@
 // Guia (Ajuda): tela própria, menu por área, busca sem acento, botão "?" em cada
-// tela abrindo o tópico dela, Novidades, filtro por permissão e celular.
+// tela abrindo o tópico dela, sem Novidades, filtro por permissão e celular.
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -23,10 +23,7 @@ const path = require('path');
   const res = await page.$$eval('#helpBody .help-results li', (a) => a.map((x) => x.textContent));
   console.log('search ignores case/accents and finds the cancellation topics?', res.some((t) => /Motivos de cancelamento/.test(t)) && res.some((t) => /Tratamentos/.test(t)));
   await page.fill('#helpSearch', ''); await page.dispatchEvent('#helpSearch', 'input');
-  await page.click('#helpNav [data-help-go="novidades"]');
-  console.log('Novidades lists dated changes?', /04\/10\/2026/.test(await page.textContent('#helpBody')));
-  await page.click('#helpBody [data-help-go]');
-  console.log('clicking a novelty opens its topic?', !/Novidades/.test(await page.textContent('#helpBody .help-title')));
+  console.log('no "Novidades" in the guide menu?', !(await page.$('#helpNav [data-help-go="novidades"]')));
 
   // "?" na tela de Pacientes e no Planner abre o tópico certo.
   await page.$eval('#mainTabs button[data-tab=pacientes]', (b) => b.click()); await page.waitForTimeout(200);

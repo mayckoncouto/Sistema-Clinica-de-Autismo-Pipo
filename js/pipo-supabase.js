@@ -415,6 +415,8 @@
       if (!r.ok) throw new Error("config " + r.status);
       return r.json();
     }).then(function (cfg) {
+      // Cor dos botões da clínica já na tela de login (null = padrão; ausente = não leu).
+      if (cfg.theme !== undefined && window.pipoTheme) window.pipoTheme(cfg.theme && cfg.theme.corBotoes, cfg.theme && cfg.theme.corTexto);
       if (!window.supabase || !window.supabase.createClient) throw new Error("biblioteca do Supabase não carregou");
       client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
         auth: { persistSession: true, autoRefreshToken: true }
