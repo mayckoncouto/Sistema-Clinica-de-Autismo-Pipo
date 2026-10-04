@@ -12,7 +12,7 @@ const path = require('path');
   await page.waitForSelector('#gridHost .book');
   const setSel = (id, v) => page.$eval(id, (s, v) => { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }, v);
 
-  await page.click('#freeSlotBtn');
+  await page.click('#plToolsBtn'); await page.click('#freeSlotBtn'); // dentro do menu Ferramentas
   await page.waitForSelector('#frPat', { state: 'attached' });
   await page.waitForFunction(() => !/Carregando/.test(document.getElementById('frResult').innerText));
   await setSel('#frPat', 'carla-laranja');

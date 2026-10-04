@@ -11,8 +11,17 @@ const path = require('path');
   await page.goto('file://' + path.join(__dirname, 'page.html'));
   await page.waitForSelector('#gridHost .book');
 
+  // ---- Barra: "Enviar para a Agenda" visível; o resto no menu Ferramentas ----
+  console.log('Ferramentas menu starts closed?', await page.locator('#plToolsMenu').isHidden());
+  console.log('Enviar para a Agenda stays on the bar (outside the menu)?', (await page.locator('.controls > #sendToAgendaBtn').count()) === 1);
+  await page.click('#plToolsBtn');
+  const items = await page.locator('#plToolsMenu button:visible').allInnerTexts();
+  console.log('menu lists Horário livre, Editar agendamento, Trocar profissional, Exportar Excel, Limpar semana?', ['Horário livre', 'Editar agendamento', 'Trocar profissional', 'Exportar Excel', 'Limpar semana'].every((t) => items.some((i) => i.trim() === t)));
+  await page.keyboard.press('Escape');
+  console.log('Esc closes the menu?', await page.locator('#plToolsMenu').isHidden());
+
   // ---- Exportar Excel ----
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#plExportBtn')]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#plToolsBtn').then(() => page.click('#plExportBtn'))]);
   const csv = await new Promise((res) => { dl.createReadStream().then((s) => { let t = ''; s.on('data', (c) => (t += c)); s.on('end', () => res(t)); }); });
   const lines = csv.replace(/^﻿/, '').split(/\r\n/);
   console.log('export file name is planner.csv?', dl.suggestedFilename() === 'planner.csv');
@@ -21,7 +30,7 @@ const path = require('path');
   console.log('export marks special slots by type (Bloqueado)?', lines.some((l) => /;Bloqueado;/.test(l)));
 
   // ---- Editar agendamento: resumo e pacote × Planner ----
-  await page.click('#fixPatientBtn');
+  await page.click('#plToolsBtn'); await page.click('#fixPatientBtn'); // dentro do menu Ferramentas
   await page.waitForSelector('#fxPat', { state: 'attached' });
   await page.waitForFunction(() => !/Carregando/.test(document.getElementById('fxReport').innerText));
   await page.$eval('#fxPat', (s) => { s.value = 'bruno-verde'; s.dispatchEvent(new Event('change', { bubbles: true })); });
@@ -46,7 +55,7 @@ const path = require('path');
   await page.click('#fxCancel');
 
   // ---- Trocar profissional ----
-  await page.click('#swapProfBtn');
+  await page.click('#plToolsBtn'); await page.click('#swapProfBtn'); // dentro do menu Ferramentas
   await page.waitForSelector('#swFrom', { state: 'attached' });
   await page.$eval('#swFrom', (s) => { s.value = 'bia-terapeuta'; s.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.$eval('#swTo', (s) => { s.value = 'andrelisa-terapeuta'; s.dispatchEvent(new Event('change', { bubbles: true })); });

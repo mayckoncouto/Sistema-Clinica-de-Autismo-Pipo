@@ -1532,3 +1532,12 @@ especialidades saíram da lista (ficam em Tratamentos). `SORT_COLS` /
 `PAT_COL_KEYS` = nome, nascimento, idade, tratamento (todas ordenáveis,
 `patSortKey`); larguras padrão 340/150/110/200. Celular: Nome + Tratamento
 (`:nth-child(1)` e `(4)`). A bolinha de cor continua (tratamento ativo).
+
+## Planner: menu "Ferramentas ▾" (2026-10-04)
+Na barra fica só **Enviar para a Agenda**; Horário livre, Editar agendamento,
+Trocar profissional, Exportar Excel e Limpar semana ficam no menu `#plToolsBtn` /
+`#plToolsMenu` (`.pl-tools-wrap`, mesmo visual dos menus do topo), no fim da barra,
+antes do "?" da ajuda. Os botões mantêm os ids (listeners e `applyPermissionsUI`
+continuam iguais). Abre para a esquerda quando não cabe (`.to-left`); fecha ao
+escolher, clicar fora ou Esc. A busca do Planner encolhe até 140px antes de a barra
+quebrar linha. Testes abrem o menu antes de clicar nesses botões.

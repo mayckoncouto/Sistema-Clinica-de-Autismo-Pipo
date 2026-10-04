@@ -472,6 +472,12 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .cl-cards{display:flex;flex-direction:column;gap:12px;margin:2px 0 4px}
 .fx-report{margin:4px 0 12px}
 .fx-top-row{margin:-4px 0 10px}
+.pl-tools-menu{min-width:210px}
+.pl-tools-menu.to-left{left:auto;right:0}
+/* Planner: a busca encolhe um pouco antes de a barra quebrar linha */
+#tab-agenda .controls .search-wrap{flex:0 1 220px;min-width:140px}
+.pl-tools-menu .btn{display:block;width:100%;text-align:left;border:0;border-radius:0;box-shadow:none;background:transparent;font-weight:600}
+.pl-tools-menu .btn[hidden]{display:none}
 .fr-week{border:1px solid var(--line);border-radius:10px;margin:6px 0;padding:0 10px}
 .fr-week summary{cursor:pointer;padding:8px 2px;font-weight:700;font-size:13px}
 .fr-day{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line);font-size:12.5px}
@@ -1240,12 +1246,16 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <div class="spacer"></div>
       <span class="pat-count" id="matchCount"></span>
-      <button class="btn ghost" id="freeSlotBtn" title="Ver os horários livres para agendar um paciente">Horário livre</button>
-      <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar profissional</button>
-      <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar agendamento</button>
-      <button class="btn ghost" id="plExportBtn" title="Baixa o Planner (4 semanas) em planilha para abrir no Excel">Exportar Excel</button>
       <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do dia e semana abertos para uma data da Agenda" hidden>Enviar para a Agenda</button>
-      <button class="btn ghost" id="plClearWeekBtn" title="Apaga todos os agendamentos da semana escolhida (segunda a sexta)" hidden>Limpar semana</button>
+      <!-- Ferramentas do Planner: menu suspenso (os botões mantêm os ids; o "?" da ajuda entra depois) -->
+      <div class="cad-wrap pl-tools-wrap"><button type="button" class="btn ghost" id="plToolsBtn" aria-haspopup="menu" aria-expanded="false">Ferramentas <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>
+      <div class="cad-menu pl-tools-menu" id="plToolsMenu" role="menu" hidden>
+        <button class="btn ghost" id="freeSlotBtn" title="Ver os horários livres para agendar um paciente">Horário livre</button>
+        <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar agendamento</button>
+        <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar profissional</button>
+        <button class="btn ghost" id="plExportBtn" title="Baixa o Planner (4 semanas) em planilha para abrir no Excel">Exportar Excel</button>
+        <button class="btn ghost" id="plClearWeekBtn" title="Apaga todos os agendamentos da semana escolhida (segunda a sexta)" hidden>Limpar semana</button>
+      </div></div>
     </div>
     <div class="readonly-banner" id="readonlyBanner">Modo somente leitura — você está vendo esta agenda mas as alterações não serão salvas. Verifique se está conectado com uma conta que tem permissão de edição.</div>
     <div class="clipboard-bar" id="clipboardBar"></div>
@@ -3363,6 +3373,16 @@ function wireControls(){
   document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
   document.getElementById("plClearWeekBtn").addEventListener("click", function(){ plannerClearWeek(); });
   document.getElementById("fixPatientBtn").addEventListener("click", function(){ openFixPatientModal(); });
+  // Menu "Ferramentas ▾" do Planner: abre/fecha; escolher um item fecha o menu.
+  (function(){
+    var tb = document.getElementById("plToolsBtn"), tm = document.getElementById("plToolsMenu");
+    if (!tb || !tm) return;
+    function setOpen(o){ tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ var rc = tb.getBoundingClientRect(); tm.classList.toggle("to-left", rc.left + 220 > window.innerWidth); } if (o){ var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); } }
+    tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
+    tm.addEventListener("click", function(e){ if (e.target.closest("button")) setOpen(false); });
+    document.addEventListener("mousedown", function(e){ if (!e.target.closest(".pl-tools-wrap")) setOpen(false); });
+    document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !tm.hidden){ setOpen(false); tb.focus(); } });
+  })();
   document.getElementById("swapProfBtn").addEventListener("click", function(){ openSwapProfModal(); });
   document.getElementById("freeSlotBtn").addEventListener("click", function(){ openFreeSlotModal(); });
   document.getElementById("plExportBtn").addEventListener("click", function(){ plannerExportCsv(); });
