@@ -7,7 +7,7 @@
 // usuário logado — ver supabase/2026-10-03-copia-de-seguranca.sql).
 //
 // POST /api/admin-backup   Authorization: Bearer <access_token do usuário>
-//   { action: "restore", table: "documents" | "appointments" | "clinical_records" | "treatment_finance", rows: [...] }
+//   { action: "restore", table: "documents" | "appointments" | "clinical_records" | "treatment_finance" | "convenio_finance", rows: [...] }
 //
 // Só acrescenta ou sobrescreve (upsert): nada que foi criado depois da cópia
 // é apagado. O app manda as linhas em lotes pequenos (limite de 4,5 MB da Vercel).
@@ -75,6 +75,11 @@ var TABLES = {
   treatment_finance: {
     key: "treatment_id",
     cols: ["treatment_id", "valor", "despesas", "updated_at", "updated_by"],
+    users: ["updated_by"]
+  },
+  convenio_finance: {
+    key: "id",
+    cols: ["id", "convenio_id", "spec_id", "valor", "updated_at", "updated_by"],
     users: ["updated_by"]
   },
   clinical_records: {

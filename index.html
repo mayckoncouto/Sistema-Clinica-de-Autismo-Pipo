@@ -786,6 +786,13 @@ body.pat-col-resizing *{user-select:none}
 .dp-btn .dp-in{border:0;background:transparent;padding:0;margin:0;font:inherit;color:inherit;outline:none;cursor:text;width:100%;box-shadow:none}
 .dp-btn .dp-in::placeholder{color:var(--muted)}
 .spec-sum-label{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.hours-row[data-cover]{flex-wrap:wrap}
+.hours-row[data-cover]::after{content:attr(data-cover);flex:1 1 100%;margin:-2px 0 2px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.hours-row.cover-none::after{color:#b6403a}
+.hours-row.cover-none .spec-name{border-color:#e3a19c}
+.cv-row .cv-spec-wrap{flex:1;min-width:0}
+.cv-row .cv-spec-wrap .dp-btn,.cv-row .cv-spec{width:100%}
+.cv-row .cv-val{width:130px;flex:none}
 .spec-sum{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:0;text-transform:none}
 .spec-sum[hidden]{display:none}
 .spec-sum-ok{background:#e3f4ea;color:#1f7a45}
@@ -1111,6 +1118,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)){display:none}
   #profList .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)){display:none}
   :is(#reg-servicos-host,#reg-especialidades-host) .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)){display:none}
+  #reg-convenios-host .pat-table :is(col,th,td):nth-child(n+3){display:none}
   #trHost .pat-table.tr-main :is(col,th,td):not(:nth-child(1)):not(:nth-child(5)){display:none}
   /* Janelas no celular. O iPhone dá zoom sozinho ao tocar num campo com letra
      menor que 16px (e não volta ao sair): todo campo de digitar fica com 16px. */
@@ -5228,6 +5236,63 @@ function therapistMismatchMsg(patientName, profId, serviceId, iso){
     "</b>, mas o agendamento está com <b>" + esc(prof.name) + "</b>";
 }
 var TREAT_FIELDS = ["convenioId", "convenio", "plano", "pacoteHoras", "aba", "specHours", "horarios"];
+// ---- Convênios: especialidades cobertas, valor por sessão e especialidades que liberam outras ----
+// Cadastro de Especialidades: libera = [ids] — "dentro de Psicologia posso atender
+// Musicoterapia, Psicopedagogia…" (igual para todos os convênios).
+// Convênio: especialidades = [ids] cobertas; o valor por sessão de cada uma fica na
+// tabela protegida convenio_finance (mesma permissão "Tratamentos – valores"); sem o
+// sistema online (testes) fica em c.valores {specId: valor}. Especialidade liberada é
+// cobrada pelo valor da especialidade que a liberou.
+function specLibera(id){
+  var sp = state.specialties.filter(function(x){ return x.id === id; })[0];
+  return sp && Array.isArray(sp.libera) ? sp.libera.filter(function(x){ return x !== id; }) : [];
+}
+function convSpecList(c){ return c && Array.isArray(c.especialidades) ? c.especialidades : []; }
+// null = não confere (convênio sem especialidades cadastradas, ou serviço);
+// {direct} coberta; {via: idDaQueLibera} liberada por outra; {none} não coberta.
+function convCoverage(convId, specId){
+  var c = state.convenios.filter(function(x){ return x.id === convId; })[0], list = convSpecList(c);
+  if (!c || !list.length || !specId || isSvcItem(specId)) return null;
+  if (list.indexOf(specId) !== -1) return {direct: true};
+  for (var i = 0; i < list.length; i++) if (specLibera(list[i]).indexOf(specId) !== -1) return {via: list[i]};
+  return {none: true};
+}
+var CONV = {fin: null};
+// Valor por sessão da especialidade no convênio (liberada = valor da que liberou).
+function convValor(convId, specId){
+  var cov = convCoverage(convId, specId); if (!cov || cov.none) return null;
+  var base = cov.via || specId, c = state.convenios.filter(function(x){ return x.id === convId; })[0];
+  var m = CONV.fin ? CONV.fin[convId] : (c && c.valores);
+  return m && m[base] != null && m[base] !== "" ? parseMoney(m[base]) : null;
+}
+function convLoadFinance(){
+  var c = agdClient();
+  if (!c || !trCanSeeVal()) return Promise.resolve();
+  return c.from("convenio_finance").select("convenio_id,spec_id,valor").then(function(r){
+    if (r.error) return;   // tabela ainda não criada (falta o ajuste do banco) ou sem permissão
+    var m = {};
+    (r.data || []).forEach(function(x){ (m[x.convenio_id] = m[x.convenio_id] || {})[x.spec_id] = x.valor; });
+    CONV.fin = m;
+  });
+}
+// Grava os valores de um convênio ({specId: valor}); tira os das especialidades removidas.
+function convSaveFinance(convId, vals){
+  var c = agdClient();
+  if (!c || !trCanEditVal()) return Promise.resolve(true);
+  var keys = Object.keys(vals);
+  var rows = keys.map(function(k){ return {id: convId + "|" + k, convenio_id: convId, spec_id: k, valor: vals[k]}; });
+  var fail = function(r){ showToast("O convênio foi salvo, mas os valores não: " + ((r.error && r.error.message) || "erro"), true); return false; };
+  return (rows.length ? c.from("convenio_finance").upsert(rows, {onConflict: "id"}) : Promise.resolve({})).then(function(r){
+    if (r && r.error) return fail(r);
+    var q = c.from("convenio_finance").delete().eq("convenio_id", convId);
+    if (keys.length) q = q.not("spec_id", "in", "(" + keys.map(function(k){ return '"' + k.replace(/"/g, "") + '"'; }).join(",") + ")");
+    return q.then(function(d){
+      if (d && d.error) return fail(d);
+      CONV.fin = CONV.fin || {}; CONV.fin[convId] = Object.assign({}, vals);
+      return true;
+    });
+  });
+}
 // Sessão/Mês (total) × soma das sessões das especialidades/serviços da janela.
 function specSumNum(x){ var n = parseFloat(String(x == null ? "" : x).replace(",", ".")); return isFinite(n) ? n : null; }
 function specSumRead(){
@@ -5305,8 +5370,27 @@ function treatFieldsEditor(v){
     // Conta ao lado do título: Sessão/Mês × soma das especialidades/serviços.
     var pacEl = document.getElementById("pPac"), rowsEl = document.getElementById("specRowsHost");
     if (pacEl) pacEl.addEventListener("input", specSumRender);
-    if (rowsEl){ rowsEl.addEventListener("input", specSumRender); new MutationObserver(specSumRender).observe(rowsEl, {childList: true, subtree: true}); }
-    setTimeout(specSumRender, 0);
+    // Cobertura do convênio em cada linha (só aviso): coberta, liberada por outra ou não coberta.
+    function coverRender(){
+      if (!rowsEl) return;
+      // Não usar resolveRef(): ela CRIA o convênio digitado. Aqui só procura.
+      var convId = draftConvenioId;
+      if (!convId){ var ci = document.getElementById("pConv"), cm = ci && state.convenios.filter(function(x){ return normText(x.name) === normText(ci.value.trim()); })[0]; convId = cm && cm.id; }
+      rowsEl.querySelectorAll(".hours-row[data-i]").forEach(function(rowEl){
+        var d = draftSpecRows[+rowEl.getAttribute("data-i")] || {}, sid = d.specId;
+        if (!sid && d.name){ var m = state.specialties.filter(function(x){ return normText(x.name) === normText(d.name); })[0]; sid = m && m.id; }
+        var cov = convCoverage(convId, sid), txt = "", cls = "";
+        if (cov && cov.none){ txt = "Não coberta pelo convênio"; cls = "cover-none"; }
+        else if (cov && cov.via){ txt = "Coberta pelo convênio via " + specialtyName(cov.via); cls = "cover-via"; }
+        if (rowEl.getAttribute("data-cover") !== txt){ if (txt) rowEl.setAttribute("data-cover", txt); else rowEl.removeAttribute("data-cover"); }
+        rowEl.classList.toggle("cover-none", cls === "cover-none"); rowEl.classList.toggle("cover-via", cls === "cover-via");
+      });
+    }
+    var specAll = function(){ specSumRender(); coverRender(); };
+    if (rowsEl){ rowsEl.addEventListener("input", specAll); new MutationObserver(specAll).observe(rowsEl, {childList: true, subtree: true}); }
+    var ovEl = document.getElementById(ovId);
+    if (ovEl){ ["input", "change", "click"].forEach(function(ev){ ovEl.addEventListener(ev, function(){ setTimeout(coverRender, 0); }); }); }
+    setTimeout(specAll, 0);
     // Per-patient specialty rows (add/remove independently of the global catalog).
     var specRowsHost = document.getElementById("specRowsHost");
     function syncSpecRowsFromDom(){
@@ -11006,9 +11090,20 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Profissionais</b>."},
   {id: "convenios", group: "Cadastros", title: "Convênios", mod: "convenios", tab: "convenios",
-    purpose: "Lista de convênios usada nos tratamentos e nos relatórios.",
-    steps: ["Cadastros → <b>Convênios</b> → <b>+ Incluir</b>. Clique na linha para editar ou excluir."],
-    rules: ["Também é possível criar um convênio direto na janela do tratamento, digitando o nome.", "A coluna Pacientes mostra quantos usam o convênio."],
+    purpose: "Convênios usados nos tratamentos e nos relatórios, com as especialidades que cada um cobre e o valor por sessão de cada especialidade.",
+    steps: [
+      "Cadastros → <b>Convênios</b> → <b>+ Incluir</b>. Clique na linha para editar ou excluir.",
+      "Em <b>Especialidades cobertas</b>, clique em <b>+ especialidade</b>, escolha a especialidade e informe o <b>valor por sessão</b>.",
+      "Abaixo de cada especialidade aparece o que ela libera (ex.: Psicologia libera Musicoterapia, Psicopedagogia e Psicomotricidade), conforme o cadastro de Especialidades."
+    ],
+    rules: [
+      "Especialidade liberada é cobrada pelo valor da especialidade que a liberou.",
+      "No tratamento, a linha de especialidade mostra \"Coberta pelo convênio via …\" ou, em vermelho, \"Não coberta pelo convênio\". É só um aviso: o tratamento pode ser salvo.",
+      "Convênio sem especialidades cadastradas não confere nada nos tratamentos.",
+      "Os valores só aparecem para quem tem <b>Tratamentos – valores: ver</b> e só são alterados com <b>editar</b>.",
+      "Também é possível criar um convênio direto na janela do tratamento, digitando o nome.",
+      "A coluna Pacientes mostra quantos usam o convênio."
+    ],
     who: "Permissão <b>Convênios</b>."},
   {id: "servicos", group: "Cadastros", title: "Serviços", mod: "servicos", tab: "servicos",
     purpose: "Tipos de atendimento: Sessão, Triagem, Avaliação, Orientação Familiar etc.",
@@ -11021,8 +11116,15 @@ var HELP_TOPICS = [
     who: "Permissão <b>Serviços</b>."},
   {id: "especialidades", group: "Cadastros", title: "Especialidades", mod: "especialidades", tab: "especialidades",
     purpose: "Especialidades dos profissionais (Psicologia, Fonoaudiologia…), com sigla e cor.",
-    steps: ["Cadastros → <b>Especialidades</b> → <b>+ Incluir</b>; escolha a cor no seletor."],
-    rules: ["A cor da especialidade aparece nos agendamentos e nos cabeçalhos.", "O pacote do tratamento é contado por especialidade."],
+    steps: [
+      "Cadastros → <b>Especialidades</b> → <b>+ Incluir</b>; escolha a cor no seletor.",
+      "Em <b>Libera atender também</b>, marque as especialidades que o profissional desta área também pode atender (ex.: Fonoaudiologia libera Musicoterapia e Psicomotricidade)."
+    ],
+    rules: [
+      "A cor da especialidade aparece nos agendamentos e nos cabeçalhos.",
+      "As sessões do tratamento são contadas por especialidade.",
+      "A liberação vale para todos os convênios: o convênio que cobre esta especialidade passa a cobrir também as liberadas, com o mesmo valor por sessão."
+    ],
     who: "Permissão <b>Especialidades</b>."},
   {id: "motivos", group: "Cadastros", title: "Motivos de cancelamento", mod: "motivos_cancelamento", tab: "motivos",
     purpose: "Lista de motivos escolhida ao cancelar um tratamento.",
@@ -11326,6 +11428,7 @@ var BACKUP_TABLES = [
   {name: "appointments", order: "id", label: "Atendimentos da Agenda", restore: true},
   {name: "clinical_records", order: "id", label: "Evoluções do Prontuário", restore: true},
   {name: "treatment_finance", order: "treatment_id", label: "Valores dos tratamentos", restore: true, optional: true},
+  {name: "convenio_finance", order: "id", label: "Valores dos convênios", restore: true, optional: true},
   {name: "roles", order: "id", label: "Níveis de permissão (só consulta)", restore: false}
 ];
 var BACKUP_LAST_KEY = "agendaPipo:lastBackup";
@@ -11498,13 +11601,14 @@ var REG_CFG = {
     title: "convênio", plural: "convênios", module: "convenios", newLabel: "+ Incluir",
     list: function(){ return state.convenios.slice(); },
     write: function(l){ return writeConvenios(l); },
-    cols: ["Nome", "Pacientes"],
+    cols: ["Nome", "Pacientes", "Especialidades cobertas"],
     row: function(c){
       var n = state.patients.filter(function(p){ return p.convenioId === c.id || (!p.convenioId && normText(p.convenio || "") === normText(c.name)); }).length;
-      return ['<b>' + esc(c.name) + '</b>', n];
+      var sp = convSpecList(c).map(specialtyName).join(", ");
+      return ['<b>' + esc(c.name) + '</b>', n, sp ? esc(sp) : '<span class="pt-muted">—</span>'];
     },
     vals: function(c){
-      return [c.name, state.patients.filter(function(p){ return p.convenioId === c.id || (!p.convenioId && normText(p.convenio || "") === normText(c.name)); }).length];
+      return [c.name, state.patients.filter(function(p){ return p.convenioId === c.id || (!p.convenioId && normText(p.convenio || "") === normText(c.name)); }).length, convSpecList(c).length];
     }
   },
   servicos: {
@@ -11548,13 +11652,14 @@ var REG_CFG = {
     title: "especialidade", plural: "especialidades", module: "especialidades", newLabel: "+ Incluir",
     list: function(){ return state.specialties.slice(); },
     write: function(l){ return writeSpecialties(l); },
-    cols: ["Nome", "Sigla", "Profissionais"],
+    cols: ["Nome", "Sigla", "Profissionais", "Libera atender também"],
     row: function(s){
       var n = state.professionals.filter(function(p){ return p.specialtyId === s.id; }).length;
-      return ['<span class="pcolor-dot" style="background:' + swatchVar(s.color || "teal") + '"></span><b>' + esc(s.name) + '</b>', esc(s.sigla || defaultSigla(s.name)), n];
+      var lib = specLibera(s.id).map(specialtyName).join(", ");
+      return ['<span class="pcolor-dot" style="background:' + swatchVar(s.color || "teal") + '"></span><b>' + esc(s.name) + '</b>', esc(s.sigla || defaultSigla(s.name)), n, lib ? esc(lib) : '<span class="pt-muted">—</span>'];
     },
     vals: function(s){
-      return [s.name, s.sigla || defaultSigla(s.name), state.professionals.filter(function(p){ return p.specialtyId === s.id; }).length];
+      return [s.name, s.sigla || defaultSigla(s.name), state.professionals.filter(function(p){ return p.specialtyId === s.id; }).length, specLibera(s.id).map(specialtyName).join(", ")];
     }
   }
 };
@@ -11586,7 +11691,7 @@ function openRegistryItem(kind, item){
   var color = item && item.color ? item.color : "teal";
   var host = document.getElementById("modalHost");
   host.innerHTML =
-    '<div class="overlay" id="ovReg"><div class="modal" style="max-width:440px">' +
+    '<div class="overlay" id="ovReg"><div class="modal" style="max-width:' + (kind === "convenios" ? 620 : kind === "especialidades" ? 520 : 440) + 'px">' +
       '<div class="modal-head"><div><h3>' + (isNew ? "Novo " + cfg.title : (canSave ? "Editar " : "") + cfg.title.charAt(0).toUpperCase() + cfg.title.slice(1)) + '</h3>' +
         (locked ? '<div class="modal-sub">' + esc(cfg.lockedMsg || "Serviço padrão dos atendimentos: não pode ser renomeado nem excluído.") + '</div>' : '') + '</div>' +
         '<button class="modal-close" id="regClose" aria-label="Fechar">✕</button></div>' +
@@ -11596,7 +11701,19 @@ function openRegistryItem(kind, item){
           '<div class="field"><label for="regSigla">Sigla</label><input id="regSigla" type="text" maxlength="4" value="' + esc(item ? item.sigla || "" : "") + '" placeholder="' + esc(item ? defaultSigla(item.name) : "") + '"' + (canSave ? '' : ' disabled') + '></div>' : '') +
         (kind === "especialidades" ?
           '<div class="field-row"><div class="field"><label for="regSigla">Sigla</label><input id="regSigla" type="text" maxlength="4" value="' + esc(item ? item.sigla || "" : "") + '" placeholder="' + esc(item ? defaultSigla(item.name) : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
-          '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="regColor"' + (canSave ? '' : ' disabled') + ' aria-label="Escolher cor"></button><span class="color-pick-code mono" id="regColorCode"></span></div></div></div>' : '') +
+          '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="regColor"' + (canSave ? '' : ' disabled') + ' aria-label="Escolher cor"></button><span class="color-pick-code mono" id="regColorCode"></span></div></div></div>' +
+          '<div class="field"><label id="regLibLabel">Libera atender também</label>' +
+            '<div class="ms" id="regLib"><button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="regLibLabel"' + (canSave ? '' : ' disabled') + '><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
+            '<div class="ms-panel" hidden role="listbox" aria-multiselectable="true">' +
+              state.specialties.filter(function(x){ return (!item || x.id !== item.id) && (isActive(x) || (item && specLibera(item.id).indexOf(x.id) !== -1)); }).map(function(x){
+                return '<label class="ms-opt"><input type="checkbox" value="' + esc(x.id) + '"' + (item && specLibera(item.id).indexOf(x.id) !== -1 ? ' checked' : '') + '><span>' + esc(x.name) + '</span></label>';
+              }).join("") + '</div></div>' +
+            '<div class="pat-count" style="margin-top:4px;font-weight:500">Especialidades que o profissional desta área também pode atender. Num convênio que cobre esta especialidade, as marcadas aqui ficam liberadas (com o mesmo valor por sessão).</div></div>' : '') +
+        (kind === "convenios" ?
+          '<div class="field"><label>Especialidades cobertas' + (trCanSeeVal() ? ' e valor por sessão' : '') + '</label>' +
+            '<div class="hours-list" id="cvRows"></div>' +
+            (canSave ? '<button type="button" class="btn ghost add-row-btn" id="cvAdd">+ especialidade</button>' : '') +
+            '<div class="pat-count" style="margin-top:4px;font-weight:500">Cada especialidade coberta libera também as especialidades marcadas no cadastro dela (Cadastros → Especialidades), com o mesmo valor por sessão.</div></div>' : '') +
       '</div>' +
       '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="regDel">Excluir</button>' : '<span></span>') +
         '<div class="spacer"></div><button class="btn ghost" id="regCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
@@ -11613,6 +11730,65 @@ function openRegistryItem(kind, item){
     sync();
     cb.addEventListener("click", function(){ openColorPicker(cb, color, function(hex){ color = hex; sync(); }); });
   }
+  // Especialidades: "Libera atender também" (várias).
+  var lib = document.getElementById("regLib");
+  if (lib){
+    var libBtn = lib.querySelector(".ms-btn"), libPanel = lib.querySelector(".ms-panel");
+    var libSel = function(){ return Array.prototype.map.call(libPanel.querySelectorAll("input:checked"), function(c){ return c.value; }); };
+    var libRefresh = function(){
+      var names = libSel().map(specialtyName), sm = lib.querySelector(".ms-sum");
+      sm.textContent = names.length ? names.join(", ") : "Nenhuma"; sm.classList.toggle("ms-placeholder", !names.length); libBtn.title = names.join(", ");
+    };
+    var libOpen = function(o){ libPanel.hidden = !o; libBtn.setAttribute("aria-expanded", o ? "true" : "false"); };
+    libBtn.addEventListener("click", function(){ libOpen(libPanel.hidden); });
+    libPanel.addEventListener("change", libRefresh);
+    libPanel.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); libOpen(false); libBtn.focus(); } });
+    ov.addEventListener("mousedown", function(e){ if (!lib.contains(e.target)) libOpen(false); });
+    libRefresh();
+  }
+  // Convênios: especialidades cobertas + valor por sessão.
+  var cvHost = document.getElementById("cvRows"), cvDraft = [];
+  var cvSee = trCanSeeVal(), cvEdit = canSave && trCanEditVal();
+  function cvRender(){
+    if (!cvHost) return;
+    var used = cvDraft.map(function(r){ return r.specId; });
+    cvHost.innerHTML = cvDraft.length ? cvDraft.map(function(r, i){
+      var opts = '<option value="">Escolha…</option>' + state.specialties.filter(function(x){
+        return (isActive(x) || x.id === r.specId) && (x.id === r.specId || used.indexOf(x.id) === -1);
+      }).map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === r.specId ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join("");
+      var lb = r.specId ? specLibera(r.specId).map(specialtyName).join(", ") : "";
+      return '<div class="hours-row cv-row" data-i="' + i + '"' + (lb ? ' data-cover="' + esc("Libera também: " + lb) + '"' : '') + '>' +
+        '<div class="cv-spec-wrap"><select class="cv-spec" aria-label="Especialidade"' + (canSave ? '' : ' disabled') + '>' + opts + '</select></div>' +
+        (cvSee ? '<input type="text" class="cv-val" inputmode="decimal" placeholder="R$ 0,00" aria-label="Valor por sessão" value="' + esc(r.valor) + '"' + (cvEdit ? '' : ' disabled') + '>' : '') +
+        (canSave ? '<button type="button" class="rm" data-cvrm="' + i + '" aria-label="Remover especialidade">✕</button>' : '') +
+      '</div>';
+    }).join("") : '<div class="hours-empty">Nenhuma especialidade cadastrada neste convênio (sem conferência nos tratamentos).</div>';
+  }
+  if (cvHost){
+    var cvVals = (CONV.fin ? CONV.fin[item && item.id] : (item && item.valores)) || {};
+    cvDraft = convSpecList(item).map(function(id){ return {specId: id, valor: cvVals[id] != null && cvVals[id] !== "" ? fmtMoney(cvVals[id]).replace("R$ ", "") : ""}; });
+    cvRender();
+    if (item) convLoadFinance().then(function(){
+      if (!CONV.fin || !document.getElementById("cvRows")) return;
+      var m = CONV.fin[item.id] || {};
+      cvDraft.forEach(function(r){ if (m[r.specId] != null) r.valor = fmtMoney(m[r.specId]).replace("R$ ", ""); });
+      cvRender();
+    });
+    cvHost.addEventListener("change", function(e){
+      var sel = e.target.closest(".cv-spec"); if (!sel) return;
+      var i = +sel.closest(".cv-row").getAttribute("data-i"); cvDraft[i].specId = sel.value; cvRender();
+    });
+    cvHost.addEventListener("input", function(e){
+      var v = e.target.closest(".cv-val"); if (!v) return;
+      cvDraft[+v.closest(".cv-row").getAttribute("data-i")].valor = v.value;
+    });
+    cvHost.addEventListener("click", function(e){
+      var b = e.target.closest("[data-cvrm]"); if (!b) return;
+      cvDraft.splice(+b.getAttribute("data-cvrm"), 1); cvRender();
+    });
+    var cvAdd = document.getElementById("cvAdd");
+    if (cvAdd) cvAdd.addEventListener("click", function(){ cvDraft.push({specId: "", valor: ""}); cvRender(); });
+  }
   var nameEl = document.getElementById("regName");
   if (canSave) nameEl.focus();
   var del = document.getElementById("regDel");
@@ -11623,7 +11799,10 @@ function openRegistryItem(kind, item){
     confirmDialog({title: "Confirmar exclusão", message: "Excluir <b>" + esc(item.name) + "</b> do cadastro de " + cfg.plural + "?<br>Essa ação não pode ser desfeita.", confirmLabel: "Confirmar exclusão"})
       .then(function(ok){
         if (!ok) return;
-        Promise.resolve(cfg.write(cfg.list().filter(function(x){ return x.id !== item.id; }))).then(function(){ close(); renderRegistryTab(kind); });
+        Promise.resolve(cfg.write(cfg.list().filter(function(x){ return x.id !== item.id; }))).then(function(){
+          if (kind === "convenios" && agdClient() && trCanEditVal()) agdClient().from("convenio_finance").delete().eq("convenio_id", item.id).then(function(){});
+          close(); renderRegistryTab(kind);
+        });
       });
   });
   var save = document.getElementById("regSave");
@@ -11635,9 +11814,23 @@ function openRegistryItem(kind, item){
     var rec = Object.assign({}, item || {}, {id: item ? item.id : uid(slugify(name) || kind), name: name});
     if (kind === "especialidades"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); rec.color = color; }
     if (kind === "servicos"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); }
+    if (kind === "especialidades" && lib) rec.libera = libSel();
+    var cvValsOut = null;
+    if (kind === "convenios" && cvHost){
+      var ids = cvDraft.map(function(r){ return r.specId; }).filter(Boolean);
+      if (ids.length !== cvDraft.length){ showToast("Escolha a especialidade em todas as linhas (ou tire a linha vazia).", true); return; }
+      rec.especialidades = ids;
+      if (cvSee && cvEdit){
+        cvValsOut = {};
+        cvDraft.forEach(function(r){ if (String(r.valor).trim() !== "") cvValsOut[r.specId] = parseMoney(r.valor); });
+        if (agdClient()) delete rec.valores; else rec.valores = cvValsOut;   // online: valores só na tabela protegida
+      }
+    }
     var list = cfg.list();
     list = isNew ? list.concat([rec]) : list.map(function(x){ return x.id === rec.id ? rec : x; });
-    Promise.resolve(cfg.write(list)).then(function(){ close(); renderRegistryTab(kind); showToast(isNew ? "Cadastrado." : "Alterado."); });
+    Promise.resolve(cfg.write(list))
+      .then(function(){ return cvValsOut ? convSaveFinance(rec.id, cvValsOut) : true; })
+      .then(function(){ close(); renderRegistryTab(kind); showToast(isNew ? "Cadastrado." : "Alterado."); });
   });
 }
 // Menus suspensos do topo: "Cadastros" e "Planner" (Planner / Resumo).

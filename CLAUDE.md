@@ -1280,6 +1280,27 @@ título "Especialidades/serviços e sessão (mês)" fica a etiqueta `#specSum`
 `-falta` (âmbar, falta distribuir), `-sobra` (vermelho, passou). Salvar o
 tratamento com diferença pede confirmação (`sv._sumOk`). Sem SQL.
 
+## Convênios: especialidades cobertas, valor por sessão e "libera" (2026-10-04)
+Decisões do usuário: a liberação é igual para todos os convênios; valor POR SESSÃO;
+especialidade liberada usa o valor da que liberou; no tratamento só aviso; valores
+com a mesma permissão de "Tratamentos – valores".
+- Especialidades: `libera: [specIds]` no item de `config/specialties` (campo
+  "Libera atender também", multi-seleção `#regLib`; coluna na lista). `specLibera(id)`.
+- Convênios: `especialidades: [specIds]` no item de `config/convenios` (janela com
+  linhas `#cvRows`: especialidade + valor; mostra "Libera também: …"). Valor por
+  sessão na tabela protegida `public.convenio_finance (id = "conv|spec",
+  convenio_id, spec_id, valor)` — migração `supabase/2026-10-04-valores-dos-convenios.sql`
+  (RLS `has_perm('tratamentos_valores', view/edit)`). Sem sistema online (testes)
+  os valores ficam em `c.valores {specId: valor}`. `CONV.fin`, `convLoadFinance`,
+  `convSaveFinance` (upsert + apaga os removidos), `convValor(convId, specId)`
+  (para relatórios futuros; liberada = valor da base). Backup inclui
+  `convenio_finance` (`optional`) e `api/admin-backup.js` restaura por `id`.
+- `convCoverage(convId, specId)` → null (convênio sem especialidades / serviço),
+  `{direct}`, `{via: base}`, `{none}`. Tratamento: cada linha ganha
+  `data-cover` ("Coberta pelo convênio via X" / "Não coberta pelo convênio",
+  `.cover-none` em vermelho), refeito ao mudar convênio ou linhas (`coverRender`).
+- Celular: lista de Convênios continua só com Nome + Pacientes (esconde a 3ª coluna).
+
 ## Vencimento dos tratamentos (Etapa 4, 2026-10-04)
 Decisões do usuário: vencimento por duração em meses (ajustável), opcional, aviso
 30 dias antes só na tela de Tratamentos; ao vencer continua Ativo com etiqueta
@@ -1377,7 +1398,7 @@ ferramentas do Planner e da Agenda somem sem permissão.
   profissional, `serviceOptionsHtml`, sugestões de convênio/especialidade/serviço
   do tratamento e motivos de cancelamento. Relatórios continuam vendo todos.
   Status e Tratamentos não usam Inativar (Tratamentos já tem as regras dele).
-- Teste `tests/run_perm_buttons.js` (no `npm test`, agora 24 arquivos).
+- Teste `tests/run_perm_buttons.js` (no `npm test`, agora 24 arquivos). `tests/run_convenios.js` (convênios/libera, 25 arquivos).
 
 ## Botões de incluir = "+ Incluir" (2026-10-04)
 Todo botão que cria um registro novo (Pacientes, Tratamentos, Profissionais,
