@@ -36,7 +36,7 @@
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
     // RH (menu RH do topo): cadastro de funcionários e prestadores e a remuneração deles.
     { key: "rh_funcionarios", label: "Funcionários e Prestadores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)", group: "RH" },
-    { key: "rh_remuneracao", label: "Remuneração", hint: "valor mensal contratado e formas de pagamento", actions: ["view", "edit"] },
+    { key: "rh_remuneracao", label: "Funcionários e Prestadores – valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
     // Itens do menu Acesso (Sair aparece sempre).
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)", group: "Menu Acesso" },
     { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" },

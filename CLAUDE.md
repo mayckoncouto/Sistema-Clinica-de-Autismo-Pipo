@@ -1741,7 +1741,7 @@ no mesmo menu.
 - Usuários → "+ Incluir" (`newUser` em `js/usuarios.js`): abre funcionário novo
   (`window.pipoOpenStaffNew`); Administrador escolhe também "Conta sem funcionário".
 - Permissões: `rh_funcionarios` (ver/incluir/editar/excluir) e `rh_remuneracao`
-  (ver/editar), grupo "RH" em Níveis de permissão (`MODULES` nos dois js).
+  (ver/editar, exibido como "Funcionários e Prestadores – valores", exclusivo como Tratamentos – valores), grupo "RH" em Níveis de permissão (`MODULES` nos dois js).
 - Teste `tests/run_staff.js` (30 arquivos no `npm test`).
 
 ## Profissionais dentro de Funcionários e Prestadores (2026-10-05)
