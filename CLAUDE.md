@@ -1851,6 +1851,14 @@ o conteúdo. Chave `INICIO_ON = false` (perto de `var state`): botão sempre ocu
 permissão cai na primeira tela permitida), e a logo/nome leva para essa mesma tela.
 Para voltar a mostrar o Início: `INICIO_ON = true` (e rever o tópico "inicio" da Ajuda).
 
+## Grupo bloqueado com paciente na sala (Planner, 2026-10-05)
+Pedido do usuário: profissional com paciente numa SALA tem a coluna dele nos Grupos
+de Suporte bloqueada no horário (`.prof-busy`), SEM a exceção antiga "grupo
+apontando para a mesma sala" (a grade não libera mais a coluna do grupo e
+`plannerConflict` recusa gravar no grupo). Continua: agendamento de grupo JÁ marcado
+apontando para a sala não bloqueia nem recusa os atendimentos dele nessa sala
+(`sameRoomViaGroup` só nesse sentido), e as regras "não ABA" da sala não mudam.
+
 ## Menu Acesso em grupos (2026-10-05)
 Pedido do usuário: menu Acesso organizado em grupos com divisória (`accGroups` em
 `js/pipo-supabase.js`, `.acc-sep`): Clínica, Usuários, Backup | Senha, Ajuda |

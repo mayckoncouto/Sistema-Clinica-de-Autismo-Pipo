@@ -104,8 +104,8 @@ const path = require('path');
     if (open) await page.click('#bkCancel');
     return open ? 'REFUSED' : 'ok';
   };
-  console.log('own group column is free while she attends in a single room?', !(await page.locator('table.sched[data-doc="seg-1"] td.slotcell[data-key="07:20|coord|coord-t1"]').evaluate((el) => el.classList.contains('slot-off'))));
-  console.log('group pointing to the SAME room where she attends is accepted?', (await book('07:20|coord|coord-t1', 'Sala Teste')) === 'ok');
+  console.log('own group column is blocked while she attends in a room?', await page.locator('table.sched[data-doc="seg-1"] td.slotcell[data-key="07:20|coord|coord-t1"]').evaluate((el) => el.classList.contains('slot-off') && el.classList.contains('prof-busy')));
+  console.log('group pointing to the SAME room where she attends is refused too?', (await book('07:20|coord|coord-t1', 'Sala Teste')) !== 'ok');
   await book('10:00|r1|r1-t1', 'Carla Laranja');
   console.log('group pointing to ANOTHER room (while she attends in Sala Teste) is still refused?', (await book('10:00|coord|coord-t1', 'Sala Azul')) !== 'ok');
   // ao contrário: grupo já aponta para a Sala Teste às 09:20 → paciente na coluna dela na Sala Teste é aceito
