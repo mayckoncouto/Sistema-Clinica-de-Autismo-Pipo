@@ -201,6 +201,43 @@ const path = require('path');
   console.log('plan shows one chart with one line of 2 points, legend and table?', fig.figs === 1 && fig.lines === 1 && fig.dots === 2 && fig.legend === 1 && fig.cols === 3, JSON.stringify(fig));
   await page.click('#plCancel');
 
+  // Agenda: Detalhes do agendamento com "Objetivos do atendimento" e botão Editar.
+  await ev(`(function(){
+    var mk = function(id, t, spec){ return {id: id, areaId: "comunicacao", objetivo: t, criterio: "80%", prazo: 3, scaleId: "likert", levelId: "1", status: "ativo"}; };
+    planMemPut({id: "pa", patient_id: "ana-azul", patient_name: "Ana Azul", version: 1, status: "vigente", plan_date: "2026-10-01", review_date: "2027-04-01", summary: "Resumo da Ana", sections: [
+      {specId: "fono", objectives: [mk("a1", "Esperar a vez"), mk("a2", "Nomear cores")]}, {specId: "to", objectives: [mk("a3", "Recortar com tesoura")]}]});
+    planMemPut({id: "pc", patient_id: "carla-laranja", patient_name: "Carla Laranja", version: 1, status: "vigente", plan_date: "2026-10-01", review_date: "2027-04-01", summary: "", sections: [
+      {specId: "fono", objectives: [mk("c1", "esperar a VEZ")]}]});
+    AD.rows = {r1: {id: "r1", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Ana Azul", service: "sessao", status: ""},
+               r2: {id: "r2", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Carla Laranja", service: "sessao", status: ""}};
+    agdOpenDetails(AD.rows.r1);
+  })()`);
+  await page.waitForSelector('#agdDetGoals .ag-obj-line');
+  const box = await page.$eval('#agdDetGoals', (h) => ({
+    visible: Array.prototype.filter.call(h.querySelectorAll('.ag-obj-line'), (l) => !l.closest('[hidden]')).map((l) => l.querySelector('.ag-obj-txt').textContent),
+    more: !!h.querySelector('[data-ag-obj-more]'), meta: (h.querySelector('.ag-obj-meta') || {}).textContent || '', sum: h.querySelector('.ag-obj-sum').textContent }));
+  console.log('slot shared with another patient: common objective shown, own hidden behind the button, TO (not Bia\'s area) left out?', box.visible.length === 1 && /Esperar a vez/.test(box.visible[0]) && /Carla Laranja/.test(box.visible[0]) && box.more && /Critério: 80%/.test(box.meta) && /Situação/.test(box.meta), JSON.stringify(box));
+  await page.click('[data-ag-obj-more]');
+  const nOpen = await page.$$eval('#agdDetGoals .ag-obj-line', (r) => r.filter((l) => !l.closest('[hidden]')).length);
+  console.log('"Objetivos do paciente" reveals the specific ones?', nOpen === 2, nOpen);
+  const editBtn = await page.$('#agdDetEdit');
+  console.log('details has "Editar agendamento" for who can edit?', !!editBtn);
+  await editBtn.click(); await page.waitForSelector('#ovAgd');
+  console.log('"Editar agendamento" opens the edit window?', !!(await page.$('#ovAgd')));
+  await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; delete AD.rows.r2; agdOpenDetails(AD.rows.r1); })()`);
+  await page.waitForSelector('#agdDetGoals .ag-obj-line');
+  const alone = await page.$eval('#agdDetGoals', (h) => ({n: h.querySelectorAll('.ag-obj-line').length, more: !!h.querySelector('[data-ag-obj-more]')}));
+  console.log('alone in the slot: all objectives open, no button?', alone.n === 2 && !alone.more, JSON.stringify(alone));
+  // Finalizado travado para o terapeuta.
+  await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; window.__planProfId = "bia-terapeuta"; state.statuses = [{id: "finalizado", name: "Finalizado", color: "#2E9E5B"}, {id: "nao-compareceu", name: "Não compareceu", color: "#999"}];
+    AD.rows.r1.status = "finalizado"; agdOpenDetails(AD.rows.r1); })()`);
+  const locked = await page.$eval('#agdDetStatus', (e) => e.disabled);
+  const lockMsg = await page.$eval('#ovAgdDet', (e) => /não pode ser alterado pelo terapeuta/.test(e.textContent));
+  await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; AD.rows.r1.status = ""; agdOpenDetails(AD.rows.r1); })()`);
+  const open = await page.$eval('#agdDetStatus', (e) => !e.disabled);
+  console.log('therapist cannot change a finalized status (others still can)?', locked && lockMsg && open, JSON.stringify({locked, lockMsg, open}));
+  await ev('(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = ""; AD.rows = {}; })()');
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

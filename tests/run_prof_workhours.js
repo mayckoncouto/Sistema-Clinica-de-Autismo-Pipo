@@ -55,7 +55,7 @@ const path = require('path');
   console.log('editing an old out-of-hours booking in the same slot is not blocked?', await page.evaluate(() => window.__checked) === 1);
   await page.click('#agdCancel').catch(() => {});
 
-  // Na grade: atendimento já marcado fora do horário (Ana, segunda 14:10) abre ao clicar.
+  // Na grade: atendimento já marcado fora do horário (Ana, segunda 14:10) abre os Detalhes ao clicar; Editar abre a janela.
   const opened = await ev(`(function(){
     agdClient = function(){ return null; };
     AD.error = ""; AD.loaded = true; AD.view = "dia"; AD.mode = "prof"; AD.sel = "ana-terapeuta"; AD.date = new Date(2030, 0, 7);
@@ -66,9 +66,11 @@ const path = require('path');
     var main = td && td.querySelector('.book[data-id="x2"] .book-main');
     if (!main) return "no cell: " + [].map.call(document.querySelectorAll('#agdGrid td[data-t="14:10"]'), function(t){ return t.className + '/' + t.innerHTML.slice(0, 80); }).join(' ; ') + ' :: ' + (document.getElementById('agdGrid') ? '' : document.getElementById('tab-agendadia').innerText.slice(0, 200));
     main.click();
-    return !!document.getElementById("agdSave");
+    var det = !!document.getElementById("ovAgdDet"), ed = document.getElementById("agdDetEdit");
+    if (ed) ed.click();
+    return det && !!document.getElementById("agdSave");
   })()`);
-  console.log('an existing booking out of hours still opens for editing?', opened === true, opened);
+  console.log('an existing booking out of hours opens the details and "Editar agendamento" opens the edit window?', opened === true, opened);
   await page.click('#agdCancel').catch(() => {});
 
   // Janela do colaborador: se o banco recusar o cadastro do profissional, não diz "Alterado"

@@ -1966,6 +1966,20 @@ atingido fica no plano); impressão/PDF. Escalas e Habilidades comuns à clínic
   legenda, rótulo direto (≤ 4), dica no ponto e "Ver tabela". Sem sistema online lê
   `PLAN.evoMem`. Migração `supabase/2026-10-06c-objetivos-na-evolucao.sql`; backup leva
   `plan_goals`.
+- (2026-10-06) **Agenda: clique num atendimento abre sempre `agdOpenDetails`** (antes, quem podia
+  editar ia direto para `agdOpenModal`); botão **Editar agendamento** (`#agdDetEdit`, só com
+  `agendamentos.edit`). Nos Detalhes, quadro **Objetivos do atendimento** (`#agdDetGoals`,
+  `agdGoalsFill` → `agdGoalsData`/`agdGoalsBoxHtml`, só com `plano_terapeutico.view`): resumo,
+  quadro clínico (`summary`) e objetivos ATIVOS do plano vigente nas áreas do profissional do
+  atendimento (`planActiveObjs`), cada um com `planObjMetaHtml` (critério, prazo, escala, situação,
+  status). Outros pacientes do mesmo profissional/data/horário (`agdSameSlotPatients`, em
+  `AD.rows`): objetivos em comum (mesmo texto, `normText`) primeiro e os do paciente em
+  "Objetivos do paciente ▾" (`[data-ag-obj-more]`); sozinho, todos abertos.
+- Evolução: objetivos ANTES das "Observações" (o editor), com as mesmas informações.
+- **Finalizado travado para o terapeuta** (`agdFinalLocked`, `agdTherapistUser` = usuário com
+  `professional_id`, não Administrador; teste: `window.__planProfId`): status desativado nos
+  Detalhes e na janela, com aviso. Banco: `appointments_status_guard` (migração
+  `supabase/2026-10-06d-finalizado-travado-terapeuta.sql`).
 
 ## Agenda: linha final com a saída da última sessão (2026-10-05)
 Pedido do usuário: horários do Planner e da Agenda seguem o horário da clínica e a

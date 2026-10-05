@@ -186,7 +186,18 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 :root{--viz-1:#2a78d6;--viz-2:#eb6834;--viz-3:#1baf7a;--viz-4:#eda100;--viz-5:#e87ba4;--viz-6:#008300;--viz-7:#4a3aa7;--viz-8:#e34948}
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--viz-1:#3987e5;--viz-2:#d95926;--viz-3:#199e70;--viz-4:#c98500;--viz-5:#d55181;--viz-6:#008300;--viz-7:#9085e9;--viz-8:#e66767} }
 :root[data-theme="dark"]{--viz-1:#3987e5;--viz-2:#d95926;--viz-3:#199e70;--viz-4:#c98500;--viz-5:#d55181;--viz-6:#008300;--viz-7:#9085e9;--viz-8:#e66767}
-.pr-goals{margin-top:14px}
+.ag-obj-box{margin-top:14px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:10px 12px;background:var(--surface)}
+.ag-obj-title{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px}
+.ag-obj-sum,.ag-obj-clin{font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
+.ag-obj-clin{white-space:pre-wrap}
+.ag-obj-line{padding:7px 0;border-top:1px solid var(--line)}
+.ag-obj-txt{font-size:13px;line-height:1.4}
+.ag-obj-txt .pcolor-dot{width:9px;height:9px;margin-right:6px;vertical-align:middle}
+.ag-obj-meta{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.5}
+.ag-obj-meta .pl-lv-dot,.pr-goal-txt .pl-lv-dot{display:inline-block;width:8px;height:8px;margin:0 4px 0 2px;vertical-align:middle}
+.ag-obj-with{font-size:11px;color:var(--accent);font-weight:700}
+.ag-obj-more{margin-top:8px;width:100%;justify-content:space-between;display:flex}
+.pr-goals{margin-bottom:14px}
 .pr-goal-sec{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px}
 .pr-goal-spec{display:flex;align-items:center;gap:8px;font-size:13px;padding:2px 0 6px}
 .pr-goal{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
@@ -401,7 +412,7 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .agd-det-name{font-size:18px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .agd-det{display:block}
 /* Popup "Detalhes do Agendamento": nome + botão no alto, dados num quadro com rótulos alinhados. */
-.modal.agd-det-modal{max-width:430px}
+.modal.agd-det-modal{max-width:560px}
 .agd-det-modal .modal-head{padding:14px 16px 6px}
 .agd-det-modal .modal-head h3{font-size:15px;white-space:nowrap}
 .agd-det-modal .modal-body{padding:4px 16px 14px;gap:12px}
@@ -9640,7 +9651,7 @@ function agdDaySummary(iso){
   document.getElementById("ovAgdDay").addEventListener("mousedown", function(e){ if (e.target.id === "ovAgdDay") close(); });
 }
 
-// ---- popup "Detalhes do Agendamento" (quem não pode editar) ----
+// ---- popup "Detalhes do Agendamento" (clique num atendimento; "Editar agendamento" para quem pode editar) ----
 // Mostra os dados, o botão "Registrar / Editar Atendimento" (prontuário) e o Status.
 function agdOpenDetails(row){
   var kind = bookingKind(row);
@@ -9653,7 +9664,8 @@ function agdOpenDetails(row){
   var showPront = !!pat && prCan("view");
   var curStatus = row.status || "";
   var showStatus = !kind && statusesList().length > 0;
-  var canChange = showStatus && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
+  var stLocked = agdFinalLocked(curStatus);
+  var canChange = showStatus && !stLocked && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
   function line(label, value){ return '<div class="k">' + label + '</div><div class="v">' + (value ? esc(value) : '<span class="pt-muted">—</span>') + '</div>'; }
   var host = document.getElementById("modalHost");
   host.innerHTML =
@@ -9676,15 +9688,20 @@ function agdOpenDetails(row){
           statusesList().map(function(s){
             var ok = canUseStatus(s.id) || s.id === curStatus;
             return '<option value="' + esc(s.id) + '"' + (s.id === curStatus ? ' selected' : '') + (ok ? '' : ' disabled') + '>' + esc(s.name) + (ok ? '' : ' (sem permissão)') + '</option>';
-          }).join("") + '</select></div>' : '') +
+          }).join("") + '</select>' + (stLocked ? '<div class="pl-hint">' + esc(AGD_FINAL_LOCK_MSG) + '</div>' : '') + '</div>' : '') +
+        '<div id="agdDetGoals"></div>' +
       '</div>' +
-      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="agdDetOk">Fechar</button></div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="agdDetOk">Fechar</button>' +
+        (can("agendamentos", "edit") ? '<button class="btn primary" id="agdDetEdit">Editar agendamento</button>' : '') + '</div>' +
     '</div></div>';
   var ov = document.getElementById("ovAgdDet");
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("agdDetClose").addEventListener("click", close);
   document.getElementById("agdDetOk").addEventListener("click", close);
+  agdGoalsFill(document.getElementById("agdDetGoals"), row);
+  var edBtn = document.getElementById("agdDetEdit");
+  if (edBtn) edBtn.addEventListener("click", function(){ agdOpenModal({row: AD.rows[row.id] || row}); });
   // Status: grava na hora em que escolhe.
   var sel = document.getElementById("agdDetStatus");
   if (sel) sel.addEventListener("change", function(){
@@ -9715,7 +9732,8 @@ function agdOpenModal(opts){
   // Status (só em atendimento já marcado, não em bloqueio/reunião/treinamento).
   var curStatus = (row && row.status) || "";
   var showStatus = !!row && !rowKind && statusesList().length > 0;
-  var canChangeStatus = showStatus && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
+  var stLocked = agdFinalLocked(curStatus);
+  var canChangeStatus = showStatus && !stLocked && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
   // Botão "Atendimento" (prontuário): só para paciente cadastrado e quem pode ver o prontuário.
   var showPront = !!row && !rowKind && !!findPatientByName(row.patient) && prCan("view");
   var statusHtml = !showStatus ? "" :
@@ -9724,7 +9742,7 @@ function agdOpenModal(opts){
       statusesList().map(function(s){
         var ok = canUseStatus(s.id) || s.id === curStatus;
         return '<option value="'+esc(s.id)+'"'+(s.id === curStatus ? ' selected' : '')+(ok ? '' : ' disabled')+'>'+esc(s.name)+(ok ? '' : ' (sem permissão)')+'</option>';
-      }).join("") + '</select></div>';
+      }).join("") + '</select>' + (stLocked ? '<div class="pl-hint">' + esc(AGD_FINAL_LOCK_MSG) + '</div>' : '') + '</div>';
   var profs = state.professionals.slice().sort(function(a,b){ return (a.name||"").localeCompare(b.name||"", "pt-BR"); });
   var host = document.getElementById("modalHost");
   host.innerHTML =
@@ -10219,7 +10237,7 @@ function wireAgendaDia(){
     if (td.classList.contains("agd-off")){ showToast("Fora do horário de atendimento do profissional.", true); return; }
     // Com algo copiado/movendo, o clique cola naquele horário.
     if (AD.clipboard){ agdPasteTo(td); return; }
-    if (row && !e.target.closest(".agd-add")){ agdOpenModal({row: row}); return; }
+    if (row && !e.target.closest(".agd-add")){ agdOpenDetails(row); return; }
     if (!can("agendamentos", "create")) return;
     var resId = td.getAttribute("data-r");
     agdOpenModal({date: td.getAttribute("data-d"), time: td.getAttribute("data-t"),
@@ -11950,7 +11968,7 @@ function prGoToAppointment(rec){
     if (!row){ showToast("Este atendimento não está mais na Agenda (talvez tenha sido apagado ou movido de semana).", true); return; }
     var cell = document.querySelector('#agdGrid .book[data-id="' + row.id + '"]');
     if (cell){ cell.scrollIntoView({block: "center", behavior: "smooth"}); cell.classList.add("pr-flash"); setTimeout(function(){ cell.classList.remove("pr-flash"); }, 2200); }
-    agdOpenModal({row: row});
+    agdOpenDetails(row);
   });
 }
 function prRenderDetail(){
@@ -12039,6 +12057,8 @@ function prOpenEditor(opts){
         '<div class="modal-sub">' + (opts.onSaved ? '<b>Registre a evolução para finalizar o atendimento.</b> ' : '') + (date ? agdBrDate(date) : "") + (time ? " às " + esc(time) : "") + (prof ? " · " + esc(prof.name) : "") + (serv ? " · " + esc(serv) : "") + '</div></div>' +
         '<button class="modal-close" id="prClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
+        (planCan("view") ? '<div class="pr-goals" id="prGoals"><div class="tr-sec">Objetivos do plano terapêutico trabalhados</div><div id="prGoalsBody" class="pl-hint">Carregando…</div></div>' : '') +
+        '<div class="tr-sec">Observações</div>' +
         '<div class="pr-toolbar" id="prTools">' +
           '<button type="button" data-cmd="bold" title="Negrito"><b>N</b></button>' +
           '<button type="button" data-cmd="italic" title="Itálico"><i>I</i></button>' +
@@ -12057,7 +12077,6 @@ function prOpenEditor(opts){
           '<button type="button" data-cmd="redo" title="Refazer (Ctrl+Y)">↷</button>' +
         '</div>' +
         '<div class="pr-editor pr-content" id="prEditor" contenteditable="true" spellcheck="true"></div>' +
-        (planCan("view") ? '<div class="pr-goals" id="prGoals"><div class="tr-sec">Objetivos do plano terapêutico trabalhados</div><div id="prGoalsBody" class="pl-hint">Carregando…</div></div>' : '') +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div>' +
         '<button class="btn ghost" id="prCancel">Cancelar</button>' +
@@ -14095,6 +14114,8 @@ var HELP_TOPICS = [
       "Abra <b>Agenda</b>. Escolha <b>Dia</b> ou <b>Semana</b>, <b>Profissionais</b> ou <b>Salas</b>, e navegue com ‹ Hoje ›.",
       "Clique no + de um horário para marcar: paciente (ou grupo de suporte), serviço, sala, observação; ou marque Bloqueado / Reunião Clínica / Treinamento.",
       "Vários atendimentos no mesmo horário ficam lado a lado (botão + para mais um).",
+      "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>: dados, status e o quadro <b>Objetivos do atendimento</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar agendamento</b>.",
+      "<b>Objetivos do atendimento</b>: resumo e quadro clínico do plano terapêutico e os objetivos ativos do paciente nas especialidades do profissional (principal e complementares), com critério, prazo, escala, situação e status. Se outros pacientes do mesmo profissional estão no mesmo horário, aparecem primeiro os objetivos em comum; os demais ficam em <b>Objetivos do paciente ▾</b>.",
       "Copiar, mover e arrastar funcionam como no Planner. Desfazer: Ctrl+Z / Ctrl+Y.",
       "Busca: destaca o paciente na tela e mostra quantos há na semana."
     ],
@@ -14103,6 +14124,7 @@ var HELP_TOPICS = [
       "Fora do horário de trabalho do profissional (cadastrado em Cadastros → Colaboradores) a célula é hachurada e não aceita marcação. A janela do atendimento também recusa profissional, data ou horário fora desse horário (atendimento antigo pode ser editado se continuar no mesmo profissional, data e horário).",
       "<b>Limpar semana</b> apaga tudo da semana aberta (dupla confirmação); atendimentos com evolução ficam.",
       "Atendimento com evolução no prontuário <b>só o Administrador</b> exclui.",
+      "Atendimento <b>Finalizado</b>: o terapeuta (usuário ligado a um profissional) não altera o status; a evolução é corrigida no Prontuário.",
       "Datas passadas mostram a cor do tratamento que valia na época.",
       "Feriados e recessos (Cadastros → Feriados e recessos): os horários ficam cinza com o nome do feriado; marcar neles pede confirmação.",
       "Paciente com <b>medida protetiva</b>: o último atendimento dele no dia fica com borda e escudo vermelhos. Ao abrir o atendimento aparece quem NÃO pode retirar e quem pode (cadastro do paciente)."
@@ -14127,7 +14149,7 @@ var HELP_TOPICS = [
       "Abra <b>Prontuário ▾ → Prontuário</b>, busque o paciente e veja a linha do tempo.",
       "<b>+ Incluir</b> para escrever (negrito, títulos, listas, tabelas). Ou marque o atendimento como Finalizado na Agenda.",
       "O ícone de agenda antes da data leva ao atendimento ligado à evolução.",
-      "Abaixo do texto ficam os <b>Objetivos do plano terapêutico</b> ativos nas especialidades do profissional do atendimento: marque os trabalhados e escolha o nível alcançado (escolher o nível já marca o objetivo)."
+      "Antes das <b>Observações</b> ficam os <b>Objetivos do plano terapêutico</b> ativos nas especialidades do profissional do atendimento: marque os trabalhados e escolha o nível alcançado (escolher o nível já marca o objetivo)."
     ],
     rules: [
       "Só o autor edita a própria evolução; excluir: autor com permissão ou Administrador.",
@@ -16195,11 +16217,10 @@ function planEvoGoalsHtml(data){
       s.items.map(function(x){
         var sc = scaleById(x.o.scaleId), lv = sc ? sc.levels : [];
         var cur = x.pick ? x.pick.levelId : x.o.levelId;
-        var now = scaleLevel(x.o.scaleId, x.o.levelId);
         return '<div class="pr-goal" data-goal-obj="' + esc(x.o.id) + '" data-goal-spec="' + esc(s.specId) + '">' +
           '<label class="pr-goal-main"><input type="checkbox" data-goal-on' + (x.pick ? ' checked' : '') + ' aria-label="Objetivo trabalhado">' +
           '<span class="pr-goal-txt"><span><b>' + x.n + '.</b> ' + esc(x.o.objetivo || "") + (x.o.areaId ? ' <span class="autolist-kind">' + esc(skillAreaName(x.o.areaId)) + '</span>' : '') + '</span>' +
-            '<span class="pl-hint">Situação no plano: ' + esc(now ? now.name : "—") + (x.o.levelEm ? ' (em ' + esc(trBr(x.o.levelEm)) + ')' : '') + '</span></span></label>' +
+            '<span class="pl-hint">' + planObjMetaHtml(data.plan, x.o).replace(/^<div class="ag-obj-meta">|<\/div>$/g, "") + '</span></span></label>' +
           '<span class="pr-goal-lv"><span class="pl-lv-dot" style="background:' + esc(((lv.filter(function(l){ return l.id === cur; })[0]) || {}).color || "transparent") + '"></span>' +
             '<select data-goal-level aria-label="Nível alcançado">' + lv.map(function(l){ return '<option value="' + esc(l.id) + '"' + (l.id === cur ? ' selected' : '') + '>' + esc(l.name) + '</option>'; }).join("") + '</select></span>' +
         '</div>';
@@ -16313,6 +16334,107 @@ function planChartsHtml(charts){
     '</figure>';
   }).join("");
 }
+/* ---- Objetivos do atendimento (Agenda: detalhes e janela do atendimento) ----
+ * Objetivos ATIVOS do plano vigente do paciente nas especialidades do profissional
+ * do atendimento (principal + complementares). Com outros pacientes do mesmo
+ * profissional no mesmo dia e horário, mostra primeiro os objetivos EM COMUM
+ * (mesmo texto, sem acento/maiúscula) e deixa os específicos do paciente atrás do
+ * botão "Objetivos do paciente ▾"; sozinho, mostra todos abertos.
+ */
+function planObjMetaHtml(plan, o){
+  var sc = scaleById(o.scaleId), lv = scaleLevel(o.scaleId, o.levelId);
+  var st = PLAN_STATUS.filter(function(x){ return x.id === (o.status || "ativo"); })[0];
+  var parts = [];
+  if (o.criterio) parts.push('Critério: ' + esc(o.criterio));
+  if (o.prazo) parts.push('Prazo: ' + o.prazo + ' meses (até ' + esc(trBr(trAddMonths(plan.plan_date, Number(o.prazo) || 0))) + ')');
+  if (sc) parts.push('Escala: ' + esc(sc.name));
+  parts.push('Situação: ' + (lv ? '<span class="pl-lv-dot" style="background:' + esc(lv.color || "transparent") + '"></span>' + esc(lv.name) : '—') + (o.levelEm ? ' (em ' + esc(trBr(o.levelEm)) + ')' : ''));
+  if (st) parts.push('Status: ' + esc(st.name));
+  return '<div class="ag-obj-meta">' + parts.join(' · ') + '</div>';
+}
+// [{specId, n, o}] dos objetivos ativos do plano nas especialidades do profissional.
+function planActiveObjs(plan, profId){
+  if (!plan) return [];
+  var prof = profId ? findProfessional(profId) : null, areas = prof ? profAreas(prof) : null;
+  var out = [];
+  (plan.sections || []).forEach(function(s){
+    if (areas && areas.indexOf(s.specId) === -1) return;
+    (s.objectives || []).forEach(function(o, i){ if ((o.status || "ativo") === "ativo") out.push({specId: s.specId, n: i + 1, o: o}); });
+  });
+  return out;
+}
+// Outros pacientes do mesmo profissional, mesmo dia e horário (linhas carregadas da Agenda).
+function agdSameSlotPatients(row){
+  var out = [];
+  Object.keys(AD.rows || {}).forEach(function(id){
+    var r = AD.rows[id];
+    if (!r || r.id === row.id || r.date !== row.date || r.time !== row.time || r.professional_id !== row.professional_id || bookingKind(r)) return;
+    var p = findPatientAt(r.patient, r.date);
+    if (p && out.every(function(x){ return x.id !== p.id; })) out.push(p);
+  });
+  return out;
+}
+function agdGoalsData(row){
+  var pat = findPatientAt(row.patient, row.date); if (!pat) return null;
+  var plan = planVigente(pat.id); if (!plan) return {pat: pat, plan: null};
+  var mine = planActiveObjs(plan, row.professional_id);
+  var others = agdSameSlotPatients(row).filter(function(p){ return p.id !== pat.id; }).map(function(p){
+    return {p: p, objs: planActiveObjs(planVigente(p.id), row.professional_id)};
+  });
+  var common = [], own = [];
+  mine.forEach(function(x){
+    var key = normText(x.o.objetivo || "");
+    var with_ = others.filter(function(oo){ return key && oo.objs.some(function(y){ return normText(y.o.objetivo || "") === key; }); }).map(function(oo){ return oo.p.nome; });
+    (with_.length ? common : own).push(Object.assign({with: with_}, x));
+  });
+  return {pat: pat, plan: plan, mine: mine, others: others, common: common, own: own};
+}
+function agdGoalsBoxHtml(d){
+  if (!d) return '';
+  var head = '<div class="ag-obj-title">Objetivos do atendimento</div>';
+  if (!d.plan) return '<div class="ag-obj-box">' + head + '<div class="pl-hint">Paciente sem plano terapêutico vigente.</div></div>';
+  function line(x){
+    return '<div class="ag-obj-line"><div class="ag-obj-txt"><span class="pcolor-dot" style="background:' + swatchVar((state.specialties.filter(function(s){ return s.id === x.specId; })[0] || {}).color || "teal") + '" title="' + esc(specialtyName(x.specId)) + '"></span>' +
+      '<b>' + x.n + '.</b> ' + esc(x.o.objetivo || "") + (x.o.areaId ? ' <span class="autolist-kind">' + esc(skillAreaName(x.o.areaId)) + '</span>' : '') +
+      (x.with && x.with.length ? ' <span class="ag-obj-with">também: ' + esc(x.with.join(", ")) + '</span>' : '') + '</div>' +
+      planObjMetaHtml(d.plan, x.o) + '</div>';
+  }
+  var resumo = '<div class="ag-obj-sum"><b>Resumo:</b> ' + d.mine.length + (d.mine.length === 1 ? ' objetivo ativo' : ' objetivos ativos') +
+    (d.others.length ? ' · ' + d.common.length + ' em comum com ' + esc(d.others.map(function(o){ return o.p.nome; }).join(", ")) : '') + '</div>' +
+    (d.plan.summary ? '<div class="ag-obj-clin"><b>Quadro clínico:</b> ' + esc(d.plan.summary) + '</div>' : '');
+  if (!d.mine.length) return '<div class="ag-obj-box">' + head + resumo + '<div class="pl-hint">Nenhum objetivo ativo nas especialidades deste profissional.</div></div>';
+  if (!d.others.length) return '<div class="ag-obj-box">' + head + resumo + d.mine.map(line).join("") + '</div>';
+  return '<div class="ag-obj-box">' + head + resumo +
+    (d.common.length ? d.common.map(line).join("") : '<div class="pl-hint">Nenhum objetivo em comum com os outros pacientes deste horário.</div>') +
+    (d.own.length ? '<button type="button" class="btn ghost ag-obj-more" data-ag-obj-more aria-expanded="false">Objetivos do paciente (' + d.own.length + ') <span class="ag-obj-caret">▾</span></button>' +
+      '<div class="ag-obj-own" hidden>' + d.own.map(line).join("") + '</div>' : '') +
+  '</div>';
+}
+// Coloca o quadro no elemento host (carrega os planos antes). Só com permissão de ver o plano.
+function agdGoalsFill(host, row){
+  if (!host || !planCan("view") || bookingKind(row) || !findPatientAt(row.patient, row.date)) return;
+  host.innerHTML = '<div class="ag-obj-box"><div class="ag-obj-title">Objetivos do atendimento</div><div class="pl-hint">Carregando…</div></div>';
+  planLoadAll().then(function(){
+    if (!document.body.contains(host)) return;
+    host.innerHTML = agdGoalsBoxHtml(agdGoalsData(row));
+    var b = host.querySelector("[data-ag-obj-more]");
+    if (b) b.addEventListener("click", function(){
+      var own = host.querySelector(".ag-obj-own"), open = own.hidden;
+      own.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
+      b.querySelector(".ag-obj-caret").textContent = open ? "▴" : "▾";
+    });
+  });
+}
+// Atendimento finalizado: usuário ligado a um profissional (terapeuta), que não seja
+// Administrador, não troca o status (a evolução continua editável no Prontuário).
+// O banco confere a mesma regra (migração 2026-10-06d).
+function agdTherapistUser(){
+  var me = prMe();
+  return !!((me && me.professional_id) || window.__planProfId) && !(window.pipoAuth && window.pipoAuth.isAdmin && window.pipoAuth.isAdmin());
+}
+function agdFinalLocked(status){ return status === FINAL_STATUS && agdTherapistUser(); }
+var AGD_FINAL_LOCK_MSG = "Atendimento finalizado: o status não pode ser alterado pelo terapeuta. Para corrigir, edite a evolução em Prontuário.";
+
 // Dica ao passar o mouse nos pontos (delegado no contêiner dos gráficos).
 function planChartsWire(host){
   host.addEventListener("mouseover", function(e){
