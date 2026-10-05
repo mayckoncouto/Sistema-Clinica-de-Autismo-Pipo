@@ -1806,3 +1806,11 @@ sem o bloqueio de troca de status).
   `#trSt` e força "cancelado" ao salvar). Banco: migração
   `supabase/2026-10-05i-cancelado-definitivo.sql` repõe a regra (só precisa se a 05h
   foi rodada). `trOfferReactivatePatient` saiu (não há mais cancelado → ativo).
+- (2026-10-05) **Cancelar ou renegociar pergunta se remove os agendamentos**
+  (`trOfferRemoveBookings(patId)`, depois de salvar; também quando outro Ativo vira
+  Renegociado): janela `#ovRmBk` com `#rbPl` (Planner, as 4 semanas — conta via
+  `currentBookingsFor(plannerAllDocIds())`, remove com `applyBookingChanges`/
+  `clearValueFor`, entra no desfazer; precisa de `agenda.delete`) e `#rbAg` (Agenda a
+  partir da data `#rbFrom`, conta `appointments` do paciente com `date >=`; remove com
+  `agdSplitByRecords` + `agdDeleteByIds` + `agdRecord`; precisa de
+  `agendamentos.delete`). Nada marcado por padrão; com evolução no prontuário fica.

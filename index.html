@@ -223,6 +223,9 @@ tr.is-inactive td{color:var(--muted)}
 .btn.danger-solid{background:var(--danger);color:#fff;border-color:transparent}
 .btn.danger-solid:hover{filter:brightness(1.08);background:var(--danger)}
 .confirm-overlay{z-index:60}
+.rb-opt{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;margin:4px 0 10px;cursor:pointer}
+.rb-opt input{margin-top:2px;width:16px;height:16px}
+.rb-date{margin:0 0 10px 24px}
 /* ---------- Agenda por data (nova) ---------- */
 #tab-agendadia{flex:1;min-height:0}
 .agd-panel{display:flex;gap:0}
@@ -13215,6 +13218,8 @@ function openTreatmentModal(t, opts){
         var changed = finTable && canEditVal && (isNew || money.valor !== newVal || money.despesas !== newDesp);
         return (changed ? trSaveFinance(rec.id, newVal, newDesp) : Promise.resolve(true)).then(function(){
           close(); if (state.tab === "tratamentos") renderTreatmentsTab();
+          // Cancelou ou renegociou (este ou o ativo anterior): pergunta se remove os agendamentos.
+          if (((st === "cancelado" || st === "renegociado") && (isNew || t.status !== st)) || others.length) trOfferRemoveBookings(patId);
           // Tratamento passou a Cancelado e o paciente não tem outro Ativo: inativa o paciente.
           if (st === "cancelado" && (isNew || t.status !== "cancelado")) trInactivatePatient(patId, list);
           // Tratamento novo para paciente inativo: o paciente volta a ficar ativo.
@@ -13233,6 +13238,89 @@ function trInactivatePatient(patId, list){
   if (!can("pacientes", "edit")){ showToast("Tratamento cancelado. O paciente continua ativo: seu nível não pode editar Pacientes.", true); return; }
   showToast("Tratamento cancelado e paciente " + (p.nome || "") + " inativado.");
   writePatients(state.patientsRaw.map(function(x){ return x.id === patId ? Object.assign({}, x, {inativo: true}) : x; }));
+}
+// Ao cancelar ou renegociar: pergunta se remove os agendamentos do paciente no Planner
+// (as 4 semanas) e na Agenda a partir de uma data escolhida. Atendimentos com evolução
+// no prontuário ficam (regra da Agenda). As duas remoções entram no desfazer.
+function trOfferRemoveBookings(patId){
+  var p = rawPatient(patId); if (!p || !p.nome || !db) return;
+  var key = normText(String(p.nome).trim());
+  var canPl = can("agenda", "delete"), cli = agdClient(), canAg = !!cli && can("agendamentos", "delete");
+  if (!canPl && !canAg) return;
+  var plChanges = {}, plN = 0;
+  currentBookingsFor(plannerAllDocIds()).then(function(all){
+    Object.keys(all).forEach(function(docId){
+      var bk = all[docId] || {}, dayKey = docId.split("-")[0];
+      Object.keys(bk).forEach(function(k){
+        var v = bk[k]; if (!v) return;
+        var rec = typeof v === "string" ? {patient: v} : v;
+        if (normText(String(rec.patient || "").trim()) !== key) return;
+        (plChanges[docId] = plChanges[docId] || {})[k] = clearValueFor(dayKey, k.split("|")[0]);
+        plN++;
+      });
+    });
+  }).catch(function(){}).then(function(){
+    if (!plN && !cli) return; // nada para remover (sem Agenda online)
+    var host = document.getElementById("confirmHost");
+    if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
+    host.innerHTML = '<div class="overlay confirm-overlay" id="ovRmBk" role="alertdialog" aria-modal="true" aria-labelledby="rbTitle"><div class="modal" style="max-width:460px">' +
+      '<div class="modal-head"><div><h3 id="rbTitle">Remover agendamentos?</h3><div class="modal-sub">' + esc(p.nome) + '</div></div></div>' +
+      '<div class="modal-body">' +
+        '<label class="rb-opt"><input type="checkbox" id="rbPl"' + (canPl && plN ? '' : ' disabled') + '> <span>Remover do <b>Planner</b> ' +
+          (plN ? '(' + plN + (plN === 1 ? ' agendamento' : ' agendamentos') + ' nas 4 semanas)' : '— nenhum agendamento') + (canPl ? '' : ' — sem permissão') + '</span></label>' +
+        (cli ? '<label class="rb-opt"><input type="checkbox" id="rbAg"' + (canAg ? '' : ' disabled') + '> <span>Remover da <b>Agenda</b>' + (canAg ? '' : ' — sem permissão') + '</span></label>' +
+          '<div class="rb-date" id="rbAgBox" hidden><div class="field"><label for="rbFrom">Remover os atendimentos a partir de</label><input type="date" id="rbFrom" value="' + trTodayIso() + '"></div>' +
+          '<div class="pat-count" id="rbAgCount">Contando…</div></div>' : '<div class="pat-count">Agenda indisponível neste momento.</div>') +
+        '<div class="pat-count">Atendimentos com evolução no prontuário não são removidos.</div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="rbNo">Manter agendamentos</button><button class="btn danger" id="rbYes" disabled>Remover</button></div>' +
+    '</div></div>';
+    var $ = function(id){ return document.getElementById(id); };
+    var agRows = null, seq = 0;
+    function close(){ host.innerHTML = ""; }
+    function refresh(){
+      var ag = $("rbAg") && $("rbAg").checked;
+      if ($("rbAgBox")) $("rbAgBox").hidden = !ag;
+      $("rbYes").disabled = !(($("rbPl") && $("rbPl").checked) || (ag && agRows && agRows.length));
+    }
+    function countAg(){
+      if (!cli || !$("rbFrom")) return;
+      var from = $("rbFrom").value || trTodayIso(), my = ++seq; agRows = null; refresh();
+      $("rbAgCount").textContent = "Contando…";
+      cli.from("appointments").select("*").eq("patient", p.nome).gte("date", from).then(function(r){
+        if (my !== seq || !$("rbAgCount")) return;
+        if (r.error){ $("rbAgCount").textContent = "Não foi possível contar os atendimentos."; return; }
+        agRows = r.data || [];
+        $("rbAgCount").textContent = agRows.length ? agRows.length + (agRows.length === 1 ? " atendimento" : " atendimentos") + " a partir de " + trBr(from) + "." : "Nenhum atendimento a partir de " + trBr(from) + ".";
+        refresh();
+      });
+    }
+    ["rbPl", "rbAg"].forEach(function(id){ if ($(id)) $(id).addEventListener("change", refresh); });
+    if ($("rbFrom")) $("rbFrom").addEventListener("change", countAg);
+    countAg();
+    $("rbNo").addEventListener("click", close);
+    $("rbYes").addEventListener("click", function(){
+      var doPl = $("rbPl") && $("rbPl").checked, doAg = $("rbAg") && $("rbAg").checked && agRows && agRows.length;
+      var rows = doAg ? agRows.slice() : [], from = $("rbFrom") ? $("rbFrom").value : "";
+      close();
+      var msgs = [];
+      var pl = doPl ? Promise.resolve(applyBookingChanges(plChanges)).then(function(r){ if (r !== false) msgs.push(plN + " do Planner"); }) : Promise.resolve();
+      pl.then(function(){
+        if (!rows.length) return;
+        return agdSplitByRecords(rows).then(function(sp){
+          if (!sp.del.length){ msgs.push("nenhum da Agenda (todos têm evolução)"); return; }
+          return agdDeleteByIds(sp.del.map(function(x){ return x.id; })).then(function(d){
+            if (d && d.error){ showToast("Não foi possível remover da Agenda: " + (d.error.message || ""), true); return; }
+            agdRecord("Remover atendimentos de " + p.nome + " a partir de " + trBr(from), sp.del, []);
+            msgs.push(sp.del.length + " da Agenda" + (sp.kept.length ? " (" + sp.kept.length + " com evolução ficaram)" : ""));
+            if (typeof agdLoadWeek === "function" && state.tab === "agendadia") agdLoadWeek();
+          });
+        });
+      }).then(function(){ if (msgs.length) showToast("Removidos: " + msgs.join(" e ") + "."); })
+        .catch(function(e){ showToast("Erro ao remover: " + (e && e.message ? e.message : e), true); });
+    });
+    $("rbNo").focus();
+  });
 }
 function trReactivatePatient(patId){
   var p = rawPatient(patId);
@@ -13394,6 +13482,7 @@ var HELP_TOPICS = [
       "O <b>Tipo</b> é automático: <b>Novo</b> se não há anterior ou o anterior foi Cancelado; <b>Renegociado</b> se o anterior foi Renegociado.",
       "<b>Cancelado é definitivo</b> e exige motivo. A observação é obrigatória quando o motivo é \"Outro\". Para retomar, crie um novo tratamento.",
       "Cancelar um tratamento <b>inativa o paciente</b>, se ele não tiver outro tratamento Ativo (precisa da permissão de editar Pacientes).",
+      "Ao <b>cancelar ou renegociar</b> um tratamento, o sistema pergunta se remove os agendamentos do paciente: do <b>Planner</b> (as 4 semanas) e/ou da <b>Agenda</b> a partir de uma data que você escolhe. Atendimentos com evolução no prontuário ficam. As remoções entram no desfazer do Planner e da Agenda.",
       "No tratamento novo, a lista de pacientes mostra também os inativos, com \"(inativo)\" ao lado do nome. Salvar o tratamento novo <b>reativa o paciente</b> (menos quando ele já é salvo como Cancelado).",
       "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b> e a quantidade de sessões fica travada. Para mudar, use Renegociar.",
       "A <b>Data de término</b> é o último atendimento da Agenda no período do tratamento.",

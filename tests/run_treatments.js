@@ -22,6 +22,7 @@ const path = require('path');
   async function save(){
     await page.click('#trSave'); await page.waitForTimeout(200);
     if (await page.$('#cfOk')) { await page.click('#cfOk'); await page.waitForTimeout(200); }
+    if (await page.$('#rbNo')) { await page.click('#rbNo'); await page.waitForTimeout(100); }
   }
 
   console.log('missing-treatment notice counts all 6 patients?', (await page.textContent('#trMissing')).includes('6 pacientes'));
@@ -54,7 +55,15 @@ const path = require('path');
   await page.click('#trSave'); await page.waitForTimeout(200);
   console.log('"Outro" requires the cancellation note?', !!(await page.$('#ovTreat')) && (await store()).some((t) => t.patientId === 'duda-vermelho' && t.status === 'ativo'));
   await page.fill('#trObsCancel', 'Família pediu pausa');
-  await save();
+  // Um agendamento da Duda no Planner: ao cancelar, a janela pergunta se remove.
+  await page.evaluate(async () => { const db = await window.claude.use('db'); const d = await db.doc('schedule/ter-2').get(); const bk = Object.assign({}, (d.exists && d.data().bookings) || {}); bk['09:20|r1|r1-t1'] = {patient: 'Duda Vermelho', note: ''}; await db.doc('schedule/ter-2').set({bookings: bk}); });
+  await page.click('#trSave'); await page.waitForTimeout(200);
+  if (await page.$('#cfOk')) { await page.click('#cfOk'); await page.waitForTimeout(200); }
+  await page.waitForSelector('#ovRmBk', {timeout: 3000}).catch(() => {});
+  const rbTxt = await page.textContent('#ovRmBk').catch(() => '');
+  console.log('cancelling asks to remove the Planner bookings (count shown)?', /Planner/.test(rbTxt) && /1 agendamento/.test(rbTxt), rbTxt.slice(0, 120));
+  await page.check('#rbPl'); await page.click('#rbYes'); await page.waitForTimeout(400);
+  console.log('Planner booking removed after confirming?', await page.evaluate(() => !(((window.__STORE__['schedule/ter-2'] || {}).bookings || {})['09:20|r1|r1-t1'])));
   L = (await store()).filter((t) => t.patientId === 'duda-vermelho');
   const canc = L.filter((t) => t.status === 'cancelado')[0];
   console.log('cancelled with reason, note and history entry?', !!canc && canc.motivoCancel === 'outro' && canc.obsCancel === 'Família pediu pausa' &&
