@@ -182,6 +182,37 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .pl-tbl td:nth-child(5),.pl-tbl td:nth-child(6),.pl-tbl td:nth-child(7),.pl-tbl td:nth-child(8){font-size:12.5px}
 .pl-tbl th{font-size:11.5px;text-align:left;color:var(--muted);font-weight:700;padding:4px 6px;border-bottom:1px solid var(--line)}
 .pl-tbl td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+/* Plano terapêutico: objetivos na evolução e gráficos (cores validadas: claro e escuro) */
+:root{--viz-1:#2a78d6;--viz-2:#eb6834;--viz-3:#1baf7a;--viz-4:#eda100;--viz-5:#e87ba4;--viz-6:#008300;--viz-7:#4a3aa7;--viz-8:#e34948}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--viz-1:#3987e5;--viz-2:#d95926;--viz-3:#199e70;--viz-4:#c98500;--viz-5:#d55181;--viz-6:#008300;--viz-7:#9085e9;--viz-8:#e66767} }
+:root[data-theme="dark"]{--viz-1:#3987e5;--viz-2:#d95926;--viz-3:#199e70;--viz-4:#c98500;--viz-5:#d55181;--viz-6:#008300;--viz-7:#9085e9;--viz-8:#e66767}
+.pr-goals{margin-top:14px}
+.pr-goal-sec{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px}
+.pr-goal-spec{display:flex;align-items:center;gap:8px;font-size:13px;padding:2px 0 6px}
+.pr-goal{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+.pr-goal-main{flex:1;min-width:0;display:flex;align-items:flex-start;gap:10px;cursor:pointer}
+.pr-goal input[type=checkbox]{margin-top:3px;flex:none;width:16px;height:16px}
+.pr-goal-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.pr-goal-lv{flex:none;display:flex;align-items:center;gap:6px;width:240px}
+.pr-goal-lv .dp-btn,.pr-goal-lv select{flex:1;min-width:0}
+.pv-host{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+.pv-fig{margin:0;border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--surface)}
+.pv-fig figcaption{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)}
+.pv-legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin:8px 0 2px;font-size:12px;color:var(--ink-2)}
+.pv-key{display:inline-flex;align-items:center;gap:6px}
+.pv-sw{width:14px;height:3px;border-radius:2px;flex:none}
+.pv-plot{position:relative}
+.pv-svg{width:100%;height:auto;display:block;max-width:820px}
+.pv-grid{stroke:var(--line);stroke-width:1}
+.pv-ylab,.pv-xlab{fill:var(--muted);font-size:11px;font-family:inherit}
+.pv-dlab{fill:var(--ink-2);font-size:11px;font-weight:700;font-family:inherit}
+.pv-line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.pv-dot{stroke:var(--surface);stroke-width:2}
+.pv-hit{fill:transparent;cursor:default}
+.pv-tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--surface);font-size:11.5px;padding:5px 8px;border-radius:6px;white-space:nowrap;z-index:2}
+.pv-table summary{cursor:pointer;font-size:12px;color:var(--muted);margin-top:6px}
+.pv-table table{margin-top:6px;font-size:12px}
+@media (max-width:760px){ .pr-goal{flex-wrap:wrap} .pr-goal-lv{width:100%} }
 .autolist.pl-goal-pop{position:fixed;right:auto;top:0;z-index:80;max-height:280px}
 .pl-goal-pop .autolist-name{white-space:normal}
 .pl-tbl textarea{width:100%;min-height:40px;resize:none;overflow:hidden;line-height:1.35;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);color:var(--ink)}
@@ -11766,6 +11797,7 @@ function prCan(action){ return window.pipoAuth ? window.pipoAuth.can("prontuario
 function prMe(){ return (window.pipoAuth && window.pipoAuth.profile && window.pipoAuth.profile()) || null; }
 function prErrMsg(e){
   var m = (e && e.message) || String(e || "");
+  if (/plan_goals/i.test(m)) return "falta rodar a atualização do banco (objetivos na evolução).";
   if (/clinical_records/i.test(m) && /does not exist|not find|schema cache/i.test(m)) return "falta rodar a atualização do banco (prontuário).";
   return agdErr(e);
 }
@@ -12009,6 +12041,7 @@ function prOpenEditor(opts){
           '<button type="button" data-cmd="redo" title="Refazer (Ctrl+Y)">↷</button>' +
         '</div>' +
         '<div class="pr-editor pr-content" id="prEditor" contenteditable="true" spellcheck="true"></div>' +
+        (planCan("view") ? '<div class="pr-goals" id="prGoals"><div class="tr-sec">Objetivos do plano terapêutico trabalhados</div><div id="prGoalsBody" class="pl-hint">Carregando…</div></div>' : '') +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div>' +
         '<button class="btn ghost" id="prCancel">Cancelar</button>' +
@@ -12016,6 +12049,22 @@ function prOpenEditor(opts){
       '</div>' +
     '</div></div>';
   var ed = document.getElementById("prEditor");
+  // Objetivos do plano vigente (Parte 2): marcar os trabalhados e o nível alcançado.
+  var goalsData = null, goalsReady = false, goalsInit = rec && Array.isArray(rec.plan_goals) ? rec.plan_goals : [];
+  if (document.getElementById("prGoals")) planLoadAll(true).then(function(){
+    var body = document.getElementById("prGoalsBody"); if (!body) return;
+    goalsData = planEvoGoalsFor(p.id, profId, goalsInit);
+    body.className = ""; body.innerHTML = planEvoGoalsHtml(goalsData); goalsReady = true;
+    body.addEventListener("change", function(e){
+      var lab = e.target.closest("[data-goal-obj]"); if (!lab) return;
+      if (e.target.hasAttribute("data-goal-level")){
+        lab.querySelector("[data-goal-on]").checked = true;
+        var sc = scaleById(((goalsData.plan.sections || []).filter(function(x){ return x.specId === lab.getAttribute("data-goal-spec"); })[0].objectives || []).filter(function(o){ return o.id === lab.getAttribute("data-goal-obj"); })[0].scaleId);
+        var lv = sc && sc.levels.filter(function(l){ return l.id === e.target.value; })[0];
+        lab.querySelector(".pl-lv-dot").style.background = (lv && lv.color) || "transparent";
+      }
+    });
+  });
   ed.innerHTML = rec ? prSanitize(rec.content) : "<p><br></p>";
   var initial = ed.innerHTML;
   try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch(e){}
@@ -12086,16 +12135,20 @@ function prOpenEditor(opts){
     if (!prPlainText(content) && !/<table/i.test(content)){ showToast("Escreva a evolução antes de salvar.", true); ed.focus(); return; }
     saveBtn.disabled = true;
     var c = agdClient(), q;
-    if (rec) q = c.from("clinical_records").update({content: content}).eq("id", rec.id).select().single();
-    else q = c.from("clinical_records").insert({
+    var goals = goalsReady ? planEvoGoalsRead(document.getElementById("prGoalsBody"), goalsData) : null;
+    var upd = {content: content};
+    if (goals) upd.plan_goals = goals;
+    if (rec) q = c.from("clinical_records").update(upd).eq("id", rec.id).select().single();
+    else q = c.from("clinical_records").insert(Object.assign({
       patient_id: p.id, patient_name: p.nome,
       appointment_id: appt ? appt.id : null, appointment_date: date || null, appointment_time: time || null,
-      professional_id: profId, author_name: me ? (me.full_name || me.email || "") : "", content: content
-    }).select().single();
+      professional_id: profId, author_name: me ? (me.full_name || me.email || "") : ""
+    }, upd)).select().single();
     q.then(function(r){
       saveBtn.disabled = false;
       if (r.error){ showToast("Não foi possível salvar: " + prErrMsg(r.error), true); return; }
       savedOk = true;
+      if (goals && (goals.length || goalsInit.length)) planLoadAll(true);
       close(true);
       if (opts.onSaved) opts.onSaved(r.data);
       showToast(rec ? "Evolução atualizada." : "Evolução salva no prontuário.");
@@ -14057,7 +14110,8 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>Prontuário ▾ → Prontuário</b>, busque o paciente e veja a linha do tempo.",
       "<b>+ Incluir</b> para escrever (negrito, títulos, listas, tabelas). Ou marque o atendimento como Finalizado na Agenda.",
-      "O ícone de agenda antes da data leva ao atendimento ligado à evolução."
+      "O ícone de agenda antes da data leva ao atendimento ligado à evolução.",
+      "Abaixo do texto ficam os <b>Objetivos do plano terapêutico</b> ativos nas especialidades do profissional do atendimento: marque os trabalhados e escolha o nível alcançado (escolher o nível já marca o objetivo)."
     ],
     rules: [
       "Só o autor edita a própria evolução; excluir: autor com permissão ou Administrador.",
@@ -14078,6 +14132,8 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Ao escolher o último nível da escala, o objetivo fica <b>Atingido</b> sozinho e continua no plano.",
+      "A <b>Situação</b> se atualiza sozinha com o nível marcado na evolução mais recente (data do atendimento); a data aparece abaixo dela. Evolução de data anterior à última registrada não muda a Situação.",
+      "<b>Evolução dos objetivos</b>: um gráfico por especialidade e escala, com uma linha por objetivo (Nº da prioridade) mostrando o nível em cada evolução. Passe o mouse num ponto para ver data e nível; <b>Ver tabela</b> mostra os mesmos dados em tabela.",
       "Especialidade nova no tratamento ganha um quadro; nenhum quadro é removido. Quadro de especialidade que saiu do tratamento mostra o aviso \"Fora do tratamento atual\". O quadro de outra especialidade pode ser incluído pela lista no fim da janela.",
       "Validade de 6 meses a partir da data do plano.",
       "Quem tem <b>editar</b> (ex.: Coordenador) altera tudo. O profissional altera só a situação e o status dos objetivos da sua especialidade principal e das áreas complementares, e inclui objetivos só na especialidade principal.",
@@ -15811,7 +15867,7 @@ function openPlanModal(plan, opts){
       '<td><textarea data-f="criterio" rows="2"' + dA + ' placeholder="Critério de sucesso">' + esc(o.criterio || "") + '</textarea></td>' +
       '<td><select data-f="prazo"' + dA + '>' + optList(PLAN_PRAZOS, o.prazo || 3) + '</select><div class="pl-hint">até ' + esc(trBr(prazoAte)) + '</div></td>' +
       '<td><select data-f="scaleId" data-combo' + dA + '>' + optList(scales.filter(function(x){ return isActive(x) || x.id === o.scaleId; }), o.scaleId) + '</select></td>' +
-      '<td>' + levelSel(o, dS) + '</td>' +
+      '<td>' + levelSel(o, dS) + (o.levelEm ? '<div class="pl-hint">em ' + esc(trBr(o.levelEm)) + '</div>' : '') + '</td>' +
       '<td><select data-f="status"' + dS + '>' + optList(PLAN_STATUS, o.status || "ativo") + '</select>' +
         (o.status && o.status !== "ativo" && o.statusEm ? '<div class="pl-hint">em ' + esc(trBr(o.statusEm)) + '</div>' : '') + '</td>' +
       '<td class="pl-rm-cell">' + (full || (editAll && !origIds[o.id]) ? '<button type="button" class="rm" data-rm-obj aria-label="Excluir objetivo" title="Excluir objetivo">✕</button>' : '') + '</td>' +
@@ -15856,6 +15912,7 @@ function openPlanModal(plan, opts){
       (d.sections.length ? '' : '<div class="pl-empty">O tratamento atual não tem especialidades. Inclua as especialidades no tratamento do paciente para os quadros aparecerem.</div>') +
       '<div id="plSecs"></div>' +
       (full ? '<div class="pl-add-spec"><select id="plAddSpec"><option value="">Incluir quadro de outra especialidade…</option></select></div>' : '') +
+      (isNew ? '' : '<div class="tr-sec">Evolução dos objetivos</div><div class="pl-hint">Níveis registrados nas evoluções do Prontuário: um gráfico por especialidade e escala, uma linha por objetivo.</div><div id="plCharts" class="pv-host"><div class="pl-hint">Carregando…</div></div>') +
       (versions.length ? '<div class="tr-sec">Versões anteriores</div><div class="pl-versions">' + versions.map(function(r){
         return '<button type="button" class="pl-ver" data-ver="' + esc(r.id) + '">Versão ' + r.version + ' · ' + esc(trBr(r.plan_date)) + (r.status === "vigente" ? " (vigente)" : "") + '</button>';
       }).join("") + '</div>' : '') +
@@ -15892,6 +15949,10 @@ function openPlanModal(plan, opts){
     return {s: s, i: i, o: s.objectives[i]};
   }
   render();
+  if ($("plCharts")){
+    planChartsWire($("plCharts"));
+    planEvoLoad(pid).then(function(recs){ var h = $("plCharts"); if (h) h.innerHTML = planChartsHtml(planEvoCharts(plan, recs)); });
+  }
   var secsEl = $("plSecs");
   // Campos de texto: guarda ao digitar (sem redesenhar, para não perder o foco).
   secsEl.addEventListener("input", function(e){
@@ -15975,7 +16036,7 @@ function openPlanModal(plan, opts){
       o.levelId = sc && sc.levels.length ? sc.levels[0].id : "";
       if (o.status === "atingido"){ o.status = "ativo"; o.statusEm = today; }
     } else if (f === "levelId"){
-      o.levelId = v;
+      o.levelId = v; o.levelEm = today;
       // Último nível da escala = objetivo atingido (sai do atingido se voltar).
       if (scaleIsFinal(o.scaleId, v)){ if (o.status !== "atingido"){ o.status = "atingido"; o.statusEm = today; } }
       else if (o.status === "atingido"){ o.status = "ativo"; o.statusEm = today; }
@@ -16087,6 +16148,170 @@ function openPlanModal(plan, opts){
 
 // Objetivo e critério: a caixa cresce com o texto (sem barra de rolagem dentro).
 function planGrow(ta){ ta.style.height = "auto"; ta.style.height = Math.max(40, ta.scrollHeight + 2) + "px"; }
+
+/* ---- Parte 2: objetivos trabalhados na evolução e gráfico ----
+ * Evolução (prOpenEditor) mostra os objetivos ATIVOS do plano vigente nas
+ * especialidades do profissional do atendimento (principal + complementares; sem
+ * profissional, todas): marcar "trabalhado" + nível alcançado. Grava em
+ * clinical_records.plan_goals [{planId, specId, objId, scaleId, levelId}]; o banco
+ * (trigger clinical_records_plan_goals, migração 2026-10-06c) atualiza a Situação
+ * do objetivo (levelId + levelEm = data da evolução; último nível = Atingido).
+ * Gráfico no plano: uma figura por especialidade × escala, uma linha por objetivo
+ * (nível ao longo das datas das evoluções). Sem sistema online lê PLAN.evoMem.
+ */
+function planEvoGoalsFor(pid, profId, picked){
+  var plan = planVigente(pid); if (!plan) return null;
+  var prof = profId ? findProfessional(profId) : null;
+  var areas = prof ? profAreas(prof) : null;
+  var pk = {}; (picked || []).forEach(function(g){ pk[g.objId] = g; });
+  var secs = (plan.sections || []).filter(function(s){ return !areas || areas.indexOf(s.specId) !== -1; }).map(function(s){
+    return {specId: s.specId, items: (s.objectives || []).map(function(o, i){ return {o: o, n: i + 1, pick: pk[o.id] || null}; })
+      .filter(function(x){ return (x.o.status || "ativo") === "ativo" || x.pick; })};
+  }).filter(function(s){ return s.items.length; });
+  return {plan: plan, secs: secs};
+}
+function planEvoGoalsHtml(data){
+  if (!data) return '<div class="pl-hint">Paciente sem plano terapêutico vigente.</div>';
+  if (!data.secs.length) return '<div class="pl-hint">Nenhum objetivo ativo no plano terapêutico para as especialidades deste atendimento.</div>';
+  return data.secs.map(function(s){
+    var spec = state.specialties.filter(function(x){ return x.id === s.specId; })[0];
+    return '<div class="pr-goal-sec"><div class="pr-goal-spec"><span class="pcolor-dot" style="background:' + swatchVar((spec && spec.color) || "teal") + '"></span><b>' + esc(specialtyName(s.specId)) + '</b></div>' +
+      s.items.map(function(x){
+        var sc = scaleById(x.o.scaleId), lv = sc ? sc.levels : [];
+        var cur = x.pick ? x.pick.levelId : x.o.levelId;
+        var now = scaleLevel(x.o.scaleId, x.o.levelId);
+        return '<div class="pr-goal" data-goal-obj="' + esc(x.o.id) + '" data-goal-spec="' + esc(s.specId) + '">' +
+          '<label class="pr-goal-main"><input type="checkbox" data-goal-on' + (x.pick ? ' checked' : '') + ' aria-label="Objetivo trabalhado">' +
+          '<span class="pr-goal-txt"><span><b>' + x.n + '.</b> ' + esc(x.o.objetivo || "") + (x.o.areaId ? ' <span class="autolist-kind">' + esc(skillAreaName(x.o.areaId)) + '</span>' : '') + '</span>' +
+            '<span class="pl-hint">Situação no plano: ' + esc(now ? now.name : "—") + (x.o.levelEm ? ' (em ' + esc(trBr(x.o.levelEm)) + ')' : '') + '</span></span></label>' +
+          '<span class="pr-goal-lv"><span class="pl-lv-dot" style="background:' + esc(((lv.filter(function(l){ return l.id === cur; })[0]) || {}).color || "transparent") + '"></span>' +
+            '<select data-goal-level aria-label="Nível alcançado">' + lv.map(function(l){ return '<option value="' + esc(l.id) + '"' + (l.id === cur ? ' selected' : '') + '>' + esc(l.name) + '</option>'; }).join("") + '</select></span>' +
+        '</div>';
+      }).join("") + '</div>';
+  }).join("");
+}
+function planEvoGoalsRead(root, data){
+  if (!data) return [];
+  var out = [];
+  Array.prototype.forEach.call(root.querySelectorAll("[data-goal-obj]"), function(el){
+    if (!el.querySelector("[data-goal-on]").checked) return;
+    var objId = el.getAttribute("data-goal-obj"), specId = el.getAttribute("data-goal-spec");
+    var s = (data.plan.sections || []).filter(function(x){ return x.specId === specId; })[0];
+    var o = s && (s.objectives || []).filter(function(x){ return x.id === objId; })[0];
+    if (!o) return;
+    out.push({planId: data.plan.id, specId: specId, objId: objId, scaleId: o.scaleId, levelId: el.querySelector("[data-goal-level]").value});
+  });
+  return out;
+}
+
+/* ---- gráfico ---- */
+function planEvoLoad(pid){
+  var c = agdClient();
+  if (!c) return Promise.resolve((PLAN.evoMem || []).filter(function(r){ return r.patient_id === pid; }));
+  return c.from("clinical_records").select("id,appointment_date,created_at,plan_goals").eq("patient_id", pid).then(function(r){
+    if (r.error) return [];
+    return r.data || [];
+  }, function(){ return []; });
+}
+// [{specId, scale, series:[{n, o, pts:[{d, idx, levelId}]}]}] — só objetivos com registro.
+function planEvoCharts(plan, records){
+  var byObj = {};
+  (records || []).forEach(function(r){
+    var d = r.appointment_date || String(r.created_at || "").slice(0, 10);
+    (Array.isArray(r.plan_goals) ? r.plan_goals : []).forEach(function(g){
+      (byObj[g.objId] = byObj[g.objId] || []).push({d: d, scaleId: g.scaleId, levelId: g.levelId});
+    });
+  });
+  var out = [];
+  (plan.sections || []).forEach(function(s){
+    var groups = {};
+    (s.objectives || []).forEach(function(o, i){
+      var sc = scaleById(o.scaleId); if (!sc) return;
+      var pts = (byObj[o.id] || []).filter(function(p){ return p.scaleId === o.scaleId; }).map(function(p){
+        return {d: p.d, levelId: p.levelId, idx: sc.levels.findIndex(function(l){ return l.id === p.levelId; })};
+      }).filter(function(p){ return p.idx !== -1 && p.d; }).sort(function(a, b){ return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
+      if (!pts.length) return;
+      (groups[sc.id] = groups[sc.id] || {specId: s.specId, scale: sc, series: []}).series.push({n: i + 1, o: o, pts: pts});
+    });
+    Object.keys(groups).forEach(function(k){ out.push(groups[k]); });
+  });
+  return out;
+}
+var PLAN_VIZ_MAX = 8;
+function planChartSvg(ch){
+  var L = ch.scale.levels, series = ch.series.slice(0, PLAN_VIZ_MAX);
+  var dates = []; series.forEach(function(s){ s.pts.forEach(function(p){ if (dates.indexOf(p.d) === -1) dates.push(p.d); }); });
+  dates.sort();
+  var W = 760, padL = 222, padR = 28, padT = 14, rowH = 30, H = padT + (L.length - 1) * rowH + 44;
+  function day(iso){ return Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 864e5; }
+  var d0 = day(dates[0]), d1 = day(dates[dates.length - 1]), span = Math.max(1, d1 - d0);
+  function x(iso){ return dates.length === 1 ? padL + (W - padL - padR) / 2 : padL + (day(iso) - d0) / span * (W - padL - padR); }
+  function y(i){ return padT + (L.length - 1 - i) * rowH; }
+  var g = '';
+  L.forEach(function(l, i){
+    g += '<line class="pv-grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(i) + '" y2="' + y(i) + '"/>' +
+      '<text class="pv-ylab" x="' + (padL - 10) + '" y="' + (y(i) + 4) + '" text-anchor="end">' + esc(l.name.length > 33 ? l.name.slice(0, 32) + "…" : l.name) + '<title>' + esc(l.name) + '</title></text>';
+  });
+  // datas no eixo: até 6, sempre a primeira e a última
+  var step = Math.max(1, Math.ceil(dates.length / 6)), ticks = dates.filter(function(d, i){ return i % step === 0 || i === dates.length - 1; });
+  ticks.forEach(function(d, i){
+    if (i > 0 && i === ticks.length - 1 && x(d) - x(ticks[i - 1]) < 44) return;
+    g += '<text class="pv-xlab" x="' + x(d) + '" y="' + (H - 14) + '" text-anchor="middle">' + esc(d.slice(8, 10) + "/" + d.slice(5, 7)) + '</text>';
+  });
+  // Objetivos no mesmo nível ficam levemente separados (3px) para as linhas não se esconderem;
+  // a dica do ponto lista todos os objetivos daquela data e nível.
+  var hits = {}, hitOrder = [];
+  series.forEach(function(s, k){
+    var col = "var(--viz-" + (k + 1) + ")", dy = (k - (series.length - 1) / 2) * 3;
+    function py(p){ return (y(p.idx) + dy).toFixed(1); }
+    if (s.pts.length > 1) g += '<polyline class="pv-line" style="stroke:' + col + '" points="' + s.pts.map(function(p){ return x(p.d).toFixed(1) + "," + py(p); }).join(" ") + '"/>';
+    s.pts.forEach(function(p){
+      g += '<circle class="pv-dot" style="fill:' + col + '" cx="' + x(p.d).toFixed(1) + '" cy="' + py(p) + '" r="4.5"/>';
+      var key = p.d + "|" + p.idx;
+      if (!hits[key]){ hits[key] = {d: p.d, idx: p.idx, ns: []}; hitOrder.push(key); }
+      if (hits[key].ns.indexOf(s.n) === -1) hits[key].ns.push(s.n);
+    });
+    // rótulo direto no fim da linha (até 4 objetivos)
+    if (series.length <= 4){ var last = s.pts[s.pts.length - 1]; g += '<text class="pv-dlab" x="' + (x(last.d) + 8).toFixed(1) + '" y="' + (y(last.idx) + dy - 6).toFixed(1) + '">' + s.n + '</text>'; }
+  });
+  hitOrder.forEach(function(k){
+    var h = hits[k];
+    g += '<circle class="pv-hit" cx="' + x(h.d).toFixed(1) + '" cy="' + y(h.idx) + '" r="12" data-tip="' + esc(trBr(h.d) + " · Nº " + h.ns.join(", ") + " · " + L[h.idx].name) + '"/>';
+  });
+  return '<svg class="pv-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(specialtyName(ch.specId) + " — " + ch.scale.name) + '">' + g + '</svg>';
+}
+function planChartsHtml(charts){
+  if (!charts.length) return '<div class="pl-hint">Ainda não há níveis registrados nas evoluções. Ao escrever a evolução, marque os objetivos trabalhados e o nível alcançado.</div>';
+  return charts.map(function(ch){
+    var spec = state.specialties.filter(function(x){ return x.id === ch.specId; })[0];
+    var series = ch.series.slice(0, PLAN_VIZ_MAX);
+    var dates = []; series.forEach(function(s){ s.pts.forEach(function(p){ if (dates.indexOf(p.d) === -1) dates.push(p.d); }); }); dates.sort();
+    return '<figure class="pv-fig">' +
+      '<figcaption><span class="pcolor-dot" style="background:' + swatchVar((spec && spec.color) || "teal") + '"></span><b>' + esc(specialtyName(ch.specId)) + '</b> · escala ' + esc(ch.scale.name) + '</figcaption>' +
+      '<div class="pv-legend">' + series.map(function(s, k){ return '<span class="pv-key"><span class="pv-sw" style="background:var(--viz-' + (k + 1) + ')"></span><b>' + s.n + '.</b> ' + esc((s.o.objetivo || "").length > 60 ? s.o.objetivo.slice(0, 59) + "…" : s.o.objetivo) + '</span>'; }).join("") + '</div>' +
+      '<div class="pv-plot">' + planChartSvg(ch) + '<div class="pv-tip" hidden></div></div>' +
+      (ch.series.length > PLAN_VIZ_MAX ? '<div class="pl-hint">Mostrando os ' + PLAN_VIZ_MAX + ' primeiros objetivos (ordem de prioridade).</div>' : '') +
+      '<details class="pv-table"><summary>Ver tabela</summary><div class="pl-tbl-wrap"><table class="pat-table"><thead><tr><th>Objetivo</th>' + dates.map(function(d){ return '<th>' + esc(trBr(d)) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+        series.map(function(s){ return '<tr><td><b>' + s.n + '.</b> ' + esc(s.o.objetivo || "") + '</td>' + dates.map(function(d){ var p = s.pts.filter(function(q){ return q.d === d; }).pop(); return '<td>' + (p ? esc(ch.scale.levels[p.idx].name) : "—") + '</td>'; }).join("") + '</tr>'; }).join("") +
+      '</tbody></table></div></details>' +
+    '</figure>';
+  }).join("");
+}
+// Dica ao passar o mouse nos pontos (delegado no contêiner dos gráficos).
+function planChartsWire(host){
+  host.addEventListener("mouseover", function(e){
+    var h = e.target.closest && e.target.closest(".pv-hit"); if (!h) return;
+    var plot = h.closest(".pv-plot"), tip = plot.querySelector(".pv-tip");
+    var r = h.getBoundingClientRect(), pr = plot.getBoundingClientRect();
+    tip.textContent = h.getAttribute("data-tip"); tip.hidden = false;
+    tip.style.left = Math.max(0, Math.min(pr.width - tip.offsetWidth, r.left - pr.left + r.width / 2 - tip.offsetWidth / 2)) + "px";
+    tip.style.top = (r.top - pr.top - tip.offsetHeight - 4) + "px";
+  });
+  host.addEventListener("mouseout", function(e){
+    var h = e.target.closest && e.target.closest(".pv-hit"); if (!h) return;
+    h.closest(".pv-plot").querySelector(".pv-tip").hidden = true;
+  });
+}
 
 /* ---- impressão ---- */
 function planPrint(plan){

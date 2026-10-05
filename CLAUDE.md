@@ -1952,8 +1952,20 @@ atingido fica no plano); impressão/PDF. Escalas e Habilidades comuns à clínic
   copiar objetivos na revisão (manter/ajustar/encerrar); aviso de objetivo parado; painel da
   coordenação; prazo vencido no objetivo; comparação entre versões; relatório para a família;
   relatório para o convênio. Recusados: ciência da família, metas da família, anexos.
-- **Parte 2 (a fazer):** na evolução, marcar objetivos trabalhados e o nível; Situação do
-  plano atualiza sozinha com o último nível; gráfico por especialidade × escala.
+- **Parte 2 (2026-10-06):** evolução (`prOpenEditor`) com "Objetivos do plano terapêutico
+  trabalhados" (`#prGoals`, só com `plano_terapeutico.view`): objetivos ATIVOS do plano vigente
+  nas especialidades do profissional do atendimento (`profAreas`; sem profissional, todas) —
+  `planEvoGoalsFor`, `planEvoGoalsHtml`, `planEvoGoalsRead`. Grava
+  `clinical_records.plan_goals [{planId, specId, objId, scaleId, levelId}]`; o trigger
+  `clinical_records_plan_goals` (security definer) põe `levelId` + `levelEm` (data da evolução)
+  no objetivo do plano vigente se a data não for anterior a `levelEm`; último nível = Atingido,
+  sair dele = Ativo. Mudança manual da Situação no plano também grava `levelEm` (hoje);
+  `plan_prof_update` aceita `levelEm`. Gráfico no plano (`#plCharts`, `planEvoLoad`,
+  `planEvoCharts`, `planChartSvg`, `planChartsHtml`): figura por especialidade × escala, linha
+  por objetivo (até 8, `PLAN_VIZ_MAX`), cores `--viz-1..8` (paleta validada claro/escuro),
+  legenda, rótulo direto (≤ 4), dica no ponto e "Ver tabela". Sem sistema online lê
+  `PLAN.evoMem`. Migração `supabase/2026-10-06c-objetivos-na-evolucao.sql`; backup leva
+  `plan_goals`.
 
 ## Agenda: linha final com a saída da última sessão (2026-10-05)
 Pedido do usuário: horários do Planner e da Agenda seguem o horário da clínica e a

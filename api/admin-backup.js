@@ -101,7 +101,7 @@ var TABLES = {
   clinical_records: {
     key: "id",
     cols: ["id", "patient_id", "patient_name", "appointment_id", "appointment_date", "appointment_time",
-           "professional_id", "author_id", "author_name", "content", "created_at", "updated_at"],
+           "professional_id", "author_id", "author_name", "content", "plan_goals", "created_at", "updated_at"],
     users: ["author_id"]
   }
 };

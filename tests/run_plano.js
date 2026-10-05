@@ -177,6 +177,30 @@ const path = require('path');
   console.log('"+ Salvar no Banco" opens prefilled over the plan, saves and keeps the plan open?', pre === 'Imitar sons de animais' && preSpec === 'fono' && !!stillPlan && bankN === 2 && rowArea === 'comunicacao', JSON.stringify({pre, preSpec, bankN, rowArea}));
   await page.click('#plCancel');
 
+  // Parte 2: objetivos trabalhados na evolução + gráfico no plano.
+  await ev('prOpenEditor({patient: findPatientByName("Bruno Verde"), appointment: {id: "ap1", date: "2026-10-10", time: "08:00", professional_id: null}})');
+  await page.waitForSelector('#prGoalsBody [data-goal-obj]');
+  const evoRows = await page.$$eval('#prGoalsBody [data-goal-obj]', (r) => r.map((x) => x.getAttribute('data-goal-spec')));
+  const allActive = await ev('(function(){ var p = planVigente("bruno-verde"); var n = 0; p.sections.forEach(function(s){ s.objectives.forEach(function(o){ if ((o.status || "ativo") === "ativo") n++; }); }); return n; })()');
+  console.log('evolution lists the active objectives of the plan?', evoRows.length === allActive && allActive > 0, evoRows.length, allActive);
+  const firstObj = await page.$eval('#prGoalsBody [data-goal-obj]', (e) => e.getAttribute('data-goal-obj'));
+  const lvOpts = await page.$eval('#prGoalsBody [data-goal-obj] select[data-goal-level]', (e) => Array.prototype.map.call(e.options, (x) => x.value));
+  await page.$eval('#prGoalsBody [data-goal-obj] select[data-goal-level]', (e, v) => { e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }, lvOpts[lvOpts.length - 1]);
+  const read = await ev('JSON.stringify(planEvoGoalsRead(document.getElementById("prGoalsBody"), planEvoGoalsFor("bruno-verde", null, [])))');
+  const rd = JSON.parse(read);
+  console.log('choosing a level marks the objective as worked and reads planId/objId/level?', rd.length === 1 && rd[0].objId === firstObj && rd[0].levelId === lvOpts[lvOpts.length - 1] && !!rd[0].planId, read);
+  const tito = await ev('(function(){ var d = planEvoGoalsFor("bruno-verde", "tito", []); return d ? d.secs.length : -1; })()');
+  console.log('professional outside the plan specialties sees no objectives?', tito === 0, tito);
+  await ev('document.getElementById("modalHost").innerHTML = ""');
+  // gráfico: duas evoluções com níveis do primeiro objetivo
+  await ev(`(function(){ var p = planVigente("bruno-verde"); var s = p.sections.filter(function(x){ return x.objectives.length; })[0]; var o = s.objectives[0]; var sc = scaleById(o.scaleId);
+    PLAN.evoMem = [{patient_id: "bruno-verde", appointment_date: "2026-10-01", plan_goals: [{planId: p.id, specId: s.specId, objId: o.id, scaleId: o.scaleId, levelId: sc.levels[0].id}]},
+                   {patient_id: "bruno-verde", appointment_date: "2026-10-15", plan_goals: [{planId: p.id, specId: s.specId, objId: o.id, scaleId: o.scaleId, levelId: sc.levels[2].id}]}]; })()`);
+  await ev('openPlanFor("bruno-verde")'); await page.waitForSelector('#plCharts .pv-fig');
+  const fig = await page.$eval('#plCharts', (h) => ({figs: h.querySelectorAll('.pv-fig').length, lines: h.querySelectorAll('.pv-line').length, dots: h.querySelectorAll('.pv-dot').length, legend: h.querySelectorAll('.pv-key').length, cols: h.querySelectorAll('.pv-table thead th').length}));
+  console.log('plan shows one chart with one line of 2 points, legend and table?', fig.figs === 1 && fig.lines === 1 && fig.dots === 2 && fig.legend === 1 && fig.cols === 3, JSON.stringify(fig));
+  await page.click('#plCancel');
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
