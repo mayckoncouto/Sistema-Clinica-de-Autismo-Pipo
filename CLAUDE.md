@@ -1795,3 +1795,7 @@ Continua: cancelar exige motivo ("Outro" exige observação) e só um Ativo por 
 (reativar com outro Ativo pede confirmação e passa o outro para Renegociado). Banco:
 migração `supabase/2026-10-05h-cancelado-pode-voltar.sql` (`treatments_cancel_rules`
 sem o bloqueio de troca de status).
+- (2026-10-05) **Cancelar o tratamento inativa o paciente** (`trInactivatePatient`, depois
+  de salvar): só se ele não tiver outro tratamento Ativo e se o nível pode editar
+  Pacientes (senão avisa). Cancelado que volta a **Ativo** com paciente inativo →
+  `trOfferReactivatePatient` pergunta se reativa. Sem SQL.

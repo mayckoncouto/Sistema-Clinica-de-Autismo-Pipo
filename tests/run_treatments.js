@@ -59,6 +59,9 @@ const path = require('path');
   const canc = L.filter((t) => t.status === 'cancelado')[0];
   console.log('cancelled with reason, note and history entry?', !!canc && canc.motivoCancel === 'outro' && canc.obsCancel === 'Família pediu pausa' &&
     canc.historico.some((h) => h.de === 'ativo' && h.para === 'cancelado' && h.motivo === 'outro'));
+  const patInact = await page.evaluate(async () => { const db = await window.claude.use('db'); const d = await db.doc('patients/all').get(); const p = (d.data().list || []).filter((x) => x.id === 'duda-vermelho')[0]; return p ? !!p.inativo : null; });
+  const stillActive = L.some((t) => t.status === 'ativo');
+  console.log('cancelling the treatment inactivates the patient (when no other is active)?', stillActive ? patInact === false : patInact === true, stillActive, patInact);
   console.log('auto-renegotiated treatment got a history entry?', L.some((t) => t.status === 'renegociado' && (t.historico || []).some((h) => h.auto)));
   await page.click('#trHost tbody tr:has(.st-cancelado)'); await page.waitForSelector('#ovTreat');
   console.log('cancelled treatment: status can change and history shown?', !(await page.$eval('#trSt', (s) => s.disabled)) && /Ativo → Cancelado/.test(await page.textContent('#ovTreat .tr-hist')));

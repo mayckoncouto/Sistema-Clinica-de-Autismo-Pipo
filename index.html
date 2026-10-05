@@ -13210,10 +13210,37 @@ function openTreatmentModal(t, opts){
         if (res[0] === false) return;
         var money = trMoney(t || {});
         var changed = finTable && canEditVal && (isNew || money.valor !== newVal || money.despesas !== newDesp);
-        return (changed ? trSaveFinance(rec.id, newVal, newDesp) : Promise.resolve(true)).then(function(){ close(); if (state.tab === "tratamentos") renderTreatmentsTab(); });
+        return (changed ? trSaveFinance(rec.id, newVal, newDesp) : Promise.resolve(true)).then(function(){
+          close(); if (state.tab === "tratamentos") renderTreatmentsTab();
+          // Tratamento passou a Cancelado e o paciente não tem outro Ativo: inativa o paciente.
+          if (st === "cancelado" && (isNew || t.status !== "cancelado")) trInactivatePatient(patId, list);
+          // Cancelado voltou a Ativo com o paciente inativo: oferece reativar o paciente.
+          else if (st === "ativo" && !isNew && t.status === "cancelado") trOfferReactivatePatient(patId);
+        });
       });
     });
   });
+}
+// Cancelar o tratamento inativa o paciente (pedido do usuário, 2026-10-05), a não
+// ser que ele ainda tenha outro tratamento Ativo. Precisa de editar em Pacientes.
+function trInactivatePatient(patId, list){
+  var p = rawPatient(patId);
+  if (!p || p.inativo) return;
+  if ((list || state.treatments).some(function(x){ return x.patientId === patId && x.status === "ativo"; })) return;
+  if (!can("pacientes", "edit")){ showToast("Tratamento cancelado. O paciente continua ativo: seu nível não pode editar Pacientes.", true); return; }
+  showToast("Tratamento cancelado e paciente " + (p.nome || "") + " inativado.");
+  writePatients(state.patientsRaw.map(function(x){ return x.id === patId ? Object.assign({}, x, {inativo: true}) : x; }));
+}
+function trOfferReactivatePatient(patId){
+  var p = rawPatient(patId);
+  if (!p || !p.inativo || !can("pacientes", "edit")) return;
+  confirmDialog({title: "Reativar o paciente", confirmLabel: "Reativar",
+    message: "O tratamento voltou a <b>Ativo</b>, mas o paciente <b>" + esc(p.nome || "") + "</b> está inativo. Reativar o paciente também?"})
+    .then(function(ok){
+      if (!ok) return;
+      showToast("Paciente reativado.");
+      writePatients(state.patientsRaw.map(function(x){ return x.id === patId ? Object.assign({}, x, {inativo: false}) : x; }));
+    });
 }
 
 // "Mostrar inativos" nas telas de cadastro (ver setupInactivate).
@@ -13367,6 +13394,7 @@ var HELP_TOPICS = [
       "Ao lado de \"Especialidades/serviços e sessão (mês)\" aparece a conta: <b>Sessão/Mês</b> (o total) × a soma das especialidades/serviços. Verde = confere, âmbar = faltam sessões para distribuir, vermelho = passou do total. Salvar com diferença pede confirmação.",
       "O <b>Tipo</b> é automático: <b>Novo</b> se não há anterior ou o anterior foi Cancelado; <b>Renegociado</b> se o anterior foi Renegociado.",
       "<b>Cancelado</b> exige motivo; a observação é obrigatória quando o motivo é \"Outro\". Um tratamento cancelado pode voltar a Ativo ou Renegociado: o motivo do cancelamento sai do tratamento e a troca fica no histórico.",
+      "Cancelar um tratamento <b>inativa o paciente</b>, se ele não tiver outro tratamento Ativo (precisa da permissão de editar Pacientes). Se o tratamento cancelado voltar a Ativo, o sistema pergunta se reativa o paciente.",
       "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b> e a quantidade de sessões fica travada. Para mudar, use Renegociar.",
       "A <b>Data de término</b> é o último atendimento da Agenda no período do tratamento.",
       "Atendimentos de datas passadas usam o tratamento que valia <b>na data</b> deles (cor, regras e relatórios).",
