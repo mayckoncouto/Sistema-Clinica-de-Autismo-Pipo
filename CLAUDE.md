@@ -1939,6 +1939,7 @@ atingido fica no plano); impressão/PDF. Escalas e Habilidades comuns à clínic
 - Backup inclui `therapy_plans` (restaura por versão crescente). Teste
   `tests/run_plano.js` (31 arquivos no `npm test`). Os profissionais fictícios de
   `tests/test.html` têm `complementares` para os testes antigos não pararem no aviso.
+- Quadro de cada especialidade com borda lateral na cor dela (`.pl-spec`, `border-left-color`); colunas estreitas (Nº 52, Habilidade 128, Prazo 96, Escala 92, Situação 168, Status 104) e o resto dividido entre Objetivo e Critério de sucesso (`.pl-col-txt`), que crescem com o texto (`planGrow`).
 - **Parte 2 (a fazer):** na evolução, marcar objetivos trabalhados e o nível; Situação do
   plano atualiza sozinha com o último nível; gráfico por especialidade × escala.
 

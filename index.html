@@ -178,10 +178,11 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .pl-out{font-size:11px;font-weight:700;color:#9a5b00;background:#fff3d6;border:1px solid #f0d08a;border-radius:999px;padding:1px 8px}
 .pl-empty{font-size:12.5px;color:var(--muted);padding:6px 0}
 .pl-tbl-wrap{overflow-x:auto}
-.pl-tbl{width:100%;min-width:980px;border-collapse:collapse;table-layout:fixed}
+.pl-tbl{width:100%;min-width:900px;border-collapse:collapse;table-layout:fixed}
+.pl-tbl td:nth-child(5),.pl-tbl td:nth-child(6),.pl-tbl td:nth-child(7),.pl-tbl td:nth-child(8){font-size:12.5px}
 .pl-tbl th{font-size:11.5px;text-align:left;color:var(--muted);font-weight:700;padding:4px 6px;border-bottom:1px solid var(--line)}
 .pl-tbl td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
-.pl-tbl textarea{width:100%;min-height:40px;resize:vertical;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);color:var(--ink)}
+.pl-tbl textarea{width:100%;min-height:40px;resize:none;overflow:hidden;line-height:1.35;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);color:var(--ink)}
 .pl-tbl textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
 .pl-tbl textarea:disabled{background:var(--surface-2);color:var(--ink)}
 .pl-tbl tr.pl-st-atingido td{background:color-mix(in srgb,#2E9E5B 7%,var(--surface))}
@@ -15778,11 +15779,12 @@ function openPlanModal(plan, opts){
     var spec = state.specialties.filter(function(x){ return x.id === s.specId; })[0];
     var out = treatSpecs.indexOf(s.specId) === -1;
     var at = s.objectives.filter(function(o){ return o.status === "atingido"; }).length;
-    return '<div class="pl-spec" data-spec="' + esc(s.specId) + '">' +
-      '<div class="pl-spec-head"><span class="pcolor-dot" style="background:' + swatchVar((spec && spec.color) || "teal") + '"></span>' +
+    var specColor = swatchVar((spec && spec.color) || "teal");
+    return '<div class="pl-spec" data-spec="' + esc(s.specId) + '" style="border-left-color:' + specColor + '">' +
+      '<div class="pl-spec-head"><span class="pcolor-dot" style="background:' + specColor + '"></span>' +
         '<b>' + esc(specialtyName(s.specId)) + '</b>' + (out ? '<span class="pl-out">Fora do tratamento atual</span>' : '') +
         '<span class="pl-spec-count">' + s.objectives.length + (s.objectives.length === 1 ? " objetivo" : " objetivos") + (at ? " · " + at + (at === 1 ? " atingido" : " atingidos") : "") + '</span></div>' +
-      (s.objectives.length ? '<div class="pl-tbl-wrap"><table class="pl-tbl"><colgroup><col style="width:64px"><col style="width:150px"><col><col><col style="width:110px"><col style="width:110px"><col style="width:190px"><col style="width:120px"><col style="width:34px"></colgroup>' +
+      (s.objectives.length ? '<div class="pl-tbl-wrap"><table class="pl-tbl"><colgroup><col style="width:52px"><col style="width:128px"><col class="pl-col-txt"><col class="pl-col-txt"><col style="width:96px"><col style="width:92px"><col style="width:168px"><col style="width:104px"><col style="width:30px"></colgroup>' +
         '<thead><tr><th>Nº</th><th>Habilidade / área</th><th>Objetivo</th><th>Critério de sucesso</th><th>Prazo</th><th>Escala</th><th>Situação</th><th>Status</th><th></th></tr></thead><tbody>' +
         s.objectives.map(function(o, i){ return objRow(s, o, i, s.objectives.length); }).join("") + '</tbody></table></div>'
         : '<div class="pl-empty">Nenhum objetivo nesta especialidade.</div>') +
@@ -15833,6 +15835,7 @@ function openPlanModal(plan, opts){
 
   function render(){
     $("plSecs").innerHTML = d.sections.map(secHtml).join("");
+    Array.prototype.forEach.call($("plSecs").querySelectorAll(".pl-tbl textarea"), planGrow);
     var add = $("plAddSpec");
     if (add){
       var used = d.sections.map(function(s){ return s.specId; });
@@ -15853,6 +15856,7 @@ function openPlanModal(plan, opts){
     var f = e.target.getAttribute("data-f"), tr = e.target.closest("tr[data-obj]");
     if (!f || !tr || e.target.tagName !== "TEXTAREA") return;
     findObj(tr).o[f] = e.target.value;
+    planGrow(e.target);
   });
   secsEl.addEventListener("change", function(e){
     var f = e.target.getAttribute("data-f"), tr = e.target.closest("tr[data-obj]");
@@ -15974,6 +15978,9 @@ function openPlanModal(plan, opts){
     });
   });
 }
+
+// Objetivo e critério: a caixa cresce com o texto (sem barra de rolagem dentro).
+function planGrow(ta){ ta.style.height = "auto"; ta.style.height = Math.max(40, ta.scrollHeight + 2) + "px"; }
 
 /* ---- impressão ---- */
 function planPrint(plan){
