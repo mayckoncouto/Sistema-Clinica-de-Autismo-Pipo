@@ -1950,3 +1950,9 @@ duração padrão (`clinicSlots`: só sessões inteiras; com 50 min, 07:20–12:
 existia) e a nova linha final `tr.agd-endrow` (`agdDayEnd`, `agdEndRowHtml`; na Semana o
 rótulo é a saída mais tarde e o dia diferente mostra a dele em `td.agd-end-cell`). O
 Planner já tinha as duas linhas (`timeRows`). Teste `tests/run_clinic_slots.js`.
+
+## Planner: barrinha na cor da sala embaixo do profissional (2026-10-05)
+Pedido do usuário (opção 5 das sugestões de divisão entre salas): embaixo do nome do
+profissional, no cabeçalho (`.seathead .seathead-cell`) e na linha do almoço
+(`.periodrow-seatname`), uma barra de 3px na cor da sala (`--room` = `swatchVar(r.color)`
+inline no `th`/`div`, `box-shadow: inset 0 -3px 0`). Só cabeçalhos: sem custo na grade.
