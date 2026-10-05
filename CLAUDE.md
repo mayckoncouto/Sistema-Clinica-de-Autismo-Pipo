@@ -1786,3 +1786,6 @@ campo; `dpReplace` roda em todo `scroll` (captura), `resize` e `visualViewport`
 (teclado do celular), então a lista acompanha o campo ao rolar a janela; se o campo
 sai da área visível da janela/tela, a lista fica escondida até ele voltar. O seletor
 de cor (`#cpPop`, `pop.__place`) faz o mesmo.
+
+## Menu Cadastros: "Paciente 1" (2026-10-05)
+Pedido do usuário: o item de Pacientes no menu Cadastros (`CAD_ITEMS`, e no ☰ do celular) se chama **"Paciente 1"**. Só o rótulo mudou (aba `pacientes`, endereço `#pacientes`).
