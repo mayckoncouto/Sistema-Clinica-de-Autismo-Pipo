@@ -9578,6 +9578,15 @@ function agdOpenModal(opts){
     if (!rec.date){ showToast("Escolha a data.", true); return; }
     var wd = agdParse(rec.date).getDay();
     if (wd === 0 || wd === 6){ showToast("A agenda funciona de segunda a sexta.", true); return; }
+    // Horário de trabalho do profissional (cadastro do colaborador): fora dele não marca.
+    // Atendimento antigo que não mudou de profissional, data e horário pode ser editado.
+    var sameSlot = row && row.professional_id === rec.professional_id && row.date === rec.date && row.time === rec.time;
+    var recProf = findProfessional(rec.professional_id);
+    if (!sameSlot && recProf && !agdInHours(recProf, rec.time, agdParse(rec.date))){
+      var hrs = profDayHours(recProf, AD_WEEKDAY_KEYS[wd]);
+      showToast("Fora do horário de trabalho de " + (recProf.name || "profissional") + (hrs ? " neste dia (" + agdHoursText(hrs) + ")." : ": não trabalha neste dia."), true);
+      return;
+    }
     if (!kind && !rec.patient){ showToast("Informe o paciente ou o grupo.", true); pacEl.focus(); return; }
     if (!kind){
       var regName = agdBookingName(rec.patient);
@@ -13766,7 +13775,7 @@ var HELP_TOPICS = [
       "Busca: destaca o paciente na tela e mostra quantos há na semana."
     ],
     rules: [
-      "Fora do horário do profissional a célula é hachurada e não aceita marcação.",
+      "Fora do horário de trabalho do profissional (cadastrado em Cadastros → Colaboradores) a célula é hachurada e não aceita marcação. A janela do atendimento também recusa profissional, data ou horário fora desse horário (atendimento antigo pode ser editado se continuar no mesmo profissional, data e horário).",
       "<b>Limpar semana</b> apaga tudo da semana aberta (dupla confirmação); atendimentos com evolução ficam.",
       "Atendimento com evolução no prontuário <b>só o Administrador</b> exclui.",
       "Datas passadas mostram a cor do tratamento que valia na época.",

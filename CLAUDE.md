@@ -1873,3 +1873,13 @@ abre a tela direto (`navActivate`; Ctrl+clique abre em outra aba). Com duas ou
 mais, volta o menu com o texto original (`btn.__menuHtml`). Nenhuma = botão
 oculto. No celular (`mnavRender`) o grupo com uma opção também vira o item solto.
 Teste `tests/run_nav_single.js`.
+
+## Agenda: janela do atendimento respeita o horário de trabalho (2026-10-05)
+Pedido do usuário: profissional fora do horário de trabalho (cadastro do colaborador,
+`horarios` em `config/professionals`) não pode ser agendado. As células já ficavam
+`.agd-off`; a janela (`agdOpenModal`, "+ Incluir", visão Salas) deixava escolher
+qualquer profissional/data/hora. Agora o Salvar recusa com "Fora do horário de trabalho
+de Fulano neste dia (08:00–12:00)" / "não trabalha neste dia" (`agdInHours`,
+`profDayHours`), antes das outras checagens. Atendimento já gravado que não mudou de
+profissional, data e horário continua editável. Vale para todos os tipos (bloqueio,
+reunião, treinamento também). Teste `tests/run_prof_workhours.js`.
