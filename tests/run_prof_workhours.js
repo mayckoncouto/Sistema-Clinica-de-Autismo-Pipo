@@ -55,6 +55,22 @@ const path = require('path');
   console.log('editing an old out-of-hours booking in the same slot is not blocked?', await page.evaluate(() => window.__checked) === 1);
   await page.click('#agdCancel').catch(() => {});
 
+  // Na grade: atendimento já marcado fora do horário (Ana, segunda 14:10) abre ao clicar.
+  const opened = await ev(`(function(){
+    agdClient = function(){ return null; };
+    AD.error = ""; AD.loaded = true; AD.view = "dia"; AD.mode = "prof"; AD.sel = "ana-terapeuta"; AD.date = new Date(2030, 0, 7);
+    AD.rows = {x2: {id: "x2", date: "2030-01-07", time: "14:10", professional_id: "ana-terapeuta", patient: "Paciente Um", service: "sessao", room_id: null, note: ""}};
+    document.getElementById("tab-agendadia").hidden = false;
+    agdRender();
+    var td = document.querySelector('#agdGrid td.agd-slot[data-t="14:10"]');
+    var main = td && td.querySelector('.book[data-id="x2"] .book-main');
+    if (!main) return "no cell: " + [].map.call(document.querySelectorAll('#agdGrid td[data-t="14:10"]'), function(t){ return t.className + '/' + t.innerHTML.slice(0, 80); }).join(' ; ') + ' :: ' + (document.getElementById('agdGrid') ? '' : document.getElementById('tab-agendadia').innerText.slice(0, 200));
+    main.click();
+    return !!document.getElementById("agdSave");
+  })()`);
+  console.log('an existing booking out of hours still opens for editing?', opened === true, opened);
+  await page.click('#agdCancel').catch(() => {});
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
