@@ -13432,7 +13432,7 @@ var HELP_TOPICS = [
     purpose: "O sistema reúne o cadastro dos pacientes e da clínica, o Planner (a grade modelo de 4 semanas), a Agenda com as datas reais, o Prontuário e os Relatórios.",
     steps: [
       "Ao entrar, o sistema abre o Planner (no celular, a Agenda). Clicar na logo ou no nome da clínica também volta para essa tela.",
-      "Use o menu do topo: <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>.",
+      "Use o menu do topo: <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>. Cada pessoa vê só as telas do nível dela: quando o nível permite uma única opção de um menu (ex.: só Pacientes em Cadastros), o botão aparece direto com o nome dessa opção, sem menu; com duas ou mais, aparece o menu com elas.",
       "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Senha, Ajuda e Sair. Para o Administrador, também Clínica, Usuários e Backup.",
       "Em cada tela, o botão <b>?</b> abre este guia direto no assunto daquela tela.",
       "Nos campos de data, digite a data (só os números, ex.: 15032026 vira 15/03/2026) e tecle Enter, ou clique no ícone do calendário para escolher.",
@@ -14552,7 +14552,13 @@ function renderNavMenus(){
     var items = m.items.filter(function(i){ return !window.pipoAuth || i.ok(); });
     menu.innerHTML = items.map(function(i, n){ return (i.sep && n ? '<div class="cad-sep" role="separator"></div>' : "") + '<button type="button" role="menuitem" data-nav="' + i.key + '">' + i.label + '</button>'; }).join("");
     btn.hidden = !items.length;
-    btn.classList.toggle("active", m.tabs.indexOf(state.tab) !== -1);
+    // Só UMA opção permitida no menu: o botão vira essa opção direto (sem menu suspenso).
+    // Duas ou mais: o menu com as opções, como sempre.
+    if (btn.__menuHtml == null) btn.__menuHtml = btn.innerHTML;
+    m.single = items.length === 1 ? items[0] : null;
+    if (m.single){ btn.textContent = m.single.label; btn.removeAttribute("aria-haspopup"); btn.classList.add("nav-single"); setNavMenu(m, false); }
+    else { if (btn.classList.contains("nav-single")){ btn.innerHTML = btn.__menuHtml; btn.classList.remove("nav-single"); } btn.setAttribute("aria-haspopup", "menu"); }
+    btn.classList.toggle("active", m.single ? (!!m.single.tab && m.single.tab === state.tab && (!m.single.view || state.salasView === m.single.view)) : m.tabs.indexOf(state.tab) !== -1);
   });
 }
 function renderCadMenu(){ renderNavMenus(); }
@@ -14655,6 +14661,8 @@ function mnavRender(){
   function group(title, items){
     items = items.filter(function(i){ return !window.pipoAuth || i.ok(); });
     if (!items.length) return "";
+    // Só uma opção permitida: aparece direto, sem o grupo (mesma regra do topo).
+    if (items.length === 1) return navBtn(items[0], false);
     return mnavGroup(title, items.map(function(i, n){ return (i.sep && n ? '<div class="mnav-sep"></div>' : "") + navBtn(i, true); }).join(""));
   }
   // Grupo recolhido (Cadastros, Acesso): as opções só aparecem ao tocar no título.
@@ -14714,7 +14722,11 @@ function wireMobileNav(){
   NAV_MENUS.forEach(function(m){
     var btn = document.getElementById(m.btn), menu = document.getElementById(m.menu);
     if (!btn) return;
-    btn.addEventListener("click", function(e){ e.stopPropagation(); var open = menu.hidden; closeNavMenus(); setNavMenu(m, open); });
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      if (m.single){ closeNavMenus(); if (e.ctrlKey || e.metaKey){ navOpenNewTab(m.single.key); return; } navActivate(m.single); return; }
+      var open = menu.hidden; closeNavMenus(); setNavMenu(m, open);
+    });
     function pick(e){
       var b = e.target.closest("[data-nav]"); if (!b) return;
       var it = navItem(b.getAttribute("data-nav")); if (!it) return;

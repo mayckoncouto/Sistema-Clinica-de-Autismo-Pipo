@@ -1865,3 +1865,11 @@ Pedido do usuário: menu Acesso organizado em grupos com divisória (`accGroups`
 Sair. (2026-10-05) **Status** saiu do Acesso e foi para Cadastros (último item);
 na grade dos Níveis, "Status (cadastro)" fica junto dos cadastros, depois de Grupos. "Trocar senha" passou a se chamar **Senha** (menu, Níveis de permissão, Ajuda).
 A grade "Menu Acesso" dos Níveis segue a mesma ordem.
+## Menu do topo com uma opção só vira botão direto (2026-10-04)
+Regra do usuário: em `renderNavMenus`, se o nível permite só UMA opção de um menu
+do topo (Cadastros ou Planner), o botão mostra o nome dessa opção (ex.:
+"Pacientes"), sem seta nem menu (`m.single`, classe `.nav-single`), e o clique
+abre a tela direto (`navActivate`; Ctrl+clique abre em outra aba). Com duas ou
+mais, volta o menu com o texto original (`btn.__menuHtml`). Nenhuma = botão
+oculto. No celular (`mnavRender`) o grupo com uma opção também vira o item solto.
+Teste `tests/run_nav_single.js`.
