@@ -1980,3 +1980,13 @@ Pedido do usuário (opção 5 das sugestões de divisão entre salas): embaixo d
 profissional, no cabeçalho (`.seathead .seathead-cell`) e na linha do almoço
 (`.periodrow-seatname`), uma barra de 3px na cor da sala (`--room` = `swatchVar(r.color)`
 inline no `th`/`div`, `box-shadow: inset 0 -3px 0`). Só cabeçalhos: sem custo na grade.
+
+## Plano terapêutico: linhas de objetivo compactas (2026-10-05)
+Pedido do usuário ("as linhas ocupam muito espaço"): linha vazia de 68px → 41px.
+Objetivo e Critério com `rows="1"` (`planGrow` mínimo 32px, cresce ao digitar), listas
+`.pl-tbl .dp-btn` com 32px, células `vertical-align:middle`, "até dd/mm/aa" ao lado do
+prazo (`.pl-prazo`, data completa no `title`; coluna Prazo 176px), setas ▲▼ menores.
+- (2026-10-05) Setas ▲▼ ANTES do número, discretas (sem borda, cinza, mais visíveis no
+  passar do mouse); número com a fonte dos campos (12.5px, peso normal).
+  "Habilidade / área" passou a se chamar **Habilidade** (janela, cadastro "Habilidades",
+  menu, Níveis de permissão, ajuda, mensagens).

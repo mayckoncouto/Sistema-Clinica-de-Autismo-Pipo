@@ -228,6 +228,20 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .pl-lv-dot{flex:none;width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.15);display:inline-block;vertical-align:middle}
 .pl-lv-chip{display:inline-flex;align-items:center;gap:4px;margin:1px 8px 1px 0;font-size:12px;white-space:nowrap}
 .pl-rm-cell{text-align:center}
+/* Linhas compactas (2026-10-05): texto de 1 linha que cresce ao digitar, listas mais baixas, "até" ao lado do prazo. */
+.pl-tbl td{padding:4px 5px;vertical-align:middle}
+.pl-tbl textarea{min-height:32px;padding:5px 8px;display:block}
+.pl-tbl .dp-btn{padding:5px 8px;min-height:32px;font-size:12.5px;width:100%}
+.pl-tbl select{min-height:32px}
+.pl-prazo{display:flex;align-items:center;gap:6px}.pl-prazo>*:first-child{flex:1;min-width:0}.pl-prazo .pl-hint{flex:none;white-space:nowrap;font-size:11px}
+/* Setas antes do número, discretas (sem borda, cinza; aparecem mais no passar do mouse). Número na fonte dos campos. */
+.pl-num-in{gap:4px}.pl-num-in b{font-size:12.5px;font-weight:400;color:var(--ink);min-width:14px;text-align:left}
+.pl-move{gap:0}
+.pl-tbl .pl-mv{border:0;background:transparent;color:var(--muted);font-size:8px;padding:0 3px;opacity:.45;border-radius:4px}
+.pl-tbl tr:hover .pl-mv:not(:disabled){opacity:1}
+.pl-tbl .pl-mv:disabled{opacity:.15}
+.pl-tbl .pl-mv:not(:disabled):hover{background:var(--accent-weak);color:var(--accent)}
+.pl-tbl .rm{padding:2px 6px}
 .pl-rm-cell .rm{border:0;background:transparent;color:var(--muted);font-size:14px;cursor:pointer;padding:6px;border-radius:6px}.pl-rm-cell .rm:hover{color:var(--danger,#b6403a);background:var(--surface-2)}
 .pl-add-spec{margin:6px 0 4px;max-width:360px}
 .pl-versions{display:flex;flex-wrap:wrap;gap:6px}.pl-ver{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:4px 12px;font:inherit;font-size:12.5px;cursor:pointer}
@@ -1460,7 +1474,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="planos" hidden>Plano terapêutico</button>
       <button data-tab="objetivos" hidden>Banco de objetivos</button>
       <button data-tab="escalas" hidden>Escalas</button>
-      <button data-tab="habilidades" hidden>Habilidades / áreas</button>
+      <button data-tab="habilidades" hidden>Habilidades</button>
       <button data-tab="pacientes" hidden>Pacientes</button>
       <button data-tab="tratamentos" hidden>Tratamentos</button>
       <button data-tab="profissionais" hidden>Profissionais</button>
@@ -2818,7 +2832,7 @@ var state = {
   schools: [],           // escolas [{id,name,telefone,contato}] (config/schools)
   scales: [],            // escalas do plano terapêutico [{id,name,levels:[{id,name,color}]}] (config/scales)
   goalBank: [],          // banco de objetivos do plano terapêutico [{id,name,areaId,criterio,scaleId,specId}] (config/goal_bank)
-  skillAreas: [],        // habilidades/áreas do plano terapêutico [{id,name}] (config/skill_areas)
+  skillAreas: [],        // habilidades do plano terapêutico [{id,name}] (config/skill_areas)
   holidays: [],          // feriados e recessos (config/holidays); vazio = padrão (holidaysList)
   councils: [],          // conselhos [{id,sigla,name}] (config/councils); vazio = padrão (councilList)
   cbos: [],              // CBO [{id,code,name}] (config/cbo); vazio = sugestões (cboList)
@@ -2855,7 +2869,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano terapêutico", objetivos:"Banco de objetivos", escalas:"Escalas", habilidades:"Habilidades / áreas", relatorios:"Relatórios", rh_funcionarios:"Colaboradores", rh_remuneracao:"Colaboradores – valores"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano terapêutico", objetivos:"Banco de objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", rh_funcionarios:"Colaboradores", rh_remuneracao:"Colaboradores – valores"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -3557,7 +3571,7 @@ var SIMPLE_LISTS = {
   feriados: {path: "config/holidays", key: "holidays", module: "feriados", label: "feriados"},
   tiposfunc: {path: "config/staff_types", key: "staffTypes", module: "rh_funcionarios", label: "tipos de colaborador"},
   escalas: {path: "config/scales", key: "scales", module: "escalas", label: "escalas"},
-  habilidades: {path: "config/skill_areas", key: "skillAreas", module: "habilidades", label: "habilidades/áreas"},
+  habilidades: {path: "config/skill_areas", key: "skillAreas", module: "habilidades", label: "habilidades"},
   objetivos: {path: "config/goal_bank", key: "goalBank", module: "objetivos", label: "banco de objetivos"}
 };
 function subscribeSimpleLists(){
@@ -13974,9 +13988,9 @@ var HELP_TOPICS = [
     rules: ["Não pode haver dois conselhos com a mesma sigla.", "A coluna Profissionais mostra quantos usam cada conselho; conselho em uso não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>Conselhos</b>."},
   {id: "objetivos", group: "Prontuário", title: "Banco de objetivos", mod: "objetivos", tab: "objetivos",
-    purpose: "Objetivos prontos para usar no Plano terapêutico, com habilidade/área, critério de sucesso e escala sugeridos.",
-    steps: ["Prontuário ▾ → <b>Banco de objetivos</b> → <b>+ Incluir</b>: objetivo, habilidade/área, especialidade (ou todas), critério de sucesso e escala.",
-      "No Plano terapêutico, ao digitar no campo <b>Objetivo</b>, aparecem os objetivos do banco daquela especialidade (e os de todas). Escolha com o mouse ou com ↑ ↓ e Enter: o texto entra no objetivo e a habilidade/área, o critério e a escala vêm junto quando estão vazios.",
+    purpose: "Objetivos prontos para usar no Plano terapêutico, com habilidade, critério de sucesso e escala sugeridos.",
+    steps: ["Prontuário ▾ → <b>Banco de objetivos</b> → <b>+ Incluir</b>: objetivo, habilidade, especialidade (ou todas), critério de sucesso e escala.",
+      "No Plano terapêutico, ao digitar no campo <b>Objetivo</b>, aparecem os objetivos do banco daquela especialidade (e os de todas). Escolha com o mouse ou com ↑ ↓ e Enter: o texto entra no objetivo e a habilidade, o critério e a escala vêm junto quando estão vazios.",
       "Para guardar um objetivo novo sem sair do plano, digite o texto e escolha <b>+ Salvar no Banco de objetivos</b>: abre uma janela por cima, já preenchida com o que está na linha."],
     rules: ["Não pode haver dois objetivos com o mesmo texto na mesma especialidade.", "Mudar ou excluir um objetivo do banco não muda os planos que já usaram o texto."],
     who: "Permissão <b>Banco de objetivos</b>."},
@@ -13985,11 +13999,11 @@ var HELP_TOPICS = [
     steps: ["Prontuário ▾ → <b>Escalas</b> → <b>+ Incluir</b>: nome e os níveis, do primeiro ao final.", "Cada nível tem nome e cor (clique no círculo para escolher). Use ▲▼ para mudar a ordem e <b>+ nível</b> para acrescentar."],
     rules: ["O <b>último nível</b> é o nível final: no plano, escolher esse nível deixa o objetivo como <b>Atingido</b>.", "A escala precisa de pelo menos 2 níveis.", "Escala usada em algum plano não é excluída: é <b>Inativada</b>.", "As escalas são as mesmas para toda a clínica."],
     who: "Permissão <b>Escalas</b>."},
-  {id: "habilidades", group: "Prontuário", title: "Habilidades / áreas", mod: "habilidades", tab: "habilidades",
-    purpose: "Habilidades/áreas dos objetivos do Plano terapêutico (Comunicação, Socialização, Autonomia…).",
-    steps: ["Prontuário ▾ → <b>Habilidades / áreas</b> → <b>+ Incluir</b>: nome."],
+  {id: "habilidades", group: "Prontuário", title: "Habilidades", mod: "habilidades", tab: "habilidades",
+    purpose: "Habilidades dos objetivos do Plano terapêutico (Comunicação, Socialização, Autonomia…).",
+    steps: ["Prontuário ▾ → <b>Habilidades</b> → <b>+ Incluir</b>: nome."],
     rules: ["Valem para todas as especialidades.", "Habilidade usada em algum plano não é excluída: é <b>Inativada</b>."],
-    who: "Permissão <b>Habilidades / áreas</b>."},
+    who: "Permissão <b>Habilidades</b>."},
   {id: "cbo", group: "Cadastros", title: "CBO", mod: "cbo", tab: "cbo",
     purpose: "Lista de CBO (Classificação Brasileira de Ocupações) usada no cadastro dos profissionais.",
     steps: ["Cadastros → <b>CBO</b> → <b>+ Incluir</b>: código (ex.: 2515-10) e descrição.", "No cadastro do colaborador com o tipo Profissional, o botão <b>+</b> ao lado do CBO também inclui um novo."],
@@ -14124,7 +14138,7 @@ var HELP_TOPICS = [
       "Abra <b>Prontuário ▾ → Plano terapêutico</b>. A lista mostra um plano por paciente, com a coluna <b>Revisão</b> (aviso 30 dias antes e quando vence). O filtro mostra só os que vencem ou já venceram.",
       "<b>+ Incluir</b>: escolha o paciente. Também dá para abrir pelo botão <b>Abrir plano terapêutico</b> na janela do Tratamento.",
       "<b>Quadro clínico</b>: os dados da seção Saúde do cadastro do paciente aparecem sozinhos e sempre atualizados; escreva o <b>Resumo do quadro clínico</b> no campo abaixo deles.",
-      "Cada especialidade do tratamento tem um quadro. Use <b>+ Inserir objetivo</b> e preencha: Habilidade/área, Objetivo, Critério de sucesso, Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
+      "Cada especialidade do tratamento tem um quadro. Use <b>+ Inserir objetivo</b> e preencha: Habilidade, Objetivo, Critério de sucesso, Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
       "No campo <b>Objetivo</b>, ao digitar, aparecem sugestões do <b>Banco de objetivos</b>; <b>+ Salvar no Banco de objetivos</b> guarda o texto digitado para usar em outros planos.",
       "O <b>Nº</b> é a prioridade: use ▲▼ na própria linha para subir ou descer; os números se ajustam sozinhos.",
       "<b>Revisar (nova versão)</b>: cria a versão seguinte a partir de hoje, copiando o resumo e os objetivos; a versão anterior fica guardada e abre pela lista <b>Versões anteriores</b> (só leitura).",
@@ -14514,7 +14528,7 @@ var REG_CFG = {
     write: function(l){ return writeSimpleList("objetivos", l); },
     open: function(item){ openGoalModal(item); },
     search: function(g){ return [g.name, skillAreaName(g.areaId), g.specId ? specialtyName(g.specId) : "", g.criterio].join(" "); },
-    cols: ["Objetivo", "Habilidade / área", "Especialidade", "Critério de sucesso", "Escala"],
+    cols: ["Objetivo", "Habilidade", "Especialidade", "Critério de sucesso", "Escala"],
     row: function(g){ var sc = scaleById(g.scaleId); return ['<b>' + esc(g.name) + '</b>', esc(g.areaId ? skillAreaName(g.areaId) : "—"), esc(g.specId ? specialtyName(g.specId) : "Todas"), esc(g.criterio || "—"), esc(sc ? sc.name : "—")]; },
     vals: function(g){ var sc = scaleById(g.scaleId); return [g.name, g.areaId ? skillAreaName(g.areaId) : "", g.specId ? specialtyName(g.specId) : "", g.criterio || "", sc ? sc.name : ""]; }
   },
@@ -14528,7 +14542,7 @@ var REG_CFG = {
     vals: function(sc){ return [sc.name, (sc.levels || []).length]; }
   },
   habilidades: {
-    title: "habilidade/área", plural: "habilidades/áreas", module: "habilidades", newLabel: "+ Incluir", fem: true,
+    title: "habilidade", plural: "habilidades", module: "habilidades", newLabel: "+ Incluir", fem: true,
     list: function(){ return skillAreasList(); },
     write: function(l){ return writeSimpleList("habilidades", l); },
     cols: ["Nome"],
@@ -14919,7 +14933,7 @@ var PR_ITEMS = [
   // Cadastros usados no Plano terapêutico.
   {sep: true, key: "objetivos", label: "Banco de objetivos", tab: "objetivos", ok: function(){ return can("objetivos", "view"); }},
   {key: "escalas", label: "Escalas", tab: "escalas", ok: function(){ return can("escalas", "view"); }},
-  {key: "habilidades", label: "Habilidades / áreas", tab: "habilidades", ok: function(){ return can("habilidades", "view"); }}
+  {key: "habilidades", label: "Habilidades", tab: "habilidades", ok: function(){ return can("habilidades", "view"); }}
 ];
 var PR_TABS = ["prontuario", "planos", "objetivos", "escalas", "habilidades"];
 var NAV_MENUS = [
@@ -15859,13 +15873,13 @@ function openPlanModal(plan, opts){
     var dA = editAll ? '' : ' disabled', dS = editSt ? '' : ' disabled';
     var prazoAte = trAddMonths(d.plan_date, Number(o.prazo) || 0);
     return '<tr data-obj="' + esc(o.id) + '" class="pl-st-' + esc(o.status || "ativo") + '">' +
-      '<td class="pl-num"><div class="pl-num-in"><b>' + (i + 1) + '</b>' + (full ? '<span class="pl-move">' +
+      '<td class="pl-num"><div class="pl-num-in">' + (full ? '<span class="pl-move">' +
         '<button type="button" class="pl-mv" data-mv="-1"' + (i ? '' : ' disabled') + ' aria-label="Subir" title="Subir">▲</button>' +
-        '<button type="button" class="pl-mv" data-mv="1"' + (i < n - 1 ? '' : ' disabled') + ' aria-label="Descer" title="Descer">▼</button></span>' : '') + '</div></td>' +
+        '<button type="button" class="pl-mv" data-mv="1"' + (i < n - 1 ? '' : ' disabled') + ' aria-label="Descer" title="Descer">▼</button></span>' : '') + '<b>' + (i + 1) + '</b></div></td>' +
       '<td><select data-f="areaId" data-combo' + dA + '>' + optList(areas.filter(function(a){ return isActive(a) || a.id === o.areaId; }), o.areaId, "Escolha…") + '</select></td>' +
-      '<td><textarea data-f="objetivo" rows="2"' + dA + ' placeholder="Objetivo">' + esc(o.objetivo || "") + '</textarea></td>' +
-      '<td><textarea data-f="criterio" rows="2"' + dA + ' placeholder="Critério de sucesso">' + esc(o.criterio || "") + '</textarea></td>' +
-      '<td><select data-f="prazo"' + dA + '>' + optList(PLAN_PRAZOS, o.prazo || 3) + '</select><div class="pl-hint">até ' + esc(trBr(prazoAte)) + '</div></td>' +
+      '<td><textarea data-f="objetivo" rows="1"' + dA + ' placeholder="Objetivo">' + esc(o.objetivo || "") + '</textarea></td>' +
+      '<td><textarea data-f="criterio" rows="1"' + dA + ' placeholder="Critério de sucesso">' + esc(o.criterio || "") + '</textarea></td>' +
+      '<td><div class="pl-prazo"><select data-f="prazo"' + dA + '>' + optList(PLAN_PRAZOS, o.prazo || 3) + '</select><span class="pl-hint" title="Prazo até ' + esc(trBr(prazoAte)) + '">até ' + esc(trBr(prazoAte).slice(0, 6) + trBr(prazoAte).slice(8)) + '</span></div></td>' +
       '<td><select data-f="scaleId" data-combo' + dA + '>' + optList(scales.filter(function(x){ return isActive(x) || x.id === o.scaleId; }), o.scaleId) + '</select></td>' +
       '<td>' + levelSel(o, dS) + (o.levelEm ? '<div class="pl-hint">em ' + esc(trBr(o.levelEm)) + '</div>' : '') + '</td>' +
       '<td><select data-f="status"' + dS + '>' + optList(PLAN_STATUS, o.status || "ativo") + '</select>' +
@@ -15882,8 +15896,8 @@ function openPlanModal(plan, opts){
       '<div class="pl-spec-head"><span class="pcolor-dot" style="background:' + specColor + '"></span>' +
         '<b>' + esc(specialtyName(s.specId)) + '</b>' + (out ? '<span class="pl-out">Fora do tratamento atual</span>' : '') +
         '<span class="pl-spec-count">' + s.objectives.length + (s.objectives.length === 1 ? " objetivo" : " objetivos") + (at ? " · " + at + (at === 1 ? " atingido" : " atingidos") : "") + '</span></div>' +
-      (s.objectives.length ? '<div class="pl-tbl-wrap"><table class="pl-tbl"><colgroup><col style="width:52px"><col style="width:128px"><col class="pl-col-txt"><col class="pl-col-txt"><col style="width:96px"><col style="width:92px"><col style="width:168px"><col style="width:104px"><col style="width:30px"></colgroup>' +
-        '<thead><tr><th>Nº</th><th>Habilidade / área</th><th>Objetivo</th><th>Critério de sucesso</th><th>Prazo</th><th>Escala</th><th>Situação</th><th>Status</th><th></th></tr></thead><tbody>' +
+      (s.objectives.length ? '<div class="pl-tbl-wrap"><table class="pl-tbl"><colgroup><col style="width:52px"><col style="width:128px"><col class="pl-col-txt"><col class="pl-col-txt"><col style="width:176px"><col style="width:92px"><col style="width:168px"><col style="width:104px"><col style="width:30px"></colgroup>' +
+        '<thead><tr><th>Nº</th><th>Habilidade</th><th>Objetivo</th><th>Critério de sucesso</th><th>Prazo</th><th>Escala</th><th>Situação</th><th>Status</th><th></th></tr></thead><tbody>' +
         s.objectives.map(function(o, i){ return objRow(s, o, i, s.objectives.length); }).join("") + '</tbody></table></div>'
         : '<div class="pl-empty">Nenhum objetivo nesta especialidade.</div>') +
       (canAddIn(s.specId) ? '<button type="button" class="btn add-row-btn" data-add-obj>+ Inserir objetivo</button>' : '') +
@@ -16101,7 +16115,7 @@ function openPlanModal(plan, opts){
         var o = s.objectives[j];
         if (!origIds[o.id] || full){
           if (!String(o.objetivo || "").trim()){ showToast("Preencha o objetivo nº " + (j + 1) + " de " + specialtyName(s.specId) + ".", true); return false; }
-          if (!o.areaId){ showToast("Escolha a habilidade/área do objetivo nº " + (j + 1) + " de " + specialtyName(s.specId) + ".", true); return false; }
+          if (!o.areaId){ showToast("Escolha a habilidade do objetivo nº " + (j + 1) + " de " + specialtyName(s.specId) + ".", true); return false; }
         }
       }
     }
@@ -16147,7 +16161,7 @@ function openPlanModal(plan, opts){
 }
 
 // Objetivo e critério: a caixa cresce com o texto (sem barra de rolagem dentro).
-function planGrow(ta){ ta.style.height = "auto"; ta.style.height = Math.max(40, ta.scrollHeight + 2) + "px"; }
+function planGrow(ta){ ta.style.height = "auto"; ta.style.height = Math.max(32, ta.scrollHeight + 2) + "px"; }
 
 /* ---- Parte 2: objetivos trabalhados na evolução e gráfico ----
  * Evolução (prOpenEditor) mostra os objetivos ATIVOS do plano vigente nas
@@ -16324,7 +16338,7 @@ function planPrint(plan){
     '<h3>Quadro clínico</h3>' + planClinicalHtml(p).replace(/class="pl-clin"/, 'class="clin"') +
     (plan.summary ? '<p class="sum">' + esc(plan.summary).replace(/\n/g, "<br>") + '</p>' : '') +
     secs.map(function(s){
-      return '<h3>' + esc(specialtyName(s.specId)) + '</h3><table><thead><tr><th>Nº</th><th>Habilidade / área</th><th>Objetivo</th><th>Critério de sucesso</th><th>Prazo</th><th>Escala</th><th>Situação</th><th>Status</th></tr></thead><tbody>' +
+      return '<h3>' + esc(specialtyName(s.specId)) + '</h3><table><thead><tr><th>Nº</th><th>Habilidade</th><th>Objetivo</th><th>Critério de sucesso</th><th>Prazo</th><th>Escala</th><th>Situação</th><th>Status</th></tr></thead><tbody>' +
         s.objectives.map(function(o, i){
           var sc = scaleById(o.scaleId), lv = scaleLevel(o.scaleId, o.levelId);
           return '<tr><td>' + (i + 1) + '</td><td>' + esc(skillAreaName(o.areaId)) + '</td><td>' + esc(o.objetivo || "") + '</td><td>' + esc(o.criterio || "") + '</td><td>' + esc(trLabel(PLAN_PRAZOS, Number(o.prazo))) + '</td><td>' + esc(sc ? sc.name : "—") + '</td>' +
@@ -16464,12 +16478,12 @@ function openGoalModal(item, opts){
   }
   host.innerHTML = '<div class="overlay' + (opts.stack ? ' confirm-overlay' : '') + '" id="ovGoal"><div class="modal" style="max-width:620px">' +
     '<div class="modal-head"><div><h3>' + (isNew ? "Novo objetivo" : (canSave ? "Editar objetivo" : "Objetivo")) + '</h3>' +
-      '<div class="modal-sub">Objetivo pronto para usar no plano terapêutico: ao escolher no campo Objetivo, a habilidade/área, o critério e a escala vêm junto.</div></div>' +
+      '<div class="modal-sub">Objetivo pronto para usar no plano terapêutico: ao escolher no campo Objetivo, a habilidade, o critério e a escala vêm junto.</div></div>' +
       '<button class="modal-close" id="glClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body">' +
       '<div class="field"><label for="glName">Objetivo</label><textarea id="glName" rows="3" placeholder="Ex.: Pedir ajuda usando frase de 2 palavras"' + dis + '>' + esc(v.name) + '</textarea></div>' +
       '<div class="field-row">' +
-        '<div class="field"><label for="glArea">Habilidade / área</label><select id="glArea" data-combo' + dis + '>' + opt(skillAreasList().filter(function(a){ return isActive(a) || a.id === v.areaId; }), v.areaId, "Escolha…") + '</select></div>' +
+        '<div class="field"><label for="glArea">Habilidade</label><select id="glArea" data-combo' + dis + '>' + opt(skillAreasList().filter(function(a){ return isActive(a) || a.id === v.areaId; }), v.areaId, "Escolha…") + '</select></div>' +
         '<div class="field"><label for="glSpec">Especialidade</label><select id="glSpec" data-combo' + dis + '>' + opt(activeOnly(state.specialties).concat(state.specialties.filter(function(x){ return x.id === v.specId && !isActive(x); })), v.specId, "Todas as especialidades") + '</select></div>' +
       '</div>' +
       '<div class="field"><label for="glCrit">Critério de sucesso (sugerido)</label><textarea id="glCrit" rows="2" placeholder="Ex.: 80% das tentativas em 3 sessões seguidas"' + dis + '>' + esc(v.criterio) + '</textarea></div>' +
@@ -16495,7 +16509,7 @@ function openGoalModal(item, opts){
   if ($("glSave")) $("glSave").addEventListener("click", function(){
     var name = $("glName").value.trim();
     if (!name){ $("glName").focus(); showToast("Preencha o objetivo.", true); return; }
-    if (!$("glArea").value){ showToast("Escolha a habilidade/área.", true); return; }
+    if (!$("glArea").value){ showToast("Escolha a habilidade.", true); return; }
     var list = goalBankList(), spec = $("glSpec").value;
     if (list.some(function(g){ return normText(g.name) === normText(name) && (g.specId || "") === spec && (!item || g.id !== item.id); })){ showToast("Esse objetivo já está no Banco de objetivos.", true); return; }
     var rec = Object.assign({}, item || {}, {name: name, areaId: $("glArea").value, specId: spec, criterio: $("glCrit").value.trim(), scaleId: $("glScale").value});

@@ -22,7 +22,7 @@
     { key: "plano_terapeutico", label: "Plano terapêutico", hint: "ver: consultar; incluir: criar e revisar; editar: tudo. Profissional sem editar muda só situação/status nas especialidades dele" },
     { key: "objetivos", label: "Banco de objetivos", hint: "objetivos prontos para usar no plano terapêutico" },
     { key: "escalas", label: "Escalas", hint: "escalas do plano terapêutico (níveis e cores)" },
-    { key: "habilidades", label: "Habilidades / áreas", hint: "habilidades/áreas dos objetivos do plano terapêutico" },
+    { key: "habilidades", label: "Habilidades", hint: "habilidades dos objetivos do plano terapêutico" },
     { key: "pacientes", label: "Pacientes", hint: "" },
     { key: "campos_paciente", label: "Pacientes – campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
