@@ -21,12 +21,12 @@ const path = require('path');
   const ev = (code) => page.evaluate((c) => window.__ev(c), code);
   const setv = (sel, v) => page.$eval(sel, (e, x) => { e.value = x; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }, v);
 
-  // Menus: Prontuário ▾ com as duas opções; Escalas e Habilidades em Cadastros.
+  // Menus: Prontuário ▾ com Prontuário, Plano terapêutico e os cadastros do plano.
   const menus = await ev(`(function(){ renderNavMenus(); return {
     pr: Array.prototype.map.call(document.querySelectorAll("#prMenu [data-nav]"), function(b){ return b.textContent; }),
     cad: Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav"); }) }; })()`);
-  console.log('Prontuário menu has Prontuário + Plano terapêutico?', JSON.stringify(menus.pr) === '["Prontuário","Plano terapêutico"]', JSON.stringify(menus.pr));
-  console.log('Cadastros has Escalas and Habilidades / áreas?', menus.cad.indexOf('escalas') !== -1 && menus.cad.indexOf('habilidades') !== -1);
+  console.log('Prontuário menu has Prontuário, Plano terapêutico and its registries?', JSON.stringify(menus.pr) === '["Prontuário","Plano terapêutico","Banco de objetivos","Escalas","Habilidades / áreas"]', JSON.stringify(menus.pr));
+  console.log('Escalas and Habilidades left Cadastros?', menus.cad.indexOf('escalas') === -1 && menus.cad.indexOf('habilidades') === -1);
 
   // Escalas: Likert e ABA pré-cadastradas, com cor; habilidades pré-cadastradas.
   await page.$eval('#mainTabs button[data-tab=escalas]', (b) => b.click()); await page.waitForTimeout(200);
@@ -140,6 +140,42 @@ const path = require('path');
   await page.click('#cfCancel'); await page.waitForTimeout(200);
   const notSaved = await ev('!((state.scheduleDocs["seg-1"] || {}).bookings || {})["09:20|r1|r1-t1"]');
   console.log('cancel keeps the slot empty?', notSaved);
+
+  // Banco de objetivos: cadastro, sugestão no campo Objetivo e "+ Salvar no Banco".
+  await page.$eval('#mainTabs button[data-tab=objetivos]', (b) => b.click()); await page.waitForTimeout(200);
+  await page.click('#reg-objetivos-add'); await page.waitForSelector('#ovGoal');
+  await page.fill('#glName', 'Nomear 10 objetos do cotidiano');
+  await setv('#glArea', 'comunicacao'); await setv('#glSpec', 'fono');
+  await page.fill('#glCrit', '8 de 10 tentativas');
+  await setv('#glScale', 'aba');
+  await page.click('#glSave'); await page.waitForTimeout(300);
+  const bankRows = await page.$$eval('#reg-objetivos-host tbody tr', (r) => r.map((x) => x.cells[0].textContent.trim()));
+  console.log('goal saved in the bank?', bankRows.join() === 'Nomear 10 objetos do cotidiano', JSON.stringify(bankRows));
+  await ev('openPlanFor("bruno-verde")'); await page.waitForSelector('#ovPlan');
+  await page.click('#plSecs [data-spec="fono"] [data-add-obj]');
+  const lastFono = '#plSecs [data-spec="fono"] tbody tr:last-child';
+  await page.type(lastFono + ' textarea[data-f="objetivo"]', 'nomear obj');
+  await page.waitForSelector('.pl-goal-pop:not([hidden]) [data-goal]');
+  const sugg = await page.$$eval('.pl-goal-pop [data-goal]', (r) => r.map((x) => x.textContent));
+  console.log('typing suggests the bank goal (no accents/case)?', sugg.length === 1 && /Nomear 10 objetos/.test(sugg[0]), JSON.stringify(sugg));
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); await page.waitForTimeout(200);
+  const applied = await page.evaluate((sel) => { const tr = document.querySelector(sel); return {o: tr.querySelector('[data-f=objetivo]').value, a: tr.querySelector('select[data-f=areaId]').value, c: tr.querySelector('[data-f=criterio]').value, s: tr.querySelector('select[data-f=scaleId]').value}; }, lastFono);
+  console.log('choosing fills objective, area, criterion and scale?', applied.o === 'Nomear 10 objetos do cotidiano' && applied.a === 'comunicacao' && applied.c === '8 de 10 tentativas' && applied.s === 'aba', JSON.stringify(applied));
+  const psicoSugg = await ev('goalMatches("nomear", "psico").length');
+  console.log('goal of Fonoaudiologia is not suggested in Psicologia?', psicoSugg === 0, psicoSugg);
+  await page.click('#plSecs [data-spec="fono"] [data-add-obj]');
+  await page.type(lastFono + ' textarea[data-f="objetivo"]', 'Imitar sons de animais');
+  await page.waitForSelector('.pl-goal-pop:not([hidden]) [data-goal-new]');
+  await page.click('.pl-goal-pop [data-goal-new]'); await page.waitForSelector('#ovGoal');
+  const pre = await page.$eval('#glName', (e) => e.value);
+  const preSpec = await page.$eval('#glSpec', (e) => e.value);
+  await setv('#glArea', 'comunicacao');
+  await page.click('#glSave'); await page.waitForTimeout(300);
+  const stillPlan = await page.$('#ovPlan');
+  const bankN = await ev('goalBankList().length');
+  const rowArea = await page.$eval(lastFono + ' select[data-f=areaId]', (e) => e.value);
+  console.log('"+ Salvar no Banco" opens prefilled over the plan, saves and keeps the plan open?', pre === 'Imitar sons de animais' && preSpec === 'fono' && !!stillPlan && bankN === 2 && rowArea === 'comunicacao', JSON.stringify({pre, preSpec, bankN, rowArea}));
+  await page.click('#plCancel');
 
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();

@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var MODULES = ["agendamentos", "agenda", "resumo", "pacientes", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "cbo", "conselhos", "feriados", "campos_paciente", "profissionais", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "escalas", "habilidades", "rh_funcionarios", "rh_remuneracao"];
+  var MODULES = ["agendamentos", "agenda", "resumo", "pacientes", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "cbo", "conselhos", "feriados", "campos_paciente", "profissionais", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "objetivos", "escalas", "habilidades", "rh_funcionarios", "rh_remuneracao"];
   var ACTIONS = ["view", "create", "edit", "delete"];
 
   var client = null;

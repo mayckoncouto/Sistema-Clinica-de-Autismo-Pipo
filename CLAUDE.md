@@ -1940,6 +1940,18 @@ atingido fica no plano); impressão/PDF. Escalas e Habilidades comuns à clínic
   `tests/run_plano.js` (31 arquivos no `npm test`). Os profissionais fictícios de
   `tests/test.html` têm `complementares` para os testes antigos não pararem no aviso.
 - Quadro de cada especialidade com borda lateral na cor dela (`.pl-spec`, `border-left-color`); colunas estreitas (Nº 52, Habilidade 128, Prazo 96, Escala 92, Situação 168, Status 104) e o resto dividido entre Objetivo e Critério de sucesso (`.pl-col-txt`), que crescem com o texto (`planGrow`).
+- (2026-10-06) **Banco de objetivos** e cadastros do plano no menu Prontuário ▾ (`PR_ITEMS`:
+  Prontuário, Plano terapêutico | Banco de objetivos, Escalas, Habilidades / áreas; saíram de
+  Cadastros). Documento `config/goal_bank {list:[{id, name, areaId, criterio, scaleId, specId}]}`
+  (`specId` vazio = todas), permissão `objetivos`, `REG_CFG.objetivos` + `openGoalModal(item,
+  {stack, prefill, onSaved})`. No plano, o campo Objetivo mostra `.pl-goal-pop` (fixa, junto do
+  campo) com `goalMatches(texto, especialidade)`; escolher preenche o texto e, se vazios, área,
+  critério e escala (`goalApply`); "+ Salvar no Banco de objetivos" abre a janela por cima
+  (`#confirmHost`) já preenchida. Migração `supabase/2026-10-06b-banco-de-objetivos.sql`.
+- Pedidos do usuário para o plano (2026-10-06), aprovados: Parte 2; objetivos do dia na Agenda;
+  copiar objetivos na revisão (manter/ajustar/encerrar); aviso de objetivo parado; painel da
+  coordenação; prazo vencido no objetivo; comparação entre versões; relatório para a família;
+  relatório para o convênio. Recusados: ciência da família, metas da família, anexos.
 - **Parte 2 (a fazer):** na evolução, marcar objetivos trabalhados e o nível; Situação do
   plano atualiza sozinha com o último nível; gráfico por especialidade × escala.
 

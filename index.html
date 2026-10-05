@@ -182,6 +182,8 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .pl-tbl td:nth-child(5),.pl-tbl td:nth-child(6),.pl-tbl td:nth-child(7),.pl-tbl td:nth-child(8){font-size:12.5px}
 .pl-tbl th{font-size:11.5px;text-align:left;color:var(--muted);font-weight:700;padding:4px 6px;border-bottom:1px solid var(--line)}
 .pl-tbl td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.autolist.pl-goal-pop{position:fixed;right:auto;top:0;z-index:80;max-height:280px}
+.pl-goal-pop .autolist-name{white-space:normal}
 .pl-tbl textarea{width:100%;min-height:40px;resize:none;overflow:hidden;line-height:1.35;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);color:var(--ink)}
 .pl-tbl textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
 .pl-tbl textarea:disabled{background:var(--surface-2);color:var(--ink)}
@@ -1425,6 +1427,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <div class="cad-wrap"><button type="button" class="cad-btn" id="prBtn" aria-haspopup="menu" aria-expanded="false">Prontuário <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="prMenu" role="menu" hidden></div></div>
       <button data-tab="prontuario" hidden>Prontuário</button>
       <button data-tab="planos" hidden>Plano terapêutico</button>
+      <button data-tab="objetivos" hidden>Banco de objetivos</button>
       <button data-tab="escalas" hidden>Escalas</button>
       <button data-tab="habilidades" hidden>Habilidades / áreas</button>
       <button data-tab="pacientes" hidden>Pacientes</button>
@@ -1767,6 +1770,18 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
     <div class="room-list" id="roomList"></div>
   </section>
 
+  <section id="tab-objetivos" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:320px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-objetivos-search" type="text" placeholder="Buscar objetivo, área ou especialidade…">
+      </div>
+      <span class="pat-count" id="reg-objetivos-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-objetivos-add">+ Incluir</button>
+    </div>
+    <div id="reg-objetivos-host" class="reg-host"></div>
+  </section>
   <section id="tab-escalas" class="panel reg-panel" hidden>
     <div class="pat-toolbar">
       <div class="search-wrap" style="max-width:280px">
@@ -2771,6 +2786,7 @@ var state = {
   doctors: [],           // médicos [{id,name,especialidade,crm,telefone}] (config/doctors)
   schools: [],           // escolas [{id,name,telefone,contato}] (config/schools)
   scales: [],            // escalas do plano terapêutico [{id,name,levels:[{id,name,color}]}] (config/scales)
+  goalBank: [],          // banco de objetivos do plano terapêutico [{id,name,areaId,criterio,scaleId,specId}] (config/goal_bank)
   skillAreas: [],        // habilidades/áreas do plano terapêutico [{id,name}] (config/skill_areas)
   holidays: [],          // feriados e recessos (config/holidays); vazio = padrão (holidaysList)
   councils: [],          // conselhos [{id,sigla,name}] (config/councils); vazio = padrão (councilList)
@@ -2808,7 +2824,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano terapêutico", escalas:"Escalas", habilidades:"Habilidades / áreas", relatorios:"Relatórios", rh_funcionarios:"Colaboradores", rh_remuneracao:"Colaboradores – valores"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano terapêutico", objetivos:"Banco de objetivos", escalas:"Escalas", habilidades:"Habilidades / áreas", relatorios:"Relatórios", rh_funcionarios:"Colaboradores", rh_remuneracao:"Colaboradores – valores"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -2887,7 +2903,7 @@ function permToolClasses(){
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
   if (!window.pipoAuth) return;
-  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"rh_funcionarios", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados", funcionarios:"rh_funcionarios", tiposfunc:"rh_funcionarios"};
+  var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"rh_funcionarios", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados", funcionarios:"rh_funcionarios", tiposfunc:"rh_funcionarios"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -3179,6 +3195,7 @@ function useTxt(n, one, many){ return n ? n + " " + (n === 1 ? one : many) : nul
 // Onde cada cadastro está em uso (lista de textos; vazia = livre para excluir).
 var USAGE = {
   escalas: function(sc){ return planUseCount("scaleId", sc.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos")].filter(Boolean); }); },
+  objetivos: function(){ return Promise.resolve([]); },
   habilidades: function(a){ return planUseCount("areaId", a.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos")].filter(Boolean); }); },
   tiposfunc: function(t){ return Promise.resolve([useTxt(staffTypeUseCount(t.id), "pessoa", "pessoas")].filter(Boolean)); },
   medicos: function(m){ return Promise.resolve([useTxt(patientsUsing("medicoId", m.id), "paciente", "pacientes")].filter(Boolean)); },
@@ -3509,7 +3526,8 @@ var SIMPLE_LISTS = {
   feriados: {path: "config/holidays", key: "holidays", module: "feriados", label: "feriados"},
   tiposfunc: {path: "config/staff_types", key: "staffTypes", module: "rh_funcionarios", label: "tipos de colaborador"},
   escalas: {path: "config/scales", key: "scales", module: "escalas", label: "escalas"},
-  habilidades: {path: "config/skill_areas", key: "skillAreas", module: "habilidades", label: "habilidades/áreas"}
+  habilidades: {path: "config/skill_areas", key: "skillAreas", module: "habilidades", label: "habilidades/áreas"},
+  objetivos: {path: "config/goal_bank", key: "goalBank", module: "objetivos", label: "banco de objetivos"}
 };
 function subscribeSimpleLists(){
   Object.keys(SIMPLE_LISTS).forEach(function(k){
@@ -13606,7 +13624,7 @@ function trReactivatePatient(patId){
   addInactiveToggle("tab-pacientes", "pacientes", function(){ renderPatientsTab(); });
   addInactiveToggle("tab-profissionais", "profissionais", function(){ renderProfissionaisTab(); });
   addInactiveToggle("tab-salas", "salas", function(){ renderSalasTab(); });
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "escalas", "habilidades"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "objetivos", "escalas", "habilidades"].forEach(function(k){
     addInactiveToggle("tab-" + k, k, function(){ renderRegistryTab(k); });
   });
 })();
@@ -13902,14 +13920,21 @@ var HELP_TOPICS = [
     steps: ["Cadastros → <b>Conselhos</b> → <b>+ Incluir</b>: sigla (ex.: CRP) e nome.", "No cadastro do colaborador com o tipo Profissional, o botão <b>+</b> ao lado do Conselho também inclui um novo."],
     rules: ["Não pode haver dois conselhos com a mesma sigla.", "A coluna Profissionais mostra quantos usam cada conselho; conselho em uso não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>Conselhos</b>."},
-  {id: "escalas", group: "Cadastros", title: "Escalas", mod: "escalas", tab: "escalas",
+  {id: "objetivos", group: "Prontuário", title: "Banco de objetivos", mod: "objetivos", tab: "objetivos",
+    purpose: "Objetivos prontos para usar no Plano terapêutico, com habilidade/área, critério de sucesso e escala sugeridos.",
+    steps: ["Prontuário ▾ → <b>Banco de objetivos</b> → <b>+ Incluir</b>: objetivo, habilidade/área, especialidade (ou todas), critério de sucesso e escala.",
+      "No Plano terapêutico, ao digitar no campo <b>Objetivo</b>, aparecem os objetivos do banco daquela especialidade (e os de todas). Escolha com o mouse ou com ↑ ↓ e Enter: o texto entra no objetivo e a habilidade/área, o critério e a escala vêm junto quando estão vazios.",
+      "Para guardar um objetivo novo sem sair do plano, digite o texto e escolha <b>+ Salvar no Banco de objetivos</b>: abre uma janela por cima, já preenchida com o que está na linha."],
+    rules: ["Não pode haver dois objetivos com o mesmo texto na mesma especialidade.", "Mudar ou excluir um objetivo do banco não muda os planos que já usaram o texto."],
+    who: "Permissão <b>Banco de objetivos</b>."},
+  {id: "escalas", group: "Prontuário", title: "Escalas", mod: "escalas", tab: "escalas",
     purpose: "Escalas usadas na Situação dos objetivos do Plano terapêutico (ex.: Likert de 0 a 5, ABA).",
-    steps: ["Cadastros → <b>Escalas</b> → <b>+ Incluir</b>: nome e os níveis, do primeiro ao final.", "Cada nível tem nome e cor (clique no círculo para escolher). Use ▲▼ para mudar a ordem e <b>+ nível</b> para acrescentar."],
+    steps: ["Prontuário ▾ → <b>Escalas</b> → <b>+ Incluir</b>: nome e os níveis, do primeiro ao final.", "Cada nível tem nome e cor (clique no círculo para escolher). Use ▲▼ para mudar a ordem e <b>+ nível</b> para acrescentar."],
     rules: ["O <b>último nível</b> é o nível final: no plano, escolher esse nível deixa o objetivo como <b>Atingido</b>.", "A escala precisa de pelo menos 2 níveis.", "Escala usada em algum plano não é excluída: é <b>Inativada</b>.", "As escalas são as mesmas para toda a clínica."],
     who: "Permissão <b>Escalas</b>."},
-  {id: "habilidades", group: "Cadastros", title: "Habilidades / áreas", mod: "habilidades", tab: "habilidades",
+  {id: "habilidades", group: "Prontuário", title: "Habilidades / áreas", mod: "habilidades", tab: "habilidades",
     purpose: "Habilidades/áreas dos objetivos do Plano terapêutico (Comunicação, Socialização, Autonomia…).",
-    steps: ["Cadastros → <b>Habilidades / áreas</b> → <b>+ Incluir</b>: nome."],
+    steps: ["Prontuário ▾ → <b>Habilidades / áreas</b> → <b>+ Incluir</b>: nome."],
     rules: ["Valem para todas as especialidades.", "Habilidade usada em algum plano não é excluída: é <b>Inativada</b>."],
     who: "Permissão <b>Habilidades / áreas</b>."},
   {id: "cbo", group: "Cadastros", title: "CBO", mod: "cbo", tab: "cbo",
@@ -14046,6 +14071,7 @@ var HELP_TOPICS = [
       "<b>+ Incluir</b>: escolha o paciente. Também dá para abrir pelo botão <b>Abrir plano terapêutico</b> na janela do Tratamento.",
       "<b>Quadro clínico</b>: os dados da seção Saúde do cadastro do paciente aparecem sozinhos e sempre atualizados; escreva o <b>Resumo do quadro clínico</b> no campo abaixo deles.",
       "Cada especialidade do tratamento tem um quadro. Use <b>+ Inserir objetivo</b> e preencha: Habilidade/área, Objetivo, Critério de sucesso, Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
+      "No campo <b>Objetivo</b>, ao digitar, aparecem sugestões do <b>Banco de objetivos</b>; <b>+ Salvar no Banco de objetivos</b> guarda o texto digitado para usar em outros planos.",
       "O <b>Nº</b> é a prioridade: use ▲▼ na própria linha para subir ou descer; os números se ajustam sozinhos.",
       "<b>Revisar (nova versão)</b>: cria a versão seguinte a partir de hoje, copiando o resumo e os objetivos; a versão anterior fica guardada e abre pela lista <b>Versões anteriores</b> (só leitura).",
       "<b>Imprimir</b> gera o plano em PDF com a logo da clínica e espaço para as assinaturas."
@@ -14130,7 +14156,7 @@ var HELP = {topic: "inicio", search: ""};
 var HELP_TAB_TOPIC = {inicio: "inicio", agenda: "planner", relatorio: "resumo", agendadia: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "funcionarios", convenios: "convenios", servicos: "servicos",
   especialidades: "especialidades", motivos: "motivos", medicos: "medicos", escolas: "escolas", cbo: "cbo", conselhos: "conselhos", feriados: "feriados", usuarios: "usuarios", funcionarios: "funcionarios", tiposfunc: "tiposfunc",
-  planos: "plano-terapeutico", escalas: "escalas", habilidades: "habilidades"};
+  planos: "plano-terapeutico", objetivos: "objetivos", escalas: "escalas", habilidades: "habilidades"};
 function helpCan(t){
   if (!t.mod) return true;
   if (!window.pipoAuth) return true;
@@ -14426,6 +14452,16 @@ function openBackupModal(){
  * Gravam pelos mesmos writeConvenios / writeServices / writeSpecialties.
  */
 var REG_CFG = {
+  objetivos: {
+    title: "objetivo", plural: "objetivos", module: "objetivos", newLabel: "+ Incluir",
+    list: function(){ return goalBankList(); },
+    write: function(l){ return writeSimpleList("objetivos", l); },
+    open: function(item){ openGoalModal(item); },
+    search: function(g){ return [g.name, skillAreaName(g.areaId), g.specId ? specialtyName(g.specId) : "", g.criterio].join(" "); },
+    cols: ["Objetivo", "Habilidade / área", "Especialidade", "Critério de sucesso", "Escala"],
+    row: function(g){ var sc = scaleById(g.scaleId); return ['<b>' + esc(g.name) + '</b>', esc(g.areaId ? skillAreaName(g.areaId) : "—"), esc(g.specId ? specialtyName(g.specId) : "Todas"), esc(g.criterio || "—"), esc(sc ? sc.name : "—")]; },
+    vals: function(g){ var sc = scaleById(g.scaleId); return [g.name, g.areaId ? skillAreaName(g.areaId) : "", g.specId ? specialtyName(g.specId) : "", g.criterio || "", sc ? sc.name : ""]; }
+  },
   escalas: {
     title: "escala", plural: "escalas", module: "escalas", newLabel: "+ Incluir", fem: true,
     list: function(){ return scalesList(); },
@@ -14806,8 +14842,6 @@ var CAD_ITEMS = [
   {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("servicos", "view"); }},
   {key: "cbo", label: "CBO", tab: "cbo", ok: function(){ return can("cbo", "view"); }},
   {key: "conselhos", label: "Conselhos", tab: "conselhos", ok: function(){ return can("conselhos", "view"); }},
-  {key: "escalas", label: "Escalas", tab: "escalas", ok: function(){ return can("escalas", "view"); }},
-  {key: "habilidades", label: "Habilidades / áreas", tab: "habilidades", ok: function(){ return can("habilidades", "view"); }},
   {sep: true, key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
   {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }},
   {key: "feriados", label: "Feriados e recessos", tab: "feriados", ok: function(){ return can("feriados", "view"); }},
@@ -14816,7 +14850,7 @@ var CAD_ITEMS = [
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
-var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "funcionarios", "tiposfunc", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "escalas", "habilidades", "salas", "feriados"];
+var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "funcionarios", "tiposfunc", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "agenda", ok: function(){ return can("agenda", "view"); }},
   {key: "resumo", label: "Resumo", tab: "relatorio", ok: function(){ return can("resumo", "view"); }}
@@ -14825,9 +14859,13 @@ var PL_TABS = ["agenda", "relatorio"];
 // Prontuário ▾: evoluções e Plano terapêutico.
 var PR_ITEMS = [
   {key: "prontuario", label: "Prontuário", tab: "prontuario", ok: function(){ return can("prontuario", "view"); }},
-  {key: "planos", label: "Plano terapêutico", tab: "planos", ok: function(){ return can("plano_terapeutico", "view"); }}
+  {key: "planos", label: "Plano terapêutico", tab: "planos", ok: function(){ return can("plano_terapeutico", "view"); }},
+  // Cadastros usados no Plano terapêutico.
+  {sep: true, key: "objetivos", label: "Banco de objetivos", tab: "objetivos", ok: function(){ return can("objetivos", "view"); }},
+  {key: "escalas", label: "Escalas", tab: "escalas", ok: function(){ return can("escalas", "view"); }},
+  {key: "habilidades", label: "Habilidades / áreas", tab: "habilidades", ok: function(){ return can("habilidades", "view"); }}
 ];
-var PR_TABS = ["prontuario", "planos"];
+var PR_TABS = ["prontuario", "planos", "objetivos", "escalas", "habilidades"];
 var NAV_MENUS = [
   {btn: "cadBtn", menu: "cadMenu", items: CAD_ITEMS, tabs: CAD_TABS},
   {btn: "plBtn", menu: "plMenu", items: PL_ITEMS, tabs: PL_TABS},
@@ -15044,7 +15082,7 @@ function wireMobileNav(){
   setTimeout(openNavFromHash, 0);
   wireMobileNav();
   wirePlansTab();
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "feriados", "tiposfunc", "escalas", "habilidades"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "feriados", "tiposfunc", "objetivos", "escalas", "habilidades"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
     var a = document.getElementById("reg-" + k + "-add");
@@ -15862,6 +15900,70 @@ function openPlanModal(plan, opts){
     findObj(tr).o[f] = e.target.value;
     planGrow(e.target);
   });
+  // Campo Objetivo: sugestões do Banco de objetivos (da especialidade do quadro ou
+  // de todas) e "+ Salvar no Banco de objetivos" para o texto digitado.
+  var goalPop = document.createElement("div");
+  goalPop.className = "autolist pl-goal-pop"; goalPop.hidden = true; ov.appendChild(goalPop);
+  var goalTa = null;
+  function goalHide(){ goalPop.hidden = true; goalTa = null; }
+  function goalShow(ta){
+    if (!ta || ta.disabled || !document.body.contains(ta)) return goalHide();
+    var x = findObj(ta.closest("tr[data-obj]")), q = ta.value.trim();
+    var list = goalMatches(q, x.s.specId, 8).filter(function(g){ return normText(g.name) !== normText(q); });
+    var canNew = !!q && can("objetivos", "create") && !goalBankList().some(function(g){ return normText(g.name) === normText(q); });
+    if (!list.length && !canNew) return goalHide();
+    goalTa = ta;
+    goalPop.innerHTML = list.map(function(g){
+      return '<button type="button" data-goal="' + esc(g.id) + '"><span class="autolist-name">' + esc(g.name) + '</span>' + (g.areaId ? '<span class="autolist-kind">' + esc(skillAreaName(g.areaId)) + '</span>' : '') + '</button>';
+    }).join("") + (canNew ? '<button type="button" class="autolist-new" data-goal-new>+ Salvar no Banco de objetivos</button>' : '');
+    var r = ta.getBoundingClientRect();
+    goalPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 528)) + "px";
+    goalPop.style.width = Math.min(520, Math.max(r.width, 340)) + "px";
+    goalPop.hidden = false;
+    var below = window.innerHeight - r.bottom - 8, h = goalPop.offsetHeight;
+    goalPop.style.top = (h <= below || r.top < h ? r.bottom + 4 : r.top - h - 4) + "px";
+  }
+  function goalApply(o, g){
+    o.objetivo = g.name;
+    if (!o.areaId && g.areaId) o.areaId = g.areaId;
+    if (!String(o.criterio || "").trim() && g.criterio) o.criterio = g.criterio;
+    if (g.scaleId && g.scaleId !== o.scaleId && scaleById(g.scaleId)){
+      var sc = scaleById(g.scaleId);
+      o.scaleId = g.scaleId; o.levelId = sc.levels.length ? sc.levels[0].id : "";
+      if (o.status === "atingido"){ o.status = "ativo"; o.statusEm = today; }
+    }
+  }
+  function isGoalTa(t){ return t && t.tagName === "TEXTAREA" && t.getAttribute("data-f") === "objetivo"; }
+  secsEl.addEventListener("focusin", function(e){ if (isGoalTa(e.target)) goalShow(e.target); });
+  secsEl.addEventListener("input", function(e){ if (isGoalTa(e.target)) goalShow(e.target); });
+  secsEl.addEventListener("focusout", function(e){ if (isGoalTa(e.target)) setTimeout(function(){ if (document.activeElement !== goalTa) goalHide(); }, 0); });
+  secsEl.addEventListener("keydown", function(e){
+    if (goalPop.hidden || e.target !== goalTa) return;
+    var items = Array.prototype.slice.call(goalPop.querySelectorAll("button"));
+    var cur = goalPop.querySelector("button.kb"), i = items.indexOf(cur);
+    if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); goalHide(); return; }
+    if (e.key === "Enter" && cur){ e.preventDefault(); cur.click(); return; }
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    i = e.key === "ArrowDown" ? Math.min(items.length - 1, i + 1) : Math.max(0, i - 1);
+    items.forEach(function(b){ b.classList.remove("kb"); });
+    items[i].classList.add("kb"); items[i].scrollIntoView({block: "nearest"});
+  }, true);
+  goalPop.addEventListener("mousedown", function(e){ e.preventDefault(); });
+  goalPop.addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b || !goalTa) return;
+    var tr = goalTa.closest("tr[data-obj]"), x = findObj(tr), objId = x.o.id;
+    goalHide();
+    var refocus = function(){ var t = secsEl.querySelector('tr[data-obj="' + objId + '"] textarea[data-f="criterio"]'); if (t) t.focus(); };
+    if (b.hasAttribute("data-goal-new")){
+      openGoalModal(null, {stack: true, prefill: {name: String(x.o.objetivo || "").trim(), areaId: x.o.areaId, criterio: x.o.criterio, scaleId: x.o.scaleId, specId: x.s.specId},
+        onSaved: function(rec){ goalApply(x.o, rec); render(); refocus(); }});
+      return;
+    }
+    var g = goalBankList().filter(function(z){ return z.id === b.getAttribute("data-goal"); })[0];
+    if (g){ goalApply(x.o, g); render(); refocus(); }
+  });
+  ov.querySelector(".modal-body").addEventListener("scroll", function(){ if (goalTa) goalShow(goalTa); });
   secsEl.addEventListener("change", function(e){
     var f = e.target.getAttribute("data-f"), tr = e.target.closest("tr[data-obj]");
     if (!f || !tr || e.target.tagName === "TEXTAREA") return;
@@ -16099,6 +16201,90 @@ function openScaleModal(item){
       if (delBlocked(this)) return;
       confirmDialog({title: "Confirmar exclusão", message: "Excluir a escala <b>" + esc(item.name) + "</b>?<br>Essa ação não pode ser desfeita.", confirmLabel: "Confirmar exclusão"}).then(function(ok){
         if (ok) save(scalesList().filter(function(s){ return s.id !== item.id; }));
+      });
+    });
+  }
+}
+
+/* ---- Banco de objetivos (Prontuário ▾ → Banco de objetivos; config/goal_bank) ----
+ * Objetivos prontos {id, name (texto do objetivo), areaId, criterio, scaleId,
+ * specId ("" = todas as especialidades)}. No plano, o campo Objetivo sugere os do
+ * banco (da especialidade do quadro ou de todas) e oferece "+ Salvar no Banco de
+ * objetivos" para o texto digitado (openGoalModal com stack: janela por cima).
+ */
+function goalBankList(){ return (state.goalBank || []).slice(); }
+function goalMatches(q, specId, limit){
+  var words = normText(q || "").split(/\s+/).filter(Boolean);
+  return activeOnly(goalBankList()).filter(function(g){
+    if (g.specId && specId && g.specId !== specId) return false;
+    var t = normText([g.name, skillAreaName(g.areaId)].join(" "));
+    return words.every(function(w){ return t.indexOf(w) !== -1; });
+  }).sort(function(a, b){ return (b.specId === specId) - (a.specId === specId) || String(a.name).localeCompare(String(b.name), "pt-BR"); })
+    .slice(0, limit || 8);
+}
+function openGoalModal(item, opts){
+  opts = opts || {};
+  var isNew = !item;
+  if (isNew && !can("objetivos", "create")){ showToast(permDeniedMsg("objetivos", "create"), true); return; }
+  var canSave = isNew || can("objetivos", "edit"), canDel = !isNew && !opts.stack && can("objetivos", "delete");
+  var v = Object.assign({name: "", areaId: "", criterio: "", scaleId: "", specId: ""}, opts.prefill || {}, item || {});
+  var dis = canSave ? '' : ' disabled';
+  var host;
+  if (opts.stack){
+    host = document.getElementById("confirmHost");
+    if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
+  } else host = document.getElementById("modalHost");
+  function opt(list, val, empty){
+    return (empty != null ? '<option value="">' + esc(empty) + '</option>' : '') + list.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === val ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join("");
+  }
+  host.innerHTML = '<div class="overlay' + (opts.stack ? ' confirm-overlay' : '') + '" id="ovGoal"><div class="modal" style="max-width:620px">' +
+    '<div class="modal-head"><div><h3>' + (isNew ? "Novo objetivo" : (canSave ? "Editar objetivo" : "Objetivo")) + '</h3>' +
+      '<div class="modal-sub">Objetivo pronto para usar no plano terapêutico: ao escolher no campo Objetivo, a habilidade/área, o critério e a escala vêm junto.</div></div>' +
+      '<button class="modal-close" id="glClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body">' +
+      '<div class="field"><label for="glName">Objetivo</label><textarea id="glName" rows="3" placeholder="Ex.: Pedir ajuda usando frase de 2 palavras"' + dis + '>' + esc(v.name) + '</textarea></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label for="glArea">Habilidade / área</label><select id="glArea" data-combo' + dis + '>' + opt(skillAreasList().filter(function(a){ return isActive(a) || a.id === v.areaId; }), v.areaId, "Escolha…") + '</select></div>' +
+        '<div class="field"><label for="glSpec">Especialidade</label><select id="glSpec" data-combo' + dis + '>' + opt(activeOnly(state.specialties).concat(state.specialties.filter(function(x){ return x.id === v.specId && !isActive(x); })), v.specId, "Todas as especialidades") + '</select></div>' +
+      '</div>' +
+      '<div class="field"><label for="glCrit">Critério de sucesso (sugerido)</label><textarea id="glCrit" rows="2" placeholder="Ex.: 80% das tentativas em 3 sessões seguidas"' + dis + '>' + esc(v.criterio) + '</textarea></div>' +
+      '<div class="field"><label for="glScale">Escala (sugerida)</label><select id="glScale" data-combo' + dis + '>' + opt(scalesList().filter(function(x){ return isActive(x) || x.id === v.scaleId; }), v.scaleId, "Sem escala sugerida") + '</select></div>' +
+    '</div>' +
+    '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="glDel">Excluir</button>' : '') +
+      '<div class="spacer"></div><button class="btn ghost" id="glCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
+      (canSave ? '<button class="btn primary" id="glSave">Salvar</button>' : '') + '</div></div></div>';
+  var ov = document.getElementById("ovGoal");
+  function $(id){ return document.getElementById(id); }
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  $("glClose").addEventListener("click", close);
+  $("glCancel").addEventListener("click", close);
+  setTimeout(function(){ var n = $("glName"); if (n && canSave){ n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 0);
+  function save(list, rec){
+    return writeSimpleList("objetivos", list).then(function(ok){
+      if (!ok) return;
+      close(); if (state.tab === "objetivos") renderRegistryTab("objetivos");
+      if (rec){ showToast("Objetivo salvo no Banco de objetivos."); if (opts.onSaved) opts.onSaved(rec); }
+    });
+  }
+  if ($("glSave")) $("glSave").addEventListener("click", function(){
+    var name = $("glName").value.trim();
+    if (!name){ $("glName").focus(); showToast("Preencha o objetivo.", true); return; }
+    if (!$("glArea").value){ showToast("Escolha a habilidade/área.", true); return; }
+    var list = goalBankList(), spec = $("glSpec").value;
+    if (list.some(function(g){ return normText(g.name) === normText(name) && (g.specId || "") === spec && (!item || g.id !== item.id); })){ showToast("Esse objetivo já está no Banco de objetivos.", true); return; }
+    var rec = Object.assign({}, item || {}, {name: name, areaId: $("glArea").value, specId: spec, criterio: $("glCrit").value.trim(), scaleId: $("glScale").value});
+    if (isNew) rec.id = uid("goal");
+    save(isNew ? list.concat([rec]) : list.map(function(g){ return g.id === rec.id ? rec : g; }), rec);
+  });
+  var del = $("glDel");
+  if (del){
+    setupInactivate({btn: "glDel", mod: "objetivos", item: item, name: item.name, usage: USAGE.objetivos, close: close,
+      save: function(it){ return writeSimpleList("objetivos", goalBankList().map(function(g){ return g.id === it.id ? Object.assign({}, g, {inativo: it.inativo}) : g; })).then(function(){ renderRegistryTab("objetivos"); }); }});
+    del.addEventListener("click", function(){
+      if (delBlocked(this)) return;
+      confirmDialog({title: "Confirmar exclusão", message: "Excluir o objetivo <b>" + esc(item.name) + "</b> do Banco de objetivos?<br>Os planos que já usam esse texto não mudam.", confirmLabel: "Confirmar exclusão"}).then(function(ok){
+        if (ok) save(goalBankList().filter(function(g){ return g.id !== item.id; }));
       });
     });
   }
