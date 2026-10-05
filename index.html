@@ -419,6 +419,10 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .agd-det-modal .modal-foot{padding:10px 16px 12px}
 .agd-det-top{display:flex;align-items:center;gap:12px}
 .agd-det-top .btn{flex:none;padding:7px 12px;font-size:12.5px;white-space:nowrap}
+.agd-det-top{margin-bottom:8px;flex-wrap:wrap}
+.agd-det-seg{flex:none;margin-left:auto}
+.agd-det-seg button{padding:5px 10px;font-size:12px}
+.agd-det[hidden]{display:none}
 .agd-det-modal .agd-det-name{flex:1;min-width:0;font-size:16px;margin:0;line-height:1.25;align-items:flex-start}
 .agd-det-modal .agd-det-name .pcolor-dot{margin-top:6px}
 .agd-det{display:grid;grid-template-columns:auto 1fr;column-gap:14px;row-gap:7px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;font-size:13px}
@@ -1479,8 +1483,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="agendadia">Agenda</button>
       <div class="cad-wrap"><button type="button" class="cad-btn" id="prBtn" aria-haspopup="menu" aria-expanded="false">Prontuário <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="prMenu" role="menu" hidden></div></div>
       <button data-tab="prontuario" hidden>Prontuário</button>
-      <button data-tab="planos" hidden>Plano terapêutico</button>
-      <button data-tab="objetivos" hidden>Banco de objetivos</button>
+      <button data-tab="planos" hidden>Plano Terapêutico</button>
+      <button data-tab="objetivos" hidden>Objetivos</button>
       <button data-tab="escalas" hidden>Escalas</button>
       <button data-tab="habilidades" hidden>Habilidades</button>
       <button data-tab="pacientes" hidden>Pacientes</button>
@@ -2877,7 +2881,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano terapêutico", objetivos:"Banco de objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", rh_funcionarios:"Colaboradores", rh_remuneracao:"Colaboradores – valores"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", rh_funcionarios:"Colaboradores", rh_remuneracao:"Colaboradores – valores"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -9674,22 +9678,29 @@ function agdOpenDetails(row){
         '<button class="modal-close" id="agdDetClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="agd-det-top"><div class="agd-det-name">' + (col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + '<span>' + esc(name) + '</span></div>' +
+          (pat ? '<div class="seg agd-det-seg" id="agdDetSeg" role="tablist">' + [["ag", "Agendamento"], ["sa", "Saúde"], ["tr", "Tratamento"]].map(function(t, i){
+            return '<button type="button" data-det="' + t[0] + '"' + (i ? '' : ' class="active"') + ' role="tab" aria-selected="' + (i ? 'false' : 'true') + '">' + t[1] + '</button>'; }).join("") + '</div>' : '') +
           '</div>' +
-        (pat ? pickupBoxHtml(pat, agdIsLastOfDay(row)) : '') +
-        '<div class="agd-det">' +
+        // Quadro de informações: Agendamento | Saúde (cadastro do paciente) | Tratamento (da data).
+        '<div class="agd-det" data-det-pane="ag">' +
         (kind ? '' : line(grp ? "Tipo" : "Serviço", grp ? "Grupo de suporte" : bookingServiceName(row))) +
-        line("Profissional", prof ? prof.name : "") +
-        line("Observação", row.note || "") +
         line("Sala", room ? room.name : "") +
         line("Data/Hora", agdBrDate(row.date) + " " + row.time + " até " + agdPlus40(row.time)) +
+        line("Observação", row.note || "") +
         '</div>' +
+        (pat ? '<div class="agd-det" data-det-pane="sa" hidden>' +
+          line("Diagnóstico (CID)", pat.cid || "") + line("Alergias", pat.alergias || "") +
+          line("Medicações em uso", pat.medicacoes || "") + line("Restrições alimentares", pat.restricoes || "") + '</div>' +
+          '<div class="agd-det" data-det-pane="tr" hidden>' +
+          line("Plano", pat.plano || "") + line("ABA", pat.aba || "") + line("Horários", trHoursText(pat)) + '</div>' : '') +
+        (pat ? pickupBoxHtml(pat, agdIsLastOfDay(row)) : '') +
+        '<div id="agdDetGoals"></div>' +
         (showStatus ? '<div class="field" style="margin-top:12px"><label for="agdDetStatus">Status</label><select id="agdDetStatus"' + (canChange ? '' : ' disabled') + '>' +
           '<option value="">Em Aberto</option>' +
           statusesList().map(function(s){
             var ok = canUseStatus(s.id) || s.id === curStatus;
             return '<option value="' + esc(s.id) + '"' + (s.id === curStatus ? ' selected' : '') + (ok ? '' : ' disabled') + '>' + esc(s.name) + (ok ? '' : ' (sem permissão)') + '</option>';
           }).join("") + '</select>' + (stLocked ? '<div class="pl-hint">' + esc(AGD_FINAL_LOCK_MSG) + '</div>' : '') + '</div>' : '') +
-        '<div id="agdDetGoals"></div>' +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="agdDetOk">Fechar</button>' +
         (can("agendamentos", "edit") ? '<button class="btn primary" id="agdDetEdit">Editar agendamento</button>' : '') + '</div>' +
@@ -9700,6 +9711,13 @@ function agdOpenDetails(row){
   document.getElementById("agdDetClose").addEventListener("click", close);
   document.getElementById("agdDetOk").addEventListener("click", close);
   agdGoalsFill(document.getElementById("agdDetGoals"), row);
+  var detSeg = document.getElementById("agdDetSeg");
+  if (detSeg) detSeg.addEventListener("click", function(e){
+    var b = e.target.closest("[data-det]"); if (!b) return;
+    var k = b.getAttribute("data-det");
+    Array.prototype.forEach.call(detSeg.querySelectorAll("[data-det]"), function(x){ var on = x === b; x.classList.toggle("active", on); x.setAttribute("aria-selected", on ? "true" : "false"); });
+    Array.prototype.forEach.call(ov.querySelectorAll("[data-det-pane]"), function(p){ p.hidden = p.getAttribute("data-det-pane") !== k; });
+  });
   var edBtn = document.getElementById("agdDetEdit");
   if (edBtn) edBtn.addEventListener("click", function(){ agdOpenModal({row: AD.rows[row.id] || row}); });
   // Status: grava na hora em que escolhe.
@@ -14040,13 +14058,13 @@ var HELP_TOPICS = [
     steps: ["Cadastros → <b>Conselhos</b> → <b>+ Incluir</b>: sigla (ex.: CRP) e nome.", "No cadastro do colaborador com o tipo Profissional, o botão <b>+</b> ao lado do Conselho também inclui um novo."],
     rules: ["Não pode haver dois conselhos com a mesma sigla.", "A coluna Profissionais mostra quantos usam cada conselho; conselho em uso não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>Conselhos</b>."},
-  {id: "objetivos", group: "Prontuário", title: "Banco de objetivos", mod: "objetivos", tab: "objetivos",
+  {id: "objetivos", group: "Prontuário", title: "Objetivos", mod: "objetivos", tab: "objetivos",
     purpose: "Objetivos prontos para usar no Plano terapêutico, com habilidade, critério de sucesso e escala sugeridos.",
-    steps: ["Prontuário ▾ → <b>Banco de objetivos</b> → <b>+ Incluir</b>: objetivo, habilidade, especialidade (ou todas), critério de sucesso e escala.",
+    steps: ["Prontuário ▾ → <b>Objetivos</b> → <b>+ Incluir</b>: objetivo, habilidade, especialidade (ou todas), critério de sucesso e escala.",
       "No Plano terapêutico, ao digitar no campo <b>Objetivo</b>, aparecem os objetivos do banco daquela especialidade (e os de todas). Escolha com o mouse ou com ↑ ↓ e Enter: o texto entra no objetivo e a habilidade, o critério e a escala vêm junto quando estão vazios.",
-      "Para guardar um objetivo novo sem sair do plano, digite o texto e escolha <b>+ Salvar no Banco de objetivos</b>: abre uma janela por cima, já preenchida com o que está na linha."],
+      "Para guardar um objetivo novo sem sair do plano, digite o texto e escolha <b>+ Salvar no cadastro de Objetivos</b>: abre uma janela por cima, já preenchida com o que está na linha."],
     rules: ["Não pode haver dois objetivos com o mesmo texto na mesma especialidade.", "Mudar ou excluir um objetivo do banco não muda os planos que já usaram o texto."],
-    who: "Permissão <b>Banco de objetivos</b>."},
+    who: "Permissão <b>Objetivos</b>."},
   {id: "escalas", group: "Prontuário", title: "Escalas", mod: "escalas", tab: "escalas",
     purpose: "Escalas usadas na Situação dos objetivos do Plano terapêutico (ex.: Likert de 0 a 5, ABA).",
     steps: ["Prontuário ▾ → <b>Escalas</b> → <b>+ Incluir</b>: nome e os níveis, do primeiro ao final.", "Cada nível tem nome e cor (clique no círculo para escolher). Use ▲▼ para mudar a ordem e <b>+ nível</b> para acrescentar."],
@@ -14146,8 +14164,8 @@ var HELP_TOPICS = [
       "Abra <b>Agenda</b>. Escolha <b>Dia</b> ou <b>Semana</b>, <b>Profissionais</b> ou <b>Salas</b>, e navegue com ‹ Hoje ›.",
       "Clique no + de um horário para marcar: paciente (ou grupo de suporte), serviço, sala, observação; ou marque Bloqueado / Reunião Clínica / Treinamento.",
       "Vários atendimentos no mesmo horário ficam lado a lado (botão + para mais um).",
-      "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>: dados, status e o quadro <b>Objetivos do atendimento</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar agendamento</b>.",
-      "<b>Objetivos do atendimento</b>: resumo e quadro clínico do plano terapêutico e os objetivos ativos do paciente nas especialidades do profissional (principal e complementares), com critério, prazo, escala, situação e status. Se outros pacientes do mesmo profissional estão no mesmo horário, aparecem primeiro os objetivos em comum; os demais ficam em <b>Objetivos do paciente ▾</b>. Pacientes sem plano terapêutico vigente não entram nessa conta.",
+      "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>. Ao lado do nome, o seletor troca o quadro de informações: <b>Agendamento</b> (serviço, sala, data/hora, observação), <b>Saúde</b> (diagnóstico, alergias, medicações e restrições alimentares do cadastro do paciente) e <b>Tratamento</b> (plano, ABA e horários). Abaixo ficam os <b>Objetivos</b> e o <b>Status</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar agendamento</b>.",
+      "<b>Objetivos</b>: resumo e quadro clínico do plano terapêutico e os objetivos ativos do paciente nas especialidades do profissional (principal e complementares), com critério, prazo, escala, situação e status. Se outros pacientes do mesmo profissional estão no mesmo horário, aparecem primeiro os objetivos em comum; os demais ficam em <b>Objetivos do paciente ▾</b>. Pacientes sem plano terapêutico vigente não entram nessa conta.",
       "Ao marcar um paciente no mesmo horário e com o mesmo profissional de outro, se os dois têm plano terapêutico vigente e nenhum objetivo em comum, aparece o aviso <b>Sem objetivos em comum</b> (dá para agendar assim mesmo). Paciente sem plano vigente não gera aviso.",
       "Copiar, mover e arrastar funcionam como no Planner. Desfazer: Ctrl+Z / Ctrl+Y.",
       "Busca: destaca o paciente na tela e mostra quantos há na semana."
@@ -14189,14 +14207,14 @@ var HELP_TOPICS = [
       "Evolução ligada a um atendimento impede que ele seja excluído (só o Administrador)."
     ],
     who: "Permissão <b>Prontuário</b>."},
-  {id: "plano-terapeutico", group: "Prontuário", title: "Plano terapêutico", mod: "plano_terapeutico", tab: "planos",
+  {id: "plano-terapeutico", group: "Prontuário", title: "Plano Terapêutico", mod: "plano_terapeutico", tab: "planos",
     purpose: "Plano de cada paciente: resumo do quadro clínico e objetivos por especialidade, com escala, situação, status e revisão a cada 6 meses.",
     steps: [
-      "Abra <b>Prontuário ▾ → Plano terapêutico</b>. A lista mostra um plano por paciente, com a coluna <b>Revisão</b> (aviso 30 dias antes e quando vence). O filtro mostra só os que vencem ou já venceram.",
+      "Abra <b>Prontuário ▾ → Plano Terapêutico</b>. A lista mostra um plano por paciente, com a coluna <b>Revisão</b> (aviso 30 dias antes e quando vence). O filtro mostra só os que vencem ou já venceram.",
       "<b>+ Incluir</b>: escolha o paciente. Também dá para abrir pelo botão <b>Abrir plano terapêutico</b> na janela do Tratamento.",
       "<b>Quadro clínico</b>: os dados da seção Saúde do cadastro do paciente aparecem sozinhos e sempre atualizados; escreva o <b>Resumo do quadro clínico</b> no campo abaixo deles.",
       "Cada especialidade do tratamento tem um quadro. Use <b>+ Inserir objetivo</b> e preencha: Habilidade, Objetivo, Critério de sucesso, Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
-      "No campo <b>Objetivo</b>, ao digitar, aparecem sugestões do <b>Banco de objetivos</b>; <b>+ Salvar no Banco de objetivos</b> guarda o texto digitado para usar em outros planos.",
+      "No campo <b>Objetivo</b>, ao digitar, aparecem sugestões do cadastro de <b>Objetivos</b>; <b>+ Salvar no cadastro de Objetivos</b> guarda o texto digitado para usar em outros planos.",
       "O <b>Nº</b> é a prioridade: use ▲▼ na própria linha para subir ou descer; os números se ajustam sozinhos.",
       "<b>Revisar (nova versão)</b>: cria a versão seguinte a partir de hoje, copiando o resumo e os objetivos; a versão anterior fica guardada e abre pela lista <b>Versões anteriores</b> (só leitura).",
       "<b>Imprimir</b> gera o plano em PDF com a logo da clínica e espaço para as assinaturas."
@@ -14210,7 +14228,7 @@ var HELP_TOPICS = [
       "Quem tem <b>editar</b> (ex.: Coordenador) altera tudo. O profissional altera só a situação e o status dos objetivos da sua especialidade principal e das áreas complementares, e inclui objetivos só na especialidade principal.",
       "É dado de saúde: só vê quem tem a permissão do Plano terapêutico."
     ],
-    who: "Permissão <b>Plano terapêutico</b> (ver, incluir, editar, excluir)."},
+    who: "Permissão <b>Plano Terapêutico</b> (ver, incluir, editar, excluir)."},
 
   // ---------- Relatórios ----------
   {id: "relatorios", group: "Relatórios", title: "Relatórios", mod: "relatorios", tab: "relatorios",
@@ -14986,9 +15004,9 @@ var PL_TABS = ["agenda", "relatorio"];
 // Prontuário ▾: evoluções e Plano terapêutico.
 var PR_ITEMS = [
   {key: "prontuario", label: "Prontuário", tab: "prontuario", ok: function(){ return can("prontuario", "view"); }},
-  {key: "planos", label: "Plano terapêutico", tab: "planos", ok: function(){ return can("plano_terapeutico", "view"); }},
+  {key: "planos", label: "Plano Terapêutico", tab: "planos", ok: function(){ return can("plano_terapeutico", "view"); }},
   // Cadastros usados no Plano terapêutico.
-  {sep: true, key: "objetivos", label: "Banco de objetivos", tab: "objetivos", ok: function(){ return can("objetivos", "view"); }},
+  {sep: true, key: "objetivos", label: "Objetivos", tab: "objetivos", ok: function(){ return can("objetivos", "view"); }},
   {key: "escalas", label: "Escalas", tab: "escalas", ok: function(){ return can("escalas", "view"); }},
   {key: "habilidades", label: "Habilidades", tab: "habilidades", ok: function(){ return can("habilidades", "view"); }}
 ];
@@ -15643,7 +15661,7 @@ document.addEventListener("mouseover", function(e){
 });
 
 /* ---------------- Plano terapêutico (2026-10-06) ----------------
- * Prontuário ▾ → Plano terapêutico (#tab-planos). Um plano VIGENTE por paciente
+ * Prontuário ▾ → Plano Terapêutico (#tab-planos). Um plano VIGENTE por paciente
  * (tabela protegida therapy_plans; sem sistema online fica em memória, PLAN.mem).
  *  - Quadro clínico: dados da seção Saúde do cadastro (sempre atualizados) +
  *    texto "Resumo do quadro clínico" do plano (summary).
@@ -16032,8 +16050,8 @@ function openPlanModal(plan, opts){
     findObj(tr).o[f] = e.target.value;
     planGrow(e.target);
   });
-  // Campo Objetivo: sugestões do Banco de objetivos (da especialidade do quadro ou
-  // de todas) e "+ Salvar no Banco de objetivos" para o texto digitado.
+  // Campo Objetivo: sugestões do Objetivos (da especialidade do quadro ou
+  // de todas) e "+ Salvar no cadastro de Objetivos" para o texto digitado.
   var goalPop = document.createElement("div");
   goalPop.className = "autolist pl-goal-pop"; goalPop.hidden = true; ov.appendChild(goalPop);
   var goalTa = null;
@@ -16047,7 +16065,7 @@ function openPlanModal(plan, opts){
     goalTa = ta;
     goalPop.innerHTML = list.map(function(g){
       return '<button type="button" data-goal="' + esc(g.id) + '"><span class="autolist-name">' + esc(g.name) + '</span>' + (g.areaId ? '<span class="autolist-kind">' + esc(skillAreaName(g.areaId)) + '</span>' : '') + '</button>';
-    }).join("") + (canNew ? '<button type="button" class="autolist-new" data-goal-new>+ Salvar no Banco de objetivos</button>' : '');
+    }).join("") + (canNew ? '<button type="button" class="autolist-new" data-goal-new>+ Salvar no cadastro de Objetivos</button>' : '');
     var r = ta.getBoundingClientRect();
     goalPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 528)) + "px";
     goalPop.style.width = Math.min(520, Math.max(r.width, 340)) + "px";
@@ -16424,7 +16442,7 @@ function agdGoalsData(row){
 }
 function agdGoalsBoxHtml(d){
   if (!d) return '';
-  var head = '<div class="ag-obj-title">Objetivos do atendimento</div>';
+  var head = '<div class="ag-obj-title">Objetivos</div>';
   if (!d.plan) return '<div class="ag-obj-box">' + head + '<div class="pl-hint">Paciente sem plano terapêutico vigente.</div></div>';
   function line(x){
     return '<div class="ag-obj-line"><div class="ag-obj-txt"><span class="pcolor-dot" style="background:' + swatchVar((state.specialties.filter(function(s){ return s.id === x.specId; })[0] || {}).color || "teal") + '" title="' + esc(specialtyName(x.specId)) + '"></span>' +
@@ -16446,7 +16464,7 @@ function agdGoalsBoxHtml(d){
 // Coloca o quadro no elemento host (carrega os planos antes). Só com permissão de ver o plano.
 function agdGoalsFill(host, row){
   if (!host || !planCan("view") || bookingKind(row) || !findPatientAt(row.patient, row.date)) return;
-  host.innerHTML = '<div class="ag-obj-box"><div class="ag-obj-title">Objetivos do atendimento</div><div class="pl-hint">Carregando…</div></div>';
+  host.innerHTML = '<div class="ag-obj-box"><div class="ag-obj-title">Objetivos</div><div class="pl-hint">Carregando…</div></div>';
   planLoadAll().then(function(){
     if (!document.body.contains(host)) return;
     host.innerHTML = agdGoalsBoxHtml(agdGoalsData(row));
@@ -16602,7 +16620,7 @@ function openScaleModal(item){
   }
 }
 
-/* ---- Banco de objetivos (Prontuário ▾ → Banco de objetivos; config/goal_bank) ----
+/* ---- Objetivos (Prontuário ▾ → Objetivos; config/goal_bank) ----
  * Objetivos prontos {id, name (texto do objetivo), areaId, criterio, scaleId,
  * specId ("" = todas as especialidades)}. No plano, o campo Objetivo sugere os do
  * banco (da especialidade do quadro ou de todas) e oferece "+ Salvar no Banco de
@@ -16660,7 +16678,7 @@ function openGoalModal(item, opts){
     return writeSimpleList("objetivos", list).then(function(ok){
       if (!ok) return;
       close(); if (state.tab === "objetivos") renderRegistryTab("objetivos");
-      if (rec){ showToast("Objetivo salvo no Banco de objetivos."); if (opts.onSaved) opts.onSaved(rec); }
+      if (rec){ showToast("Objetivo salvo no cadastro de Objetivos."); if (opts.onSaved) opts.onSaved(rec); }
     });
   }
   if ($("glSave")) $("glSave").addEventListener("click", function(){
@@ -16668,7 +16686,7 @@ function openGoalModal(item, opts){
     if (!name){ $("glName").focus(); showToast("Preencha o objetivo.", true); return; }
     if (!$("glArea").value){ showToast("Escolha a habilidade.", true); return; }
     var list = goalBankList(), spec = $("glSpec").value;
-    if (list.some(function(g){ return normText(g.name) === normText(name) && (g.specId || "") === spec && (!item || g.id !== item.id); })){ showToast("Esse objetivo já está no Banco de objetivos.", true); return; }
+    if (list.some(function(g){ return normText(g.name) === normText(name) && (g.specId || "") === spec && (!item || g.id !== item.id); })){ showToast("Esse objetivo já está no Objetivos.", true); return; }
     var rec = Object.assign({}, item || {}, {name: name, areaId: $("glArea").value, specId: spec, criterio: $("glCrit").value.trim(), scaleId: $("glScale").value});
     if (isNew) rec.id = uid("goal");
     save(isNew ? list.concat([rec]) : list.map(function(g){ return g.id === rec.id ? rec : g; }), rec);
@@ -16679,7 +16697,7 @@ function openGoalModal(item, opts){
       save: function(it){ return writeSimpleList("objetivos", goalBankList().map(function(g){ return g.id === it.id ? Object.assign({}, g, {inativo: it.inativo}) : g; })).then(function(){ renderRegistryTab("objetivos"); }); }});
     del.addEventListener("click", function(){
       if (delBlocked(this)) return;
-      confirmDialog({title: "Confirmar exclusão", message: "Excluir o objetivo <b>" + esc(item.name) + "</b> do Banco de objetivos?<br>Os planos que já usam esse texto não mudam.", confirmLabel: "Confirmar exclusão"}).then(function(ok){
+      confirmDialog({title: "Confirmar exclusão", message: "Excluir o objetivo <b>" + esc(item.name) + "</b> do cadastro de Objetivos?<br>Os planos que já usam esse texto não mudam.", confirmLabel: "Confirmar exclusão"}).then(function(ok){
         if (ok) save(goalBankList().filter(function(g){ return g.id !== item.id; }));
       });
     });

@@ -1980,6 +1980,14 @@ atingido fica no plano); impressão/PDF. Escalas e Habilidades comuns à clínic
   colar/mover, trocar), `agdGoalsCheck(pairs)` — último passo de `agdPatientConfirm`, depois
   de `agdAreaCheck` — avisa "Sem objetivos em comum" (confirmação) quando o paciente e outro
   do mesmo profissional/data/horário têm plano vigente e nenhum objetivo com o mesmo texto.
+- (2026-10-06) **Detalhes do Agendamento**: ao lado do nome, seletor `#agdDetSeg`
+  (`.seg`, `[data-det]`) que troca o quadro (`[data-det-pane]`): **Agendamento** (Serviço, Sala,
+  Data/Hora, Observação), **Saúde** (CID, alergias, medicações, restrições — cadastro do
+  paciente) e **Tratamento** (Plano, ABA, Horários — `trHoursText` do paciente somado ao
+  tratamento da data). Sem paciente cadastrado (grupo, bloqueio) só o quadro Agendamento, sem
+  seletor. Ordem: quadro, retirada/medida protetiva, **Objetivos** (o antigo "Objetivos do
+  atendimento"), Status. Nomes no menu: **Objetivos** (antes "Banco de objetivos") e
+  **Plano Terapêutico** (com T maiúsculo no menu, aba, Níveis e Ajuda).
 - Evolução: objetivos ANTES das "Observações" (o editor), com as mesmas informações.
 - **Finalizado travado para o terapeuta** (`agdFinalLocked`, `agdTherapistUser` = usuário com
   `professional_id`, não Administrador; teste: `window.__planProfId`): status desativado nos

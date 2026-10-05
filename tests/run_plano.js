@@ -25,7 +25,7 @@ const path = require('path');
   const menus = await ev(`(function(){ renderNavMenus(); return {
     pr: Array.prototype.map.call(document.querySelectorAll("#prMenu [data-nav]"), function(b){ return b.textContent; }),
     cad: Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav"); }) }; })()`);
-  console.log('Prontuário menu has Prontuário, Plano terapêutico and its registries?', JSON.stringify(menus.pr) === '["Prontuário","Plano terapêutico","Banco de objetivos","Escalas","Habilidades"]', JSON.stringify(menus.pr));
+  console.log('Prontuário menu has Prontuário, Plano terapêutico and its registries?', JSON.stringify(menus.pr) === '["Prontuário","Plano Terapêutico","Objetivos","Escalas","Habilidades"]', JSON.stringify(menus.pr));
   console.log('Escalas and Habilidades left Cadastros?', menus.cad.indexOf('escalas') === -1 && menus.cad.indexOf('habilidades') === -1);
 
   // Escalas: Likert e ABA pré-cadastradas, com cor; habilidades pré-cadastradas.
@@ -217,6 +217,19 @@ const path = require('path');
     visible: Array.prototype.filter.call(h.querySelectorAll('.ag-obj-line'), (l) => !l.closest('[hidden]')).map((l) => l.querySelector('.ag-obj-txt').textContent),
     more: !!h.querySelector('[data-ag-obj-more]'), meta: (h.querySelector('.ag-obj-meta') || {}).textContent || '', sum: h.querySelector('.ag-obj-sum').textContent }));
   console.log('slot shared with another patient: common objective shown, own hidden behind the button, TO (not Bia\'s area) left out?', box.visible.length === 1 && /Esperar a vez/.test(box.visible[0]) && /Carla Laranja/.test(box.visible[0]) && box.more && /Critério: 80%/.test(box.meta) && /Situação/.test(box.meta), JSON.stringify(box));
+  // Seletor Agendamento | Saúde | Tratamento ao lado do nome; Objetivos antes do Status.
+  const tabs = await page.$$eval('#agdDetSeg [data-det]', (r) => r.map((x) => x.textContent));
+  const agPane = await page.$eval('[data-det-pane="ag"]', (e) => Array.prototype.map.call(e.querySelectorAll('.k'), (k) => k.textContent).join('|'));
+  await page.click('#agdDetSeg [data-det="sa"]');
+  const saPane = await page.$eval('[data-det-pane="sa"]', (e) => ({vis: !e.hidden, keys: Array.prototype.map.call(e.querySelectorAll('.k'), (k) => k.textContent).join('|')}));
+  const agHidden = await page.$eval('[data-det-pane="ag"]', (e) => e.hidden);
+  await page.click('#agdDetSeg [data-det="tr"]');
+  const trKeys = await page.$eval('[data-det-pane="tr"]', (e) => Array.prototype.map.call(e.querySelectorAll('.k'), (k) => k.textContent).join('|'));
+  const goalsFirst = await page.$eval('#ovAgdDet .modal-body', (b) => { var g = b.querySelector('#agdDetGoals'), st = b.querySelector('#agdDetStatus'); return !st || !!(g.compareDocumentPosition(st) & Node.DOCUMENT_POSITION_FOLLOWING); });
+  const objTitle = await page.$eval('#agdDetGoals .ag-obj-title', (e) => e.textContent);
+  console.log('details: Agendamento/Saúde/Tratamento selector, panes with the asked fields, Objetivos before Status?',
+    tabs.join() === 'Agendamento,Saúde,Tratamento' && agPane === 'Serviço|Sala|Data/Hora|Observação' && saPane.vis && agHidden && saPane.keys === 'Diagnóstico (CID)|Alergias|Medicações em uso|Restrições alimentares' && trKeys === 'Plano|ABA|Horários'&& goalsFirst && objTitle === 'Objetivos',
+    JSON.stringify({tabs, agPane, saPane, trKeys, goalsFirst, objTitle}));
   await page.click('[data-ag-obj-more]');
   const nOpen = await page.$$eval('#agdDetGoals .ag-obj-line', (r) => r.filter((l) => !l.closest('[hidden]')).length);
   console.log('"Objetivos do paciente" reveals the specific ones?', nOpen === 2, nOpen);
