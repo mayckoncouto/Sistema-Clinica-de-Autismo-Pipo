@@ -1893,3 +1893,7 @@ rápido de erro e depois "Alterado", mas o horário não ficou salvo. O banco re
 usado pela janela do colaborador) rejeita com o motivo do banco: a janela fica aberta,
 "Não foi possível salvar tudo: …" e os dados do RH não são gravados pela metade. Teste no
 fim de `tests/run_prof_workhours.js`.
+- Produção (2026-10-05): a 05f não tinha sido rodada (`module_for_path` devolvia
+  `profissionais`). Criada `supabase/2026-10-05j-cadastro-profissional-segue-colaboradores.sql`
+  só com a função (sem a parte 2 da 05f, que copiaria o acesso antigo de Profissionais
+  para Colaboradores por cima do que o Administrador já ajustou nos Níveis).
