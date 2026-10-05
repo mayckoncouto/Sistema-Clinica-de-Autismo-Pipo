@@ -491,6 +491,8 @@ Bloqueado / Reunião Clínica / Treinamento não entram nas regras.
   conta como "dois lugares" (`sameRoomViaGroup` em `plannerConflict`; na grade,
   `profWhere[].target` e a coluna do grupo fica livre quando ele está numa sala só).
   Regra 2 mantida como está (decisão do usuário).
+  **(Revisto em 2026-10-05: a coluna do grupo NÃO fica mais livre — ver "Grupo bloqueado
+  com paciente na sala". Só vale o sentido grupo já marcado → atendimentos na sala.)**
 - Planner: `plannerConflict(docId, key, rec, ignoreKeys, extra)` — na janela,
   ao colar e ao mover/arrastar (na troca confere os dois lados).
 - Agenda: `agdConflictIn(rows, rec)` (síncrono) e `agdConflictsFor(recs,
@@ -1331,6 +1333,7 @@ Decisões do usuário: vencimento por duração em meses (ajustável), opcional,
   ("Restam N sessões"), ≤ 0 = "vencido" ("Sessões esgotadas"); `trDueText` na
   coluna ("6 de 10 sessões"). Total e tipo de vencimento entram em `trQtyKey`
   (travados com atendimentos realizados). Renegociar começa em "Data", vazio.
+  **(Desde 2026-10-06 o padrão é "Sem vencimento" — ver a seção do fim.)**
 
 ## Contratado × realizado mês a mês (Etapa 5, 2026-10-04)
 Decisões do usuário: mês a mês; realizado = Finalizado + Não compareceu; mês
@@ -1790,7 +1793,7 @@ campo; `dpReplace` roda em todo `scroll` (captura), `resize` e `visualViewport`
 sai da área visível da janela/tela, a lista fica escondida até ele voltar. O seletor
 de cor (`#cpPop`, `pop.__place`) faz o mesmo.
 
-## Tratamento cancelado pode voltar a outro status (2026-10-05)
+## Tratamento cancelado pode voltar a outro status (2026-10-05) — DESFEITO, Cancelado é definitivo (ver abaixo)
 Pedido do usuário: saiu a regra "Cancelado é definitivo". `#trSt` não trava mais e o
 salvar não força "cancelado". Ao sair de Cancelado, `motivoCancel`/`motivoCancelNome`/
 `obsCancel` saem do tratamento (ficam no `historico`) e `statusEm` vira a data da troca.
@@ -2047,3 +2050,7 @@ prazo (`.pl-prazo`, data completa no `title`; coluna Prazo 176px), setas ▲▼ 
 - (2026-10-06) Janela do tratamento: botão **Cadastro do paciente** (`#trOpenPat`, no topo à
   direita, `.modal-head-acts`; só com `pacientes.view` e paciente escolhido) fecha o
   tratamento e abre `openPatientModal` do paciente.
+- (2026-10-06, revisão) ABA mostrado nos Detalhes do Agendamento (aba Tratamento) = o ABA
+  daquele atendimento (`bookingAbaOf` com o profissional e o serviço da linha), não o do
+  tratamento; cartão do tratamento mostra Sim quando o ABA está vazio (`abaYesNo`).
+  `schema.sql` conferido montando um banco do zero (sem erros).
