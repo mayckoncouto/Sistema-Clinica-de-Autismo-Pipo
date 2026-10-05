@@ -37,10 +37,10 @@
     { key: "feriados", label: "Feriados e recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
+    { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" },
     // Itens do menu Acesso (Sair aparece sempre).
     { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"], group: "Menu Acesso" },
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)" },
-    { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" },
     { key: "backup", label: "Backup", hint: "baixar o backup (restaurar: só o Administrador)", actions: ["view"] },
     { key: "senha", label: "Senha", hint: "trocar a própria senha", actions: ["view"], dflt: true },
     { key: "ajuda", label: "Ajuda", hint: "guia do sistema", actions: ["view"], dflt: true }

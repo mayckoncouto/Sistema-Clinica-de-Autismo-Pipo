@@ -3331,7 +3331,7 @@ function quickAddRegistry(kind){
 window.pipoConfirm = confirmDialog; // usado por js/usuarios.js
 window.pipoProfessionals = function(){ return state.professionals.slice(); }; // idem (criar acessos)
 window.pipoStatuses = function(){ return statusesList(); }; // níveis de permissão (js/usuarios.js)
-window.pipoOpenStatuses = function(){ openStatusesModal(); }; // menu Acesso (js/pipo-supabase.js)
+window.pipoOpenStatuses = function(){ openStatusesModal(); }; // Cadastros → Status (CAD_ITEMS)
 window.pipoOpenBackup = function(){ openBackupModal(); }; // menu Acesso → Backup
 window.pipoOpenClinic = function(){ openClinicModal(); }; // menu Acesso → Clínica
 function namesList(names){
@@ -13434,7 +13434,7 @@ var HELP_TOPICS = [
     steps: [
       "Ao entrar, o sistema abre o Planner (no celular, a Agenda). Clicar na logo ou no nome da clínica também volta para essa tela.",
       "Use o menu do topo: <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>.",
-      "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Senha, Ajuda e Sair. Para o Administrador, também Clínica, Usuários, Status e Backup.",
+      "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Senha, Ajuda e Sair. Para o Administrador, também Clínica, Usuários e Backup.",
       "Em cada tela, o botão <b>?</b> abre este guia direto no assunto daquela tela.",
       "Nos campos de data, digite a data (só os números, ex.: 15032026 vira 15/03/2026) e tecle Enter, ou clique no ícone do calendário para escolher.",
       "Nos campos que escolhem um item de cadastro (paciente, profissional, especialidade, serviço, convênio, sala, status, motivo), digite parte do nome direto no campo: a lista abaixo mostra só os que combinam (sem diferenciar acento e maiúscula). Escolha com as setas ↑ ↓ e Enter, ou clique. Se o texto não combinar com nenhum item, o campo volta ao que estava.",
@@ -13825,7 +13825,7 @@ var HELP_TOPICS = [
     purpose: "Quem acessa o sistema e o que cada nível pode fazer.",
     steps: [
       "Acesso ▾ → <b>Usuários</b> → <b>+ Incluir</b>: abre o cadastro de um novo colaborador; o usuário é criado na seção <b>Acesso ao sistema</b> (e-mail, nível e senha). O Administrador também pode criar uma <b>conta sem colaborador</b> (ex.: contador externo).",
-      "<b>Níveis de permissão</b> (só o Administrador): clique num nível e marque, por tela, Ver / Incluir / Editar / Excluir, os status e os relatórios liberados. O grupo <b>Menu Acesso</b> libera Clínica, Usuários, Status, Backup, Senha e Ajuda.",
+      "<b>Níveis de permissão</b> (só o Administrador): clique num nível e marque, por tela, Ver / Incluir / Editar / Excluir, os status e os relatórios liberados. O grupo <b>Menu Acesso</b> libera Clínica, Usuários, Backup, Senha e Ajuda.",
       "Para bloquear alguém, desative o usuário (ele sai na hora)."
     ],
     rules: [
@@ -13835,9 +13835,9 @@ var HELP_TOPICS = [
       "Mudanças de permissão valem na hora para todos daquele nível."
     ],
     who: "Permissão <b>Usuários</b> (Níveis de permissão: só o Administrador)."},
-  {id: "status-cadastro", group: "Acesso", title: "Cadastro de status", mod: "cadastro_status",
+  {id: "status-cadastro", group: "Cadastros", title: "Cadastro de status", mod: "cadastro_status",
     purpose: "Lista de status dos atendimentos (nome e cor).",
-    steps: ["Acesso ▾ → <b>Status</b>: inclua, renomeie, mude a cor ou exclua."],
+    steps: ["Cadastros ▾ → <b>Status</b>: inclua, renomeie, mude a cor ou exclua."],
     rules: ["Quem pode usar cada status é definido em Níveis de permissão."],
     who: "Permissão <b>Status</b>."},
   {id: "clinica", group: "Acesso", title: "Cadastro da Clínica", mod: "clinica",
@@ -14527,7 +14527,9 @@ var CAD_ITEMS = [
   {key: "conselhos", label: "Conselhos", tab: "conselhos", ok: function(){ return can("conselhos", "view"); }},
   {sep: true, key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
   {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }},
-  {key: "feriados", label: "Feriados e recessos", tab: "feriados", ok: function(){ return can("feriados", "view"); }}
+  {key: "feriados", label: "Feriados e recessos", tab: "feriados", ok: function(){ return can("feriados", "view"); }},
+  // Status dos atendimentos: abre a janela de cadastro (sem tela própria).
+  {key: "status", label: "Status", open: function(){ openStatusesModal(); }, ok: function(){ return can("cadastro_status", "view"); }}
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
@@ -14567,6 +14569,7 @@ function navItem(key){
   return null;
 }
 function navActivate(it){
+  if (it.open){ it.open(); return; }
   if (!it.tab){ openClinicModal(); return; }
   if (it.view){ state.salasView = it.view; var s = document.getElementById("roomListSearch"); if (s) s.value = ""; }
   var tb = document.querySelector('#mainTabs button[data-tab="' + it.tab + '"]');
@@ -14585,7 +14588,7 @@ function openNavFromHash(final){
   if (it){
     if (window.pipoAuth && !it.ok()){ if (final){ navHashDone = true; navSaveHash(); } return; }
     navHashDone = true;
-    if (!it.tab) setTimeout(function(){ openClinicModal(); }, 800); else navActivate(it);
+    if (!it.tab) setTimeout(function(){ if (it.open) it.open(); else openClinicModal(); }, 800); else navActivate(it);
     navSaveHash();
     return;
   }

@@ -312,7 +312,6 @@
             // Configuração do sistema
             [((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : ""),
              ((isAdmin() || can("usuarios", "view")) ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : ""),
-             ((isAdmin() || can("cadastro_status", "view")) ? '<button type="button" role="menuitem" data-act="status">Status</button>' : ""),
              ((isAdmin() || can("backup", "view")) ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : "")],
             // Pessoal
             [(canDefault("senha", "view", true) ? '<button type="button" role="menuitem" data-act="senha">Senha</button>' : ""),

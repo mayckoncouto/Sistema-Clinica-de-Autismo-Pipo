@@ -1839,8 +1839,9 @@ Decisão do usuário: agrupados por assunto, com divisória entre os grupos
 (`sep: true` no item de `CAD_ITEMS`; `.cad-sep` no menu do topo, `.mnav-sep` no ☰):
 Pacientes, Tratamentos, Convênios, Motivos de cancelamento, Médicos, Escolas |
 Colaboradores, Tipos de colaborador, Especialidades, Serviços, CBO, Conselhos |
-Salas, Grupos de Suporte, Feriados e recessos. Item novo de cadastro: colocar no
-grupo do assunto.
+Salas, Grupos de Suporte, Feriados e recessos, Status. Item novo de cadastro: colocar no
+grupo do assunto. Item sem tela própria usa `open` (ex.: Status → `openStatusesModal`;
+`navActivate`/`openNavFromHash` chamam `it.open`, endereço `#status`).
 
 ## Início oculto (2026-10-05)
 Pedido do usuário: o botão **Início** fica oculto em todos os modos até ele definir
@@ -1852,6 +1853,7 @@ Para voltar a mostrar o Início: `INICIO_ON = true` (e rever o tópico "inicio" 
 
 ## Menu Acesso em grupos (2026-10-05)
 Pedido do usuário: menu Acesso organizado em grupos com divisória (`accGroups` em
-`js/pipo-supabase.js`, `.acc-sep`): Clínica, Usuários, Status, Backup | Senha, Ajuda |
-Sair. "Trocar senha" passou a se chamar **Senha** (menu, Níveis de permissão, Ajuda).
+`js/pipo-supabase.js`, `.acc-sep`): Clínica, Usuários, Backup | Senha, Ajuda |
+Sair. (2026-10-05) **Status** saiu do Acesso e foi para Cadastros (último item);
+na grade dos Níveis, "Status (cadastro)" fica junto dos cadastros, depois de Grupos. "Trocar senha" passou a se chamar **Senha** (menu, Níveis de permissão, Ajuda).
 A grade "Menu Acesso" dos Níveis segue a mesma ordem.
