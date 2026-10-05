@@ -417,6 +417,9 @@ importação da migração ficam fora do repositório (`.gitignore` bloqueia `ex
    ("agora", "antes era"…). **Não** acrescentar linhas em `HELP_NEWS`: a seção
    Novidades foi tirada a pedido do usuário (2026-10-04) e fica para o futuro.
 5. Commit + push na `main` → a Vercel publica sozinha em ~1 minuto.
+6. **SQL para o usuário rodar (pedido dele, 2026-10-06):** sempre mostrar o script
+   inteiro no chat, num bloco ```sql, pronto para copiar e colar no SQL Editor do
+   Supabase (não basta dar o link do arquivo; não há como pôr na área de transferência).
 
 ## Nunca usar prefixo `ad` / `ad-` em classes, ids ou atributos
 Bloqueadores de anúncio (AdBlock, uBlock etc.) escondem elementos chamados
