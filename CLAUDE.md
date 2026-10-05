@@ -1797,8 +1797,12 @@ migração `supabase/2026-10-05h-cancelado-pode-voltar.sql` (`treatments_cancel_
 sem o bloqueio de troca de status).
 - (2026-10-05) **Cancelar o tratamento inativa o paciente** (`trInactivatePatient`, depois
   de salvar): só se ele não tiver outro tratamento Ativo e se o nível pode editar
-  Pacientes (senão avisa). Cancelado que volta a **Ativo** com paciente inativo →
-  `trOfferReactivatePatient` pergunta se reativa. Sem SQL.
+  Pacientes (senão avisa). Sem SQL.
 - (2026-10-05) **Tratamento novo de paciente inativo**: `#trPat` lista todos os pacientes,
   inativos com "(inativo)" ao lado do nome; salvar um tratamento NOVO (que não seja
   Cancelado) reativa o paciente (`trReactivatePatient`; sem editar Pacientes, só avisa).
+- (2026-10-05, desfeito a pedido do usuário) **Cancelado voltou a ser definitivo**: a
+  mudança "cancelado pode voltar a outro status" foi desfeita (`wasCancelled` trava
+  `#trSt` e força "cancelado" ao salvar). Banco: migração
+  `supabase/2026-10-05i-cancelado-definitivo.sql` repõe a regra (só precisa se a 05h
+  foi rodada). `trOfferReactivatePatient` saiu (não há mais cancelado → ativo).

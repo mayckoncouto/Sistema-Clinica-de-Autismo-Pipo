@@ -64,18 +64,11 @@ const path = require('path');
   console.log('cancelling the treatment inactivates the patient (when no other is active)?', stillActive ? patInact === false : patInact === true, stillActive, patInact);
   console.log('auto-renegotiated treatment got a history entry?', L.some((t) => t.status === 'renegociado' && (t.historico || []).some((h) => h.auto)));
   await page.click('#trHost tbody tr:has(.st-cancelado)'); await page.waitForSelector('#ovTreat');
-  console.log('cancelled treatment: status can change and history shown?', !(await page.$eval('#trSt', (s) => s.disabled)) && /Ativo → Cancelado/.test(await page.textContent('#ovTreat .tr-hist')));
+  console.log('cancelled treatment: status locked and history shown?', await page.$eval('#trSt', (s) => s.disabled) && /Ativo → Cancelado/.test(await page.textContent('#ovTreat .tr-hist')));
   await page.click('#trCancel');
   await openNew('duda-vermelho');
   console.log('after a cancelled treatment the next one is "novo"?', (await page.$eval('#trTipo', (s) => s.value)) === 'novo');
   await page.click('#trCancel');
-  // Cancelado pode voltar a Renegociado: o motivo sai e a troca entra no histórico.
-  await page.click('#trHost tbody tr:has(.st-cancelado)'); await page.waitForSelector('#ovTreat');
-  await page.$eval('#trSt', (s) => { s.value = 'renegociado'; s.dispatchEvent(new Event('change', {bubbles: true})); });
-  await save();
-  const back = (await store()).filter((t) => t.id === canc.id)[0];
-  console.log('cancelled treatment goes back to another status (reason cleared, history kept)?', !!back && back.status === 'renegociado' && !back.motivoCancel &&
-    back.historico.some((h) => h.de === 'cancelado' && h.para === 'renegociado'), back && back.status);
 
   // Bolinha de cor na lista de Tratamentos.
   console.log('treatment list shows the color dot before the name?', (await page.locator('#trHost tbody tr .pt-nome .pcolor-dot, #trHost tbody tr td:first-child .pcolor-dot').count()) > 0);

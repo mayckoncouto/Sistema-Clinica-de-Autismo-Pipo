@@ -12968,6 +12968,7 @@ function openTreatmentModal(t, opts){
     total: isNew ? "" : (t.totalSessoes || "")
   };
   var ed = treatFieldsEditor(v);
+  var wasCancelled = !isNew && t.status === "cancelado";
   var mots = activeOnly(cancelReasonsList(), isNew ? "" : t.motivoCancel);
   if (!isNew && t.motivoCancel && !mots.some(function(m){ return m.id === t.motivoCancel; })) mots.push({id: t.motivoCancel, name: t.motivoCancelNome || t.motivoCancel});
   var motOpts = '<option value="">Selecione o motivo…</option>' + mots.map(function(m){
@@ -13012,10 +13013,10 @@ function openTreatmentModal(t, opts){
         '</div>') : '') +
         '<div class="field-row">' +
           '<div class="field"><label for="trTipo">Tipo (automático)</label><select id="trTipo" disabled>' + opt(TR_TIPOS, d.tipo) + '</select></div>' +
-          '<div class="field"><label for="trSt">Status</label><select id="trSt">' + opt(TR_STATUS, d.status) + '</select></div>' +
+          '<div class="field"><label for="trSt">Status</label><select id="trSt"' + (wasCancelled ? ' disabled' : '') + '>' + opt(TR_STATUS, d.status) + '</select></div>' +
         '</div>' +
         '<div class="tr-cancel" id="trCancelBox"' + (d.status === "cancelado" ? '' : ' hidden') + '>' +
-          '<p class="tr-cancel-note">Cancelar exige o motivo. Dá para voltar a outro status depois; a troca fica no histórico.</p>' +
+          '<p class="tr-cancel-note">' + (wasCancelled ? 'Tratamento cancelado: o status não pode mais ser alterado. Para retomar, crie um novo tratamento.' : 'Cancelado é definitivo: depois de salvo, o tratamento não volta a outro status.') + '</p>' +
           '<div class="field-row">' +
             '<div class="field"><label for="trMot">Motivo do cancelamento</label><select id="trMot">' + motOpts + '</select></div>' +
           '</div>' +
@@ -13148,6 +13149,7 @@ function openTreatmentModal(t, opts){
       return;
     }
     var st = document.getElementById("trSt").value;
+    if (wasCancelled) st = "cancelado";   // cancelado é definitivo
     var motId = document.getElementById("trMot").value;
     var obsCancel = document.getElementById("trObsCancel").value.trim();
     if (st === "cancelado"){
@@ -13217,8 +13219,6 @@ function openTreatmentModal(t, opts){
           if (st === "cancelado" && (isNew || t.status !== "cancelado")) trInactivatePatient(patId, list);
           // Tratamento novo para paciente inativo: o paciente volta a ficar ativo.
           else if (isNew) trReactivatePatient(patId);
-          // Cancelado voltou a Ativo com o paciente inativo: oferece reativar o paciente.
-          else if (st === "ativo" && t.status === "cancelado") trOfferReactivatePatient(patId);
         });
       });
     });
@@ -13240,17 +13240,6 @@ function trReactivatePatient(patId){
   if (!can("pacientes", "edit")){ showToast("Tratamento salvo. O paciente continua inativo: seu nível não pode editar Pacientes.", true); return; }
   showToast("Tratamento salvo e paciente " + (p.nome || "") + " reativado.");
   writePatients(state.patientsRaw.map(function(x){ return x.id === patId ? Object.assign({}, x, {inativo: false}) : x; }));
-}
-function trOfferReactivatePatient(patId){
-  var p = rawPatient(patId);
-  if (!p || !p.inativo || !can("pacientes", "edit")) return;
-  confirmDialog({title: "Reativar o paciente", confirmLabel: "Reativar",
-    message: "O tratamento voltou a <b>Ativo</b>, mas o paciente <b>" + esc(p.nome || "") + "</b> está inativo. Reativar o paciente também?"})
-    .then(function(ok){
-      if (!ok) return;
-      showToast("Paciente reativado.");
-      writePatients(state.patientsRaw.map(function(x){ return x.id === patId ? Object.assign({}, x, {inativo: false}) : x; }));
-    });
 }
 
 // "Mostrar inativos" nas telas de cadastro (ver setupInactivate).
@@ -13403,8 +13392,8 @@ var HELP_TOPICS = [
       "Cada paciente tem <b>só um tratamento Ativo</b>. Salvar outro como Ativo passa o anterior para Renegociado (o banco também confere).",
       "Ao lado de \"Especialidades/serviços e sessão (mês)\" aparece a conta: <b>Sessão/Mês</b> (o total) × a soma das especialidades/serviços. Verde = confere, âmbar = faltam sessões para distribuir, vermelho = passou do total. Salvar com diferença pede confirmação.",
       "O <b>Tipo</b> é automático: <b>Novo</b> se não há anterior ou o anterior foi Cancelado; <b>Renegociado</b> se o anterior foi Renegociado.",
-      "<b>Cancelado</b> exige motivo; a observação é obrigatória quando o motivo é \"Outro\". Um tratamento cancelado pode voltar a Ativo ou Renegociado: o motivo do cancelamento sai do tratamento e a troca fica no histórico.",
-      "Cancelar um tratamento <b>inativa o paciente</b>, se ele não tiver outro tratamento Ativo (precisa da permissão de editar Pacientes). Se o tratamento cancelado voltar a Ativo, o sistema pergunta se reativa o paciente.",
+      "<b>Cancelado é definitivo</b> e exige motivo. A observação é obrigatória quando o motivo é \"Outro\". Para retomar, crie um novo tratamento.",
+      "Cancelar um tratamento <b>inativa o paciente</b>, se ele não tiver outro tratamento Ativo (precisa da permissão de editar Pacientes).",
       "No tratamento novo, a lista de pacientes mostra também os inativos, com \"(inativo)\" ao lado do nome. Salvar o tratamento novo <b>reativa o paciente</b> (menos quando ele já é salvo como Cancelado).",
       "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b> e a quantidade de sessões fica travada. Para mudar, use Renegociar.",
       "A <b>Data de término</b> é o último atendimento da Agenda no período do tratamento.",
