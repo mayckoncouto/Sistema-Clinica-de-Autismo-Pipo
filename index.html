@@ -1179,7 +1179,7 @@ body.pat-col-resizing *{user-select:none}
 .hours-row input:focus{outline:none;box-shadow:var(--ring);border-color:var(--accent)}
 .hours-row .spec-name{width:100%}
 .hours-row .spec-name-wrap{flex:1;min-width:0;position:relative}
-.hours-row .spec-hours-val{width:64px;flex:none}
+.hours-row .spec-hours-val{width:84px;flex:none}
 .hours-row .spec-prof-wrap{flex:0 1 190px;min-width:0}
 .hours-row .spec-prof-wrap .dp-btn,.hours-row .spec-prof-wrap select{width:100%}
 .hours-row .spec-aba-wrap{flex:0 0 104px;min-width:0}
@@ -1187,6 +1187,11 @@ body.pat-col-resizing *{user-select:none}
 .hours-row .rm{flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--danger);cursor:pointer;font-size:13px;line-height:1}
 .hours-row .rm:hover{background:var(--danger-weak)}
 .hours-empty{font-size:12px;color:var(--muted)}
+.spec-head{display:flex;gap:8px;font-size:11.5px;font-weight:600;color:var(--muted);margin:2px 0 3px}
+.spec-head[hidden]{display:none}
+.spec-head>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:2px;min-width:0}
+.spec-head .sh-name{flex:1}.spec-head .sh-hours{flex:none;width:84px}.spec-head .sh-prof{flex:0 1 190px}
+.spec-head .sh-aba{flex:0 0 104px}.spec-head .sh-rm{flex:none;width:26px}
 
 /* ---------- profissionais admin ---------- */
 .prof-row{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:var(--bg)}
@@ -1460,6 +1465,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #specRowsHost .hours-row{flex-wrap:wrap}
   #specRowsHost .hours-row .spec-prof-wrap{flex:1 1 60%;order:3}
   #specRowsHost .hours-row .spec-aba-wrap{flex:1 1 30%;order:3}
+  #specHead{display:none}
   .field-row>.field{flex:1 1 140px!important;min-width:0}
   /* Tabelas de horário (profissional, paciente, clínica): compactas, sem ícones. */
   .prof-hours .dp-btn,.cl-hours .dp-btn{padding:5px 4px;gap:2px}
@@ -6152,10 +6158,12 @@ function specSumRender(){
   }
   el.className = "spec-sum spec-sum-" + cls; el.textContent = txt; el.hidden = false;
 }
+// ABA do tratamento e das linhas: só "Sim" ou "Não"; vazio (cadastros antigos) = Sim.
+function abaYesNo(v){ return v === "Não" ? "Não" : "Sim"; }
 function treatFieldsEditor(v){
   // Per-patient specialty rows, editable independently of the global catalog.
   var draftSpecRows = patientSpecRows(v).map(function(row){
-    return {specId: row.specId, name: specialtyName(row.specId), hours: row.hours == null ? "" : String(row.hours), profId: row.profId || "", aba: row.aba || v.aba || ""};
+    return {specId: row.specId, name: specialtyName(row.specId), hours: row.hours == null ? "" : String(row.hours), profId: row.profId || "", aba: abaYesNo(row.aba || v.aba)};
   });
   // Local shadow copies of the shared catalogs: any specialty/convênio created inline
   // while this modal is open lands here first (so filtering/suggestions see it right
@@ -6189,12 +6197,15 @@ function treatFieldsEditor(v){
         '<div class="field-row">' +
           '<div class="field"><label for="pPac">Sessão/Mês</label><input id="pPac" type="text" value="'+esc(v.pacoteHoras == null ? "" : v.pacoteHoras)+'"></div>' +
           '<div class="field"><label for="pAba">ABA</label><select id="pAba">' +
-            '<option value=""'+(v.aba?"":" selected")+'>Não definido</option>' +
-            '<option value="Sim"'+(v.aba==="Sim"?" selected":"")+'>Sim</option>' +
-            '<option value="Não"'+(v.aba==="Não"?" selected":"")+'>Não</option>' +
+            '<option value="Sim"'+(abaYesNo(v.aba)==="Sim"?" selected":"")+'>Sim</option>' +
+            '<option value="Não"'+(abaYesNo(v.aba)==="Não"?" selected":"")+'>Não</option>' +
           '</select></div>' +
         '</div>' +
-        '<div class="field"><label class="spec-sum-label">Especialidades/serviços e sessão (mês) <span class="spec-sum" id="specSum" hidden></span></label><div class="hours-list" id="specRowsHost"></div>' +
+        '<div class="field"><label class="spec-sum-label">Especialidades/serviços e sessão (mês) <span class="spec-sum" id="specSum" hidden></span></label>' +
+          '<div class="spec-head" id="specHead" aria-hidden="true" hidden>' +
+          '<span class="sh-name">Especialidade ou serviço</span><span class="sh-hours">Sessões/mês</span>' +
+          '<span class="sh-prof">Terapeuta</span><span class="sh-aba">ABA</span><span class="sh-rm"></span></div>' +
+          '<div class="hours-list" id="specRowsHost"></div>' +
           '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ especialidade ou serviço</button>' +
         '</div>' +
         patHoursSectionHtml(v);
@@ -6323,6 +6334,7 @@ function treatFieldsEditor(v){
       });
     }
     function renderSpecRows(){
+      var head = document.getElementById("specHead"); if (head) head.hidden = !draftSpecRows.length;
       specRowsHost.innerHTML = draftSpecRows.length ? draftSpecRows.map(function(row, i){
         return '<div class="hours-row" data-i="'+i+'">' +
           '<div class="spec-name-wrap">' +
@@ -6332,7 +6344,7 @@ function treatFieldsEditor(v){
           '<input type="text" class="spec-hours-val" placeholder="0" value="'+esc(row.hours)+'">' +
           '<div class="spec-prof-wrap"><select class="spec-prof" aria-label="Terapeuta">' + specProfOptions(row.specId, row.profId) + '</select></div>' +
           '<div class="spec-aba-wrap"><select class="spec-aba" aria-label="ABA nesta especialidade" title="ABA nesta especialidade">' +
-            [["", "ABA —"], ["Sim", "ABA Sim"], ["Não", "ABA Não"]].map(function(o){ return '<option value="' + o[0] + '"' + ((row.aba || "") === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join("") + '</select></div>' +
+            ["Sim", "Não"].map(function(o){ return '<option value="' + o + '"' + (abaYesNo(row.aba) === o ? ' selected' : '') + '>' + o + '</option>'; }).join("") + '</select></div>' +
           '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover especialidade">✕</button>' +
         '</div>';
       }).join("") : '<div class="hours-empty">Nenhuma especialidade ou serviço nesta ficha — clique em "+ especialidade ou serviço" para adicionar.</div>';
@@ -13980,7 +13992,7 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda).",
-      "Cada especialidade/serviço tem o seu <b>ABA</b> (Sim/Não). Escolher o ABA do tratamento (campo de cima) copia o valor para todas as linhas; depois cada linha pode ser trocada sozinha.",
+      "Cada especialidade/serviço tem o seu <b>ABA</b>: Sim ou Não (tratamento novo começa com Sim). Escolher o ABA do tratamento (campo de cima) copia o valor para todas as linhas; depois cada linha pode ser trocada sozinha. As colunas são: Especialidade ou serviço, Sessões/mês, Terapeuta e ABA.",
       "No Planner e na Agenda, a cor do paciente e as regras de \"não faz intervenção ABA\" usam o ABA da linha da especialidade do atendimento (especialidade principal ou complementar do profissional; serviço diferente de Sessão = a linha do serviço). Atendimento de especialidade que não está no tratamento usa o ABA do tratamento."
     ],
     who: "Permissão <b>Tratamentos</b> (editar)."},

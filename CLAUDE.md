@@ -2040,3 +2040,7 @@ prazo (`.pl-prazo`, data completa no `title`; coluna Prazo 176px), setas ▲▼ 
   (Planner, `agdEventHtml`, Detalhes) e em `isNaoABABooking(b, profId)` (grade do Planner,
   `plannerConflict`, `abaGroupDependencyDenied`; a Agenda usa `professional_id` da linha).
   Teste `tests/run_aba_linha.js` (32 arquivos no `npm test`).
+- (2026-10-06) ABA do tratamento e das linhas só **Sim** ou **Não** (`abaYesNo`: vazio de
+  cadastros antigos aparece como Sim; vazio e Sim valem igual na cor e nas regras), padrão
+  Sim. Títulos das colunas acima das linhas (`.spec-head`: Especialidade ou serviço,
+  Sessões/mês, Terapeuta, ABA; oculto no celular, onde as linhas quebram).
