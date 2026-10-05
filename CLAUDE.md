@@ -1833,3 +1833,19 @@ responsável financeiro do paciente (`#fi-telefone`, valor mostrado já formatad
 colaborador (`#sf-tel`, `#sf-em-tel`), Clínica (`#clFone`), Médicos/Escolas
 (`REG_CFG.fields` com `phone: true`, valor gravado também aparece formatado). Gravação
 continua só com dígitos onde já era assim. Campo de telefone novo: usar `data-phone`.
+
+## Ordem do menu Cadastros (2026-10-05)
+Decisão do usuário: agrupados por assunto, com divisória entre os grupos
+(`sep: true` no item de `CAD_ITEMS`; `.cad-sep` no menu do topo, `.mnav-sep` no ☰):
+Pacientes, Tratamentos, Convênios, Motivos de cancelamento, Médicos, Escolas |
+Colaboradores, Tipos de colaborador, Especialidades, Serviços, CBO, Conselhos |
+Salas, Grupos de Suporte, Feriados e recessos. Item novo de cadastro: colocar no
+grupo do assunto.
+
+## Início oculto (2026-10-05)
+Pedido do usuário: o botão **Início** fica oculto em todos os modos até ele definir
+o conteúdo. Chave `INICIO_ON = false` (perto de `var state`): botão sempre oculto,
+`#inicio` não abre, ao entrar sem endereço abre o Planner (celular: Agenda;
+`navInitialTab` grava `#planner`/`#agendadia` e `openNavFromHash` faz o clique; sem
+permissão cai na primeira tela permitida), e a logo/nome leva para essa mesma tela.
+Para voltar a mostrar o Início: `INICIO_ON = true` (e rever o tópico "inicio" da Ajuda).

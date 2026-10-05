@@ -167,6 +167,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .cad-btn:hover{color:var(--ink)}
 .cad-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:60;min-width:200px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);padding:5px;display:flex;flex-direction:column}
 .cad-menu[hidden]{display:none}
+.cad-menu .cad-sep{flex:none;height:5px;background:var(--surface-2);border-bottom:1px solid var(--line)}
 .cad-menu button{border:0;background:transparent;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 .cad-menu button:hover,.cad-menu button:focus{background:var(--accent-weak);outline:none}
 #tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-cbo,#tab-conselhos,#tab-feriados{flex:1;min-height:0;display:flex;flex-direction:column}
@@ -1370,7 +1371,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
     <div class="maintabs" id="mainTabs">
       <!-- "agenda" = Planner (grade de 4 semanas que se repete); "agendadia" = Agenda por data real. -->
       <!-- Cadastros: menu suspenso; as abas de cadastro ficam ocultas e são abertas por ele. -->
-      <button class="active" data-tab="inicio">Início</button>
+      <button data-tab="inicio" hidden>Início</button>
       <div class="cad-wrap"><button type="button" class="cad-btn" id="cadBtn" aria-haspopup="menu" aria-expanded="false">Cadastros <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="cadMenu" role="menu" hidden></div></div>
       <div class="cad-wrap"><button type="button" class="cad-btn" id="plBtn" aria-haspopup="menu" aria-expanded="false">Planner <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="plMenu" role="menu" hidden></div></div>
       <button data-tab="agenda" hidden>Planner</button>
@@ -2665,8 +2666,11 @@ function patientConvenioName(p){
 }
 
 /* ---------------- state ---------------- */
+// Início oculto em todos os modos até o usuário definir o conteúdo (2026-10-05).
+// Para mostrar de novo: true (botão, tela de entrada, clique na logo).
+var INICIO_ON = false;
 var state = {
-  tab: "inicio",
+  tab: INICIO_ON ? "inicio" : "agenda",
   day: "seg",
   week: 1,
   rooms: [],             // rooms (ordered array = display order), from db
@@ -2803,7 +2807,7 @@ function applyPermissionsUI(){
   Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button[data-tab]"), function(b){
     var k = b.getAttribute("data-tab");
     if (k === "ajuda"){ b.hidden = true; return; }   // Guia: abre pelo menu Acesso → Ajuda; todos podem ver
-    if (k === "inicio"){ b.hidden = false; return; } // Início: todos veem
+    if (k === "inicio"){ b.hidden = !INICIO_ON; if (!INICIO_ON && state.tab === "inicio") activeHidden = true; return; } // Início: todos veem
     if (k === "usuarios"){
       // Botão sempre oculto (abre pelo menu "Acesso"); só o Administrador pode ficar nessa tela.
       b.hidden = true;
@@ -2821,7 +2825,7 @@ function applyPermissionsUI(){
   if (activeHidden || !curSec){
     var first = null;
     ["inicio", "agenda", "agendadia", "prontuario", "relatorio", "relatorios"].concat(CAD_TABS).some(function(k){
-      if (k !== "inicio" && !tabCan(k)) return false;
+      if (k === "inicio" ? !INICIO_ON : !tabCan(k)) return false;
       first = document.querySelector('#mainTabs button[data-tab="' + k + '"]'); return !!first;
     });
     if (first) first.click();
@@ -2866,9 +2870,16 @@ function navInitialTab(){
   var tab = ({planner: "agenda", resumo: "relatorio", grupos: "salas"})[key] || key;
   if (!tab || !document.getElementById("tab-" + tab) || !document.querySelector('#mainTabs button[data-tab="' + tab + '"]')) tab = "";
   var mobile = !!(window.matchMedia && window.matchMedia("(max-width:760px)").matches);
+  if (tab === "inicio" && !INICIO_ON) tab = "";
+  if (!tab && !INICIO_ON){
+    // Sem Início: entra no Planner (celular: Agenda); openNavFromHash() faz o clique
+    // que carrega os dados e, sem permissão, troca pela primeira tela permitida.
+    tab = mobile ? "agendadia" : "agenda";
+    try { history.replaceState(history.state, "", location.pathname + location.search + (mobile ? "#agendadia" : "#planner")); } catch(e){}
+  }
   if (mobile && (tab === "agenda" || tab === "relatorio")){
-    tab = "inicio";
-    try { history.replaceState(history.state, "", location.pathname + location.search + "#inicio"); } catch(e){}
+    tab = INICIO_ON ? "inicio" : "agendadia";
+    try { history.replaceState(history.state, "", location.pathname + location.search + "#" + tab); } catch(e){}
   }
   if (!tab) return;
   if (key === "grupos") state.salasView = "grupos";
@@ -2882,13 +2893,19 @@ function navInitialTab(){
   var zc = document.getElementById("zoomCtrl");
   if (zc) zc.hidden = (tab !== "agenda");
 }
-// Logo e nome da clínica no topo levam à página Início.
+// Logo e nome da clínica no topo levam à página Início (oculto: Planner; celular: Agenda).
 function wireBrandHome(){
   var br = document.querySelector(".topbar .brand") || document.querySelector(".brand");
   if (!br) return;
   br.classList.add("brand-home");
-  br.setAttribute("role", "link"); br.setAttribute("tabindex", "0"); br.title = "Início";
-  function go(){ var b = document.querySelector('#mainTabs button[data-tab="inicio"]'); if (b) b.click(); }
+  br.setAttribute("role", "link"); br.setAttribute("tabindex", "0"); br.title = INICIO_ON ? "Início" : "Tela inicial";
+  function go(){
+    var b;
+    if (INICIO_ON) b = document.querySelector('#mainTabs button[data-tab="inicio"]');
+    else if (!isMobileView() && (!window.pipoAuth || can("agenda", "view"))) b = document.querySelector('#mainTabs button[data-tab="agenda"]');
+    else b = mobileAltTab();
+    if (b) b.click();
+  }
   br.addEventListener("click", go);
   br.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } });
 }
@@ -13415,8 +13432,8 @@ var HELP_TOPICS = [
   {id: "inicio", group: "Início", title: "Visão geral do sistema", mod: null,
     purpose: "O sistema reúne o cadastro dos pacientes e da clínica, o Planner (a grade modelo de 4 semanas), a Agenda com as datas reais, o Prontuário e os Relatórios.",
     steps: [
-      "<b>Início</b> é o primeiro botão do topo e a tela que abre ao entrar no sistema. Clicar na logo ou no nome da clínica também volta para o Início.",
-      "Use o menu do topo: <b>Início</b>, <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>.",
+      "Ao entrar, o sistema abre o Planner (no celular, a Agenda). Clicar na logo ou no nome da clínica também volta para essa tela.",
+      "Use o menu do topo: <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>.",
       "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Ajuda, Trocar senha e Sair. Para o Administrador, também Usuários, Status, Clínica e Backup.",
       "Em cada tela, o botão <b>?</b> abre este guia direto no assunto daquela tela.",
       "Nos campos de data, digite a data (só os números, ex.: 15032026 vira 15/03/2026) e tecle Enter, ou clique no ícone do calendário para escolher.",
@@ -14494,26 +14511,27 @@ function openRegistryItem(kind, item){
 // Menus suspensos do topo: "Cadastros" e "Planner" (Planner / Resumo).
 // Ctrl+clique (ou botão do meio) num item ou numa aba abre a tela em outra aba
 // do navegador: o endereço leva "#chave" e openNavFromHash() abre a tela certa.
+// Agrupados por assunto; "sep" põe uma divisória antes do item (menu do topo e ☰ do celular).
 var CAD_ITEMS = [
   {key: "pacientes", label: "Pacientes", tab: "pacientes", ok: function(){ return can("pacientes", "view"); }},
   {key: "tratamentos", label: "Tratamentos", tab: "tratamentos", ok: function(){ return can("tratamentos", "view"); }},
-  {key: "funcionarios", label: "Colaboradores", tab: "funcionarios", ok: function(){ return can("rh_funcionarios", "view"); }},
-  {key: "tiposfunc", label: "Tipos de colaborador", tab: "tiposfunc", ok: function(){ return can("rh_funcionarios", "view"); }},
   {key: "convenios", label: "Convênios", tab: "convenios", ok: function(){ return can("convenios", "view"); }},
-  {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("servicos", "view"); }},
-  {key: "especialidades", label: "Especialidades", tab: "especialidades", ok: function(){ return can("especialidades", "view"); }},
   {key: "motivos", label: "Motivos de cancelamento", tab: "motivos", ok: function(){ return can("motivos_cancelamento", "view"); }},
   {key: "medicos", label: "Médicos", tab: "medicos", ok: function(){ return can("medicos", "view"); }},
   {key: "escolas", label: "Escolas", tab: "escolas", ok: function(){ return can("escolas", "view"); }},
+  {sep: true, key: "funcionarios", label: "Colaboradores", tab: "funcionarios", ok: function(){ return can("rh_funcionarios", "view"); }},
+  {key: "tiposfunc", label: "Tipos de colaborador", tab: "tiposfunc", ok: function(){ return can("rh_funcionarios", "view"); }},
+  {key: "especialidades", label: "Especialidades", tab: "especialidades", ok: function(){ return can("especialidades", "view"); }},
+  {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("servicos", "view"); }},
   {key: "cbo", label: "CBO", tab: "cbo", ok: function(){ return can("cbo", "view"); }},
   {key: "conselhos", label: "Conselhos", tab: "conselhos", ok: function(){ return can("conselhos", "view"); }},
-  {key: "feriados", label: "Feriados e recessos", tab: "feriados", ok: function(){ return can("feriados", "view"); }},
-  {key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
-  {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }}
+  {sep: true, key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
+  {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }},
+  {key: "feriados", label: "Feriados e recessos", tab: "feriados", ok: function(){ return can("feriados", "view"); }}
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
-var CAD_TABS = ["pacientes", "tratamentos", "funcionarios", "tiposfunc", "profissionais", "convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "feriados", "salas"];
+var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "funcionarios", "tiposfunc", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "agenda", ok: function(){ return can("agenda", "view"); }},
   {key: "resumo", label: "Resumo", tab: "relatorio", ok: function(){ return can("resumo", "view"); }}
@@ -14530,7 +14548,7 @@ function renderNavMenus(){
     var menu = document.getElementById(m.menu), btn = document.getElementById(m.btn);
     if (!menu || !btn) return;
     var items = m.items.filter(function(i){ return !window.pipoAuth || i.ok(); });
-    menu.innerHTML = items.map(function(i){ return '<button type="button" role="menuitem" data-nav="' + i.key + '">' + i.label + '</button>'; }).join("");
+    menu.innerHTML = items.map(function(i, n){ return (i.sep && n ? '<div class="cad-sep" role="separator"></div>' : "") + '<button type="button" role="menuitem" data-nav="' + i.key + '">' + i.label + '</button>'; }).join("");
     btn.hidden = !items.length;
     btn.classList.toggle("active", m.tabs.indexOf(state.tab) !== -1);
   });
@@ -14574,7 +14592,7 @@ function openNavFromHash(final){
   var tb = document.querySelector('#mainTabs button[data-tab="' + key + '"]');
   // Usuários: botão sempre oculto, só o Administrador abre.
   var ok = tb && (!window.pipoAuth || (key === "usuarios" ? (window.pipoAuth.isAdmin() || window.pipoAuth.can("usuarios", "view")) :
-    key === "ajuda" ? window.pipoAuth.canDefault("ajuda", "view", true) : (key === "inicio" || !tb.hidden)));
+    key === "ajuda" ? window.pipoAuth.canDefault("ajuda", "view", true) : (key === "inicio" ? INICIO_ON : !tb.hidden)));
   if (!ok){ if (final || !tb){ navHashDone = true; navSaveHash(); } return; }
   navHashDone = true;
   tb.click();
@@ -14601,7 +14619,7 @@ var MOBILE_MQ = window.matchMedia ? window.matchMedia("(max-width:760px)") : nul
 function isMobileView(){ return !!(MOBILE_MQ && MOBILE_MQ.matches); }
 // Primeira tela permitida que aparece no celular (ordem do topo).
 function mobileAltTab(){
-  var order = ["inicio", "agendadia", "prontuario", "relatorios"].concat(CAD_TABS);
+  var order = (INICIO_ON ? ["inicio"] : []).concat(["agendadia", "prontuario", "relatorios"], CAD_TABS);
   var navs = CAD_ITEMS.concat(PL_ITEMS);
   for (var i = 0; i < order.length; i++){
     var b = document.querySelector('#mainTabs button[data-tab="' + order[i] + '"]');
@@ -14634,7 +14652,7 @@ function mnavRender(){
   function group(title, items){
     items = items.filter(function(i){ return !window.pipoAuth || i.ok(); });
     if (!items.length) return "";
-    return mnavGroup(title, items.map(function(i){ return navBtn(i, true); }).join(""));
+    return mnavGroup(title, items.map(function(i, n){ return (i.sep && n ? '<div class="mnav-sep"></div>' : "") + navBtn(i, true); }).join(""));
   }
   // Grupo recolhido (Cadastros, Acesso): as opções só aparecem ao tocar no título.
   function mnavGroup(title, inner){
