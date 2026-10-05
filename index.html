@@ -9111,6 +9111,16 @@ function agdWeekSlots(days){
   return Object.keys(m).sort().concat(["ALMOCO"], Object.keys(t).sort());
 }
 function agdLunchLabel(slots){ var i = slots.indexOf("ALMOCO"); return i > 0 ? addMinutes(slots[i-1], CLINIC_SLOT_MIN) : (slots[i+1] || ""); }
+// Saída da última sessão da tarde (início do último horário + duração padrão). Sem tarde: "".
+function agdDayEnd(d){ var o = agdDayObj(d); return o && o.afternoon.length ? addMinutes(o.afternoon[o.afternoon.length - 1], CLINIC_SLOT_MIN) : ""; }
+// Linha final da grade com o horário de saída da última sessão da tarde (igual à linha
+// final do Planner). Na Semana, o dia com saída diferente mostra a dele na própria célula.
+function agdEndRowHtml(days, cells){
+  var ends = days.map(agdDayEnd), lbl = ends.filter(Boolean).sort().pop() || "";
+  if (!lbl) return "";
+  return '<tr class="agd-lunch agd-endrow"><td class="agd-tcol" title="Saída da última sessão da tarde">' + lbl + '</td>' +
+    cells.map(function(c, i){ var e = ends[c.day]; return '<td class="agd-end-cell">' + (e && e !== lbl ? '<span title="Saída da última sessão neste dia">' + e + '</span>' : '') + '</td>'; }).join("") + '</tr>';
+}
 function agdDayObj(d){ return findDayObj(AD_WEEKDAY_KEYS[d.getDay()]); }
 // Horários do dia = os mesmos do Planner (manhã, almoço, tarde).
 function agdSlots(d){ var o = agdDayObj(d); return o.morning.concat(["ALMOCO"], o.afternoon); }
@@ -9430,6 +9440,7 @@ function agdRender(){
       if (t === "ALMOCO"){ html += '<tr class="agd-lunch agd-periodrow"><td class="agd-tcol">'+lunchLbl+'</td>' + days.map(function(d){ return agdPeriodCell("afternoon", agdIso(d), res.id); }).join("") + '</tr>'; return; }
       html += '<tr><td class="agd-tcol">'+agdRowTimeHtml(t)+'</td>' + days.map(function(d){ return cell(agdIso(d), t, res); }).join("") + '</tr>';
     });
+    html += agdEndRowHtml(days, days.map(function(d, i){ return {day: i}; }));
   } else {
     // Dia: só o profissional (ou a sala) selecionado na lista da esquerda.
     var dIso = agdIso(AD.date);
@@ -9454,6 +9465,7 @@ function agdRender(){
       if (t === "ALMOCO"){ html += '<tr class="agd-lunch agd-periodrow"><td class="agd-tcol">'+dayLunch+'</td>' + cols.map(function(r){ return r._split === "grupos" ? '<td class="agd-grp-col"></td>' : agdPeriodCell("afternoon", dIso, r.id); }).join("") + '</tr>'; return; }
       html += '<tr><td class="agd-tcol">'+agdRowTimeHtml(t)+'</td>' + cols.map(function(r){ return cell(dIso, t, r); }).join("") + '</tr>';
     });
+    html += agdEndRowHtml([AD.date], cols.map(function(){ return {day: 0}; }));
     // Sem nenhuma coluna (filtro sem resultado): a tabela fica só com os 87px dos horários, sem esticar.
     html = html.replace('<table class="agd-grid">', '<table class="agd-grid" style="'+(cols.length ? 'min-width:'+(87 + cols.length*130)+'px' : 'width:87px')+'">');
   }
@@ -13988,6 +14000,7 @@ var HELP_TOPICS = [
       "Busca: destaca o paciente na tela e mostra quantos há na semana."
     ],
     rules: [
+      "Os horários seguem o horário da clínica e a duração padrão (Acesso → Clínica): cabem só sessões inteiras na manhã e na tarde. A linha do almoço mostra a saída da última sessão da manhã e a última linha a saída da última sessão da tarde (na Semana, o dia com saída diferente mostra a dele).",
       "Fora do horário de trabalho do profissional (cadastrado em Cadastros → Colaboradores) a célula é hachurada e não aceita marcação. A janela do atendimento também recusa profissional, data ou horário fora desse horário (atendimento antigo pode ser editado se continuar no mesmo profissional, data e horário).",
       "<b>Limpar semana</b> apaga tudo da semana aberta (dupla confirmação); atendimentos com evolução ficam.",
       "Atendimento com evolução no prontuário <b>só o Administrador</b> exclui.",

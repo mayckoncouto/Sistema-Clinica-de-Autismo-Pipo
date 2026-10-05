@@ -1938,3 +1938,11 @@ atingido fica no plano); impressão/PDF. Escalas e Habilidades comuns à clínic
   `tests/test.html` têm `complementares` para os testes antigos não pararem no aviso.
 - **Parte 2 (a fazer):** na evolução, marcar objetivos trabalhados e o nível; Situação do
   plano atualiza sozinha com o último nível; gráfico por especialidade × escala.
+
+## Agenda: linha final com a saída da última sessão (2026-10-05)
+Pedido do usuário: horários do Planner e da Agenda seguem o horário da clínica e a
+duração padrão (`clinicSlots`: só sessões inteiras; com 50 min, 07:20–12:00 vira
+07:20…10:40). A Agenda mostra a saída da última sessão: almoço (`agdLunchLabel`, já
+existia) e a nova linha final `tr.agd-endrow` (`agdDayEnd`, `agdEndRowHtml`; na Semana o
+rótulo é a saída mais tarde e o dia diferente mostra a dele em `td.agd-end-cell`). O
+Planner já tinha as duas linhas (`timeRows`). Teste `tests/run_clinic_slots.js`.
