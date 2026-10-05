@@ -514,6 +514,20 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .pl-tools-menu.to-left{left:auto;right:0}
 /* Planner: a busca encolhe um pouco antes de a barra quebrar linha */
 #tab-agenda .controls .search-wrap{flex:0 1 220px;min-width:140px}
+/* Barra do Planner sempre numa linha (computador): o filtro de salas e a busca encolhem;
+   em telas mais estreitas os botões de dia/semana ficam mais compactos. */
+@media (min-width:761px){
+  #tab-agenda .controls{flex-wrap:nowrap}
+  #tab-agenda .controls > *{flex-shrink:0}
+  #tab-agenda .controls .search-wrap{flex:1 1 220px;min-width:110px;max-width:260px}
+  #tab-agenda .controls #roomChips{flex:0 1 220px;min-width:140px}
+  #tab-agenda .controls #roomChips .rf-btn{min-width:0;width:100%;max-width:none}
+  #tab-agenda .controls .spacer{flex:1 1 0;min-width:0}
+}
+@media (min-width:761px) and (max-width:1300px){
+  #tab-agenda .controls{gap:6px;padding-inline:10px}
+  #tab-agenda .controls .seg button{padding:6px 7px;font-size:12px}
+}
 .pl-tools-menu .btn{display:block;width:100%;text-align:left;border:0;border-radius:0;box-shadow:none;background:transparent;font-weight:600}
 .pl-tools-menu .btn[hidden]{display:none}
 .fr-week{border:1px solid var(--line);border-radius:10px;margin:6px 0;padding:0 10px}
@@ -1408,11 +1422,10 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <div class="spacer"></div>
       <span class="pat-count" id="matchCount"></span>
-      <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do dia e semana abertos para uma data da Agenda" hidden>Enviar para a Agenda</button>
-      <button class="btn ghost" id="genMonthBtn" title="Gera as 4 semanas do Planner num mês da Agenda" hidden>Gerar mês</button>
       <!-- Opções do Planner (antes "Ferramentas"): menu suspenso (os botões mantêm os ids; o "?" da ajuda entra depois) -->
-      <div class="cad-wrap pl-tools-wrap"><button type="button" class="btn ghost" id="plToolsBtn" aria-haspopup="menu" aria-expanded="false">Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>
+      <div class="cad-wrap pl-tools-wrap"><button type="button" class="btn ghost" id="plToolsBtn" aria-haspopup="menu" aria-expanded="false">Outras opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>
       <div class="cad-menu pl-tools-menu" id="plToolsMenu" role="menu" hidden>
+        <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do Planner para a Agenda: uma semana (ou um dia) ou o mês inteiro" hidden>Enviar para a Agenda</button>
         <button class="btn ghost" id="freeSlotBtn" title="Ver os horários livres para agendar um paciente">Horário livre</button>
         <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar agendamento</button>
         <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar profissional</button>
@@ -2826,7 +2839,6 @@ function applyPermissionsUI(){
   if (state.salasView !== "grupos" && !can("salas", "view") && can("grupos", "view")) state.salasView = "grupos";
   if (state.salasView === "grupos" && !can("grupos", "view") && can("salas", "view")) state.salasView = "salas";
   show("sendToAgendaBtn", can("agendamentos","create"));
-  show("genMonthBtn", can("agendamentos","create"));
   show("plClearWeekBtn", can("agenda","delete"));
   show("fixPatientBtn", can("agenda","create") || can("agenda","edit") || can("agenda","delete"));
   show("swapProfBtn", can("salas","edit") || can("grupos","edit"));
@@ -3790,10 +3802,9 @@ function wireControls(){
   document.getElementById("addRoomBtn").addEventListener("click", function(){ openRoomModal(null, state.salasView === "grupos"); });
   // Salas <-> Grupos de suporte: a mesma tela mostra um cadastro ou o outro.
   document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
-  document.getElementById("genMonthBtn").addEventListener("click", function(){ openGenMonthModal(); });
   document.getElementById("plClearWeekBtn").addEventListener("click", function(){ plannerClearWeek(); });
   document.getElementById("fixPatientBtn").addEventListener("click", function(){ openFixPatientModal(); });
-  // Menu "Opções ▾" do Planner (antes "Ferramentas"): abre/fecha; escolher um item fecha o menu.
+  // Menu "Outras opções ▾" do Planner: abre/fecha; escolher um item fecha o menu.
   (function(){
     var tb = document.getElementById("plToolsBtn"), tm = document.getElementById("plToolsMenu");
     if (!tb || !tm) return;
@@ -3829,8 +3840,6 @@ function visibleRooms(){
 function renderAgendaShell(){
   var sendBtn = document.getElementById("sendToAgendaBtn");
   if (sendBtn) sendBtn.hidden = !can("agendamentos", "create");
-  var genBtn = document.getElementById("genMonthBtn");
-  if (genBtn) genBtn.hidden = !can("agendamentos", "create");
   var clrBtn = document.getElementById("plClearWeekBtn");
   if (clrBtn) clrBtn.hidden = !can("agenda", "delete");
   renderRoomChips();
@@ -10983,6 +10992,17 @@ function plannerSendPlan(dayKey, week, dateIso, skipTime){
     return plan;
   });
 }
+// "Enviar para a Agenda": uma janela só, com o seletor Período (Semana / Mês).
+// Semana = um dia ou a semana inteira numa data; Mês = as 4 semanas no mês (antigo "Gerar mês").
+function sendModeHtml(mode){
+  return '<div class="field send-mode"><label for="sendMode">Período</label><select id="sendMode">' +
+    '<option value="semana"' + (mode === "semana" ? ' selected' : '') + '>Semana (um dia ou a semana inteira)</option>' +
+    '<option value="mes"' + (mode === "mes" ? ' selected' : '') + '>Mês (as 4 semanas do Planner)</option></select></div>';
+}
+function wireSendMode(mode){
+  var el = document.getElementById("sendMode"); if (!el) return;
+  el.addEventListener("change", function(){ if (el.value === mode) return; if (el.value === "mes") openGenMonthModal(); else openSendToAgendaModal(); });
+}
 function openSendToAgendaModal(){
   if (!agdClient()){ showToast("O envio para a Agenda funciona no sistema online.", true); return; }
   if (!can("agendamentos", "create")){ showToast(permDeniedMsg("agendamentos", "create"), true); return; }
@@ -11001,7 +11021,7 @@ function openSendToAgendaModal(){
       '<div class="modal-head"><div><h3>Enviar para a Agenda</h3>' +
         '<div class="modal-sub">Copia os agendamentos de um dia (ou da semana inteira) do Planner para a Agenda. Nada que já está na Agenda é apagado ou substituído.</div></div>' +
         '<button class="modal-close" id="closeSend" aria-label="Fechar">✕</button></div>' +
-      '<div class="modal-body">' +
+      '<div class="modal-body">' + sendModeHtml("semana") +
         '<div class="field-row" style="display:flex;gap:10px">' +
           '<div class="field" style="flex:1"><label for="sendDay">Dia do Planner</label><select id="sendDay">' +
             DAYS.map(function(d){ return '<option value="'+d.key+'"'+(d.key === dayKey ? ' selected' : '')+'>'+esc(d.full)+'</option>'; }).join("") + '<option value="semana">Semana inteira</option></select></div>' +
@@ -11021,6 +11041,7 @@ function openSendToAgendaModal(){
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("closeSend").addEventListener("click", close);
   document.getElementById("sendCancel").addEventListener("click", close);
+  wireSendMode("semana");
   var daySel = document.getElementById("sendDay"), weekSel = document.getElementById("sendWeek"), dateEl = document.getElementById("sendDate");
   var okBtn = document.getElementById("sendOk"), prev = document.getElementById("sendPreview");
   var current = null, seq = 0;
@@ -11238,7 +11259,7 @@ function openHolidayModal(item){
   var host = document.getElementById("modalHost");
   host.innerHTML = '<div class="overlay" id="ovHol"><div class="modal" style="max-width:520px">' +
     '<div class="modal-head"><div><h3>' + (isNew ? "Novo feriado ou recesso" : (canSave ? "Editar " : "") + "Feriado ou recesso") + '</h3>' +
-      '<div class="modal-sub">Na Agenda os horários ficam cinza e marcar pede confirmação. O "Gerar mês" do Planner pula esses horários.</div></div>' +
+      '<div class="modal-sub">Na Agenda os horários ficam cinza e marcar pede confirmação. O "Enviar para a Agenda" do Planner (período Mês) pula esses horários.</div></div>' +
       '<button class="modal-close" id="holClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body">' +
       '<div class="field"><label for="holName">Nome</label><input id="holName" type="text" value="' + esc(v.name) + '" placeholder="Ex.: Recesso de fim de ano"' + dis + '></div>' +
@@ -11306,29 +11327,30 @@ function genMonthWeeks(ym){
   });
 }
 function openGenMonthModal(){
-  if (!agdClient()){ showToast("O Gerar mês funciona no sistema online.", true); return; }
+  if (!agdClient()){ showToast("O envio para a Agenda funciona no sistema online.", true); return; }
   if (!can("agendamentos", "create")){ showToast(permDeniedMsg("agendamentos", "create"), true); return; }
   var now = new Date(), months = [];
   for (var i = 0; i < 13; i++){ var md = new Date(now.getFullYear(), now.getMonth() + i, 1); months.push({ym: holIsoOf(md).slice(0, 7), label: AD_MONTHS[md.getMonth()] + " de " + md.getFullYear()}); }
   var host = document.getElementById("modalHost");
   host.innerHTML = '<div class="overlay" id="ovGen"><div class="modal" style="max-width:600px">' +
-    '<div class="modal-head"><div><h3>Gerar mês na Agenda</h3>' +
+    '<div class="modal-head"><div><h3>Enviar para a Agenda</h3>' +
       '<div class="modal-sub">Leva as 4 semanas do Planner para o mês escolhido. A 1ª semana é a primeira que começa numa segunda-feira dentro do mês. Dias antes dela, depois da 4ª semana, dias que já passaram e feriados ficam de fora (faça à mão). Nada que já está na Agenda é apagado.</div></div>' +
       '<button class="modal-close" id="genClose" aria-label="Fechar">✕</button></div>' +
-    '<div class="modal-body">' +
+    '<div class="modal-body">' + sendModeHtml("mes") +
       '<div class="field"><label for="genMonth">Mês</label><select id="genMonth">' + months.map(function(m, i){ return '<option value="' + m.ym + '"' + (i === 1 ? ' selected' : '') + '>' + esc(m.label) + '</option>'; }).join("") + '</select></div>' +
       '<div class="send-preview" id="genPreview">Calculando…</div>' +
     '</div>' +
-    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="genCancel">Cancelar</button><button class="btn primary" id="genOk" disabled>Gerar</button></div></div></div>';
+    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="genCancel">Cancelar</button><button class="btn primary" id="genOk" disabled>Enviar</button></div></div></div>';
   var ov = document.getElementById("ovGen");
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("genClose").addEventListener("click", close);
   document.getElementById("genCancel").addEventListener("click", close);
+  wireSendMode("mes");
   var sel = document.getElementById("genMonth"), prev = document.getElementById("genPreview"), okBtn = document.getElementById("genOk");
   var current = null, seq = 0;
   function sendList(){ if (!current) return []; var off = current.off; return current.send.filter(function(r){ return off.indexOf(r) === -1; }); }
-  function syncOk(){ var n = sendList().length; okBtn.disabled = !n; okBtn.textContent = n ? "Gerar (" + n + ")" : "Gerar"; }
+  function syncOk(){ var n = sendList().length; okBtn.disabled = !n; okBtn.textContent = n ? "Enviar (" + n + ")" : "Enviar"; }
   prev.addEventListener("change", function(e){
     var cb = e.target.closest("[data-warn]"); if (!cb || !current) return;
     var rec = current.warns[+cb.getAttribute("data-warn")].rec;
@@ -11337,7 +11359,7 @@ function openGenMonthModal(){
     syncOk();
   });
   function refresh(){
-    var my = ++seq; current = null; okBtn.disabled = true; okBtn.textContent = "Gerar";
+    var my = ++seq; current = null; okBtn.disabled = true; okBtn.textContent = "Enviar";
     var weeks = genMonthWeeks(sel.value), today = holIsoOf(new Date());
     var jobs = [], holDays = [], pastDays = 0, outDays = 0;
     weeks.forEach(function(w){
@@ -11409,13 +11431,13 @@ function openGenMonthModal(){
         return c.from("appointments").insert(part).select().then(function(r){ if (r.error) throw r.error; return acc.concat(r.data || []); });
       });
     }, Promise.resolve([])).then(function(created){
-      agdRecord("Gerar mês do Planner · " + label, [], created);
+      agdRecord("Enviar mês do Planner · " + label, [], created);
       close();
       showToast(created.length + (created.length === 1 ? " agendamento gerado" : " agendamentos gerados") + " em " + label +
         (cur.skipped.length ? ", " + cur.skipped.length + (cur.skipped.length === 1 ? " pulado" : " pulados") : "") + ".");
       if (AD.loaded) agdLoadWeek();
     }).catch(function(err){
-      okBtn.textContent = "Gerar"; okBtn.disabled = false;
+      okBtn.textContent = "Enviar"; okBtn.disabled = false;
       showToast("Não foi possível gerar: " + agdErr(err) + ". O que já foi gravado continua na Agenda; gere de novo para completar (não duplica).", true);
       if (AD.loaded) agdLoadWeek();
     });
@@ -13622,8 +13644,7 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Na <b>Agenda</b>, os horários do feriado ficam cinza e o dia mostra o nome do feriado. Marcar nesses horários não é bloqueado: o sistema só pede confirmação.",
-      "O <b>Gerar mês</b> do Planner sempre pula os dias e horários de feriado e recesso.",
-      "No <b>Enviar para a Agenda</b>, a prévia avisa quando a data é feriado."
+      "No <b>Enviar para a Agenda</b> do Planner, o período Mês sempre pula os dias e horários de feriado e recesso; no período Semana, a prévia avisa quando a data é feriado."
     ],
     who: "Permissão <b>Feriados e recessos</b>."},
   {id: "conselhos", group: "Cadastros", title: "Conselhos", mod: "conselhos", tab: "conselhos",
@@ -13689,22 +13710,22 @@ var HELP_TOPICS = [
       "Bloqueado, Reunião Clínica e Treinamento não entram nas regras."
     ],
     who: "Vale para todos que agendam."},
-  {id: "planner-ferramentas", group: "Planner", title: "Ferramentas do Planner", mod: "agenda", tab: "agenda",
-    purpose: "Botões da barra do Planner para mudanças em lote.",
+  {id: "planner-ferramentas", group: "Planner", title: "Outras opções do Planner", mod: "agenda", tab: "agenda",
+    purpose: "Menu <b>Outras opções ▾</b> do Planner: mudanças em lote e envio para a Agenda.",
     steps: [
       "<b>Editar agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar profissional</b>: passa as colunas de um profissional para outro.",
-      "<b>Gerar mês</b> (ao lado do Enviar): escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda. A 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª. A prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
-      "<b>Enviar para a Agenda</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes. Na prévia, \"com aviso\" lista os que ficam fora do horário do paciente ou com terapeuta diferente do tratamento: desmarque os que não devem ir.",
+      "<b>Outras opções ▾ → Enviar para a Agenda</b>: comece escolhendo o <b>Período</b>. <b>Mês</b>: escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda; a 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª; a prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
+      "<b>Semana</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes. Na prévia, \"com aviso\" lista os que ficam fora do horário do paciente ou com terapeuta diferente do tratamento: desmarque os que não devem ir.",
       "<b>Limpar semana</b>: apaga todos os agendamentos de uma semana do Planner (dupla confirmação, desfazível).",
       "<b>Exportar Excel</b>: baixa uma planilha com os agendamentos das 4 semanas."
     ],
     rules: [
       "Enviar para a Agenda só acrescenta: nunca altera nem apaga o que já está na Agenda. Pula horários ocupados, bloqueados ou fora do horário.",
-      "Gerar mês segue as mesmas regras do Enviar e também pula feriados e recessos e os dias que já passaram. Dias antes da 1ª semana, depois da 4ª (a 5ª semana) e os que caem no mês seguinte ficam para fazer à mão. Pode gerar de novo: o que já está na Agenda não é duplicado.",
+      "No período Mês valem as mesmas regras e também são pulados feriados e recessos e os dias que já passaram. Dias antes da 1ª semana, depois da 4ª (a 5ª semana) e os que caem no mês seguinte ficam para fazer à mão. Pode gerar de novo: o que já está na Agenda não é duplicado.",
       "Trocar profissional não entra no desfazer; para voltar, troque ao contrário."
     ],
-    who: "Permissão <b>Planner</b>. Enviar e Gerar mês exigem incluir na <b>Agenda</b>; Trocar profissional exige editar <b>Salas</b>."},
+    who: "Permissão <b>Planner</b>. Enviar para a Agenda exige incluir na <b>Agenda</b>; Trocar profissional exige editar <b>Salas</b>."},
   {id: "resumo", group: "Planner", title: "Resumo do Planner", mod: "resumo", tab: "relatorio",
     purpose: "Total de sessões por paciente, profissional e especialidade, somando as 4 semanas do Planner.",
     steps: ["Planner ▾ → <b>Resumo</b>. Busque o paciente; os cabeçalhos ficam fixos ao rolar."],

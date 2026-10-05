@@ -68,6 +68,14 @@ const path = require('path');
   await page.waitForTimeout(100);
   const after = await page.textContent('#sendOk');
   console.log('unchecking a warned item removes it from the send count?', /Enviar \(\d+\)/.test(before) && (parseInt(before.match(/\d+/)[0], 10) - 1 === (parseInt((after.match(/\d+/) || ['0'])[0], 10))), before, after);
+  // Período Mês na mesma janela (antigo "Gerar mês"); voltar para Semana.
+  await ev(`(function(){ var m = document.getElementById("sendMode"); m.value = "mes"; m.dispatchEvent(new Event("change", {bubbles: true})); })()`);
+  await page.waitForTimeout(300);
+  const mesOk = await page.evaluate(() => !!document.getElementById('genMonth') && /Enviar para a Agenda/.test(document.querySelector('#ovGen h3').textContent) && document.getElementById('sendMode').value === 'mes');
+  await ev(`(function(){ var m = document.getElementById("sendMode"); m.value = "semana"; m.dispatchEvent(new Event("change", {bubbles: true})); })()`);
+  await page.waitForTimeout(300);
+  const semOk = await page.evaluate(() => !!document.getElementById('sendDay') && document.getElementById('sendMode').value === 'semana');
+  console.log('Enviar para a Agenda starts with Período and switches Semana ↔ Mês in the same window?', mesOk && semOk);
   await page.click('#sendCancel');
 
   // 3) Resumo do banco: rpc treatment_appt_summary com quantidade (n).

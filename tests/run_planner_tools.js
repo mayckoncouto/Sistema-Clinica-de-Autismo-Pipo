@@ -13,7 +13,7 @@ const path = require('path');
 
   // ---- Barra: "Enviar para a Agenda" visível; o resto no menu Ferramentas ----
   console.log('Ferramentas menu starts closed?', await page.locator('#plToolsMenu').isHidden());
-  console.log('Enviar para a Agenda stays on the bar (outside the menu)?', (await page.locator('.controls > #sendToAgendaBtn').count()) === 1);
+  console.log('Enviar para a Agenda is inside "Outras opções"?', (await page.locator('#plToolsMenu #sendToAgendaBtn').count()) === 1 && /Outras opções/.test(await page.textContent('#plToolsBtn')));
   await page.click('#plToolsBtn');
   const items = await page.locator('#plToolsMenu button:visible').allInnerTexts();
   console.log('menu lists Horário livre, Editar agendamento, Trocar profissional, Exportar Excel, Limpar semana?', ['Horário livre', 'Editar agendamento', 'Trocar profissional', 'Exportar Excel', 'Limpar semana'].every((t) => items.some((i) => i.trim() === t)));

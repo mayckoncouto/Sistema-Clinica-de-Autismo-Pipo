@@ -1814,3 +1814,14 @@ sem o bloqueio de troca de status).
   partir da data `#rbFrom`, conta `appointments` do paciente com `date >=`; remove com
   `agdSplitByRecords` + `agdDeleteByIds` + `agdRecord`; precisa de
   `agendamentos.delete`). Nada marcado por padrão; com evolução no prontuário fica.
+
+## Planner: "Enviar para a Agenda" com Semana/Mês; "Outras opções"; barra numa linha (2026-10-05)
+- Pedido do usuário: "Gerar mês" deixou de ser botão/janela própria. **Enviar para a Agenda**
+  (`#sendToAgendaBtn`) fica dentro do menu **Outras opções ▾** (`#plToolsBtn`, antes
+  "Opções"), e a janela começa com o seletor **Período** (`#sendMode`, `sendModeHtml` /
+  `wireSendMode`): Semana = `openSendToAgendaModal` (dia ou semana inteira numa data);
+  Mês = `openGenMonthModal` (as 4 semanas no mês; título "Enviar para a Agenda", botão
+  "Enviar"). Trocar o Período troca o conteúdo da mesma janela. `#genMonthBtn` não existe mais.
+- Barra do Planner sempre numa linha no computador (`@media (min-width:761px)`:
+  `flex-wrap:nowrap`, filtro de salas e busca encolhem; até 1300px os botões de dia/semana
+  ficam compactos).

@@ -56,7 +56,7 @@ const path = require('path');
     }).then(function(p){ return {sent: p.send.filter(function(r){ return r.time === "08:00"; }).length, hol: p.skipped.filter(function(s){ return s.why === "holiday"; }).length}; });
   })()`);
   console.log('Gerar mês skips holiday times?', plan.sent === 0 && plan.hol >= 1, JSON.stringify(plan));
-  console.log('Gerar mês button is next to Enviar para a Agenda?', await page.evaluate(() => { const a = document.getElementById('sendToAgendaBtn'), b = document.getElementById('genMonthBtn'); return a.nextElementSibling === b; }));
+  console.log('no separate Gerar mês button (Mês is a period inside Enviar para a Agenda)?', await page.evaluate(() => !document.getElementById('genMonthBtn') && !!document.querySelector('#plToolsMenu #sendToAgendaBtn')));
 
   const ag = await ev(`(function(){
     agdClient = function(){ return null; };
