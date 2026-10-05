@@ -71,6 +71,17 @@ const path = require('path');
   console.log('an existing booking out of hours still opens for editing?', opened === true, opened);
   await page.click('#agdCancel').catch(() => {});
 
+  // Janela do colaborador: se o banco recusar o cadastro do profissional, não diz "Alterado"
+  // e a janela continua aberta com o motivo.
+  await ev(`(function(){ var orig = db.doc; db.doc = function(p){ var r = orig.call(db, p); if (p === "config/professionals") r.set = function(){ return Promise.reject(new Error("sem permissão no banco")); }; return r; }; })()`);
+  await ev(`openProfessionalModal(findProfessional("ana-terapeuta"))`);
+  await page.waitForSelector('#profSave');
+  await page.evaluate(() => { document.getElementById('toastHost').innerHTML = ''; });
+  await page.click('#profSave');
+  await page.waitForTimeout(400);
+  const toast2 = await page.innerText('#toastHost');
+  console.log('save refused by the database keeps the window open and explains why (no "Alterado")?', (await page.locator('#ovProf').count()) === 1 && /sem permissão no banco/.test(toast2) && !/Alterado/.test(toast2), JSON.stringify(toast2));
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

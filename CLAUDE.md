@@ -1883,3 +1883,13 @@ de Fulano neste dia (08:00–12:00)" / "não trabalha neste dia" (`agdInHours`,
 `profDayHours`), antes das outras checagens. Atendimento já gravado que não mudou de
 profissional, data e horário continua editável. Vale para todos os tipos (bloqueio,
 reunião, treinamento também). Teste `tests/run_prof_workhours.js`.
+
+## Janela do colaborador não diz "Alterado" se o profissional não gravou (2026-10-05)
+Caso real: quem tinha "editar" em Colaboradores mudou o horário de trabalho, viu um aviso
+rápido de erro e depois "Alterado", mas o horário não ficou salvo. O banco recusou
+`config/professionals` (se a migração `2026-10-05f-profissionais-no-rh.sql` não foi rodada,
+`module_for_path` ainda exige a permissão antiga `profissionais`, que saiu dos Níveis) e
+`writeProfessionals` engolia o erro. Agora `writeProfessionals(list, true)` (modo strict,
+usado pela janela do colaborador) rejeita com o motivo do banco: a janela fica aberta,
+"Não foi possível salvar tudo: …" e os dados do RH não são gravados pela metade. Teste no
+fim de `tests/run_prof_workhours.js`.

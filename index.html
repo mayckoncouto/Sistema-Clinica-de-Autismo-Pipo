@@ -8189,10 +8189,10 @@ function openStaffModal(entry, opts){
         });
         if (desligado) rec.inativo = true;
         var list = prof ? state.professionals.map(function(x){ return x.id === rec.id ? rec : x; }) : state.professionals.concat([rec]);
-        profStep = writeProfessionals(list);
+        profStep = writeProfessionals(list, true);
       } else if (!isProf && prof && !prof.inativo){
         // Deixou de ser profissional: fica inativo (os atendimentos antigos continuam com ele).
-        profStep = writeProfessionals(state.professionals.map(function(x){ return x.id === prof.id ? Object.assign({}, x, {inativo: true}) : x; }));
+        profStep = writeProfessionals(state.professionals.map(function(x){ return x.id === prof.id ? Object.assign({}, x, {inativo: true}) : x; }), true);
       }
       // 2) Dados do RH.
       var staffId = row ? row.id : (profId && prof ? "prof-" + profId : uid("func"));
@@ -8397,18 +8397,21 @@ function cpfValido(s){
   return true;
 }
 
-function writeProfessionals(list){
+// strict = a janela do colaborador: se não gravar, a promessa falha com o motivo (para não
+// continuar e mostrar "Alterado" com o horário/cadastro do profissional sem salvar).
+function writeProfessionals(list, strict){
+  function fail(msg){ if (strict) return Promise.reject(new Error(msg)); showToast(msg, true); return Promise.resolve(); }
   var denied = listPermDenied("rh_funcionarios", state.professionals, list); // profissional = colaborador
-  if (denied){ showToast(denied, true); return Promise.resolve(); }
+  if (denied) return fail(denied);
   state.professionals = list;
   renderProfissionaisTab();
   if (state.tab === "funcionarios") renderStaffTab();
   renderAgendaShell();
   renderRelatorioTab();
-  if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
-  if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
-  return db.doc("config/professionals").set({list:list}).catch(function(){
-    showToast("Não foi possível salvar os profissionais.", true);
+  if (!db) return fail("Não salvo: sem conexão com o servidor.");
+  if (state.writable === false) return fail("Modo somente leitura — alteração não salva.");
+  return db.doc("config/professionals").set({list:list}).catch(function(e){
+    return fail("Não foi possível salvar os dados de atendimento (horário, especialidade…) do profissional" + (e && e.message ? ": " + e.message : "."));
   });
 }
 
