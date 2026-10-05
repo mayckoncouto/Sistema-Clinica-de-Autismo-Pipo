@@ -12973,10 +12973,11 @@ function openTreatmentModal(t, opts){
   var motOpts = '<option value="">Selecione o motivo…</option>' + mots.map(function(m){
     return '<option value="' + esc(m.id) + '"' + (!isNew && m.id === t.motivoCancel ? ' selected' : '') + '>' + esc(m.name) + '</option>';
   }).join("");
-  var pats = activeOnly(state.patientsRaw, pid).sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
+  // Tratamento novo: inativos também aparecem ("(inativo)"); salvar o tratamento reativa o paciente.
+  var pats = (state.patientsRaw || []).slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
   var patOpts = '<option value="">Selecione o paciente…</option>' + pats.map(function(p){
     var act = activeTreatment(p.id);
-    return '<option value="' + esc(p.id) + '"' + (p.id === pid ? ' selected' : '') + '>' + esc(p.nome) + (isNew && act && !opts.renegotiateFrom ? ' (já tem tratamento ativo)' : '') + '</option>';
+    return '<option value="' + esc(p.id) + '"' + (p.id === pid ? ' selected' : '') + '>' + esc(p.nome) + (p.inativo ? ' (inativo)' : '') + (isNew && act && !opts.renegotiateFrom ? ' (já tem tratamento ativo)' : '') + '</option>';
   }).join("");
   function opt(list, cur){ return list.map(function(x){ return '<option value="' + x.id + '"' + (x.id === cur ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join(""); }
   var host = document.getElementById("modalHost");
@@ -13214,8 +13215,10 @@ function openTreatmentModal(t, opts){
           close(); if (state.tab === "tratamentos") renderTreatmentsTab();
           // Tratamento passou a Cancelado e o paciente não tem outro Ativo: inativa o paciente.
           if (st === "cancelado" && (isNew || t.status !== "cancelado")) trInactivatePatient(patId, list);
+          // Tratamento novo para paciente inativo: o paciente volta a ficar ativo.
+          else if (isNew) trReactivatePatient(patId);
           // Cancelado voltou a Ativo com o paciente inativo: oferece reativar o paciente.
-          else if (st === "ativo" && !isNew && t.status === "cancelado") trOfferReactivatePatient(patId);
+          else if (st === "ativo" && t.status === "cancelado") trOfferReactivatePatient(patId);
         });
       });
     });
@@ -13230,6 +13233,13 @@ function trInactivatePatient(patId, list){
   if (!can("pacientes", "edit")){ showToast("Tratamento cancelado. O paciente continua ativo: seu nível não pode editar Pacientes.", true); return; }
   showToast("Tratamento cancelado e paciente " + (p.nome || "") + " inativado.");
   writePatients(state.patientsRaw.map(function(x){ return x.id === patId ? Object.assign({}, x, {inativo: true}) : x; }));
+}
+function trReactivatePatient(patId){
+  var p = rawPatient(patId);
+  if (!p || !p.inativo) return;
+  if (!can("pacientes", "edit")){ showToast("Tratamento salvo. O paciente continua inativo: seu nível não pode editar Pacientes.", true); return; }
+  showToast("Tratamento salvo e paciente " + (p.nome || "") + " reativado.");
+  writePatients(state.patientsRaw.map(function(x){ return x.id === patId ? Object.assign({}, x, {inativo: false}) : x; }));
 }
 function trOfferReactivatePatient(patId){
   var p = rawPatient(patId);
@@ -13395,6 +13405,7 @@ var HELP_TOPICS = [
       "O <b>Tipo</b> é automático: <b>Novo</b> se não há anterior ou o anterior foi Cancelado; <b>Renegociado</b> se o anterior foi Renegociado.",
       "<b>Cancelado</b> exige motivo; a observação é obrigatória quando o motivo é \"Outro\". Um tratamento cancelado pode voltar a Ativo ou Renegociado: o motivo do cancelamento sai do tratamento e a troca fica no histórico.",
       "Cancelar um tratamento <b>inativa o paciente</b>, se ele não tiver outro tratamento Ativo (precisa da permissão de editar Pacientes). Se o tratamento cancelado voltar a Ativo, o sistema pergunta se reativa o paciente.",
+      "No tratamento novo, a lista de pacientes mostra também os inativos, com \"(inativo)\" ao lado do nome. Salvar o tratamento novo <b>reativa o paciente</b> (menos quando ele já é salvo como Cancelado).",
       "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b> e a quantidade de sessões fica travada. Para mudar, use Renegociar.",
       "A <b>Data de término</b> é o último atendimento da Agenda no período do tratamento.",
       "Atendimentos de datas passadas usam o tratamento que valia <b>na data</b> deles (cor, regras e relatórios).",

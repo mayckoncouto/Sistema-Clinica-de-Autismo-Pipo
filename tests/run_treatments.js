@@ -98,6 +98,20 @@ const path = require('path');
   await page.click('#cfCancel'); await page.waitForTimeout(200);
   console.log('cancelling keeps the slot empty?', await page.evaluate(() => !((window.__STORE__['schedule/seg-1'] || {}).bookings || {})['08:00|r1|r1-t1']));
 
+  // Paciente inativo aparece na lista do tratamento novo com "(inativo)"; salvar o tratamento reativa.
+  const pInact = () => page.evaluate(() => { const p = (window.__STORE__['patients/all'].list || []).filter((x) => x.id === 'duda-vermelho')[0]; return !!p.inativo; });
+  if (await page.$('#ovTreat')) await page.click('#trCancel');
+  await page.evaluate(async () => { const db = await window.claude.use('db'); const d = await db.doc('patients/all').get(); const l = d.data().list.map((x) => x.id === 'duda-vermelho' ? Object.assign({}, x, {inativo: true}) : x); await db.doc('patients/all').set({list: l}); });
+  await page.waitForTimeout(150);
+  await page.$eval('#mainTabs button[data-tab=tratamentos]', (b) => b.click()); await page.waitForTimeout(200);
+  await page.click('#trAdd'); await page.waitForSelector('#ovTreat');
+  const optTxt = await page.$eval('#trPat', (s) => Array.from(s.options).filter((o) => o.value === 'duda-vermelho').map((o) => o.textContent)[0] || '');
+  console.log('inactive patient listed in a new treatment with "(inativo)"?', /\(inativo\)/.test(optTxt), optTxt);
+  await page.$eval('#trPat', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, 'duda-vermelho');
+  await page.waitForTimeout(200);
+  await save(); await page.waitForTimeout(200);
+  console.log('saving a new treatment reactivates the patient?', (await pInact()) === false);
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });

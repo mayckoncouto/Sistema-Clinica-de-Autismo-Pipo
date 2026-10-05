@@ -1799,3 +1799,6 @@ sem o bloqueio de troca de status).
   de salvar): só se ele não tiver outro tratamento Ativo e se o nível pode editar
   Pacientes (senão avisa). Cancelado que volta a **Ativo** com paciente inativo →
   `trOfferReactivatePatient` pergunta se reativa. Sem SQL.
+- (2026-10-05) **Tratamento novo de paciente inativo**: `#trPat` lista todos os pacientes,
+  inativos com "(inativo)" ao lado do nome; salvar um tratamento NOVO (que não seja
+  Cancelado) reativa o paciente (`trReactivatePatient`; sem editar Pacientes, só avisa).
