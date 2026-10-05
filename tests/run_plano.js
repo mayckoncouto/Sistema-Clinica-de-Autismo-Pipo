@@ -236,6 +236,26 @@ const path = require('path');
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; AD.rows.r1.status = ""; agdOpenDetails(AD.rows.r1); })()`);
   const open = await page.$eval('#agdDetStatus', (e) => !e.disabled);
   console.log('therapist cannot change a finalized status (others still can)?', locked && lockMsg && open, JSON.stringify({locked, lockMsg, open}));
+  // Paciente sem plano no horário é ignorado; sem objetivos em comum avisa ao agendar.
+  await ev(`(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = ""; AD.rows.r1.status = "";
+    AD.rows.r3 = {id: "r3", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Eva Sem Idade", service: "sessao", status: ""};
+    agdOpenDetails(AD.rows.r1); })()`);
+  await page.waitForSelector('#agdDetGoals .ag-obj-line');
+  const noPlan = await page.$eval('#agdDetGoals', (h) => ({n: h.querySelectorAll('.ag-obj-line').length, more: !!h.querySelector('[data-ag-obj-more]'), sum: h.querySelector('.ag-obj-sum').textContent}));
+  console.log('other patient without a plan is ignored in the details (all open, not in the summary)?', noPlan.n === 2 && !noPlan.more && !/Eva/.test(noPlan.sum), JSON.stringify(noPlan));
+  await ev('document.getElementById("modalHost").innerHTML = ""');
+  const evaOk = await ev('agdGoalsCheck([{rec: {date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Eva Sem Idade", service: "sessao"}, old: null}])');
+  const carlaOk = await ev('agdGoalsCheck([{rec: {date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Carla Laranja", service: "sessao"}, old: null}])');
+  console.log('booking a patient without a plan, or with an objective in common, does not ask?', evaOk === true && carlaOk === true, evaOk, carlaOk);
+  await ev(`(function(){ planMemPut({id: "pd", patient_id: "duda-vermelho", patient_name: "Duda Vermelho", version: 1, status: "vigente", plan_date: "2026-10-01", review_date: "2027-04-01", summary: "", sections: [
+      {specId: "fono", objectives: [{id: "d1", areaId: "comunicacao", objetivo: "Imitar sons", criterio: "", prazo: 3, scaleId: "likert", levelId: "0", status: "ativo"}]}]});
+    window.__gc = agdGoalsCheck([{rec: {date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Duda Vermelho", service: "sessao"}, old: null}]); })()`);
+  await page.waitForSelector('#cfTitle');
+  const gcTitle = await page.$eval('#cfTitle', (e) => e.textContent);
+  const gcMsg = await page.$eval('#confirmHost', (e) => e.textContent);
+  await page.click('#cfCancel');
+  const gcRes = await page.evaluate(() => window.__gc);
+  console.log('booking a patient with a plan and no objective in common asks first?', gcTitle === 'Sem objetivos em comum' && /Duda Vermelho/.test(gcMsg) && /Ana Azul/.test(gcMsg) && gcRes === false, gcTitle, gcRes);
   await ev('(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = ""; AD.rows = {}; })()');
 
   console.log('no JS errors?', errors.length === 0, errors);

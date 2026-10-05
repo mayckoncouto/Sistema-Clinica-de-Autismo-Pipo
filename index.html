@@ -9980,7 +9980,7 @@ function agdTherapistCheck(pairs){
         (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return null;
     return therapistMismatchMsg(rec.patient, rec.professional_id, rec.service, rec.date);
   }).filter(Boolean);
-  return therapistConfirm(msgs).then(function(ok){ return ok ? agdAreaCheck(pairs) : false; });
+  return therapistConfirm(msgs).then(function(ok){ return ok ? agdAreaCheck(pairs) : false; }).then(function(ok){ return ok ? agdGoalsCheck(pairs) : false; });
 }
 function agdAreaCheck(pairs){
   var msgs = pairs.map(function(x){
@@ -9991,6 +9991,38 @@ function agdAreaCheck(pairs){
     return areaMismatchMsg(rec.patient, rec.professional_id, rec.service, rec.date);
   }).filter(Boolean);
   return areaConfirm(msgs.filter(function(m, i){ return msgs.indexOf(m) === i; }));
+}
+// Agenda: pacientes do mesmo profissional no mesmo dia e horário sem nenhum objetivo em
+// comum no plano terapêutico (objetivos ativos nas áreas do profissional) → aviso com
+// confirmação. Paciente sem plano vigente (ou sem objetivos ativos) não entra na conta.
+function agdGoalsCheck(pairs){
+  if (!planCan("view")) return Promise.resolve(true);
+  return planLoadAll().then(function(){
+    var msgs = [], seen = {};
+    var batch = pairs.map(function(x){ return x.rec; }).filter(Boolean);
+    pairs.forEach(function(x){
+      var rec = x.rec, old = x.old;
+      if (!rec || bookingKind(rec)) return;
+      if (old && old.professional_id === rec.professional_id && old.date === rec.date && old.time === rec.time && normText(old.patient || "") === normText(rec.patient || "")) return;
+      var p = findPatientAt(rec.patient, rec.date); if (!p) return;
+      var mine = planActiveObjs(planVigente(p.id), rec.professional_id); if (!mine.length) return;
+      var keys = mine.map(function(y){ return normText(y.o.objetivo || ""); });
+      var others = Object.keys(AD.rows || {}).map(function(id){ return AD.rows[id]; }).concat(batch).filter(function(o){
+        return o && o !== rec && (!rec.id || o.id !== rec.id) && !(old && o.id === old.id) && !bookingKind(o) && o.date === rec.date && o.time === rec.time && o.professional_id === rec.professional_id;
+      });
+      others.forEach(function(o){
+        var q = findPatientAt(o.patient, o.date); if (!q || q.id === p.id) return;
+        var theirs = planActiveObjs(planVigente(q.id), rec.professional_id); if (!theirs.length) return;
+        if (theirs.some(function(y){ return keys.indexOf(normText(y.o.objetivo || "")) !== -1; })) return;
+        var k = [p.id, q.id].sort().join("|"); if (seen[k]) return; seen[k] = 1;
+        msgs.push("<b>" + esc(p.nome) + "</b> e <b>" + esc(q.nome) + "</b> (" + esc(agdBrDate(rec.date)) + " " + esc(rec.time) + ")");
+      });
+    });
+    if (!msgs.length) return true;
+    return confirmDialog({title: "Sem objetivos em comum",
+      message: "Os pacientes deste horário não têm objetivos em comum no plano terapêutico:<br>" + msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : "") + "<br>Agendar mesmo assim?",
+      confirmLabel: "Agendar assim mesmo"});
+  });
 }
 // Agenda: regras de horário (ver profBusyMsg / patientBusyMsg). rows = outras linhas
 // (do banco e/ou da mesma operação); rec = a linha que vai ser gravada.
@@ -14115,7 +14147,8 @@ var HELP_TOPICS = [
       "Clique no + de um horário para marcar: paciente (ou grupo de suporte), serviço, sala, observação; ou marque Bloqueado / Reunião Clínica / Treinamento.",
       "Vários atendimentos no mesmo horário ficam lado a lado (botão + para mais um).",
       "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>: dados, status e o quadro <b>Objetivos do atendimento</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar agendamento</b>.",
-      "<b>Objetivos do atendimento</b>: resumo e quadro clínico do plano terapêutico e os objetivos ativos do paciente nas especialidades do profissional (principal e complementares), com critério, prazo, escala, situação e status. Se outros pacientes do mesmo profissional estão no mesmo horário, aparecem primeiro os objetivos em comum; os demais ficam em <b>Objetivos do paciente ▾</b>.",
+      "<b>Objetivos do atendimento</b>: resumo e quadro clínico do plano terapêutico e os objetivos ativos do paciente nas especialidades do profissional (principal e complementares), com critério, prazo, escala, situação e status. Se outros pacientes do mesmo profissional estão no mesmo horário, aparecem primeiro os objetivos em comum; os demais ficam em <b>Objetivos do paciente ▾</b>. Pacientes sem plano terapêutico vigente não entram nessa conta.",
+      "Ao marcar um paciente no mesmo horário e com o mesmo profissional de outro, se os dois têm plano terapêutico vigente e nenhum objetivo em comum, aparece o aviso <b>Sem objetivos em comum</b> (dá para agendar assim mesmo). Paciente sem plano vigente não gera aviso.",
       "Copiar, mover e arrastar funcionam como no Planner. Desfazer: Ctrl+Z / Ctrl+Y.",
       "Busca: destaca o paciente na tela e mostra quantos há na semana."
     ],
@@ -16380,7 +16413,7 @@ function agdGoalsData(row){
   var mine = planActiveObjs(plan, row.professional_id);
   var others = agdSameSlotPatients(row).filter(function(p){ return p.id !== pat.id; }).map(function(p){
     return {p: p, objs: planActiveObjs(planVigente(p.id), row.professional_id)};
-  });
+  }).filter(function(o){ return o.objs.length; });   // sem plano vigente (ou sem objetivos ativos) não conta
   var common = [], own = [];
   mine.forEach(function(x){
     var key = normText(x.o.objetivo || "");

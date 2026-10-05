@@ -1975,6 +1975,11 @@ atingido fica no plano); impressão/PDF. Escalas e Habilidades comuns à clínic
   status). Outros pacientes do mesmo profissional/data/horário (`agdSameSlotPatients`, em
   `AD.rows`): objetivos em comum (mesmo texto, `normText`) primeiro e os do paciente em
   "Objetivos do paciente ▾" (`[data-ag-obj-more]`); sozinho, todos abertos.
+- Outros pacientes do horário SEM plano vigente (ou sem objetivos ativos nas áreas do
+  profissional) não contam no quadro (`agdGoalsData` filtra). Ao agendar na Agenda (janela,
+  colar/mover, trocar), `agdGoalsCheck(pairs)` — último passo de `agdPatientConfirm`, depois
+  de `agdAreaCheck` — avisa "Sem objetivos em comum" (confirmação) quando o paciente e outro
+  do mesmo profissional/data/horário têm plano vigente e nenhum objetivo com o mesmo texto.
 - Evolução: objetivos ANTES das "Observações" (o editor), com as mesmas informações.
 - **Finalizado travado para o terapeuta** (`agdFinalLocked`, `agdTherapistUser` = usuário com
   `professional_id`, não Administrador; teste: `window.__planProfId`): status desativado nos
