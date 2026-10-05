@@ -1825,3 +1825,11 @@ sem o bloqueio de troca de status).
 - Barra do Planner sempre numa linha no computador (`@media (min-width:761px)`:
   `flex-wrap:nowrap`, filtro de salas e busca encolhem; até 1300px os botões de dia/semana
   ficam compactos).
+
+## Telefone com máscara em todos os cadastros (2026-10-05)
+Ouvinte global de `input` (perto de `formatCpf`): todo `input[data-phone]` ou
+`input[data-mask="phone"]` recebe `formatPhone` ao digitar. Campos marcados: telefones e
+responsável financeiro do paciente (`#fi-telefone`, valor mostrado já formatado),
+colaborador (`#sf-tel`, `#sf-em-tel`), Clínica (`#clFone`), Médicos/Escolas
+(`REG_CFG.fields` com `phone: true`, valor gravado também aparece formatado). Gravação
+continua só com dígitos onde já era assim. Campo de telefone novo: usar `data-phone`.
