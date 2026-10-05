@@ -2044,3 +2044,6 @@ prazo (`.pl-prazo`, data completa no `title`; coluna Prazo 176px), setas ▲▼ 
   cadastros antigos aparece como Sim; vazio e Sim valem igual na cor e nas regras), padrão
   Sim. Títulos das colunas acima das linhas (`.spec-head`: Especialidade ou serviço,
   Sessões/mês, Terapeuta, ABA; oculto no celular, onde as linhas quebram).
+- (2026-10-06) Janela do tratamento: botão **Cadastro do paciente** (`#trOpenPat`, no topo à
+  direita, `.modal-head-acts`; só com `pacientes.view` e paciente escolhido) fecha o
+  tratamento e abre `openPatientModal` do paciente.

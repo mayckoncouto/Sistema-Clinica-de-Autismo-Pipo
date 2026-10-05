@@ -921,6 +921,8 @@ body.pat-col-resizing *{user-select:none}
 .modal-head{padding:16px 18px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .modal-head h3{font-size:15px;font-weight:800}
 .modal-head .modal-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.modal-head-acts{display:flex;align-items:center;gap:8px;flex:none}
+.modal-head-acts .btn{white-space:nowrap}
 .modal-close{border:0;background:transparent;cursor:pointer;color:var(--muted);padding:4px;border-radius:6px;flex:none}
 .modal-close:hover{background:var(--surface-2)}
 .modal-body{padding:4px 18px 14px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
@@ -13481,7 +13483,8 @@ function openTreatmentModal(t, opts){
     '<div class="overlay" id="ovTreat"><div class="modal wide" style="max-width:720px">' +
       '<div class="modal-head"><div><h3>' + (opts.renegotiateFrom ? "Renegociar tratamento" : (isNew ? "Novo tratamento" : "Tratamento")) + '</h3>' +
         '<div class="modal-sub">Cada paciente tem só um tratamento Ativo. O tipo é automático: <b>Novo</b> quando não há tratamento anterior ou o anterior foi Cancelado; <b>Renegociado</b> quando o anterior foi Renegociado.</div></div>' +
-        '<button class="modal-close" id="trClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-head-acts">' + (can("pacientes", "view") ? '<button type="button" class="btn ghost" id="trOpenPat" data-ro-ok>Cadastro do paciente</button>' : '') +
+        '<button class="modal-close" id="trClose" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' +
         '<div class="tr-cancel" id="trLockNote" hidden><p class="tr-cancel-note" id="trLockText"></p></div>' +
         '<div class="field"><label for="trPat">Paciente</label><select id="trPat"' + (isNew && !opts.renegotiateFrom ? '' : ' disabled') + '>' + patOpts + '</select></div>' +
@@ -13539,6 +13542,19 @@ function openTreatmentModal(t, opts){
   overlay.addEventListener("mousedown", function(e){ if (e.target === overlay) close(); });
   document.getElementById("trClose").addEventListener("click", close);
   document.getElementById("trCancel").addEventListener("click", close);
+  // Cadastro do paciente: fecha o tratamento e abre a janela do paciente escolhido.
+  var trPatBtn = document.getElementById("trOpenPat");
+  function syncPatBtn(){ if (trPatBtn) trPatBtn.hidden = !document.getElementById("trPat").value; }
+  if (trPatBtn){
+    syncPatBtn();
+    document.getElementById("trPat").addEventListener("change", syncPatBtn);
+    trPatBtn.addEventListener("click", function(){
+      var pid = document.getElementById("trPat").value;
+      var p = state.patients.filter(function(x){ return x.id === pid; })[0];
+      if (!p) return;
+      close(); openPatientModal(p);
+    });
+  }
   var trPlanBtn = document.getElementById("trOpenPlan");
   if (trPlanBtn) trPlanBtn.addEventListener("click", function(){ var pid = t.patientId; close(); planFromTreatment(pid); });
   function upFinal(){
@@ -13968,6 +13984,7 @@ var HELP_TOPICS = [
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: ele cria um novo tratamento copiando o atual, e o anterior vira Renegociado.",
       "Para encerrar, mude o Status para <b>Cancelado</b> e escolha o motivo.",
+      "O botão <b>Cadastro do paciente</b>, no topo da janela, abre o cadastro do paciente do tratamento.",
       "Na tela, use os filtros: status, Vencendo, Vencidos, Abaixo do contratado e Pacientes sem tratamento ativo."
     ],
     rules: [

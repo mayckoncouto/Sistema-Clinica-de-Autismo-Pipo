@@ -79,6 +79,11 @@ const path = require('path');
   check('top ABA copies to all lines?', ed.all === 'Não,Não', ed.all);
   check('one line changes alone?', ed.after === 'Sim,Não', ed.after);
 
+  const btnVisible = await page.$eval('#trOpenPat', (b) => !b.hidden).catch(() => false);
+  if (btnVisible) await page.click('#trOpenPat');
+  await page.waitForTimeout(300);
+  const patOpen = !(await page.$('#ovTreat')) && !!(await page.$('#pNome'));
+  check('"Cadastro do paciente" opens the patient window?', btnVisible && patOpen);
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();
