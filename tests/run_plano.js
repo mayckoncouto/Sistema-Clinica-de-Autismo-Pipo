@@ -1,0 +1,147 @@
+// Plano terapêutico: menu Prontuário ▾, cadastros de Escalas e Habilidades/áreas,
+// quadros por especialidade vindos do tratamento, objetivos com ▲▼, último nível
+// da escala = Atingido, revisão com nova versão, modo do profissional e áreas
+// complementares no colaborador. Sem sistema online os planos ficam na memória.
+// Dados fictícios.
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+
+(async () => {
+  const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
+  const i = src.indexOf('"use strict";');
+  const evPage = path.join(__dirname, 'page_plano.html');
+  fs.writeFileSync(evPage, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
+  const browser = await chromium.launch(require('./launch-opts'));
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + evPage);
+  await page.waitForTimeout(800);
+  const ev = (code) => page.evaluate((c) => window.__ev(c), code);
+  const setv = (sel, v) => page.$eval(sel, (e, x) => { e.value = x; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }, v);
+
+  // Menus: Prontuário ▾ com as duas opções; Escalas e Habilidades em Cadastros.
+  const menus = await ev(`(function(){ renderNavMenus(); return {
+    pr: Array.prototype.map.call(document.querySelectorAll("#prMenu [data-nav]"), function(b){ return b.textContent; }),
+    cad: Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav"); }) }; })()`);
+  console.log('Prontuário menu has Prontuário + Plano terapêutico?', JSON.stringify(menus.pr) === '["Prontuário","Plano terapêutico"]', JSON.stringify(menus.pr));
+  console.log('Cadastros has Escalas and Habilidades / áreas?', menus.cad.indexOf('escalas') !== -1 && menus.cad.indexOf('habilidades') !== -1);
+
+  // Escalas: Likert e ABA pré-cadastradas, com cor; habilidades pré-cadastradas.
+  await page.$eval('#mainTabs button[data-tab=escalas]', (b) => b.click()); await page.waitForTimeout(200);
+  const scRows = await page.$$eval('#reg-escalas-host tbody tr', (r) => r.map((x) => x.cells[0].textContent.trim()));
+  console.log('Escalas lists Likert and ABA?', scRows.join(',') === 'ABA,Likert', JSON.stringify(scRows));
+  const lik = await ev('JSON.stringify(scaleById("likert").levels.map(function(l){ return l.name; }))');
+  console.log('Likert has 6 levels 0..5?', JSON.parse(lik).length === 6 && JSON.parse(lik)[5] === '5 – Independente', lik);
+  await page.click('#reg-escalas-host tbody tr:nth-child(2)'); await page.waitForSelector('#ovScale');
+  const lvCount = await page.$$eval('#scLevels .sc-level', (r) => r.length);
+  const finalTag = await page.$eval('#scLevels .sc-level:last-child', (e) => !!e.querySelector('.sc-final'));
+  console.log('scale window shows levels with the last marked "final"?', lvCount === 6 && finalTag, lvCount);
+  await page.click('#scCancel');
+  await page.$eval('#mainTabs button[data-tab=habilidades]', (b) => b.click()); await page.waitForTimeout(200);
+  const nAreas = await page.$$eval('#reg-habilidades-host tbody tr', (r) => r.length);
+  console.log('8 skill areas pre-registered?', nAreas === 8, nAreas);
+
+  // Plano novo para Bruno Verde (tratamento com Psicologia e Fonoaudiologia).
+  await page.$eval('#mainTabs button[data-tab=planos]', (b) => b.click()); await page.waitForTimeout(300);
+  await page.click('#planAdd'); await page.waitForSelector('#ovPlanPick');
+  await setv('#ppPat', 'bruno-verde');
+  await page.click('#ppOk'); await page.waitForSelector('#ovPlan');
+  const specs = await page.$$eval('#plSecs .pl-spec', (r) => r.map((x) => x.getAttribute('data-spec')));
+  console.log('quadros come from the treatment (psico, fono)?', specs.join(',') === 'psico,fono', specs.join(','));
+  const rev = await page.$eval('#plReview', (e) => e.value);
+  const exp = await ev('trAddMonths(trTodayIso(), 6)');
+  console.log('review date = plan date + 6 months?', rev === exp, rev);
+  // 3 objetivos em Fonoaudiologia
+  for (let k = 0; k < 3; k++){
+    await page.click('#plSecs [data-spec="fono"] [data-add-obj]');
+    const row = '#plSecs [data-spec="fono"] tbody tr:last-child';
+    await page.fill(row + ' textarea[data-f="objetivo"]', 'Objetivo ' + (k + 1));
+    await setv(row + ' select[data-f="areaId"]', 'comunicacao');
+  }
+  const nums = await page.$$eval('#plSecs [data-spec="fono"] .pl-num b', (r) => r.map((x) => x.textContent).join(','));
+  console.log('Nº is automatic (1,2,3)?', nums === '1,2,3', nums);
+  // ▼ no 1º: troca de lugar com o 2º, número continua pela posição
+  await page.click('#plSecs [data-spec="fono"] tbody tr:nth-child(1) [data-mv="1"]');
+  const order = await page.$$eval('#plSecs [data-spec="fono"] textarea[data-f="objetivo"]', (r) => r.map((x) => x.value).join('|'));
+  console.log('▼ moves the row and renumbers?', order === 'Objetivo 2|Objetivo 1|Objetivo 3', order);
+  // último nível da escala = Atingido
+  await setv('#plSecs [data-spec="fono"] tbody tr:nth-child(1) select[data-f="levelId"]', '5');
+  const st1 = await page.$eval('#plSecs [data-spec="fono"] tbody tr:nth-child(1) select[data-f="status"]', (e) => e.value);
+  console.log('last level of the scale sets status Atingido?', st1 === 'atingido', st1);
+  // escala ABA no 2º: níveis trocam; "Adquirida" = atingido
+  await setv('#plSecs [data-spec="fono"] tbody tr:nth-child(2) select[data-f="scaleId"]', 'aba');
+  const abaOpts = await page.$$eval('#plSecs [data-spec="fono"] tbody tr:nth-child(2) select[data-f="levelId"] option', (r) => r.map((x) => x.value).join(','));
+  console.log('Situação follows the chosen scale (ABA levels)?', abaOpts === 'nao-adquirida,parcial,adquirida', abaOpts);
+  await page.fill('#plSummary', 'Resumo fictício do quadro clínico.');
+  await page.click('#plSave'); await page.waitForTimeout(300);
+  const saved = await ev('JSON.stringify(planVigente("bruno-verde"))');
+  const sp = JSON.parse(saved);
+  console.log('plan saved with only the sections that have objectives?', sp && sp.sections.length === 1 && sp.sections[0].specId === 'fono' && sp.sections[0].objectives.length === 3 && sp.summary.indexOf('fictício') !== -1);
+  const listRow = await page.$$eval('#planListHost tbody tr', (r) => r.map((x) => x.cells[0].textContent + '|' + x.cells[4].textContent));
+  console.log('list shows the plan with objective counts?', listRow.length === 1 && listRow[0].indexOf('Bruno Verde|2 ativos · 1 atingido') === 0, JSON.stringify(listRow));
+
+  // Revisão vencida aparece na coluna Revisão.
+  await ev('(function(){ var r = planVigente("bruno-verde"); r.review_date = "2020-01-01"; renderPlansTab(); })()');
+  const due = await page.$eval('#planListHost tbody tr td:nth-child(4)', (e) => e.textContent);
+  console.log('Revisão column warns when the review is overdue?', /Vencida em 01\/01\/2020/.test(due), due);
+
+  // Revisar: nova versão; a anterior fica encerrada.
+  await page.click('#planListHost tbody tr'); await page.waitForSelector('#ovPlan');
+  await page.click('#plRevise'); await page.waitForSelector('#cfOk');
+  await page.click('#cfOk'); await page.waitForTimeout(400);
+  const vers = await ev('JSON.stringify(planVersions("bruno-verde").map(function(r){ return r.version + ":" + r.status; }))');
+  console.log('Revisar creates v2 vigente and keeps v1 encerrado?', vers === '["2:vigente","1:encerrado"]', vers);
+  const verBtn = await page.$$eval('#ovPlan [data-ver]', (r) => r.length);
+  console.log('previous version listed in the window?', verBtn === 1);
+  await page.click('#plCancel');
+
+  // Modo do profissional: Bia (Fonoaudiologia, complementar Psicologia).
+  await ev('(function(){ state.professionals = state.professionals.map(function(p){ return p.id === "bia-terapeuta" ? Object.assign({}, p, {complementares: ["psico"]}) : p; }); window.__planProfId = "bia-terapeuta"; })()');
+  await ev('openPlanFor("bruno-verde")'); await page.waitForSelector('#ovPlan');
+  const profUi = await page.evaluate(() => {
+    const f = document.querySelector('#plSecs [data-spec="fono"] tbody tr');
+    return {
+      objDisabled: f.querySelector('textarea[data-f="objetivo"]').disabled,
+      levelEnabled: !f.querySelector('select[data-f="levelId"]').disabled,
+      noMove: !document.querySelector('#plSecs [data-mv]'),
+      addFono: !!document.querySelector('#plSecs [data-spec="fono"] [data-add-obj]'),
+      addPsico: !!document.querySelector('#plSecs [data-spec="psico"] [data-add-obj]'),
+      summaryDisabled: document.getElementById('plSummary').disabled
+    };
+  });
+  console.log('professional: only Situação/Status editable, no ▲▼, add only in the main specialty?',
+    profUi.objDisabled && profUi.levelEnabled && profUi.noMove && profUi.addFono && !profUi.addPsico && profUi.summaryDisabled, JSON.stringify(profUi));
+  await page.click('#plCancel');
+  await ev('window.__planProfId = null');
+
+  // Colaborador: áreas complementares gravadas no profissional.
+  await ev('(function(){ state.professionals = state.professionals.map(function(p){ return p.id === "ana-terapeuta" ? Object.assign({}, p, {complementares: []}) : p; }); })()');
+  await ev('openProfessionalModal(state.professionals.filter(function(p){ return p.id === "ana-terapeuta"; })[0])'); await page.waitForSelector('#ovProf');
+  await page.click('#sfComplAdd');
+  await setv('#sfCompl select[data-compl="0"]', 'fono');
+  await page.click('#profSave'); await page.waitForTimeout(400);
+  const compl = await ev('JSON.stringify((state.professionals.filter(function(p){ return p.id === "ana-terapeuta"; })[0] || {}).complementares)');
+  console.log('Áreas complementares saved on the professional?', compl === '["fono"]', compl);
+
+  // Aviso de área: profissional fora das especialidades do tratamento (Bruno: psico + fono).
+  await ev('(function(){ state.professionals = state.professionals.concat([{id: "tito", name: "Tito", specialtyId: "to"}]); })()');
+  const m1 = await ev('areaMismatchMsg("Bruno Verde", "tito", "sessao")');
+  const m2 = await ev('areaMismatchMsg("Bruno Verde", "bia-terapeuta", "sessao")');
+  const m3 = await ev('areaMismatchMsg("Bruno Verde", "tito", "avaliacao")');
+  await ev('(function(){ state.professionals = state.professionals.map(function(p){ return p.id === "tito" ? Object.assign({}, p, {complementares: ["fono"]}) : p; }); })()');
+  const m4 = await ev('areaMismatchMsg("Bruno Verde", "tito", "sessao")');
+  console.log('area warning: other specialty warns; main, other service or complementary area do not?', !!m1 && !m2 && !m3 && !m4, m1);
+  await ev('(function(){ state.professionals = state.professionals.map(function(p){ return p.id === "tito" ? Object.assign({}, p, {complementares: []}) : p; }); state.rooms = state.rooms.map(function(r){ return r.id !== "r1" ? r : Object.assign({}, r, {therapists: r.therapists.map(function(t){ return t.id === "r1-t1" ? Object.assign({}, t, {professionalId: "tito"}) : t; })}); }); applyBookingChanges({"seg-1": {"09:20|r1|r1-t1": {patient: "Bruno Verde", note: ""}}}); })()');
+  await page.waitForSelector('#cfTitle');
+  const cfT = await page.$eval('#cfTitle', (e) => e.textContent);
+  console.log('Planner asks before booking outside the treatment specialties?', /fora das especialidades/.test(cfT), cfT);
+  await page.click('#cfCancel'); await page.waitForTimeout(200);
+  const notSaved = await ev('!((state.scheduleDocs["seg-1"] || {}).bookings || {})["09:20|r1|r1-t1"]');
+  console.log('cancel keeps the slot empty?', notSaved);
+
+  console.log('no JS errors?', errors.length === 0, errors);
+  await browser.close();
+  fs.unlinkSync(evPage);
+})().catch((e) => { console.error(e); process.exit(1); });

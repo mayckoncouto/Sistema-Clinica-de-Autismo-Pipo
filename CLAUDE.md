@@ -1897,3 +1897,44 @@ fim de `tests/run_prof_workhours.js`.
   `profissionais`). Criada `supabase/2026-10-05j-cadastro-profissional-segue-colaboradores.sql`
   só com a função (sem a parte 2 da 05f, que copiaria o acesso antigo de Profissionais
   para Colaboradores por cima do que o Administrador já ajustou nos Níveis).
+
+## Plano terapêutico — Parte 1 (2026-10-06)
+Decisões do usuário: Prontuário ▾ com **Prontuário** e **Plano terapêutico**; um plano
+vigente por paciente, validade 6 meses, Revisar = nova versão (anterior guardada); quadro
+clínico = dados da seção Saúde do cadastro (automático) + texto "Resumo do quadro
+clínico" do plano; um quadro por especialidade do tratamento (novas entram, nenhuma sai;
+fora do tratamento = aviso); objetivo: Nº automático com ▲▼ na linha, Habilidade/área,
+Objetivo, Critério de sucesso, Prazo (3/6/12 meses da data do plano), Escala, Situação
+(níveis da escala), Status (Ativo/Atingido/Suspenso; último nível = Atingido automático;
+atingido fica no plano); impressão/PDF. Escalas e Habilidades comuns à clínica.
+- Banco: migração `supabase/2026-10-06-plano-terapeutico.sql` — tabela protegida
+  `therapy_plans` (patient_id, version, status vigente|encerrado, plan_date, review_date,
+  summary, sections jsonb, prev_id, created_by/updated_by + nomes; índice único de um
+  vigente por paciente; RLS por `plano_terapeutico`), função `plan_prof_update(p_id,
+  p_sections)` (profissional sem "editar": só levelId/status/statusEm dos objetivos das
+  especialidades dele — principal + `complementares` em config/professionals —, objetivos
+  novos só na principal, nada some), documentos `config/scales` (Likert 0–5, ABA com
+  cores) e `config/skill_areas` (8 áreas), módulos `plano_terapeutico`, `escalas`,
+  `habilidades` e o nível **Coordenador** (cópia do Profissional + plano completo).
+- App (bloco "Plano terapêutico" no fim do script): `PLAN` (sem sistema online = memória
+  `PLAN.mem`), `planLoadAll`, `planVigente`, `planVersions`, `openPlanFor(pid)`,
+  `openPlanModal(plan, {patientId})`, `planSectionsView` (salvos + `planTreatSpecs` =
+  specHours do paciente somado ao tratamento), `planProfMode`/`planFull`/`planMySpecs`
+  (teste: `window.__planProfId`), `planReviewChip`, `planPrint`. Tela `#tab-planos`
+  (`renderPlansTab`, busca, filtro Revisão a vencer/vencida). Menu `#prBtn`/`#prMenu`
+  (`PR_ITEMS`, `PR_TABS`, também no ☰ do celular). Tratamento: seção "Convênio, pacote e
+  horário" + botão `#trOpenPlan` (não existia texto antigo de "plano terapêutico" para
+  migrar: era só o título dessa seção).
+- Cadastros → **Escalas** (`REG_CFG.escalas`, janela `openScaleModal`: níveis com cor,
+  ▲▼, último = final) e **Habilidades / áreas** (`REG_CFG.habilidades`). Em uso nos
+  planos = Inativar (`planUseCount`).
+- Colaborador: **Áreas complementares** (`#sfCompl`, `#sfComplAdd` → `complementares`
+  no profissional). **Aviso de área** (`areaMismatchMsg`, `areaConfirm`): Sessão com
+  profissional cuja principal + complementares não estão nas especialidades do
+  tratamento → confirmação. Planner: `areaMismatches` em `applyBookingChanges`
+  (`opts.areaOk`, não vale para desfazer); Agenda: `agdAreaCheck` depois do terapeuta.
+- Backup inclui `therapy_plans` (restaura por versão crescente). Teste
+  `tests/run_plano.js` (31 arquivos no `npm test`). Os profissionais fictícios de
+  `tests/test.html` têm `complementares` para os testes antigos não pararem no aviso.
+- **Parte 2 (a fazer):** na evolução, marcar objetivos trabalhados e o nível; Situação do
+  plano atualiza sozinha com o último nível; gráfico por especialidade × escala.
