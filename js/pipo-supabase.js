@@ -229,7 +229,8 @@
       ".acesso-menu[hidden]{display:none}" +
       ".acesso-menu button{text-align:left;border:0;background:transparent;padding:8px 14px;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink,#182523);cursor:pointer}" +
       ".acesso-menu button:hover,.acesso-menu button:focus{background:var(--accent-weak,#e2f0ee);outline:none}" +
-      ".acesso-menu button[data-act=sair]{border-top:1px solid var(--line,#dde3e1);color:var(--danger,#b6403a)}" +
+      ".acesso-menu button[data-act=sair]{color:var(--danger,#b6403a)}" +
+      ".acesso-menu .acc-sep{flex:none;height:5px;background:var(--surface-2,#f3f5f4);border-bottom:1px solid var(--line,#dde3e1)}" +
       ".user-pill .user-role{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--accent-weak,#e2f0ee);color:var(--accent,#2c7a72);white-space:nowrap}" +
       "@media (max-width:640px){.user-pill .user-name,.user-pill .user-role{display:none}}";
     var st = document.createElement("style");
@@ -295,6 +296,10 @@
     var host = document.getElementById("userPill");
     if (!host || !profile) return;
     host.hidden = false;
+    // Menu Acesso em grupos (sistema | pessoal | Sair), com divisória entre os grupos que têm itens.
+    function accGroups(groups){
+      return groups.map(function(g){ return g.join(""); }).filter(Boolean).join('<div class="acc-sep" role="separator"></div>');
+    }
     host.innerHTML =
       '<span class="user-name" title="' + escapeHtml(profile.email) + '">' +
         escapeHtml(profile.full_name || profile.email) + "</span>" +
@@ -303,13 +308,17 @@
         '<button type="button" class="acesso-btn" id="acessoBtn" aria-haspopup="menu" aria-expanded="false">Acesso ' +
           '<svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
         '<div class="acesso-menu" id="acessoMenu" role="menu" hidden>' +
-          ((isAdmin() || can("usuarios", "view")) ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : "") +
-          ((isAdmin() || can("cadastro_status", "view")) ? '<button type="button" role="menuitem" data-act="status">Status</button>' : "") +
-          ((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : "") +
-          ((isAdmin() || can("backup", "view")) ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : "") +
-          (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : "") +
-          (canDefault("senha", "view", true) ? '<button type="button" role="menuitem" data-act="senha">Trocar senha</button>' : "") +
-          '<button type="button" role="menuitem" data-act="sair">Sair</button>' +
+          accGroups([
+            // Configuração do sistema
+            [((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : ""),
+             ((isAdmin() || can("usuarios", "view")) ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : ""),
+             ((isAdmin() || can("cadastro_status", "view")) ? '<button type="button" role="menuitem" data-act="status">Status</button>' : ""),
+             ((isAdmin() || can("backup", "view")) ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : "")],
+            // Pessoal
+            [(canDefault("senha", "view", true) ? '<button type="button" role="menuitem" data-act="senha">Senha</button>' : ""),
+             (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : "")],
+            ['<button type="button" role="menuitem" data-act="sair">Sair</button>']
+          ]) +
         "</div>" +
       "</div>";
   }

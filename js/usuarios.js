@@ -38,12 +38,12 @@
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
     // Itens do menu Acesso (Sair aparece sempre).
-    { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)", group: "Menu Acesso" },
+    { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"], group: "Menu Acesso" },
+    { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)" },
     { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" },
-    { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"] },
     { key: "backup", label: "Backup", hint: "baixar o backup (restaurar: só o Administrador)", actions: ["view"] },
-    { key: "ajuda", label: "Ajuda", hint: "guia do sistema", actions: ["view"], dflt: true },
-    { key: "senha", label: "Trocar senha", hint: "trocar a própria senha", actions: ["view"], dflt: true }
+    { key: "senha", label: "Senha", hint: "trocar a própria senha", actions: ["view"], dflt: true },
+    { key: "ajuda", label: "Ajuda", hint: "guia do sistema", actions: ["view"], dflt: true }
   ];
   function modActs(m) { return m.actions || ["view", "create", "edit", "delete"]; }
   // Permissão "Usuários" do nível (o Administrador pode tudo). Níveis de permissão e
@@ -723,7 +723,7 @@
                 '<td class="bk-status pt-muted">—</td></tr>';
             }).join("") +
           "</tbody></table>" +
-          '<div class="pat-count">Depois, peça para cada profissional trocar a senha no menu "Acesso › Trocar senha".</div>' +
+          '<div class="pat-count">Depois, peça para cada profissional trocar a senha no menu "Acesso › Senha".</div>' +
         "</div>" +
         '<div class="modal-foot"><div class="spacer"></div>' +
           '<button class="btn ghost" id="bkCancel">Cancelar</button>' +

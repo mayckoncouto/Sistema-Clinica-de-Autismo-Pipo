@@ -1849,3 +1849,9 @@ o conteúdo. Chave `INICIO_ON = false` (perto de `var state`): botão sempre ocu
 `navInitialTab` grava `#planner`/`#agendadia` e `openNavFromHash` faz o clique; sem
 permissão cai na primeira tela permitida), e a logo/nome leva para essa mesma tela.
 Para voltar a mostrar o Início: `INICIO_ON = true` (e rever o tópico "inicio" da Ajuda).
+
+## Menu Acesso em grupos (2026-10-05)
+Pedido do usuário: menu Acesso organizado em grupos com divisória (`accGroups` em
+`js/pipo-supabase.js`, `.acc-sep`): Clínica, Usuários, Status, Backup | Senha, Ajuda |
+Sair. "Trocar senha" passou a se chamar **Senha** (menu, Níveis de permissão, Ajuda).
+A grade "Menu Acesso" dos Níveis segue a mesma ordem.
