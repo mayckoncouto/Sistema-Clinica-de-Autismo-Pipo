@@ -2026,3 +2026,18 @@ prazo (`.pl-prazo`, data completa no `title`; coluna Prazo 176px), setas ▲▼ 
   passar do mouse); número com a fonte dos campos (12.5px, peso normal).
   "Habilidade / área" passou a se chamar **Habilidade** (janela, cadastro "Habilidades",
   menu, Níveis de permissão, ajuda, mensagens).
+
+## Tratamento: Sem vencimento, Descontos e ABA por especialidade (2026-10-06)
+- **Vencimento por** ganhou **Sem vencimento** (`vencPor: "sem"`, padrão do tratamento
+  novo e da renegociação): esconde duração/válido até; `trDue` = null, `trDueText` = "".
+  Migração `supabase/2026-10-06e-tratamento-sem-vencimento.sql` pôs "sem" em TODOS os
+  tratamentos existentes (pedido do usuário).
+- "Despesas" aparece como **Descontos** (campo no banco continua `despesas`).
+- **ABA por linha** em `specHours[].aba` (select `.spec-aba` em cada linha). Mudar o ABA
+  do tratamento (`#pAba`) copia para todas as linhas; cada linha muda sozinha.
+  `bookingAbaOf(p, profId, service)` / `bookingPatient(p, b, profId)`: serviço ≠ Sessão =
+  linha `svc:<id>`; Sessão = linha da principal ou complementar do profissional
+  (`profAreas`); sem linha (ou nenhuma linha com ABA) = ABA do tratamento. Usado na cor
+  (Planner, `agdEventHtml`, Detalhes) e em `isNaoABABooking(b, profId)` (grade do Planner,
+  `plannerConflict`, `abaGroupDependencyDenied`; a Agenda usa `professional_id` da linha).
+  Teste `tests/run_aba_linha.js` (32 arquivos no `npm test`).

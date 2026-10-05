@@ -26,7 +26,7 @@
     { key: "pacientes", label: "Pacientes", hint: "" },
     { key: "campos_paciente", label: "Pacientes – campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
-    { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, despesas e valor final", actions: ["view", "edit"] },
+    { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, descontos e valor final", actions: ["view", "edit"] },
     // Colaboradores (Cadastros): todas as pessoas, inclusive os profissionais; valores com permissão exclusiva.
     { key: "rh_funcionarios", label: "Colaboradores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)" },
     { key: "rh_remuneracao", label: "Colaboradores – valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },

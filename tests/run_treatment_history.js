@@ -113,6 +113,7 @@ const path = require('path');
   await page.$eval('#trPat', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, await ev('state.patientsRaw[5].id'));
   await page.waitForTimeout(200);
   await page.$eval('#trIni', (i) => { i.value = '2026-03-15'; i.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.$eval('#trVencPor', (s) => { s.value = 'data'; s.dispatchEvent(new Event('change', {bubbles: true})); });
   await page.fill('#trDur', '6'); await page.dispatchEvent('#trDur', 'input');
   console.log('duration 6 months from 15/03 fills valid until 14/09?', (await page.$eval('#trVenc', (i) => i.value)) === '2026-09-14');
   await page.click('#trSave'); await page.waitForTimeout(300);

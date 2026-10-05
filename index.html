@@ -1179,6 +1179,8 @@ body.pat-col-resizing *{user-select:none}
 .hours-row .spec-hours-val{width:64px;flex:none}
 .hours-row .spec-prof-wrap{flex:0 1 190px;min-width:0}
 .hours-row .spec-prof-wrap .dp-btn,.hours-row .spec-prof-wrap select{width:100%}
+.hours-row .spec-aba-wrap{flex:0 0 104px;min-width:0}
+.hours-row .spec-aba-wrap .dp-btn,.hours-row .spec-aba-wrap select{width:100%}
 .hours-row .rm{flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--danger);cursor:pointer;font-size:13px;line-height:1}
 .hours-row .rm:hover{background:var(--danger-weak)}
 .hours-empty{font-size:12px;color:var(--muted)}
@@ -1453,7 +1455,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .modal-foot .spacer{flex-basis:0}
   .field-row{flex-wrap:wrap}
   #specRowsHost .hours-row{flex-wrap:wrap}
-  #specRowsHost .hours-row .spec-prof-wrap{flex:1 1 100%;order:3}
+  #specRowsHost .hours-row .spec-prof-wrap{flex:1 1 60%;order:3}
+  #specRowsHost .hours-row .spec-aba-wrap{flex:1 1 30%;order:3}
   .field-row>.field{flex:1 1 140px!important;min-width:0}
   /* Tabelas de horário (profissional, paciente, clínica): compactas, sem ícones. */
   .prof-hours .dp-btn,.cl-hours .dp-btn{padding:5px 4px;gap:2px}
@@ -2502,6 +2505,29 @@ function patientIsNaoABA(p){
   var aba = String((p && p.aba) || "").trim().toLowerCase();
   return aba === "não" || aba === "nao";
 }
+// ABA do paciente num atendimento: a linha do tratamento da especialidade do
+// atendimento (principal do profissional ou complementar dele que esteja no tratamento;
+// serviço diferente de Sessão = a linha do serviço) manda; fora das especialidades do
+// tratamento, ou linha sem ABA, vale o ABA do tratamento (cadastro).
+function bookingAbaOf(p, profId, service){
+  if (!p) return "";
+  var rows = Array.isArray(p.specHours) ? p.specHours : [];
+  if (!rows.some(function(r){ return r && r.aba; })) return p.aba || "";
+  var svc = service || DEFAULT_SERVICE_ID, keys = [];
+  if (svc !== DEFAULT_SERVICE_ID) keys = [SVC_PREFIX + svc];
+  else { var prof = profId ? findProfessional(profId) : null; if (prof) keys = profAreas(prof); }
+  for (var i = 0; i < keys.length; i++){
+    var line = rows.filter(function(r){ return r && r.specId === keys[i]; })[0];
+    if (line) return line.aba || p.aba || "";
+  }
+  return p.aba || "";
+}
+// Paciente com o ABA do atendimento (para a cor e as regras "não ABA").
+function bookingPatient(p, b, profId){
+  if (!p) return p;
+  var aba = bookingAbaOf(p, profId || (b && b.professional_id), b && b.service);
+  return aba === (p.aba || "") ? p : Object.assign({}, p, {aba: aba});
+}
 function patientColor(p){
   if (!p) return null;
   if (patientIsNaoABA(p)) return PCOLOR_ABA_NAO;
@@ -2710,7 +2736,7 @@ function clearValueFor(dayKey, time){
 // record still uses the old flat fields (fono/psico/...) or the newer specHours array.
 function patientSpecRows(p){
   if (!p) return [];
-  if (Array.isArray(p.specHours)) return p.specHours.map(function(row){ return {specId: row.specId, hours: row.hours, profId: row.profId || ""}; });
+  if (Array.isArray(p.specHours)) return p.specHours.map(function(row){ return {specId: row.specId, hours: row.hours, profId: row.profId || "", aba: row.aba || ""}; });
   var rows = [];
   state.specialties.forEach(function(s){
     if (p[s.id] !== "" && p[s.id] != null) rows.push({specId: s.id, hours: p[s.id]});
@@ -4256,11 +4282,11 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
       // colunas do MESMO profissional (as de outros profissionais ficam livres).
       // Exceção: grupo de suporte agendado para esta sala = o profissional pode ter outro "não ABA".
       var abaByProf = {};
-      if (!isGroup(r)) r.therapists.forEach(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (t2.professionalId && isNaoABABooking(b2) && !abaByProf[t2.professionalId]) abaByProf[t2.professionalId] = b2.patient; });
+      if (!isGroup(r)) r.therapists.forEach(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (t2.professionalId && isNaoABABooking(b2, t2.professionalId) && !abaByProf[t2.professionalId]) abaByProf[t2.professionalId] = b2.patient; });
       var abaGroupOk = Object.keys(abaByProf).length && groupBookedRoom(bookings, dayObj.key, row.time, r);
       // Sala sem "ABA" no nome: qualquer "não ABA" bloqueia a sala toda.
       var abaAny = null;
-      if (!isGroup(r) && !roomIsABA(r)) r.therapists.some(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2)){ abaAny = b2.patient; return true; } return false; });
+      if (!isGroup(r) && !roomIsABA(r)) r.therapists.some(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2, t2.professionalId)){ abaAny = b2.patient; return true; } return false; });
       r.therapists.forEach(function(t){
         var key = row.time+"|"+r.id+"|"+t.id;
         var b = effectiveBooking(bookings, key, dayObj.key, row.time);
@@ -4301,7 +4327,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
           var isTraining = !isBlocked && bookingKind(b) === "treinamento";
           var isSpecialKind = isBlocked || isMeetingDefault || isTraining;
           var pRec = isSpecialKind ? null : findPatientByName(b.patient);
-          var pCol = pRec ? (otherService(b) ? TRAINING_COLOR : patientColor(pRec)) : null;
+          var pCol = pRec ? (otherService(b) ? TRAINING_COLOR : patientColor(bookingPatient(pRec, b, t.professionalId))) : null;
           var roomMatch = (!isSpecialKind && !pRec) ? findRoomByName(b.patient) : null;
           var roomCol = roomMatch ? roomFillColor(roomMatch) : null;
           var fillCol = isBlocked ? BLOCKED_COLOR : (isMeetingDefault ? MEETING_COLOR : (isTraining ? TRAINING_COLOR : (pCol || roomCol)));
@@ -4768,10 +4794,10 @@ function patientBusyMsg(patient, service, time, place){
 }
 // Paciente que não faz intervenção ABA ocupa a SALA inteira no horário: as outras
 // colunas da mesma sala ficam bloqueadas (só no Planner, só em sala — não em grupo).
-function isNaoABABooking(b){
+function isNaoABABooking(b, profId){
   if (!b || !b.patient || bookingKind(b)) return false;
   var p = b.date ? findPatientAt(b.patient, b.date) : findPatientByName(b.patient);  // Agenda: tratamento da data
-  return !!(p && patientIsNaoABA(p));
+  return !!(p && patientIsNaoABA(bookingPatient(p, b, profId)));   // Planner: profissional da coluna
 }
 // Exceção: com um Grupo de Suporte agendado para esta sala no mesmo horário, o
 // MESMO profissional pode ter dois (ou mais) pacientes que não fazem intervenção
@@ -4808,7 +4834,7 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
   var bookings = (doc && doc.bookings) || {};
   var patientRule = !isGroup(room) && !!findPatientByName(rec.patient);
   var svc = rec.service || DEFAULT_SERVICE_ID;
-  var recNaoABA = !isGroup(room) && isNaoABABooking(rec);
+  var recNaoABA = !isGroup(room) && isNaoABABooking(rec, profId);
   var rooms = plannerRooms();
   for (var i=0;i<rooms.length;i++){
     var r = rooms[i], seats = r.therapists || [];
@@ -4821,11 +4847,11 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       // profissional; em sala sem "ABA" no nome vale para a sala toda.
       var sameProfSeat = !!profId && t.professionalId === profId;
       if (r.id === room.id && !isGroup(room) && (sameProfSeat || !roomIsABA(room))){
-        if (recNaoABA && isNaoABABooking(b) && sameProfSeat && groupBookedRoom(bookings, dayKey, time, room)) continue;
+        if (recNaoABA && isNaoABABooking(b, t.professionalId) && sameProfSeat && groupBookedRoom(bookings, dayKey, time, room)) continue;
         if (recNaoABA) return roomIsABA(room)
           ? "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + professionalName(profId) + " já tem " + b.patient + " às " + time + " em " + room.name + "."
           : "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + ".";
-        if (isNaoABABooking(b)) return abaRoomMsg(b.patient, room.name, time, roomIsABA(room) ? professionalName(profId) : "");
+        if (isNaoABABooking(b, t.professionalId)) return abaRoomMsg(b.patient, room.name, time, roomIsABA(room) ? professionalName(profId) : "");
       }
       // Exceção (2026-10-02): agendamento de grupo JÁ marcado apontando para esta sala não
       // impede o profissional de atender nela. O contrário não vale (2026-10-05): com
@@ -5223,7 +5249,7 @@ function abaGroupDependencyDenied(changesByDoc){
       var perProf = {};
       (target.therapists || []).forEach(function(t){
         if (!t.professionalId) return;
-        if (isNaoABABooking(effectiveBooking(newB, time + "|" + target.id + "|" + t.id, dayKey, time))) perProf[t.professionalId] = (perProf[t.professionalId] || 0) + 1;
+        if (isNaoABABooking(effectiveBooking(newB, time + "|" + target.id + "|" + t.id, dayKey, time), t.professionalId)) perProf[t.professionalId] = (perProf[t.professionalId] || 0) + 1;
       });
       var prof = Object.keys(perProf).filter(function(p){ return perProf[p] >= 2; })[0];
       if (!prof) return false;
@@ -6131,7 +6157,7 @@ function specSumRender(){
 function treatFieldsEditor(v){
   // Per-patient specialty rows, editable independently of the global catalog.
   var draftSpecRows = patientSpecRows(v).map(function(row){
-    return {specId: row.specId, name: specialtyName(row.specId), hours: row.hours == null ? "" : String(row.hours), profId: row.profId || ""};
+    return {specId: row.specId, name: specialtyName(row.specId), hours: row.hours == null ? "" : String(row.hours), profId: row.profId || "", aba: row.aba || v.aba || ""};
   });
   // Local shadow copies of the shared catalogs: any specialty/convênio created inline
   // while this modal is open lands here first (so filtering/suggestions see it right
@@ -6213,6 +6239,8 @@ function treatFieldsEditor(v){
         draftSpecRows[i].hours = hoursInp ? hoursInp.value : draftSpecRows[i].hours;
         var profSel = row.querySelector(".spec-prof");
         draftSpecRows[i].profId = profSel ? profSel.value : (draftSpecRows[i].profId || "");
+        var abaSel = row.querySelector(".spec-aba");
+        if (abaSel) draftSpecRows[i].aba = abaSel.value;
       });
     }
     // Specialties already used by another row shouldn't be offered again — only the
@@ -6305,6 +6333,8 @@ function treatFieldsEditor(v){
           '</div>' +
           '<input type="text" class="spec-hours-val" placeholder="0" value="'+esc(row.hours)+'">' +
           '<div class="spec-prof-wrap"><select class="spec-prof" aria-label="Terapeuta">' + specProfOptions(row.specId, row.profId) + '</select></div>' +
+          '<div class="spec-aba-wrap"><select class="spec-aba" aria-label="ABA nesta especialidade" title="ABA nesta especialidade">' +
+            [["", "ABA —"], ["Sim", "ABA Sim"], ["Não", "ABA Não"]].map(function(o){ return '<option value="' + o[0] + '"' + ((row.aba || "") === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join("") + '</select></div>' +
           '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover especialidade">✕</button>' +
         '</div>';
       }).join("") : '<div class="hours-empty">Nenhuma especialidade ou serviço nesta ficha — clique em "+ especialidade ou serviço" para adicionar.</div>';
@@ -6320,7 +6350,15 @@ function treatFieldsEditor(v){
     renderSpecRows();
     document.getElementById("specRowAdd").addEventListener("click", function(){
       syncSpecRowsFromDom();
-      draftSpecRows.push({specId:null, name:"", hours:"", profId:""});
+      draftSpecRows.push({specId:null, name:"", hours:"", profId:"", aba: document.getElementById("pAba").value});
+      renderSpecRows();
+    });
+    // ABA do tratamento: trocar aqui troca o ABA de todas as linhas; cada linha pode
+    // ser mudada depois sem mexer nas outras.
+    document.getElementById("pAba").addEventListener("change", function(){
+      syncSpecRowsFromDom();
+      var val = this.value;
+      draftSpecRows.forEach(function(r){ r.aba = val; });
       renderSpecRows();
     });
 
@@ -6422,6 +6460,7 @@ function treatFieldsEditor(v){
       }
       var outRow = {specId: specId, hours: hours};
     if (row.profId) outRow.profId = row.profId;
+    if (row.aba) outRow.aba = row.aba;
     specHoursOut.push(outRow);
     });
 
@@ -9333,7 +9372,7 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   else {
     var pRec = findPatientAt(row.patient, row.date);   // cor/ABA da época do atendimento
     var room = !pRec ? findRoomByName(row.patient) : null;
-    fill = pRec ? (otherService(row) ? TRAINING_COLOR : patientColor(pRec)) : (room ? roomFillColor(room) : null);
+    fill = pRec ? (otherService(row) ? TRAINING_COLOR : patientColor(bookingPatient(pRec, row))) : (room ? roomFillColor(room) : null);
     if (fill) cls = " pcolor";
   }
   var name = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : row.patient;
@@ -9688,7 +9727,7 @@ function agdOpenDetails(row){
   if (grp && !isGroup(grp)) grp = null;
   var prof = findProfessional(row.professional_id), room = row.room_id ? findRoom(row.room_id) : null;
   var name = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : row.patient;
-  var col = pat ? patientColor(pat) : (grp ? swatchVar(grp.color) : null);
+  var col = pat ? patientColor(bookingPatient(pat, row)) : (grp ? swatchVar(grp.color) : null);
   var showPront = !!pat && prCan("view");
   var curStatus = row.status || "";
   var showStatus = !kind && statusesList().length > 0;
@@ -12484,10 +12523,10 @@ var RP_BUILDERS = {
     var money = trCanSeeVal();
     function mm(cols, vals){ return money ? cols.concat(vals) : cols; }
     return {note: money ? "" : "Valores ocultos: o seu nível não tem a permissão \"Tratamentos – valores\".", sections: [
-      {title: "Resumo dos tratamentos iniciados", head: mm(["Tipo", "Tratamentos"], ["Valor", "Despesas", "Valor final"]),
+      {title: "Resumo dos tratamentos iniciados", head: mm(["Tipo", "Tratamentos"], ["Valor", "Descontos", "Valor final"]),
         rows: TR_TIPOS.map(function(x){ var a = sum[x.id]; return mm([x.name, a.n], [fmtMoney(a.v), fmtMoney(a.d), fmtMoney(a.f)]); }),
         foot: mm(["Total", tot.n], [fmtMoney(tot.v), fmtMoney(tot.d), fmtMoney(tot.f)])},
-      {title: "Tratamentos iniciados no período", head: mm(["Paciente", "Início", "Tipo", "Status", "Convênio"], ["Valor", "Despesas", "Valor final"]),
+      {title: "Tratamentos iniciados no período", head: mm(["Paciente", "Início", "Tipo", "Status", "Convênio"], ["Valor", "Descontos", "Valor final"]),
         empty: "Nenhum tratamento iniciado no período.",
         rows: started.map(function(t){ var mo = trMoney(t); return mm([pn(t), trBr(t.inicio), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), conv(t) || "—"], [fmtMoney(mo.valor), fmtMoney(mo.despesas), fmtMoney(trFinal(t))]); })},
       {title: "Tratamentos encerrados no período (cancelados ou renegociados)", head: mm(["Paciente", "Início", "Encerrado em", "Status", "Motivo", "Observação do cancelamento"], ["Valor final"]),
@@ -12905,7 +12944,7 @@ function trAddMonths(iso, n){
   return agdIso(d);
 }
 function trDue(t){
-  if (!t || t.status !== "ativo") return null;
+  if (!t || t.status !== "ativo" || t.vencPor === "sem") return null;
   if (t.vencPor === "sessoes"){
     var tot = Number(t.totalSessoes) || 0; if (!tot) return null;
     var u = trUsedCount(t); if (u === null) return null;   // ainda carregando (ou sem sistema online)
@@ -12918,6 +12957,7 @@ function trDue(t){
 }
 // Texto da coluna "Vencimento" (sem a etiqueta).
 function trDueText(t){
+  if (t.vencPor === "sem") return "";
   if (t.vencPor === "sessoes"){
     if (!(Number(t.totalSessoes) > 0)) return "";
     var u = trUsedCount(t);
@@ -13409,7 +13449,7 @@ function openTreatmentModal(t, opts){
     // Renegociar/novo: duração e vencimento começam em branco.
     duracao: isNew ? "" : (t.duracaoMeses || ""),
     validoAte: isNew ? "" : (t.validoAte || ""),
-    vencPor: isNew ? "data" : (t.vencPor || "data"),
+    vencPor: isNew ? "sem" : (t.vencPor || "data"),
     total: isNew ? "" : (t.totalSessoes || "")
   };
   var ed = treatFieldsEditor(v);
@@ -13442,8 +13482,7 @@ function openTreatmentModal(t, opts){
         '</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="trVencPor">Vencimento por</label><select id="trVencPor">' +
-            '<option value="data"' + (d.vencPor === "sessoes" ? '' : ' selected') + '>Data</option>' +
-            '<option value="sessoes"' + (d.vencPor === "sessoes" ? ' selected' : '') + '>Quantidade de sessões</option></select></div>' +
+            [["sem", "Sem vencimento"], ["data", "Data"], ["sessoes", "Quantidade de sessões"]].map(function(o){ return '<option value="' + o[0] + '"' + (d.vencPor === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join("") + '</select></div>' +
           '<div class="field" id="trTotalBox"><label for="trTotal">Total de sessões <span id="trUsedInfo" class="hint"></span></label><input type="number" min="1" step="1" inputmode="numeric" id="trTotal" placeholder="Ex.: 40" value="' + esc(d.total) + '"></div>' +
         '</div>' +
         '<div class="field-row" id="trDateBox">' +
@@ -13453,7 +13492,7 @@ function openTreatmentModal(t, opts){
         (canSeeVal ? (
         '<div class="field-row">' +
           '<div class="field"><label for="trVal">Valor</label><input type="text" inputmode="decimal" id="trVal" placeholder="0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.valor === "" ? "" : parseMoney(d.valor).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
-          '<div class="field"><label for="trDesp">Despesas</label><input type="text" inputmode="decimal" id="trDesp" placeholder="0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.despesas === "" ? "" : parseMoney(d.despesas).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
+          '<div class="field"><label for="trDesp">Descontos</label><input type="text" inputmode="decimal" id="trDesp" placeholder="0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.despesas === "" ? "" : parseMoney(d.despesas).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
           '<div class="field"><label>Valor final</label><input type="text" id="trFinal" disabled></div>' +
         '</div>') : '') +
         '<div class="field-row">' +
@@ -13508,9 +13547,9 @@ function openTreatmentModal(t, opts){
   document.getElementById("trDur").addEventListener("input", syncVenc);
   // Por data: duração/válido até; por sessões: total contratado (usadas = Finalizados + Não compareceu).
   function syncVencPor(){
-    var bySess = document.getElementById("trVencPor").value === "sessoes";
+    var vp = document.getElementById("trVencPor").value, bySess = vp === "sessoes";
     document.getElementById("trTotalBox").hidden = !bySess;
-    document.getElementById("trDateBox").hidden = bySess;
+    document.getElementById("trDateBox").hidden = vp !== "data";   // "Sem vencimento": sem duração nem válido até
     var u = isNew ? 0 : trUsedCount(t);
     document.getElementById("trUsedInfo").textContent = bySess ? "(usadas: " + (u === null ? "…" : u) + ")" : "";
   }
@@ -13617,7 +13656,7 @@ function openTreatmentModal(t, opts){
       atualizadoEm: now
     });
     if (!t || t.status !== st) rec.statusEm = trTodayIso();
-    rec.vencPor = document.getElementById("trVencPor").value === "sessoes" ? "sessoes" : "data";
+    rec.vencPor = ["sem", "sessoes"].indexOf(document.getElementById("trVencPor").value) !== -1 ? document.getElementById("trVencPor").value : "data";
     var totV = parseInt(document.getElementById("trTotal").value, 10);
     rec.totalSessoes = rec.vencPor === "sessoes" && totV > 0 ? totV : "";
     rec.duracaoMeses = rec.vencPor === "data" && durV > 0 ? durV : "";
@@ -13792,7 +13831,7 @@ function trReactivatePatient(patId){
  *    fim do período — trPeriodEnd — vazio ou ≥ início do mês);
  *  - novos / renegociados: iniciados no mês, pelo tipo; cancelados: status
  *    cancelado com statusEm no mês;
- *  - receita prevista = soma do valor final (valor − despesas) dos ativos;
+ *  - receita prevista = soma do valor final (valor − descontos) dos ativos;
  *    ticket médio = receita ÷ ativos.
  * Os valores vêm de treatment_finance, que o banco libera para quem tem
  * "Tratamentos – valores: ver" OU o relatório "Relatório financeiro"
@@ -13913,10 +13952,10 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir). Campos obrigatórios: permissão <b>Pacientes – campos</b>. Mesclar cadastros: só Administrador."},
   {id: "tratamentos", group: "Cadastros", title: "Tratamentos", mod: "tratamentos", tab: "tratamentos",
-    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, ABA, especialidades/serviços com o terapeuta, horário de atendimento, vencimento e valores. O botão <b>Abrir plano terapêutico</b> leva aos objetivos do paciente.",
+    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, ABA, especialidades/serviços com o terapeuta e o ABA de cada uma, horário de atendimento, vencimento e valores (Valor, Descontos e Valor final). O botão <b>Abrir plano terapêutico</b> leva aos objetivos do paciente.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
-      "Preencha início, vencimento (por data ou por quantidade de sessões), convênio, pacote e horário. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
+      "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: ele cria um novo tratamento copiando o atual, e o anterior vira Renegociado.",
       "Para encerrar, mude o Status para <b>Cancelado</b> e escolha o motivo.",
       "Na tela, use os filtros: status, Vencendo, Vencidos, Abaixo do contratado e Pacientes sem tratamento ativo."
@@ -13942,13 +13981,15 @@ var HELP_TOPICS = [
       "Em <b>Horário de atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente."
     ],
     rules: [
-      "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda)."
+      "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda).",
+      "Cada especialidade/serviço tem o seu <b>ABA</b> (Sim/Não). Escolher o ABA do tratamento (campo de cima) copia o valor para todas as linhas; depois cada linha pode ser trocada sozinha.",
+      "No Planner e na Agenda, a cor do paciente e as regras de \"não faz intervenção ABA\" usam o ABA da linha da especialidade do atendimento (especialidade principal ou complementar do profissional; serviço diferente de Sessão = a linha do serviço). Atendimento de especialidade que não está no tratamento usa o ABA do tratamento."
     ],
     who: "Permissão <b>Tratamentos</b> (editar)."},
   {id: "tratamentos-vencimento", group: "Cadastros", title: "Tratamento: vencimento e renovação", mod: "tratamentos", tab: "tratamentos",
     purpose: "Avisa quando o tratamento está perto de acabar, por data ou por quantidade de sessões.",
     steps: [
-      "Na janela, escolha <b>Vencimento por</b>: <b>Data</b> (digite a duração em meses; o \"Válido até\" é calculado e pode ser ajustado) ou <b>Quantidade de sessões</b> (digite o total contratado).",
+      "Na janela, escolha <b>Vencimento por</b>: <b>Sem vencimento</b> (o padrão; não pede duração nem data), <b>Data</b> (digite a duração em meses; o \"Válido até\" é calculado e pode ser ajustado) ou <b>Quantidade de sessões</b> (digite o total contratado).",
       "Na tela de Tratamentos, os botões \"N vencem nos próximos 30 dias\" e \"N vencidos\" filtram a lista."
     ],
     rules: [
@@ -13972,9 +14013,9 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Tratamentos</b>."},
   {id: "tratamentos-valores", group: "Cadastros", title: "Tratamento: valores", mod: "tratamentos_valores", tab: "tratamentos",
-    purpose: "Valor, despesas e valor final (valor − despesas) de cada tratamento.",
+    purpose: "Valor, descontos e valor final (valor − descontos) de cada tratamento.",
     steps: [
-      "Na janela do tratamento, preencha Valor e Despesas. O Valor final é calculado.",
+      "Na janela do tratamento, preencha Valor e Descontos. O Valor final é calculado.",
       "O relatório \"Tratamentos novos e renegociados\" soma os valores do período."
     ],
     rules: [
