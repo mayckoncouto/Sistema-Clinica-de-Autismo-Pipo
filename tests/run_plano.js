@@ -212,11 +212,17 @@ const path = require('path');
                r2: {id: "r2", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Carla Laranja", service: "sessao", status: ""}};
     agdOpenDetails(AD.rows.r1);
   })()`);
-  await page.waitForSelector('#agdDetGoals .ag-obj-line');
-  const box = await page.$eval('#agdDetGoals', (h) => ({
-    visible: Array.prototype.filter.call(h.querySelectorAll('.ag-obj-line'), (l) => !l.closest('[hidden]')).map((l) => l.querySelector('.ag-obj-txt').textContent),
-    more: !!h.querySelector('[data-ag-obj-more]'), meta: (h.querySelector('.ag-obj-meta') || {}).textContent || '', sum: h.querySelector('.ag-obj-sum').textContent }));
-  console.log('slot shared with another patient: common objective shown, own hidden behind the button, TO (not Bia\'s area) left out?', box.visible.length === 1 && /Esperar a vez/.test(box.visible[0]) && /Carla Laranja/.test(box.visible[0]) && box.more && /Critério: 80%/.test(box.meta) && /Situação/.test(box.meta), JSON.stringify(box));
+  await page.waitForSelector('#agdDetGoals .ag-obj-line', {state: 'attached'});
+  const box0 = await page.$eval('#agdDetGoals', (h) => ({visible: Array.prototype.filter.call(h.querySelectorAll('.ag-obj-line'), (l) => !l.closest('[hidden]')).length,
+    sum: h.querySelector('.ag-obj-sum').textContent, boxes: Array.prototype.map.call(h.querySelectorAll('[data-ag-box]'), (b) => b.getAttribute('data-ag-box')).join(),
+    ownSum: !!h.querySelector('[data-ag-box="own"] .ag-obj-sum')}));
+  await page.click('[data-ag-box="common"] [data-ag-toggle]');
+  const box = await page.$eval('[data-ag-box="common"]', (h) => ({
+    lines: Array.prototype.map.call(h.querySelectorAll('.ag-obj-line'), (l) => l.querySelector('.ag-obj-txt').textContent),
+    meta: Array.prototype.map.call(h.querySelectorAll('.ag-obj-meta'), (m) => m.textContent).join(' | ')}));
+  console.log('Objetivos starts collapsed with the summary; arrow shows the common objective (number, skill, text | criterion, scale | status, situation); own objectives in a separate collapsed box without summary; TO left out?',
+    box0.visible === 0 && /Carla Laranja/.test(box0.sum) && box0.boxes === 'common,own' && !box0.ownSum &&
+    box.lines.length === 1 && /1\.\s*Comunicação\s*Esperar a vez/.test(box.lines[0]) && /Critério: 80% · Escala: Likert/.test(box.meta) && /Status: Ativo · Situação:/.test(box.meta), JSON.stringify({box0, box}));
   // Seletor Agendamento | Saúde | Tratamento ao lado do nome; Objetivos antes do Status.
   const tabs = await page.$$eval('#agdDetSeg [data-det]', (r) => r.map((x) => x.textContent));
   const agPane = await page.$eval('[data-det-pane="ag"]', (e) => Array.prototype.map.call(e.querySelectorAll('.k'), (k) => k.textContent).join('|'));
@@ -230,7 +236,7 @@ const path = require('path');
   console.log('details: Agendamento/Saúde/Tratamento selector, panes with the asked fields, Objetivos before Status?',
     tabs.join() === 'Agendamento,Saúde,Tratamento' && agPane === 'Serviço|Sala|Data/Hora|Observação' && saPane.vis && agHidden && saPane.keys === 'Diagnóstico (CID)|Alergias|Medicações em uso|Restrições alimentares' && trKeys === 'Plano|ABA|Horários'&& goalsFirst && objTitle === 'Objetivos',
     JSON.stringify({tabs, agPane, saPane, trKeys, goalsFirst, objTitle}));
-  await page.click('[data-ag-obj-more]');
+  await page.click('[data-ag-box="own"] [data-ag-toggle]');
   const nOpen = await page.$$eval('#agdDetGoals .ag-obj-line', (r) => r.filter((l) => !l.closest('[hidden]')).length);
   console.log('"Objetivos do paciente" reveals the specific ones?', nOpen === 2, nOpen);
   const editBtn = await page.$('#agdDetEdit');
@@ -238,8 +244,8 @@ const path = require('path');
   await editBtn.click(); await page.waitForSelector('#ovAgd');
   console.log('"Editar agendamento" opens the edit window?', !!(await page.$('#ovAgd')));
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; delete AD.rows.r2; agdOpenDetails(AD.rows.r1); })()`);
-  await page.waitForSelector('#agdDetGoals .ag-obj-line');
-  const alone = await page.$eval('#agdDetGoals', (h) => ({n: h.querySelectorAll('.ag-obj-line').length, more: !!h.querySelector('[data-ag-obj-more]')}));
+  await page.waitForSelector('#agdDetGoals .ag-obj-line', {state: 'attached'});
+  const alone = await page.$eval('#agdDetGoals', (h) => ({n: h.querySelectorAll('.ag-obj-line').length, more: !!h.querySelector('[data-ag-box="own"]')}));
   console.log('alone in the slot: all objectives open, no button?', alone.n === 2 && !alone.more, JSON.stringify(alone));
   // Finalizado travado para o terapeuta.
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; window.__planProfId = "bia-terapeuta"; state.statuses = [{id: "finalizado", name: "Finalizado", color: "#2E9E5B"}, {id: "nao-compareceu", name: "Não compareceu", color: "#999"}];
@@ -249,12 +255,26 @@ const path = require('path');
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; AD.rows.r1.status = ""; agdOpenDetails(AD.rows.r1); })()`);
   const open = await page.$eval('#agdDetStatus', (e) => !e.disabled);
   console.log('therapist cannot change a finalized status (others still can)?', locked && lockMsg && open, JSON.stringify({locked, lockMsg, open}));
+  // Podem retirar acima do nome; Medida protetiva em quadro vermelho só quando há medida ativa.
+  await ev(`(function(){ document.getElementById("modalHost").innerHTML = "";
+    state.patientsRaw = state.patientsRaw.map(function(p){ return p.id !== "ana-azul" ? p : Object.assign({}, p, {rotina: [{nome: "Mara Azul", src: "mae"}], protetiva: [{nome: "Jorge", rel: "Pai"}]}); });
+    rebuildPatients(); agdOpenDetails(AD.rows.r1); })()`);
+  const pk = await page.$eval('#ovAgdDet .modal-body', (b) => {
+    var ret = b.querySelector('.pickup-box:not(.pickup-alert)'), prot = b.querySelector('.pickup-box.pickup-alert'), name = b.querySelector('.agd-det-top');
+    return {retFirst: !!ret && !!(ret.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING), ret: ret ? ret.textContent : '', prot: prot ? prot.textContent : '',
+      protAfterInfo: !!prot && !!(b.querySelector('[data-det-pane="ag"]').compareDocumentPosition(prot) & Node.DOCUMENT_POSITION_FOLLOWING)};
+  });
+  console.log('"Podem retirar" above the name and the red "Não pode retirar" box below the info?', pk.retFirst && /Podem retirar: Mara Azul \(Mãe\)/.test(pk.ret) && /Não pode retirar: Jorge \(Pai\)/.test(pk.prot) && pk.protAfterInfo, JSON.stringify(pk));
+  await ev(`(function(){ document.getElementById("modalHost").innerHTML = "";
+    state.patientsRaw = state.patientsRaw.map(function(p){ return p.id !== "ana-azul" ? p : Object.assign({}, p, {protetiva: []}); }); rebuildPatients(); agdOpenDetails(AD.rows.r1); })()`);
+  const noProt = await page.$$eval('#ovAgdDet .pickup-alert', (r) => r.length);
+  console.log('no protective measure: no red box?', noProt === 0, noProt);
   // Paciente sem plano no horário é ignorado; sem objetivos em comum avisa ao agendar.
   await ev(`(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = ""; AD.rows.r1.status = "";
     AD.rows.r3 = {id: "r3", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Eva Sem Idade", service: "sessao", status: ""};
     agdOpenDetails(AD.rows.r1); })()`);
-  await page.waitForSelector('#agdDetGoals .ag-obj-line');
-  const noPlan = await page.$eval('#agdDetGoals', (h) => ({n: h.querySelectorAll('.ag-obj-line').length, more: !!h.querySelector('[data-ag-obj-more]'), sum: h.querySelector('.ag-obj-sum').textContent}));
+  await page.waitForSelector('#agdDetGoals .ag-obj-line', {state: 'attached'});
+  const noPlan = await page.$eval('#agdDetGoals', (h) => ({n: h.querySelectorAll('.ag-obj-line').length, more: !!h.querySelector('[data-ag-box="own"]'), sum: h.querySelector('.ag-obj-sum').textContent}));
   console.log('other patient without a plan is ignored in the details (all open, not in the summary)?', noPlan.n === 2 && !noPlan.more && !/Eva/.test(noPlan.sum), JSON.stringify(noPlan));
   await ev('document.getElementById("modalHost").innerHTML = ""');
   const evaOk = await ev('agdGoalsCheck([{rec: {date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Eva Sem Idade", service: "sessao"}, old: null}])');

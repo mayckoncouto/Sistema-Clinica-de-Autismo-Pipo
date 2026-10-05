@@ -196,7 +196,15 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .ag-obj-meta{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.5}
 .ag-obj-meta .pl-lv-dot,.pr-goal-txt .pl-lv-dot{display:inline-block;width:8px;height:8px;margin:0 4px 0 2px;vertical-align:middle}
 .ag-obj-with{font-size:11px;color:var(--accent);font-weight:700}
-.ag-obj-more{margin-top:8px;width:100%;justify-content:space-between;display:flex}
+.ag-obj-head{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;background:none;border:0;padding:0;margin:0 0 4px;font:inherit;color:inherit;cursor:pointer;text-align:left}
+div.ag-obj-head{cursor:default}
+.ag-obj-head .ag-obj-title{margin:0}
+.ag-obj-caret{font-size:12px;color:var(--ink-2)}
+.ag-obj-box + .ag-obj-box{margin-top:10px}
+.ag-obj-list .ag-obj-clin{margin-top:6px}
+.pickup-prot-line{font-size:13px}
+#ovAgdDet .pickup-box.pickup-alert{margin:12px 0 0}
+#agdDetGoals > .ag-obj-box:first-child{margin-top:12px}
 .pr-goals{margin-bottom:14px}
 .pr-goal-sec{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px}
 .pr-goal-spec{display:flex;align-items:center;gap:8px;font-size:13px;padding:2px 0 6px}
@@ -460,6 +468,9 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .trc{display:flex;flex-direction:column;gap:10px}
 .trc-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .trc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 14px}
+.trc-line{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px}
+.trc-line .trc-item{display:inline;flex-direction:row}
+.trc-line .trc-item>span{color:var(--muted);font-weight:600;font-size:13px;text-transform:none;letter-spacing:0}
 .trc-item{display:flex;flex-direction:column;gap:1px;min-width:0}
 .trc-item span{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
 .trc-item b{font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -6605,6 +6616,19 @@ function pickupBoxHtml(p, alert){
     (k.ret.length ? '<div class="pickup-ret"><b>Podem retirar:</b> ' + k.ret.map(who).join(", ") + '</div>' : '') +
   '</div>';
 }
+// Detalhes do Agendamento: "Podem retirar" (acima do nome) e "Medida protetiva" (quadro
+// vermelho, só com medida ativa; 1ª linha = aviso, depois "Não pode retirar: Nome (Relação)").
+function pickupRetHtml(p){
+  var k = patPickup(p); if (!k.ret.length) return "";
+  return '<div class="pickup-box"><div class="pickup-ret"><b>Podem retirar:</b> ' + k.ret.map(function(x){ return esc(x.nome) + (x.rel ? ' (' + esc(x.rel) + ')' : ''); }).join(", ") + '</div></div>';
+}
+function pickupProtHtml(p, last){
+  var k = patPickup(p); if (!k.prot.length) return "";
+  return '<div class="pickup-box pickup-alert">' +
+    '<div class="pickup-alert-title">' + SHIELD_SVG + ' ' + (last ? 'Último atendimento do dia — confira quem vai retirar' : 'Medida protetiva — confira quem vai retirar') + '</div>' +
+    k.prot.map(function(m){ return '<div class="pickup-prot-line"><b>Não pode retirar:</b> ' + esc(m.nome) + (m.rel ? ' (' + esc(m.rel) + ')' : '') + '</div>'; }).join("") +
+  '</div>';
+}
 // Último atendimento do paciente no dia (Agenda), sem bloqueio/reunião/treinamento.
 function agdIsLastOfDay(row){
   if (!row || bookingKind(row) || !row.patient) return false;
@@ -9677,6 +9701,7 @@ function agdOpenDetails(row){
       '<div class="modal-head"><div><h3>Detalhes do Agendamento</h3></div>' +
         '<button class="modal-close" id="agdDetClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
+        (pat ? pickupRetHtml(pat) : '') +
         '<div class="agd-det-top"><div class="agd-det-name">' + (col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + '<span>' + esc(name) + '</span></div>' +
           (pat ? '<div class="seg agd-det-seg" id="agdDetSeg" role="tablist">' + [["ag", "Agendamento"], ["sa", "Saúde"], ["tr", "Tratamento"]].map(function(t, i){
             return '<button type="button" data-det="' + t[0] + '"' + (i ? '' : ' class="active"') + ' role="tab" aria-selected="' + (i ? 'false' : 'true') + '">' + t[1] + '</button>'; }).join("") + '</div>' : '') +
@@ -9693,7 +9718,7 @@ function agdOpenDetails(row){
           line("Medicações em uso", pat.medicacoes || "") + line("Restrições alimentares", pat.restricoes || "") + '</div>' +
           '<div class="agd-det" data-det-pane="tr" hidden>' +
           line("Plano", pat.plano || "") + line("ABA", pat.aba || "") + line("Horários", trHoursText(pat)) + '</div>' : '') +
-        (pat ? pickupBoxHtml(pat, agdIsLastOfDay(row)) : '') +
+        (pat ? pickupProtHtml(pat, agdIsLastOfDay(row)) : '') +
         '<div id="agdDetGoals"></div>' +
         (showStatus ? '<div class="field" style="margin-top:12px"><label for="agdDetStatus">Status</label><select id="agdDetStatus"' + (canChange ? '' : ' disabled') + '>' +
           '<option value="">Em Aberto</option>' +
@@ -13069,17 +13094,10 @@ function writeTreatments(list){
 // vencimento, dados em grade e o horário de atendimento (só os dias/períodos em que vem).
 // Data de entrada (cadastro) do paciente: o tratamento não pode começar antes dela.
 function trPatEntrada(pid){ var p = pid && rawPatient(pid); return (p && p.entrada) || ""; }
+// Janela do paciente: uma linha só com Início, Tipo, Plano e ABA do tratamento atual.
 function treatCardHtml(t){
-  var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
-  function item(label, val){ return '<div class="trc-item"><span>' + label + '</span><b>' + (val ? esc(val) : "—") + '</b></div>'; }
-  return '<div class="trc-status"><span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>' + (typeof trDueChip === "function" ? trDueChip(t) : "") + '</div>' +
-    '<div class="trc-grid">' +
-      item("Início", trBr(t.inicio)) + item("Tipo", trLabel(TR_TIPOS, t.tipo)) +
-      item("Convênio", conv) + item("Plano", t.plano) +
-      item("Sessões/mês", t.pacoteHoras !== "" && t.pacoteHoras != null ? String(t.pacoteHoras) : "") + item("ABA", t.aba) +
-      ((t.vencPor === "sessoes" ? Number(t.totalSessoes) > 0 : t.validoAte) ? item(t.vencPor === "sessoes" ? "Sessões usadas" : "Válido até", trDueText(t)) : "") +
-    '</div>' +
-    (trHoursText(t) ? '<div class="trc-hours"><span>Horário de atendimento:</span> <b>' + esc(trHoursText(t)) + '</b></div>' : '');
+  function item(label, val){ return '<span class="trc-item"><span>' + label + ':</span> <b>' + (val ? esc(val) : "—") + '</b></span>'; }
+  return '<div class="trc-line">' + item("Início", trBr(t.inicio)) + item("Tipo", trLabel(TR_TIPOS, t.tipo)) + item("Plano", t.plano) + item("ABA", t.aba) + '</div>';
 }
 function treatSummaryHtml(t){
   var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
@@ -14164,8 +14182,8 @@ var HELP_TOPICS = [
       "Abra <b>Agenda</b>. Escolha <b>Dia</b> ou <b>Semana</b>, <b>Profissionais</b> ou <b>Salas</b>, e navegue com ‹ Hoje ›.",
       "Clique no + de um horário para marcar: paciente (ou grupo de suporte), serviço, sala, observação; ou marque Bloqueado / Reunião Clínica / Treinamento.",
       "Vários atendimentos no mesmo horário ficam lado a lado (botão + para mais um).",
-      "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>. Ao lado do nome, o seletor troca o quadro de informações: <b>Agendamento</b> (serviço, sala, data/hora, observação), <b>Saúde</b> (diagnóstico, alergias, medicações e restrições alimentares do cadastro do paciente) e <b>Tratamento</b> (plano, ABA e horários). Abaixo ficam os <b>Objetivos</b> e o <b>Status</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar agendamento</b>.",
-      "<b>Objetivos</b>: resumo e quadro clínico do plano terapêutico e os objetivos ativos do paciente nas especialidades do profissional (principal e complementares), com critério, prazo, escala, situação e status. Se outros pacientes do mesmo profissional estão no mesmo horário, aparecem primeiro os objetivos em comum; os demais ficam em <b>Objetivos do paciente ▾</b>. Pacientes sem plano terapêutico vigente não entram nessa conta.",
+      "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>. Ao lado do nome, o seletor troca o quadro de informações: <b>Agendamento</b> (serviço, sala, data/hora, observação), <b>Saúde</b> (diagnóstico, alergias, medicações e restrições alimentares do cadastro do paciente) e <b>Tratamento</b> (plano, ABA e horários). Acima do nome aparece quem <b>pode retirar</b> o paciente; abaixo do quadro, quando há medida protetiva, um quadro vermelho com quem <b>não pode retirar</b>. Depois ficam os <b>Objetivos</b> e o <b>Status</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar agendamento</b>.",
+      "<b>Objetivos</b>: mostra o resumo; a seta ▾ abre o quadro clínico do plano terapêutico e os objetivos ativos do paciente nas especialidades do profissional (principal e complementares), cada um com cor, número, habilidade e objetivo; critério e escala; status e situação. Se outros pacientes do mesmo profissional estão no mesmo horário, esse quadro traz os objetivos em comum e os demais ficam no quadro <b>Objetivos do paciente ▾</b>, também fechado. Pacientes sem plano terapêutico vigente não entram nessa conta.",
       "Ao marcar um paciente no mesmo horário e com o mesmo profissional de outro, se os dois têm plano terapêutico vigente e nenhum objetivo em comum, aparece o aviso <b>Sem objetivos em comum</b> (dá para agendar assim mesmo). Paciente sem plano vigente não gera aviso.",
       "Copiar, mover e arrastar funcionam como no Planner. Desfazer: Ctrl+Z / Ctrl+Y.",
       "Busca: destaca o paciente na tela e mostra quantos há na semana."
@@ -16442,36 +16460,45 @@ function agdGoalsData(row){
 }
 function agdGoalsBoxHtml(d){
   if (!d) return '';
-  var head = '<div class="ag-obj-title">Objetivos</div>';
-  if (!d.plan) return '<div class="ag-obj-box">' + head + '<div class="pl-hint">Paciente sem plano terapêutico vigente.</div></div>';
-  function line(x){
-    return '<div class="ag-obj-line"><div class="ag-obj-txt"><span class="pcolor-dot" style="background:' + swatchVar((state.specialties.filter(function(s){ return s.id === x.specId; })[0] || {}).color || "teal") + '" title="' + esc(specialtyName(x.specId)) + '"></span>' +
-      '<b>' + x.n + '.</b> ' + esc(x.o.objetivo || "") + (x.o.areaId ? ' <span class="autolist-kind">' + esc(skillAreaName(x.o.areaId)) + '</span>' : '') +
-      (x.with && x.with.length ? ' <span class="ag-obj-with">também: ' + esc(x.with.join(", ")) + '</span>' : '') + '</div>' +
-      planObjMetaHtml(d.plan, x.o) + '</div>';
+  // Quadro recolhível: cabeçalho com seta (data-ag-toggle) + resumo opcional + lista oculta.
+  function box(title, sum, inner, key){
+    return '<div class="ag-obj-box" data-ag-box="' + key + '">' +
+      '<button type="button" class="ag-obj-head" data-ag-toggle aria-expanded="false"><span class="ag-obj-title">' + title + '</span><span class="ag-obj-caret" aria-hidden="true">▾</span></button>' +
+      (sum ? '<div class="ag-obj-sum">' + sum + '</div>' : '') +
+      '<div class="ag-obj-list" hidden>' + inner + '</div></div>';
   }
-  var resumo = '<div class="ag-obj-sum"><b>Resumo:</b> ' + d.mine.length + (d.mine.length === 1 ? ' objetivo ativo' : ' objetivos ativos') +
-    (d.others.length ? ' · ' + d.common.length + ' em comum com ' + esc(d.others.map(function(o){ return o.p.nome; }).join(", ")) : '') + '</div>' +
-    (d.plan.summary ? '<div class="ag-obj-clin"><b>Quadro clínico:</b> ' + esc(d.plan.summary) + '</div>' : '');
-  if (!d.mine.length) return '<div class="ag-obj-box">' + head + resumo + '<div class="pl-hint">Nenhum objetivo ativo nas especialidades deste profissional.</div></div>';
-  if (!d.others.length) return '<div class="ag-obj-box">' + head + resumo + d.mine.map(line).join("") + '</div>';
-  return '<div class="ag-obj-box">' + head + resumo +
-    (d.common.length ? d.common.map(line).join("") : '<div class="pl-hint">Nenhum objetivo em comum com os outros pacientes deste horário.</div>') +
-    (d.own.length ? '<button type="button" class="btn ghost ag-obj-more" data-ag-obj-more aria-expanded="false">Objetivos do paciente (' + d.own.length + ') <span class="ag-obj-caret">▾</span></button>' +
-      '<div class="ag-obj-own" hidden>' + d.own.map(line).join("") + '</div>' : '') +
-  '</div>';
+  function plain(title, msg){ return '<div class="ag-obj-box"><div class="ag-obj-head"><span class="ag-obj-title">' + title + '</span></div><div class="pl-hint">' + msg + '</div></div>'; }
+  if (!d.plan) return plain("Objetivos", "Paciente sem plano terapêutico vigente.");
+  // Linha: cor, número, habilidade, objetivo | critério, escala | status, situação.
+  function line(x){
+    var o = x.o, sc = scaleById(o.scaleId), lv = scaleLevel(o.scaleId, o.levelId);
+    var st = PLAN_STATUS.filter(function(z){ return z.id === (o.status || "ativo"); })[0];
+    return '<div class="ag-obj-line">' +
+      '<div class="ag-obj-txt"><span class="pcolor-dot" style="background:' + swatchVar((state.specialties.filter(function(s){ return s.id === x.specId; })[0] || {}).color || "teal") + '" title="' + esc(specialtyName(x.specId)) + '"></span>' +
+        '<b>' + x.n + '.</b> ' + (o.areaId ? '<span class="autolist-kind">' + esc(skillAreaName(o.areaId)) + '</span> ' : '') + esc(o.objetivo || "") + '</div>' +
+      '<div class="ag-obj-meta">Critério: ' + esc(o.criterio || "—") + ' · Escala: ' + esc(sc ? sc.name : "—") + '</div>' +
+      '<div class="ag-obj-meta">Status: ' + esc(st ? st.name : "—") + ' · Situação: ' + (lv ? '<span class="pl-lv-dot" style="background:' + esc(lv.color || "transparent") + '"></span>' + esc(lv.name) : '—') + '</div>' +
+    '</div>';
+  }
+  if (!d.mine.length) return plain("Objetivos", "Nenhum objetivo ativo nas especialidades deste profissional.");
+  var sum = '<b>Resumo:</b> ' + d.mine.length + (d.mine.length === 1 ? ' objetivo ativo' : ' objetivos ativos') +
+    (d.others.length ? ' · ' + d.common.length + ' em comum com ' + esc(d.others.map(function(o){ return o.p.nome; }).join(", ")) : '');
+  var clin = d.plan.summary ? '<div class="ag-obj-clin"><b>Quadro clínico:</b> ' + esc(d.plan.summary) + '</div>' : '';
+  if (!d.others.length) return box("Objetivos", sum, clin + d.mine.map(line).join(""), "all");
+  return box("Objetivos", sum, clin + (d.common.length ? d.common.map(line).join("") : '<div class="pl-hint">Nenhum objetivo em comum com os outros pacientes deste horário.</div>'), "common") +
+    (d.own.length ? box("Objetivos do paciente (" + d.own.length + ")", "", d.own.map(line).join(""), "own") : '');
 }
 // Coloca o quadro no elemento host (carrega os planos antes). Só com permissão de ver o plano.
 function agdGoalsFill(host, row){
   if (!host || !planCan("view") || bookingKind(row) || !findPatientAt(row.patient, row.date)) return;
-  host.innerHTML = '<div class="ag-obj-box"><div class="ag-obj-title">Objetivos</div><div class="pl-hint">Carregando…</div></div>';
+  host.innerHTML = '<div class="ag-obj-box"><div class="ag-obj-head"><span class="ag-obj-title">Objetivos</span></div><div class="pl-hint">Carregando…</div></div>';
   planLoadAll().then(function(){
     if (!document.body.contains(host)) return;
     host.innerHTML = agdGoalsBoxHtml(agdGoalsData(row));
-    var b = host.querySelector("[data-ag-obj-more]");
-    if (b) b.addEventListener("click", function(){
-      var own = host.querySelector(".ag-obj-own"), open = own.hidden;
-      own.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
+    host.addEventListener("click", function(e){
+      var b = e.target.closest("[data-ag-toggle]"); if (!b) return;
+      var list = b.parentNode.querySelector(".ag-obj-list"), open = list.hidden;
+      list.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
       b.querySelector(".ag-obj-caret").textContent = open ? "▴" : "▾";
     });
   });

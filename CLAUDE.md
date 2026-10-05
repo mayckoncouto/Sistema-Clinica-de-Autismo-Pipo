@@ -1988,6 +1988,14 @@ atingido fica no plano); impressão/PDF. Escalas e Habilidades comuns à clínic
   seletor. Ordem: quadro, retirada/medida protetiva, **Objetivos** (o antigo "Objetivos do
   atendimento"), Status. Nomes no menu: **Objetivos** (antes "Banco de objetivos") e
   **Plano Terapêutico** (com T maiúsculo no menu, aba, Níveis e Ajuda).
+- (2026-10-06) Detalhes: **"Podem retirar"** (`pickupRetHtml`) acima do nome; **Medida protetiva**
+  (`pickupProtHtml`, quadro vermelho só com medida ativa: aviso + "Não pode retirar: Nome
+  (Relação)") abaixo do quadro de informações. Objetivos recolhidos (`.ag-obj-head[data-ag-toggle]`,
+  `[data-ag-box="all"|"common"|"own"]`): resumo visível, lista oculta; linha = cor, nº,
+  habilidade, objetivo / Critério · Escala / Status · Situação; "Objetivos do paciente" em quadro
+  próprio, recolhido, sem resumo. A janela "Editar agendamento" continua com `pickupBoxHtml`.
+- (2026-10-06) Janela do paciente: o tratamento atual aparece numa linha só (`treatCardHtml` →
+  `.trc-line`: Início, Tipo, Plano, ABA).
 - Evolução: objetivos ANTES das "Observações" (o editor), com as mesmas informações.
 - **Finalizado travado para o terapeuta** (`agdFinalLocked`, `agdTherapistUser` = usuário com
   `professional_id`, não Administrador; teste: `window.__planProfId`): status desativado nos
