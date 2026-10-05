@@ -1786,3 +1786,12 @@ campo; `dpReplace` roda em todo `scroll` (captura), `resize` e `visualViewport`
 (teclado do celular), então a lista acompanha o campo ao rolar a janela; se o campo
 sai da área visível da janela/tela, a lista fica escondida até ele voltar. O seletor
 de cor (`#cpPop`, `pop.__place`) faz o mesmo.
+
+## Tratamento cancelado pode voltar a outro status (2026-10-05)
+Pedido do usuário: saiu a regra "Cancelado é definitivo". `#trSt` não trava mais e o
+salvar não força "cancelado". Ao sair de Cancelado, `motivoCancel`/`motivoCancelNome`/
+`obsCancel` saem do tratamento (ficam no `historico`) e `statusEm` vira a data da troca.
+Continua: cancelar exige motivo ("Outro" exige observação) e só um Ativo por paciente
+(reativar com outro Ativo pede confirmação e passa o outro para Renegociado). Banco:
+migração `supabase/2026-10-05h-cancelado-pode-voltar.sql` (`treatments_cancel_rules`
+sem o bloqueio de troca de status).
