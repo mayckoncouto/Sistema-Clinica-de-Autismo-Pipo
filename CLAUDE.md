@@ -1975,11 +1975,12 @@ existia) e a nova linha final `tr.agd-endrow` (`agdDayEnd`, `agdEndRowHtml`; na 
 rótulo é a saída mais tarde e o dia diferente mostra a dele em `td.agd-end-cell`). O
 Planner já tinha as duas linhas (`timeRows`). Teste `tests/run_clinic_slots.js`.
 
-## Planner: barrinha na cor da sala embaixo do profissional (2026-10-05)
-Pedido do usuário (opção 5 das sugestões de divisão entre salas): embaixo do nome do
-profissional, no cabeçalho (`.seathead .seathead-cell`) e na linha do almoço
-(`.periodrow-seatname`), uma barra de 3px na cor da sala (`--room` = `swatchVar(r.color)`
-inline no `th`/`div`, `box-shadow: inset 0 -3px 0`). Só cabeçalhos: sem custo na grade.
+## Planner: fundo tingido por sala (2026-10-05)
+Pedido do usuário (opção 3 das sugestões de divisão entre salas; substituiu a barrinha da
+opção 5, que saiu): cada coluna da sala tem fundo com 9% da cor da sala
+(`color-mix(in srgb, swatchVar(r.color) 9%, transparent)`), por um `<colgroup>` no início
+de `buildScheduleTable` — um `<col>` por coluna, nada a mais em cada célula. Células com
+fundo próprio (atendimento, listrado "bloqueado por regra", busca) continuam por cima.
 
 ## Plano terapêutico: linhas de objetivo compactas (2026-10-05)
 Pedido do usuário ("as linhas ocupam muito espaço"): linha vazia de 68px → 41px.

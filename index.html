@@ -837,9 +837,6 @@ tr:hover .row-lock .period-btn{opacity:.8}
 .row-lock .period-btn.confirm{opacity:1}
 .periodrow-seat{padding:4px 6px;vertical-align:middle}
 .periodrow-seatname{font-size:10px;font-weight:700;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;opacity:.75;margin-bottom:2px}
-/* Barrinha na cor da sala embaixo do nome do profissional: cabeçalho e linha do almoço. */
-.seathead .seathead-cell{box-shadow:inset 0 -3px 0 var(--room, transparent);padding-bottom:7px}
-.periodrow-seatname{box-shadow:inset 0 -3px 0 var(--room, transparent);padding-bottom:4px;opacity:1;color:var(--muted)}
 .seat-lock-group{display:flex;justify-content:center;align-items:center;gap:3px}
 .period-btn{width:18px;height:18px;flex:none;border:0;border-radius:5px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;opacity:.5}
 .period-btn svg{width:10px;height:10px;display:block}
@@ -4132,6 +4129,12 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
   var bookings = (state.scheduleDocs[docId] && state.scheduleDocs[docId].bookings) || {};
   var matchCount = 0;
   var html = '<table class="sched" data-doc="'+esc(docId)+'">';
+  // Fundo levemente tingido com a cor da sala em todas as colunas dela (separa uma sala
+  // da outra). Um <col> por coluna: não acrescenta nada em cada célula.
+  html += '<colgroup><col>' + rooms.map(function(r){
+    var c = 'color-mix(in srgb,' + swatchVar(r.color) + ' 9%,transparent)';
+    return r.therapists.map(function(){ return '<col style="background:' + c + '">'; }).join("");
+  }).join("") + '</colgroup>';
 
   // Small, discreet lock/unlock controls for bulk-blocking or bulk-releasing every
   // slot in one period (morning or afternoon) for a single seat — same visual weight
@@ -4158,8 +4161,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
   html += '</tr><tr><th class="timecol corner"></th>';
   rooms.forEach(function(r){
     r.therapists.forEach(function(t){
-      // Barrinha na cor da sala embaixo do nome (separa uma sala da outra) — também na linha do almoço.
-      html += '<th class="seathead" style="--room:'+swatchVar(r.color)+'"><div class="seathead-cell">' +
+      html += '<th class="seathead"><div class="seathead-cell">' +
         '<span class="seathead-name" title="'+esc(therapistDisplayName(t))+'">'+esc(seatShortName(t))+'</span>' +
       '</div></th>';
     });
@@ -4189,7 +4191,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         rooms.forEach(function(r){
           r.therapists.forEach(function(t){
             html += '<td class="periodrow-seat">' +
-              '<div class="periodrow-seatname" style="--room:'+swatchVar(r.color)+'">'+esc(seatShortName(t))+'</div>' +
+              '<div class="periodrow-seatname">'+esc(seatShortName(t))+'</div>' +
               seatLockButtons("afternoon", r.id, t.id, therapistDisplayName(t)) +
             '</td>';
           });
