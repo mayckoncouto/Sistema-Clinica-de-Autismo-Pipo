@@ -2334,3 +2334,10 @@ Respostas do usuário (2026-10-06):
 7. Ocupação do profissional: tentar deixar um horário livre por turno (preferência, não obrigatório).
 8. Pacientes "não ABA": deixar um intervalo entre eles sempre que possível.
 Pendente decidir: qual modo primeiro e se faz antes o relatório de prontidão.
+
+## Horário de atendimento do paciente: Limpar horário (2026-10-06)
+Pedido do usuário. Na seção do tratamento (`patHoursSectionHtml`), antes de "Copiar segunda
+para todos" (`#pHoursCopy`, antes "…para os dias úteis"; agora copia para todos os dias da
+tabela, inclusive sáb/dom abertos), botão **Limpar horário** (`#pHoursClear`,
+`wirePatHoursClear`): desmarca "Atende" e apaga os horários de todos os dias. Teste no fim de
+`tests/run_treatments.js`.

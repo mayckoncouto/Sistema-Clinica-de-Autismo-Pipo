@@ -643,6 +643,7 @@ td.agd-slot:hover .agd-add{opacity:1}
 .prof-section{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:6px}
 .prof-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .prof-section-head .ph-copy{padding:3px 8px;font-size:11.5px}
+.prof-section-head .ph-acts{display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .prof-hours th{text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted);padding:4px 6px;border-bottom:1px solid var(--line)}
 .prof-hours td{padding:4px 6px;border-bottom:1px solid var(--line)}
@@ -6144,7 +6145,8 @@ function patHoursSectionHtml(v){
       '<td>'+tm("ph-"+d.key+"-ti", h.tarde && h.tarde.inicio, off)+'</td><td>'+tm("ph-"+d.key+"-tf", h.tarde && h.tarde.fim, off)+'</td></tr>';
   }).join("");
   return '<div class="prof-section"><div class="prof-section-head"><span class="prof-access-title">Horário de atendimento</span>' +
-      '<button type="button" class="btn ghost ph-copy" id="pHoursCopy">Copiar segunda para os dias úteis</button></div>' +
+      '<span class="ph-acts"><button type="button" class="btn ghost ph-copy" id="pHoursClear" title="Desmarca todos os dias e apaga os horários">Limpar horário</button>' +
+      '<button type="button" class="btn ghost ph-copy" id="pHoursCopy">Copiar segunda para todos</button></span></div>' +
     '<table class="prof-hours cl-hours" id="pHours"><colgroup><col style="width:48px"><col style="width:58px"><col><col><col><col></colgroup><thead>' +
       '<tr><th rowspan="2">Dia</th><th rowspan="2">Atende</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th></tr>' +
       '<tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>' + rows + '</tbody></table>' +
@@ -6155,14 +6157,25 @@ function wirePatHours(){
   tbl.addEventListener("change", function(e){
     if (e.target.classList.contains("cl-ativo")) e.target.closest("tr").querySelectorAll(".cl-time").forEach(function(x){ x.disabled = !e.target.checked; });
   });
+  wirePatHoursClear();
   var cp = document.getElementById("pHoursCopy");
   if (cp) cp.addEventListener("click", function(){
     var src = tbl.querySelector('tr[data-day="seg"]'); if (!src) return;
     var on = src.querySelector(".cl-ativo").checked;
-    ["ter", "qua", "qui", "sex"].forEach(function(k){
-      var tr = tbl.querySelector('tr[data-day="'+k+'"]'); if (!tr) return;
+    Array.prototype.forEach.call(tbl.querySelectorAll("tbody tr"), function(tr){
+      var k = tr.getAttribute("data-day"); if (k === "seg") return;
       tr.querySelector(".cl-ativo").checked = on;
       ["mi", "mf", "ti", "tf"].forEach(function(s){ var el = document.getElementById("ph-"+k+"-"+s); el.value = document.getElementById("ph-seg-"+s).value; el.disabled = !on; });
+    });
+  });
+}
+function wirePatHoursClear(){
+  var tbl = document.getElementById("pHours"), bt = document.getElementById("pHoursClear");
+  if (!tbl || !bt) return;
+  bt.addEventListener("click", function(){
+    Array.prototype.forEach.call(tbl.querySelectorAll("tbody tr"), function(tr){
+      tr.querySelector(".cl-ativo").checked = false;
+      tr.querySelectorAll(".cl-time").forEach(function(x){ x.value = ""; x.disabled = true; });
     });
   });
 }
@@ -15210,7 +15223,7 @@ var HELP_TOPICS = [
     purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido.",
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
-      "Em <b>Horário de atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente."
+      "Em <b>Horário de atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. <b>Limpar horário</b> desmarca todos os dias e apaga os horários; <b>Copiar segunda para todos</b> repete o horário de segunda nos outros dias."
     ],
     rules: [
       "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda).",

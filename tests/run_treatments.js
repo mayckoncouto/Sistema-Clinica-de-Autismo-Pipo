@@ -125,6 +125,23 @@ const path = require('path');
   });
   console.log('treatments list columns in the requested order, ABA with Sim/Não?', abaCol.ths.slice(0, 9).map((t) => t.replace(/[⇅▲▼]/g, '').trim()).join('|') === 'Paciente|Início|Vencimento|Convênio|ABA|Término|Tipo|Status|Mês (realizado/contratado)' && abaCol.vals.some((v) => v === 'Sim' || v === 'Não'), JSON.stringify(abaCol.ths));
 
+  // Horário de atendimento: "Limpar horário" e "Copiar segunda para todos".
+  await openNew('ana-azul');
+  const ph = await page.evaluate(() => {
+    const names = [...document.querySelectorAll('#ovTreat .prof-section-head .ph-copy')].map((b) => b.textContent.trim());
+    document.getElementById('pHoursClear').click();
+    const rows = [...document.querySelectorAll('#pHours tbody tr')];
+    const cleared = rows.every((tr) => !tr.querySelector('.cl-ativo').checked && [...tr.querySelectorAll('input.cl-time')].every((x) => x.value === '' && x.disabled));
+    const seg = document.querySelector('#pHours tr[data-day="seg"] .cl-ativo');
+    seg.checked = true; seg.dispatchEvent(new Event('change', {bubbles: true}));
+    document.getElementById('ph-seg-mi').value = '08:00'; document.getElementById('ph-seg-mf').value = '11:00';
+    document.getElementById('pHoursCopy').click();
+    const copied = rows.every((tr) => tr.querySelector('.cl-ativo').checked && tr.querySelector('input[id$="-mi"]').value === '08:00');
+    return {names, cleared, copied};
+  });
+  console.log('patient hours: "Limpar horário" before "Copiar segunda para todos", clear and copy work?', ph.names.join('|') === 'Limpar horário|Copiar segunda para todos' && ph.cleared && ph.copied, JSON.stringify(ph));
+  await page.click('#trCancel').catch(() => {});
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });
