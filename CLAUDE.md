@@ -2314,3 +2314,23 @@ mesmo id e outro `professionalId`):
   horário do novo ou ele em outra coluna no mesmo horário → aviso e confirmação dupla) ou
   "Mover para" colunas do profissional antigo.
 - Continua limpando órfãos (`plannerOrphans`). Teste `tests/run_room_seats.js`.
+
+## IDEIA EM AVALIAÇÃO (não implementada): organizar o Planner pelos tratamentos (2026-10-06)
+O usuário quer, no futuro, que o sistema leia os tratamentos ativos e monte uma PROPOSTA de
+Planner (4 semanas) — nunca grava sem prévia; depois o "Enviar para a Agenda" leva às datas.
+Modos discutidos: "Completar o que falta" (recomendado para começar), reorganizar um paciente/
+especialidade, reorganizar tudo. Prévia com o que entra/sai, contratado × planejado e aceite por
+paciente; tudo no desfazer; reconferir `plannerConflict` antes de aplicar. Sugerido começar por um
+relatório de prontidão dos dados (tratamentos sem sessões/mês, horário, terapeuta, ABA).
+Respostas do usuário (2026-10-06):
+1. Máximo de sessões por dia por paciente = total de sessões dividido pelos horários de atendimento
+   do tratamento (distribuir pelo horário disponível).
+2. No mesmo dia, sessões SEGUIDAS.
+3. Distribuir na semana: ex. 8 sessões/mês de Fono = 2 por semana, em dias diferentes.
+4. Mesmo horário toda semana: SIM — o horário do tratamento é a rotina da família; as
+   especialidades são distribuídas dentro dos dias/horários do tratamento.
+5. Irmãos no mesmo horário ou em horários colados: sempre que possível.
+6. Quando não cabe todo mundo: LISTAR os que não couberam (com o motivo), sem prioridade automática.
+7. Ocupação do profissional: tentar deixar um horário livre por turno (preferência, não obrigatório).
+8. Pacientes "não ABA": deixar um intervalo entre eles sempre que possível.
+Pendente decidir: qual modo primeiro e se faz antes o relatório de prontidão.
