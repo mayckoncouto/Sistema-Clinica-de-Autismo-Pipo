@@ -2119,3 +2119,21 @@ Pedido do usuário. Coluna "ABA" logo depois de Status (`trAbaText`/`trAbaCell`)
 tratamento; se as especialidades (`specHours[].aba`) têm valores diferentes, "Misto" com o
 detalhe por especialidade no `title`. Ordenável. Valor final passou para a 7ª posição (o
 `splice` de quem não vê valores usa 6). Celular continua Paciente + Status (1ª e 5ª).
+
+## Fluidez do Planner e da Agenda; Tela cheia (2026-10-06)
+Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, 75% ocupado).
+- Agenda: `agdRenderIfVisible` junta as mudanças do tempo real e redesenha uma vez a cada
+  150 ms (`agdRenderTimer`; enviar um mês = 1 redesenho, não centenas). `agdLoadWeek` lê
+  em páginas de 1000 (`.order("id").range()`; antes uma semana com mais de 1000 linhas
+  vinha incompleta) e, recarregando a MESMA semana (`AD._loadedRange`), não apaga a grade.
+  `agdPatchGrid(host, html)` troca só as `td`/`tr` cujo HTML mudou (mesmo `thead` e mesmo
+  nº de linhas; senão refaz tudo): sem piscar, mantém rolagem e "clique de novo".
+- Planner Todos×Todos: cada tabela fica num `.cv-lazy` (`content-visibility:auto` +
+  `contain-intrinsic-size` estimado por nº de colunas/horários): só é posicionada e pintada
+  perto da tela. Até pintar: 2,3 s → 0,9 s (sem limitar CPU). As 20 tabelas continuam no
+  DOM (busca, atualização por documento e testes iguais).
+- **Tela cheia** (`[data-full-toggle]`, botão de quatro cantos na barra do Planner e da
+  Agenda; oculto no celular): `gridFullscreen(on)` põe `body.grid-full` (esconde topo,
+  barra, legenda, nota e, na Agenda, a lista lateral), pede tela cheia ao navegador e mostra
+  `#fullExit` "Sair da tela cheia". Esc (do navegador via `fullscreenchange`, ou do teclado
+  sem janela/menu/copiar aberto) volta. Teste `tests/run_fluidez.js` (35 arquivos).

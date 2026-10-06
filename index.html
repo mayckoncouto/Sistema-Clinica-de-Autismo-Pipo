@@ -746,6 +746,14 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .day-section-label{font-size:12.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-2);padding:12px 4px 8px;position:sticky;left:0;width:fit-content}
 .weeks-row{display:flex;gap:16px;align-items:flex-start}
 .week-panel{flex:none}
+.cv-lazy{content-visibility:auto}
+/* Tela cheia (Planner e Agenda): só a grade; Esc ou o botão do canto voltam. */
+.full-btn{padding:6px 9px;display:inline-flex;align-items:center}
+.full-exit{display:none}
+body.grid-full .topbar,body.grid-full #tab-agenda .controls,body.grid-full .color-legend,body.grid-full .foot-note,
+body.grid-full #tab-agendadia .agd-toolbar,body.grid-full #tab-agendadia .agd-side{display:none!important}
+body.grid-full .full-exit{display:inline-flex;position:fixed;top:8px;right:12px;z-index:60;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+@media (max-width:760px){.full-btn{display:none!important}}
 .week-panel-label{font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);padding-bottom:6px;position:sticky;left:0;width:fit-content}
 .week-panel table.sched{min-width:0}
 /* Largura natural (sem esticar até a tela): com filtro de salas a coluna de horários não alarga. */
@@ -1562,6 +1570,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       </div>
       <div class="spacer"></div>
       <span class="pat-count" id="matchCount"></span>
+      <button type="button" class="btn ghost full-btn" data-full-toggle title="Tela cheia: mostra só a grade (Esc volta)" aria-label="Tela cheia"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
       <!-- Opções do Planner (antes "Ferramentas"): menu suspenso (os botões mantêm os ids; o "?" da ajuda entra depois) -->
       <div class="cad-wrap pl-tools-wrap"><button type="button" class="btn ghost" id="plToolsBtn" aria-haspopup="menu" aria-expanded="false">Outras opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>
       <div class="cad-menu pl-tools-menu" id="plToolsMenu" role="menu" hidden>
@@ -1615,6 +1624,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <span class="pat-count" id="agdMatchCount"></span>
         <div class="spacer"></div>
         <span class="agd-who" id="agdWho"></span>
+        <button type="button" class="btn ghost full-btn" data-full-toggle title="Tela cheia: mostra só a grade (Esc volta)" aria-label="Tela cheia"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
         <button class="btn ghost" id="agdClearWeekBtn" title="Apaga todos os registros da semana aberta" hidden>Limpar semana</button>
         <button class="btn primary" id="agdNewBtn">+ Incluir</button>
         <!-- Celular: o ☰ (#agdMoreBtn) abre o menu: Incluir agendamento + atalhos -->
@@ -4703,6 +4713,7 @@ function renderGrid(){
   scheduleMatchCounts = {};
 
   var sectionsHtml = "";
+  var seatCount = rooms.reduce(function(n, r){ return n + ((r.therapists || []).length || 1); }, 0);
   days.forEach(function(dayKey){
     var dayObj = findDayObj(dayKey);
     var weeksHtml = "";
@@ -4711,8 +4722,13 @@ function renderGrid(){
       var built = buildScheduleTable(dayObj, week, docId, rooms, search);
       scheduleMatchCounts[docId] = built.matchCount;
       var panel = built.html;
+      // Várias tabelas (Todos): cada uma só é posicionada/pintada quando chega perto da
+      // tela (content-visibility). Tamanho estimado para a barra de rolagem até lá.
+      var cvStyle = (multiWeek || multiDay) ? ' style="contain-intrinsic-size:auto '+(90 + seatCount*131)+'px auto '+((dayObj.morning || []).length + (dayObj.afternoon || []).length + 5)*58+'px"' : '';
       if (multiWeek){
-        panel = '<div class="week-panel"><div class="week-panel-label">'+WEEK_LABEL[week]+'</div>'+panel+'</div>';
+        panel = '<div class="week-panel cv-lazy"'+cvStyle+'><div class="week-panel-label">'+WEEK_LABEL[week]+'</div>'+panel+'</div>';
+      } else if (multiDay){
+        panel = '<div class="cv-lazy"'+cvStyle+'>'+panel+'</div>';
       }
       weeksHtml += panel;
     });
@@ -9545,13 +9561,25 @@ function agdLoadWeek(){
   var c = agdClient();
   if (!c){ AD.loaded = true; AD.error = "offline"; agdRender(); return Promise.resolve(); }
   var seq = ++AD.loadSeq;
-  AD.loaded = false; agdRender();
+  // Mesma semana já na tela (reconexão, volta para a aba): relê sem apagar a grade.
+  var rangeKey = AD.rangeFrom + "|" + AD.rangeTo;
+  if (!(AD.loaded && !AD.error && AD._loadedRange === rangeKey)){ AD.loaded = false; agdRender(); }
   agdEnsureChannel();
-  return c.from("appointments").select("*").gte("date", AD.rangeFrom).lte("date", AD.rangeTo).then(function(r){
+  // Em páginas de 1000: o banco nunca entrega mais que isso numa leitura, e uma semana
+  // cheia passa disso (sem as páginas, a semana apareceria incompleta, sem aviso).
+  var from = AD.rangeFrom, to = AD.rangeTo, all = [];
+  function page(off){
+    return c.from("appointments").select("*").gte("date", from).lte("date", to).order("id").range(off, off + 999).then(function(r){
+      if (r.error) return r;
+      all = all.concat(r.data || []);
+      return (r.data || []).length === 1000 ? page(off + 1000) : {data: all};
+    });
+  }
+  return page(0).then(function(r){
     if (seq !== AD.loadSeq) return; // uma navegação mais nova já pediu outra semana
     AD.loaded = true;
     if (r.error){ AD.error = r.error.message || "erro"; AD.rows = {}; agdRender(); return; }
-    AD.error = ""; AD.rows = {};
+    AD.error = ""; AD.rows = {}; AD._loadedRange = rangeKey;
     (r.data || []).forEach(function(row){ AD.rows[row.id] = row; });
     agdRender();
   });
@@ -9574,7 +9602,13 @@ function agdEnsureChannel(){
     .subscribe(function(status){ if (status === "SUBSCRIBED" && AD.loaded) agdLoadWeek(); });
 }
 
-function agdRenderIfVisible(){ if (state.tab === "agendadia") agdRender(); }
+// Mudanças em tempo real chegam uma a uma (enviar um mês do Planner = centenas):
+// junta tudo o que chegar em ~150 ms num redesenho só.
+var agdRenderTimer = null;
+function agdRenderIfVisible(){
+  if (state.tab !== "agendadia" || agdRenderTimer) return;
+  agdRenderTimer = setTimeout(function(){ agdRenderTimer = null; if (state.tab === "agendadia") agdRender(); }, 150);
+}
 function agdOnShow(){
   if (!AD.sel || !agdFindRes(AD.sel)){ var first = agdResources()[0]; AD.sel = first ? first.id : null; }
   agdLoadWeek();
@@ -9837,7 +9871,7 @@ function agdRender(){
     // Sem nenhuma coluna (filtro sem resultado): a tabela fica só com os 87px dos horários, sem esticar.
     html = html.replace('<table class="agd-grid">', '<table class="agd-grid" style="'+(cols.length ? 'min-width:'+(87 + cols.length*130)+'px' : 'width:87px')+'">');
   }
-  gridHost.innerHTML = html + '</tbody></table>';
+  agdPatchGrid(gridHost, html + '</tbody></table>');
   var mcEl = document.getElementById("agdMatchCount");
   if (mcEl){
     var weekHits = (AD.search || "").trim() ? Object.keys(AD.rows).filter(function(id){ return agdSearchHit(AD.rows[id]); }).length : 0;
@@ -9845,6 +9879,29 @@ function agdRender(){
       ? (shownHits + " na tela · " + weekHits + " na semana")
       : "";
   }
+}
+
+// Troca na tela só as células que mudaram (mesma estrutura de linhas e colunas);
+// senão refaz a grade toda. Mantém rolagem, foco e botões "clique de novo" das
+// células que não mudaram, e evita o piscar ao chegar mudança em tempo real.
+function agdPatchGrid(host, html){
+  var old = host.querySelector(":scope > table.agd-grid");
+  var tpl = document.createElement("template"); tpl.innerHTML = html;
+  var neu = tpl.content.querySelector("table.agd-grid");
+  if (!old || !neu || host.children.length !== 1 || old.getAttribute("style") !== neu.getAttribute("style") ||
+      old.rows.length !== neu.rows.length || !old.tHead || !neu.tHead || old.tHead.innerHTML !== neu.tHead.innerHTML){
+    host.innerHTML = html; return -1;
+  }
+  var changed = 0;
+  for (var i = 0; i < neu.rows.length; i++){
+    var or = old.rows[i], nr = neu.rows[i];
+    if (or.parentNode.tagName === "THEAD") continue;
+    if (or.className !== nr.className || or.cells.length !== nr.cells.length){ or.parentNode.replaceChild(document.importNode(nr, true), or); changed++; continue; }
+    for (var j = 0; j < nr.cells.length; j++){
+      if (or.cells[j].outerHTML !== nr.cells[j].outerHTML){ or.replaceChild(document.importNode(nr.cells[j], true), or.cells[j]); changed++; }
+    }
+  }
+  return changed;
 }
 
 // Atendimento da Agenda que é de um grupo de suporte (o nome do grupo no lugar do paciente).
@@ -14474,7 +14531,8 @@ var HELP_TOPICS = [
       "Clique numa célula vazia (+) para agendar: paciente, serviço, observação, ou marque Bloqueado / Reunião Clínica / Treinamento.",
       "Passe o mouse no agendamento para Excluir, Mover ou Copiar. Também dá para arrastar e soltar (em cima de outro agendamento, troca os dois).",
       "Na linha antes das 07:20 e na do almoço: botões <b>liberar / bloquear / limpar</b> do período (dois cliques para confirmar). Ao lado de cada horário: liberar/bloquear a linha.",
-      "Desfazer/refazer: botões no canto da grade ou Ctrl+Z / Ctrl+Y (a setinha ▾ lista as ações)."
+      "Desfazer/refazer: botões no canto da grade ou Ctrl+Z / Ctrl+Y (a setinha ▾ lista as ações).",
+      "Botão <b>Tela cheia</b> (quatro cantos, na barra): mostra só a grade, sem o topo, a barra e a legenda. Para voltar: Esc ou <b>Sair da tela cheia</b> no canto."
     ],
     rules: [
       "Bloquear só preenche horários livres; liberar só tira bloqueios; limpar apaga tudo do período.",
@@ -14528,7 +14586,8 @@ var HELP_TOPICS = [
       "<b>Objetivos</b>: mostra o resumo; a seta ▾ abre o quadro clínico do plano terapêutico e os objetivos ativos do paciente nas especialidades do profissional (principal e complementares), cada um com cor, número, habilidade e objetivo; critério e escala; status e situação. Se outros pacientes do mesmo profissional estão no mesmo horário, esse quadro traz os objetivos em comum e os demais ficam no quadro <b>Objetivos do paciente ▾</b>, também fechado. Pacientes sem plano terapêutico vigente não entram nessa conta.",
       "Ao marcar um paciente no mesmo horário e com o mesmo profissional de outro, se os dois têm plano terapêutico vigente e nenhum objetivo em comum, aparece o aviso <b>Sem objetivos em comum</b> (dá para agendar assim mesmo). Paciente sem plano vigente não gera aviso.",
       "Copiar, mover e arrastar funcionam como no Planner. Desfazer: Ctrl+Z / Ctrl+Y.",
-      "Busca: destaca o paciente na tela e mostra quantos há na semana."
+      "Busca: destaca o paciente na tela e mostra quantos há na semana.",
+      "Botão <b>Tela cheia</b> (quatro cantos, na barra): mostra só a grade, sem o topo, a barra, a lista lateral e a legenda. Para voltar: Esc ou <b>Sair da tela cheia</b> no canto."
     ],
     rules: [
       "Os horários seguem o horário da clínica e a duração padrão (Acesso → Clínica): cabem só sessões inteiras na manhã e na tarde. A linha do almoço mostra a saída da última sessão da manhã e a última linha a saída da última sessão da tarde (na Semana, o dia com saída diferente mostra a dele).",
@@ -17082,6 +17141,35 @@ function planFromTreatment(pid){
   if (!planCan("view")){ showToast("Seu nível de permissão não dá acesso ao Plano terapêutico.", true); return; }
   openPlanFor(pid);
 }
+
+/* ---------------- Tela cheia (Planner e Agenda) ---------------- */
+// Esconde o topo, a barra, a legenda (e, na Agenda, a lista lateral) e pede tela
+// cheia ao navegador. Esc (do navegador ou do teclado) ou "Sair da tela cheia" voltam.
+function gridFullscreen(on){
+  var was = document.body.classList.contains("grid-full");
+  if (on === undefined) on = !was;
+  document.body.classList.toggle("grid-full", on);
+  var de = document.documentElement;
+  try {
+    if (on && !document.fullscreenElement && de.requestFullscreen) de.requestFullscreen().catch(function(){});
+    if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function(){});
+  } catch (e){}
+  if (on !== was && state.tab === "agenda") applyZoom();
+}
+(function(){
+  var ex = document.createElement("button");
+  ex.type = "button"; ex.className = "btn primary full-exit"; ex.id = "fullExit"; ex.textContent = "Sair da tela cheia";
+  ex.addEventListener("click", function(){ gridFullscreen(false); });
+  document.body.appendChild(ex);
+  document.addEventListener("click", function(e){ if (e.target.closest && e.target.closest("[data-full-toggle]")) gridFullscreen(true); });
+  document.addEventListener("fullscreenchange", function(){ if (!document.fullscreenElement && document.body.classList.contains("grid-full")) gridFullscreen(false); });
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Escape" || !document.body.classList.contains("grid-full")) return;
+    // Esc com janela, menu, copiar/mover ou busca em andamento é deles.
+    if (document.querySelector(".overlay, #dpPop, #cpPop, .cad-menu:not([hidden])") || state.clipboard || (typeof AD !== "undefined" && AD.clipboard)) return;
+    gridFullscreen(false);
+  });
+})();
 
 (function(){
   dpScan(document.body);
