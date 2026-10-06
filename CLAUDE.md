@@ -2128,7 +2128,8 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, 75% ocupad
   vinha incompleta) e, recarregando a MESMA semana (`AD._loadedRange`), não apaga a grade.
   `agdPatchGrid(host, html)` troca só as `td`/`tr` cujo HTML mudou (mesmo `thead` e mesmo
   nº de linhas; senão refaz tudo): sem piscar, mantém rolagem e "clique de novo".
-- Planner Todos×Todos: cada tabela fica num `.cv-lazy` (`content-visibility:auto` +
+- Planner Todos×Todos: cada tabela fica num `.cv-lazy` (`content-visibility:auto` + `width:max-content` —
+  sem ele, em "Todos os dias × 1 semana" o embrulho cortava a tabela e não rolava para os lados —
   `contain-intrinsic-size` estimado por nº de colunas/horários): só é posicionada e pintada
   perto da tela. Até pintar: 2,3 s → 0,9 s (sem limitar CPU). As 20 tabelas continuam no
   DOM (busca, atualização por documento e testes iguais).

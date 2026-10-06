@@ -73,6 +73,14 @@ const path = require('path');
   const cv = await ev(`(function(){ var p = document.querySelectorAll('#gridHost .week-panel.cv-lazy');
     return {n: p.length, cv: p.length ? getComputedStyle(p[0]).contentVisibility : "", size: p.length ? p[0].style.containIntrinsicSize : "", tables: document.querySelectorAll('table.sched').length}; })()`);
   check('Todos×Todos: 20 tables, each drawn on demand (content-visibility)?', cv.n === 20 && cv.tables === 20 && cv.cv === 'auto' && /auto/.test(cv.size), JSON.stringify(cv));
+  // Todos os dias × uma semana: a grade larga continua rolando para os lados
+  await page.click('#weekSeg button[data-week="1"]');
+  await page.waitForTimeout(400);
+  const side = await ev(`(function(){ var old = state.rooms;
+    state.rooms = state.rooms.map(function(r){ return r.id === "r1" ? Object.assign({}, r, {therapists: r.therapists.concat([1,2,3,4,5,6,7,8].map(function(k){ return {id: "x"+k, name: "X", professionalId: "ana-terapeuta"}; }))}) : r; });
+    renderGrid(); var sc = document.querySelector('.grid-scroll'), out = {scrollW: sc.scrollWidth, clientW: sc.clientWidth};
+    state.rooms = old; renderGrid(); return out; })()`);
+  check('Todos os dias × 1 semana: wide grid scrolls sideways?', side.scrollW > side.clientW + 100, JSON.stringify(side));
   await page.click('#daySeg button[data-day="seg"]'); await page.click('#weekSeg button[data-week="1"]');
   await page.waitForTimeout(400);
   const single = await ev(`document.querySelectorAll('#gridHost .cv-lazy').length`);
