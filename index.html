@@ -544,6 +544,7 @@ td.agd-slot:hover .agd-add{opacity:1}
 .agd-off-swatch{background:var(--off-bg)!important;border:1px dashed var(--line-strong)}
 /* Planner: horário fora do expediente do profissional da coluna (cinza, inativo). */
 .slotcell.slot-off{cursor:not-allowed}
+.slotcell.slot-off.aba-soft{cursor:pointer}
 /* bloqueios por regra (paciente "não ABA" / profissional atendendo em sala): listras cinza-claro e branco */
 .slotcell.aba-lock .book .book-main.off-box,.slotcell.aba-lock .book .book-main.off-box:hover,
 .slotcell.prof-busy .book .book-main.off-box,.slotcell.prof-busy .book .book-main.off-box:hover{background:repeating-linear-gradient(135deg,#E4E7E6 0 6px,#FFFFFF 6px 12px)}
@@ -4364,10 +4365,13 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         var busyAt = pw[0] || null;
         var busyLock = !(b && b.patient) && !!busyAt;
         var isOff = abaLock || busyLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
-        var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time, roomIsABA(r) ? professionalName(t.professionalId) : "")
+        // Só a regra "não ABA" travando: dá para marcar outro serviço (não Sessão) — a
+        // célula aceita clique/colar/soltar e a gravação confere o serviço.
+        var abaSoft = abaLock && !busyLock && seatAvailable(t, dayObj.key, row.time);
+        var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time, roomIsABA(r) ? professionalName(t.professionalId) : "") + (abaSoft ? " Outros serviços (que não Sessão) podem ser marcados." : "")
           : busyLock ? professionalName(t.professionalId) + (busyAt.grp ? " tem agendamento no grupo " : " está atendendo em ") + busyAt.name + " neste horário."
           : "Fora do horário do profissional";
-        html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock' : (busyLock ? ' prof-busy' : '')) : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
+        html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock'+(abaSoft ? ' aba-soft' : '') : (busyLock ? ' prof-busy' : '')) : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
         if (isOff){
           html += '<div class="book"><div class="book-main off-box" aria-hidden="true"></div></div>';
         } else if (b && b.patient){
@@ -4632,7 +4636,7 @@ function wireGridDelegatedEvents(){
       renderGrid();
       return;
     }
-    if (td.classList.contains("slot-off")){
+    if (td.classList.contains("slot-off") && !td.classList.contains("aba-soft")){
       showToast((td.classList.contains("aba-lock") || td.classList.contains("prof-busy")) ? td.title : "Fora do horário de atendimento do profissional.", true);
       return;
     }
@@ -4675,7 +4679,7 @@ function wireGridDelegatedEvents(){
   host.addEventListener("dragover", function(e){
     if (!state.dragKey) return;
     var td = e.target.closest(".slotcell");
-    if (!td || td.classList.contains("slot-off")) return; // sem preventDefault = não aceita soltar
+    if (!td || (td.classList.contains("slot-off") && !td.classList.contains("aba-soft"))) return; // sem preventDefault = não aceita soltar
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     td.classList.add("drag-over");
@@ -4687,7 +4691,7 @@ function wireGridDelegatedEvents(){
   host.addEventListener("drop", function(e){
     var td = e.target.closest(".slotcell");
     if (!td) return;
-    if (td.classList.contains("slot-off")){
+    if (td.classList.contains("slot-off") && !td.classList.contains("aba-soft")){
       e.preventDefault();
       state.dragKey = null; state.dragDocId = null;
       showToast((td.classList.contains("aba-lock") || td.classList.contains("prof-busy")) ? td.title : "Fora do horário de atendimento do profissional.", true);
@@ -4851,6 +4855,9 @@ function patientBusyMsg(patient, service, time, place){
 // colunas da mesma sala ficam bloqueadas (só no Planner, só em sala — não em grupo).
 function isNaoABABooking(b, profId){
   if (!b || !b.patient || bookingKind(b)) return false;
+  // Regras "não ABA" só valem para Sessão: outro serviço (avaliação, triagem…) não ocupa
+  // nem é barrado (Planner e Agenda).
+  if ((b.service || DEFAULT_SERVICE_ID) !== DEFAULT_SERVICE_ID) return false;
   var p = b.date ? findPatientAt(b.patient, b.date) : findPatientByName(b.patient);  // Agenda: tratamento da data
   return !!(p && patientIsNaoABA(bookingPatient(p, b, profId)));   // Planner: profissional da coluna
 }
@@ -4906,7 +4913,7 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
         if (recNaoABA) return roomIsABA(room)
           ? "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + professionalName(profId) + " já tem " + b.patient + " às " + time + " em " + room.name + "."
           : "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + ".";
-        if (isNaoABABooking(b, t.professionalId)) return abaRoomMsg(b.patient, room.name, time, roomIsABA(room) ? professionalName(profId) : "");
+        if (svc === DEFAULT_SERVICE_ID && isNaoABABooking(b, t.professionalId)) return abaRoomMsg(b.patient, room.name, time, roomIsABA(room) ? professionalName(profId) : "");
       }
       // Profissional em dois lugares: vale também para o grupo que marca a mesma sala
       // (2026-10-06 — sem exceção nos dois sentidos).
@@ -10425,7 +10432,7 @@ function agdConflictIn(rows, rec){
           if (recNao) return roomIsABA(recRoom)
             ? "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + pn + " já tem " + o.patient + " às " + rec.time + " em " + recRoom.name + "."
             : "Paciente que não faz intervenção ABA ocupa a sala toda: " + recRoom.name + " já tem " + o.patient + " às " + rec.time + ".";
-          if (oNao) return abaRoomMsg(o.patient, recRoom.name, rec.time, pn);
+          if (oNao && (rec.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID) return abaRoomMsg(o.patient, recRoom.name, rec.time, pn);
         }
       }
     }
@@ -14556,6 +14563,7 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Sala <b>com \"ABA\" no nome</b>: paciente que não faz ABA ocupa só o horário do mesmo profissional. Sala <b>sem \"ABA\"</b>: ocupa a sala toda.",
+      "As regras de quem não faz ABA valem só para o serviço <b>Sessão</b>: atendimento de outro serviço (avaliação, triagem, orientação…) não ocupa o horário e pode ser marcado no horário listrado por essa regra.",
       "Tirar uma coluna que tem agendamentos no Planner abre a janela <b>Colunas com agendamentos</b>: para cada coluna, escolha <b>Apagar os agendamentos</b> ou <b>Mover para</b> outra coluna (sala → sala, grupo → grupo). Os que não cabem no destino (horário ocupado, conflito ou fora do horário do profissional) são apagados; a janela mostra quantos antes de aplicar.",
       "Excluir ou inativar uma sala/grupo com agendamentos no Planner avisa quantos são (inclusive os de grupos que marcam a sala) e apaga todos junto. A Agenda (datas reais) não é mexida: sala com atendimentos na Agenda é inativada, não excluída.",
       "Ao salvar uma sala ou grupo, agendamentos gravados em colunas que não existem mais são apagados.",
@@ -14596,7 +14604,7 @@ var HELP_TOPICS = [
       "Profissional não pode estar em dois lugares (salas/grupos diferentes) no mesmo horário.",
       "No Planner, profissional com paciente numa sala fica com a coluna dele nos Grupos de Suporte bloqueada nesse horário (cinza listrado), mesmo que o grupo seja para a mesma sala. Da mesma forma, com agendamento num grupo, as colunas dele em todas as salas ficam bloqueadas nesse horário, inclusive na sala que o grupo marca.",
       "Paciente não pode ter o mesmo serviço em dois lugares no mesmo horário, nem dois atendimentos com o mesmo profissional.",
-      "Paciente que <b>não faz ABA</b> ocupa o horário do profissional (sala com ABA no nome) ou a sala toda (sala sem ABA).",
+      "Paciente que <b>não faz ABA</b> ocupa o horário do profissional (sala com ABA no nome) ou a sala toda (sala sem ABA). Vale só para o serviço <b>Sessão</b>: outros serviços não ocupam nem são barrados.",
       "Fora do horário do paciente ou com terapeuta diferente do tratamento: pede confirmação duas vezes.",
       "Sessão com profissional cuja especialidade principal e áreas complementares não estão entre as especialidades do tratamento do paciente: aparece um aviso e é preciso confirmar.",
       "Bloqueado, Reunião Clínica e Treinamento não entram nas regras."

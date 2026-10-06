@@ -2178,3 +2178,12 @@ avaliações nos Detalhes/evolução, relatório "Evolução por habilidade", N�
   `specId` e esvazia `plan_goals` que apontavam para eles; `clinical_records_plan_goals` procura
   o objetivo em qualquer quadro; `plan_prof_update` com as regras novas). Testada num Postgres de
   teste (PGlite) antes de publicar. Teste `tests/run_plano.js` reescrito (55 checagens).
+
+## Regras "não ABA" só para Sessão (Planner e Agenda, 2026-10-06)
+Pedido do usuário: quando o serviço não é Sessão, as regras ABA são ignoradas.
+`isNaoABABooking` devolve false para `service` ≠ `DEFAULT_SERVICE_ID` (atendimento de
+outro serviço não ocupa sala/horário); `plannerConflict` e `agdConflictIn` não barram um
+registro de outro serviço ao lado de um "não ABA". Na grade do Planner, a célula travada
+só pela regra ABA (sem outra trava) ganha `.aba-soft`: continua listrada, mas aceita
+clique/colar/soltar (a gravação recusa se for Sessão). A cor do paciente não mudou.
+Testes no fim de `tests/run_aba_linha.js`.
