@@ -1500,8 +1500,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(4)){display:none}
   /* Pacientes / Tratamentos: coluna do nome com todo o espaço que sobra; a da situação só do tamanho da etiqueta */
   #patListHost .pat-table col:first-child,#trHost .pat-table.tr-main col:first-child{width:auto!important}
-  #patListHost .pat-table col:nth-child(4),#trHost .pat-table.tr-main col:nth-child(5){width:122px!important}
-  :is(#patListHost .pat-table :is(th,td):nth-child(4),#trHost .pat-table.tr-main :is(th,td):nth-child(5)){padding-left:6px;padding-right:10px;white-space:nowrap}
+  #patListHost .pat-table col:nth-child(4),#trHost .pat-table.tr-main col:nth-child(8){width:122px!important}
+  :is(#patListHost .pat-table :is(th,td):nth-child(4),#trHost .pat-table.tr-main :is(th,td):nth-child(8)){padding-left:6px;padding-right:10px;white-space:nowrap}
   :is(#patListHost,#trHost) .pat-table .tr-chip{white-space:nowrap}
   #profList .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)){display:none}
   #staffListHost .pat-table :is(col,th,td):nth-child(n+3),#reg-tiposfunc-host .pat-table :is(col,th,td):nth-child(n+3){display:none}
@@ -1509,7 +1509,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   :is(#reg-servicos-host,#reg-especialidades-host) .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)){display:none}
   #reg-convenios-host .pat-table :is(col,th,td):nth-child(n+3){display:none}
   :is(#reg-medicos-host,#reg-escolas-host,#reg-cbo-host,#reg-conselhos-host,#reg-feriados-host) .pat-table :is(col,th,td):nth-child(n+3){display:none}
-  #trHost .pat-table.tr-main :is(col,th,td):not(:nth-child(1)):not(:nth-child(5)){display:none}
+  #trHost .pat-table.tr-main :is(col,th,td):not(:nth-child(1)):not(:nth-child(8)){display:none}
   /* Janelas no celular. O iPhone dá zoom sozinho ao tocar num campo com letra
      menor que 16px (e não volta ao sair): todo campo de digitar fica com 16px. */
   input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]),select,textarea,[contenteditable=true],[contenteditable=""]{font-size:16px!important}
@@ -14336,30 +14336,38 @@ function renderTreatmentsTab(){
   if (!all.length){ host.innerHTML = '<div class="empty-state"><b>Nenhum tratamento cadastrado</b>Use "+ Incluir".</div>'; return; }
   if (!shown.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca ou o filtro.</div>'; return; }
   var canFin = trCanSeeVal();
+  // Ordem das colunas (pedido do usuário): Paciente, Início, Vencimento, Convênio, ABA,
+  // Término, Tipo, Status, Mês; "Valor final" no fim, só para quem vê valores.
   var trCols = [
     {key: "pac", label: "Paciente", width: 260, min: 140, cls: "pt-nome"},
     {key: "ini", label: "Início", width: 110, min: 80},
+    {key: "venc", label: "Vencimento", width: 190, min: 100},
+    {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"},
+    {key: "aba", label: "ABA", width: 90, min: 60},
     {key: "fim", label: "Término", width: 200, min: 90, cls: "pt-muted"},
     {key: "tipo", label: "Tipo", width: 120, min: 80},
     {key: "st", label: "Status", width: 130, min: 90},
-    {key: "aba", label: "ABA", width: 90, min: 60},
-    {key: "val", label: "Valor final", width: 130, min: 90},
-    {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"},
-    {key: "venc", label: "Vencimento", width: 190, min: 100},
     {key: "mes", label: "Mês (realizado/contratado)", width: 200, min: 110}
   ];
-  if (!canFin) trCols.splice(6, 1);
+  if (canFin) trCols.push({key: "val", label: "Valor final", width: 130, min: 90});
   gtRender(host, "tratamentos", trCols, shown.map(function(t){
     var p = rawPatient(t.patientId);
     var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
     var fin = trFinal(t);
-    return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"',
-      cells: [(function(){ var c = trColor(t); return c ? '<span class="pcolor-dot" style="background:' + c + '" title="Cor por idade/ABA"></span>' : ''; })() + esc(p ? p.nome : "(paciente excluído)"), esc(trBr(t.inicio)), esc(trEndText(t)), esc(trLabel(TR_TIPOS, t.tipo)),
-        '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>',
-        trAbaCell(t),
-        esc(fmtMoney(fin)), esc(conv || "—"), (trDueText(t) ? esc(trDueText(t)) : '<span class="pt-muted">—</span>') + trDueChip(t), trMonthCell(t)],
-      vals: [p ? p.nome : "", t.inicio || "", trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), trAbaText(t), fin, conv || "", t.vencPor === "sessoes" ? (trDue(t) ? trDue(t).rest : "") : (t.validoAte || ""), (function(){ var ms = trMonthSummary(t); return ms ? ms.m.tot.diff : ""; })()]};
-  }).map(function(row){ if (!canFin){ row.cells.splice(6, 1); row.vals.splice(6, 1); } return row; }), renderTreatmentsTab, "tr-main");
+    var cells = [(function(){ var c = trColor(t); return c ? '<span class="pcolor-dot" style="background:' + c + '" title="Cor por idade/ABA"></span>' : ''; })() + esc(p ? p.nome : "(paciente excluído)"),
+      esc(trBr(t.inicio)),
+      (trDueText(t) ? esc(trDueText(t)) : '<span class="pt-muted">—</span>') + trDueChip(t),
+      esc(conv || "—"),
+      trAbaCell(t),
+      esc(trEndText(t)),
+      esc(trLabel(TR_TIPOS, t.tipo)),
+      '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>',
+      trMonthCell(t)];
+    var vals = [p ? p.nome : "", t.inicio || "", t.vencPor === "sessoes" ? (trDue(t) ? trDue(t).rest : "") : (t.validoAte || ""), conv || "",
+      trAbaText(t), trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), (function(){ var ms = trMonthSummary(t); return ms ? ms.m.tot.diff : ""; })()];
+    if (canFin){ cells.push(esc(fmtMoney(fin))); vals.push(fin); }
+    return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"', cells: cells, vals: vals};
+  }), renderTreatmentsTab, "tr-main");
 }
 // Coluna ABA da lista de Tratamentos: o ABA do tratamento; se as especialidades têm ABA
 // diferentes entre si, "Misto" (o detalhe de cada uma no title).

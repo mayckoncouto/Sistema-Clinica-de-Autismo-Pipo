@@ -2117,8 +2117,10 @@ exceção "não ABA" de `groupBookedRoom` (outro profissional na sala) não mudo
 ## Tratamentos: coluna ABA na lista (2026-10-06)
 Pedido do usuário. Coluna "ABA" logo depois de Status (`trAbaText`/`trAbaCell`): o ABA do
 tratamento; se as especialidades (`specHours[].aba`) têm valores diferentes, "Misto" com o
-detalhe por especialidade no `title`. Ordenável. Valor final passou para a 7ª posição (o
-`splice` de quem não vê valores usa 6). Celular continua Paciente + Status (1ª e 5ª).
+detalhe por especialidade no `title`. Ordenável.
+- (2026-10-06, pedido do usuário) Ordem das colunas: Paciente, Início, Vencimento, Convênio,
+  ABA, Término, Tipo, Status, Mês (realizado/contratado) e, só para quem vê valores, Valor
+  final no fim (`trCols.push`). Celular: Paciente + Status (1ª e 8ª, `:nth-child(8)`).
 
 ## Fluidez do Planner e da Agenda; Tela cheia (2026-10-06)
 Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, 75% ocupado).

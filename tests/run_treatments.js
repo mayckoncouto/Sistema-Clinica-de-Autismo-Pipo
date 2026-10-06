@@ -114,16 +114,16 @@ const path = require('path');
   await save(); await page.waitForTimeout(200);
   console.log('saving a new treatment reactivates the patient?', (await pInact()) === false);
 
-  // Coluna ABA na lista de Tratamentos (depois de Status).
+  // Ordem das colunas da lista de Tratamentos e coluna ABA com Sim/Não.
   if (await page.$('#ovTreat')) await page.click('#trCancel').catch(() => {});
   await page.$eval('#mainTabs button[data-tab=tratamentos]', (b) => b.click()); await page.waitForTimeout(200);
   const abaCol = await page.evaluate(() => {
     const ths = [...document.querySelectorAll('#trHost table.tr-main thead th')].map((th) => th.textContent.trim());
     const i = ths.findIndex((t) => /^ABA/.test(t));
     const vals = [...document.querySelectorAll('#trHost table.tr-main tbody tr')].map((tr) => tr.cells[i] ? tr.cells[i].textContent.trim() : '?');
-    return {i, st: ths.findIndex((t) => /^Status/.test(t)), vals};
+    return {i, ths, vals};
   });
-  console.log('treatments list shows an ABA column right after Status with Sim/Não?', abaCol.i === abaCol.st + 1 && abaCol.vals.some((v) => v === 'Sim' || v === 'Não'), JSON.stringify(abaCol));
+  console.log('treatments list columns in the requested order, ABA with Sim/Não?', abaCol.ths.slice(0, 9).map((t) => t.replace(/[⇅▲▼]/g, '').trim()).join('|') === 'Paciente|Início|Vencimento|Convênio|ABA|Término|Tipo|Status|Mês (realizado/contratado)' && abaCol.vals.some((v) => v === 'Sim' || v === 'Não'), JSON.stringify(abaCol.ths));
 
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
