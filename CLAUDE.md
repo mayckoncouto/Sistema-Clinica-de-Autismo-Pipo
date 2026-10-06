@@ -2188,3 +2188,34 @@ registro de outro serviço ao lado de um "não ABA". Na grade do Planner, a cél
 só pela regra ABA (sem outra trava) ganha `.aba-soft`: continua listrada, mas aceita
 clique/colar/soltar (a gravação recusa se for Sessão). A cor do paciente não mudou.
 Testes no fim de `tests/run_aba_linha.js`.
+
+## Agenda: menu "Outras opções ▾" (2026-10-06, substitui "Limpar semana")
+Decisões do usuário: Limpar por período com filtros completos, prévia e proteção dos
+realizados; Bloquear período; Trocar profissional no período; Copiar dia/semana;
+Pendências de status; Status em lote; Exportar Excel; as mesmas opções no ☰ do celular.
+- Bloco "Agenda: menu Outras opções" (no lugar de `agdClearWeek`, que saiu): `AGD_TOOLS`
+  (`{k, label, ok(), run()}`; `agdToolsVisible`, `agdToolsMenuHtml`, `agdRunTool`).
+  Botão `#agdToolsBtn` / `#agdToolsMenu` em `#agdToolsWrap` (oculto sem nenhuma opção
+  permitida; oculto no celular, onde o ☰ `#agdMoreMenu` ganha o grupo "Outras opções" com
+  `[data-agd-tool]`). Permissões: limpar = excluir; bloquear e copiar = incluir (apagar
+  junto no bloquear = excluir); trocar = editar; status em lote = algum status permitido
+  além de Finalizado; pendências e exportar = todos.
+- Apoio: `agdToolModal` (janela padrão), `agdPickHtml/Wire/Read` (lista de marcar com
+  filtro; nada marcado = todos; já vem marcado o profissional/sala aberto), `agdFetchRange`
+  (páginas de 1000), `agdRecordsMap` (evolução, confere também para o Administrador),
+  `agdInsertBatches`, `agdUpdateRows`, `agdInPer` (manhã/tarde pelo fim da última sessão da
+  manhã), `agdTimesFor`, `agdDatesBetween` (só dias abertos), `agdListTable`, `agdCountTable`.
+- Toda ferramenta tem "Ver prévia" (qualquer mudança nos campos limpa a prévia) e grava com
+  `agdRecord` (desfazer). Com status ou evolução: Limpar não apaga, Trocar não troca.
+  Copiar pula data passada, clínica fechada, feriado, fora do horário, horário ocupado e
+  `agdConflictIn`. Status em lote usa `agdSetStatusQuiet` (RPC, um aviso só) e não oferece
+  Finalizado. Exportar = CSV ";" com BOM (Data, Dia, Hora, Profissional, Sala, Paciente/grupo,
+  Tipo, Serviço, Status, Observação, Origem).
+- Teste `tests/run_agd_tools.js` (banco em memória no lugar do Supabase; 36 arquivos no
+  `npm test`).
+
+## Planner Todos: "Segunda-feira" fica à esquerda ao rolar (2026-10-06)
+`.day-section{width:max-content;min-width:100%}`: a seção do dia acompanha a largura da
+grade, então o rótulo (sticky `left:0`) não sai da tela ao rolar para os lados (antes a seção
+tinha a largura da tela e o rótulo ia embora junto). "1ª semana" já ficava presa dentro da
+própria semana. Teste no `tests/run_fluidez.js`.
