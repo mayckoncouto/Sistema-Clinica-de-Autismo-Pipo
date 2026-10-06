@@ -2079,3 +2079,5 @@ prazo (`.pl-prazo`, data completa no `title`; coluna Prazo 176px), setas ▲▼ 
 - `supabase/conferencia-dos-dados.sql`: script SÓ DE LEITURA com 17 verificações (Planner em
   colunas apagadas, nomes não cadastrados, inativos agendados, tratamentos, CPF, Agenda sem
   status, Finalizado sem evolução, usuários/profissionais). Não é migração.
+- Produção (2026-10-06): o usuário rodou a `2026-10-06d` (Finalizado travado) e a
+  `2026-10-06f` (saúde do paciente).
