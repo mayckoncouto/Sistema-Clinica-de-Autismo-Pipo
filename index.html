@@ -332,6 +332,10 @@ tr.is-inactive td{color:var(--muted)}
 .btn.danger{color:var(--danger);border-color:var(--danger-weak)}
 .btn.danger-solid{background:var(--danger);color:#fff;border-color:transparent}
 .btn.danger-solid:hover{filter:brightness(1.08);background:var(--danger)}
+.sr-row{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}
+.sr-row .field{margin:6px 0 4px}
+.sr-prev{font-size:12.5px;color:var(--ink-2,var(--muted))}
+.sr-prev.sr-del{color:var(--danger)}
 .confirm-overlay{z-index:60}
 .rb-opt{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;margin:4px 0 10px;cursor:pointer}
 .rb-opt input{margin-top:2px;width:16px;height:16px}
@@ -3324,12 +3328,10 @@ var USAGE = {
       return [useTxt(cols, "sala/grupo do Planner", "salas/grupos do Planner"), useTxt(trs, "tratamento", "tratamentos"), useTxt(n, "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean);
     });
   },
+  // Só a Agenda: os agendamentos do Planner são apagados junto ao excluir/inativar
+  // (roomPlannerUse + plannerRoomDeleteFlow), nunca ficam escondidos.
   salas: function(r){
-    var name = normText(String(r.name || "").trim());
-    return Promise.all([
-      plannerUseCount(function(k, rec){ return k.split("|")[1] === r.id || normText(String(rec.patient || "").trim()) === name; }),
-      apptUseCount("room_id", r.id)
-    ]).then(function(n){ return [useTxt(n[0], "agendamento no Planner", "agendamentos no Planner"), useTxt(n[1], "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean); });
+    return apptUseCount("room_id", r.id).then(function(n){ return [useTxt(n, "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean); });
   },
   convenios: function(c){
     var hit = function(x){ return x.convenioId === c.id || (!x.convenioId && normText(x.convenio || "") === normText(c.name)); };
@@ -3385,6 +3387,10 @@ function setupInactivate(o){
   });
   b.addEventListener("click", function(){
     if (b.dataset.mode !== "inactivate") return;
+    if (o.inactivateFlow){
+      o.inactivateFlow(uses).then(function(ok){ if (ok) Promise.resolve(o.save(Object.assign({}, o.item, {inativo: true}))).then(function(){ o.close(); showToast("Inativado."); }); });
+      return;
+    }
     confirmDialog({title: "Inativar", confirmLabel: "Inativar",
       message: "<b>" + esc(o.name) + "</b> está em uso (" + esc(uses.join(", ")) + ") e por isso não pode ser excluído." +
         "<br>Inativar? Some das listas e das opções para novos cadastros e agendamentos; os registros antigos continuam. Dá para reativar depois."})
@@ -5443,7 +5449,7 @@ function applyBookingChanges(changesByDoc, opts){
   } else if (opts.history === "redo"){
     histEntry = bookingHistory.redo.pop();
     if (histEntry){ histStack = bookingHistory.undo; histStack.push(histEntry); }
-  } else if (changedSomething){
+  } else if (changedSomething && !opts.noHistory){
     histEntry = {changes: cloneJson(changesByDoc), prev: cloneJson(prevByDoc), label: describeHistoryEntry(changesByDoc, prevByDoc)};
     histStack = bookingHistory.undo;
     histStack.push(histEntry);
@@ -8898,6 +8904,7 @@ function openRoomModal(r, asGroup){
     if (!document.getElementById("ovRoom")) return;
     modalApplyPerms(grp ? "grupos" : "salas", isNew, {ov: "ovRoom", save: "rmSave", del: "rmDelete", cancel: "rmCancel"});
     if (!isNew) setupInactivate({btn: "rmDelete", mod: grp ? "grupos" : "salas", item: r, name: r.name, usage: USAGE.salas, close: close,
+      inactivateFlow: function(uses){ return plannerRoomDeleteFlow(r, uses); },
       save: function(it){ return writeRooms(state.rooms.map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; })); }});
   }, 0);
   overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
@@ -8965,11 +8972,7 @@ function openRoomModal(r, asGroup){
   if (!isNew){
     document.getElementById("rmDelete").addEventListener("click", function(){
       if (delBlocked(this)) return;
-      confirmDialog({
-        title: "Confirmar exclusão",
-        message: "Excluir "+(grp ? "o grupo" : "a sala")+" <b>"+esc(r.name || "")+"</b>?<br>"+(grp ? "Ele some" : "Ela some")+" da agenda, e os atendimentos marcados nas colunas "+(grp ? "dele" : "dela")+" deixam de aparecer.",
-        confirmLabel: "Confirmar exclusão"
-      }).then(function(ok){
+      plannerRoomDeleteFlow(r, null).then(function(ok){
         if (!ok) return;
         var list = state.rooms.filter(function(x){ return x.id !== r.id; });
         writeRooms(list).then(close);
@@ -8999,13 +9002,9 @@ function openRoomModal(r, asGroup){
     // Colunas (profissionais) tiradas desta sala: pedir confirmação antes de salvar.
     var keptSeatIds = cleanTherapists.map(function(t){ return t.id; });
     var removedSeats = isNew ? [] : (r.therapists || []).filter(function(t){ return keptSeatIds.indexOf(t.id) === -1; });
-    (removedSeats.length ? confirmDialog({
-      title: removedSeats.length === 1 ? "Remover coluna d"+(grp ? "o grupo" : "a sala") : "Remover colunas d"+(grp ? "o grupo" : "a sala"),
-      message: (removedSeats.length === 1 ? "Esta coluna será removida" : "Estas colunas serão removidas") +
-        " d"+(grp ? "o grupo" : "a sala")+" <b>"+esc(name)+"</b>:" + namesList(removedSeats.map(therapistDisplayName)) +
-        (removedSeats.length === 1 ? "Os atendimentos marcados nela deixam de aparecer na agenda." : "Os atendimentos marcados nelas deixam de aparecer na agenda."),
-      confirmLabel: "Remover e salvar"
-    }) : Promise.resolve(true)).then(function(ok){
+    // Colunas tiradas com agendamentos no Planner: apagar ou mover antes (nunca ficam
+    // escondidas). Junto, limpa agendamentos de colunas que já não existem.
+    plannerSeatRemovalFlow(rec, removedSeats, list).then(function(ok){
       if (ok) writeRooms(list).then(close);
     });
   });
@@ -9023,6 +9022,197 @@ function writeRooms(list){
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
   return db.doc("config/rooms").set({list:list}).catch(function(){
     showToast("Não foi possível salvar a sala.", true);
+  });
+}
+
+/* Salas/grupos × agendamentos do Planner: tirar uma coluna, excluir ou inativar uma
+ * sala/grupo nunca deixa agendamento "perdido" (gravado numa coluna que não aparece). */
+function bkHasContent(v){
+  if (!v) return false;
+  var r = typeof v === "string" ? {patient: v} : v;
+  return !!(String(r.patient || "").trim() || r.blocked || r.training || String(r.note || "").trim());
+}
+function bkRec(v){ return typeof v === "string" ? {patient: v} : v; }
+// Lê as 4 semanas do Planner (as regras de conflito leem state.scheduleDocs).
+function plannerLoadDocs(){
+  if (!db) return Promise.resolve({});
+  var ids = plannerAllDocIds();
+  return currentBookingsFor(ids).then(function(all){
+    ids.forEach(function(id){ if (!state.scheduleDocs[id]) state.scheduleDocs[id] = {bookings: JSON.parse(JSON.stringify(all[id] || {}))}; });
+    return all;
+  });
+}
+// Agendamentos de colunas que não existem na lista de salas/grupos `list`.
+function plannerOrphans(all, list){
+  var seats = {}, out = {}, n = 0;
+  (list || []).forEach(function(r){ (r.therapists || []).forEach(function(t){ seats[r.id + "|" + t.id] = true; }); });
+  Object.keys(all).forEach(function(docId){
+    Object.keys(all[docId] || {}).forEach(function(k){
+      var p = k.split("|");
+      if (p.length !== 3 || seats[p[1] + "|" + p[2]]) return;
+      (out[docId] = out[docId] || {})[k] = null; n++;
+    });
+  });
+  return {changes: out, n: n};
+}
+function mergeChanges(a, b){
+  Object.keys(b).forEach(function(d){ a[d] = Object.assign(a[d] || {}, b[d]); });
+  return a;
+}
+// Agendamentos ligados à sala/grupo: os das colunas dela e (sala) os de grupos que
+// marcam o nome dela.
+function roomPlannerUse(all, room){
+  var name = normText(String(room.name || "").trim()), out = {}, own = 0, viaGroup = 0;
+  Object.keys(all).forEach(function(docId){
+    var dayKey = docId.split("-")[0], bk = all[docId] || {};
+    Object.keys(bk).forEach(function(k){
+      var p = k.split("|"), v = bk[k];
+      if (p.length !== 3) return;
+      if (p[1] === room.id){ if (v !== undefined){ (out[docId] = out[docId] || {})[k] = null; if (bkHasContent(v)) own++; } return; }
+      if (isGroup(room) || !bkHasContent(v)) return;
+      var g = findRoom(p[1]);
+      if (!g || !isGroup(g) || normText(String(bkRec(v).patient || "").trim()) !== name) return;
+      (out[docId] = out[docId] || {})[k] = clearValueFor(dayKey, p[0]); viaGroup++;
+    });
+  });
+  return {changes: out, own: own, viaGroup: viaGroup, n: own + viaGroup};
+}
+// Excluir (uses = null) ou inativar (uses = usos na Agenda) sala/grupo: apaga antes os
+// agendamentos do Planner, com confirmação. Resolve true para seguir.
+function plannerRoomDeleteFlow(room, uses){
+  var grp = isGroup(room), art = grp ? "o grupo" : "a sala", inact = !!uses;
+  return plannerLoadDocs().catch(function(){ return null; }).then(function(all){
+    if (!all){ showToast("Não foi possível ler o Planner. Tente de novo.", true); return false; }
+    var use = roomPlannerUse(all, room);
+    var head = inact
+      ? "<b>" + esc(room.name || "") + "</b> está em uso (" + esc(uses.join(", ")) + ") e por isso será <b>inativad" + (grp ? "o" : "a") + "</b>, não excluíd" + (grp ? "o" : "a") + ". Some das listas e das opções para novos agendamentos; dá para reativar depois."
+      : "Excluir " + art + " <b>" + esc(room.name || "") + "</b>?";
+    if (!use.n){
+      return confirmDialog({title: inact ? "Inativar" : "Confirmar exclusão", message: head, confirmLabel: inact ? "Inativar" : "Confirmar exclusão"});
+    }
+    if (!can("agenda", "delete")){
+      showToast(capFirst(art) + " tem " + use.n + " agendamento" + (use.n === 1 ? "" : "s") + " no Planner. Seu nível não pode excluir agendamentos do Planner: peça para quem pode apagá-los antes.", true);
+      return false;
+    }
+    var parts = [];
+    if (use.own) parts.push(use.own + " nas colunas d" + (grp ? "ele" : "ela"));
+    if (use.viaGroup) parts.push(use.viaGroup + " em grupos de suporte marcando esta sala");
+    return confirmDialog({
+      title: inact ? "Inativar e apagar agendamentos" : "Excluir e apagar agendamentos",
+      message: head + "<br><br>" + capFirst(art) + " tem <b>" + use.n + " agendamento" + (use.n === 1 ? "" : "s") + " no Planner</b> (" + parts.join(" e ") + ").<br>" +
+        (use.n === 1 ? "Ele será apagado" : "Eles serão apagados") + " antes. Não dá para desfazer.",
+      confirmLabel: inact ? "Apagar e inativar" : "Apagar e excluir"
+    }).then(function(ok){
+      if (!ok) return false;
+      return Promise.resolve(applyBookingChanges(use.changes, {noHistory: true})).then(function(r){ return r !== false; });
+    });
+  });
+}
+function capFirst(t){ t = String(t || ""); return t.charAt(0).toUpperCase() + t.slice(1); }
+// Salvar sala/grupo com colunas tiradas: cada coluna com agendamentos escolhe apagar ou
+// mover para outra coluna (do mesmo tipo: sala → sala, grupo → grupo). Também limpa os
+// agendamentos de colunas que já não existem. Resolve true para seguir com o salvar.
+function plannerSeatRemovalFlow(rec, removedSeats, newList){
+  if (!db) return Promise.resolve(true);
+  var canDel = can("agenda", "delete");
+  if (!removedSeats.length && !canDel) return Promise.resolve(true);
+  return plannerLoadDocs().catch(function(){ return null; }).then(function(all){
+    if (!all){
+      if (!removedSeats.length) return true;
+      showToast("Não foi possível ler o Planner. Tente de novo.", true); return false;
+    }
+    var bySeat = {};
+    removedSeats.forEach(function(t){ bySeat[t.id] = []; });
+    Object.keys(all).forEach(function(docId){
+      Object.keys(all[docId] || {}).forEach(function(k){
+        var p = k.split("|");
+        if (p.length === 3 && p[1] === rec.id && bySeat[p[2]] && bkHasContent(all[docId][k])) bySeat[p[2]].push({docId: docId, k: k, time: p[0], rec: bkRec(all[docId][k])});
+      });
+    });
+    // Agendamentos de colunas que não existem mais (inclui as tiradas agora, ao final).
+    var orph = canDel ? plannerOrphans(all, newList) : {changes: {}, n: 0};
+    var withBk = removedSeats.filter(function(t){ return bySeat[t.id].length; });
+    if (!withBk.length){
+      if (!orph.n) return true;
+      return Promise.resolve(applyBookingChanges(orph.changes, {noHistory: true})).then(function(){ return true; });
+    }
+    if (!canDel){ showToast("Esta coluna tem agendamentos no Planner e seu nível não pode excluir agendamentos do Planner.", true); return false; }
+    var grp = isGroup(rec), canMove = can("agenda", "create");
+    var keptIds = (rec.therapists || []).map(function(t){ return t.id; });
+    var targets = [];
+    plannerRooms().forEach(function(r){
+      if (isGroup(r) !== grp || r.inativo) return;
+      var seats = r.id === rec.id ? (findRoom(r.id) || {therapists: []}).therapists.filter(function(t){ return keptIds.indexOf(t.id) !== -1; }) : (r.therapists || []);
+      seats.forEach(function(t){ if (t.professionalId) targets.push({v: r.id + "|" + t.id, room: r, seat: t, label: r.name + " — " + therapistDisplayName(t)}); });
+    });
+    var srcKeys = [];
+    withBk.forEach(function(t){ bySeat[t.id].forEach(function(it){ srcKeys.push(it.k); }); });
+    // Plano completo: o que cada coluna faz com os agendamentos dela.
+    function plan(choice){
+      var changes = {}, used = {}, res = {};
+      withBk.forEach(function(t){
+        var tg = choice[t.id] ? targets.filter(function(x){ return x.v === choice[t.id]; })[0] : null, moved = 0, left = 0;
+        bySeat[t.id].forEach(function(it){
+          (changes[it.docId] = changes[it.docId] || {})[it.k] = null;
+          if (!tg) return;
+          var dayKey = it.docId.split("-")[0], tk = it.time + "|" + tg.v, uk = it.docId + "|" + tk;
+          var dst = (state.scheduleDocs[it.docId] && state.scheduleDocs[it.docId].bookings) || {};
+          var ok = !used[uk] && !bkHasContent(effectiveBooking(dst, tk, dayKey, it.time));
+          if (ok && !bookingKind(it.rec)){
+            ok = seatAvailable(tg.seat, dayKey, it.time) && !slotRefusal(tg.room.id, it.rec) && !plannerConflict(it.docId, tk, it.rec, srcKeys);
+          }
+          if (ok){ changes[it.docId][tk] = it.rec; used[uk] = true; moved++; } else left++;
+        });
+        res[t.id] = {moved: moved, left: left};
+      });
+      return {changes: changes, res: res};
+    }
+    return new Promise(function(resolve){
+      var host = document.getElementById("confirmHost");
+      if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
+      var opts = function(t){
+        return '<option value="">Apagar os agendamentos</option>' + (canMove ? targets.map(function(x){ return '<option value="' + esc(x.v) + '">Mover para ' + esc(x.label) + '</option>'; }).join("") : "");
+      };
+      host.innerHTML = '<div class="overlay confirm-overlay" id="ovSeatRm" role="alertdialog" aria-modal="true" aria-labelledby="srTitle"><div class="modal" style="max-width:560px">' +
+        '<div class="modal-head"><div><h3 id="srTitle">' + (withBk.length === 1 ? "Coluna com agendamentos" : "Colunas com agendamentos") + '</h3></div></div>' +
+        '<div class="modal-body"><div class="confirm-msg">Antes de tirar ' + (withBk.length === 1 ? "esta coluna" : "estas colunas") + ' d' + (grp ? "o grupo" : "a sala") + ' <b>' + esc(rec.name) + '</b>, escolha o que fazer com os agendamentos do Planner (as 4 semanas).</div>' +
+          withBk.map(function(t){
+            var n = bySeat[t.id].length;
+            return '<div class="sr-row"><div class="sr-name"><b>' + esc(therapistDisplayName(t)) + '</b> · ' + n + ' agendamento' + (n === 1 ? '' : 's') + '</div>' +
+              '<div class="field"><select data-sr-seat="' + esc(t.id) + '" aria-label="O que fazer com os agendamentos de ' + esc(therapistDisplayName(t)) + '">' + opts(t) + '</select></div>' +
+              '<div class="sr-prev" data-sr-prev="' + esc(t.id) + '"></div></div>';
+          }).join("") +
+        '</div>' +
+        '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="srCancel">Cancelar</button><button class="btn danger-solid" id="srOk">Aplicar e salvar</button></div>' +
+      '</div></div>';
+      function choice(){ var c = {}; host.querySelectorAll("select[data-sr-seat]").forEach(function(s){ c[s.getAttribute("data-sr-seat")] = s.value; }); return c; }
+      function refresh(){
+        var c = choice(), pl = plan(c);
+        withBk.forEach(function(t){
+          var el = host.querySelector('[data-sr-prev="' + t.id + '"]'), r = pl.res[t.id], n = bySeat[t.id].length;
+          if (!el) return;
+          if (!c[t.id]){ el.textContent = (n === 1 ? "O agendamento será apagado." : "Os " + n + " agendamentos serão apagados."); el.className = "sr-prev sr-del"; return; }
+          el.textContent = r.moved + " ser" + (r.moved === 1 ? "á movido" : "ão movidos") + (r.left ? " · " + r.left + " não cabe" + (r.left === 1 ? "" : "m") + " (horário ocupado, conflito ou fora do horário do profissional) e ser" + (r.left === 1 ? "á apagado" : "ão apagados") : "") + ".";
+          el.className = "sr-prev" + (r.left ? " sr-del" : "");
+        });
+      }
+      function done(v){ document.removeEventListener("keydown", onKey, true); host.innerHTML = ""; resolve(v); }
+      function onKey(e){ if (e.key === "Escape"){ e.stopPropagation(); done(false); } }
+      document.addEventListener("keydown", onKey, true);
+      host.querySelectorAll("select[data-sr-seat]").forEach(function(s){ s.addEventListener("change", refresh); });
+      document.getElementById("srCancel").addEventListener("click", function(){ done(false); });
+      document.getElementById("srOk").addEventListener("click", function(){
+        var pl = plan(choice()), changes = mergeChanges(orph.changes, pl.changes);
+        Object.keys(pl.changes).forEach(function(d){ Object.assign(changes[d], pl.changes[d]); }); // movidos vencem a limpeza
+        var btn = this; btn.disabled = true;
+        Promise.resolve(applyBookingChanges(changes, {noHistory: true})).then(function(r){
+          if (r === false){ btn.disabled = false; return; }
+          done(true);
+        });
+      });
+      refresh();
+      document.getElementById("srCancel").focus();
+    });
   });
 }
 
@@ -14244,9 +14434,12 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Sala <b>com \"ABA\" no nome</b>: paciente que não faz ABA ocupa só o horário do mesmo profissional. Sala <b>sem \"ABA\"</b>: ocupa a sala toda.",
-      "Tirar uma coluna da sala pede confirmação."
+      "Tirar uma coluna que tem agendamentos no Planner abre a janela <b>Colunas com agendamentos</b>: para cada coluna, escolha <b>Apagar os agendamentos</b> ou <b>Mover para</b> outra coluna (sala → sala, grupo → grupo). Os que não cabem no destino (horário ocupado, conflito ou fora do horário do profissional) são apagados; a janela mostra quantos antes de aplicar.",
+      "Excluir ou inativar uma sala/grupo com agendamentos no Planner avisa quantos são (inclusive os de grupos que marcam a sala) e apaga todos junto. A Agenda (datas reais) não é mexida: sala com atendimentos na Agenda é inativada, não excluída.",
+      "Ao salvar uma sala ou grupo, agendamentos gravados em colunas que não existem mais são apagados.",
+      "Apagar agendamentos precisa da permissão de excluir no <b>Planner</b>; mover, também a de incluir. Essas ações não entram no desfazer."
     ],
-    who: "Permissão <b>Salas</b>."},
+    who: "Permissão <b>Salas</b> (grupos: <b>Grupos de Suporte</b>)."},
   {id: "grupos", group: "Cadastros", title: "Grupos de Suporte", mod: "grupos", tab: "salas",
     purpose: "Colunas especiais do Planner (ex.: Coordenador, Aplicador ABA) em que se agenda uma <b>sala</b>, não um paciente.",
     steps: ["Cadastros → <b>Grupos de Suporte</b> → <b>+ Incluir</b>."],

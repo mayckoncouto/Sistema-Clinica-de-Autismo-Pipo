@@ -2087,3 +2087,22 @@ prazo (`.pl-prazo`, data completa no `title`; coluna Prazo 176px), setas ▲▼ 
   status, Finalizado sem evolução, usuários/profissionais). Não é migração.
 - Produção (2026-10-06): o usuário rodou a `2026-10-06d` (Finalizado travado) e a
   `2026-10-06f` (saúde do paciente).
+
+## Tirar coluna, excluir ou inativar sala/grupo com agendamentos (Planner, 2026-10-06)
+Decisões do usuário: coluna tirada com agendamentos → apagar ou mover; sala/grupo
+excluído ou inativado → apaga só os do Planner (Agenda não é mexida); agendamentos de
+colunas que não existem mais são limpos ao salvar. Bloco "Salas/grupos × agendamentos do
+Planner" (depois de `writeRooms`):
+- `plannerSeatRemovalFlow(rec, removedSeats, newList)` (no Salvar de `openRoomModal`):
+  janela `#ovSeatRm` com um `select[data-sr-seat]` por coluna ("Apagar os agendamentos" ou
+  "Mover para <sala — profissional>", só colunas do mesmo tipo, ativas e com profissional),
+  prévia `.sr-prev` (movidos / não cabem → apagados: ocupado, `seatAvailable`,
+  `slotRefusal`, `plannerConflict`). Junta `plannerOrphans(all, newList)` (chaves cuja
+  coluna não existe; só com `agenda.delete`).
+- `plannerRoomDeleteFlow(room, uses)`: Excluir (uses null) e Inativar (via
+  `setupInactivate({inactivateFlow})`) — `roomPlannerUse` = colunas dela + grupos que
+  marcam o nome da sala; confirmação "Apagar e excluir" / "Apagar e inativar". `USAGE.salas`
+  passou a contar só a Agenda (Planner não decide mais Inativar).
+- `applyBookingChanges(..., {noHistory: true})`: grava sem entrar no desfazer (estrutural).
+- `plannerLoadDocs()` lê as 4 semanas e preenche `state.scheduleDocs`. Teste
+  `tests/run_room_seats.js` (34 arquivos no `npm test`).
