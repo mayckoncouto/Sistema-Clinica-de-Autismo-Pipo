@@ -41,11 +41,10 @@ const path = require('path');
   const dlg = await ev(`(function(){ var o = document.getElementById("ovSeatRm"); if (!o) return null;
     var sel = o.querySelector("select[data-sr-seat]"); return {txt: o.textContent, opts: Array.prototype.map.call(sel.options, function(x){ return x.value; }), prev: o.querySelector(".sr-prev").textContent}; })()`);
   check('removing a column with bookings asks what to do?', !!dlg && /3 agendamentos/.test(dlg.txt), dlg && dlg.txt.slice(0, 160));
-  check('options: delete or move to another room column (not groups)?', !!dlg && dlg.opts[0] === '' && dlg.opts.indexOf('r1|r1-t2') !== -1 && !dlg.opts.some((v) => /^coord/.test(v)), dlg && dlg.opts.join(','));
-  check('default preview = delete?', !!dlg && /serão apagados/.test(dlg.prev), dlg && dlg.prev);
-  await ev(`(function(){ var s = document.querySelector("#ovSeatRm select[data-sr-seat]"); s.value = "r1|r1-t2"; s.dispatchEvent(new Event("change", {bubbles: true})); })()`);
-  const prev2 = await ev(`document.querySelector("#ovSeatRm .sr-prev").textContent`);
-  check('move preview counts?', /3 serão movidos/.test(prev2), prev2);
+  check('no delete option: only "move to" another room column (not groups)?', !!dlg && dlg.opts.indexOf('') === -1 && dlg.opts.indexOf('r1|r1-t2') !== -1 && !dlg.opts.some((v) => /^coord/.test(v)), dlg && dlg.opts.join(','));
+  check('suggested column already chosen and everything fits?', !!dlg && /serão movidos/.test(dlg.prev), dlg && dlg.prev);
+  const okEnabled = await ev(`!document.getElementById("srOk").disabled`);
+  check('"Aplicar e salvar" enabled when all bookings fit?', okEnabled);
   await page.click('#srOk');
   await page.waitForTimeout(700);
   const s1 = await bk('seg-1'), t1 = await bk('ter-1'), s2 = await bk('seg-2'), q3 = await bk('qua-3');
@@ -68,6 +67,34 @@ const path = require('path');
   const stillOpen = !!(await page.$('#ovRoom'));
   check('cancel keeps bookings and the window open?', !!after['07:20|r1|r1-t2'] && stillOpen);
   await ev(`document.getElementById("closeRoom").click()`);
+
+  // 2b) Coluna sem lugar para todos: não deixa tirar
+  await ev(`(function(){ state.rooms = state.rooms.map(function(x){ return x.id === "r1" ? Object.assign({}, x, {therapists: x.therapists.filter(function(t){ return t.id !== "r1-t9"; })}) : x; }); })()`);
+  const blocked = await ev(`(async function(){
+    var rec = Object.assign({}, findRoom("r1")), seat = rec.therapists[0];
+    var list = state.rooms.map(function(x){ return x.id === "r1" ? Object.assign({}, rec, {therapists: []}) : x; });
+    var p = plannerSeatRemovalFlow(Object.assign({}, rec, {therapists: []}), [seat], list, []);
+    await new Promise(function(r){ setTimeout(r, 400); });
+    var o = document.getElementById("ovSeatRm"), out = o ? {dis: document.getElementById("srOk").disabled, prev: o.querySelector(".sr-prev").textContent} : null;
+    if (o) document.getElementById("srCancel").click();
+    await p; return out;
+  })()`);
+  check('column whose bookings have nowhere to go cannot be removed?', !!blocked && blocked.dis && /Mova-os no Planner|não \(horário/.test(blocked.prev), JSON.stringify(blocked));
+
+  // 2c) Trocar o profissional da coluna: pergunta; padrão = ficam com o novo
+  const chg = await ev(`(async function(){
+    var room = findRoom("r1"), seat = room.therapists[0], oldProf = seat.professionalId;
+    var other = state.professionals.filter(function(p){ return p.id !== oldProf && p.specialtyId; })[0];
+    var nseat = Object.assign({}, seat, {professionalId: other.id, name: other.name});
+    var rec = Object.assign({}, room, {therapists: [nseat].concat(room.therapists.slice(1))});
+    var list = state.rooms.map(function(x){ return x.id === "r1" ? rec : x; });
+    var p = plannerSeatRemovalFlow(rec, [], list, [{seat: nseat, oldProf: oldProf}]);
+    await new Promise(function(r){ setTimeout(r, 400); });
+    var o = document.getElementById("ovSeatRm"); if (!o) return null;
+    var sel = o.querySelector("select[data-sr-seat]"), out = {txt: o.textContent.slice(0, 300), first: sel.options[0].value, firstTxt: sel.options[0].textContent, prev: o.querySelector(".sr-prev").textContent};
+    document.getElementById("srCancel").click(); await p; return out;
+  })()`);
+  check('changing the column professional asks (default: bookings stay with the new one)?', !!chg && chg.first === '' && /Ficam com/.test(chg.firstTxt) && /profissional trocado/.test(chg.txt) && /novo profissional/.test(chg.prev), JSON.stringify(chg));
 
   // 3) Excluir o grupo Coordenador (com agendamentos) apaga os agendamentos junto
   await ev(`openRoomModal(findRoom("coord"))`);

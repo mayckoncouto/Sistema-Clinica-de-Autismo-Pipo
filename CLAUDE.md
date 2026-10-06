@@ -2299,3 +2299,18 @@ Pedido do usuário ("arrastar fica pesado em Todos e Todos"). Medido com volume 
   atributo na página toda.
 - Testes: `tests/run_grid_perf.js` (tabelas ficam, a célula editada muda) e
   `tests/run_fluidez.js` (mover troca poucas células e o resultado é igual a montar do zero).
+
+## Editar sala: coluna com agendamentos precisa ser movida; troca de profissional pergunta (2026-10-06)
+Decisões do usuário: mover obrigatório (não há mais "Apagar os agendamentos" ao tirar
+coluna); trocar o profissional da coluna pergunta; destino = qualquer coluna (ordem
+sugerida); só o Planner (a Agenda não é conferida). `plannerSeatRemovalFlow(rec, removed,
+newList, changedSeats)` (salvar de `openRoomModal` calcula `changedSeats` = colunas com o
+mesmo id e outro `professionalId`):
+- Coluna tirada (`kind "rm"`): select só com "Mover para …" (`rankFor`: mesmo profissional →
+  mesma sala → outras; destinos tirados de `newList`, sem as colunas tiradas/trocadas). Já
+  vem escolhido o primeiro destino em que tudo cabe (`initial`). Algum não cabe, ou não há
+  destino = `#srOk` desativado com o motivo. Precisa de incluir + excluir no Planner.
+- Profissional trocado (`kind "chg"`): padrão "Ficam com <novo>" (`keepConflicts`: fora do
+  horário do novo ou ele em outra coluna no mesmo horário → aviso e confirmação dupla) ou
+  "Mover para" colunas do profissional antigo.
+- Continua limpando órfãos (`plannerOrphans`). Teste `tests/run_room_seats.js`.

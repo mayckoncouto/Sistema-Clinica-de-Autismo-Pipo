@@ -392,6 +392,9 @@ tr.is-inactive td{color:var(--muted)}
 .sr-row .field{margin:6px 0 4px}
 .sr-prev{font-size:12.5px;color:var(--ink-2,var(--muted))}
 .sr-prev.sr-del{color:var(--danger)}
+.sr-prev.sr-ok{color:var(--accent)}
+.sr-prev.sr-warn{color:#8a5a00}
+.sr-tag{font-size:11.5px;color:var(--muted)}
 .confirm-overlay{z-index:60}
 .rb-opt{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;margin:4px 0 10px;cursor:pointer}
 .rb-opt input{margin-top:2px;width:16px;height:16px}
@@ -9190,9 +9193,14 @@ function openRoomModal(r, asGroup){
     // Colunas (profissionais) tiradas desta sala: pedir confirmação antes de salvar.
     var keptSeatIds = cleanTherapists.map(function(t){ return t.id; });
     var removedSeats = isNew ? [] : (r.therapists || []).filter(function(t){ return keptSeatIds.indexOf(t.id) === -1; });
-    // Colunas tiradas com agendamentos no Planner: apagar ou mover antes (nunca ficam
-    // escondidas). Junto, limpa agendamentos de colunas que já não existem.
-    plannerSeatRemovalFlow(rec, removedSeats, list).then(function(ok){
+    // Colunas que continuam mas trocaram de profissional.
+    var changedSeats = isNew ? [] : cleanTherapists.map(function(t){
+      var o = (r.therapists || []).filter(function(x){ return x.id === t.id; })[0];
+      return o && o.professionalId && o.professionalId !== t.professionalId ? {seat: t, oldProf: o.professionalId} : null;
+    }).filter(Boolean);
+    // Colunas tiradas com agendamentos no Planner: mover antes (obrigatório); coluna que
+    // trocou de profissional: perguntar. Junto, limpa agendamentos de colunas que já não existem.
+    plannerSeatRemovalFlow(rec, removedSeats, list, changedSeats).then(function(ok){
       if (ok) writeRooms(list).then(close);
     });
   });
@@ -9300,49 +9308,92 @@ function capFirst(t){ t = String(t || ""); return t.charAt(0).toUpperCase() + t.
 // Salvar sala/grupo com colunas tiradas: cada coluna com agendamentos escolhe apagar ou
 // mover para outra coluna (do mesmo tipo: sala → sala, grupo → grupo). Também limpa os
 // agendamentos de colunas que já não existem. Resolve true para seguir com o salvar.
-function plannerSeatRemovalFlow(rec, removedSeats, newList){
+// Editar sala/grupo × agendamentos do Planner (as 4 semanas).
+//  - Coluna TIRADA com agendamentos: é obrigatório MOVER todos para outra coluna antes
+//    (não há "apagar" por aqui). Sugere primeiro outra coluna do mesmo profissional, depois
+//    a mesma sala, depois as outras; se algum não couber, a coluna não sai.
+//  - Coluna que TROCOU de profissional com agendamentos: pergunta — ficam com o novo
+//    profissional (mostra quantos dariam conflito: dois lugares ou fora do horário) ou
+//    vão para outra coluna do profissional antigo.
+//  - Junto, limpa agendamentos de colunas que já não existem (só com "excluir" no Planner).
+// changedSeats = [{seat (coluna com o profissional novo), oldProf}].
+function plannerSeatRemovalFlow(rec, removedSeats, newList, changedSeats){
+  changedSeats = changedSeats || [];
   if (!db) return Promise.resolve(true);
   var canDel = can("agenda", "delete");
-  if (!removedSeats.length && !canDel) return Promise.resolve(true);
+  if (!removedSeats.length && !changedSeats.length && !canDel) return Promise.resolve(true);
   return plannerLoadDocs().catch(function(){ return null; }).then(function(all){
     if (!all){
-      if (!removedSeats.length) return true;
+      if (!removedSeats.length && !changedSeats.length) return true;
       showToast("Não foi possível ler o Planner. Tente de novo.", true); return false;
     }
     var bySeat = {};
-    removedSeats.forEach(function(t){ bySeat[t.id] = []; });
+    removedSeats.concat(changedSeats.map(function(c){ return c.seat; })).forEach(function(t){ bySeat[t.id] = []; });
     Object.keys(all).forEach(function(docId){
       Object.keys(all[docId] || {}).forEach(function(k){
         var p = k.split("|");
         if (p.length === 3 && p[1] === rec.id && bySeat[p[2]] && bkHasContent(all[docId][k])) bySeat[p[2]].push({docId: docId, k: k, time: p[0], rec: bkRec(all[docId][k])});
       });
     });
-    // Agendamentos de colunas que não existem mais (inclui as tiradas agora, ao final).
     var orph = canDel ? plannerOrphans(all, newList) : {changes: {}, n: 0};
-    var withBk = removedSeats.filter(function(t){ return bySeat[t.id].length; });
-    if (!withBk.length){
+    var rows = [];
+    removedSeats.forEach(function(t){ if (bySeat[t.id].length) rows.push({kind: "rm", seat: t, oldProf: t.professionalId}); });
+    changedSeats.forEach(function(c){ if (bySeat[c.seat.id].length) rows.push({kind: "chg", seat: c.seat, oldProf: c.oldProf}); });
+    if (!rows.length){
       if (!orph.n) return true;
       return Promise.resolve(applyBookingChanges(orph.changes, {noHistory: true})).then(function(){ return true; });
     }
-    if (!canDel){ showToast("Esta coluna tem agendamentos no Planner e seu nível não pode excluir agendamentos do Planner.", true); return false; }
-    var grp = isGroup(rec), canMove = can("agenda", "create");
-    var keptIds = (rec.therapists || []).map(function(t){ return t.id; });
+    var canMove = can("agenda", "create") && can("agenda", "delete");
+    if (rows.some(function(r){ return r.kind === "rm"; }) && !canMove){
+      showToast("Esta coluna tem agendamentos no Planner: é preciso movê-los antes, e seu nível não pode incluir e excluir agendamentos do Planner.", true); return false;
+    }
+    var grp = isGroup(rec), busy = {};
+    rows.forEach(function(r){ busy[r.seat.id] = true; });
+    // Colunas de destino: as do novo cadastro (newList), do mesmo tipo, ativas, com profissional.
     var targets = [];
-    plannerRooms().forEach(function(r){
+    newList.forEach(function(r){
       if (isGroup(r) !== grp || r.inativo) return;
-      var seats = r.id === rec.id ? (findRoom(r.id) || {therapists: []}).therapists.filter(function(t){ return keptIds.indexOf(t.id) !== -1; }) : (r.therapists || []);
-      seats.forEach(function(t){ if (t.professionalId) targets.push({v: r.id + "|" + t.id, room: r, seat: t, label: r.name + " — " + therapistDisplayName(t)}); });
+      (r.therapists || []).forEach(function(t){
+        if (!t.professionalId || (r.id === rec.id && busy[t.id])) return;
+        targets.push({v: r.id + "|" + t.id, room: r, seat: t, label: r.name + " — " + therapistDisplayName(t)});
+      });
     });
+    function rankFor(row){
+      return targets.filter(function(x){ return row.kind === "rm" || x.seat.professionalId === row.oldProf; }).map(function(x){
+        var sameProf = x.seat.professionalId === row.oldProf, sameRoom = x.room.id === rec.id;
+        return {x: x, score: (sameProf ? 0 : 2) + (sameRoom ? 0 : 1)};
+      }).sort(function(a, b){ return a.score - b.score || a.x.label.localeCompare(b.x.label, "pt-BR"); }).map(function(o){ return o.x; });
+    }
     var srcKeys = [];
-    withBk.forEach(function(t){ bySeat[t.id].forEach(function(it){ srcKeys.push(it.k); }); });
-    // Plano completo: o que cada coluna faz com os agendamentos dela.
+    rows.forEach(function(r){ bySeat[r.seat.id].forEach(function(it){ srcKeys.push(it.k); }); });
+    // Profissional de cada coluna no novo cadastro (para a conferência de "ficam com o novo").
+    var profOf = {};
+    newList.forEach(function(r){ (r.therapists || []).forEach(function(t){ profOf[r.id + "|" + t.id] = t.professionalId; }); });
+    function keepConflicts(row){
+      var n = 0, np = row.seat.professionalId;
+      bySeat[row.seat.id].forEach(function(it){
+        if (bookingKind(it.rec)) return;
+        var dayKey = it.docId.split("-")[0];
+        if (!seatAvailable(row.seat, dayKey, it.time)){ n++; return; }
+        var docB = all[it.docId] || {};
+        var other = Object.keys(docB).some(function(k){
+          var p = k.split("|");
+          return k !== it.k && p[0] === it.time && profOf[p[1] + "|" + p[2]] === np && !(p[1] === rec.id && p[2] === row.seat.id) && bkHasContent(docB[k]) && !bookingKind(bkRec(docB[k]));
+        });
+        if (other) n++;
+      });
+      return n;
+    }
+    // Plano: o que acontece com os agendamentos de cada coluna. choice[seatId] = "" (fica) ou destino.
     function plan(choice){
       var changes = {}, used = {}, res = {};
-      withBk.forEach(function(t){
-        var tg = choice[t.id] ? targets.filter(function(x){ return x.v === choice[t.id]; })[0] : null, moved = 0, left = 0;
-        bySeat[t.id].forEach(function(it){
+      rows.forEach(function(row){
+        var c = choice[row.seat.id];
+        if (row.kind === "chg" && !c){ res[row.seat.id] = {keep: true, conf: keepConflicts(row)}; return; }
+        var tg = targets.filter(function(x){ return x.v === c; })[0], moved = 0, left = 0;
+        bySeat[row.seat.id].forEach(function(it){
           (changes[it.docId] = changes[it.docId] || {})[it.k] = null;
-          if (!tg) return;
+          if (!tg){ left++; return; }
           var dayKey = it.docId.split("-")[0], tk = it.time + "|" + tg.v, uk = it.docId + "|" + tk;
           var dst = (state.scheduleDocs[it.docId] && state.scheduleDocs[it.docId].bookings) || {};
           var ok = !used[uk] && !bkHasContent(effectiveBooking(dst, tk, dayKey, it.time));
@@ -9351,51 +9402,92 @@ function plannerSeatRemovalFlow(rec, removedSeats, newList){
           }
           if (ok){ changes[it.docId][tk] = it.rec; used[uk] = true; moved++; } else left++;
         });
-        res[t.id] = {moved: moved, left: left};
+        res[row.seat.id] = {moved: moved, left: left};
       });
       return {changes: changes, res: res};
     }
+    // Destino sugerido: o primeiro da ordem em que tudo cabe (senão, o que mais acomoda).
+    var initial = {};
+    rows.forEach(function(row){
+      if (row.kind === "chg"){ initial[row.seat.id] = ""; return; }
+      var best = null, bestMoved = -1;
+      rankFor(row).some(function(x){
+        var c = Object.assign({}, initial); c[row.seat.id] = x.v;
+        var r = plan(c).res[row.seat.id];
+        if (r.moved > bestMoved){ best = x.v; bestMoved = r.moved; }
+        return r.left === 0;
+      });
+      initial[row.seat.id] = best || "";
+    });
     return new Promise(function(resolve){
       var host = document.getElementById("confirmHost");
       if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
-      var opts = function(t){
-        return '<option value="">Apagar os agendamentos</option>' + (canMove ? targets.map(function(x){ return '<option value="' + esc(x.v) + '">Mover para ' + esc(x.label) + '</option>'; }).join("") : "");
-      };
-      host.innerHTML = '<div class="overlay confirm-overlay" id="ovSeatRm" role="alertdialog" aria-modal="true" aria-labelledby="srTitle"><div class="modal" style="max-width:560px">' +
-        '<div class="modal-head"><div><h3 id="srTitle">' + (withBk.length === 1 ? "Coluna com agendamentos" : "Colunas com agendamentos") + '</h3></div></div>' +
-        '<div class="modal-body"><div class="confirm-msg">Antes de tirar ' + (withBk.length === 1 ? "esta coluna" : "estas colunas") + ' d' + (grp ? "o grupo" : "a sala") + ' <b>' + esc(rec.name) + '</b>, escolha o que fazer com os agendamentos do Planner (as 4 semanas).</div>' +
-          withBk.map(function(t){
-            var n = bySeat[t.id].length;
-            return '<div class="sr-row"><div class="sr-name"><b>' + esc(therapistDisplayName(t)) + '</b> · ' + n + ' agendamento' + (n === 1 ? '' : 's') + '</div>' +
-              '<div class="field"><select data-sr-seat="' + esc(t.id) + '" aria-label="O que fazer com os agendamentos de ' + esc(therapistDisplayName(t)) + '">' + opts(t) + '</select></div>' +
-              '<div class="sr-prev" data-sr-prev="' + esc(t.id) + '"></div></div>';
+      function opts(row){
+        var L = rankFor(row), sel = initial[row.seat.id];
+        var first = row.kind === "chg" ? '<option value="">Ficam com ' + esc(professionalName(row.seat.professionalId) || "o novo profissional") + '</option>' : (L.length ? '' : '<option value="">Nenhuma coluna disponível</option>');
+        return first + (row.kind === "rm" || canMove ? L.map(function(x){ return '<option value="' + esc(x.v) + '"' + (x.v === sel ? ' selected' : '') + '>Mover para ' + esc(x.label) + '</option>'; }).join("") : "");
+      }
+      var nRm = rows.filter(function(r){ return r.kind === "rm"; }).length;
+      host.innerHTML = '<div class="overlay confirm-overlay" id="ovSeatRm" role="alertdialog" aria-modal="true" aria-labelledby="srTitle"><div class="modal" style="max-width:580px">' +
+        '<div class="modal-head"><div><h3 id="srTitle">' + (rows.length === 1 ? "Coluna com agendamentos" : "Colunas com agendamentos") + '</h3></div></div>' +
+        '<div class="modal-body"><div class="confirm-msg">' +
+          (nRm ? 'Antes de tirar ' + (nRm === 1 ? 'a coluna' : 'as colunas') + ' d' + (grp ? 'o grupo' : 'a sala') + ' <b>' + esc(rec.name) + '</b>, mova os agendamentos do Planner (as 4 semanas) para outra coluna.' : '') +
+          (rows.length > nRm ? (nRm ? '<br>' : '') + 'Coluna com outro profissional: escolha se os agendamentos ficam com ele ou vão para outra coluna do profissional anterior.' : '') +
+        '</div>' +
+          rows.map(function(row){
+            var n = bySeat[row.seat.id].length, who = row.kind === "rm" ? therapistDisplayName(row.seat) : (professionalName(row.oldProf) + " → " + professionalName(row.seat.professionalId));
+            return '<div class="sr-row"><div class="sr-name"><b>' + esc(who) + '</b> · ' + n + ' agendamento' + (n === 1 ? '' : 's') + (row.kind === "rm" ? ' · <span class="sr-tag">coluna tirada</span>' : ' · <span class="sr-tag">profissional trocado</span>') + '</div>' +
+              '<div class="field"><select data-sr-seat="' + esc(row.seat.id) + '" aria-label="O que fazer com os agendamentos de ' + esc(who) + '">' + opts(row) + '</select></div>' +
+              '<div class="sr-prev" data-sr-prev="' + esc(row.seat.id) + '"></div></div>';
           }).join("") +
         '</div>' +
-        '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="srCancel">Cancelar</button><button class="btn danger-solid" id="srOk">Aplicar e salvar</button></div>' +
+        '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="srCancel">Cancelar</button><button class="btn primary" id="srOk">Aplicar e salvar</button></div>' +
       '</div></div>';
       function choice(){ var c = {}; host.querySelectorAll("select[data-sr-seat]").forEach(function(s){ c[s.getAttribute("data-sr-seat")] = s.value; }); return c; }
+      var last = null;
       function refresh(){
-        var c = choice(), pl = plan(c);
-        withBk.forEach(function(t){
-          var el = host.querySelector('[data-sr-prev="' + t.id + '"]'), r = pl.res[t.id], n = bySeat[t.id].length;
+        var c = choice(), pl = plan(c), blocked = false;
+        rows.forEach(function(row){
+          var el = host.querySelector('[data-sr-prev="' + row.seat.id + '"]'), r = pl.res[row.seat.id], n = bySeat[row.seat.id].length;
           if (!el) return;
-          if (!c[t.id]){ el.textContent = (n === 1 ? "O agendamento será apagado." : "Os " + n + " agendamentos serão apagados."); el.className = "sr-prev sr-del"; return; }
-          el.textContent = r.moved + " ser" + (r.moved === 1 ? "á movido" : "ão movidos") + (r.left ? " · " + r.left + " não cabe" + (r.left === 1 ? "" : "m") + " (horário ocupado, conflito ou fora do horário do profissional) e ser" + (r.left === 1 ? "á apagado" : "ão apagados") : "") + ".";
-          el.className = "sr-prev" + (r.left ? " sr-del" : "");
+          if (r.keep){
+            el.textContent = r.conf ? r.conf + (r.conf === 1 ? " agendamento fica" : " agendamentos ficam") + " em conflito com o novo profissional (em dois lugares no mesmo horário ou fora do horário de trabalho dele)." : "Todos ficam com o novo profissional, sem conflito.";
+            el.className = "sr-prev" + (r.conf ? " sr-warn" : " sr-ok"); return;
+          }
+          if (!c[row.seat.id]){ el.textContent = "Não há outra coluna disponível para receber os agendamentos. Mova-os no Planner antes de tirar a coluna."; el.className = "sr-prev sr-del"; blocked = true; return; }
+          if (r.left){
+            el.textContent = r.moved + " cabe" + (r.moved === 1 ? "" : "m") + " nesta coluna, mas " + r.left + " não (horário ocupado, conflito ou fora do horário do profissional). Escolha outra coluna ou mova esses agendamentos no Planner antes.";
+            el.className = "sr-prev sr-del"; blocked = true; return;
+          }
+          el.textContent = (n === 1 ? "O agendamento será movido" : "Os " + n + " agendamentos serão movidos") + ", nos mesmos dias e horários.";
+          el.className = "sr-prev sr-ok";
         });
+        host.querySelector("#srOk").disabled = blocked;
+        last = pl;
+        return pl;
       }
       function done(v){ document.removeEventListener("keydown", onKey, true); host.innerHTML = ""; resolve(v); }
-      function onKey(e){ if (e.key === "Escape"){ e.stopPropagation(); done(false); } }
+      function onKey(e){ if (e.key === "Escape" && !document.querySelector("#dpPop")){ e.stopPropagation(); done(false); } }
       document.addEventListener("keydown", onKey, true);
       host.querySelectorAll("select[data-sr-seat]").forEach(function(s){ s.addEventListener("change", refresh); });
       document.getElementById("srCancel").addEventListener("click", function(){ done(false); });
       document.getElementById("srOk").addEventListener("click", function(){
-        var pl = plan(choice()), changes = mergeChanges(orph.changes, pl.changes);
-        Object.keys(pl.changes).forEach(function(d){ Object.assign(changes[d], pl.changes[d]); }); // movidos vencem a limpeza
-        var btn = this; btn.disabled = true;
-        Promise.resolve(applyBookingChanges(changes, {noHistory: true})).then(function(r){
-          if (r === false){ btn.disabled = false; return; }
-          done(true);
+        var pl = refresh(), btn = this;
+        if (btn.disabled) return;
+        var conf = rows.reduce(function(s, row){ var r = pl.res[row.seat.id]; return s + (r.keep ? r.conf : 0); }, 0);
+        var go = !conf ? Promise.resolve(true) : confirmDialog({title: "Agendamentos em conflito",
+          message: "<b>" + conf + "</b> " + (conf === 1 ? "agendamento fica" : "agendamentos ficam") + " em conflito com o novo profissional (dois lugares no mesmo horário ou fora do horário de trabalho dele).<br>Salvar assim mesmo? Depois, ajuste esses horários no Planner.",
+          confirmLabel: "Salvar assim mesmo"});
+        go.then(function(ok){
+          if (!ok) return;
+          var changes = mergeChanges(orph.changes, pl.changes);
+          Object.keys(pl.changes).forEach(function(d){ Object.assign(changes[d], pl.changes[d]); }); // movidos vencem a limpeza
+          if (!Object.keys(changes).some(function(d){ return Object.keys(changes[d]).length; })){ done(true); return; }
+          btn.disabled = true;
+          Promise.resolve(applyBookingChanges(changes, {noHistory: true})).then(function(r){
+            if (r === false){ btn.disabled = false; return; }
+            done(true);
+          });
         });
       });
       refresh();
@@ -15294,7 +15386,8 @@ var HELP_TOPICS = [
     rules: [
       "Sala <b>com \"ABA\" no nome</b>: paciente que não faz ABA ocupa só o horário do mesmo profissional. Sala <b>sem \"ABA\"</b>: ocupa a sala toda.",
       "As regras de quem não faz ABA valem só para o serviço <b>Sessão</b>: atendimento de outro serviço (avaliação, triagem, orientação…) não ocupa o horário e pode ser marcado no horário listrado por essa regra.",
-      "Tirar uma coluna que tem agendamentos no Planner abre a janela <b>Colunas com agendamentos</b>: para cada coluna, escolha <b>Apagar os agendamentos</b> ou <b>Mover para</b> outra coluna (sala → sala, grupo → grupo). Os que não cabem no destino (horário ocupado, conflito ou fora do horário do profissional) são apagados; a janela mostra quantos antes de aplicar.",
+      "Tirar uma coluna que tem agendamentos no Planner abre a janela <b>Colunas com agendamentos</b>: os agendamentos precisam ser <b>movidos</b> para outra coluna (sala → sala, grupo → grupo) antes de a coluna sair. O sistema já sugere a coluna: primeiro outra do mesmo profissional, depois a mesma sala, depois as outras. Se algum agendamento não cabe no destino (horário ocupado, conflito ou fora do horário do profissional), escolha outra coluna ou mova esses agendamentos no Planner antes; enquanto isso a coluna não sai.",
+      "Trocar o profissional de uma coluna que tem agendamentos também abre a janela: os agendamentos <b>ficam com o novo profissional</b> (a janela mostra quantos ficariam em conflito — em dois lugares no mesmo horário ou fora do horário de trabalho dele — e pede confirmação) ou vão para <b>outra coluna do profissional anterior</b>.",
       "Excluir ou inativar uma sala/grupo com agendamentos no Planner avisa quantos são (inclusive os de grupos que marcam a sala) e apaga todos junto. A Agenda (datas reais) não é mexida: sala com atendimentos na Agenda é inativada, não excluída.",
       "Ao salvar uma sala ou grupo, agendamentos gravados em colunas que não existem mais são apagados.",
       "Apagar agendamentos precisa da permissão de excluir no <b>Planner</b>; mover, também a de incluir. Essas ações não entram no desfazer."
