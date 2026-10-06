@@ -2137,3 +2137,44 @@ Medido com volume real fictício (110 pacientes, 15 salas/40 colunas, 75% ocupad
   barra, legenda, nota e, na Agenda, a lista lateral), pede tela cheia ao navegador e mostra
   `#fullExit` "Sair da tela cheia". Esc (do navegador via `fullscreenchange`, ou do teclado
   sem janela/menu/copiar aberto) volta. Teste `tests/run_fluidez.js` (35 arquivos).
+
+## Plano terapêutico por Habilidade (2026-10-06, substitui os quadros por especialidade)
+Decisões do usuário: quadros por **Habilidade**; cada objetivo com as **especialidades que
+podem trabalhá-lo** (seleção múltipla); Situação ÚNICA (vale a última evolução, de qualquer
+especialidade); profissional inclui/edita objetivos (a principal dele vem marcada e não sai;
+pode marcar outras como apoio); planos do formato antigo EXCLUÍDOS; todas as sugestões
+aprovadas (especialidades sugeridas na Habilidade, conferência de cobertura, filtro "Só as
+minhas especialidades", contador + quadro recolhível, outras especialidades e últimas
+avaliações nos Detalhes/evolução, relatório "Evolução por habilidade", Nº por habilidade).
+- Formato: `sections = [{areaId, objectives: [{id, objetivo, criterio, specIds, prazo, scaleId,
+  levelId, levelEm, status, statusEm, criadoEm}]}]` (sem `specId` no quadro, sem `areaId` no
+  objetivo). `planSectionsView(plan)` ignora quadro sem `areaId`. Apoio: `planObjSpecs`,
+  `planObjById`, `planProfWorks(o, áreas)` (alguma especialidade do objetivo está nas
+  áreas = principal + complementares), `planWorkSpec(o, prof)` (principal se marcada, senão a
+  1ª em comum — vai em `plan_goals[].specId`), `planSkillSpecs(areaId)`, `planSpecSiglas/Names`,
+  `planLastBySpec(records)` + `planLastHtml` (última avaliação por especialidade).
+- Janela (`openPlanModal`): `#plAddArea` "Incluir habilidade…" (cria o quadro e o 1º objetivo),
+  quadro `.pl-area[data-area]` com `[data-area-toggle]` (recolhe; contador objetivos · ativos ·
+  atingidos), colunas Nº | Objetivo | Critério | **Especialidades** (`[data-specs]` → lista
+  flutuante `.pl-specs-pop`: "Do tratamento" primeiro, "Outras especialidades (apoio)"; a
+  principal do profissional fica marcada e travada) | Prazo | Escala | Situação | Status.
+  Objetivo novo já vem com as sugeridas da habilidade que estão no tratamento.
+  Sem especialidade não salva. `#plCover` (cobertura) e `#plOnlyMine` (só para quem é
+  profissional). Regras do profissional: `canFull(o)` (objetivo com a principal dele, ou novo),
+  `canSt(o)` (área complementar: situação/status), `canRm(o)` (só os ainda não gravados).
+- Banco de objetivos: `specIds` (vazio = todas; itens antigos com `specId` lidos por
+  `goalSpecIds`), caixas `#glSpecs` (`specCheckGridHtml`/`specCheckGridWire`), mesmo texto não
+  repete na mesma habilidade. `goalMatches(q, areaId, specIds)`: mesma habilidade do quadro.
+- Habilidades: campo "Especialidades sugeridas" (`#regHabSpecs` → `specIds`), coluna na lista.
+- Evolução: `planEvoGoalsFor(pid, profId, picked, records)` por habilidade; Detalhes do
+  Agendamento: `agdGoalsData(row, records)` agrupado por habilidade (`.ag-obj-area`), linha com
+  "Especialidades: … (também …)" e últimas avaliações; `agdGoalsFill` carrega planos + evoluções.
+- Gráficos por habilidade × escala (`ch.areaId`); a dica do ponto traz a sigla da especialidade.
+- Relatório **Evolução por habilidade** (`RP_TYPES` id `evolucao-habilidade`, lê `PLAN.rows`;
+  `rpGenerate` espera `planLoadAll`): por habilidade e por paciente × habilidade (objetivos,
+  ativos, atingidos, suspensos, %, atingidos no período por `statusEm`); filtro de profissional =
+  `planProfWorks`. Permissão `relatorios.evolucao-habilidade` (REPORTS em `js/usuarios.js`).
+- Banco: migração `supabase/2026-10-06g-plano-por-habilidade.sql` (exclui planos com quadro
+  `specId` e esvazia `plan_goals` que apontavam para eles; `clinical_records_plan_goals` procura
+  o objetivo em qualquer quadro; `plan_prof_update` com as regras novas). Testada num Postgres de
+  teste (PGlite) antes de publicar. Teste `tests/run_plano.js` reescrito (55 checagens).

@@ -86,7 +86,8 @@
     { key: "bloqueios", label: "Bloqueios, reuniões e treinamentos" },
     { key: "sem-atendimento", label: "Pacientes sem atendimento" },
     { key: "tratamentos", label: "Tratamentos novos e renegociados" },
-    { key: "financeiro", label: "Relatório financeiro" }
+    { key: "financeiro", label: "Relatório financeiro" },
+    { key: "evolucao-habilidade", label: "Evolução por habilidade" }
   ];
   function confirmBox(opts) { return window.pipoConfirm ? window.pipoConfirm(opts) : Promise.resolve(window.confirm(opts.title)); }
   function roleById(id) { return roles.filter(function (r) { return r.id === id; })[0] || null; }

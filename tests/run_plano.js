@@ -1,5 +1,5 @@
 // Plano terapêutico: menu Prontuário ▾, cadastros de Escalas e Habilidades,
-// quadros por especialidade vindos do tratamento, objetivos com ▲▼, último nível
+// quadros por habilidade com as especialidades de cada objetivo, objetivos com ▲▼, último nível
 // da escala = Atingido, revisão com nova versão, modo do profissional e áreas
 // complementares no colaborador. Sem sistema online os planos ficam na memória.
 // Dados fictícios.
@@ -43,44 +43,79 @@ const path = require('path');
   const nAreas = await page.$$eval('#reg-habilidades-host tbody tr', (r) => r.length);
   console.log('8 skill areas pre-registered?', nAreas === 8, nAreas);
 
-  // Plano novo para Bruno Verde (tratamento com Psicologia e Fonoaudiologia).
+  // Habilidades: "Especialidades sugeridas" (Comunicação → Fonoaudiologia).
+  await page.locator('#reg-habilidades-host tbody tr', { hasText: 'Comunicação' }).click(); await page.waitForSelector('#ovReg');
+  const habName = await page.$eval('#regName', (e) => e.value);
+  await page.$eval('#regHabSpecs input[value="fono"]', (e) => { e.checked = true; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.click('#regSave'); await page.waitForTimeout(300);
+  const habSaved = await ev('JSON.stringify(skillAreasList().filter(function(a){ return a.id === "comunicacao"; })[0].specIds)');
+  const habCol = await page.locator('#reg-habilidades-host tbody tr', { hasText: 'Comunicação' }).evaluate((r) => r.cells[1].textContent);
+  console.log('skill saves the suggested specialties and shows them in the list?', habName === 'Comunicação' && habSaved === '["fono"]' && /Fonoaudiologia/.test(habCol), habSaved, habCol);
+
+  // Plano novo para Bruno Verde (tratamento com Psicologia e Fonoaudiologia): quadros por habilidade.
   await page.$eval('#mainTabs button[data-tab=planos]', (b) => b.click()); await page.waitForTimeout(300);
   await page.click('#planAdd'); await page.waitForSelector('#ovPlanPick');
   await setv('#ppPat', 'bruno-verde');
   await page.click('#ppOk'); await page.waitForSelector('#ovPlan');
-  const specs = await page.$$eval('#plSecs .pl-spec', (r) => r.map((x) => x.getAttribute('data-spec')));
-  console.log('quadros come from the treatment (psico, fono)?', specs.join(',') === 'psico,fono', specs.join(','));
+  const empty0 = await page.$$eval('#plSecs .pl-area', (r) => r.length);
   const rev = await page.$eval('#plReview', (e) => e.value);
   const exp = await ev('trAddMonths(trTodayIso(), 6)');
-  console.log('review date = plan date + 6 months?', rev === exp, rev);
-  // 3 objetivos em Fonoaudiologia
+  console.log('new plan starts without skills and review = plan date + 6 months?', empty0 === 0 && rev === exp, empty0, rev);
+  // Incluir habilidade: o quadro aparece com o 1º objetivo; Fonoaudiologia vem marcada (sugerida).
+  await setv('#plAddArea', 'comunicacao'); await page.waitForTimeout(100);
+  const Q = '#plSecs [data-area="comunicacao"]';
   for (let k = 0; k < 3; k++){
-    await page.click('#plSecs [data-spec="fono"] [data-add-obj]');
-    const row = '#plSecs [data-spec="fono"] tbody tr:last-child';
-    await page.fill(row + ' textarea[data-f="objetivo"]', 'Objetivo ' + (k + 1));
-    await setv(row + ' select[data-f="areaId"]', 'comunicacao');
+    if (k) await page.click(Q + ' [data-add-obj]');
+    await page.fill(Q + ' tbody tr:last-child textarea[data-f="objetivo"]', 'Objetivo ' + (k + 1));
+    await page.keyboard.press('Escape');
   }
-  const nums = await page.$$eval('#plSecs [data-spec="fono"] .pl-num b', (r) => r.map((x) => x.textContent).join(','));
-  console.log('Nº is automatic (1,2,3)?', nums === '1,2,3', nums);
-  // ▼ no 1º: troca de lugar com o 2º, número continua pela posição
-  await page.click('#plSecs [data-spec="fono"] tbody tr:nth-child(1) [data-mv="1"]');
-  const order = await page.$$eval('#plSecs [data-spec="fono"] textarea[data-f="objetivo"]', (r) => r.map((x) => x.value).join('|'));
+  const specT = await page.$$eval(Q + ' [data-specs]', (r) => r.map((x) => x.title));
+  console.log('new objectives come with the suggested specialty (Fonoaudiologia)?', specT.length === 3 && specT.every((t) => t === 'Fonoaudiologia'), JSON.stringify(specT));
+  const head = await page.$eval('#plSecs .pl-tbl thead', (e) => e.textContent);
+  console.log('table has Especialidades and no Habilidade column?', /Especialidades/.test(head) && !/Habilidade/.test(head), head);
+  const cover1 = await page.$eval('#plCover', (e) => e.textContent);
+  console.log('coverage warns that Psicologia (in the treatment) has no active objective?', /sem objetivo ativo:\s*Psicologia/.test(cover1), cover1);
+  const nums = await page.$$eval(Q + ' .pl-num b', (r) => r.map((x) => x.textContent).join(','));
+  console.log('Nº is automatic inside the skill (1,2,3)?', nums === '1,2,3', nums);
+  await page.click(Q + ' tbody tr:nth-child(1) [data-mv="1"]');
+  const order = await page.$$eval(Q + ' textarea[data-f="objetivo"]', (r) => r.map((x) => x.value).join('|'));
   console.log('▼ moves the row and renumbers?', order === 'Objetivo 2|Objetivo 1|Objetivo 3', order);
-  // último nível da escala = Atingido
-  await setv('#plSecs [data-spec="fono"] tbody tr:nth-child(1) select[data-f="levelId"]', '5');
-  const st1 = await page.$eval('#plSecs [data-spec="fono"] tbody tr:nth-child(1) select[data-f="status"]', (e) => e.value);
+  // Especialidades do 2º objetivo: marca também Psicologia.
+  await page.click(Q + ' tbody tr:nth-child(2) [data-specs]'); await page.waitForSelector('.pl-specs-pop:not([hidden])');
+  const popTxt = await page.$eval('.pl-specs-pop', (e) => e.textContent);
+  await page.$eval('.pl-specs-pop input[value="psico"]', (e) => { e.checked = true; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.keyboard.press('Escape');
+  const t2 = await page.$eval(Q + ' tbody tr:nth-child(2) [data-specs]', (e) => e.title);
+  const cover2 = await page.$eval('#plCover', (e) => e.textContent);
+  console.log('specialties picker (treatment first) adds Psicologia; coverage becomes ok?', /Do tratamento/.test(popTxt) && t2 === 'Fonoaudiologia, Psicologia' && /Todas as especialidades do tratamento/.test(cover2), t2, cover2);
+  // último nível da escala = Atingido; escala ABA troca os níveis
+  await setv(Q + ' tbody tr:nth-child(1) select[data-f="levelId"]', '5');
+  const st1 = await page.$eval(Q + ' tbody tr:nth-child(1) select[data-f="status"]', (e) => e.value);
   console.log('last level of the scale sets status Atingido?', st1 === 'atingido', st1);
-  // escala ABA no 2º: níveis trocam; "Adquirida" = atingido
-  await setv('#plSecs [data-spec="fono"] tbody tr:nth-child(2) select[data-f="scaleId"]', 'aba');
-  const abaOpts = await page.$$eval('#plSecs [data-spec="fono"] tbody tr:nth-child(2) select[data-f="levelId"] option', (r) => r.map((x) => x.value).join(','));
+  await setv(Q + ' tbody tr:nth-child(2) select[data-f="scaleId"]', 'aba');
+  const abaOpts = await page.$$eval(Q + ' tbody tr:nth-child(2) select[data-f="levelId"] option', (r) => r.map((x) => x.value).join(','));
   console.log('Situação follows the chosen scale (ABA levels)?', abaOpts === 'nao-adquirida,parcial,adquirida', abaOpts);
+  // Sem especialidade não salva.
+  await page.click(Q + ' [data-add-obj]');
+  await page.fill(Q + ' tbody tr:last-child textarea[data-f="objetivo"]', 'Sem especialidade');
+  await page.keyboard.press('Escape');
+  await page.click(Q + ' tbody tr:last-child [data-specs]'); await page.waitForSelector('.pl-specs-pop:not([hidden])');
+  await page.$eval('.pl-specs-pop input[value="fono"]', (e) => { e.checked = false; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { document.getElementById('toastHost').innerHTML = ''; });
+  await page.click('#plSave'); await page.waitForTimeout(200);
+  const tNoSpec = await page.innerText('#toastHost');
+  console.log('objective without specialties is refused?', /Escolha as especialidades do objetivo nº 4 de Comunicação/.test(tNoSpec) && !!(await page.$('#ovPlan')), tNoSpec);
+  await page.click(Q + ' tbody tr:last-child [data-rm-obj]'); await page.waitForTimeout(100);
+  if (await page.$('#cfOk')) await page.click('#cfOk');
   await page.fill('#plSummary', 'Resumo fictício do quadro clínico.');
   await page.click('#plSave'); await page.waitForTimeout(300);
-  const saved = await ev('JSON.stringify(planVigente("bruno-verde"))');
-  const sp = JSON.parse(saved);
-  console.log('plan saved with only the sections that have objectives?', sp && sp.sections.length === 1 && sp.sections[0].specId === 'fono' && sp.sections[0].objectives.length === 3 && sp.summary.indexOf('fictício') !== -1);
-  const listRow = await page.$$eval('#planListHost tbody tr', (r) => r.map((x) => x.cells[0].textContent + '|' + x.cells[4].textContent));
-  console.log('list shows the plan with objective counts?', listRow.length === 1 && listRow[0].indexOf('Bruno Verde|2 ativos · 1 atingido') === 0, JSON.stringify(listRow));
+  const sp = JSON.parse(await ev('JSON.stringify(planVigente("bruno-verde"))'));
+  const s0 = sp && sp.sections[0];
+  console.log('plan saved by skill with the specialties of each objective?', sp && sp.sections.length === 1 && s0.areaId === 'comunicacao' && s0.objectives.length === 3 &&
+    JSON.stringify(s0.objectives[1].specIds) === '["fono","psico"]' && !('specId' in s0) && sp.summary.indexOf('fictício') !== -1, JSON.stringify(s0 && s0.objectives.map((o) => o.specIds)));
+  const listRow = await page.$$eval('#planListHost tbody tr', (r) => r.map((x) => x.cells[0].textContent + '|' + x.cells[4].textContent + '|' + x.cells[5].textContent));
+  console.log('list shows objective counts and the specialties used?', listRow.length === 1 && listRow[0].indexOf('Bruno Verde|2 ativos · 1 atingido|Fonoaudiologia, Psicologia') === 0, JSON.stringify(listRow));
 
   // Revisão vencida aparece na coluna Revisão.
   await ev('(function(){ var r = planVigente("bruno-verde"); r.review_date = "2020-01-01"; renderPlansTab(); })()');
@@ -95,24 +130,44 @@ const path = require('path');
   console.log('Revisar creates v2 vigente and keeps v1 encerrado?', vers === '["2:vigente","1:encerrado"]', vers);
   const verBtn = await page.$$eval('#ovPlan [data-ver]', (r) => r.length);
   console.log('previous version listed in the window?', verBtn === 1);
+  // Quadro recolhível.
+  await page.click('#plSecs [data-area="comunicacao"] [data-area-toggle]');
+  const colRows = await page.$$eval('#plSecs [data-area="comunicacao"] tr[data-obj]', (r) => r.length);
+  const colCount = await page.$eval('#plSecs [data-area="comunicacao"] .pl-spec-count', (e) => e.textContent);
+  console.log('skill box collapses and keeps the counter?', colRows === 0 && /3 objetivos · 2 ativos · 1 atingido/.test(colCount), colRows, colCount);
   await page.click('#plCancel');
 
   // Modo do profissional: Bia (Fonoaudiologia, complementar Psicologia).
-  await ev('(function(){ state.professionals = state.professionals.map(function(p){ return p.id === "bia-terapeuta" ? Object.assign({}, p, {complementares: ["psico"]}) : p; }); window.__planProfId = "bia-terapeuta"; })()');
+  await ev(`(function(){ var r = planVigente("bruno-verde"), o = r.sections[0].objectives;
+    o.push({id: "psonly", objetivo: "Só psicologia", criterio: "", specIds: ["psico"], prazo: 3, scaleId: "likert", levelId: "0", status: "ativo"});
+    o.push({id: "toonly", objetivo: "Só TO", criterio: "", specIds: ["to"], prazo: 3, scaleId: "likert", levelId: "0", status: "ativo"});
+    state.professionals = state.professionals.map(function(p){ return p.id === "bia-terapeuta" ? Object.assign({}, p, {complementares: ["psico"]}) : p; }); window.__planProfId = "bia-terapeuta"; })()`);
   await ev('openPlanFor("bruno-verde")'); await page.waitForSelector('#ovPlan');
   const profUi = await page.evaluate(() => {
-    const f = document.querySelector('#plSecs [data-spec="fono"] tbody tr');
+    const row = (id) => document.querySelector('#plSecs tr[data-obj="' + id + '"]');
+    const fonoRow = document.querySelector('#plSecs [data-area="comunicacao"] tbody tr');
     return {
-      objDisabled: f.querySelector('textarea[data-f="objetivo"]').disabled,
-      levelEnabled: !f.querySelector('select[data-f="levelId"]').disabled,
+      fonoEditable: !fonoRow.querySelector('textarea[data-f="objetivo"]').disabled,
+      psOnlyLocked: row('psonly').querySelector('textarea[data-f="objetivo"]').disabled && !row('psonly').querySelector('select[data-f="levelId"]').disabled,
+      toLocked: row('toonly').querySelector('select[data-f="levelId"]').disabled,
       noMove: !document.querySelector('#plSecs [data-mv]'),
-      addFono: !!document.querySelector('#plSecs [data-spec="fono"] [data-add-obj]'),
-      addPsico: !!document.querySelector('#plSecs [data-spec="psico"] [data-add-obj]'),
+      noRmSaved: !fonoRow.querySelector('[data-rm-obj]'),
+      add: !!document.querySelector('#plSecs [data-add-obj]'),
       summaryDisabled: document.getElementById('plSummary').disabled
     };
   });
-  console.log('professional: only Situação/Status editable, no ▲▼, add only in the main specialty?',
-    profUi.objDisabled && profUi.levelEnabled && profUi.noMove && profUi.addFono && !profUi.addPsico && profUi.summaryDisabled, JSON.stringify(profUi));
+  console.log('professional: edits objectives of the main specialty, only Situação/Status in complementary ones, nothing in others, no ▲▼, can add?',
+    profUi.fonoEditable && profUi.psOnlyLocked && profUi.toLocked && profUi.noMove && profUi.noRmSaved && profUi.add && profUi.summaryDisabled, JSON.stringify(profUi));
+  await page.click('#plSecs [data-area="comunicacao"] [data-add-obj]');
+  await page.click('#plSecs [data-area="comunicacao"] tbody tr:last-child [data-specs]'); await page.waitForSelector('.pl-specs-pop:not([hidden])');
+  const lockFono = await page.$eval('.pl-specs-pop input[value="fono"]', (e) => e.checked && e.disabled);
+  await page.$eval('.pl-specs-pop input[value="psico"]', (e) => { e.checked = true; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.keyboard.press('Escape');
+  const newT = await page.$eval('#plSecs [data-area="comunicacao"] tbody tr:last-child [data-specs]', (e) => e.title);
+  console.log('new objective by the professional: main specialty locked, support specialties can be added?', lockFono && newT === 'Fonoaudiologia, Psicologia', newT);
+  await page.$eval('#plOnlyMine', (e) => { e.checked = true; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  const mineRows = await page.$$eval('#plSecs tr[data-obj]', (r) => r.map((x) => x.getAttribute('data-obj')));
+  console.log('"Só as minhas especialidades" hides objectives she does not work (Só TO)?', mineRows.indexOf('toonly') === -1 && mineRows.indexOf('psonly') !== -1, JSON.stringify(mineRows));
   await page.click('#plCancel');
   await ev('window.__planProfId = null');
 
@@ -141,73 +196,80 @@ const path = require('path');
   const notSaved = await ev('!((state.scheduleDocs["seg-1"] || {}).bookings || {})["09:20|r1|r1-t1"]');
   console.log('cancel keeps the slot empty?', notSaved);
 
-  // Banco de objetivos: cadastro, sugestão no campo Objetivo e "+ Salvar no Banco".
+  // Banco de objetivos: várias especialidades, sugestão no campo Objetivo e "+ Salvar no Banco".
   await page.$eval('#mainTabs button[data-tab=objetivos]', (b) => b.click()); await page.waitForTimeout(200);
   await page.click('#reg-objetivos-add'); await page.waitForSelector('#ovGoal');
   await page.fill('#glName', 'Nomear 10 objetos do cotidiano');
-  await setv('#glArea', 'comunicacao'); await setv('#glSpec', 'fono');
+  await setv('#glArea', 'comunicacao');
+  await page.$eval('#glSpecs input[value="fono"]', (e) => { e.checked = true; e.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.fill('#glCrit', '8 de 10 tentativas');
   await setv('#glScale', 'aba');
   await page.click('#glSave'); await page.waitForTimeout(300);
-  const bankRows = await page.$$eval('#reg-objetivos-host tbody tr', (r) => r.map((x) => x.cells[0].textContent.trim()));
-  console.log('goal saved in the bank?', bankRows.join() === 'Nomear 10 objetos do cotidiano', JSON.stringify(bankRows));
+  const bankRows = await page.$$eval('#reg-objetivos-host tbody tr', (r) => r.map((x) => x.cells[0].textContent.trim() + '|' + x.cells[2].textContent.trim()));
+  const bankRec = await ev('JSON.stringify(goalBankList()[0].specIds)');
+  console.log('goal saved in the bank with its specialties?', bankRows.join() === 'Nomear 10 objetos do cotidiano|Fonoaudiologia' && bankRec === '["fono"]', JSON.stringify(bankRows), bankRec);
   await ev('openPlanFor("bruno-verde")'); await page.waitForSelector('#ovPlan');
-  await page.click('#plSecs [data-spec="fono"] [data-add-obj]');
-  const lastFono = '#plSecs [data-spec="fono"] tbody tr:last-child';
-  await page.type(lastFono + ' textarea[data-f="objetivo"]', 'nomear obj');
+  const Q2 = '#plSecs [data-area="comunicacao"]';
+  await page.click(Q2 + ' [data-add-obj]');
+  const lastRow = Q2 + ' tbody tr:last-child';
+  await page.type(lastRow + ' textarea[data-f="objetivo"]', 'nomear obj');
   await page.waitForSelector('.pl-goal-pop:not([hidden]) [data-goal]');
   const sugg = await page.$$eval('.pl-goal-pop [data-goal]', (r) => r.map((x) => x.textContent));
   console.log('typing suggests the bank goal (no accents/case)?', sugg.length === 1 && /Nomear 10 objetos/.test(sugg[0]), JSON.stringify(sugg));
   await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); await page.waitForTimeout(200);
-  const applied = await page.evaluate((sel) => { const tr = document.querySelector(sel); return {o: tr.querySelector('[data-f=objetivo]').value, a: tr.querySelector('select[data-f=areaId]').value, c: tr.querySelector('[data-f=criterio]').value, s: tr.querySelector('select[data-f=scaleId]').value}; }, lastFono);
-  console.log('choosing fills objective, area, criterion and scale?', applied.o === 'Nomear 10 objetos do cotidiano' && applied.a === 'comunicacao' && applied.c === '8 de 10 tentativas' && applied.s === 'aba', JSON.stringify(applied));
-  const psicoSugg = await ev('goalMatches("nomear", "psico").length');
-  console.log('goal of Fonoaudiologia is not suggested in Psicologia?', psicoSugg === 0, psicoSugg);
-  await page.click('#plSecs [data-spec="fono"] [data-add-obj]');
-  await page.type(lastFono + ' textarea[data-f="objetivo"]', 'Imitar sons de animais');
+  const applied = await page.evaluate((sel) => { const tr = document.querySelector(sel); return {o: tr.querySelector('[data-f=objetivo]').value, c: tr.querySelector('[data-f=criterio]').value, s: tr.querySelector('select[data-f=scaleId]').value, sp: tr.querySelector('[data-specs]').title}; }, lastRow);
+  console.log('choosing fills objective, criterion, scale and specialties?', applied.o === 'Nomear 10 objetos do cotidiano' && applied.c === '8 de 10 tentativas' && applied.s === 'aba' && applied.sp === 'Fonoaudiologia', JSON.stringify(applied));
+  const psicoSugg = await ev('goalMatches("nomear", "comunicacao", ["psico"]).length');
+  const otherArea = await ev('goalMatches("nomear", "autonomia", []).length');
+  console.log('bank goal of Fonoaudiologia/Comunicação is not suggested for Psicologia nor in another skill?', psicoSugg === 0 && otherArea === 0, psicoSugg, otherArea);
+  await page.click(Q2 + ' [data-add-obj]');
+  await page.type(lastRow + ' textarea[data-f="objetivo"]', 'Imitar sons de animais');
   await page.waitForSelector('.pl-goal-pop:not([hidden]) [data-goal-new]');
   await page.click('.pl-goal-pop [data-goal-new]'); await page.waitForSelector('#ovGoal');
   const pre = await page.$eval('#glName', (e) => e.value);
-  const preSpec = await page.$eval('#glSpec', (e) => e.value);
-  await setv('#glArea', 'comunicacao');
+  const preArea = await page.$eval('#glArea', (e) => e.value);
+  const preSpec = await page.$eval('#glSpecs input[value="fono"]', (e) => e.checked);
   await page.click('#glSave'); await page.waitForTimeout(300);
   const stillPlan = await page.$('#ovPlan');
   const bankN = await ev('goalBankList().length');
-  const rowArea = await page.$eval(lastFono + ' select[data-f=areaId]', (e) => e.value);
-  console.log('"+ Salvar no Banco" opens prefilled over the plan, saves and keeps the plan open?', pre === 'Imitar sons de animais' && preSpec === 'fono' && !!stillPlan && bankN === 2 && rowArea === 'comunicacao', JSON.stringify({pre, preSpec, bankN, rowArea}));
+  console.log('"+ Salvar no Banco" opens prefilled (skill and specialties) over the plan, saves and keeps the plan open?', pre === 'Imitar sons de animais' && preArea === 'comunicacao' && preSpec && !!stillPlan && bankN === 2, JSON.stringify({pre, preArea, preSpec, bankN}));
   await page.click('#plCancel');
 
-  // Parte 2: objetivos trabalhados na evolução + gráfico no plano.
+  // Evolução: objetivos ativos por habilidade, conforme as especialidades do profissional.
   await ev('prOpenEditor({patient: findPatientByName("Bruno Verde"), appointment: {id: "ap1", date: "2026-10-10", time: "08:00", professional_id: null}})');
   await page.waitForSelector('#prGoalsBody [data-goal-obj]');
-  const evoRows = await page.$$eval('#prGoalsBody [data-goal-obj]', (r) => r.map((x) => x.getAttribute('data-goal-spec')));
+  const evoRows = await page.$$eval('#prGoalsBody [data-goal-obj]', (r) => r.length);
+  const evoHead = await page.$eval('#prGoalsBody .pr-goal-spec', (e) => e.textContent);
   const allActive = await ev('(function(){ var p = planVigente("bruno-verde"); var n = 0; p.sections.forEach(function(s){ s.objectives.forEach(function(o){ if ((o.status || "ativo") === "ativo") n++; }); }); return n; })()');
-  console.log('evolution lists the active objectives of the plan?', evoRows.length === allActive && allActive > 0, evoRows.length, allActive);
+  console.log('evolution lists the active objectives grouped by skill?', evoRows === allActive && allActive > 0 && evoHead === 'Comunicação', evoRows, allActive, evoHead);
   const firstObj = await page.$eval('#prGoalsBody [data-goal-obj]', (e) => e.getAttribute('data-goal-obj'));
   const lvOpts = await page.$eval('#prGoalsBody [data-goal-obj] select[data-goal-level]', (e) => Array.prototype.map.call(e.options, (x) => x.value));
   await page.$eval('#prGoalsBody [data-goal-obj] select[data-goal-level]', (e, v) => { e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }, lvOpts[lvOpts.length - 1]);
   const read = await ev('JSON.stringify(planEvoGoalsRead(document.getElementById("prGoalsBody"), planEvoGoalsFor("bruno-verde", null, [])))');
   const rd = JSON.parse(read);
   console.log('choosing a level marks the objective as worked and reads planId/objId/level?', rd.length === 1 && rd[0].objId === firstObj && rd[0].levelId === lvOpts[lvOpts.length - 1] && !!rd[0].planId, read);
-  const tito = await ev('(function(){ var d = planEvoGoalsFor("bruno-verde", "tito", []); return d ? d.secs.length : -1; })()');
-  console.log('professional outside the plan specialties sees no objectives?', tito === 0, tito);
+  const bia = await ev('(function(){ var d = planEvoGoalsFor("bruno-verde", "bia-terapeuta", []); var ids = []; d.secs.forEach(function(s){ s.items.forEach(function(x){ ids.push(x.o.id + ":" + x.spec); }); }); return ids.join(","); })()');
+  console.log('Bia (fono + psico) does not see the TO-only objective; works with fono when marked, psico otherwise?', bia.indexOf('toonly') === -1 && /psonly:psico/.test(bia) && /:fono/.test(bia), bia);
+  const tito = await ev('(function(){ var d = planEvoGoalsFor("bruno-verde", "tito", []); var ids = []; d.secs.forEach(function(s){ s.items.forEach(function(x){ ids.push(x.o.id); }); }); return ids.join(","); })()');
+  console.log('professional of another specialty sees only the objectives marked for it?', tito === 'toonly', tito);
   await ev('document.getElementById("modalHost").innerHTML = ""');
-  // gráfico: duas evoluções com níveis do primeiro objetivo
-  await ev(`(function(){ var p = planVigente("bruno-verde"); var s = p.sections.filter(function(x){ return x.objectives.length; })[0]; var o = s.objectives[0]; var sc = scaleById(o.scaleId);
-    PLAN.evoMem = [{patient_id: "bruno-verde", appointment_date: "2026-10-01", plan_goals: [{planId: p.id, specId: s.specId, objId: o.id, scaleId: o.scaleId, levelId: sc.levels[0].id}]},
-                   {patient_id: "bruno-verde", appointment_date: "2026-10-15", plan_goals: [{planId: p.id, specId: s.specId, objId: o.id, scaleId: o.scaleId, levelId: sc.levels[2].id}]}]; })()`);
+  // gráfico: duas evoluções (Fono e Psicologia) com níveis do primeiro objetivo
+  await ev(`(function(){ var p = planVigente("bruno-verde"); var o = p.sections[0].objectives[0]; var sc = scaleById(o.scaleId);
+    PLAN.evoMem = [{patient_id: "bruno-verde", appointment_date: "2026-10-01", plan_goals: [{planId: p.id, specId: "fono", objId: o.id, scaleId: o.scaleId, levelId: sc.levels[0].id}]},
+                   {patient_id: "bruno-verde", appointment_date: "2026-10-15", plan_goals: [{planId: p.id, specId: "psico", objId: o.id, scaleId: o.scaleId, levelId: sc.levels[2].id}]}]; })()`);
   await ev('openPlanFor("bruno-verde")'); await page.waitForSelector('#plCharts .pv-fig');
-  const fig = await page.$eval('#plCharts', (h) => ({figs: h.querySelectorAll('.pv-fig').length, lines: h.querySelectorAll('.pv-line').length, dots: h.querySelectorAll('.pv-dot').length, legend: h.querySelectorAll('.pv-key').length, cols: h.querySelectorAll('.pv-table thead th').length}));
-  console.log('plan shows one chart with one line of 2 points, legend and table?', fig.figs === 1 && fig.lines === 1 && fig.dots === 2 && fig.legend === 1 && fig.cols === 3, JSON.stringify(fig));
+  const fig = await page.$eval('#plCharts', (h) => ({figs: h.querySelectorAll('.pv-fig').length, lines: h.querySelectorAll('.pv-line').length, dots: h.querySelectorAll('.pv-dot').length, cap: h.querySelector('figcaption').textContent,
+    tips: Array.prototype.map.call(h.querySelectorAll('.pv-hit'), (x) => x.getAttribute('data-tip')).join(' | ')}));
+  console.log('chart by skill, one line of 2 points; tooltip shows the specialty that evaluated?', fig.figs === 1 && fig.lines === 1 && fig.dots === 2 && /^Comunicação/.test(fig.cap) && /\(FN\)/.test(fig.tips) && /\(PS/.test(fig.tips), JSON.stringify(fig));
   await page.click('#plCancel');
 
   // Agenda: Detalhes do agendamento com "Objetivos do atendimento" e botão Editar.
   await ev(`(function(){
-    var mk = function(id, t, spec){ return {id: id, areaId: "comunicacao", objetivo: t, criterio: "80%", prazo: 3, scaleId: "likert", levelId: "1", status: "ativo"}; };
+    var mk = function(id, t, spec){ return {id: id, specIds: [spec || "fono"], objetivo: t, criterio: "80%", prazo: 3, scaleId: "likert", levelId: "1", status: "ativo"}; };
     planMemPut({id: "pa", patient_id: "ana-azul", patient_name: "Ana Azul", version: 1, status: "vigente", plan_date: "2026-10-01", review_date: "2027-04-01", summary: "Resumo da Ana", sections: [
-      {specId: "fono", objectives: [mk("a1", "Esperar a vez"), mk("a2", "Nomear cores")]}, {specId: "to", objectives: [mk("a3", "Recortar com tesoura")]}]});
+      {areaId: "comunicacao", objectives: [mk("a1", "Esperar a vez"), mk("a2", "Nomear cores")]}, {areaId: "desenvolvimento-motor", objectives: [mk("a3", "Recortar com tesoura", "to")]}]});
     planMemPut({id: "pc", patient_id: "carla-laranja", patient_name: "Carla Laranja", version: 1, status: "vigente", plan_date: "2026-10-01", review_date: "2027-04-01", summary: "", sections: [
-      {specId: "fono", objectives: [mk("c1", "esperar a VEZ")]}]});
+      {areaId: "comunicacao", objectives: [mk("c1", "esperar a VEZ")]}]});
     AD.rows = {r1: {id: "r1", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Ana Azul", service: "sessao", status: ""},
                r2: {id: "r2", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Carla Laranja", service: "sessao", status: ""}};
     agdOpenDetails(AD.rows.r1);
@@ -219,10 +281,11 @@ const path = require('path');
   await page.click('[data-ag-box="common"] [data-ag-toggle]');
   const box = await page.$eval('[data-ag-box="common"]', (h) => ({
     lines: Array.prototype.map.call(h.querySelectorAll('.ag-obj-line'), (l) => l.querySelector('.ag-obj-txt').textContent),
+    area: (h.querySelector('.ag-obj-area') || {}).textContent,
     meta: Array.prototype.map.call(h.querySelectorAll('.ag-obj-meta'), (m) => m.textContent).join(' | ')}));
-  console.log('Objetivos starts collapsed with the summary; arrow shows the common objective (number, skill, text | criterion, scale | status, situation); own objectives in a separate collapsed box without summary; TO left out?',
+  console.log('Objetivos starts collapsed with the summary; arrow shows the common objective under its skill (number, text | criterion, scale | status, situation | specialties); own objectives in a separate collapsed box without summary; TO left out?',
     box0.visible === 0 && /Carla Laranja/.test(box0.sum) && box0.boxes === 'common,own' && !box0.ownSum &&
-    box.lines.length === 1 && /1\.\s*Comunicação\s*Esperar a vez/.test(box.lines[0]) && /Critério: 80% · Escala: Likert/.test(box.meta) && /Status: Ativo · Situação:/.test(box.meta), JSON.stringify({box0, box}));
+    box.lines.length === 1 && /1\.\s*Esperar a vez/.test(box.lines[0]) && box.area === 'Comunicação' && /Especialidades: Fonoaudiologia/.test(box.meta) && /Critério: 80% · Escala: Likert/.test(box.meta) && /Status: Ativo · Situação:/.test(box.meta), JSON.stringify({box0, box}));
   // Seletor Agendamento | Saúde | Tratamento ao lado do nome; Objetivos antes do Status.
   const tabs = await page.$$eval('#agdDetSeg [data-det]', (r) => r.map((x) => x.textContent));
   const agPane = await page.$eval('[data-det-pane="ag"]', (e) => Array.prototype.map.call(e.querySelectorAll('.k'), (k) => k.textContent).join('|'));
@@ -281,7 +344,7 @@ const path = require('path');
   const carlaOk = await ev('agdGoalsCheck([{rec: {date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Carla Laranja", service: "sessao"}, old: null}])');
   console.log('booking a patient without a plan, or with an objective in common, does not ask?', evaOk === true && carlaOk === true, evaOk, carlaOk);
   await ev(`(function(){ planMemPut({id: "pd", patient_id: "duda-vermelho", patient_name: "Duda Vermelho", version: 1, status: "vigente", plan_date: "2026-10-01", review_date: "2027-04-01", summary: "", sections: [
-      {specId: "fono", objectives: [{id: "d1", areaId: "comunicacao", objetivo: "Imitar sons", criterio: "", prazo: 3, scaleId: "likert", levelId: "0", status: "ativo"}]}]});
+      {areaId: "comunicacao", objectives: [{id: "d1", specIds: ["fono"], objetivo: "Imitar sons", criterio: "", prazo: 3, scaleId: "likert", levelId: "0", status: "ativo"}]}]});
     window.__gc = agdGoalsCheck([{rec: {date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Duda Vermelho", service: "sessao"}, old: null}]); })()`);
   await page.waitForSelector('#cfTitle');
   const gcTitle = await page.$eval('#cfTitle', (e) => e.textContent);
@@ -290,6 +353,14 @@ const path = require('path');
   const gcRes = await page.evaluate(() => window.__gc);
   console.log('booking a patient with a plan and no objective in common asks first?', gcTitle === 'Sem objetivos em comum' && /Duda Vermelho/.test(gcMsg) && /Ana Azul/.test(gcMsg) && gcRes === false, gcTitle, gcRes);
   await ev('(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = ""; AD.rows = {}; })()');
+
+  // Relatório "Evolução por habilidade" (planos vigentes).
+  const rep = JSON.parse(await ev('JSON.stringify(RP_BUILDERS["evolucao-habilidade"]([], {from: "2000-01-01", to: "2100-01-01", pac: "", prof: ""}))'));
+  const bruno = rep.sections[1].rows.filter((r) => r[0] === 'Bruno Verde')[0];
+  const repTito = JSON.parse(await ev('JSON.stringify(RP_BUILDERS["evolucao-habilidade"]([], {from: "2000-01-01", to: "2100-01-01", pac: "", prof: "tito"}))'));
+  console.log('report by skill: Bruno/Comunicação with objectives, achieved and %; filtered by professional shows only what he works?',
+    !!bruno && bruno[1] === 'Comunicação' && bruno[2] === 5 && bruno[4] === 1 && bruno[6] === '20%' && rep.sections[0].rows.some((r) => r[0] === 'Comunicação') &&
+    repTito.sections[1].rows.every((r) => r[2] === 1), JSON.stringify(bruno), JSON.stringify(repTito.sections[1].rows));
 
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
