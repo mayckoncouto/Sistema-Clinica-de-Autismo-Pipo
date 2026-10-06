@@ -4331,10 +4331,8 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         var abaHolder = abaAny || abaOwn;
         var abaLock = !(b && b.patient) && !!abaHolder && !abaExcept;
         // atendimento do mesmo profissional em OUTRA sala ou grupo neste horário
-        // (grupo do profissional apontando para esta sala não bloqueia a sala; já a coluna
-        // dele no grupo fica bloqueada sempre que ele tem paciente numa sala — 2026-10-05)
+        // (inclusive o grupo do profissional que marca esta mesma sala — 2026-10-06)
         var pw = t.professionalId ? (profWhere[t.professionalId] || []).filter(function(x){ return x.id !== r.id; }) : [];
-        if (!isGroup(r)) pw = pw.filter(function(x){ return !(x.grp && x.target === normText(r.name)); });
         var busyAt = pw[0] || null;
         var busyLock = !(b && b.patient) && !!busyAt;
         var isOff = abaLock || busyLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
@@ -4876,11 +4874,9 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
           : "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + ".";
         if (isNaoABABooking(b, t.professionalId)) return abaRoomMsg(b.patient, room.name, time, roomIsABA(room) ? professionalName(profId) : "");
       }
-      // Exceção (2026-10-02): agendamento de grupo JÁ marcado apontando para esta sala não
-      // impede o profissional de atender nela. O contrário não vale (2026-10-05): com
-      // paciente numa sala, o grupo do profissional fica bloqueado, mesmo para a mesma sala.
-      var sameRoomViaGroup = isGroup(r) && !isGroup(room) && normText(b.patient) === normText(room.name);
-      if (profId && t.professionalId === profId && r.id !== room.id && !sameRoomViaGroup) return profBusyMsg(professionalName(profId), time, r.name);
+      // Profissional em dois lugares: vale também para o grupo que marca a mesma sala
+      // (2026-10-06 — sem exceção nos dois sentidos).
+      if (profId && t.professionalId === profId && r.id !== room.id) return profBusyMsg(professionalName(profId), time, r.name);
       // Mesmo paciente com o MESMO profissional no mesmo horário: nunca (nem com outro serviço).
       if (patientRule && !isGroup(r) && profId && t.professionalId === profId && normText(b.patient) === normText(rec.patient)){
         return rec.patient + " já está com " + professionalName(profId) + " às " + time + " em " + r.name + ". O mesmo paciente não pode ter dois atendimentos com o mesmo profissional no mesmo horário, nem com outro serviço.";
@@ -14471,7 +14467,7 @@ var HELP_TOPICS = [
     steps: ["O sistema confere sozinho. Quando algo não pode, aparece o motivo na tela."],
     rules: [
       "Profissional não pode estar em dois lugares (salas/grupos diferentes) no mesmo horário.",
-      "No Planner, profissional com paciente numa sala fica com a coluna dele nos Grupos de Suporte bloqueada nesse horário (cinza listrado), mesmo que o grupo seja para a mesma sala. Um grupo já marcado para a sala não impede os atendimentos dele nessa sala.",
+      "No Planner, profissional com paciente numa sala fica com a coluna dele nos Grupos de Suporte bloqueada nesse horário (cinza listrado), mesmo que o grupo seja para a mesma sala. Da mesma forma, com agendamento num grupo, as colunas dele em todas as salas ficam bloqueadas nesse horário, inclusive na sala que o grupo marca.",
       "Paciente não pode ter o mesmo serviço em dois lugares no mesmo horário, nem dois atendimentos com o mesmo profissional.",
       "Paciente que <b>não faz ABA</b> ocupa o horário do profissional (sala com ABA no nome) ou a sala toda (sala sem ABA).",
       "Fora do horário do paciente ou com terapeuta diferente do tratamento: pede confirmação duas vezes.",

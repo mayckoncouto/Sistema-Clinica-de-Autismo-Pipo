@@ -21,6 +21,13 @@ const path = require('path');
   const check = (label, ok, extra) => { console.log(label, ok, extra === undefined ? '' : extra); if (!ok) fails++; };
   const bk = (doc) => ev(`(async function(){ var db = await window.claude.use("db"); var s = await db.doc("schedule/${doc}").get(); return JSON.stringify((s.exists && s.data().bookings) || {}); })()`).then(JSON.parse);
 
+  // Grupo marcando a MESMA sala também bloqueia o profissional nessa sala
+  const same = await ev(`(function(){ var d = state.scheduleDocs["seg-1"] = state.scheduleDocs["seg-1"] || {bookings: {}};
+    d.bookings["09:20|coord|coord-t1"] = {patient: "Sala Teste", note: ""};
+    var msg = plannerConflict("seg-1", "09:20|r1|r1-t1", {patient: "Bruno Verde", note: ""});
+    delete d.bookings["09:20|coord|coord-t1"]; return msg; })()`);
+  check('group booked for the same room blocks the professional there?', !!same, same);
+
   // agendamento "perdido" (coluna que não existe)
   await ev(`(async function(){ var db = await window.claude.use("db"); var s = await db.doc("schedule/qua-3").get();
     var d = (s.exists && s.data()) || {bookings:{}}; d.bookings = Object.assign({}, d.bookings, {"09:20|r1|gone-seat": {patient: "Paciente Um", note: ""}}); await db.doc("schedule/qua-3").set(d); })()`);

@@ -2106,3 +2106,10 @@ Planner" (depois de `writeRooms`):
 - `applyBookingChanges(..., {noHistory: true})`: grava sem entrar no desfazer (estrutural).
 - `plannerLoadDocs()` lê as 4 semanas e preenche `state.scheduleDocs`. Teste
   `tests/run_room_seats.js` (34 arquivos no `npm test`).
+
+## Grupo marcando a mesma sala também bloqueia (Planner, 2026-10-06)
+Pedido do usuário (caso Lara: grupo às 10:00 marcando "Fonoaudiologia" e colunas dela na
+sala Fonoaudiologia livres): acabou a exceção `sameRoomViaGroup`. Profissional com
+agendamento num grupo tem as colunas dele em TODAS as salas bloqueadas no horário
+(`.prof-busy`), inclusive a sala que o grupo marca; `plannerConflict` recusa gravar. A
+exceção "não ABA" de `groupBookedRoom` (outro profissional na sala) não mudou.
