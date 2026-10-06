@@ -2113,3 +2113,9 @@ sala Fonoaudiologia livres): acabou a exceção `sameRoomViaGroup`. Profissional
 agendamento num grupo tem as colunas dele em TODAS as salas bloqueadas no horário
 (`.prof-busy`), inclusive a sala que o grupo marca; `plannerConflict` recusa gravar. A
 exceção "não ABA" de `groupBookedRoom` (outro profissional na sala) não mudou.
+
+## Tratamentos: coluna ABA na lista (2026-10-06)
+Pedido do usuário. Coluna "ABA" logo depois de Status (`trAbaText`/`trAbaCell`): o ABA do
+tratamento; se as especialidades (`specHours[].aba`) têm valores diferentes, "Misto" com o
+detalhe por especialidade no `title`. Ordenável. Valor final passou para a 7ª posição (o
+`splice` de quem não vê valores usa 6). Celular continua Paciente + Status (1ª e 5ª).
