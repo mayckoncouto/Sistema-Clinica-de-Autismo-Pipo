@@ -2054,6 +2054,12 @@ prazo (`.pl-prazo`, data completa no `title`; coluna Prazo 176px), setas ▲▼ 
   daquele atendimento (`bookingAbaOf` com o profissional e o serviço da linha), não o do
   tratamento; cartão do tratamento mostra Sim quando o ABA está vazio (`abaYesNo`).
   `schema.sql` conferido montando um banco do zero (sem erros).
+- (2026-10-06, correção) O ABA trocado numa linha não era gravado: o botão visual da lista
+  (`dpMakeButton`) copia a classe do `<select>`, e `syncSpecRowsFromDom` lia `.spec-aba` (o
+  botão, sem `.value`). Agora lê `select.spec-aba`. Ao procurar um `<select>` melhorado pela
+  classe, use sempre `select.<classe>`. Regra (Planner e Agenda): linha com ABA manda;
+  especialidade/serviço fora do tratamento = ABA do tratamento; mudar o ABA do tratamento
+  copia para todas as linhas.
 
 ## Dados de saúde com permissão própria; Criar acessos sem duplicar (2026-10-06)
 - **Pacientes – saúde** (`saude_paciente`: ver/editar; `MODULES` nos dois js). `HEALTH_KEYS`

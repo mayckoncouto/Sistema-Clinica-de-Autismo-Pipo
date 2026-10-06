@@ -84,6 +84,24 @@ const path = require('path');
   await page.waitForTimeout(300);
   const patOpen = !(await page.$('#ovTreat')) && !!(await page.$('#pNome'));
   check('"Cadastro do paciente" opens the patient window?', btnVisible && patOpen);
+  // Trocar o ABA de UMA linha pela lista da tela e salvar: tem que ficar gravado.
+  await ev(`(function(){ document.querySelectorAll(".overlay").forEach(function(o){ o.remove(); });
+    var pat = state.patientsRaw[0];
+    state.treatments = [{id: "tb", patientId: pat.id, inicio: "2026-01-01", status: "ativo", tipo: "novo", aba: "Sim", vencPor: "sem",
+      specHours: [{specId: "psico", hours: "4"}, {specId: "fono", hours: "4"}]}]; rebuildPatients();
+    openTreatmentModal(state.treatments[0]); })()`);
+  await page.waitForTimeout(300);
+  await page.click('.hours-row[data-i="0"] .spec-aba-wrap .dp-btn');
+  await page.waitForTimeout(150);
+  await page.click('#dpPop .dp-opt:has-text("Não")');
+  await page.waitForTimeout(150);
+  await page.click('#trSave');
+  await page.waitForTimeout(600);
+  const saved = await ev(`(function(){ var t = state.treatments.filter(function(x){ return x.id === "tb"; })[0];
+    var p = findPatientByName(state.patientsRaw[0].nome);
+    return {rows: JSON.stringify(t.specHours.map(function(r){ return r.aba || ""; })), psico: bookingAbaOf(p, "ana-terapeuta", "sessao"), fono: bookingAbaOf(p, "bia-terapeuta", "sessao")}; })()`);
+  check('line ABA changed in the window is saved?', saved.rows === '["Não","Sim"]', saved.rows);
+  check('saved line ABA rules the booking?', saved.psico === 'Não' && saved.fono === 'Sim', saved.psico + ' ' + saved.fono);
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();
