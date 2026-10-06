@@ -66,7 +66,9 @@ const path = require('path');
 
   const survivedTagCount = await page.evaluate(() => document.querySelectorAll('table.sched[data-doc]').length &&
     Array.from(document.querySelectorAll('table.sched')).filter(t => typeof t.__tagIdx === 'number').length);
-  console.log('other tables\' DOM nodes were left untouched by the targeted update (still carry their tag)?', survivedTagCount === 19, '(survived: ' + survivedTagCount + ')');
+  console.log('tables were left in place by the targeted update (only the changed cells are swapped)?', survivedTagCount === 20, '(survived: ' + survivedTagCount + ')');
+  const cellNow = await page.evaluate(() => { const td = document.querySelector('table.sched[data-doc="seg-1"] td.slotcell[data-key="07:20|r1|r1-t1"]'); return td && !/Paciente Um/.test(td.textContent); });
+  console.log('the edited cell shows the change?', cellNow);
 
   const editedCellNowEmpty = await targetCell.locator('.empty-plus').count();
   console.log('the edited table itself DID pick up the change (slot now empty)?', editedCellNowEmpty === 1);

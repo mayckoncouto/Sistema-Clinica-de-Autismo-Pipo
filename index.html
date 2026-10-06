@@ -3965,12 +3965,48 @@ function renderScheduleDocsTargeted(docIds){
     var dayObj = findDayObj(parts[0]);
     var week = parseInt(parts[1],10);
     var built = buildScheduleTable(dayObj, week, docId, rooms, search);
-    tableEl.outerHTML = built.html;
+    if (plannerPatchTable(tableEl, built.html) < 0){
+      tableEl.outerHTML = built.html;
+      var t2 = host.querySelector('table.sched[data-doc="'+docId+'"]'); if (t2) t2.__plHtml = built.html;
+    }
     updated[docId] = built.matchCount;
   }
   Object.keys(updated).forEach(function(docId){ scheduleMatchCounts[docId] = updated[docId]; });
   updateMatchCountBadge();
   applyZoom();
+}
+// Troca só as células (td) cujo HTML mudou, em vez da tabela inteira: com Todos×Todos a
+// página tem ~90 mil elementos, e recriar uma tabela de 600 células a cada gravação
+// (arrastar, colar, janela) custava o recálculo de estilo/posição dela toda. A comparação
+// é feita no texto (o HTML da última montagem fica em table.__plHtml), sem ler o DOM:
+// só as linhas que mudaram são lidas, e só as células que mudaram são trocadas.
+// Devolve -1 quando a estrutura mudou (cabeçalho, nº de linhas): aí troca a tabela.
+var PL_HTML = {};   // docId -> HTML da última montagem completa (renderGrid)
+function plannerSplitTable(html){
+  var a = html.indexOf("<tbody>"), b = html.lastIndexOf("</tbody>");
+  if (a < 0 || b < a) return null;
+  return {head: html.slice(0, a), rows: html.slice(a + 7, b).split(/(?=<tr[\s>])/)};
+}
+function plannerPatchTable(old, html){
+  var po = old.__plHtml && plannerSplitTable(old.__plHtml), pn = plannerSplitTable(html);
+  var body = old.tBodies && old.tBodies[0];
+  if (!po || !pn || !body || po.head !== pn.head || po.rows.length !== pn.rows.length || body.rows.length !== pn.rows.length) return -1;
+  var changed = 0, tpl = document.createElement("template");
+  for (var i = 0; i < pn.rows.length; i++){
+    if (po.rows[i] === pn.rows[i]) continue;
+    var co = po.rows[i].split(/(?=<td[\s>])/), cn = pn.rows[i].split(/(?=<td[\s>])/);
+    tpl.innerHTML = "<table><tbody>" + pn.rows[i] + "</tbody></table>";
+    var nr = tpl.content.querySelector("tr"), or = body.rows[i];
+    if (!nr) return -1;
+    if (co[0] !== cn[0] || co.length !== cn.length || or.cells.length !== nr.cells.length || nr.cells.length !== cn.length - 1){
+      body.replaceChild(document.importNode(nr, true), or); changed++; continue;
+    }
+    for (var j = 1; j < cn.length; j++){
+      if (co[j] !== cn[j]){ or.replaceChild(document.importNode(nr.cells[j - 1], true), or.cells[j - 1]); changed++; }
+    }
+  }
+  old.__plHtml = html;
+  return changed;
 }
 // Busca da grade sem redesenhar: só marca (amarelo) / apaga as células que já estão
 // na tela. Mesma regra do desenho completo (nome da célula contém o texto, sem
@@ -4730,18 +4766,29 @@ function wireGridDelegatedEvents(){
     var bookEl = td && td.querySelector(".book");
     if (bookEl) bookEl.classList.remove("dragging");
   });
+  // Destaque da célula de destino: só muda quando o mouse passa para OUTRA célula
+  // (o dragover dispara dezenas de vezes por segundo; mexer em classes a cada vez pesa
+  // com Todos×Todos). Ao sair da grade ou soltar, o destaque sai.
+  var dragOverTd = null;
+  function setDragOver(td){
+    if (td === dragOverTd) return;
+    if (dragOverTd) dragOverTd.classList.remove("drag-over");
+    dragOverTd = td;
+    if (td) td.classList.add("drag-over");
+  }
   host.addEventListener("dragover", function(e){
     if (!state.dragKey) return;
     var td = e.target.closest(".slotcell");
-    if (!td || (td.classList.contains("slot-off") && !td.classList.contains("aba-soft"))) return; // sem preventDefault = não aceita soltar
+    if (!td || (td.classList.contains("slot-off") && !td.classList.contains("aba-soft"))){ setDragOver(null); return; } // sem preventDefault = não aceita soltar
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    td.classList.add("drag-over");
+    setDragOver(td);
   });
   host.addEventListener("dragleave", function(e){
-    var td = e.target.closest(".slotcell");
-    if (td) td.classList.remove("drag-over");
+    if (!e.relatedTarget || !host.contains(e.relatedTarget)) setDragOver(null);
   });
+  document.addEventListener("dragend", function(){ setDragOver(null); }, true);
+  document.addEventListener("drop", function(){ setDragOver(null); }, true);
   host.addEventListener("drop", function(e){
     var td = e.target.closest(".slotcell");
     if (!td) return;
@@ -4797,6 +4844,7 @@ function renderGrid(){
       var docId = docIdFor(dayKey, week);
       var built = buildScheduleTable(dayObj, week, docId, rooms, search);
       scheduleMatchCounts[docId] = built.matchCount;
+      PL_HTML[docId] = built.html;
       var panel = built.html;
       // Várias tabelas (Todos): cada uma só é posicionada/pintada quando chega perto da
       // tela (content-visibility). Tamanho estimado para a barra de rolagem até lá.
@@ -4819,6 +4867,8 @@ function renderGrid(){
   });
 
   host.innerHTML = sectionsHtml;
+  Array.prototype.forEach.call(host.querySelectorAll("table.sched[data-doc]"), function(t){ t.__plHtml = PL_HTML[t.getAttribute("data-doc")]; });
+  PL_HTML = {};
   // Interaction handlers are delegated once on #gridHost itself (see
   // wireGridDelegatedEvents, called from boot()) — nothing to (re-)wire per render.
 
@@ -5183,9 +5233,13 @@ function historyButtonsHtml(){
   '</div>';
 }
 function refreshHistoryButtons(){
-  Array.prototype.forEach.call(document.querySelectorAll("[data-hist],[data-hist-menu]"), function(b){
-    var stack = bookingHistory[b.getAttribute("data-hist") || b.getAttribute("data-hist-menu")];
-    b.disabled = historyBusy || !stack.length;
+  // Por classe (rápido): buscar por atributo na página toda pesa com Todos×Todos (~90 mil elementos).
+  ["hist-btn", "hist-caret"].forEach(function(cls){
+    Array.prototype.forEach.call(document.getElementsByClassName(cls), function(b){
+      var k = b.getAttribute("data-hist") || b.getAttribute("data-hist-menu");
+      var stack = k && bookingHistory[k];
+      if (stack) b.disabled = historyBusy || !stack.length;
+    });
   });
 }
 

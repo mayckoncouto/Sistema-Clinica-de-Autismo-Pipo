@@ -2284,3 +2284,18 @@ importar" no fim do script.
   problema; ids dos níveis mantidos pelo nome), **Objetivos** (texto + habilidade; habilidade
   desconhecida = problema; especialidades por nome ou sigla, vazio = todas).
 - Teste `tests/run_planilhas.js` (cria `tests/page_io.html`; 38 arquivos no `npm test`).
+
+## Planner Todos×Todos: arrastar e gravar mais leves (2026-10-06)
+Pedido do usuário ("arrastar fica pesado em Todos e Todos"). Medido com volume real fictício
+(~94 mil elementos na página, CPU 4× mais lenta): soltar um paciente 790 ms → ~250 ms.
+- `renderScheduleDocsTargeted` não troca mais a tabela inteira: `plannerPatchTable(table, html)`
+  compara o HTML novo com o da última montagem (`table.__plHtml`; `renderGrid` guarda via
+  `PL_HTML`) linha a linha e célula a célula NO TEXTO (`plannerSplitTable`), lê só as linhas
+  que mudaram e troca só os `td` diferentes. Estrutura diferente (cabeçalho, nº de linhas) =
+  troca a tabela como antes (-1). A tabela continua o mesmo elemento.
+- Arrastar: `setDragOver(td)` só mexe na classe `drag-over` quando muda de célula (o
+  `dragover` dispara dezenas de vezes por segundo); sai ao soltar/terminar/sair da grade.
+- `refreshHistoryButtons` acha os botões por classe (`getElementsByClassName`), não por
+  atributo na página toda.
+- Testes: `tests/run_grid_perf.js` (tabelas ficam, a célula editada muda) e
+  `tests/run_fluidez.js` (mover troca poucas células e o resultado é igual a montar do zero).

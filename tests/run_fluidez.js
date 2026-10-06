@@ -103,6 +103,25 @@ const path = require('path');
   const fs2 = await ev(`({full: document.body.classList.contains("grid-full"), top: document.querySelector(".topbar").offsetParent !== null})`);
   check('Esc leaves full screen?', !fs2.full && fs2.top, JSON.stringify(fs2));
 
+  // --- Planner: gravar troca só as células que mudaram, e a tabela fica igual a uma montada do zero
+  await page.click('#daySeg button[data-day="todos"]'); await page.click('#weekSeg button[data-week="todos"]');
+  await page.waitForTimeout(500);
+  const pt = await ev(`(async function(){
+    var tbl = document.querySelector('table.sched[data-doc="seg-1"]');
+    tbl.querySelectorAll("td.slotcell").forEach(function(td){ td.__t = 1; });
+    var b = state.scheduleDocs["seg-1"].bookings, from = Object.keys(b).filter(function(k){ return b[k] && b[k].patient === "Paciente Um"; })[0];
+    var to = Array.prototype.map.call(tbl.querySelectorAll("td.slotcell"), function(td){ return td.getAttribute("data-key"); })
+      .filter(function(k){ return k.split("|")[1] === from.split("|")[1] && !b[k] && !tbl.querySelector('td[data-key="' + k + '"]').classList.contains("slot-off"); })[0];
+    await moveBooking("seg-1", from, "seg-1", to);
+    await new Promise(function(r){ setTimeout(r, 300); });
+    var now = document.querySelector('table.sched[data-doc="seg-1"]');
+    var fresh = 0, kept = 0; now.querySelectorAll("td.slotcell").forEach(function(td){ if (td.__t) kept++; else fresh++; });
+    var tpl = document.createElement("template"); tpl.innerHTML = buildScheduleTable(findDayObj("seg"), 1, "seg-1", visibleRooms(), state.search).html;
+    var clean = function(h){ return h.replace(/ drag-over| dragging/g, ""); };
+    return {same: now === tbl, fresh: fresh, kept: kept, equal: clean(now.outerHTML) === clean(tpl.content.querySelector("table").outerHTML), moved: !!state.scheduleDocs["seg-1"].bookings[to]};
+  })()`);
+  check('Planner Todos×Todos: moving keeps the table, swaps only a few cells, result equals a fresh build?', pt.same && pt.moved && pt.fresh > 0 && pt.fresh < 10 && pt.kept > 50 && pt.equal, JSON.stringify(pt));
+
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();
   fs.unlinkSync(evPage);
