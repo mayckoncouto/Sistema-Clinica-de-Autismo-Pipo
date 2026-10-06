@@ -2335,9 +2335,12 @@ Respostas do usuário (2026-10-06):
 8. Pacientes "não ABA": deixar um intervalo entre eles sempre que possível.
 Pendente decidir: qual modo primeiro e se faz antes o relatório de prontidão.
 
-## Horário de atendimento do paciente: Limpar horário (2026-10-06)
-Pedido do usuário. Na seção do tratamento (`patHoursSectionHtml`), antes de "Copiar segunda
-para todos" (`#pHoursCopy`, antes "…para os dias úteis"; agora copia para todos os dias da
-tabela, inclusive sáb/dom abertos), botão **Limpar horário** (`#pHoursClear`,
-`wirePatHoursClear`): desmarca "Atende" e apaga os horários de todos os dias. Teste no fim de
+## Horário de atendimento do paciente: "Disponível" e Outras opções (2026-10-06)
+Pedido do usuário. Na tabela do tratamento (`patHoursSectionHtml`) a coluna "Atende" se chama
+**Disponível** (o campo continua `horarios[dia].ativo`; o cadastro da Clínica segue com "Atende").
+Os botões ficam no menu **Outras opções ▾** (`#pHoursMore`, `wirePatHoursMenu`, posição por
+`placeToolsMenu`): **Limpar horário de todos os dias** (`data-ph-act="clear-all"`), **Limpar os
+dias sem "Disponível" marcado** (`clear-off`: apaga só os horários que sobraram nos dias
+desmarcados) e **Copiar segunda para todos** (`copy`, todos os dias da tabela). Cada ação guarda
+como estava e mostra **Desfazer** (`#pHoursUndo`) por 15 segundos. Teste no fim de
 `tests/run_treatments.js`.

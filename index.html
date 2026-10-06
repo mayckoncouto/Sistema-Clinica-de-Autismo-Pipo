@@ -6140,44 +6140,68 @@ function patHoursSectionHtml(v){
   var rows = days.map(function(d){
     var h = (v.horarios && v.horarios[d.key]) || (v.horarios ? {ativo: false} : clinicDayCfg(d.key)), off = !h.ativo;
     return '<tr data-day="'+d.key+'"><td class="ph-day" title="'+esc(d.full)+'">'+d.full.slice(0, 3)+'</td>' +
-      '<td class="cl-on"><input type="checkbox" class="cl-ativo"'+(h.ativo ? ' checked' : '')+' aria-label="Atende '+d.full+'"></td>' +
+      '<td class="cl-on"><input type="checkbox" class="cl-ativo"'+(h.ativo ? ' checked' : '')+' aria-label="Disponível '+d.full+'"></td>' +
       '<td>'+tm("ph-"+d.key+"-mi", h.manha && h.manha.inicio, off)+'</td><td>'+tm("ph-"+d.key+"-mf", h.manha && h.manha.fim, off)+'</td>' +
       '<td>'+tm("ph-"+d.key+"-ti", h.tarde && h.tarde.inicio, off)+'</td><td>'+tm("ph-"+d.key+"-tf", h.tarde && h.tarde.fim, off)+'</td></tr>';
   }).join("");
   return '<div class="prof-section"><div class="prof-section-head"><span class="prof-access-title">Horário de atendimento</span>' +
-      '<span class="ph-acts"><button type="button" class="btn ghost ph-copy" id="pHoursClear" title="Desmarca todos os dias e apaga os horários">Limpar horário</button>' +
-      '<button type="button" class="btn ghost ph-copy" id="pHoursCopy">Copiar segunda para todos</button></span></div>' +
+      '<span class="ph-acts"><button type="button" class="btn ghost ph-copy" id="pHoursUndo" hidden>Desfazer</button>' +
+      '<div class="cad-wrap pl-tools-wrap" id="pHoursMore"><button type="button" class="btn ghost ph-copy" id="pHoursMoreBtn" aria-haspopup="menu" aria-expanded="false">Outras opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+      '<div class="cad-menu pl-tools-menu" role="menu" hidden>' +
+        '<button type="button" class="btn ghost" data-ph-act="clear-all" id="pHoursClear">Limpar horário de todos os dias</button>' +
+        '<button type="button" class="btn ghost" data-ph-act="clear-off" id="pHoursClearOff">Limpar os dias sem "Disponível" marcado</button>' +
+        '<button type="button" class="btn ghost" data-ph-act="copy" id="pHoursCopy">Copiar segunda para todos</button>' +
+      '</div></div></span></div>' +
     '<table class="prof-hours cl-hours" id="pHours"><colgroup><col style="width:48px"><col style="width:58px"><col><col><col><col></colgroup><thead>' +
-      '<tr><th rowspan="2">Dia</th><th rowspan="2">Atende</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th></tr>' +
+      '<tr><th rowspan="2">Dia</th><th rowspan="2">Disponível</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th></tr>' +
       '<tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-    '<div class="pat-count" style="margin-top:6px">Horários em que o paciente pode ser atendido. No Planner, agendar fora deles pede confirmação dupla. Deixe o período em branco se não houver atendimento nele.</div></div>';
+    '<div class="pat-count" style="margin-top:6px">Horários em que o paciente pode ser atendido. Marque "Disponível" nos dias em que o paciente pode vir. No Planner e na Agenda, agendar fora deles pede confirmação dupla. Deixe o período em branco se não houver atendimento nele.</div></div>';
 }
 function wirePatHours(){
   var tbl = document.getElementById("pHours"); if (!tbl) return;
   tbl.addEventListener("change", function(e){
     if (e.target.classList.contains("cl-ativo")) e.target.closest("tr").querySelectorAll(".cl-time").forEach(function(x){ x.disabled = !e.target.checked; });
   });
-  wirePatHoursClear();
-  var cp = document.getElementById("pHoursCopy");
-  if (cp) cp.addEventListener("click", function(){
-    var src = tbl.querySelector('tr[data-day="seg"]'); if (!src) return;
-    var on = src.querySelector(".cl-ativo").checked;
-    Array.prototype.forEach.call(tbl.querySelectorAll("tbody tr"), function(tr){
-      var k = tr.getAttribute("data-day"); if (k === "seg") return;
-      tr.querySelector(".cl-ativo").checked = on;
-      ["mi", "mf", "ti", "tf"].forEach(function(s){ var el = document.getElementById("ph-"+k+"-"+s); el.value = document.getElementById("ph-seg-"+s).value; el.disabled = !on; });
-    });
-  });
+  wirePatHoursMenu(tbl);
 }
-function wirePatHoursClear(){
-  var tbl = document.getElementById("pHours"), bt = document.getElementById("pHoursClear");
-  if (!tbl || !bt) return;
-  bt.addEventListener("click", function(){
-    Array.prototype.forEach.call(tbl.querySelectorAll("tbody tr"), function(tr){
-      tr.querySelector(".cl-ativo").checked = false;
-      tr.querySelectorAll(".cl-time").forEach(function(x){ x.value = ""; x.disabled = true; });
-    });
+// "Outras opções ▾" do horário do paciente: limpar todos os dias, limpar só os dias sem
+// "Disponível" marcado (apaga os horários que sobraram) e copiar segunda para todos.
+// Cada ação guarda como estava e mostra "Desfazer" por 15 segundos.
+function wirePatHoursMenu(tbl){
+  var wrap = document.getElementById("pHoursMore"); if (!wrap) return;
+  var tb = document.getElementById("pHoursMoreBtn"), tm = wrap.querySelector(".pl-tools-menu"), undo = document.getElementById("pHoursUndo"), snap = null, timer = 0;
+  function rows(){ return Array.prototype.slice.call(tbl.querySelectorAll("tbody tr")); }
+  function take(){ return rows().map(function(tr){ return {on: tr.querySelector(".cl-ativo").checked, v: Array.prototype.map.call(tr.querySelectorAll("input.cl-time"), function(x){ return x.value; })}; }); }
+  function put(st){ rows().forEach(function(tr, i){ var r = st[i]; if (!r) return; tr.querySelector(".cl-ativo").checked = r.on; Array.prototype.forEach.call(tr.querySelectorAll("input.cl-time"), function(x, j){ x.value = r.v[j] || ""; x.disabled = !r.on; }); }); }
+  function clearRow(tr){ tr.querySelector(".cl-ativo").checked = false; tr.querySelectorAll("input.cl-time").forEach(function(x){ x.value = ""; x.disabled = true; }); }
+  function setOpen(o){ tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ placeToolsMenu(tb, tm); var f = tm.querySelector("button"); if (f) f.focus(); } }
+  tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
+  tm.addEventListener("click", function(e){
+    var b = e.target.closest("[data-ph-act]"); if (!b) return;
+    var act = b.getAttribute("data-ph-act"), before = take(), msg = "";
+    setOpen(false);
+    if (act === "clear-all"){ rows().forEach(clearRow); msg = "Horário limpo em todos os dias."; }
+    else if (act === "clear-off"){
+      var n = 0;
+      rows().forEach(function(tr){ if (!tr.querySelector(".cl-ativo").checked){ var had = Array.prototype.some.call(tr.querySelectorAll("input.cl-time"), function(x){ return !!x.value; }); clearRow(tr); if (had) n++; } });
+      msg = n ? "Horários apagados em " + n + (n === 1 ? " dia" : " dias") + " sem \"Disponível\" marcado." : "Nenhum dia sem \"Disponível\" tinha horário para apagar.";
+    } else if (act === "copy"){
+      var src = tbl.querySelector('tr[data-day="seg"]'); if (!src){ showToast("A clínica não abre na segunda.", true); return; }
+      var on = src.querySelector(".cl-ativo").checked;
+      rows().forEach(function(tr){
+        var k = tr.getAttribute("data-day"); if (k === "seg") return;
+        tr.querySelector(".cl-ativo").checked = on;
+        ["mi", "mf", "ti", "tf"].forEach(function(s){ var el = document.getElementById("ph-"+k+"-"+s); el.value = document.getElementById("ph-seg-"+s).value; el.disabled = !on; });
+      });
+      msg = "Horário de segunda copiado para todos os dias.";
+    }
+    snap = before; undo.hidden = false; clearTimeout(timer);
+    timer = setTimeout(function(){ undo.hidden = true; snap = null; }, 15000);
+    if (msg) showToast(msg);
   });
+  undo.addEventListener("click", function(){ if (!snap) return; put(snap); snap = null; undo.hidden = true; clearTimeout(timer); showToast("Desfeito."); });
+  document.addEventListener("mousedown", function(e){ if (!tm.hidden && !e.target.closest("#pHoursMore")) setOpen(false); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !tm.hidden){ e.stopPropagation(); setOpen(false); tb.focus(); } }, true);
 }
 function readPatHours(){
   var tbl = document.getElementById("pHours"); if (!tbl) return undefined;
@@ -15223,7 +15247,7 @@ var HELP_TOPICS = [
     purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido.",
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
-      "Em <b>Horário de atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. <b>Limpar horário</b> desmarca todos os dias e apaga os horários; <b>Copiar segunda para todos</b> repete o horário de segunda nos outros dias."
+      "Em <b>Horário de atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras opções ▾</b>: <b>Limpar horário de todos os dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar segunda para todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava."
     ],
     rules: [
       "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda).",
