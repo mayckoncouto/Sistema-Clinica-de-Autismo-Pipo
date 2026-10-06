@@ -87,10 +87,11 @@ select * from (
   from (select a.*, row_number() over (order by date) rn from public.appointments a join pac on lower(pac.nome) = lower(btrim(a.patient))
         where a.date >= current_date and pac.inativo) x
   union all
-  select 13, 'Agenda: atendimentos que já passaram e continuam sem status', count(*),
+  select 13, 'Agenda: atendimentos de PACIENTES que já passaram e continuam sem status', count(*),
          string_agg(to_char(date, 'DD/MM') || ' ' || patient, '; ') filter (where rn <= 15)
   from (select a.*, row_number() over (order by date desc) rn from public.appointments a
-        where a.date < current_date and a.status is null and not a.blocked and lower(btrim(a.patient)) not in (select nome from especial)) x
+        where a.date < current_date and a.status is null and not a.blocked and lower(btrim(a.patient)) not in (select nome from especial)
+          and not exists (select 1 from sala where sala.grupo and lower(sala.nome) = lower(btrim(a.patient)))) x
   union all
   select 14, 'Agenda: "Finalizado" sem evolução no prontuário', count(*),
          string_agg(to_char(date, 'DD/MM') || ' ' || patient, '; ') filter (where rn <= 15)
