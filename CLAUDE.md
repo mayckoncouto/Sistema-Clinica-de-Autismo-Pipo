@@ -2219,3 +2219,16 @@ Pendências de status; Status em lote; Exportar Excel; as mesmas opções no ☰
 grade, então o rótulo (sticky `left:0`) não sai da tela ao rolar para os lados (antes a seção
 tinha a largura da tela e o rótulo ia embora junto). "1ª semana" já ficava presa dentro da
 própria semana. Teste no `tests/run_fluidez.js`.
+
+## Menus "Outras opções" por cima de tudo; Observações do tratamento (2026-10-06)
+- Pedido do usuário: o menu da Agenda ficava atrás da grade (a barra `.agd-toolbar` tem
+  `overflow-x:auto` e cortava o menu) e os menus não podem alargar a janela.
+  `placeToolsMenu(btn, menu)` (antes do bloco "Tela cheia"): `.pl-tools-menu.tools-fixed`
+  com `position:fixed`, alinhado pela direita do botão, preso dentro da tela (abre para cima
+  se não couber embaixo, com rolagem própria). Usado no Planner (`#plToolsMenu`), Agenda
+  (`#agdToolsMenu`) e Pacientes (`#patMoreMenu`); fecha ao rolar ou mudar o tamanho da
+  janela. O menu da Agenda tem o mesmo visual do Planner (sem divisórias).
+- Barra do Planner: de 761 a 1100px a busca e o filtro encolhem mais; até 960px a barra
+  quebra em duas linhas (antes o "?" passava da borda e a página ganhava rolagem lateral).
+- Tratamento: **Observações** logo depois das especialidades/serviços e antes do horário
+  (`treatFieldsEditor(v, {beforeHours})`).

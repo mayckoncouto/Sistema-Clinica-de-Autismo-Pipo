@@ -669,6 +669,9 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .fx-top-row{margin:-4px 0 10px}
 .pl-tools-menu{min-width:210px}
 .pl-tools-menu.to-left{left:auto;right:0}
+/* Menus "Outras opções" flutuam por cima de tudo (position:fixed, placeToolsMenu): não ficam
+   atrás da grade nem cortados pela barra, e nunca alargam a janela. */
+.pl-tools-menu.tools-fixed{position:fixed;z-index:400;overflow-y:auto;overflow-x:hidden;max-width:calc(100vw - 16px)}
 /* Planner: a busca encolhe um pouco antes de a barra quebrar linha */
 #tab-agenda .controls .search-wrap{flex:0 1 220px;min-width:140px}
 /* Barra do Planner sempre numa linha (computador): o filtro de salas e a busca encolhem;
@@ -684,6 +687,15 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 @media (min-width:761px) and (max-width:1300px){
   #tab-agenda .controls{gap:6px;padding-inline:10px}
   #tab-agenda .controls .seg button{padding:6px 7px;font-size:12px}
+}
+/* Telas estreitas de computador: a busca e o filtro encolhem mais; se ainda não couber, a
+   barra quebra em duas linhas em vez de alargar a janela. */
+@media (min-width:761px) and (max-width:1100px){
+  #tab-agenda .controls .search-wrap{min-width:90px}
+  #tab-agenda .controls #roomChips{min-width:110px}
+}
+@media (min-width:761px) and (max-width:960px){
+  #tab-agenda .controls{flex-wrap:wrap;row-gap:8px}
 }
 .pl-tools-menu .btn{display:block;width:100%;text-align:left;border:0;border-radius:0;box-shadow:none;background:transparent;font-weight:600}
 .pl-tools-menu .btn[hidden]{display:none}
@@ -4089,7 +4101,7 @@ function wireControls(){
   });
   (function(){
     var tb = document.getElementById("patMoreBtn"), tm = document.getElementById("patMoreMenu");
-    function setOpen(o){ tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ var rc = tb.getBoundingClientRect(); tm.classList.toggle("to-left", rc.left + 220 > window.innerWidth); var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); } }
+    function setOpen(o){ tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ var rc = tb.getBoundingClientRect(); placeToolsMenu(tb, tm); var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); } }
     tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
     tm.addEventListener("click", function(e){ if (e.target.closest("button")) setOpen(false); });
     document.addEventListener("mousedown", function(e){ if (!e.target.closest(".pat-more-wrap")) setOpen(false); });
@@ -4111,7 +4123,7 @@ function wireControls(){
   (function(){
     var tb = document.getElementById("plToolsBtn"), tm = document.getElementById("plToolsMenu");
     if (!tb || !tm) return;
-    function setOpen(o){ tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ var rc = tb.getBoundingClientRect(); tm.classList.toggle("to-left", rc.left + 220 > window.innerWidth); } if (o){ var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); } }
+    function setOpen(o){ tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ var rc = tb.getBoundingClientRect(); placeToolsMenu(tb, tm); } if (o){ var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); } }
     tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
     tm.addEventListener("click", function(e){ if (e.target.closest("button")) setOpen(false); });
     document.addEventListener("mousedown", function(e){ if (!e.target.closest(".pl-tools-wrap")) setOpen(false); });
@@ -6235,7 +6247,7 @@ function specSumRender(){
 }
 // ABA do tratamento e das linhas: só "Sim" ou "Não"; vazio (cadastros antigos) = Sim.
 function abaYesNo(v){ return v === "Não" ? "Não" : "Sim"; }
-function treatFieldsEditor(v){
+function treatFieldsEditor(v, opts){
   // Per-patient specialty rows, editable independently of the global catalog.
   var draftSpecRows = patientSpecRows(v).map(function(row){
     return {specId: row.specId, name: specialtyName(row.specId), hours: row.hours == null ? "" : String(row.hours), profId: row.profId || "", aba: abaYesNo(row.aba || v.aba)};
@@ -6283,6 +6295,7 @@ function treatFieldsEditor(v){
           '<div class="hours-list" id="specRowsHost"></div>' +
           '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ especialidade ou serviço</button>' +
         '</div>' +
+        (opts && opts.beforeHours || "") +
         patHoursSectionHtml(v);
   // wire() define estas duas (dependem dos campos já na tela); read() usa.
   var syncRef = function(){}, resolveRef = function(){ return draftConvenioId; };
@@ -10617,7 +10630,7 @@ function wireAgendaDia(){
     function setOpen(o){
       if (o) tm.innerHTML = agdToolsMenuHtml();
       tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false");
-      if (o){ var rc = tb.getBoundingClientRect(); tm.classList.toggle("to-left", rc.left + 260 > window.innerWidth); var f = tm.querySelector("button"); if (f) f.focus(); }
+      if (o){ var rc = tb.getBoundingClientRect(); placeToolsMenu(tb, tm); var f = tm.querySelector("button"); if (f) f.focus(); }
     }
     tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
     tm.addEventListener("click", function(e){ var b = e.target.closest("[data-agd-tool]"); if (!b) return; setOpen(false); agdRunTool(b.getAttribute("data-agd-tool")); });
@@ -12250,7 +12263,8 @@ var AGD_TOOLS = [
 function agdToolsVisible(){ return agdClient() ? AGD_TOOLS.filter(function(t){ return t.ok(); }) : []; }
 function agdToolsMenuHtml(){
   var out = [];
-  agdToolsVisible().forEach(function(t, i){ if (t.sep && i) out.push('<div class="cad-sep" role="separator"></div>'); out.push('<button type="button" class="btn ghost" data-agd-tool="' + t.k + '">' + esc(t.label) + '</button>'); });
+  // Mesmo visual do menu "Outras opções" do Planner (sem divisórias).
+  agdToolsVisible().forEach(function(t){ out.push('<button type="button" class="btn ghost" data-agd-tool="' + t.k + '">' + esc(t.label) + '</button>'); });
   return out.join("");
 }
 function agdRunTool(k){ var t = AGD_TOOLS.filter(function(x){ return x.k === k; })[0]; if (t && t.ok()) t.run(); }
@@ -14412,7 +14426,8 @@ function openTreatmentModal(t, opts){
     vencPor: isNew ? "sem" : (t.vencPor || "data"),
     total: isNew ? "" : (t.totalSessoes || "")
   };
-  var ed = treatFieldsEditor(v);
+  // Observações logo depois das especialidades/serviços, antes do horário.
+  var ed = treatFieldsEditor(v, {beforeHours: '<div class="field"><label for="trObs">Observações</label><textarea id="trObs" rows="2" placeholder="Opcional">' + esc(d.obs) + '</textarea></div>'});
   var wasCancelled = !isNew && t.status === "cancelado";
   var mots = activeOnly(cancelReasonsList(), isNew ? "" : t.motivoCancel);
   if (!isNew && t.motivoCancel && !mots.some(function(m){ return m.id === t.motivoCancel; })) mots.push({id: t.motivoCancel, name: t.motivoCancelNome || t.motivoCancel});
@@ -14470,7 +14485,6 @@ function openTreatmentModal(t, opts){
         (!isNew && can("plano_terapeutico", "view") ? '<div class="tr-plan-link"><button type="button" class="btn ghost" id="trOpenPlan">Abrir plano terapêutico</button><span class="pl-hint">Objetivos por habilidade, resumo do quadro clínico e revisão.</span></div>' : '') +
         '<div class="tr-sec">Convênio, pacote e horário</div>' +
         ed.html +
-        '<div class="field"><label for="trObs">Observações</label><textarea id="trObs" rows="2" placeholder="Opcional">' + esc(d.obs) + '</textarea></div>' +
         (isNew ? '' : '<div class="tr-sec">Contratado × realizado (mês a mês)</div>' +
           '<div class="hint">Realizado = Finalizado + Não compareceu. No mês atual, "Agendado" são os atendimentos marcados até o fim do mês ainda sem status. Primeiro e último mês: contratado proporcional aos dias.</div>' +
           '<div id="trMonthly">' + trMonthlyHtml(t) + '</div>') +
@@ -17940,6 +17954,31 @@ function planFromTreatment(pid){
   if (!planCan("view")){ showToast("Seu nível de permissão não dá acesso ao Plano terapêutico.", true); return; }
   openPlanFor(pid);
 }
+
+/* Menus "Outras opções ▾" (Planner, Agenda, Pacientes): posição fixa junto do botão,
+ * alinhada pela direita dele e presa dentro da tela (não alarga a janela, não fica atrás
+ * da grade). Fecha ao rolar a página ou mudar o tamanho da janela. */
+function placeToolsMenu(btn, menu){
+  menu.classList.add("tools-fixed");
+  menu.style.left = "0px"; menu.style.top = "0px"; menu.style.right = "auto"; menu.style.maxHeight = "";
+  var rc = btn.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = window.innerHeight;
+  var w = menu.offsetWidth, top = rc.bottom + 6, left = Math.min(rc.right - w, vw - w - 8);
+  left = Math.max(8, left);
+  var space = vh - top - 8;
+  if (space < 160 && rc.top > space){ menu.style.maxHeight = Math.max(120, rc.top - 14) + "px"; top = Math.max(8, rc.top - 6 - Math.min(menu.offsetHeight, rc.top - 14)); }
+  else menu.style.maxHeight = Math.max(120, space) + "px";
+  menu.style.left = left + "px"; menu.style.top = top + "px";
+}
+(function(){
+  function closeAll(e){
+    if (e && e.target && e.target.closest && e.target.closest(".pl-tools-menu")) return;
+    document.querySelectorAll(".pl-tools-menu.tools-fixed:not([hidden])").forEach(function(m){
+      m.hidden = true; var w = m.closest(".pl-tools-wrap"), b = w && w.querySelector("[aria-expanded]"); if (b) b.setAttribute("aria-expanded", "false");
+    });
+  }
+  window.addEventListener("resize", function(){ closeAll(); });
+  document.addEventListener("scroll", closeAll, true);
+})();
 
 /* ---------------- Tela cheia (Planner e Agenda) ---------------- */
 // Esconde o topo, a barra, a legenda (e, na Agenda, a lista lateral) e pede tela
