@@ -2245,3 +2245,42 @@ confirmações de horário/terapeuta/área) e Agenda + `clinical_records.patient
 `pacientes.edit`; exige o nome novo já salvo; flag `pipo.merging` mantém autor das evoluções).
 Outro paciente com o mesmo nome antigo = não renomeia (aviso). Migração
 `supabase/2026-10-06h-renomear-paciente.sql`. Teste `tests/run_patient_rename.js`.
+## Planilhas: exportar e importar (2026-10-06)
+Decisões do usuário: ferramenta no sistema (não SQL); Excel .xlsx; exportar = modelo;
+Tratamentos, Pacientes, Objetivos, Habilidades e Escalas. Bloco "Planilhas: exportar e
+importar" no fim do script.
+- Motor sem biblioteca externa: `xlBuild(sheets)` (zip sem compressão, `xlZip`, `xlCrc32`;
+  cabeçalho em negrito e fixo, aba "Instruções"), `xlRead(buf)` (`xlUnzip` com
+  `DecompressionStream("deflate-raw")` para os arquivos que o Excel comprime; shared strings,
+  inlineStr, números), `xlParseText` (colar do Excel / CSV ";" ou ","), `xlReadFile`.
+- `IO_KINDS[tipo] = {label, file, mod, cols:[{k, h, alias, req, hide}], exportRows, plan, apply,
+  prepare}`. `ioRecords` acha o cabeçalho (nome da coluna ou apelido, sem acento/maiúscula;
+  colunas desconhecidas vão para "Colunas ignoradas"). `ioOpenImport(tipo)` (janela `#ovIo`:
+  baixar modelo atual/vazio, arquivo `#ioFile` ou colar `#ioPaste`, "Ver prévia" → `ioRenderPlan`
+  com Novo / Atualizar / Igual / Com problema, filtro pelas contagens, "Importar (N)"). Antes de
+  gravar baixa uma cópia (`ioExport(tipo)`). `ioExport(tipo, vazio)`. Célula vazia nunca apaga.
+- Menus: "Outras opções ▾" (`ioToolsMenuHtml`/`ioWireMenu`, `[data-io-wrap]`) antes do "+ Incluir"
+  em Tratamentos, Objetivos, Escalas e Habilidades; Pacientes ganhou `#patExportBtn` /
+  `#patImportBtn` no `#patMoreMenu`. Exportar = ver; Importar = incluir ou editar no módulo.
+- **Tratamentos** (`ioTrPlan`/`ioTrApply`): paciente pelo nome (`ioFindPatient`, homônimo desempata
+  pelo nascimento); fora do cadastro = listado e pulado. Mesmo paciente + mesmo início = atualiza
+  (especialidades/terapeutas/horários do sistema ficam; histórico "importado"). O tratamento da
+  migração (`id = "tr-" + pacienteId`, início que não está na planilha) é apagado e passa
+  specHours/horários ao Ativo da planilha (ou ao mais recente). Outro Ativo do sistema vira
+  Renegociado. Tipo recalculado (`trTipoFor`). Status Ativo / Alterado|Renegociado|Negociado /
+  Cancelado; Fim = `statusEm` (Renegociado sem fim = início do seguinte; Ativo com fim = ignorado).
+  Problema: fim antes do início, mesmo início repetido, 2 Ativos, Cancelado do sistema mudando de
+  status. Cancelado sem motivo = `motivoPendente: true` (etiqueta "sem motivo", filtro
+  `semmotivo` "Cancelados sem motivo"; ao salvar com motivo na janela a marca sai). Valor/Descontos
+  (mensal) → `treatment_finance` em lote (precisa de "Tratamentos – valores" editar). Suporte
+  1/2/3 → `suporte` "Nível N"; texto → `cid` (só se vazios; tabela de saúde quando existe).
+  Nascimento vazio é preenchido; data de entrada baixa até o 1º início. Migração
+  `supabase/2026-10-06i-importacao-cancelado-sem-motivo.sql` (`treatments_cancel_rules` aceita
+  `motivoPendente`).
+- **Pacientes** (`ioPatPlan`): mesmo CPF; sem CPF, mesmo nome e nascimento (vazio de um lado vale)
+  → só completa campos vazios. Novo entra sem CPF (pedido ao editar). Saúde só com
+  "Pacientes – saúde".
+- **Habilidades** (nome), **Escalas** (uma linha por nível; nível existente não sai — vira
+  problema; ids dos níveis mantidos pelo nome), **Objetivos** (texto + habilidade; habilidade
+  desconhecida = problema; especialidades por nome ou sigla, vazio = todas).
+- Teste `tests/run_planilhas.js` (cria `tests/page_io.html`; 38 arquivos no `npm test`).

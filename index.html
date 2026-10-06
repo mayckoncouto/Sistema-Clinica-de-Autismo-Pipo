@@ -362,6 +362,27 @@ tr.is-inactive td{color:var(--muted)}
 .chk-line{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:10px 0 0;cursor:pointer}
 .chk-line input{margin-top:2px;flex:none}
 .agd-tool-prev{margin-top:12px}
+/* Planilhas: importar/exportar (Tratamentos, Pacientes, Objetivos, Habilidades, Escalas). */
+.io-steps{display:flex;flex-direction:column;gap:8px}
+.io-step{font-size:13px;line-height:1.6}
+.io-step input[type=file]{font-size:12.5px;margin-left:4px;max-width:100%}
+.io-paste{width:100%;font:12px "IBM Plex Mono",ui-monospace,monospace;resize:vertical}
+.io-sum{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 8px}
+.io-chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.io-chip.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.io-badge{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--surface-2);color:var(--ink-2)}
+.io-novo{color:#1f6f43}.io-badge.io-novo{background:#dcf1e4}
+.io-atualizar{color:#1f5b8f}.io-badge.io-atualizar{background:#dceaf7}
+.io-problema{color:#a33a33}.io-badge.io-problema{background:#f8dfdc}
+.io-notes{margin:6px 0 10px;padding-left:18px;font-size:12.5px;color:var(--ink-2)}
+.io-tbl-wrap{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.io-tbl{width:100%;table-layout:auto}
+.io-tbl td{vertical-align:top;font-size:12.5px}
+.io-msg{color:var(--ink)}.io-warn{color:#8a5a00}.io-warn::before{content:"⚠ "}
+.io-diff{display:inline-block;margin-right:10px}
+.io-err{margin-top:12px;color:#a33a33;font-weight:600}
+.tr-nomot{margin-left:4px}
+@media (max-width:760px){ .io-wrap .pm-lg{display:none} .io-wrap .pm-sm{display:inline} .tr-nomot{display:none} }
 .agd-tool-prev .tr-month{margin-top:6px}
 .agd-tool-det{margin-top:8px}.agd-tool-det summary{cursor:pointer;font-size:13px;color:var(--ink-2)}
 .agd-st-grp{margin-top:10px}.agd-st-head{font-weight:700;font-size:13px;margin-bottom:2px}
@@ -1486,6 +1507,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue){order:91}
   /* Salas/Grupos: contador no começo da linha dos botões; "Inativos" desce. */
   #tab-salas .pat-toolbar .inact-toggle{order:91;flex:1 1 100%}
+  :is(#tab-objetivos,#tab-escalas,#tab-habilidades) .pat-toolbar .inact-toggle{order:91;flex:1 1 100%}
   #tab-salas .pat-toolbar{column-gap:6px}
   #tab-salas #toggleGroupsBtn{padding-inline:6px}
   #tab-salas .pat-toolbar .help-q{margin-left:0}
@@ -1774,6 +1796,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <option value="ativo">Ativos</option>
         <option value="renegociado">Renegociados</option>
         <option value="cancelado">Cancelados</option>
+        <option value="semmotivo">Cancelados sem motivo</option>
         <option value="vencendo">Vencendo (próximos 30 dias)</option>
         <option value="vencidos">Vencidos</option>
         <option value="abaixo">Abaixo do contratado</option>
@@ -13877,6 +13900,7 @@ function trHistHtml(t){
     var when = e.em ? prStamp(e.em) : "";
     var what = e.acao === "criado" ? "Tratamento criado como <b>" + esc(trLabel(TR_STATUS, e.para)) + "</b>"
       : e.acao === "motivo" ? "Motivo do cancelamento alterado"
+      : e.acao === "importado" ? "Atualizado pela importação de planilha"
       : "Status: " + esc(trLabel(TR_STATUS, e.de)) + " → <b>" + esc(trLabel(TR_STATUS, e.para)) + "</b>" + (e.auto ? " (outro tratamento ficou ativo)" : "");
     var mot = e.motivoNome ? " · Motivo: <b>" + esc(e.motivoNome) + "</b>" : "";
     return '<li><span class="tr-hist-when">' + esc(when) + '</span>' + what + mot + (e.por ? ' · por ' + esc(e.por) : '') +
@@ -14366,6 +14390,7 @@ function renderTreatmentsTab(){
   var shown = all.filter(function(t){
     if (filter === "abaixo"){ if (t.status !== "ativo") return false; var ms = trMonthSummary(t); if (!ms || !ms.below) return false; }
     else if (filter === "vencendo" || filter === "vencidos"){ var dd = trDue(t); if (!dd || dd.state !== (filter === "vencidos" ? "vencido" : "vencendo")) return false; }
+    else if (filter === "semmotivo"){ if (t.status !== "cancelado" || t.motivoCancel) return false; }
     else if (filter && t.status !== filter) return false;
     if (!q) return true;
     var p = rawPatient(t.patientId);
@@ -14403,7 +14428,7 @@ function renderTreatmentsTab(){
       trAbaCell(t),
       esc(trEndText(t)),
       esc(trLabel(TR_TIPOS, t.tipo)),
-      '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>',
+      '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>' + (t.status === "cancelado" && !t.motivoCancel ? '<span class="tr-venc vencendo tr-nomot" title="Motivo do cancelamento pendente">sem motivo</span>' : ''),
       trMonthCell(t)];
     var vals = [p ? p.nome : "", t.inicio || "", t.vencPor === "sessoes" ? (trDue(t) ? trDue(t).rest : "") : (t.validoAte || ""), conv || "",
       trAbaText(t), trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), (function(){ var ms = trMonthSummary(t); return ms ? ms.m.tot.diff : ""; })()];
@@ -14701,6 +14726,7 @@ function openTreatmentModal(t, opts){
     rec.validoAte = rec.vencPor === "data" ? (vencV || "") : "";
     if (st === "cancelado"){ rec.motivoCancel = motId; rec.motivoCancelNome = motName; rec.obsCancel = obsCancel; }
     else { delete rec.motivoCancel; delete rec.motivoCancelNome; delete rec.obsCancel; }
+    delete rec.motivoPendente;
     var cancelInfo = st === "cancelado" ? {motivo: motId, motivoNome: motName, obs: obsCancel} : {};
     if (isNew) trHistAdd(rec, Object.assign({acao: "criado", para: st}, cancelInfo));
     else if (t.status !== st) trHistAdd(rec, Object.assign({acao: "status", de: t.status, para: st}, cancelInfo));
@@ -14973,7 +14999,7 @@ var HELP_TOPICS = [
       "O grupo <b>Saúde</b> (médico, CID, data do diagnóstico, nível de suporte, comunicação, alergias, medicações e restrições) só aparece para quem tem a permissão <b>Pacientes – saúde</b>: com \"ver\" os campos aparecem travados; com \"editar\" dá para alterar. Sem a permissão, esses dados também não aparecem nos Detalhes do Agendamento, na ficha impressa nem no quadro clínico do Plano Terapêutico.",
       "Salve. Paciente novo: em seguida o sistema abre o tratamento dele. No resumo do tratamento aparece o horário de atendimento, só com os dias e períodos em que o paciente vem.",
       "A lista mostra nome, nascimento, idade e a situação do tratamento. Ao lado da busca, escolha onde procurar: <b>Paciente</b>, <b>Mãe</b>, <b>Pai</b> ou <b>Responsável financeiro</b> — pelo nome (sem acento/maiúscula) ou pelo CPF.",
-      "<b>Outras opções ▾</b>: <b>Campos obrigatórios</b>, <b>Imprimir ficha cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica) e <b>Mesclar cadastros</b> (só Administrador)."
+      "<b>Outras opções ▾</b>: <b>Campos obrigatórios</b>, <b>Imprimir ficha cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica), <b>Mesclar cadastros</b> (só Administrador) e <b>Exportar planilha</b> / <b>Importar planilha</b> (veja o tópico Planilhas)."
     ],
     rules: [
       "Trocar o nome do paciente no cadastro troca também nos agendamentos do Planner e da Agenda, nas evoluções do Prontuário e no Plano terapêutico. Se outro paciente tem o mesmo nome antigo, nada é trocado (aparece um aviso para conferir à mão).",
@@ -14999,13 +15025,15 @@ var HELP_TOPICS = [
       "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: ele cria um novo tratamento copiando o atual, e o anterior vira Renegociado.",
       "Para encerrar, mude o Status para <b>Cancelado</b> e escolha o motivo.",
       "O botão <b>Cadastro do paciente</b>, no topo da janela, abre o cadastro do paciente do tratamento.",
-      "Na tela, use os filtros: status, Vencendo, Vencidos, Abaixo do contratado e Pacientes sem tratamento ativo."
+      "Na tela, use os filtros: status, Cancelados sem motivo, Vencendo, Vencidos, Abaixo do contratado e Pacientes sem tratamento ativo.",
+      "<b>Outras opções ▾</b>: <b>Exportar planilha</b> e <b>Importar planilha</b> (veja o tópico Planilhas)."
     ],
     rules: [
       "Cada paciente tem <b>só um tratamento Ativo</b>. Salvar outro como Ativo passa o anterior para Renegociado (o banco também confere).",
       "Ao lado de \"Especialidades/serviços e sessão (mês)\" aparece a conta: <b>Sessão/Mês</b> (o total) × a soma das especialidades/serviços. Verde = confere, âmbar = faltam sessões para distribuir, vermelho = passou do total. Salvar com diferença pede confirmação.",
       "O <b>Tipo</b> é automático: <b>Novo</b> se não há anterior ou o anterior foi Cancelado; <b>Renegociado</b> se o anterior foi Renegociado.",
       "<b>Cancelado é definitivo</b> e exige motivo. A observação é obrigatória quando o motivo é \"Outro\". Para retomar, crie um novo tratamento.",
+      "Cancelado que veio da importação de planilha sem motivo aparece com a etiqueta <b>sem motivo</b> (filtro \"Cancelados sem motivo\"): abra o tratamento, escolha o motivo e salve.",
       "Cancelar um tratamento <b>inativa o paciente</b>, se ele não tiver outro tratamento Ativo (precisa da permissão de editar Pacientes).",
       "Ao <b>cancelar ou renegociar</b> um tratamento, o sistema pergunta se remove os agendamentos do paciente: do <b>Planner</b> (as 4 semanas) e/ou da <b>Agenda</b> a partir de uma data que você escolhe. Atendimentos com evolução no prontuário ficam. As remoções entram no desfazer do Planner e da Agenda.",
       "No tratamento novo, a lista de pacientes mostra também os inativos, com \"(inativo)\" ao lado do nome. Salvar o tratamento novo <b>reativa o paciente</b> (menos quando ele já é salvo como Cancelado).",
@@ -15015,6 +15043,23 @@ var HELP_TOPICS = [
       "O histórico na janela mostra cada troca de status: quem, quando e o motivo."
     ],
     who: "Permissão <b>Tratamentos</b>. Os valores dependem de <b>Tratamentos – valores</b>."},
+  {id: "planilhas", group: "Cadastros", title: "Planilhas: exportar e importar", mod: null,
+    purpose: "Levar dados do sistema para o Excel e trazer do Excel para o sistema, em Tratamentos, Pacientes, Objetivos, Habilidades e Escalas.",
+    steps: [
+      "Na tela do cadastro, abra <b>Outras opções ▾</b> → <b>Exportar planilha</b>: baixa um arquivo do Excel (.xlsx) com os dados da tela e uma aba <b>Instruções</b>. Esse arquivo é também o <b>modelo</b> para importar.",
+      "Para importar: <b>Outras opções ▾</b> → <b>Importar planilha</b>. Baixe o modelo (com os dados atuais ou vazio), preencha no Excel e escolha o arquivo — ou copie as linhas no Excel (com a linha dos títulos) e cole no quadro.",
+      "Clique em <b>Ver prévia</b>: cada linha aparece como <b>Novo</b>, <b>Atualizar</b> (com o que muda), <b>Igual</b> ou <b>Com problema</b> (com o motivo). Clique nas contagens para filtrar.",
+      "Confira e clique em <b>Importar (N)</b>. Antes de gravar, o sistema baixa uma cópia dos dados atuais para você guardar."
+    ],
+    rules: [
+      "Célula vazia nunca apaga o que já está no sistema. Linhas com problema não são importadas: corrija na planilha e importe de novo (o que já entrou aparece como Igual).",
+      "Os nomes das colunas são reconhecidos sem acento e sem maiúsculas (ex.: \"Data Início\", \"Pacote\", \"Despesas\"). Colunas que o sistema calcula (Tipo, Valor final, Idade, Retenção, Agenda) são ignoradas.",
+      "<b>Tratamentos</b>: o paciente precisa estar cadastrado (quem não está aparece na lista e fica de fora). Mesmo paciente e mesma data de início = atualiza o tratamento (especialidades, terapeutas e horários do sistema ficam); outro início = tratamento novo. O tratamento criado automaticamente na implantação é substituído pelo histórico da planilha e passa as especialidades e horários para o tratamento Ativo. Tipo é calculado; Cancelado sem motivo fica com o motivo pendente. Suporte 1, 2 ou 3 vai para o Nível de suporte; texto vai para o Diagnóstico (só se estiverem vazios).",
+      "<b>Pacientes</b>: o mesmo paciente (mesmo CPF; sem CPF, mesmo nome e nascimento) só tem os campos vazios completados. Paciente novo entra sem exigir o CPF (ele é pedido ao editar o cadastro).",
+      "<b>Objetivos</b>: mesmo texto na mesma habilidade = atualiza. <b>Habilidades</b> e <b>Escalas</b>: mesmo nome = atualiza. Escalas: uma linha por nível, do primeiro ao final; nível que já existe não sai pela importação.",
+      "Valores e dados de saúde só entram e saem para quem tem <b>Tratamentos – valores</b> e <b>Pacientes – saúde</b>."
+    ],
+    who: "Exportar: quem vê o cadastro. Importar: quem pode incluir ou alterar nele."},
   {id: "tratamentos-terapeuta", group: "Cadastros", title: "Tratamento: terapeuta e horário do paciente", mod: "tratamentos", tab: "tratamentos",
     purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido.",
     steps: [
@@ -15162,17 +15207,18 @@ var HELP_TOPICS = [
     purpose: "Objetivos prontos para usar no Plano terapêutico, com habilidade, critério de sucesso e escala sugeridos.",
     steps: ["Prontuário ▾ → <b>Objetivos</b> → <b>+ Incluir</b>: objetivo, habilidade, especialidades (nenhuma marcada = todas), critério de sucesso e escala.",
       "No Plano terapêutico, ao digitar no campo <b>Objetivo</b>, aparecem os objetivos do banco da mesma habilidade do quadro (e, se o objetivo já tem especialidades, os delas ou de todas). Escolha com o mouse ou com ↑ ↓ e Enter: o texto entra no objetivo, o critério e a escala vêm junto e as especialidades do banco que estão no tratamento são marcadas.",
-      "Para guardar um objetivo novo sem sair do plano, digite o texto e escolha <b>+ Salvar no Banco de objetivos</b>: abre uma janela por cima, já preenchida com o que está na linha (habilidade e especialidades)."],
+      "Para guardar um objetivo novo sem sair do plano, digite o texto e escolha <b>+ Salvar no Banco de objetivos</b>: abre uma janela por cima, já preenchida com o que está na linha (habilidade e especialidades).",
+      "<b>Outras opções ▾</b>: <b>Exportar planilha</b> e <b>Importar planilha</b> (veja o tópico Planilhas)."],
     rules: ["Não pode haver dois objetivos com o mesmo texto na mesma habilidade.", "Mudar ou excluir um objetivo do banco não muda os planos que já usaram o texto."],
     who: "Permissão <b>Objetivos</b>."},
   {id: "escalas", group: "Prontuário", title: "Escalas", mod: "escalas", tab: "escalas",
     purpose: "Escalas usadas na Situação dos objetivos do Plano terapêutico (ex.: Likert de 0 a 5, ABA).",
-    steps: ["Prontuário ▾ → <b>Escalas</b> → <b>+ Incluir</b>: nome e os níveis, do primeiro ao final.", "Cada nível tem nome e cor (clique no círculo para escolher). Use ▲▼ para mudar a ordem e <b>+ nível</b> para acrescentar."],
+    steps: ["Prontuário ▾ → <b>Escalas</b> → <b>+ Incluir</b>: nome e os níveis, do primeiro ao final.", "Cada nível tem nome e cor (clique no círculo para escolher). Use ▲▼ para mudar a ordem e <b>+ nível</b> para acrescentar.", "<b>Outras opções ▾</b>: <b>Exportar planilha</b> e <b>Importar planilha</b> (uma linha por nível; veja o tópico Planilhas)."],
     rules: ["O <b>último nível</b> é o nível final: no plano, escolher esse nível deixa o objetivo como <b>Atingido</b>.", "A escala precisa de pelo menos 2 níveis.", "Escala usada em algum plano não é excluída: é <b>Inativada</b>.", "As escalas são as mesmas para toda a clínica."],
     who: "Permissão <b>Escalas</b>."},
   {id: "habilidades", group: "Prontuário", title: "Habilidades", mod: "habilidades", tab: "habilidades",
     purpose: "Habilidades dos objetivos do Plano terapêutico (Comunicação, Socialização, Autonomia…).",
-    steps: ["Prontuário ▾ → <b>Habilidades</b> → <b>+ Incluir</b>: nome e as <b>especialidades sugeridas</b>.", "No Plano terapêutico, cada habilidade é um quadro, e o objetivo novo já vem com as especialidades sugeridas que estão no tratamento do paciente."],
+    steps: ["Prontuário ▾ → <b>Habilidades</b> → <b>+ Incluir</b>: nome e as <b>especialidades sugeridas</b>.", "No Plano terapêutico, cada habilidade é um quadro, e o objetivo novo já vem com as especialidades sugeridas que estão no tratamento do paciente.", "<b>Outras opções ▾</b>: <b>Exportar planilha</b> e <b>Importar planilha</b> (veja o tópico Planilhas)."],
     rules: ["Valem para todas as especialidades.", "Habilidade usada em algum plano não é excluída: é <b>Inativada</b>."],
     who: "Permissão <b>Habilidades</b>."},
   {id: "cbo", group: "Cadastros", title: "CBO", mod: "cbo", tab: "cbo",
@@ -18058,6 +18104,897 @@ function gridFullscreen(on){
     if (document.querySelector(".overlay, #dpPop, #cpPop, .cad-menu:not([hidden])") || state.clipboard || (typeof AD !== "undefined" && AD.clipboard)) return;
     gridFullscreen(false);
   });
+})();
+
+/* ---------------- Planilhas: exportar e importar (2026-10-06) ----------------
+ * Tratamentos, Pacientes, Objetivos, Habilidades e Escalas têm, no menu
+ * "Outras opções ▾", Exportar planilha (o arquivo também serve de modelo) e
+ * Importar planilha (arquivo .xlsx/.csv ou colar do Excel → prévia → importar).
+ * O .xlsx é montado e lido aqui mesmo, sem biblioteca externa: gravar = zip sem
+ * compressão; ler = zip com DecompressionStream("deflate-raw") do navegador.
+ * Cada tipo fica em IO_KINDS[tipo] = {label, file, mod, cols, exportRows, plan, apply}.
+ * Célula vazia na planilha nunca apaga o que já está no sistema.
+ */
+var XL_CRC = null;
+function xlCrc32(u8){
+  if (!XL_CRC){ XL_CRC = new Uint32Array(256); for (var n=0;n<256;n++){ var c = n; for (var k=0;k<8;k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; XL_CRC[n] = c >>> 0; } }
+  var crc = 0xFFFFFFFF;
+  for (var i=0;i<u8.length;i++) crc = XL_CRC[(crc ^ u8[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+// Zip "guardado" (sem compressão): o Excel abre normalmente.
+function xlZip(files){
+  var enc = new TextEncoder(), parts = [], central = [], off = 0;
+  var d = new Date(), dt = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate(), tm = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  files.forEach(function(f){
+    var name = enc.encode(f.name), data = typeof f.data === "string" ? enc.encode(f.data) : f.data, crc = xlCrc32(data);
+    var h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+    h.setUint16(10, tm, true); h.setUint16(12, dt, true); h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true);
+    h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+    parts.push(new Uint8Array(h.buffer), name, data);
+    var c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+    c.setUint16(12, tm, true); c.setUint16(14, dt, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true);
+    c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+    central.push(new Uint8Array(c.buffer), name);
+    off += 30 + name.length + data.length;
+  });
+  var cSize = central.reduce(function(s, p){ return s + p.length; }, 0);
+  var e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+  e.setUint32(12, cSize, true); e.setUint32(16, off, true);
+  return new Blob(parts.concat(central, [new Uint8Array(e.buffer)]), {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function xlEsc(s){ return String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function xlCol(i){ var s = ""; i++; while (i > 0){ var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+// sheets: [{name, rows: [[valor...]], widths: [n...]}] — 1ª linha = cabeçalho (negrito, fixa).
+// Números viram número; o resto, texto (datas vão como texto dd/mm/aaaa).
+function xlBuild(sheets){
+  var ws = sheets.map(function(sh, si){
+    var cols = (sh.widths || []).map(function(w, i){ return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + (w || 14) + '" customWidth="1"/>'; }).join("");
+    var rows = sh.rows.map(function(r, ri){
+      return '<row r="' + (ri + 1) + '">' + r.map(function(v, ci){
+        if (v === null || v === undefined || v === "") return "";
+        var ref = xlCol(ci) + (ri + 1), st = ri === 0 ? ' s="1"' : (sh.wrap ? ' s="2"' : '');
+        if (typeof v === "number" && isFinite(v)) return '<c r="' + ref + '"' + st + '><v>' + v + '</v></c>';
+        return '<c r="' + ref + '" t="inlineStr"' + st + '><is><t xml:space="preserve">' + xlEsc(v) + '</t></is></c>';
+      }).join("") + '</row>';
+    }).join("");
+    return {name: "xl/worksheets/sheet" + (si + 1) + ".xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      (sh.noFreeze ? '' : '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>') +
+      (cols ? '<cols>' + cols + '</cols>' : '') + '<sheetData>' + rows + '</sheetData></worksheet>'};
+  });
+  var files = [
+    {name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      sheets.map(function(s, i){ return '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'; }).join("") + '</Types>'},
+    {name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name: "xl/workbook.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
+      sheets.map(function(s, i){ return '<sheet name="' + xlEsc(String(s.name).slice(0, 31)) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>'; }).join("") + '</sheets></workbook>'},
+    {name: "xl/_rels/workbook.xml.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      sheets.map(function(s, i){ return '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>'; }).join("") +
+      '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+    {name: "xl/styles.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+      '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7F1EF"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+      '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs></styleSheet>'}
+  ].concat(ws);
+  return xlZip(files);
+}
+function xlDownload(fileName, sheets){
+  var blob = xlBuild(sheets), a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = fileName;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+}
+// Lê um .xlsx (ArrayBuffer) → Promise de [{name, rows: [[texto ou número]]}].
+function xlUnzip(buf){
+  var u8 = new Uint8Array(buf), dv = new DataView(buf), eo = -1;
+  for (var i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50){ eo = i; break; }
+  if (eo < 0) return Promise.reject(new Error("Arquivo não é uma planilha do Excel (.xlsx)."));
+  var n = dv.getUint16(eo + 10, true), p = dv.getUint32(eo + 16, true), dec = new TextDecoder(), jobs = [];
+  for (var k=0;k<n;k++){
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    var method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lo = dv.getUint32(p + 42, true);
+    var name = dec.decode(u8.subarray(p + 46, p + 46 + nl));
+    var ds = lo + 30 + dv.getUint16(lo + 26, true) + dv.getUint16(lo + 28, true), data = u8.slice(ds, ds + csize);
+    jobs.push((function(name, method, data){
+      if (method === 0) return Promise.resolve([name, data]);
+      if (method !== 8 || typeof DecompressionStream === "undefined") return Promise.reject(new Error("Este navegador não consegue abrir a planilha. Salve como CSV ou cole as linhas."));
+      return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer().then(function(b){ return [name, new Uint8Array(b)]; });
+    })(name, method, data));
+    p += 46 + nl + xl + cl;
+  }
+  return Promise.all(jobs).then(function(list){ var m = {}; list.forEach(function(x){ m[x[0]] = x[1]; }); return m; });
+}
+function xlRead(buf){
+  return xlUnzip(buf).then(function(files){
+    var dec = new TextDecoder();
+    function xml(name){ var f = files[name]; return f ? new DOMParser().parseFromString(dec.decode(f), "application/xml") : null; }
+    function all(node, tag){ return node ? Array.prototype.slice.call(node.getElementsByTagNameNS("*", tag)) : []; }
+    var ss = all(xml("xl/sharedStrings.xml"), "si").map(function(si){ return all(si, "t").map(function(t){ return t.textContent; }).join(""); });
+    var rels = {}; all(xml("xl/_rels/workbook.xml.rels"), "Relationship").forEach(function(r){ rels[r.getAttribute("Id")] = r.getAttribute("Target"); });
+    return all(xml("xl/workbook.xml"), "sheet").map(function(s){
+      var rid = s.getAttribute("r:id") || s.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+      var tgt = String(rels[rid] || "").replace(/^\//, ""); if (tgt.indexOf("xl/") !== 0) tgt = "xl/" + tgt;
+      var rows = [];
+      all(xml(tgt), "row").forEach(function(r, ri){
+        var rn = parseInt(r.getAttribute("r"), 10) || (ri + 1), row = [];
+        all(r, "c").forEach(function(c, ci){
+          var ref = c.getAttribute("r") || "", m = /^([A-Z]+)/.exec(ref), col = ci;
+          if (m){ col = 0; for (var i=0;i<m[1].length;i++) col = col * 26 + (m[1].charCodeAt(i) - 64); col--; }
+          var t = c.getAttribute("t"), v = all(c, "v")[0], val;
+          if (t === "s") val = ss[parseInt(v ? v.textContent : "", 10)] || "";
+          else if (t === "inlineStr") val = all(c, "t").map(function(x){ return x.textContent; }).join("");
+          else if (t === "b") val = v && v.textContent === "1" ? "Sim" : "Não";
+          else if (t === "str" || t === "e") val = v ? v.textContent : "";
+          else val = v ? (isFinite(Number(v.textContent)) ? Number(v.textContent) : v.textContent) : "";
+          row[col] = val;
+        });
+        rows[rn - 1] = row;
+      });
+      for (var i=0;i<rows.length;i++) if (!rows[i]) rows[i] = [];
+      return {name: s.getAttribute("name"), rows: rows};
+    });
+  });
+}
+// Texto colado do Excel (tabulação) ou CSV (";" ou ","), com aspas.
+function xlParseText(txt){
+  txt = String(txt || "").replace(/^﻿/, "");
+  var first = txt.split(/\r?\n/)[0] || "";
+  var del = first.indexOf("\t") !== -1 ? "\t" : (first.split(";").length >= first.split(",").length ? ";" : ",");
+  var rows = [], row = [], cell = "", q = false;
+  for (var i=0;i<txt.length;i++){
+    var ch = txt[i];
+    if (q){ if (ch === '"'){ if (txt[i + 1] === '"'){ cell += '"'; i++; } else q = false; } else cell += ch; continue; }
+    if (ch === '"' && cell === "") { q = true; continue; }
+    if (ch === del){ row.push(cell); cell = ""; continue; }
+    if (ch === "\r") continue;
+    if (ch === "\n"){ row.push(cell); rows.push(row); row = []; cell = ""; continue; }
+    cell += ch;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+// Arquivo escolhido → Promise das linhas (1ª aba que não seja "Instruções").
+function xlReadFile(file){
+  return file.arrayBuffer().then(function(buf){
+    var u8 = new Uint8Array(buf);
+    if (u8[0] === 0x50 && u8[1] === 0x4B) return xlRead(buf).then(function(sheets){
+      var sh = sheets.filter(function(s){ return normText(s.name) !== "instrucoes"; })[0] || sheets[0];
+      return sh ? sh.rows : [];
+    });
+    var txt = new TextDecoder("utf-8").decode(u8);
+    if (txt.indexOf("�") !== -1) txt = new TextDecoder("windows-1252").decode(u8);
+    return xlParseText(txt);
+  });
+}
+
+/* ---- leitura das colunas ---- */
+function ioKey(s){ return normText(String(s == null ? "" : s)).replace(/\s+/g, " ").replace(/[.:*]+$/, "").trim(); }
+function ioCell(v){ return v === null || v === undefined ? "" : (typeof v === "number" ? v : String(v).trim()); }
+function ioBlank(v){ v = ioCell(v); return v === "" || v === "-" || v === "—"; }
+function ioText(v){ return ioBlank(v) ? "" : String(ioCell(v)).replace(/\s+/g, " ").trim(); }
+// Data: dd/mm/aaaa, aaaa-mm-dd ou número de série do Excel. "" = vazia; null = inválida.
+function ioDate(v){
+  if (ioBlank(v)) return "";
+  if (typeof v === "number"){ if (v < 1000 || v > 80000) return null; var d = new Date(Math.round((v - 25569) * 86400000)); return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0"); }
+  var s = String(v).trim(), m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/.exec(s), y, mo, da;
+  if (m){ da = +m[1]; mo = +m[2]; y = +m[3]; if (y < 100) y += 2000; }
+  else if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s))){ y = +m[1]; mo = +m[2]; da = +m[3]; }
+  else return null;
+  if (y < 1901 || mo < 1 || mo > 12 || da < 1) return null;
+  var dt = new Date(y, mo - 1, da);
+  if (dt.getMonth() !== mo - 1) return null;
+  return y + "-" + String(mo).padStart(2, "0") + "-" + String(da).padStart(2, "0");
+}
+function ioNum(v){ if (ioBlank(v)) return ""; if (typeof v === "number") return v; var n = parseFloat(String(v).replace(/\./g, "").replace(",", ".")); return isFinite(n) ? n : null; }
+function ioMoney(v){ if (ioBlank(v)) return ""; return typeof v === "number" ? Math.round(v * 100) / 100 : parseMoney(v); }
+function ioYesNo(v){ var k = ioKey(v); if (!k) return ""; if (k === "sim" || k === "s" || k === "yes") return "Sim"; if (k === "nao" || k === "n" || k === "no") return "Não"; return null; }
+function ioList(v){ return ioText(v) ? ioText(v).split(/\s*[,;\/]\s*/).filter(Boolean) : []; }
+// Linhas da planilha → registros {chave: valor, _line}. Cabeçalho = 1ª linha com
+// alguma coluna conhecida. Colunas que o sistema calcula ou não conhece vão para notes.
+function ioRecords(kind, rows){
+  var K = IO_KINDS[kind], hi = -1, map = {}, unknown = [];
+  function colFor(h){
+    var k = ioKey(h); if (!k) return null;
+    return K.cols.filter(function(c){ return ioKey(c.h) === k || (c.alias || []).some(function(a){ return ioKey(a) === k; }); })[0] || null;
+  }
+  for (var i=0;i<Math.min(rows.length, 15) && hi < 0;i++) if ((rows[i] || []).some(function(h){ return colFor(h); })) hi = i;
+  if (hi < 0) return {error: "Não encontrei o cabeçalho. A primeira linha precisa ter os nomes das colunas (ex.: " + K.cols.slice(0, 3).map(function(c){ return c.h; }).join(", ") + ")."};
+  (rows[hi] || []).forEach(function(h, ci){
+    var c = colFor(h);
+    if (c){ if (map[c.k] === undefined) map[c.k] = ci; }
+    else if (ioText(h)) unknown.push(ioText(h));
+  });
+  var miss = K.cols.filter(function(c){ return c.req && map[c.k] === undefined; });
+  if (miss.length) return {error: "Falta a coluna obrigatória: " + miss.map(function(c){ return c.h; }).join(", ") + "."};
+  var recs = [];
+  for (var r=hi + 1;r<rows.length;r++){
+    var row = rows[r] || [], o = {_line: r + 1}, any = false;
+    K.cols.forEach(function(c){ var v = map[c.k] === undefined ? "" : row[map[c.k]]; o[c.k] = v; if (!ioBlank(v)) any = true; });
+    if (any) recs.push(o);
+  }
+  return {recs: recs, unknown: unknown, cols: map};
+}
+
+/* ---- janela de importação ---- */
+var IO_ST = {novo: "Novo", atualizar: "Atualizar", igual: "Igual (sem mudança)", problema: "Com problema"};
+function ioExport(kind, empty){
+  var K = IO_KINDS[kind];
+  var cols = K.cols.filter(function(c){ return !c.hide || !c.hide(); });
+  var data = empty ? [] : K.exportRows();
+  var rows = [cols.map(function(c){ return c.h; })].concat(data.map(function(o){ return cols.map(function(c){ var v = o[c.k]; return v === undefined || v === null ? "" : v; }); }));
+  var help = [["Como preencher"]].concat((K.help || []).map(function(t){ return [t]; }),
+    [[""], ["Colunas"]], cols.map(function(c){ return [c.h + (c.req ? " (obrigatória)" : "") + (c.note ? ": " + c.note : "")]; }),
+    [[""], ["Célula vazia não apaga o que já está no sistema. Linhas com problema aparecem na prévia e não são importadas."]]);
+  xlDownload((empty ? "modelo-" : "") + K.file + "-" + trTodayIso() + ".xlsx", [
+    {name: K.label, rows: rows, widths: cols.map(function(c){ return c.w || 16; })},
+    {name: "Instruções", rows: help, widths: [110], noFreeze: true, wrap: true}
+  ]);
+}
+function ioCanImport(kind){ var K = IO_KINDS[kind]; return can(K.mod, "create") || can(K.mod, "edit"); }
+function ioOpenImport(kind){
+  var K = IO_KINDS[kind];
+  if (!ioCanImport(kind)){ showToast("Seu nível de permissão não permite incluir nem alterar " + K.label.toLowerCase() + ".", true); return; }
+  var body =
+    '<div class="io-steps">' +
+      '<div class="io-step"><b>1.</b> Use o modelo: <button type="button" class="linklike" data-io-model="cur">baixar a planilha com os dados atuais</button> ou <button type="button" class="linklike" data-io-model="empty">baixar o modelo vazio</button>.</div>' +
+      '<div class="io-step"><b>2.</b> Escolha o arquivo (.xlsx ou .csv) <input type="file" id="ioFile" accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"> ou cole as linhas copiadas do Excel (com o cabeçalho):</div>' +
+      '<textarea id="ioPaste" class="io-paste" rows="4" placeholder="Cole aqui as linhas copiadas do Excel, começando pela linha dos títulos"></textarea>' +
+      '<div class="io-step"><b>3.</b> <button type="button" class="btn" id="ioPrev">Ver prévia</button> <span class="hint">Nada é gravado antes de você confirmar.</span></div>' +
+    '</div><div id="ioOut"></div>';
+  var m = agdToolModal("ovIo", "Importar planilha — " + K.label, esc(K.sub || ""), body,
+    '<button class="btn ghost" data-tclose>Cancelar</button><button class="btn primary" id="ioGo" disabled>Importar</button>', 980);
+  var plan = null;
+  Array.prototype.forEach.call(m.ov.querySelectorAll("[data-io-model]"), function(b){ b.addEventListener("click", function(){ ioExport(kind, b.getAttribute("data-io-model") === "empty"); }); });
+  function reset(){ plan = null; m.$("#ioOut").innerHTML = ""; m.$("#ioGo").disabled = true; m.$("#ioGo").textContent = "Importar"; }
+  m.$("#ioFile").addEventListener("change", function(){ if (this.files[0]) m.$("#ioPaste").value = ""; reset(); });
+  m.$("#ioPaste").addEventListener("input", function(){ if (this.value.trim()) m.$("#ioFile").value = ""; reset(); });
+  m.$("#ioPrev").addEventListener("click", function(){
+    var f = m.$("#ioFile").files[0], txt = m.$("#ioPaste").value;
+    if (!f && !txt.trim()){ showToast("Escolha o arquivo ou cole as linhas.", true); return; }
+    m.$("#ioOut").innerHTML = '<div class="hint">Lendo a planilha…</div>';
+    (f ? xlReadFile(f) : Promise.resolve(xlParseText(txt))).then(function(rows){
+      var R = ioRecords(kind, rows);
+      if (R.error){ m.$("#ioOut").innerHTML = '<div class="io-err">' + esc(R.error) + '</div>'; return; }
+      if (!R.recs.length){ m.$("#ioOut").innerHTML = '<div class="io-err">A planilha não tem linhas preenchidas.</div>'; return; }
+      return Promise.resolve(K.prepare ? K.prepare() : null).then(function(){
+        plan = K.plan(R.recs);
+        if (R.unknown.length) plan.notes.unshift("Colunas ignoradas: " + R.unknown.join(", ") + (K.ignoredNote ? " (" + K.ignoredNote + ")" : "") + ".");
+        ioRenderPlan(m, plan);
+      });
+    }).catch(function(e){ m.$("#ioOut").innerHTML = '<div class="io-err">' + esc((e && e.message) || "Não foi possível ler a planilha.") + '</div>'; });
+  });
+  m.$("#ioGo").addEventListener("click", function(){
+    if (!plan) return;
+    var go = plan.items.filter(function(it){ return it.st === "novo" || it.st === "atualizar"; });
+    if (!go.length && !(plan.extra && plan.extra())) { showToast("Nada para importar.", true); return; }
+    var btn = this;
+    confirmDialog({title: "Importar planilha", message: "Gravar <b>" + go.length + "</b> " + (go.length === 1 ? "linha" : "linhas") + " (" +
+      plan.items.filter(function(i){ return i.st === "novo"; }).length + " novas, " + plan.items.filter(function(i){ return i.st === "atualizar"; }).length + " atualizações)?" +
+      "<br>Antes, o sistema baixa uma cópia dos dados atuais (" + esc(K.label.toLowerCase()) + ") para você guardar.", confirmLabel: "Importar"}).then(function(ok){
+      if (!ok) return;
+      try { ioExport(kind, false); } catch (e){}
+      btn.disabled = true; btn.textContent = "Importando…";
+      Promise.resolve(K.apply(plan)).then(function(msg){
+        if (msg === false){ btn.disabled = false; btn.textContent = "Importar (" + go.length + ")"; return; }
+        m.close(); showToast(msg || "Importação concluída.");
+      }).catch(function(e){ btn.disabled = false; btn.textContent = "Importar (" + go.length + ")"; showToast((e && e.message) || "Não foi possível importar.", true); });
+    });
+  });
+}
+function ioRenderPlan(m, plan){
+  var cnt = {novo: 0, atualizar: 0, igual: 0, problema: 0};
+  plan.items.forEach(function(it){ cnt[it.st]++; });
+  var go = cnt.novo + cnt.atualizar;
+  var html = '<div class="io-sum">' + Object.keys(cnt).map(function(k){
+      return '<button type="button" class="io-chip io-' + k + '" data-io-f="' + k + '"><b>' + cnt[k] + '</b> ' + IO_ST[k] + '</button>';
+    }).join("") + '<button type="button" class="io-chip" data-io-f="">Todas</button></div>' +
+    (plan.notes.length ? '<ul class="io-notes">' + plan.notes.map(function(n){ return '<li>' + n + '</li>'; }).join("") + '</ul>' : '') +
+    '<div class="io-tbl-wrap"><table class="pat-table io-tbl"><thead><tr><th style="width:56px">Linha</th><th>' + esc(plan.itemLabel || "Item") + '</th><th style="width:150px">Situação</th><th>Detalhes</th></tr></thead><tbody>' +
+    plan.items.map(function(it){
+      return '<tr data-io-st="' + it.st + '"><td>' + esc(it.line || "") + '</td><td>' + it.label + '</td><td><span class="io-badge io-' + it.st + '">' + IO_ST[it.st] + '</span></td><td>' +
+        (it.msgs || []).map(function(x){ return '<div class="io-msg">' + x + '</div>'; }).join("") +
+        (it.warn || []).map(function(x){ return '<div class="io-warn">' + x + '</div>'; }).join("") + '</td></tr>';
+    }).join("") + '</tbody></table></div>';
+  m.$("#ioOut").innerHTML = html;
+  Array.prototype.forEach.call(m.ov.querySelectorAll("[data-io-f]"), function(b){
+    b.addEventListener("click", function(){
+      var f = b.getAttribute("data-io-f");
+      Array.prototype.forEach.call(m.ov.querySelectorAll("tr[data-io-st]"), function(tr){ tr.hidden = !!f && tr.getAttribute("data-io-st") !== f; });
+      Array.prototype.forEach.call(m.ov.querySelectorAll("[data-io-f]"), function(x){ x.classList.toggle("on", x === b); });
+    });
+  });
+  var g = m.$("#ioGo"); g.disabled = !go && !(plan.extra && plan.extra()); g.textContent = "Importar (" + go + ")";
+}
+// Menu "Outras opções ▾" com Exportar / Importar numa barra (Tratamentos e cadastros do plano).
+function ioToolsMenuHtml(kind){
+  return '<div class="cad-wrap pl-tools-wrap io-wrap" data-io-wrap="' + kind + '"><button type="button" class="btn ghost" data-io-btn aria-haspopup="menu" aria-expanded="false"><span class="pm-lg">Outras opções</span><span class="pm-sm">Opções</span> <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+    '<div class="cad-menu pl-tools-menu" role="menu" hidden><button class="btn ghost" data-io-act="export">Exportar planilha</button><button class="btn ghost" data-io-act="import">Importar planilha</button></div></div>';
+}
+function ioWireMenu(wrap){
+  var kind = wrap.getAttribute("data-io-wrap"), tb = wrap.querySelector("[data-io-btn]"), tm = wrap.querySelector(".pl-tools-menu");
+  function setOpen(o){
+    tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false");
+    if (o){ tm.querySelector('[data-io-act="import"]').hidden = !ioCanImport(kind); placeToolsMenu(tb, tm); var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); }
+  }
+  tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
+  tm.addEventListener("click", function(e){
+    var b = e.target.closest("[data-io-act]"); if (!b) return;
+    setOpen(false);
+    if (b.getAttribute("data-io-act") === "export") ioExport(kind, false); else ioOpenImport(kind);
+  });
+  document.addEventListener("mousedown", function(e){ if (!e.target.closest('[data-io-wrap="' + kind + '"]')) setOpen(false); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !tm.hidden){ setOpen(false); tb.focus(); } });
+}
+
+/* ---- busca nos cadastros (sem acento/maiúscula) ---- */
+function ioSpecFind(txt){
+  var k = ioKey(txt); if (!k) return null;
+  return (state.specialties || []).filter(function(s){ return ioKey(s.name) === k || (specialtySigla(s.id) && ioKey(specialtySigla(s.id)) === k); })[0] || null;
+}
+function ioSpecIds(txt, warn, what){
+  var ids = [];
+  ioList(txt).forEach(function(n){ var s = ioSpecFind(n); if (s){ if (ids.indexOf(s.id) === -1) ids.push(s.id); } else warn.push("Especialidade não cadastrada (" + esc(what || "ignorada") + "): <b>" + esc(n) + "</b>"); });
+  return ids;
+}
+function ioConvFind(txt){ var k = ioKey(txt); return k ? ((state.convenios || []).filter(function(c){ return ioKey(c.name) === k; })[0] || null) : null; }
+// Paciente pelo nome (sem acento/maiúscula/espaços); com homônimos, desempata pelo nascimento.
+function ioFindPatient(nome, nasc){
+  var k = ioKey(nome); if (!k) return null;
+  var L = (state.patientsRaw || []).filter(function(p){ return ioKey(p.nome) === k; });
+  if (L.length > 1 && nasc) L = L.filter(function(p){ return !p.nascimento || p.nascimento === nasc; });
+  return L.length === 1 ? L[0] : (L.length ? {ambiguous: true} : null);
+}
+function ioDiff(label, a, b){ return '<span class="io-diff">' + esc(label) + ': ' + esc(a === "" || a == null ? "—" : a) + ' → <b>' + esc(b === "" || b == null ? "—" : b) + '</b></span>'; }
+var IO_TR_STATUS = {ativo: "ativo", alterado: "renegociado", renegociado: "renegociado", negociado: "renegociado", cancelado: "cancelado"};
+function ioSuporte(v){
+  var t = ioText(v); if (!t) return null;
+  var m = /^(?:n[ií]vel\s*)?([123])$/i.exec(t);
+  return m ? {suporte: "Nível " + m[1]} : {cid: t};
+}
+
+/* ---- Tratamentos ---- */
+function ioTrPlan(recs){
+  var items = [], notes = [], missing = [], groups = {}, order = [];
+  var canNew = can("tratamentos", "create"), canEdit = can("tratamentos", "edit"), canVal = !agdClient() || trCanEditVal();
+  recs.forEach(function(r){ var k = ioKey(r.paciente); if (!groups[k]){ groups[k] = []; order.push(k); } groups[k].push(r); });
+  var patOps = [];
+  order.forEach(function(k){
+    var rows = groups[k], nome = ioText(rows[0].paciente);
+    var nasc = rows.map(function(r){ return ioDate(r.nascimento); }).filter(Boolean)[0] || "";
+    var p = ioFindPatient(nome, nasc);
+    if (!p || p.ambiguous){
+      if (!p) missing.push(nome);
+      rows.forEach(function(r){ items.push({line: r._line, label: esc(nome) + " · " + esc(ioText(r.inicio) ? trBr(ioDate(r.inicio) || "") : "—"), st: "problema",
+        msgs: [p ? "Há mais de um paciente com este nome: preencha a data de nascimento para separar." : "Paciente não está no cadastro: cadastre em Pacientes e importe de novo."]}); });
+      return;
+    }
+    // Linhas válidas do paciente.
+    var parsed = rows.map(function(r){
+      var o = {r: r, line: r._line, msgs: [], warn: []};
+      o.inicio = ioDate(r.inicio); o.fim = ioDate(r.fim);
+      if (!o.inicio) o.msgs.push(o.inicio === null ? "Data de início inválida: " + esc(ioText(r.inicio)) : "Falta a data de início.");
+      if (o.fim === null){ o.msgs.push("Data fim inválida: " + esc(ioText(r.fim))); o.fim = ""; }
+      var sk = ioKey(r.status); o.status = sk ? IO_TR_STATUS[sk] : "";
+      if (!sk) o.msgs.push("Falta o status (Ativo, Renegociado ou Cancelado).");
+      else if (!o.status) o.msgs.push("Status desconhecido: " + esc(ioText(r.status)) + " (use Ativo, Renegociado/Alterado ou Cancelado).");
+      if (o.inicio && o.fim && o.fim < o.inicio) o.msgs.push("Data fim (" + trBr(o.fim) + ") é antes do início (" + trBr(o.inicio) + ").");
+      if (o.status === "ativo" && o.fim){ o.warn.push("Tratamento Ativo com data fim: a data fim foi ignorada."); o.fim = ""; }
+      o.aba = ioYesNo(r.aba); if (o.aba === null){ o.warn.push("ABA não entendido (" + esc(ioText(r.aba)) + "): ficou sem mudar."); o.aba = ""; }
+      o.pacote = ioNum(r.pacote); if (o.pacote === null){ o.warn.push("Sessão/Mês não é número: ignorado."); o.pacote = ""; }
+      o.valor = ioMoney(r.valor); o.desc = ioMoney(r.descontos);
+      if ((o.valor !== "" || o.desc !== "") && !canVal){ o.warn.push("Valores não importados: seu nível não pode alterar \"Tratamentos – valores\"."); o.valor = o.desc = ""; }
+      o.convTxt = ioText(r.convenio); o.conv = o.convTxt ? ioConvFind(o.convTxt) : null;
+      if (o.convTxt && !o.conv) o.warn.push("Convênio não cadastrado: <b>" + esc(o.convTxt) + "</b> (fica só o nome; cadastre em Convênios).");
+      o.plano = ioText(r.plano); o.obs = ioText(r.obs);
+      o.motTxt = ioText(r.motivo);
+      if (o.motTxt){ o.mot = cancelReasonsList().filter(function(x){ return ioKey(x.name) === ioKey(o.motTxt); })[0] || null; if (!o.mot) o.warn.push("Motivo de cancelamento não cadastrado: <b>" + esc(o.motTxt) + "</b> (fica pendente)."); }
+      return o;
+    });
+    // Mesmo início em duas linhas, ou mais de um Ativo: o paciente precisa de correção.
+    var byIni = {};
+    parsed.forEach(function(o){ if (o.inicio) (byIni[o.inicio] = byIni[o.inicio] || []).push(o); });
+    Object.keys(byIni).forEach(function(d){ if (byIni[d].length > 1) byIni[d].forEach(function(o){ o.msgs.push("Duas linhas deste paciente com o mesmo início (" + trBr(d) + ")."); }); });
+    var ativos = parsed.filter(function(o){ return o.status === "ativo" && !o.msgs.length; });
+    if (ativos.length > 1) ativos.forEach(function(o){ o.msgs.push("Mais de um tratamento Ativo para este paciente na planilha."); });
+    var ok = parsed.filter(function(o){ return !o.msgs.length; }).sort(function(a, b){ return a.inicio.localeCompare(b.inicio); });
+    // Renegociado sem data fim: termina quando começa o seguinte.
+    ok.forEach(function(o, i){
+      if (o.status !== "ativo" && !o.fim){
+        if (o.status === "renegociado" && ok[i + 1]) o.fim = ok[i + 1].inicio;
+        else o.warn.push("Sem data fim: a data de encerramento ficou vazia.");
+      }
+    });
+    var existing = treatmentsOf(p.id), starts = ok.map(function(o){ return o.inicio; });
+    var mig = existing.filter(function(t){ return t.id === "tr-" + p.id && starts.indexOf(t.inicio) === -1; })[0] || null;
+    var sheetActive = ok.filter(function(o){ return o.status === "ativo"; })[0] || null;
+    var target = sheetActive || ok[ok.length - 1] || null;     // recebe especialidades/horários do substituído
+    ok.forEach(function(o){
+      o.match = existing.filter(function(t){ return t.inicio === o.inicio; })[0] || null;
+      if (o.match && o.match.status === "cancelado" && o.status !== "cancelado") o.msgs.push("No sistema este tratamento está Cancelado, e Cancelado não muda de status.");
+      if (!o.match && !canNew) o.msgs.push("Seu nível não pode incluir tratamentos.");
+    });
+    var keep = ok.filter(function(o){ return !o.msgs.length; });
+    if (mig && keep.length && target && keep.indexOf(target) !== -1)
+      target.warn.push("Substitui o tratamento criado na migração (início " + trBr(mig.inicio) + "); especialidades, terapeutas e horários dele passam para este.");
+    else mig = null;
+    // Outro Ativo do sistema (não está na planilha) vira Renegociado quando a planilha traz um Ativo.
+    var otherAct = sheetActive && keep.indexOf(sheetActive) !== -1 ? existing.filter(function(t){ return t.status === "ativo" && t !== (mig || {}) && starts.indexOf(t.inicio) === -1; }) : [];
+    if (otherAct.length) sheetActive.warn.push("O tratamento Ativo que já estava no sistema (início " + otherAct.map(function(t){ return trBr(t.inicio); }).join(", ") + ") passa a Renegociado.");
+    keep.forEach(function(o){
+      var ch = [], t = o.match;
+      o.fields = {};
+      function set(k, v, label, shown, old){ if (v === "" || v == null) return; if (!t || String(t[k] == null ? "" : t[k]) !== String(v)){ o.fields[k] = v; if (t) ch.push(ioDiff(label, old !== undefined ? old : t[k], shown !== undefined ? shown : v)); } }
+      if (o.convTxt){
+        var cid = o.conv ? o.conv.id : "", cname = o.conv ? o.conv.name : o.convTxt;
+        if (!t || (t.convenioId || "") !== cid || (!cid && (t.convenio || "") !== cname)){ o.fields.convenioId = cid; o.fields.convenio = cname; if (t) ch.push(ioDiff("Convênio", t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio, cname)); }
+      }
+      set("pacoteHoras", o.pacote, "Sessão/Mês");
+      set("aba", o.aba, "ABA", o.aba, t ? abaYesNo(t.aba) : "");
+      set("status", o.status, "Status", trLabel(TR_STATUS, o.status), t ? trLabel(TR_STATUS, t.status) : "");
+      if (o.status !== "ativo") set("statusEm", o.fim, "Data fim", trBr(o.fim), t ? trBr(t.statusEm) : "");
+      set("plano", o.plano, "Plano");
+      set("obs", o.obs, "Observação");
+      if (o.status === "cancelado" && o.mot) set("motivoCancel", o.mot.id, "Motivo", o.mot.name, t ? cancelReasonName(t) : "");
+      if (o.valor !== "" || o.desc !== ""){
+        var cur = t ? trMoney(t) : {valor: 0, despesas: 0};
+        o.money = {valor: o.valor !== "" ? o.valor : cur.valor, despesas: o.desc !== "" ? o.desc : cur.despesas};
+        if (!t || cur.valor !== o.money.valor || cur.despesas !== o.money.despesas){ if (t) ch.push(ioDiff("Valor final", fmtMoney(cur.valor - cur.despesas), fmtMoney(o.money.valor - o.money.despesas))); }
+        else o.money = null;
+      }
+      var label = esc(p.nome) + " · início " + trBr(o.inicio) + " · " + trLabel(TR_STATUS, o.status);
+      var moved = o === target && mig;
+      if (!t) items.push({line: o.line, label: label, st: "novo", warn: o.warn, msgs: [], data: o, pid: p.id});
+      else if (!canEdit && (ch.length || moved)) items.push({line: o.line, label: label, st: "problema", msgs: ["Seu nível não pode alterar tratamentos."], warn: o.warn});
+      else if (ch.length || moved || otherAct.length && o === sheetActive) items.push({line: o.line, label: label, st: "atualizar", msgs: ch, warn: o.warn, data: o, pid: p.id});
+      else items.push({line: o.line, label: label, st: "igual", msgs: [], warn: o.warn});
+    });
+    parsed.filter(function(o){ return o.msgs.length; }).forEach(function(o){
+      items.push({line: o.line, label: esc(p.nome) + " · início " + (o.inicio ? trBr(o.inicio) : "—"), st: "problema", msgs: o.msgs, warn: o.warn});
+    });
+    if (keep.length) patOps.push({p: p, keep: keep, mig: mig, target: target, otherAct: otherAct, rows: rows});
+  });
+  items.sort(function(a, b){ return (a.line || 0) - (b.line || 0); });
+  if (missing.length) notes.push("<b>" + missing.length + " paciente" + (missing.length === 1 ? "" : "s") + " fora do cadastro</b> (não importados): " + missing.map(esc).join(", ") + ".");
+  notes.push("Tipo (Novo/Renegociado) é calculado pelo sistema. Cancelados sem motivo ficam com o motivo pendente (filtro \"Cancelados sem motivo\").");
+  return {items: items, notes: notes, patOps: patOps, itemLabel: "Tratamento"};
+}
+function ioTrApply(plan){
+  var list = state.treatments.slice(), now = new Date().toISOString(), money = [], finDel = [];
+  var patList = null, health = [];
+  function byId(id){ for (var i=0;i<list.length;i++) if (list[i].id === id) return i; return -1; }
+  var goSet = {};
+  plan.items.forEach(function(it){ if ((it.st === "novo" || it.st === "atualizar") && it.data) goSet[it.data.line] = true; });
+  plan.patOps.forEach(function(op){
+    var pid = op.p.id, keep = op.keep.filter(function(o){ return goSet[o.line]; });
+    if (!keep.length) return;
+    var inherit = null;
+    if (op.mig && keep.indexOf(op.target) !== -1){
+      inherit = op.mig; list.splice(byId(op.mig.id), 1); finDel.push(op.mig.id);
+    }
+    keep.forEach(function(o){
+      var rec, t = o.match;
+      if (t){
+        rec = Object.assign({}, t, o.fields, {atualizadoEm: now});
+        if (o.fields.status && o.fields.status !== t.status) trHistAdd(rec, {acao: "status", de: t.status, para: o.fields.status, obs: "Importado da planilha"});
+        else trHistAdd(rec, {acao: "importado", obs: "Atualizado pela importação de planilha"});
+      } else {
+        rec = Object.assign({id: uid("tr"), patientId: pid, inicio: o.inicio, aba: "Sim", vencPor: "sem", pacoteHoras: "", specHours: [], criadoEm: now, atualizadoEm: now}, o.fields);
+        if (!rec.statusEm) rec.statusEm = o.status === "ativo" ? o.inicio : "";
+        trHistAdd(rec, {acao: "criado", para: rec.status, obs: "Importado da planilha"});
+      }
+      if (rec.status === "cancelado" && !rec.motivoCancel) rec.motivoPendente = true;
+      if (rec.motivoCancel){ delete rec.motivoPendente; rec.motivoCancelNome = (cancelReasonsList().filter(function(x){ return x.id === rec.motivoCancel; })[0] || {}).name || rec.motivoCancelNome || ""; }
+      if (o === op.target && inherit){
+        ["specHours", "horarios"].forEach(function(k){ if (inherit[k] && !(Array.isArray(rec[k]) ? rec[k].length : rec[k])) rec[k] = JSON.parse(JSON.stringify(inherit[k])); });
+        if (!o.fields.aba && inherit.aba) rec.aba = inherit.aba;
+      }
+      if (o.money){
+        if (agdClient()) money.push({treatment_id: rec.id, valor: o.money.valor, despesas: o.money.despesas});
+        else { rec.valor = o.money.valor; rec.despesas = o.money.despesas; }
+      }
+      if (t) list[byId(t.id)] = rec; else list.push(rec);
+    });
+    op.otherAct.forEach(function(t){
+      var i = byId(t.id); if (i < 0) return;
+      var first = keep.filter(function(o){ return o.status === "ativo"; })[0];
+      if (!first) return;
+      list[i] = trHistAdd(Object.assign({}, t, {status: "renegociado", statusEm: first.inicio, atualizadoEm: now}), {acao: "status", de: "ativo", para: "renegociado", auto: true, obs: "Importação de planilha"});
+    });
+    // Tipo calculado (do mais antigo para o mais novo) com a lista final.
+    list.filter(function(t){ return t.patientId === pid; }).sort(function(a, b){ return String(a.inicio).localeCompare(String(b.inicio)) || String(a.criadoEm || "").localeCompare(String(b.criadoEm || "")); })
+      .forEach(function(t){ var i = byId(t.id), tp = trTipoFor(t, list); if (list[i].tipo !== tp) list[i] = Object.assign({}, list[i], {tipo: tp}); });
+    // Paciente: nascimento vazio, data de entrada até o 1º início, suporte/diagnóstico vazios.
+    var raw = rawPatient(pid), upd = {};
+    var nasc = op.rows.map(function(r){ return ioDate(r.nascimento); }).filter(Boolean)[0];
+    if (nasc && raw && !raw.nascimento){ upd.nascimento = nasc; var age = computeAgeFromBirth(nasc); if (age != null) upd.idade = age; }
+    var first = keep.map(function(o){ return o.inicio; }).sort()[0];
+    if (raw && raw.entrada && first && first < raw.entrada) upd.entrada = first;
+    var sup = op.rows.slice().sort(function(a, b){ return String(ioDate(b.inicio) || "").localeCompare(String(ioDate(a.inicio) || "")); }).map(function(r){ return ioSuporte(r.suporte); }).filter(Boolean)[0];
+    if (sup){
+      var cur = Object.assign({}, raw || {}, healthOf(pid)), hs = {};
+      if (sup.suporte && !cur.suporte) hs.suporte = sup.suporte;
+      if (sup.cid && !cur.cid) hs.cid = sup.cid;
+      if (Object.keys(hs).length){ if (HEALTH.map) health.push({id: pid, data: Object.assign({}, HEALTH.map[pid] || {}, hs)}); else Object.assign(upd, hs); }
+    }
+    if (Object.keys(upd).length){ patList = patList || state.patients.slice(); patList = patList.map(function(x){ return x.id === pid ? Object.assign({}, x, upd) : x; }); }
+  });
+  return writeTreatments(list).then(function(ok){
+    if (ok === false) return false;
+    var c = agdClient(), jobs = [];
+    if (c && money.length && trCanEditVal()) jobs.push(c.from("treatment_finance").upsert(money, {onConflict: "treatment_id"}).then(function(r){
+      if (r.error) showToast("Os tratamentos foram importados, mas os valores não: " + (r.error.message || "erro"), true);
+      else { TR.fin = TR.fin || {}; money.forEach(function(m){ TR.fin[m.treatment_id] = {valor: m.valor, despesas: m.despesas}; }); }
+    }));
+    if (c && finDel.length) jobs.push(c.from("treatment_finance").delete().in("treatment_id", finDel).then(function(){}));
+    if (patList) jobs.push(writePatients(patList));
+    if (health.length && healthCanEdit()) health.forEach(function(h){ jobs.push(healthSave(h.id, h.data)); });
+    return Promise.all(jobs).then(function(){
+      trLoadLast(true);
+      var n = plan.items.filter(function(i){ return i.st === "novo"; }).length, u = plan.items.filter(function(i){ return i.st === "atualizar"; }).length;
+      return "Importação concluída: " + n + " tratamento" + (n === 1 ? "" : "s") + " novo" + (n === 1 ? "" : "s") + " e " + u + " atualizado" + (u === 1 ? "" : "s") + ".";
+    });
+  });
+}
+function ioTrExportRows(){
+  return state.treatments.slice().sort(function(a, b){
+    var pa = rawPatient(a.patientId), pb = rawPatient(b.patientId);
+    return String(pa ? pa.nome : "").localeCompare(String(pb ? pb.nome : ""), "pt-BR") || String(b.inicio || "").localeCompare(String(a.inicio || ""));
+  }).map(function(t){
+    var p = rawPatient(t.patientId) || {}, m = trMoney(t), h = Object.assign({}, p, healthOf(t.patientId));
+    var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
+    return {paciente: p.nome || "", nascimento: p.nascimento ? trBr(p.nascimento) : "", convenio: conv || "", inicio: trBr(t.inicio),
+      fim: t.status !== "ativo" && t.statusEm ? trBr(t.statusEm) : "", pacote: t.pacoteHoras === "" || t.pacoteHoras == null ? "" : Number(t.pacoteHoras),
+      valor: m.valor, descontos: m.despesas, aba: abaYesNo(t.aba), status: trLabel(TR_STATUS, t.status),
+      motivo: t.status === "cancelado" ? cancelReasonName(t) : "", plano: t.plano || "", suporte: (h.suporte || "").replace(/^N[ií]vel\s*/i, "") || "", obs: t.obs || ""};
+  });
+}
+
+/* ---- Pacientes ---- */
+var IO_PAT_SIMPLE = [["nomeSocial", "nomeSocial"], ["sexo", "sexo"], ["rg", "rg"], ["cns", "cns"], ["escolaSerie", "escolaSerie"], ["escolaTurno", "escolaTurno"],
+  ["professor", "professor"], ["mediador", "mediador"], ["comoConheceu", "comoConheceu"], ["obs", "obs"]];
+var IO_PAT_HEALTH = [["cid", "cid"], ["comunicacao", "comunicacao"], ["alergias", "alergias"], ["medicacoes", "medicacoes"], ["restricoes", "restricoes"]];
+function ioPatPlan(recs){
+  var items = [], notes = [], canNew = can("pacientes", "create"), canEdit = can("pacientes", "edit"), hEdit = healthCanEdit();
+  var seenCpf = {}, seenName = {};
+  recs.forEach(function(r){
+    var it = {line: r._line, msgs: [], warn: []}, nome = ioText(r.nome);
+    it.label = esc(nome || "(sem nome)");
+    if (!nome){ it.st = "problema"; it.msgs.push("Falta o nome."); items.push(it); return; }
+    var cpf = digitsOnly(r.cpf), nasc = ioDate(r.nascimento), ent = ioDate(r.entrada), diag = ioDate(r.diagData);
+    if (nasc === null){ it.warn.push("Data de nascimento inválida: ignorada."); nasc = ""; }
+    if (ent === null){ it.warn.push("Data de entrada inválida: ignorada."); ent = ""; }
+    if (diag === null){ it.warn.push("Data do diagnóstico inválida: ignorada."); diag = ""; }
+    if (cpf && !cpfValido(cpf)){ it.warn.push("CPF inválido: ignorado."); cpf = ""; }
+    if (cpf && seenCpf[cpf]){ it.st = "problema"; it.msgs.push("CPF repetido na planilha (linha " + seenCpf[cpf] + ")."); items.push(it); return; }
+    if (cpf) seenCpf[cpf] = r._line;
+    var nk = ioKey(nome) + "|" + (nasc || "");
+    if (!cpf && seenName[nk]){ it.st = "problema"; it.msgs.push("Paciente repetido na planilha (linha " + seenName[nk] + ")."); items.push(it); return; }
+    seenName[nk] = r._line;
+    // Mesmo paciente: mesmo CPF; sem CPF, mesmo nome e nascimento (nascimento vazio de um lado vale).
+    var all = state.patients, cur = cpf ? all.filter(function(p){ return digitsOnly(p.cpf) === cpf; })[0] : null;
+    if (!cur){
+      var L = all.filter(function(p){ return ioKey(p.nome) === ioKey(nome) && (!p.cpf || !cpf) && (!nasc || !p.nascimento || p.nascimento === nasc); });
+      if (L.length > 1){ it.st = "problema"; it.msgs.push("Há mais de um paciente com este nome no sistema: informe o CPF ou o nascimento."); items.push(it); return; }
+      cur = L[0] || null;
+    }
+    var v = {nome: nome};
+    IO_PAT_SIMPLE.forEach(function(c){ var x = ioText(r[c[0]]); if (x) v[c[1]] = c[1] === "mediador" ? (ioYesNo(x) || x) : x; });
+    if (v.cns) v.cns = digitsOnly(v.cns);
+    if (cpf) v.cpf = cpf; if (nasc) v.nascimento = nasc; if (ent) v.entrada = ent;
+    var mae = ioText(r.mae), maeCpf = digitsOnly(r.maeCpf), pai = ioText(r.pai), paiCpf = digitsOnly(r.paiCpf);
+    if (maeCpf && !cpfValido(maeCpf)){ it.warn.push("CPF da mãe inválido: ignorado."); maeCpf = ""; }
+    if (paiCpf && !cpfValido(paiCpf)){ it.warn.push("CPF do pai inválido: ignorado."); paiCpf = ""; }
+    if (mae || maeCpf) v.mae = {nome: mae, cpf: maeCpf};
+    if (pai || paiCpf) v.pai = {nome: pai, cpf: paiCpf};
+    var tels = ioList(r.telefone).map(digitsOnly).filter(function(x){ return x.length >= 8; });
+    if (tels.length) v.telefones = tels.map(function(n){ return {numero: n, nome: "", via: "whatsapp"}; });
+    var mails = ioList(r.email).filter(function(x){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x); });
+    if (ioText(r.email) && !mails.length) it.warn.push("E-mail inválido: ignorado.");
+    if (mails.length) v.emails = mails.map(function(e){ return {email: e, nome: ""}; });
+    var end = {}; ["cep", "rua", "numero", "compl", "bairro", "cidade", "uf"].forEach(function(k){ var x = ioText(r["end_" + k]); if (x) end[k] = k === "cep" ? digitsOnly(x) : (k === "uf" ? x.toUpperCase().slice(0, 2) : x); });
+    if (Object.keys(end).length) v.endereco = end;
+    var fin = ioText(r.finNome), finDoc = digitsOnly(r.finDoc);
+    if (fin || finDoc) v.financeiro = {nome: fin, doc: finDoc, telefone: "", email: "", endereco: "", link: ""};
+    var esc0 = ioText(r.escola);
+    if (esc0){ var e0 = (state.schools || []).filter(function(s){ return ioKey(s.name) === ioKey(esc0); })[0]; if (e0) v.escolaId = e0.id; else it.warn.push("Escola não cadastrada: <b>" + esc(esc0) + "</b> (ignorada)."); }
+    var h = {};
+    IO_PAT_HEALTH.forEach(function(c){ var x = ioText(r[c[0]]); if (x) h[c[1]] = x; });
+    if (diag) h.diagData = diag;
+    var sp = ioSuporte(r.suporte); if (sp){ if (sp.suporte) h.suporte = sp.suporte; else it.warn.push("Nível de suporte não entendido (" + esc(ioText(r.suporte)) + "): use 1, 2 ou 3."); }
+    if (Object.keys(h).length && !hEdit){ it.warn.push("Dados de saúde não importados: seu nível não pode alterar \"Pacientes – saúde\"."); h = {}; }
+    it.vals = v; it.health = h;
+    if (!cur){
+      if (!canNew){ it.st = "problema"; it.msgs.push("Seu nível não pode incluir pacientes."); items.push(it); return; }
+      if (!cpf) it.warn.push("Sem CPF: o CPF será pedido quando alguém editar o cadastro.");
+      it.st = "novo"; items.push(it); return;
+    }
+    // Só completa o que está vazio no sistema.
+    var base = Object.assign({}, patNormalize(cur)), fill = {}, ch = [];
+    function empty(x){ if (x == null || x === "") return true; if (Array.isArray(x)) return !x.length; if (typeof x === "object") return Object.keys(x).every(function(k){ return empty(x[k]); }); return false; }
+    Object.keys(v).forEach(function(k){
+      if (k === "nome") return;
+      if (typeof v[k] === "object" && !Array.isArray(v[k]) && base[k] && typeof base[k] === "object"){
+        var sub = Object.assign({}, base[k]), any = false;
+        Object.keys(v[k]).forEach(function(s){ if (v[k][s] && empty(sub[s])){ sub[s] = v[k][s]; any = true; } });
+        if (any){ fill[k] = sub; ch.push(esc(ioPatLabel(k)) + " (completado)"); }
+      } else if (empty(base[k])){ fill[k] = v[k]; ch.push(esc(ioPatLabel(k)) + ": <b>" + esc(ioPatShow(k, v[k])) + "</b>"); }
+    });
+    var hcur = Object.assign({}, cur, healthOf(cur.id)), hfill = {};
+    Object.keys(h).forEach(function(k){ if (empty(hcur[k])){ hfill[k] = h[k]; ch.push(esc(ioPatLabel(k)) + ": <b>" + esc(ioPatShow(k, h[k])) + "</b>"); } });
+    it.cur = cur; it.fill = fill; it.health = hfill;
+    if (!ch.length){ it.st = "igual"; items.push(it); return; }
+    if (!canEdit && Object.keys(fill).length){ it.st = "problema"; it.msgs.push("Seu nível não pode alterar pacientes."); items.push(it); return; }
+    it.st = "atualizar"; it.msgs = ["Completa: " + ch.join(" · ")]; items.push(it);
+  });
+  notes.push("Paciente que já existe (mesmo CPF; sem CPF, mesmo nome e nascimento) só tem os campos vazios completados: nada que já está no sistema é trocado.");
+  return {items: items, notes: notes, itemLabel: "Paciente"};
+}
+function ioPatLabel(k){ var f = PAT_FIELDS.filter(function(x){ return x.key === k; })[0]; return f ? f.label : k; }
+function ioPatShow(k, v){
+  if (k === "nascimento" || k === "entrada" || k === "diagData") return trBr(v);
+  if (Array.isArray(v)) return v.map(function(x){ return x.numero || x.email || x.nome || ""; }).join(", ");
+  if (v && typeof v === "object") return Object.keys(v).map(function(s){ return v[s]; }).filter(Boolean).join(", ");
+  return v;
+}
+function ioPatApply(plan){
+  var list = state.patients.slice(), health = [], now = new Date().toISOString();
+  plan.items.forEach(function(it){
+    if (it.st === "novo"){
+      var rec = Object.assign({}, it.vals, {id: slugify(it.vals.nome) + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), criadoEm: now});
+      if (!rec.entrada) rec.entrada = trTodayIso();
+      if (rec.nascimento){ var a = computeAgeFromBirth(rec.nascimento); if (a != null) rec.idade = a; }
+      if (HEALTH.map){ if (Object.keys(it.health).length) health.push({id: rec.id, data: it.health}); }
+      else Object.assign(rec, it.health);
+      list.push(rec);
+    } else if (it.st === "atualizar"){
+      list = list.map(function(x){
+        if (x.id !== it.cur.id) return x;
+        var r = Object.assign({}, x, it.fill);
+        if (it.fill.nascimento){ var a = computeAgeFromBirth(it.fill.nascimento); if (a != null) r.idade = a; }
+        if (!HEALTH.map) Object.assign(r, it.health);
+        return r;
+      });
+      if (HEALTH.map && Object.keys(it.health).length) health.push({id: it.cur.id, data: Object.assign({}, HEALTH.map[it.cur.id] || {}, it.health)});
+    }
+  });
+  return Promise.resolve(writePatients(list)).then(function(){
+    return Promise.all(health.map(function(h){ return healthSave(h.id, h.data); }));
+  }).then(function(){
+    var n = plan.items.filter(function(i){ return i.st === "novo"; }).length, u = plan.items.filter(function(i){ return i.st === "atualizar"; }).length;
+    return "Importação concluída: " + n + " paciente" + (n === 1 ? "" : "s") + " novo" + (n === 1 ? "" : "s") + " e " + u + " completado" + (u === 1 ? "" : "s") + ".";
+  });
+}
+function ioPatExportRows(){
+  var hs = healthCanSee();
+  return state.patientsRaw.slice().sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); }).map(function(p0){
+    var p = patNormalize(Object.assign({}, p0, healthOf(p0.id))), e = p.endereco || {}, f = p.financeiro || {};
+    var esc0 = p.escolaId ? ((state.schools || []).filter(function(s){ return s.id === p.escolaId; })[0] || {}).name : "";
+    var o = {nome: p.nome || "", nomeSocial: p.nomeSocial || "", nascimento: p.nascimento ? trBr(p.nascimento) : "", sexo: p.sexo || "", cpf: p.cpf ? formatCpf(p.cpf) : "",
+      rg: p.rg || "", cns: p.cns || "", entrada: p.entrada ? trBr(p.entrada) : "",
+      mae: (p.mae || {}).nome || "", maeCpf: (p.mae || {}).cpf ? formatCpf(p.mae.cpf) : "", pai: (p.pai || {}).nome || "", paiCpf: (p.pai || {}).cpf ? formatCpf(p.pai.cpf) : "",
+      telefone: (p.telefones || []).map(function(t){ return formatPhone(t.numero || ""); }).filter(Boolean).join("; "), email: (p.emails || []).map(function(m){ return m.email; }).filter(Boolean).join("; "),
+      end_cep: e.cep || "", end_rua: e.rua || "", end_numero: e.numero || "", end_compl: e.compl || "", end_bairro: e.bairro || "", end_cidade: e.cidade || "", end_uf: e.uf || "",
+      finNome: f.nome || "", finDoc: f.doc || "", escola: esc0 || "", escolaSerie: p.escolaSerie || "", escolaTurno: p.escolaTurno || "", professor: p.professor || "", mediador: p.mediador || "",
+      comoConheceu: p.comoConheceu || "", obs: p.obs || ""};
+    if (hs){ o.cid = p.cid || ""; o.diagData = p.diagData ? trBr(p.diagData) : ""; o.suporte = (p.suporte || "").replace(/^N[ií]vel\s*/i, ""); o.comunicacao = p.comunicacao || ""; o.alergias = p.alergias || ""; o.medicacoes = p.medicacoes || ""; o.restricoes = p.restricoes || ""; }
+    return o;
+  });
+}
+
+/* ---- Habilidades, Escalas, Objetivos (mesmo nome = atualizar) ---- */
+function ioHabPlan(recs){
+  var items = [], base = skillAreasList(), seen = {}, canNew = can("habilidades", "create"), canEdit = can("habilidades", "edit");
+  recs.forEach(function(r){
+    var it = {line: r._line, msgs: [], warn: []}, nome = ioText(r.nome); it.label = esc(nome || "(sem nome)");
+    if (!nome){ it.st = "problema"; it.msgs.push("Falta o nome."); return items.push(it); }
+    if (seen[ioKey(nome)]){ it.st = "problema"; it.msgs.push("Repetida na planilha (linha " + seen[ioKey(nome)] + ")."); return items.push(it); }
+    seen[ioKey(nome)] = r._line;
+    var ids = ioSpecIds(r.specs, it.warn), cur = base.filter(function(a){ return ioKey(a.name) === ioKey(nome); })[0];
+    it.vals = {name: nome, specIds: ids}; it.cur = cur;
+    if (!cur){ it.st = canNew ? "novo" : "problema"; if (!canNew) it.msgs.push("Seu nível não pode incluir habilidades."); return items.push(it); }
+    var old = Array.isArray(cur.specIds) ? cur.specIds : [];
+    if (!ioText(r.specs) || old.slice().sort().join() === ids.slice().sort().join()){ it.st = "igual"; return items.push(it); }
+    it.st = canEdit ? "atualizar" : "problema";
+    it.msgs.push(canEdit ? ioDiff("Especialidades sugeridas", planSpecNames(old), planSpecNames(ids)) : "Seu nível não pode alterar habilidades.");
+    items.push(it);
+  });
+  return {items: items, notes: [], itemLabel: "Habilidade"};
+}
+function ioHabApply(plan){
+  var list = skillAreasList();
+  plan.items.forEach(function(it){
+    if (it.st === "novo") list.push({id: slugify(it.vals.name) || uid("hab"), name: it.vals.name, specIds: it.vals.specIds});
+    else if (it.st === "atualizar") list = list.map(function(a){ return a.id === it.cur.id ? Object.assign({}, a, {specIds: it.vals.specIds}) : a; });
+  });
+  return writeSimpleList("habilidades", list).then(function(ok){ return ok === false ? false : "Habilidades importadas."; });
+}
+function ioScalePlan(recs){
+  var items = [], groups = {}, order = [], base = scalesList(), canNew = can("escalas", "create"), canEdit = can("escalas", "edit");
+  recs.forEach(function(r){ var k = ioKey(r.escala); if (!k) return items.push({line: r._line, label: "(sem escala)", st: "problema", msgs: ["Falta o nome da escala."]}); if (!groups[k]){ groups[k] = []; order.push(k); } groups[k].push(r); });
+  order.forEach(function(k){
+    var rows = groups[k], nome = ioText(rows[0].escala), it = {line: rows[0]._line, label: esc(nome), msgs: [], warn: []};
+    var levels = [], seen = {};
+    rows.forEach(function(r){
+      var ln = ioText(r.nivel); if (!ln){ it.warn.push("Linha " + r._line + " sem nível: ignorada."); return; }
+      if (seen[ioKey(ln)]){ it.warn.push("Nível repetido: " + esc(ln)); return; }
+      seen[ioKey(ln)] = 1;
+      var cor = ioText(r.cor); if (cor && !/^#?[0-9a-f]{6}$/i.test(cor)){ it.warn.push("Cor inválida em " + esc(ln) + " (use #RRGGBB): cor padrão."); cor = ""; }
+      levels.push({name: ln, color: cor ? (cor[0] === "#" ? cor : "#" + cor).toUpperCase() : ""});
+    });
+    if (levels.length < 2){ it.st = "problema"; it.msgs.push("A escala precisa de pelo menos 2 níveis (uma linha por nível, do primeiro ao final)."); return items.push(it); }
+    var cur = base.filter(function(s){ return ioKey(s.name) === k; })[0];
+    it.vals = {name: nome, levels: levels}; it.cur = cur;
+    if (!cur){ it.st = canNew ? "novo" : "problema"; if (!canNew) it.msgs.push("Seu nível não pode incluir escalas."); it.msgs.push(levels.map(function(l){ return esc(l.name); }).join(" → ")); return items.push(it); }
+    var lost = cur.levels.filter(function(l){ return !levels.some(function(n){ return ioKey(n.name) === ioKey(l.name); }); });
+    if (lost.length){ it.st = "problema"; it.msgs.push("Os níveis " + lost.map(function(l){ return "<b>" + esc(l.name) + "</b>"; }).join(", ") + " estão no sistema e não na planilha: nível não é tirado pela importação (os planos usam)."); return items.push(it); }
+    var same = cur.levels.length === levels.length && levels.every(function(n, i){ return ioKey(cur.levels[i].name) === ioKey(n.name) && (!n.color || ioKey(n.color) === ioKey(cur.levels[i].color)); });
+    if (same){ it.st = "igual"; return items.push(it); }
+    it.st = canEdit ? "atualizar" : "problema";
+    it.msgs.push(canEdit ? ioDiff("Níveis", cur.levels.map(function(l){ return l.name; }).join(" → "), levels.map(function(l){ return l.name; }).join(" → ")) : "Seu nível não pode alterar escalas.");
+    items.push(it);
+  });
+  return {items: items, notes: ["Uma linha por nível, na ordem (o último é o nível final)."], itemLabel: "Escala"};
+}
+var IO_SCALE_COLORS = ["#E05A4F", "#EE8A3C", "#F2B53A", "#D7C93B", "#8CC152", "#2E9E5B", "#2C7A72", "#3A6EA5"];
+function ioScaleApply(plan){
+  var list = scalesList();
+  plan.items.forEach(function(it){
+    if (it.st !== "novo" && it.st !== "atualizar") return;
+    var old = it.cur ? it.cur.levels : [];
+    var lv = it.vals.levels.map(function(n, i){
+      var o = old.filter(function(l){ return ioKey(l.name) === ioKey(n.name); })[0];
+      return {id: o ? o.id : (slugify(n.name) || "n" + i) + "-" + Math.random().toString(36).slice(2, 5), name: n.name, color: n.color || (o && o.color) || IO_SCALE_COLORS[Math.min(i, IO_SCALE_COLORS.length - 1)]};
+    });
+    if (it.st === "novo") list.push({id: slugify(it.vals.name) || uid("esc"), name: it.vals.name, levels: lv});
+    else list = list.map(function(s){ return s.id === it.cur.id ? Object.assign({}, s, {levels: lv}) : s; });
+  });
+  return writeSimpleList("escalas", list).then(function(ok){ return ok === false ? false : "Escalas importadas."; });
+}
+function ioScaleExportRows(){
+  var out = [];
+  scalesList().forEach(function(s){ (s.levels || []).forEach(function(l){ out.push({escala: s.name, nivel: l.name, cor: l.color || ""}); }); });
+  return out;
+}
+function ioGoalPlan(recs){
+  var items = [], base = goalBankList(), seen = {}, canNew = can("objetivos", "create"), canEdit = can("objetivos", "edit");
+  recs.forEach(function(r){
+    var it = {line: r._line, msgs: [], warn: []}, nome = ioText(r.objetivo), hab = ioText(r.habilidade);
+    it.label = esc(nome || "(sem objetivo)") + (hab ? ' <span class="hint">· ' + esc(hab) + '</span>' : '');
+    if (!nome){ it.st = "problema"; it.msgs.push("Falta o texto do objetivo."); return items.push(it); }
+    var area = hab ? skillAreasList().filter(function(a){ return ioKey(a.name) === ioKey(hab); })[0] : null;
+    if (!hab){ it.st = "problema"; it.msgs.push("Falta a habilidade."); return items.push(it); }
+    if (!area){ it.st = "problema"; it.msgs.push("Habilidade não cadastrada: <b>" + esc(hab) + "</b> (importe ou cadastre as Habilidades antes)."); return items.push(it); }
+    var key = ioKey(nome) + "|" + area.id;
+    if (seen[key]){ it.st = "problema"; it.msgs.push("Repetido na planilha (linha " + seen[key] + ")."); return items.push(it); }
+    seen[key] = r._line;
+    var scTxt = ioText(r.escala), sc = scTxt ? scalesList().filter(function(s){ return ioKey(s.name) === ioKey(scTxt); })[0] : null;
+    if (scTxt && !sc) it.warn.push("Escala não cadastrada: <b>" + esc(scTxt) + "</b> (ignorada).");
+    var v = {name: nome, areaId: area.id};
+    if (ioText(r.criterio)) v.criterio = ioText(r.criterio);
+    if (sc) v.scaleId = sc.id;
+    if (ioText(r.specs)) v.specIds = ioSpecIds(r.specs, it.warn);
+    var cur = base.filter(function(g){ return ioKey(g.name) === ioKey(nome) && g.areaId === area.id; })[0];
+    it.vals = v; it.cur = cur;
+    if (!cur){ it.st = canNew ? "novo" : "problema"; if (!canNew) it.msgs.push("Seu nível não pode incluir objetivos."); return items.push(it); }
+    var ch = [];
+    if (v.criterio && v.criterio !== (cur.criterio || "")) ch.push(ioDiff("Critério", cur.criterio, v.criterio));
+    if (v.scaleId && v.scaleId !== cur.scaleId) ch.push(ioDiff("Escala", (scaleById(cur.scaleId) || {}).name, sc.name));
+    if (v.specIds && v.specIds.slice().sort().join() !== goalSpecIds(cur).slice().sort().join()) ch.push(ioDiff("Especialidades", planSpecNames(goalSpecIds(cur)) || "Todas", planSpecNames(v.specIds) || "Todas"));
+    if (!ch.length){ it.st = "igual"; return items.push(it); }
+    it.st = canEdit ? "atualizar" : "problema"; it.msgs = canEdit ? ch : ["Seu nível não pode alterar objetivos."];
+    items.push(it);
+  });
+  return {items: items, notes: ["O mesmo objetivo (mesmo texto na mesma habilidade) é atualizado; os outros entram como novos."], itemLabel: "Objetivo"};
+}
+function ioGoalApply(plan){
+  var list = goalBankList();
+  plan.items.forEach(function(it){
+    if (it.st === "novo") list.push(Object.assign({id: uid("obj"), criterio: "", scaleId: "", specIds: []}, it.vals));
+    else if (it.st === "atualizar") list = list.map(function(g){ if (g.id !== it.cur.id) return g; var n = Object.assign({}, g, it.vals); if (it.vals.specIds) delete n.specId; return n; });
+  });
+  return writeSimpleList("objetivos", list).then(function(ok){ return ok === false ? false : "Objetivos importados."; });
+}
+
+var IO_KINDS = {
+  tratamentos: {label: "Tratamentos", file: "tratamentos", mod: "tratamentos",
+    sub: "Mesmo paciente e mesma data de início = atualiza; outro início = novo tratamento.",
+    ignoredNote: "o sistema calcula Tipo, Valor final, Idade, Retenção e Agenda",
+    help: ["Uma linha por tratamento. O paciente precisa estar cadastrado em Pacientes (o nome é comparado sem acento e sem maiúsculas).",
+      "Mesmo paciente e mesma data de início de um tratamento que já existe: os dados da planilha atualizam o tratamento (especialidades, terapeutas e horários do sistema ficam).",
+      "Status: Ativo, Renegociado (ou Alterado) ou Cancelado. Só um Ativo por paciente. Cancelado sem motivo fica com o motivo pendente.",
+      "Datas no formato dd/mm/aaaa. Valor = valor mensal. O Tipo (Novo/Renegociado) é calculado pelo sistema.",
+      "Suporte: 1, 2 ou 3 vai para o Nível de suporte do paciente; um texto (ex.: TDAH) vai para o Diagnóstico — só se o campo estiver vazio."],
+    cols: [
+      {k: "paciente", h: "Paciente", alias: ["nome", "nome do paciente"], w: 36, req: true},
+      {k: "nascimento", h: "Data de nascimento", alias: ["nascimento", "data nascimento"], w: 14, note: "ajuda a separar homônimos"},
+      {k: "convenio", h: "Convênio", alias: ["convenio"], w: 22},
+      {k: "inicio", h: "Início", alias: ["data inicio", "data de inicio"], w: 12, req: true},
+      {k: "fim", h: "Fim", alias: ["data fim", "data final", "termino", "data de termino"], w: 12, note: "data em que foi renegociado ou cancelado"},
+      {k: "pacote", h: "Sessão/Mês", alias: ["pacote", "sessoes/mes", "sessoes por mes"], w: 11},
+      {k: "valor", h: "Valor", w: 13, hide: function(){ return !trCanSeeVal(); }},
+      {k: "descontos", h: "Descontos", alias: ["despesas", "desconto"], w: 13, hide: function(){ return !trCanSeeVal(); }},
+      {k: "aba", h: "ABA", w: 7, note: "Sim ou Não"},
+      {k: "status", h: "Status", w: 13, req: true},
+      {k: "motivo", h: "Motivo do cancelamento", alias: ["motivo"], w: 22},
+      {k: "plano", h: "Plano", w: 24},
+      {k: "suporte", h: "Suporte", alias: ["nivel de suporte"], w: 10, hide: function(){ return !healthCanSee(); }},
+      {k: "obs", h: "Observação", alias: ["observacao", "observacoes", "obs"], w: 44}
+    ],
+    exportRows: ioTrExportRows, plan: ioTrPlan, apply: ioTrApply, prepare: function(){ return trLoadFinance(); }},
+  pacientes: {label: "Pacientes", file: "pacientes", mod: "pacientes",
+    sub: "Paciente que já existe só tem os campos vazios completados.",
+    help: ["Uma linha por paciente. Só o Nome é obrigatório; o CPF é pedido depois, ao editar o cadastro.",
+      "Paciente que já existe (mesmo CPF; sem CPF, mesmo nome e data de nascimento): a planilha só completa os campos vazios, nunca troca o que já está preenchido.",
+      "Vários telefones ou e-mails: separe com ponto e vírgula. Datas no formato dd/mm/aaaa. Escola: o nome precisa estar em Cadastros → Escolas."],
+    cols: [
+      {k: "nome", h: "Nome", alias: ["paciente", "nome do paciente"], w: 36, req: true},
+      {k: "nomeSocial", h: "Nome social", alias: ["apelido"], w: 16}, {k: "nascimento", h: "Data de nascimento", alias: ["nascimento", "data nascimento"], w: 14},
+      {k: "sexo", h: "Sexo", w: 11}, {k: "cpf", h: "CPF", w: 16}, {k: "rg", h: "RG", w: 14}, {k: "cns", h: "Cartão SUS", alias: ["cns"], w: 18},
+      {k: "entrada", h: "Data de entrada", alias: ["entrada"], w: 14},
+      {k: "mae", h: "Mãe", alias: ["nome da mae"], w: 30}, {k: "maeCpf", h: "CPF da mãe", w: 16}, {k: "pai", h: "Pai", alias: ["nome do pai"], w: 30}, {k: "paiCpf", h: "CPF do pai", w: 16},
+      {k: "telefone", h: "Telefones", alias: ["telefone", "celular", "whatsapp"], w: 20}, {k: "email", h: "E-mails", alias: ["e-mail", "email"], w: 26},
+      {k: "end_cep", h: "CEP", w: 11}, {k: "end_rua", h: "Rua", alias: ["endereco", "logradouro"], w: 28}, {k: "end_numero", h: "Número", alias: ["numero"], w: 9},
+      {k: "end_compl", h: "Complemento", w: 14}, {k: "end_bairro", h: "Bairro", w: 18}, {k: "end_cidade", h: "Cidade", w: 18}, {k: "end_uf", h: "UF", w: 6},
+      {k: "finNome", h: "Responsável financeiro", w: 30}, {k: "finDoc", h: "CPF/CNPJ do financeiro", w: 18},
+      {k: "escola", h: "Escola", w: 26}, {k: "escolaSerie", h: "Série", w: 10}, {k: "escolaTurno", h: "Turno da escola", w: 12}, {k: "professor", h: "Professor(a)", alias: ["professor"], w: 20},
+      {k: "mediador", h: "Mediador / AT", alias: ["mediador"], w: 10}, {k: "comoConheceu", h: "Como conheceu", w: 22},
+      {k: "cid", h: "Diagnóstico (CID)", alias: ["cid", "diagnostico"], w: 18, hide: function(){ return !healthCanSee(); }},
+      {k: "diagData", h: "Data do diagnóstico", w: 14, hide: function(){ return !healthCanSee(); }},
+      {k: "suporte", h: "Nível de suporte", alias: ["suporte"], w: 10, hide: function(){ return !healthCanSee(); }},
+      {k: "comunicacao", h: "Comunicação", w: 16, hide: function(){ return !healthCanSee(); }},
+      {k: "alergias", h: "Alergias", w: 20, hide: function(){ return !healthCanSee(); }},
+      {k: "medicacoes", h: "Medicações", alias: ["medicacoes em uso"], w: 20, hide: function(){ return !healthCanSee(); }},
+      {k: "restricoes", h: "Restrições alimentares", alias: ["restricoes"], w: 20, hide: function(){ return !healthCanSee(); }},
+      {k: "obs", h: "Observações", alias: ["observacao", "obs"], w: 40}
+    ],
+    exportRows: ioPatExportRows, plan: ioPatPlan, apply: ioPatApply},
+  objetivos: {label: "Objetivos", file: "objetivos", mod: "objetivos",
+    sub: "Mesmo objetivo na mesma habilidade = atualiza.",
+    help: ["Uma linha por objetivo do Banco de objetivos. A Habilidade precisa estar cadastrada (importe as Habilidades antes, se precisar).",
+      "Especialidades: nomes ou siglas separados por vírgula; vazio = todas. Escala: o nome de uma escala cadastrada."],
+    cols: [
+      {k: "objetivo", h: "Objetivo", alias: ["nome"], w: 50, req: true}, {k: "habilidade", h: "Habilidade", alias: ["area", "habilidade / area"], w: 22, req: true},
+      {k: "criterio", h: "Critério de sucesso", alias: ["criterio"], w: 40}, {k: "escala", h: "Escala", w: 14},
+      {k: "specs", h: "Especialidades", alias: ["especialidade"], w: 26, note: "nomes ou siglas separados por vírgula; vazio = todas"}
+    ],
+    exportRows: function(){ return goalBankList().map(function(g){ var sc = scaleById(g.scaleId); return {objetivo: g.name, habilidade: g.areaId ? skillAreaName(g.areaId) : "", criterio: g.criterio || "", escala: sc ? sc.name : "", specs: planSpecNames(goalSpecIds(g))}; }); },
+    plan: ioGoalPlan, apply: ioGoalApply},
+  habilidades: {label: "Habilidades", file: "habilidades", mod: "habilidades",
+    sub: "Mesmo nome = atualiza as especialidades sugeridas.",
+    help: ["Uma linha por habilidade. Especialidades sugeridas: nomes ou siglas separados por vírgula."],
+    cols: [{k: "nome", h: "Habilidade", alias: ["nome"], w: 30, req: true}, {k: "specs", h: "Especialidades sugeridas", alias: ["especialidades"], w: 40}],
+    exportRows: function(){ return skillAreasList().map(function(a){ return {nome: a.name, specs: planSpecNames(Array.isArray(a.specIds) ? a.specIds : [])}; }); },
+    plan: ioHabPlan, apply: ioHabApply},
+  escalas: {label: "Escalas", file: "escalas", mod: "escalas",
+    sub: "Uma linha por nível; mesmo nome de escala = atualiza.",
+    help: ["Uma linha por nível, na ordem: do primeiro ao final (o último é o nível final, que marca o objetivo como Atingido).",
+      "Cor no formato #RRGGBB (opcional). Nível que já está no sistema não pode sair pela importação."],
+    cols: [{k: "escala", h: "Escala", alias: ["nome"], w: 20, req: true}, {k: "nivel", h: "Nível", alias: ["niveis"], w: 40, req: true}, {k: "cor", h: "Cor", w: 10}],
+    exportRows: ioScaleExportRows, plan: ioScalePlan, apply: ioScaleApply}
+};
+(function(){
+  // Botões "Outras opções ▾" com Exportar/Importar nas barras de Tratamentos, Objetivos, Escalas e Habilidades.
+  ["tratamentos", "objetivos", "escalas", "habilidades"].forEach(function(k){
+    var add = document.getElementById(k === "tratamentos" ? "trAdd" : "reg-" + k + "-add"); if (!add) return;
+    add.insertAdjacentHTML("beforebegin", ioToolsMenuHtml(k));
+    ioWireMenu(add.parentNode.querySelector('[data-io-wrap="' + k + '"]'));
+  });
+  // Pacientes: entram no menu "Outras opções" que já existe.
+  var pm = document.getElementById("patMoreMenu");
+  if (pm){
+    pm.insertAdjacentHTML("beforeend", '<button class="btn ghost" id="patExportBtn">Exportar planilha</button><button class="btn ghost" id="patImportBtn">Importar planilha</button>');
+    document.getElementById("patExportBtn").addEventListener("click", function(){ ioExport("pacientes", false); });
+    document.getElementById("patImportBtn").addEventListener("click", function(){ ioOpenImport("pacientes"); });
+  }
 })();
 
 (function(){
