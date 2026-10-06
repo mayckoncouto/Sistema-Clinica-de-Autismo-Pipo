@@ -2234,3 +2234,14 @@ própria semana. Teste no `tests/run_fluidez.js`.
   quebra em duas linhas (antes o "?" passava da borda e a página ganhava rolagem lateral).
 - Tratamento: **Observações** logo depois das especialidades/serviços e antes do horário
   (`treatFieldsEditor(v, {beforeHours})`).
+
+## Trocar o nome do paciente atualiza Planner, Agenda, Prontuário e Plano (2026-10-06)
+Pedido do usuário. Planner (`bookings[].patient`) e Agenda (`appointments.patient`) guardam o
+NOME. No salvar do paciente (`openPatientModal`), com nome diferente e cadastro gravado
+(`writePatients` agora resolve `true` quando gravou), `patientRenameEverywhere(id, antigo, novo)`:
+Planner pelas 4 semanas (`currentBookingsFor` + `applyBookingChanges` com `noHistory`, sem as
+confirmações de horário/terapeuta/área) e Agenda + `clinical_records.patient_name` +
+`therapy_plans.patient_name` pela RPC `rename_patient(p_id, p_old, p_new)` (Administrador ou
+`pacientes.edit`; exige o nome novo já salvo; flag `pipo.merging` mantém autor das evoluções).
+Outro paciente com o mesmo nome antigo = não renomeia (aviso). Migração
+`supabase/2026-10-06h-renomear-paciente.sql`. Teste `tests/run_patient_rename.js`.

@@ -7197,7 +7197,12 @@ function openPatientModal(p){
     var list = state.patients.slice();
     if (isNew) list.push(rec); else list = list.map(function(x){ return x.id === rec.id ? rec : x; });
     var hData = HEALTH.map && healthCanSee() && healthCanEdit() ? healthPick(rec) : null;
-    writePatients(list).then(function(){ return hData ? healthSave(rec.id, Object.assign({}, HEALTH.map[rec.id] || {}, hData)) : null; }).then(function(){
+    var oldName = isNew ? "" : String((rawPatient(v.id) || v).nome || "");
+    writePatients(list).then(function(saved){
+      var h = hData ? healthSave(rec.id, Object.assign({}, HEALTH.map[rec.id] || {}, hData)) : null;
+      var rn = saved === true && oldName && oldName.trim() !== String(rec.nome).trim() ? patientRenameEverywhere(rec.id, oldName, rec.nome) : null;
+      return Promise.all([h, rn]);
+    }).then(function(){
       close();
       if (isNew && can("tratamentos", "create")) openTreatmentModal(null, {patientId: rec.id});
     });
@@ -7451,6 +7456,42 @@ function trHoursText(t){
   }).filter(Boolean).join(" · ");
 }
 
+// Nome do paciente trocado no cadastro: o Planner e a Agenda guardam o NOME (não o id), então
+// os agendamentos com o nome antigo passam para o novo; o nome nas evoluções e nos planos
+// terapêuticos também (Agenda/Prontuário/Plano pelo banco: rename_patient). Se outro paciente
+// tem o mesmo nome antigo, não renomeia (não dá para saber de quem é cada agendamento).
+function patientRenameEverywhere(id, oldName, newName){
+  var oldT = String(oldName || "").trim(), nn = String(newName || "").trim(), on = normText(oldT);
+  if (!on || !nn || oldT === nn) return Promise.resolve();
+  if (state.patientsRaw.some(function(x){ return x.id !== id && normText(String(x.nome || "").trim()) === on; })){
+    showToast("Outro paciente também se chama " + oldT + ": os agendamentos não foram renomeados. Confira no Planner e na Agenda.", true);
+    return Promise.resolve();
+  }
+  var msgs = [], c = agdClient();
+  var srv = c ? c.rpc("rename_patient", {p_id: id, p_old: oldT, p_new: nn}).then(function(r){
+      if (r.error){ msgs.push(/rename_patient/.test(r.error.message || "") ? "Agenda não atualizada: falta rodar a atualização do banco (renomear paciente)" : "Agenda não atualizada: " + r.error.message); return; }
+      var n = (r.data && r.data.agenda) || 0; if (n) msgs.push(n + (n === 1 ? " atendimento" : " atendimentos") + " na Agenda");
+      Object.keys(AD.rows || {}).forEach(function(k){ var x = AD.rows[k]; if (x && normText(String(x.patient || "").trim()) === on) x.patient = nn; });
+    }, function(e){ msgs.push("Agenda não atualizada: " + agdErr(e)); }) : Promise.resolve();
+  var pl = !db ? Promise.resolve() : currentBookingsFor(plannerAllDocIds()).then(function(all){
+    var changes = {}, n = 0;
+    Object.keys(all).forEach(function(docId){
+      Object.keys(all[docId] || {}).forEach(function(k){
+        var v = all[docId][k]; if (!v) return;
+        var rec = typeof v === "string" ? {patient: v} : v;
+        if (normText(String(rec.patient || "").trim()) !== on) return;
+        (changes[docId] = changes[docId] || {})[k] = Object.assign({}, rec, {patient: nn}); n++;
+      });
+    });
+    if (!n) return;
+    return Promise.resolve(applyBookingChanges(changes, {noHistory: true, patientHoursOk: true, therapistOk: true, areaOk: true})).then(function(r){
+      msgs.push(r === false ? "Planner não atualizado (sem permissão de editar o Planner ou sem conexão)" : n + (n === 1 ? " agendamento" : " agendamentos") + " no Planner");
+    });
+  });
+  return Promise.all([srv, pl]).then(function(){
+    if (msgs.length) showToast("Nome atualizado também: " + msgs.join(" · ") + ".", msgs.some(function(m){ return /não atualizad/.test(m); }));
+  });
+}
 function writePatients(list){
   // A lista que o app usa vem "somada" ao tratamento: grava só o que é do
   // paciente (os campos antigos de tratamento ficam como estavam no banco).
@@ -7471,8 +7512,9 @@ function writePatients(list){
   renderPatientsTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
-  return db.doc("patients/all").set({list:list}).catch(function(){
+  return db.doc("patients/all").set({list:list}).then(function(){ return true; }).catch(function(){
     showToast("Não foi possível salvar as alterações do paciente.", true);
+    return false;
   });
 }
 
@@ -14934,6 +14976,7 @@ var HELP_TOPICS = [
       "<b>Outras opções ▾</b>: <b>Campos obrigatórios</b>, <b>Imprimir ficha cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica) e <b>Mesclar cadastros</b> (só Administrador)."
     ],
     rules: [
+      "Trocar o nome do paciente no cadastro troca também nos agendamentos do Planner e da Agenda, nas evoluções do Prontuário e no Plano terapêutico. Se outro paciente tem o mesmo nome antigo, nada é trocado (aparece um aviso para conferir à mão).",
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",
       "Paciente com medida protetiva ativa tem o escudo vermelho ao lado do nome na lista. Na Agenda, o último atendimento do paciente no dia fica com borda e escudo vermelhos, e a janela do atendimento mostra quem não pode e quem pode retirar.",
       "A observação da medida protetiva só aparece (na janela, na Agenda e na ficha impressa) para quem pode marcar o status Finalizado. A mesma pessoa não pode estar nas duas listas: ao salvar, o sistema oferece tirá-la dos Responsáveis pela retirada.",
