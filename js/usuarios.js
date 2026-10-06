@@ -24,6 +24,7 @@
     { key: "escalas", label: "Escalas", hint: "escalas do plano terapêutico (níveis e cores)" },
     { key: "habilidades", label: "Habilidades", hint: "habilidades dos objetivos do plano terapêutico" },
     { key: "pacientes", label: "Pacientes", hint: "" },
+    { key: "saude_paciente", label: "Pacientes – saúde", hint: "ver/editar médico, CID, diagnóstico, suporte, comunicação, alergias, medicações e restrições", actions: ["view", "edit"] },
     { key: "campos_paciente", label: "Pacientes – campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, descontos e valor final", actions: ["view", "edit"] },
@@ -168,7 +169,7 @@
     });
   }
   function reloadAll() {
-    return Promise.all([loadRoles(), loadUsers()]).then(renderAll);
+    return Promise.all([loadRoles(), loadUsers(), refreshProfStaff()]).then(renderAll);
   }
 
   function adminApi(payload) {
@@ -684,18 +685,34 @@
    */
   var BULK_DOMAIN = "clinicapipo.com";
   var BULK_PASSWORD = "Pipo1234!";
+  // Profissionais (colaboradores com o tipo Profissional, ativos) que ainda NÃO têm
+  // usuário. Já tem usuário quem está ligado ao profissional (professional_id), ao
+  // cadastro do colaborador (staff_id) ou tem conta com o e-mail de contato dele.
+  var PROF_STAFF = null;
+  function refreshProfStaff() {
+    if (!window.pipoProfStaff) return Promise.resolve();
+    return window.pipoProfStaff().then(function (l) { PROF_STAFF = l; }, function () {});
+  }
   function profsWithoutUser() {
-    var linked = {};
-    users.forEach(function (u) { if (u.professional_id) linked[u.professional_id] = true; });
-    var all = window.pipoProfessionals ? window.pipoProfessionals() : [];
-    return all.filter(function (p) { return !linked[p.id]; })
-      .sort(function (a, b) { return (a.name || "").localeCompare(b.name || "", "pt-BR"); });
+    var byProf = {}, byStaff = {}, byMail = {};
+    users.forEach(function (u) {
+      if (u.professional_id) byProf[u.professional_id] = true;
+      if (u.staff_id) byStaff[u.staff_id] = true;
+      if (u.email) byMail[String(u.email).toLowerCase()] = true;
+    });
+    var all = PROF_STAFF || (window.pipoProfessionals ? window.pipoProfessionals() : []).map(function (p) { return { prof: p, staffId: "", email: "" }; });
+    return all.filter(function (x) {
+      return !byProf[x.prof.id] && !(x.staffId && byStaff[x.staffId]) && !(x.email && byMail[x.email]);
+    }).sort(function (a, b) { return (a.prof.name || "").localeCompare(b.prof.name || "", "pt-BR"); });
   }
   function emailPart(s) { return normText(s).replace(/[^a-z0-9]/g, ""); }
-  function suggestEmails(profs) {
+  function suggestEmails(list) {
     var taken = {};
     users.forEach(function (u) { taken[String(u.email || "").toLowerCase()] = true; });
-    return profs.map(function (p) {
+    return list.map(function (x) {
+      var p = x.prof;
+      // E-mail de contato do colaborador, se houver; senão a sugestão primeironome@.
+      if (x.email && !taken[x.email]) { taken[x.email] = true; return { prof: p, staffId: x.staffId, email: x.email }; }
       var parts = String(p.name || "").trim().split(/\s+/).map(emailPart).filter(Boolean);
       var base = parts[0] || "profissional";
       var email = base + "@" + BULK_DOMAIN;
@@ -704,10 +721,14 @@
       var n = 2;
       while (taken[email]) email = base + n++ + "@" + BULK_DOMAIN;
       taken[email] = true;
-      return { prof: p, email: email };
+      return { prof: p, staffId: x.staffId, email: email };
     });
   }
   function openBulkProfModal() {
+    // Relê usuários e colaboradores antes, para nunca oferecer quem já tem acesso.
+    Promise.all([loadUsers(), refreshProfStaff()]).then(function () { renderUsers(); openBulkProfModalNow(); });
+  }
+  function openBulkProfModalNow() {
     var rows = suggestEmails(profsWithoutUser());
     if (!rows.length) { toast("Todos os profissionais já têm usuário."); return; }
     var mh = document.getElementById("modalHost");
@@ -762,9 +783,15 @@
           var email = tr.querySelector(".bk-email").value.trim().toLowerCase();
           var st = tr.querySelector(".bk-status");
           st.textContent = "criando…";
-          return adminApi({ action: "create", email: email, password: pass, full_name: r.prof.name, role_id: "profissional", professional_id: r.prof.id })
+          var body = { action: "create", email: email, password: pass, full_name: r.prof.name, role_id: "profissional", professional_id: r.prof.id };
+          if (r.staffId) body.staff_id = r.staffId;
+          return adminApi(body)
             .then(function () { ok++; tr.setAttribute("data-done", "1"); st.innerHTML = '<span class="u-badge ok">Criado</span>'; tr.querySelector(".bk-on").disabled = true; })
-            .catch(function (e) { fail++; st.innerHTML = '<span class="u-badge off" title="' + esc(e.message) + '">Erro</span>'; });
+            .catch(function (e) {
+              // Conta com esse e-mail já existe: não cria outra (não conta como erro).
+              if (/já existe/i.test(e.message || "")) { tr.setAttribute("data-done", "1"); tr.querySelector(".bk-on").disabled = true; st.innerHTML = '<span class="u-badge" title="' + esc(e.message) + '">Já tem usuário</span>'; return; }
+              fail++; st.innerHTML = '<span class="u-badge off" title="' + esc(e.message) + '">Erro</span>';
+            });
         });
       }, Promise.resolve()).then(function () {
         running = false;

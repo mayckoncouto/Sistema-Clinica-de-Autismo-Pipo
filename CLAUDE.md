@@ -2054,3 +2054,28 @@ prazo (`.pl-prazo`, data completa no `title`; coluna Prazo 176px), setas ▲▼ 
   daquele atendimento (`bookingAbaOf` com o profissional e o serviço da linha), não o do
   tratamento; cartão do tratamento mostra Sim quando o ABA está vazio (`abaYesNo`).
   `schema.sql` conferido montando um banco do zero (sem erros).
+
+## Dados de saúde com permissão própria; Criar acessos sem duplicar (2026-10-06)
+- **Pacientes – saúde** (`saude_paciente`: ver/editar; `MODULES` nos dois js). `HEALTH_KEYS`
+  (medicoId, cid, diagData, suporte, comunicacao, alergias, medicacoes, restricoes) saem de
+  `patients/all` para a tabela `public.patient_health (patient_id pk, data jsonb)` com RLS
+  (migração `supabase/2026-10-06f-saude-do-paciente.sql`: copia, tira do documento, níveis
+  herdam ver/editar de Pacientes; pode rodar de novo, inclusive depois de restaurar cópia antiga).
+- App: `HEALTH.map` (null = sem sistema online/tabela → campos continuam no paciente, como nos
+  testes), `healthLoad()` (chamado em `applyPermissionsUI`), `healthOf`, `healthSave`,
+  `healthCanSee/Edit`, `patFieldShown(key)`. `rebuildPatients`/`patientAt` somam a saúde;
+  `writePatients` tira `HEALTH_KEYS` do documento quando a tabela está em uso; o salvar do
+  paciente e o Mesclar gravam a saúde com `healthSave`. Sem "ver": some o grupo Saúde da
+  janela, o seletor Saúde dos Detalhes do Agendamento, a parte Saúde da ficha impressa e o
+  quadro clínico do plano (mensagem). Com "ver" sem "editar": campos travados.
+  Backup inclui `patient_health` (optional; `api/admin-backup.js` por `patient_id`).
+  Teste `tests/run_saude.js` (33 arquivos no `npm test`).
+- **Criar acessos dos profissionais** fica (pedido do usuário): lista só profissionais ATIVOS
+  sem usuário ligado por `professional_id`, por `staff_id` do colaborador ou com conta no
+  e-mail de contato (`window.pipoProfStaff()` → `{prof, staffId, email}`); sugere o e-mail
+  de contato do colaborador; cria com `staff_id`. `api/admin-users.js` recusa criar quando
+  já há perfil com o mesmo `professional_id`/`staff_id` ("Já existe um usuário ligado a este
+  cadastro."), e a lista mostra "Já tem usuário" (não conta como erro).
+- `supabase/conferencia-dos-dados.sql`: script SÓ DE LEITURA com 17 verificações (Planner em
+  colunas apagadas, nomes não cadastrados, inativos agendados, tratamentos, CPF, Agenda sem
+  status, Finalizado sem evolução, usuários/profissionais). Não é migração.

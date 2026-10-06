@@ -122,6 +122,16 @@ module.exports = async function handler(req, res) {
       if (!admin.isAdmin && roleCheck.body[0].is_admin) {
         res.status(403).json({ error: "Só o Administrador cria usuários no nível Administrador." }); return;
       }
+      // Profissional ou colaborador que já tem usuário ligado: não cria outro.
+      var linkQ = [];
+      if (body.professional_id) linkQ.push("professional_id.eq." + encodeURIComponent(String(body.professional_id)));
+      if (body.staff_id) linkQ.push("staff_id.eq." + encodeURIComponent(String(body.staff_id)));
+      if (linkQ.length) {
+        var linked = await call("/rest/v1/profiles?select=id&or=(" + linkQ.join(",") + ")&limit=1", { headers: adminHeaders() });
+        if (linked.ok && Array.isArray(linked.body) && linked.body.length) {
+          res.status(400).json({ error: "Já existe um usuário ligado a este cadastro." }); return;
+        }
+      }
       var created = await call("/auth/v1/admin/users", {
         method: "POST",
         headers: adminHeaders(),

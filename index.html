@@ -3007,6 +3007,7 @@ function permToolClasses(){
 }
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
 function applyPermissionsUI(){
+  if (HEALTH.map === null && healthCanSee()) healthLoad();
   if (!window.pipoAuth) return;
   var tabModule = {agenda:"agenda", agendadia:"agendamentos", relatorio:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"rh_funcionarios", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados", funcionarios:"rh_funcionarios", tiposfunc:"rh_funcionarios"};
   // Salas e Grupos de Suporte dividem a mesma tela.
@@ -3545,6 +3546,16 @@ function quickAddRegistry(kind){
 }
 window.pipoConfirm = confirmDialog; // usado por js/usuarios.js
 window.pipoProfessionals = function(){ return state.professionals.slice(); }; // idem (criar acessos)
+// Criar acessos dos profissionais (js/usuarios.js): profissionais ATIVOS com a linha do
+// colaborador (staff_id e e-mail de contato), para não criar usuário de quem já tem.
+window.pipoProfStaff = function(){
+  return (STAFF.loaded ? Promise.resolve() : staffLoad()).then(function(){
+    return (state.professionals || []).filter(isActive).map(function(p){
+      var r = staffEntryForProf(p).row;
+      return {prof: p, staffId: r ? r.id : "", email: r && r.data ? String(r.data.email || "").trim().toLowerCase() : ""};
+    });
+  });
+};
 window.pipoStatuses = function(){ return statusesList(); }; // níveis de permissão (js/usuarios.js)
 window.pipoOpenStatuses = function(){ openStatusesModal(); }; // Cadastros → Status (CAD_ITEMS)
 window.pipoOpenBackup = function(){ openBackupModal(); }; // menu Acesso → Backup
@@ -6556,6 +6567,8 @@ function patFieldCfg(key){
   var req = c ? !!c.req : !!f.dfltReq;                   // CPF nasce obrigatório
   return {show: show, req: show && req};
 }
+// Campo aparece na janela do paciente: configuração de "Campos" + permissão de saúde.
+function patFieldShown(key){ return patFieldCfg(key).show && (!isHealthKey(key) || healthCanSee()); }
 function digitsOnly(s){ return String(s || "").replace(/\D/g, ""); }
 // Dados do paciente no formato novo (converte o que veio do formato anterior).
 function patNormalize(v){
@@ -6728,7 +6741,7 @@ function openPatientModal(p){
       '</div><div class="pm-note" data-note="' + role + '" hidden></div></div>';
   }
   var secs = PAT_SECTIONS.map(function(sec){
-    var fs = PAT_FIELDS.filter(function(f){ return f.sec === sec.id && patFieldCfg(f.key).show; });
+    var fs = PAT_FIELDS.filter(function(f){ return f.sec === sec.id && patFieldShown(f.key); });
     if (!fs.length) return "";
     var html = "";
     if (sec.id === "endereco") html = patAddressHtml(v.endereco);
@@ -6979,7 +6992,7 @@ function openPatientModal(p){
     var out = {};
     telSync(); rotSync(); protSync();
     PAT_FIELDS.forEach(function(f){
-      if (!patFieldCfg(f.key).show) return;
+      if (!patFieldShown(f.key)) return;
       var t = f.type || "text";
       if (t === "address"){ out.endereco = readAddress(); return; }
       if (t === "parent"){ out[f.key] = parentNow(f.key); return; }
@@ -7000,7 +7013,7 @@ function openPatientModal(p){
   function missing(d){
     var miss = [];
     PAT_FIELDS.forEach(function(f){
-      if (patFieldCfg(f.key).req && patValueEmpty(f, d)) miss.push({label: f.label + (f.hint && f.type !== "parent" ? " (" + f.hint + ")" : ""), sec: f.sec});
+      if (patFieldCfg(f.key).req && patFieldShown(f.key) && patValueEmpty(f, d)) miss.push({label: f.label + (f.hint && f.type !== "parent" ? " (" + f.hint + ")" : ""), sec: f.sec});
     });
     return miss;
   }
@@ -7018,6 +7031,11 @@ function openPatientModal(p){
   }
   finLinkApply();
   pendUpdate();
+  // Saúde: quem só pode ver não altera.
+  if (healthCanSee() && !healthCanEdit()){
+    var hs = overlay.querySelector('[data-pmsec="saude"]');
+    if (hs){ hs.querySelectorAll("input,select,textarea,button").forEach(function(el){ el.disabled = true; }); hs.insertAdjacentHTML("beforeend", '<div class="pat-count">Você pode ver os dados de saúde, mas não alterar.</div>'); }
+  }
 
   modalApplyPerms("pacientes", isNew, {ov: "ovPat", save: "pSave", del: "pDelete", cancel: "pCancel"});
   function close(){ host.innerHTML = ""; }
@@ -7103,7 +7121,8 @@ function openPatientModal(p){
     go.then(function(ok){ if (!ok) return;
     var list = state.patients.slice();
     if (isNew) list.push(rec); else list = list.map(function(x){ return x.id === rec.id ? rec : x; });
-    writePatients(list).then(function(){
+    var hData = HEALTH.map && healthCanSee() && healthCanEdit() ? healthPick(rec) : null;
+    writePatients(list).then(function(){ return hData ? healthSave(rec.id, Object.assign({}, HEALTH.map[rec.id] || {}, hData)) : null; }).then(function(){
       close();
       if (isNew && can("tratamentos", "create")) openTreatmentModal(null, {patientId: rec.id});
     });
@@ -7199,7 +7218,7 @@ function patientFichaHtml(p){
     ["Responsável financeiro", row("Nome", v.financeiro.nome) + row("CPF/CNPJ", v.financeiro.doc && v.financeiro.doc.length === 11 ? formatCpf(v.financeiro.doc) : v.financeiro.doc) +
       row("Telefone", v.financeiro.telefone ? formatPhone(v.financeiro.telefone) : "") + row("E-mail", v.financeiro.email) + row("Endereço", v.financeiro.endereco)],
     ["Escola", row("Escola", regName("escolas", v.escolaId)) + row("Série / ano", v.escolaSerie) + row("Turno", v.escolaTurno) + row("Professor(a)", v.professor) + row("Mediador / AT", v.mediador)],
-    ["Saúde", row("Médico", regName("medicos", v.medicoId)) + row("Diagnóstico (CID)", v.cid) + row("Data do diagnóstico", v.diagData ? trBr(v.diagData) : "") +
+    ["Saúde", !healthCanSee() ? "" : row("Médico", regName("medicos", v.medicoId)) + row("Diagnóstico (CID)", v.cid) + row("Data do diagnóstico", v.diagData ? trBr(v.diagData) : "") +
       row("Nível de suporte", v.suporte) + row("Comunicação", v.comunicacao) + row("Alergias", v.alergias) + row("Medicações", v.medicacoes) + row("Restrições alimentares", v.restricoes)],
     ["Administrativo", row("Como conheceu", v.comoConheceu) + row("Observações", v.obs)]
   ];
@@ -7339,7 +7358,8 @@ function patientMerge(I){
     ["mae", "pai", "financeiro", "telefones", "emails", "rotina", "protetiva"].forEach(function(key){ if (out[key] == null) out[key] = k[key]; });
     PAT_LEGACY_KEYS.forEach(function(x){ delete out[x]; });
     var list = state.patients.filter(function(p){ return p.id !== drop.id; }).map(function(p){ return p.id === keep.id ? Object.assign({}, p, out) : p; });
-    return writePatients(list);
+    // Saúde (tabela protegida): o 1º fica com os dados completados com os do 2º.
+    return writePatients(list).then(function(){ return HEALTH.map && healthCanEdit() ? healthSave(keep.id, Object.assign({}, HEALTH.map[keep.id] || {}, healthPick(out))) : null; });
   }).then(function(){
     showToast("Cadastros mesclados: " + drop.nome + " foi incorporado a " + keep.nome + ".");
     return true;
@@ -7365,6 +7385,8 @@ function writePatients(list){
     if (raw || state.treatments.some(function(t){ return t.patientId === rec.id; })){
       TREAT_FIELDS.forEach(function(k){ delete o[k]; if (raw && raw[k] !== undefined) o[k] = raw[k]; });
     }
+    // Saúde fica na tabela protegida (healthSave), nunca no documento que todos leem.
+    if (HEALTH.map) HEALTH_KEYS.forEach(function(k){ delete o[k]; });
     return o;
   });
   var denied = listPermDenied("pacientes", state.patientsRaw, list);
@@ -9754,7 +9776,7 @@ function agdOpenDetails(row){
       '<div class="modal-body">' +
         (pat ? pickupRetHtml(pat) : '') +
         '<div class="agd-det-top"><div class="agd-det-name">' + (col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + '<span>' + esc(name) + '</span></div>' +
-          (pat ? '<div class="seg agd-det-seg" id="agdDetSeg" role="tablist">' + [["ag", "Agendamento"], ["sa", "Saúde"], ["tr", "Tratamento"]].map(function(t, i){
+          (pat ? '<div class="seg agd-det-seg" id="agdDetSeg" role="tablist">' + [["ag", "Agendamento"], ["sa", "Saúde"], ["tr", "Tratamento"]].filter(function(t){ return t[0] !== "sa" || healthCanSee(); }).map(function(t, i){
             return '<button type="button" data-det="' + t[0] + '"' + (i ? '' : ' class="active"') + ' role="tab" aria-selected="' + (i ? 'false' : 'true') + '">' + t[1] + '</button>'; }).join("") + '</div>' : '') +
           '</div>' +
         // Quadro de informações: Agendamento | Saúde (cadastro do paciente) | Tratamento (da data).
@@ -9764,9 +9786,9 @@ function agdOpenDetails(row){
         line("Data/Hora", agdBrDate(row.date) + " " + row.time + " até " + agdPlus40(row.time)) +
         line("Observação", row.note || "") +
         '</div>' +
-        (pat ? '<div class="agd-det" data-det-pane="sa" hidden>' +
+        (pat ? (healthCanSee() ? '<div class="agd-det" data-det-pane="sa" hidden>' +
           line("Diagnóstico (CID)", pat.cid || "") + line("Alergias", pat.alergias || "") +
-          line("Medicações em uso", pat.medicacoes || "") + line("Restrições alimentares", pat.restricoes || "") + '</div>' +
+          line("Medicações em uso", pat.medicacoes || "") + line("Restrições alimentares", pat.restricoes || "") + '</div>' : '') +
           '<div class="agd-det" data-det-pane="tr" hidden>' +
           line("Plano", pat.plano || "") + line("ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) + line("Horários", trHoursText(pat)) + '</div>' : '') +
         (pat ? pickupProtHtml(pat, agdIsLastOfDay(row)) : '') +
@@ -13060,10 +13082,52 @@ function trColor(t){
 function rawPatient(id){ return (state.patientsRaw || []).filter(function(p){ return p.id === id; })[0] || null; }
 // Paciente + campos do tratamento atual. Sempre uma lista nova (o índice de busca
 // de pacientes é refeito quando state.patients é trocado).
+/* ---- Dados de saúde do paciente (protegidos por nível: "Pacientes – saúde") ----
+ * Médico, CID, data do diagnóstico, suporte, comunicação, alergias, medicações e
+ * restrições ficam na tabela patient_health (só quem tem saude_paciente.view lê;
+ * edit grava), fora de patients/all (que todo usuário ativo lê). HEALTH.map =
+ * {patientId: {...}} depois de ler a tabela; null = sem sistema online (testes)
+ * ou tabela ainda não criada: aí os campos continuam no próprio paciente. */
+var HEALTH_KEYS = ["medicoId", "cid", "diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"];
+var HEALTH = {map: null, loading: null};
+function isHealthKey(k){ return HEALTH_KEYS.indexOf(k) !== -1; }
+function healthCanSee(){ return !window.pipoAuth || can("saude_paciente", "view"); }
+function healthCanEdit(){ return !window.pipoAuth || can("saude_paciente", "edit"); }
+function healthOf(id){
+  if (!HEALTH.map) return {};
+  var h = HEALTH.map[id] || {}, o = {};
+  HEALTH_KEYS.forEach(function(k){ if (h[k] !== undefined && h[k] !== "") o[k] = h[k]; });
+  return o;
+}
+function healthPick(rec){ var o = {}; HEALTH_KEYS.forEach(function(k){ if (rec[k] !== undefined) o[k] = rec[k]; }); return o; }
+function healthLoad(){
+  var c = agdClient();
+  if (!c || !healthCanSee()) return Promise.resolve();
+  if (HEALTH.loading) return HEALTH.loading;
+  HEALTH.loading = c.from("patient_health").select("patient_id,data").then(function(r){
+    HEALTH.loading = null;
+    if (r.error) return;                       // tabela ainda não criada (falta o ajuste do banco)
+    var m = {};
+    (r.data || []).forEach(function(x){ m[x.patient_id] = x.data || {}; });
+    HEALTH.map = m;
+    rebuildPatients(); renderPatientsTab(); agdRenderIfVisible();
+  }, function(){ HEALTH.loading = null; });
+  return HEALTH.loading;
+}
+function healthSave(id, data){
+  var c = agdClient();
+  if (!c || HEALTH.map === null || !healthCanEdit()) return Promise.resolve(true);
+  return c.from("patient_health").upsert({patient_id: id, data: data}, {onConflict: "patient_id"}).then(function(r){
+    if (r.error){ showToast("O paciente foi salvo, mas os dados de saúde não: " + (r.error.message || "erro"), true); return false; }
+    HEALTH.map[id] = data; rebuildPatients();
+    return true;
+  });
+}
 function rebuildPatients(){
   var byPat = {};
   (state.treatments || []).forEach(function(t){ (byPat[t.patientId] = byPat[t.patientId] || []).push(t); });
   state.patients = (state.patientsRaw || []).map(function(p){
+    if (HEALTH.map) p = Object.assign({}, p, healthOf(p.id));
     if (!byPat[p.id]) return p;
     var t = currentTreatment(p.id);
     var m = Object.assign({}, p);
@@ -13094,7 +13158,7 @@ function patientAt(p, iso){
   if (_patAt.p !== state.patients || _patAt.t !== state.treatments) _patAt = {p: state.patients, t: state.treatments, map: {}};
   var k = p.id + "|" + t.id;
   if (!_patAt.map[k]){
-    var m = Object.assign({}, rawPatient(p.id) || p);
+    var m = Object.assign({}, rawPatient(p.id) || p, healthOf(p.id));
     TREAT_FIELDS.forEach(function(f){ if (t[f] === undefined) delete m[f]; else m[f] = t[f]; });
     m._treatId = t.id;
     _patAt.map[k] = m;
@@ -13958,6 +14022,7 @@ var HELP_TOPICS = [
       "Médico e Escola são escolhidos na lista (digite para buscar). O botão <b>+</b> ao lado cadastra um novo sem sair da janela.",
       "O título de cada grupo mostra quantos campos obrigatórios ainda faltam (ex.: \"2 faltando\").",
       "A data de entrada começa com a data do cadastro e pode ser alterada.",
+      "O grupo <b>Saúde</b> (médico, CID, data do diagnóstico, nível de suporte, comunicação, alergias, medicações e restrições) só aparece para quem tem a permissão <b>Pacientes – saúde</b>: com \"ver\" os campos aparecem travados; com \"editar\" dá para alterar. Sem a permissão, esses dados também não aparecem nos Detalhes do Agendamento, na ficha impressa nem no quadro clínico do Plano Terapêutico.",
       "Salve. Paciente novo: em seguida o sistema abre o tratamento dele. No resumo do tratamento aparece o horário de atendimento, só com os dias e períodos em que o paciente vem.",
       "A lista mostra nome, nascimento, idade e a situação do tratamento. Ao lado da busca, escolha onde procurar: <b>Paciente</b>, <b>Mãe</b>, <b>Pai</b> ou <b>Responsável financeiro</b> — pelo nome (sem acento/maiúscula) ou pelo CPF.",
       "<b>Outras opções ▾</b>: <b>Campos obrigatórios</b>, <b>Imprimir ficha cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica) e <b>Mesclar cadastros</b> (só Administrador)."
@@ -14342,12 +14407,14 @@ var HELP_TOPICS = [
     steps: [
       "Acesso ▾ → <b>Usuários</b> → <b>+ Incluir</b>: abre o cadastro de um novo colaborador; o usuário é criado na seção <b>Acesso ao sistema</b> (e-mail, nível e senha). O Administrador também pode criar uma <b>conta sem colaborador</b> (ex.: contador externo).",
       "<b>Níveis de permissão</b> (só o Administrador): clique num nível e marque, por tela, Ver / Incluir / Editar / Excluir, os status e os relatórios liberados. O grupo <b>Menu Acesso</b> libera Clínica, Usuários, Backup, Senha e Ajuda.",
-      "Para bloquear alguém, desative o usuário (ele sai na hora)."
+      "Para bloquear alguém, desative o usuário (ele sai na hora).",
+      "<b>Criar acessos dos profissionais</b> (aparece enquanto houver profissional ativo sem usuário): lista só os colaboradores do tipo Profissional que ainda não têm usuário, com o e-mail de contato do cadastro (ou a sugestão nome@clinicapipo.com) e uma senha inicial igual para todos. Confira, desmarque quem não deve ter acesso e clique em <b>Criar acessos</b>. Todos entram no nível Profissional, ligados ao cadastro do colaborador."
     ],
     rules: [
       "O nível Administrador tem acesso total e não pode ser alterado.",
       "Com a permissão <b>Usuários</b>, o nível vê e altera as contas conforme as caixas marcadas, mas não mexe em contas de administrador, não dá o nível Administrador e não abre Níveis de permissão.",
       "Ninguém muda o próprio nível. Nível com usuários não pode ser excluído.",
+      "Quem já tem usuário (ligado ao profissional, ao cadastro do colaborador ou com o mesmo e-mail) nunca ganha um segundo: o sistema confere antes de criar e mostra \"Já tem usuário\".",
       "Mudanças de permissão valem na hora para todos daquele nível."
     ],
     who: "Permissão <b>Usuários</b> (Níveis de permissão: só o Administrador)."},
@@ -14505,6 +14572,7 @@ var BACKUP_TABLES = [
   {name: "documents", order: "path", label: "Cadastros, Planner e Clínica", restore: true},
   {name: "appointments", order: "id", label: "Atendimentos da Agenda", restore: true},
   {name: "clinical_records", order: "id", label: "Evoluções do Prontuário", restore: true},
+  {name: "patient_health", order: "patient_id", label: "Dados de saúde dos pacientes", restore: true, optional: true},
   {name: "treatment_finance", order: "treatment_id", label: "Valores dos tratamentos", restore: true, optional: true},
   {name: "convenio_finance", order: "id", label: "Valores dos convênios", restore: true, optional: true},
   {name: "staff", order: "id", label: "Colaboradores", restore: true, optional: true},
@@ -15902,6 +15970,7 @@ function planObjCounts(plan){
 function planPatient(pid){ return state.patientsRaw.filter(function(p){ return p.id === pid; })[0] || state.patients.filter(function(p){ return p.id === pid; })[0] || null; }
 function planClinicalHtml(p){
   if (!p) return '';
+  if (!healthCanSee()) return '<div class="pat-count">Seu nível não tem permissão para ver os dados de saúde do paciente.</div>';
   var items = [["Diagnóstico (CID)", Array.isArray(p.cid) ? p.cid.join(", ") : p.cid], ["Data do diagnóstico", p.diagData ? trBr(p.diagData) : ""],
     ["Nível de suporte", p.suporte], ["Comunicação", p.comunicacao], ["Alergias", p.alergias], ["Medicações em uso", p.medicacoes], ["Restrições alimentares", p.restricoes]];
   return '<div class="pl-clin">' + items.map(function(it){
