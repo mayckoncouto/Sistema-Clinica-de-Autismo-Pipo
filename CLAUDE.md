@@ -2344,3 +2344,12 @@ dias sem "Disponível" marcado** (`clear-off`: apaga só os horários que sobrar
 desmarcados) e **Copiar segunda para todos** (`copy`, todos os dias da tabela). Cada ação guarda
 como estava e mostra **Desfazer** (`#pHoursUndo`) por 15 segundos. Teste no fim de
 `tests/run_treatments.js`.
+
+## "Não ABA": sem exceção do grupo de suporte / aplicador (2026-10-07)
+Pedido do usuário: acabou a exceção em que um Grupo de Suporte (ex.: Aplicador ABA) marcando
+a sala liberava o MESMO profissional a ter dois pacientes "não ABA" juntos. Saíram
+`groupBookedRoom`, `abaFreeProf`/`abaGroupOk`/`abaExcept` da grade, o `continue` em
+`plannerConflict`, `abaGroupDependencyDenied` (e sua chamada em `applyBookingChanges`) e o
+`grpOk` de `agdConflictIn`. As regras "não ABA" valem igual com ou sem grupo marcando a sala.
+(As seções acima que citam essa exceção ficaram históricas.) Teste no fim de
+`tests/run_aba_linha.js`.

@@ -4426,10 +4426,8 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
     rooms.forEach(function(r){
       // Paciente que não faz intervenção ABA nesta sala e horário: bloqueia as outras
       // colunas do MESMO profissional (as de outros profissionais ficam livres).
-      // Exceção: grupo de suporte agendado para esta sala = o profissional pode ter outro "não ABA".
       var abaByProf = {};
       if (!isGroup(r)) r.therapists.forEach(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (t2.professionalId && isNaoABABooking(b2, t2.professionalId) && !abaByProf[t2.professionalId]) abaByProf[t2.professionalId] = b2.patient; });
-      var abaGroupOk = Object.keys(abaByProf).length && groupBookedRoom(bookings, dayObj.key, row.time, r);
       // Sala sem "ABA" no nome: qualquer "não ABA" bloqueia a sala toda.
       var abaAny = null;
       if (!isGroup(r) && !roomIsABA(r)) r.therapists.some(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2, t2.professionalId)){ abaAny = b2.patient; return true; } return false; });
@@ -4449,10 +4447,8 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         // (sem clique, sem colar, sem soltar). Se já houver algo marcado ali, continua
         // aparecendo normalmente para poder ser movido ou desmarcado.
         var abaOwn = t.professionalId ? abaByProf[t.professionalId] : null;
-        // exceção do grupo: só as colunas do profissional que tem o "não ABA" (e um só profissional nessa situação)
-        var abaExcept = abaGroupOk && !!abaOwn && (roomIsABA(r) || Object.keys(abaByProf).length === 1);
         var abaHolder = abaAny || abaOwn;
-        var abaLock = !(b && b.patient) && !!abaHolder && !abaExcept;
+        var abaLock = !(b && b.patient) && !!abaHolder;
         // atendimento do mesmo profissional em OUTRA sala ou grupo neste horário
         // (inclusive o grupo do profissional que marca esta mesma sala — 2026-10-06)
         var pw = t.professionalId ? (profWhere[t.professionalId] || []).filter(function(x){ return x.id !== r.id; }) : [];
@@ -4969,18 +4965,6 @@ function isNaoABABooking(b, profId){
   var p = b.date ? findPatientAt(b.patient, b.date) : findPatientByName(b.patient);  // Agenda: tratamento da data
   return !!(p && patientIsNaoABA(bookingPatient(p, b, profId)));   // Planner: profissional da coluna
 }
-// Exceção: com um Grupo de Suporte agendado para esta sala no mesmo horário, o
-// MESMO profissional pode ter dois (ou mais) pacientes que não fazem intervenção
-// ABA na sala (um em cada coluna dele).
-function groupBookedRoom(bookings, dayKey, time, room){
-  return plannerRooms().some(function(g){
-    if (!isGroup(g)) return false;
-    return (g.therapists || []).some(function(t){
-      var b = effectiveBooking(bookings, time + "|" + g.id + "|" + t.id, dayKey, time);
-      return !!(b && b.patient && !bookingKind(b) && normText(b.patient) === normText(room.name));
-    });
-  });
-}
 // Sala com "ABA" no nome (ex.: "Fonoaudiologia ABA"): o paciente "não ABA" bloqueia
 // só as colunas do mesmo profissional. Sala SEM "ABA" no nome: bloqueia a sala toda,
 // inclusive as colunas de outros profissionais.
@@ -5017,7 +5001,6 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       // profissional; em sala sem "ABA" no nome vale para a sala toda.
       var sameProfSeat = !!profId && t.professionalId === profId;
       if (r.id === room.id && !isGroup(room) && (sameProfSeat || !roomIsABA(room))){
-        if (recNaoABA && isNaoABABooking(b, t.professionalId) && sameProfSeat && groupBookedRoom(bookings, dayKey, time, room)) continue;
         if (recNaoABA) return roomIsABA(room)
           ? "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + professionalName(profId) + " já tem " + b.patient + " às " + time + " em " + room.name + "."
           : "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + ".";
@@ -5396,42 +5379,6 @@ document.addEventListener("scroll", function(e){
   if (historyMenuEl && !(e.target instanceof Node && historyMenuEl.contains(e.target))) closeHistoryMenu();
 }, true);
 
-// O agendamento do grupo que libera dois (ou mais) pacientes "não ABA" do mesmo
-// profissional numa sala não pode sair (excluir, mover, trocar o nome) enquanto
-// esses pacientes estiverem lá — tire primeiro os agendamentos da sala.
-// Confere o resultado final de cada mudança (vale para janela, lixeira, mover,
-// arrastar, colar, limpar e desfazer). Devolve a mensagem de recusa ou null.
-function abaGroupDependencyDenied(changesByDoc){
-  var msg = null;
-  Object.keys(changesByDoc).some(function(docId){
-    var changes = changesByDoc[docId], dayKey = docId.split("-")[0];
-    var doc = state.scheduleDocs[docId] || state.reportDocs[docId];
-    var oldB = (doc && doc.bookings) || {}, newB = Object.assign({}, oldB);
-    Object.keys(changes).forEach(function(k){ if (changes[k] === null) delete newB[k]; else newB[k] = changes[k]; });
-    return Object.keys(changes).some(function(k){
-      var parts = k.split("|"), time = parts[0], grp = findRoom(parts[1]);
-      if (!grp || !isGroup(grp)) return false;
-      var oldRec = effectiveBooking(oldB, k, dayKey, time);
-      if (!oldRec || !oldRec.patient || bookingKind(oldRec)) return false;
-      var target = findRoomByName(oldRec.patient);
-      if (!target || isGroup(target)) return false;
-      var newRec = effectiveBooking(newB, k, dayKey, time);
-      if (newRec && newRec.patient && normText(newRec.patient) === normText(target.name)) return false;
-      if (groupBookedRoom(newB, dayKey, time, target)) return false; // outro grupo continua marcando a sala
-      var perProf = {};
-      (target.therapists || []).forEach(function(t){
-        if (!t.professionalId) return;
-        if (isNaoABABooking(effectiveBooking(newB, time + "|" + target.id + "|" + t.id, dayKey, time), t.professionalId)) perProf[t.professionalId] = (perProf[t.professionalId] || 0) + 1;
-      });
-      var prof = Object.keys(perProf).filter(function(p){ return perProf[p] >= 2; })[0];
-      if (!prof) return false;
-      msg = "Não é possível tirar " + target.name + " de " + grp.name + " às " + time + ": " + professionalName(prof) +
-        " tem pacientes que não fazem intervenção ABA na sala que dependem desse agendamento. Remova antes os agendamentos na sala.";
-      return true;
-    });
-  });
-  return msg;
-}
 // Horário de atendimento do paciente (cadastro do paciente, `horarios` no mesmo
 // formato da clínica: {seg:{ativo, manha:{inicio,fim}, tarde:{inicio,fim}}, ...}).
 // Sem `horarios` = sem restrição. No Planner, agendar fora dele pede confirmação dupla.
@@ -5525,11 +5472,6 @@ function applyBookingChanges(changesByDoc, opts){
   var denied = bookingPermDenied(changesByDoc);
   if (denied){
     showToast(denied, true);
-    return Promise.resolve(false);
-  }
-  var abaDep = abaGroupDependencyDenied(changesByDoc);
-  if (abaDep){
-    showToast(abaDep, true);
     return Promise.resolve(false);
   }
   // Fora do horário de atendimento do paciente: confirmação dupla (não vale para desfazer/refazer).
@@ -10694,11 +10636,9 @@ function agdConflictIn(rows, rec){
   if (!rec || !rec.patient || bookingKind(rec)) return null;
   var isPatient = !!findPatientByName(rec.patient);
   // Paciente "não ABA" (mesma regra do Planner): em sala SEM "ABA" no nome ocupa a sala
-  // toda; em sala COM "ABA" no nome, o horário do profissional. Exceção: um grupo de
-  // suporte agendado para a sala libera outro "não ABA" do MESMO profissional.
+  // toda; em sala COM "ABA" no nome, o horário do profissional (sem exceção).
   var recRoom = rec.room_id ? findRoom(rec.room_id) : null;
   var recNao = !!recRoom && !isGroup(recRoom) && !agdIsGroupRow(rec) && isNaoABABooking(rec);
-  var grpOk = !!recRoom && rows.some(function(g){ return g && g !== rec && g.date === rec.date && g.time === rec.time && g.room_id === rec.room_id && agdIsGroupRow(g); });
   for (var i=0;i<rows.length;i++){
     var o = rows[i];
     if (!o || o === rec || !o.patient || bookingKind(o) || o.date !== rec.date || o.time !== rec.time) continue;
@@ -10707,7 +10647,7 @@ function agdConflictIn(rows, rec){
       var same = !!rec.professional_id && o.professional_id === rec.professional_id;
       if (same || !roomIsABA(recRoom)){
         var oNao = isNaoABABooking(o);
-        if (!(recNao && oNao && same && grpOk)){
+        {
           var pn = roomIsABA(recRoom) ? professionalName(rec.professional_id) : "";
           if (recNao) return roomIsABA(recRoom)
             ? "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + pn + " já tem " + o.patient + " às " + rec.time + " em " + recRoom.name + "."
@@ -15435,8 +15375,8 @@ var HELP_TOPICS = [
     steps: ["Cadastros → <b>Grupos de Suporte</b> → <b>+ Incluir</b>."],
     rules: [
       "Na célula de grupo só se agenda o nome de uma sala; na célula de sala, só paciente.",
-      "Profissional com agendamento num grupo fica bloqueado nas outras salas no mesmo horário (exceto a própria sala do grupo).",
-      "Um grupo agendado para a sala libera o mesmo profissional a ter dois pacientes que não fazem ABA na sala."
+      "Profissional com agendamento num grupo fica bloqueado em todas as salas no mesmo horário, inclusive a sala que o grupo marca.",
+      "Um grupo agendado para a sala não muda a regra de quem não faz ABA: o profissional continua sem poder ter dois pacientes que não fazem ABA juntos."
     ],
     who: "Permissão <b>Grupos de Suporte</b>."},
 
@@ -15464,7 +15404,7 @@ var HELP_TOPICS = [
       "Profissional não pode estar em dois lugares (salas/grupos diferentes) no mesmo horário.",
       "No Planner, profissional com paciente numa sala fica com a coluna dele nos Grupos de Suporte bloqueada nesse horário (cinza listrado), mesmo que o grupo seja para a mesma sala. Da mesma forma, com agendamento num grupo, as colunas dele em todas as salas ficam bloqueadas nesse horário, inclusive na sala que o grupo marca.",
       "Paciente não pode ter o mesmo serviço em dois lugares no mesmo horário, nem dois atendimentos com o mesmo profissional.",
-      "Paciente que <b>não faz ABA</b> ocupa o horário do profissional (sala com ABA no nome) ou a sala toda (sala sem ABA). Vale só para o serviço <b>Sessão</b>: outros serviços não ocupam nem são barrados.",
+      "Paciente que <b>não faz ABA</b> ocupa o horário do profissional (sala com ABA no nome) ou a sala toda (sala sem ABA). Vale só para o serviço <b>Sessão</b>: outros serviços não ocupam nem são barrados. Não há exceção: nem um grupo de suporte ou aplicador agendado para a sala permite dois pacientes que não fazem ABA juntos.",
       "Fora do horário do paciente ou com terapeuta diferente do tratamento: pede confirmação duas vezes.",
       "Sessão com profissional cuja especialidade principal e áreas complementares não estão entre as especialidades do tratamento do paciente: aparece um aviso e é preciso confirmar.",
       "Bloqueado, Reunião Clínica e Treinamento não entram nas regras."

@@ -129,6 +129,25 @@ const path = require('path');
   check('Planner: não ABA patient in another service does not lock the room?', svc.triNoLock === null, svc.triNoLock);
   check('Agenda: same rules by service?', svc.agdSess && svc.agdOther === null && svc.agdTriNoLock === null, JSON.stringify([svc.agdOther, svc.agdTriNoLock]));
 
+  // Sem exceção: grupo de suporte marcando a sala NÃO libera dois "não ABA" do mesmo profissional.
+  const grp = await ev(`(function(){
+    var out = {};
+    state.patients = state.patients.concat([{id: "eva-x", nome: "Eva Teste", idade: 8, aba: "Não"}]);
+    state.rooms = state.rooms.concat([{id: "rx", name: "Sala Fono ABA", color: "teal", therapists: [{id: "rx-1", name: "Ana", professionalId: "ana-terapeuta"}, {id: "rx-2", name: "Ana", professionalId: "ana-terapeuta"}]}, {id: "gx", name: "Aplicador Teste", group: true, color: "slate", therapists: [{id: "gx-1", name: "Bia", professionalId: "bia-terapeuta"}]}]);
+    var d = state.scheduleDocs["ter-1"] = state.scheduleDocs["ter-1"] || {bookings: {}};
+    d.bookings["10:00|rx|rx-1"] = {patient: "Duda Vermelho", note: "", service: "sessao"};
+    d.bookings["10:00|gx|gx-1"] = {patient: "Sala Fono ABA", note: ""};
+    out.planner = plannerConflict("ter-1", "10:00|rx|rx-2", {patient: "Eva Teste", note: "", service: "sessao"});
+    out.noDepFn = typeof abaGroupDependencyDenied === "undefined" && typeof groupBookedRoom === "undefined";
+    delete d.bookings["10:00|rx|rx-1"]; delete d.bookings["10:00|gx|gx-1"];
+    var rows = [{id: "a1", date: "2030-01-07", time: "10:00", professional_id: "ana-terapeuta", room_id: "rx", patient: "Duda Vermelho", service: "sessao"},
+      {id: "g1", date: "2030-01-07", time: "10:00", professional_id: "bia-terapeuta", room_id: "rx", patient: "Aplicador Teste"}];
+    out.agenda = agdConflictIn(rows, {date: "2030-01-07", time: "10:00", professional_id: "ana-terapeuta", room_id: "rx", patient: "Eva Teste", service: "sessao"});
+    return out;
+  })()`);
+  check('Planner: group booked for the room does NOT allow two não ABA together?', /não faz intervenção ABA/.test(grp.planner || '') && grp.noDepFn, JSON.stringify(grp));
+  check('Agenda: group row in the room does NOT allow two não ABA together?', /não faz intervenção ABA/.test(grp.agenda || ''), JSON.stringify(grp));
+
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();
