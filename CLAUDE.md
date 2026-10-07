@@ -107,8 +107,8 @@ testes continuam usando o mesmo mock.
   nascem Profissional (só ver) até o admin escolher o nível (trigger
   `handle_new_user`; a API de criação já grava o nível escolhido). O banco
   nunca deixa ficar sem administrador ativo (trigger `profiles_guard`).
-- As colunas antigas `profiles.is_admin`/`profiles.permissions` ficaram no
-  banco de produção sem uso (transição); podem ser removidas.
+- As colunas antigas `profiles.is_admin`/`profiles.permissions` foram apagadas
+  (migração `2026-10-07b-limpeza-campos-antigos.sql`).
 - Mapeamento módulo ↔ dados: `schedule/*` → agenda; `patients/all`,
   `config/specialties`, `config/convenios` → pacientes;
   `config/professionals` → profissionais; `config/rooms` → salas. A aba
@@ -2391,3 +2391,17 @@ por código no Planner e na Agenda (além do nome), 3) colaborador único (profi
 parte "atendimento" do colaborador, um campo `nome`, códigos no mesmo padrão). Primeiro passo:
 `supabase/conferencia-nomes-e-campos.sql` (SÓ LEITURA, 31 verificações) para o usuário rodar
 e devolver os números antes de qualquer correção.
+Resultado da conferência em produção (2026-10-07): 111 pacientes (110 com campos de
+tratamento ainda no cadastro, 107 sem nascimento, todos sem CPF), 0 nomes órfãos ou
+homônimos no Planner (2638) e na Agenda (141), 15 profissionais todos com colaborador,
+12 colunas de sala com nome guardado antigo, 1 tratamento com `svc:`, permissão
+`profissionais` em 4 níveis, `profiles.is_admin/permissions` ainda no banco.
+- **Etapa 1 (feita, 2026-10-07):** migração `supabase/2026-10-07b-limpeza-campos-antigos.sql`
+  — tira `TREAT_FIELDS` do paciente que tem tratamento (o app já lia do tratamento), tira
+  `idade` de quem tem nascimento, atualiza o nome guardado nas colunas das salas (a grade já
+  mostrava o nome atual via `therapistDisplayName`), tira `profissionais` dos níveis (com
+  `roles_guard` desligado só na troca) e apaga as colunas antigas de `profiles`. App: idade
+  NÃO é mais gravada quando há nascimento (janela do paciente e importação de planilha);
+  sem nascimento a idade digitada continua valendo (`patientAgeYears`); `profissionais`
+  saiu de `MODULES` (`js/pipo-supabase.js`) e de `PERM_MODULE_LABELS`.
+- Próximas: 2) paciente por código; 3) colaborador único; 4) renomear nomes internos.

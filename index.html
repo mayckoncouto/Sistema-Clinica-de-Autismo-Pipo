@@ -3049,7 +3049,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", profissionais:"Profissionais", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", rh_funcionarios:"Colaboradores", rh_remuneracao:"Colaboradores – valores"};
+var PERM_MODULE_LABELS = {agenda:"Planner", agendamentos:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", rh_funcionarios:"Colaboradores", rh_remuneracao:"Colaboradores – valores"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -6261,8 +6261,8 @@ function renderPatientsTab(){
 
   var rows = list.map(function(p){
     var ageForDisplay = patientAgeYears(p);
-    var idadeTxt = p.nascimento ? (ageForDisplay!=null ? ageForDisplay+" anos" : "—") :
-      ((p.idade!==""&&p.idade!=null) ? esc(p.idade)+(typeof p.idade==="number"?" anos":"") : "—");
+    var idadeTxt = ageForDisplay != null ? ageForDisplay + " anos" :
+      (!p.nascimento && p.idade !== "" && p.idade != null ? esc(p.idade) : "—");
     var tr = currentTreatment(p.id);
     var trTxt = tr ? '<span class="tr-chip st-' + esc(tr.status) + '">' + esc(trLabel(TR_STATUS, tr.status)) + '</span>' : '<span class="pt-muted">Sem tratamento</span>';
     // Bolinha: cor do tratamento ATIVO (idade + ABA); com tratamentos mas nenhum ativo, sem cor.
@@ -7479,15 +7479,15 @@ function openPatientModal(p){
     var firstTr = !isNew ? patFirstTreatmentStart(v.id) : "";
     if (d.entrada && firstTr && d.entrada > firstTr && !sysSaveGate($("pSave"), "pac_entrada", "Data de entrada", "Este paciente tem tratamento desde " + trBr(firstTr) + ": a data de entrada precisa ser até essa data.", function(){ focusSec("ident"); })) return;
     var nascVal = d.nascimento !== undefined ? d.nascimento : (v.nascimento || "");
-    var idadeManualInp = $("pIdade"), idadeOut;
-    if (nascVal){ var calcAge = computeAgeFromBirth(nascVal); idadeOut = calcAge != null ? calcAge : ""; }
-    else idadeOut = idadeManualInp ? idadeManualInp.value.trim() : (v.idade || "");
+    // Com nascimento a idade é sempre calculada (não é gravada); sem ele vale a idade digitada.
+    var idadeManualInp = $("pIdade"), idadeOut = nascVal ? "" : (idadeManualInp ? idadeManualInp.value.trim() : (v.idade || ""));
     // Object.assign sobre o registro antigo: campos escondidos em "Campos" continuam como estavam.
     var rec = Object.assign({}, isNew ? {} : (p || v), d, {
       id: isNew ? (slugify(d.nome) + "-" + Date.now().toString(36)) : v.id,
       nome: d.nome, nascimento: nascVal, idade: idadeOut
     });
     PAT_LEGACY_KEYS.forEach(function(k){ delete rec[k]; });
+    if (nascVal) delete rec.idade;
     if (isNew) rec.criadoEm = new Date().toISOString();
     // A mesma pessoa não pode estar em "Podem retirar" e na medida protetiva.
     var protNames = (rec.protetiva || []).filter(protActive).map(function(m){ return normText(m.nome); });
@@ -8014,7 +8014,7 @@ function openConveniosModal(){
 
 /* ---------------- serviços (modal, tela Profissionais) ----------------
  * Cadastro simples {id,name}: Sessão, Triagem, Avaliação… Mesmo padrão do
- * cadastro de Convênios. Permissão do módulo "profissionais".
+ * cadastro de Convênios. Permissão do módulo "servicos".
  */
 function openServicesModal(){
   var host = document.getElementById("modalHost");
@@ -15414,6 +15414,7 @@ var HELP_TOPICS = [
       "<b>Campos obrigatórios</b> define quais campos aparecem e quais precisam ser preenchidos (marcados com *). O Nome é sempre obrigatório. O Administrador decide todos os outros campos; os demais níveis não mudam CPF, Filiação e Responsável financeiro. Esconder um campo não apaga o que já estava gravado.",
       "<b>Mesclar cadastros</b> junta dois cadastros do mesmo paciente: o 1º fica e o 2º é excluído. Tratamentos, agendamentos do Planner, atendimentos da Agenda e evoluções do Prontuário do 2º passam para o 1º; campos vazios do 1º são completados com os do 2º. Se os dois têm tratamento Ativo, o do 2º vira Renegociado. Pede confirmação dupla e não pode ser desfeito.",
       "CPFs são conferidos pelos dígitos; e-mail precisa ser válido.",
+      "A idade é calculada pela data de nascimento. Sem a data, aparece o campo Idade para digitar; ao preencher o nascimento, vale a idade calculada.",
       "A cor do paciente vem do tratamento ativo: Não faz ABA = vermelho; senão pela idade (0–4 azul, 5–9 verde, 10+ laranja).",
       "Excluir pede confirmação. Paciente com tratamento ou atendimento não é excluído: é <b>Inativado</b>.",
       "Ao inativar um paciente com tratamento Ativo, o sistema pergunta se cancela também o tratamento (com motivo). \"Manter ativo\" deixa o tratamento como está."
@@ -19034,7 +19035,7 @@ function ioTrApply(plan){
     // Paciente: nascimento vazio, data de entrada até o 1º início, suporte/diagnóstico vazios.
     var raw = rawPatient(pid), upd = {};
     var nasc = op.rows.map(function(r){ return ioDate(r.nascimento); }).filter(Boolean)[0];
-    if (nasc && raw && !raw.nascimento){ upd.nascimento = nasc; var age = computeAgeFromBirth(nasc); if (age != null) upd.idade = age; }
+    if (nasc && raw && !raw.nascimento) upd.nascimento = nasc;
     var first = keep.map(function(o){ return o.inicio; }).sort()[0];
     if (raw && raw.entrada && first && first < raw.entrada) upd.entrada = first;
     var sup = op.rows.slice().sort(function(a, b){ return String(ioDate(b.inicio) || "").localeCompare(String(ioDate(a.inicio) || "")); }).map(function(r){ return ioSuporte(r.suporte); }).filter(Boolean)[0];
@@ -19044,7 +19045,7 @@ function ioTrApply(plan){
       if (sup.cid && !cur.cid) hs.cid = sup.cid;
       if (Object.keys(hs).length){ if (HEALTH.map) health.push({id: pid, data: Object.assign({}, HEALTH.map[pid] || {}, hs)}); else Object.assign(upd, hs); }
     }
-    if (Object.keys(upd).length){ patList = patList || state.patients.slice(); patList = patList.map(function(x){ return x.id === pid ? Object.assign({}, x, upd) : x; }); }
+    if (Object.keys(upd).length){ patList = patList || state.patients.slice(); patList = patList.map(function(x){ if (x.id !== pid) return x; var r = Object.assign({}, x, upd); if (r.nascimento) delete r.idade; return r; }); }
   });
   return writeTreatments(list).then(function(ok){
     if (ok === false) return false;
@@ -19170,7 +19171,7 @@ function ioPatApply(plan){
     if (it.st === "novo"){
       var rec = Object.assign({}, it.vals, {id: slugify(it.vals.nome) + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), criadoEm: now});
       if (!rec.entrada) rec.entrada = trTodayIso();
-      if (rec.nascimento){ var a = computeAgeFromBirth(rec.nascimento); if (a != null) rec.idade = a; }
+      if (rec.nascimento) delete rec.idade;
       if (HEALTH.map){ if (Object.keys(it.health).length) health.push({id: rec.id, data: it.health}); }
       else Object.assign(rec, it.health);
       list.push(rec);
@@ -19178,7 +19179,7 @@ function ioPatApply(plan){
       list = list.map(function(x){
         if (x.id !== it.cur.id) return x;
         var r = Object.assign({}, x, it.fill);
-        if (it.fill.nascimento){ var a = computeAgeFromBirth(it.fill.nascimento); if (a != null) r.idade = a; }
+        if (r.nascimento) delete r.idade;
         if (!HEALTH.map) Object.assign(r, it.health);
         return r;
       });

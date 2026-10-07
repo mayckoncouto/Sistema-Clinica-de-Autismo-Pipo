@@ -71,8 +71,11 @@ const path = require('path');
   await page.click('#qkSave'); await page.waitForTimeout(200);
   const docId = await page.inputValue('#pf-medicoId');
   console.log('"+" registers the doctor and selects it?', !!docId && (await page.isVisible('#ovPat')) && !(await page.$('#ovQuick')));
+  await setv('#pNasc', '2020-05-10');
   await page.click('#pSave'); await page.waitForTimeout(250);
   const ana = await raw('ana-azul');
+  console.log('with a birth date the age is calculated, not stored?', ana.nascimento === '2020-05-10' && !('idade' in ana) &&
+    (await ev("patientAgeYears(state.patients.filter(function(p){ return p.id === 'ana-azul'; })[0])")) === (function(){ const t = new Date(); let a = t.getFullYear() - 2020; if (t.getMonth() < 4 || (t.getMonth() === 4 && t.getDate() < 10)) a--; return a; })(), JSON.stringify(ana));
   console.log('saved in the new format (no legacy keys)?', !(await page.$('#ovPat')) && ana.cpf === '52998224725' && ana.mae.nome === 'Maria Azul Souza' && ana.mae.cpf === '39053344705' &&
     ana.financeiro.link === 'mae' && ana.financeiro.doc === '39053344705' && ana.telefones.length === 2 && ana.telefones[1].via === 'ligacao' &&
     ana.rotina.length === 3 && ana.emails[0].email === 'maria@exemplo.com' && ana.medicoId === docId && ana.endereco.uf === 'SC' && !('responsaveis' in ana) && !('telefone' in ana), JSON.stringify(ana));
