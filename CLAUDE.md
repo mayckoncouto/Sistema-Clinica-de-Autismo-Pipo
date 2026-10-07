@@ -2428,4 +2428,5 @@ homônimos no Planner (2638) e na Agenda (141), 15 profissionais todos com colab
   - Renomear sala → células dos grupos no Planner (`roomRenameEverywhere`, chamado no salvar da
     sala; `writeRooms` resolve `true` quando gravou); renomear grupo → Agenda (`rename_group`).
   - Teste `tests/run_patient_code.js` (no `npm test`). Backup restaura as colunas novas.
+- Produção (2026-10-07): o usuário rodou a `2026-10-07b` (conferência 0/0/0/0/nenhuma) e a `2026-10-07c`.
 - Próximas: 3) colaborador único; 4) renomear nomes internos.
