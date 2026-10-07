@@ -37,14 +37,21 @@ const path = require('path');
     rpc.length === 1 && rpc[0][0] === 'rename_patient' && rpc[0][1].p_old === 'Paciente Um' && rpc[0][1].p_new === 'Paciente Um Renomeado' && !!rpc[0][1].p_id &&
     /3 atendimentos na Agenda/.test(toast) && /no Planner/.test(toast), JSON.stringify(rpc), toast);
 
-  // Homônimo: outro paciente com o mesmo nome antigo → não renomeia.
-  await ev(`(function(){ window.__rpc = []; state.patientsRaw = state.patientsRaw.concat([{id: "homonimo", nome: "Bruno Verde"}]); })()`);
+  // Homônimo: outro paciente com o mesmo nome antigo → só renomeia o que tem o código dele
+  // (marcação sem código fica com o nome antigo; a Agenda vai pelo código no banco).
+  await ev(`(function(){ window.__rpc = []; state.patientsRaw = state.patientsRaw.concat([{id: "homonimo", nome: "Bruno Verde"}]); rebuildPatients();
+    return applyBookingChanges({"seg-1": {"17:30|r1|r1-t1": {patient: "Bruno Verde", patientId: "bruno-verde", note: ""}}}, {noHistory: true, patientHoursOk: true, therapistOk: true, areaOk: true}); })()`);
+  await page.waitForTimeout(200);
   await page.evaluate(() => { document.getElementById('toastHost').innerHTML = ''; });
-  await ev('patientRenameEverywhere("bruno-verde", "Bruno Verde", "Bruno Verde Silva")');
-  await page.waitForTimeout(300);
+  // (no salvar de verdade o cadastro já está com o nome novo quando renomeia)
+  await ev(`(function(){ state.patientsRaw = state.patientsRaw.map(function(p){ return p.id === "bruno-verde" ? Object.assign({}, p, {nome: "Bruno Verde Silva"}) : p; }); rebuildPatients();
+    return patientRenameEverywhere("bruno-verde", "Bruno Verde", "Bruno Verde Silva"); })()`);
+  await page.waitForTimeout(400);
   const t2 = await page.innerText('#toastHost');
-  const brunoKept = await page.evaluate(() => Object.keys(window.__STORE__).filter((k) => k.indexOf('schedule/') === 0).some((k) => Object.values(window.__STORE__[k].bookings || {}).some((b) => b && b.patient === 'Bruno Verde')));
-  console.log('another patient with the old name: nothing is renamed and a warning shows?', /também se chama Bruno Verde/.test(t2) && brunoKept && (await page.evaluate(() => window.__rpc.length)) === 0, t2);
+  const bks = await page.evaluate(() => Object.keys(window.__STORE__).filter((k) => k.indexOf('schedule/') === 0).reduce((a, k) => a.concat(Object.values(window.__STORE__[k].bookings || {})), []));
+  const keptNoCode = bks.some((b) => b && b.patient === 'Bruno Verde' && !b.patientId);
+  const renamedCode = bks.some((b) => b && b.patient === 'Bruno Verde Silva' && b.patientId === 'bruno-verde');
+  console.log('homonym: only bookings with the patient code are renamed; the rest keeps the old name?', keptNoCode && renamedCode && (await page.evaluate(() => window.__rpc.length)) === 1, t2);
 
   // Mesmo nome (só salvou outro campo): nada acontece.
   await ev('window.__rpc = []');

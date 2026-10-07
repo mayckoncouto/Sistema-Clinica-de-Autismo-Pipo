@@ -84,7 +84,7 @@ const path = require('path');
     var rows = [{patient: "Ana Azul", d: "2020-01-02", prof: "bia-terapeuta", svc: "sessao", st: "finalizado", n: 2}];
     var fake = {rpc: function(){ return {range: function(){ return Promise.resolve({data: rows}); }}; }};
     agdClient = function(){ return fake; };
-    return trLoadLast(true).then(function(){ var k = normText("Ana Azul"); return {appts: (TR.appts[k] || []).length, done: (TR.done[k] || []).length}; });
+    return trLoadLast(true).then(function(){ var k = "ana-azul"; return {appts: (TR.appts[k] || []).length, done: (TR.done[k] || []).length}; });
   })()`);
   console.log('treatment summary comes grouped from the database (count expanded)?', r3.appts === 2 && r3.done === 2, JSON.stringify(r3));
   const r3b = await ev(`(function(){
@@ -93,7 +93,7 @@ const path = require('path');
       from: function(){ var q = {select: function(){ return q; }, eq: function(){ return q; }, lte: function(){ return q; }, order: function(){ return q; },
         range: function(){ return Promise.resolve({data: [{patient: "Bruno Verde", date: "2020-01-03", status: "finalizado", professional_id: "bia-terapeuta", service: "sessao"}]}); }}; return q; }};
     agdClient = function(){ return fake; };
-    return trLoadLast(true).then(function(){ return (TR.appts[normText("Bruno Verde")] || []).length; });
+    return trLoadLast(true).then(function(){ return (TR.appts["bruno-verde"] || []).length; });
   })()`);
   console.log('without the SQL it reads appointments one by one as before?', r3b === 1, r3b);
   await ev(`agdClient = function(){ return null; }`);

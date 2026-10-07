@@ -1067,6 +1067,7 @@ body.pat-col-resizing *{user-select:none}
 .autolist .pcolor-dot{width:10px;height:10px;margin-right:0}
 .pcolor-dot.none{background:transparent;border:1px solid var(--line)}
 .autolist-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.autolist-sub{margin-left:auto;padding-left:8px;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
 .autolist button.autolist-new{color:var(--accent)}
 .autolist.floating{}
 .field-picker{position:relative}
@@ -2669,19 +2670,86 @@ function patientColor(p){
 }
 // Índice nome -> paciente, refeito só quando a lista de pacientes muda (ela é
 // sempre substituída por uma lista nova). A grade chama isto várias vezes por célula.
-var _patIdx = {list: null, map: null};
+// Também aceita um agendamento (Planner {patient, patientId} ou Agenda {patient,
+// patient_id}): com o código do paciente acha pelo código (homônimos ficam
+// separados); sem ele, pelo nome.
+var _patIdx = {list: null, map: null, byId: null, cnt: null};
+function patIdxBuild(){
+  if (_patIdx.list === state.patients) return;
+  var m = {}, byId = {}, cnt = {};
+  for (var i=0;i<state.patients.length;i++){
+    var p = state.patients[i], k = String(p.nome||"").trim().toLowerCase(), n = normText(String(p.nome||"").trim());
+    if (!Object.prototype.hasOwnProperty.call(m, k)) m[k] = p;
+    if (p.id) byId[p.id] = p;
+    cnt[n] = (cnt[n] || 0) + 1;
+  }
+  _patIdx = {list: state.patients, map: m, byId: byId, cnt: cnt};
+}
 function findPatientByName(name){
   if (!name) return null;
-  if (_patIdx.list !== state.patients){
-    var m = {};
-    for (var i=0;i<state.patients.length;i++){
-      var k = String(state.patients[i].nome||"").trim().toLowerCase();
-      if (!Object.prototype.hasOwnProperty.call(m, k)) m[k] = state.patients[i];
-    }
-    _patIdx = {list: state.patients, map: m};
-  }
+  if (typeof name === "object") return findPatientRef(name);
+  patIdxBuild();
   var hit = _patIdx.map[String(name).trim().toLowerCase()];
   return hit || null;
+}
+function findPatientById(id){
+  if (!id) return null;
+  patIdxBuild();
+  return Object.prototype.hasOwnProperty.call(_patIdx.byId, id) ? _patIdx.byId[id] : null;
+}
+// Código do paciente gravado no agendamento (Planner: patientId; Agenda: patient_id).
+function recPid(rec){ return rec ? (rec.patientId || rec.patient_id || "") : ""; }
+function findPatientRef(rec){
+  if (!rec) return null;
+  var p = findPatientById(recPid(rec));
+  return p || (rec.patient ? findPatientByName(String(rec.patient)) : null);
+}
+// Quantos pacientes têm este nome (sem acento/maiúscula) — 2 ou mais = homônimos.
+function patNameCount(name){ patIdxBuild(); return _patIdx.cnt[normText(String(name || "").trim())] || 0; }
+function patsByName(name){ var n = normText(String(name || "").trim()); return state.patients.filter(function(p){ return normText(String(p.nome || "").trim()) === n; }); }
+// O agendamento é deste paciente? (pelo código quando houver; senão pelo nome)
+function recIsPatient(rec, p){
+  if (!rec || !p) return false;
+  var id = recPid(rec);
+  if (id) return id === p.id;
+  return normText(String(rec.patient || "").trim()) === normText(String(p.nome || "").trim());
+}
+// Dois agendamentos são do mesmo paciente (ou do mesmo nome, quando não é paciente)?
+function samePatient(a, b){
+  if (!a || !b) return false;
+  var pa = findPatientRef(a), pb = findPatientRef(b);
+  if (pa && pb) return pa.id === pb.id;
+  return normText(String(a.patient || "").trim()) === normText(String(b.patient || "").trim());
+}
+// Texto curto para separar homônimos nas sugestões: nascimento e/ou mãe.
+function patDisambig(p){
+  if (!p) return "";
+  var bits = [];
+  if (p.nascimento) bits.push("nasc. " + p.nascimento.split("-").reverse().join("/"));
+  var mae = p.mae && p.mae.nome ? p.mae.nome : "";
+  if (mae) bits.push("mãe " + mae);
+  if (!bits.length && p.cpf) bits.push("CPF final " + String(p.cpf).slice(-4));
+  return bits.join(" · ") || "sem data de nascimento";
+}
+// Qual paciente foi escolhido no campo de agendamento (Planner e Agenda). Com um só
+// paciente com esse nome, é ele; com homônimos, vale o escolhido na lista de sugestões
+// (input.dataset.pid) ou o que já estava no agendamento (keepPid). Sem isso: {err}.
+function bookingPatientPick(input, name, keepPid){
+  var list = patsByName(name);
+  if (list.length <= 1) return {id: list[0] ? list[0].id : ""};
+  var ids = list.map(function(p){ return p.id; });
+  var pid = (input && input.dataset.pid) || keepPid || "";
+  if (pid && ids.indexOf(pid) !== -1) return {id: pid};
+  return {err: "Há " + list.length + " pacientes chamados " + name + ". Escolha o paciente certo na lista de sugestões (aparece a data de nascimento ou a mãe)."};
+}
+// Liga o campo de nome às sugestões: escolher na lista guarda o código; digitar apaga.
+function bookingPidWire(input, suggest, startPid){
+  if (startPid) input.dataset.pid = startPid;
+  input.addEventListener("input", function(){ delete input.dataset.pid; });
+  suggest.addEventListener("click", function(e){
+    var b = e.target.closest("button[data-name]"); if (!b) return;
+    if (b.getAttribute("data-pid")) input.dataset.pid = b.getAttribute("data-pid"); else delete input.dataset.pid;
+  }, true);
 }
 // Grupos de suporte: ficam no mesmo cadastro das salas (config/rooms), marcados
 // com group:true. No Planner as colunas dos grupos vêm sempre antes das salas.
@@ -2727,6 +2795,12 @@ function registeredBookingName(text){
   return null;
 }
 var NOT_REGISTERED_MSG = "Paciente não cadastrado. Cadastre em Pacientes antes de agendar (ou escolha um nome da lista).";
+// Sala/grupo marcado no lugar do paciente: pelo código (Planner: roomRef na coluna de grupo;
+// Agenda: group_id) e, sem ele, pelo nome.
+function bookingRoomRef(rec){
+  if (!rec) return null;
+  return (rec.roomRef && findRoom(rec.roomRef)) || (rec.group_id && findRoom(rec.group_id)) || findRoomByName(rec.patient);
+}
 function findRoomByName(name){
   if (!name) return null;
   var n = String(name).trim().toLowerCase();
@@ -3417,6 +3491,18 @@ function apptUseCount(col, val){
   return c.from("appointments").select("id", {count: "exact", head: true}).eq(col, val)
     .then(function(r){ return r.error ? 0 : (r.count || 0); }, function(){ return 0; });
 }
+// Atendimentos da Agenda deste paciente: pelo código (patient_id); sem a coluna no banco
+// (falta a atualização 2026-10-07c), pelo nome.
+function apptPatientCount(p){
+  var c = agdClient(); if (!c || !p) return Promise.resolve(0);
+  return c.from("appointments").select("id", {count: "exact", head: true}).eq("patient_id", p.id)
+    .then(function(r){ return r.error ? apptUseCount("patient", p.nome) : (r.count || 0); }, function(){ return apptUseCount("patient", p.nome); });
+}
+function apptSelectPatient(c, p, more){
+  return more(c.from("appointments").select("*").eq("patient_id", p.id)).then(function(r){
+    return r.error ? more(c.from("appointments").select("*").eq("patient", p.nome)) : r;
+  });
+}
 function useTxt(n, one, many){ return n ? n + " " + (n === 1 ? one : many) : null; }
 // Onde cada cadastro está em uso (lista de textos; vazia = livre para excluir).
 var USAGE = {
@@ -3429,10 +3515,9 @@ var USAGE = {
   conselhos: function(c){ return Promise.resolve([useTxt(councilUseCount(c), "profissional", "profissionais")].filter(Boolean)); },
   cbo: function(c){ return Promise.resolve([useTxt(state.professionals.filter(function(p){ return cboKey(p.cbos) && cboKey(p.cbos) === cboKey(c.code); }).length, "profissional", "profissionais")].filter(Boolean)); },
   pacientes: function(p){
-    var key = normText(String(p.nome || "").trim());
     return Promise.all([
-      plannerUseCount(function(k, r){ return normText(String(r.patient || "").trim()) === key; }),
-      apptUseCount("patient", p.nome)
+      plannerUseCount(function(k, r){ return recIsPatient(r, p); }),
+      apptPatientCount(p)
     ]).then(function(n){
       return [useTxt(treatmentsOf(p.id).length, "tratamento", "tratamentos"), useTxt(n[0], "agendamento no Planner", "agendamentos no Planner"), useTxt(n[1], "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean);
     });
@@ -4703,9 +4788,9 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
           var isMeetingDefault = !isBlocked && b.patient === MEETING_LABEL;
           var isTraining = !isBlocked && bookingKind(b) === "treinamento";
           var isSpecialKind = isBlocked || isMeetingDefault || isTraining;
-          var pRec = isSpecialKind ? null : findPatientByName(b.patient);
+          var pRec = isSpecialKind ? null : findPatientByName(b);
           var pCol = pRec ? (otherService(b) ? TRAINING_COLOR : patientColor(bookingPatient(pRec, b, t.professionalId))) : null;
-          var roomMatch = (!isSpecialKind && !pRec) ? findRoomByName(b.patient) : null;
+          var roomMatch = (!isSpecialKind && !pRec) ? bookingRoomRef(b) : null;
           var roomCol = roomMatch ? roomFillColor(roomMatch) : null;
           var fillCol = isBlocked ? BLOCKED_COLOR : (isMeetingDefault ? MEETING_COLOR : (isTraining ? TRAINING_COLOR : (pCol || roomCol)));
           var mainStyle = 'border-left-color:'+swatchVar(r.color)+(fillCol ? ';background:'+fillCol : '');
@@ -5196,7 +5281,7 @@ function isNaoABABooking(b, profId){
   // Regras "não ABA" só valem para Sessão: outro serviço (avaliação, triagem…) não ocupa
   // nem é barrado (Planner e Agenda).
   if ((b.service || DEFAULT_SERVICE_ID) !== DEFAULT_SERVICE_ID) return false;
-  var p = b.date ? findPatientAt(b.patient, b.date) : findPatientByName(b.patient);  // Agenda: tratamento da data
+  var p = b.date ? findPatientAt(b, b.date) : findPatientByName(b);  // Agenda: tratamento da data
   return !!(p && patientIsNaoABA(bookingPatient(p, b, profId)));   // Planner: profissional da coluna
 }
 // Sala com "ABA" no nome (ex.: "Fonoaudiologia ABA"): o paciente "não ABA" bloqueia
@@ -5220,7 +5305,7 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
   var dayKey = docId.split("-")[0];
   var doc = state.scheduleDocs[docId] || state.reportDocs[docId];
   var bookings = (doc && doc.bookings) || {};
-  var patientRule = !isGroup(room) && !!findPatientByName(rec.patient);
+  var patientRule = !isGroup(room) && !!findPatientByName(rec);
   var svc = rec.service || DEFAULT_SERVICE_ID;
   var recNaoABA = !isGroup(room) && isNaoABABooking(rec, profId);
   var rooms = plannerRooms();
@@ -5254,9 +5339,9 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       // (2026-10-06 — sem exceção nos dois sentidos).
       if (profId && t.professionalId === profId && r.id !== room.id && (x = hit("pl_prof_dois", profBusyMsg(professionalName(profId), time, r.name)))) return x;
       // Mesmo paciente com o MESMO profissional no mesmo horário: nunca (nem com outro serviço).
-      if (patientRule && !isGroup(r) && profId && t.professionalId === profId && normText(b.patient) === normText(rec.patient) &&
+      if (patientRule && !isGroup(r) && profId && t.professionalId === profId && samePatient(b, rec) &&
           (x = hit("pl_pac_prof", rec.patient + " já está com " + professionalName(profId) + " às " + time + " em " + r.name + ". O mesmo paciente não pode ter dois atendimentos com o mesmo profissional no mesmo horário, nem com outro serviço."))) return x;
-      if (patientRule && !isGroup(r) && normText(b.patient) === normText(rec.patient) && (b.service || DEFAULT_SERVICE_ID) === svc &&
+      if (patientRule && !isGroup(r) && samePatient(b, rec) && (b.service || DEFAULT_SERVICE_ID) === svc &&
           (x = hit("pl_pac_servico", patientBusyMsg(rec.patient, bookingServiceName(b), time, r.name + " (" + therapistDisplayName(t) + ")")))) return x;
     }
   }
@@ -5269,8 +5354,9 @@ function bookingSuggestHtml(m){
   if (m.kind === "Sala"){
     return '<button type="button" data-name="'+esc(m.name)+'"><span class="pcolor-dot" style="background:'+swatchVar(m.color)+'"></span><span class="autolist-name">'+esc(m.name)+'</span></button>';
   }
-  var col = patientColor(m.p);
-  return '<button type="button" data-name="'+esc(m.name)+'"><span class="pcolor-dot'+(col ? '' : ' none')+'"'+(col ? ' style="background:'+col+'"' : '')+'></span><span class="autolist-name">'+esc(m.name)+'</span></button>';
+  var col = patientColor(m.p), homo = m.p && patNameCount(m.name) > 1;
+  return '<button type="button" data-name="'+esc(m.name)+'"'+(m.p && m.p.id ? ' data-pid="'+esc(m.p.id)+'"' : '')+'><span class="pcolor-dot'+(col ? '' : ' none')+'"'+(col ? ' style="background:'+col+'"' : '')+'></span><span class="autolist-name">'+esc(m.name)+'</span>'+
+    (homo ? '<span class="autolist-sub">'+esc(patDisambig(m.p))+'</span>' : '')+'</button>';
 }
 
 function openBookingModal(ctx){
@@ -5321,6 +5407,7 @@ function openBookingModal(ctx){
 
   var input = document.getElementById("bkPatient");
   var suggest = document.getElementById("bkSuggest");
+  bookingPidWire(input, suggest, existing && !groupCell ? existing.patientId : "");
   input.addEventListener("input", function(){
     var q = normText(input.value.trim());
     if (!q){ suggest.hidden = true; return; }
@@ -5377,8 +5464,11 @@ function openBookingModal(ctx){
       var regName = slotBookingName(room, name);
       if (!regName){ showToast(groupCell ? GROUP_ONLY_ROOMS_MSG : (findRoomByName(name) ? ROOM_ONLY_PATIENTS_MSG : NOT_REGISTERED_MSG), true); input.focus(); return; }
       name = regName;
+      var pick = groupCell ? {id: ""} : bookingPatientPick(input, name, existing && existing.patientId);
+      if (pick.err){ showToast(pick.err, true); input.focus(); return; }
     }
     var rec = kind ? slotKindRecord(kind, note) : {patient: name, note: note, service: serviceSel.value || DEFAULT_SERVICE_ID};
+    if (!kind && pick.id) rec.patientId = pick.id;
     var conflict = plannerConflict(ctx.docId, ctx.key, rec);
     sysConflictGate(conflict).then(function(ok){ if (ok) writeBooking(ctx.docId, ctx.key, rec).then(close); });
   });
@@ -5491,6 +5581,12 @@ function currentBookingsFor(docIds){
 
 // Um passo de desfazer/refazer. Resolve true se aplicou, false se parou
 // (conflito, sem permissão, erro) — já avisando a pessoa do motivo.
+// Comparação do desfazer: ignora os códigos (patientId/roomRef), que plannerNormRefs
+// acrescenta na gravação — o que importa é o que aparece na célula.
+function histCmpStr(v){
+  if (v && typeof v === "object"){ v = Object.assign({}, v); delete v.patientId; delete v.roomRef; }
+  return stableStr(v);
+}
 function historyStep(direction){
   var from = direction === "undo" ? bookingHistory.undo : bookingHistory.redo;
   var verb = direction === "undo" ? "desfazer" : "refazer";
@@ -5503,7 +5599,7 @@ function historyStep(direction){
     var conflict = Object.keys(expected).some(function(docId){
       return Object.keys(expected[docId]).some(function(k){
         var cur = Object.prototype.hasOwnProperty.call(current[docId], k) ? current[docId][k] : null;
-        return stableStr(cur) !== stableStr(expected[docId][k]);
+        return histCmpStr(cur) !== histCmpStr(expected[docId][k]);
       });
     });
     if (conflict){
@@ -5640,10 +5736,10 @@ function patientHoursOutside(changesByDoc){
       if (!rec || !rec.patient || bookingKind(rec)) return;
       var kp = k.split("|"), time = kp[0], room = findRoom(kp[1]);
       if (!room || isGroup(room)) return;
-      var p = findPatientByName(rec.patient);
+      var p = findPatientByName(rec);
       if (!p || patientSlotOk(p, dayKey, time)) return;
       var old = effectiveBooking(oldB, k, dayKey, time);
-      if (old && old.patient && normText(old.patient) === normText(rec.patient)) return; // já estava aí (ex.: só mudou a observação)
+      if (old && old.patient && samePatient(old, rec)) return; // já estava aí (ex.: só mudou a observação)
       var d = ALL_WEEKDAYS.filter(function(x){ return x.key === dayKey; })[0];
       out.push("<b>" + esc(p.nome) + "</b> — " + esc(d ? d.full : dayKey) + (week ? " (" + week + "ª semana)" : "") + " às " + time);
     });
@@ -5663,9 +5759,9 @@ function therapistMismatches(changesByDoc){
       if (!room || isGroup(room)) return;
       var ther = findTherapist(room, kp[2]), profId = ther && ther.professionalId;
       var old = effectiveBooking(oldB, k, dayKey, kp[0]);
-      if (old && old.patient && normText(old.patient) === normText(rec.patient) &&
+      if (old && old.patient && samePatient(old, rec) &&
           (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return; // já estava assim
-      var m = therapistMismatchMsg(rec.patient, profId, rec.service);
+      var m = therapistMismatchMsg(rec, profId, rec.service);
       if (m) out.push(m);
     });
   });
@@ -5684,9 +5780,9 @@ function areaMismatches(changesByDoc){
       if (!room || isGroup(room)) return;
       var ther = findTherapist(room, kp[2]), profId = ther && ther.professionalId;
       var old = effectiveBooking(oldB, k, dayKey, kp[0]);
-      if (old && old.patient && normText(old.patient) === normText(rec.patient) &&
+      if (old && old.patient && samePatient(old, rec) &&
           (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return; // já estava assim
-      var m = areaMismatchMsg(rec.patient, profId, rec.service);
+      var m = areaMismatchMsg(rec, profId, rec.service);
       if (m && out.indexOf(m) === -1) out.push(m);
     });
   });
@@ -5698,10 +5794,42 @@ function therapistConfirm(msgs){
     message: msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : ""), confirmLabel: "Continuar"})
     .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar com um terapeuta diferente do indicado no tratamento?", confirmLabel: "Agendar assim mesmo"}); });
 }
+// Antes de gravar no Planner: cada agendamento leva o código de quem está marcado —
+// coluna de sala: patientId (o paciente; com homônimos, mantém o código escolhido);
+// coluna de grupo: roomRef (a sala marcada). Bloqueado/Reunião/Treinamento não levam.
+function plannerNormRefs(changesByDoc){
+  Object.keys(changesByDoc || {}).forEach(function(docId){
+    var ch = changesByDoc[docId] || {};
+    Object.keys(ch).forEach(function(k){
+      var v = ch[k];
+      if (!v || typeof v !== "object") return;
+      var o = Object.assign({}, v);
+      if (!o.patient || bookingKind(o)){ delete o.patientId; delete o.roomRef; }
+      else {
+        var room = findRoom(k.split("|")[1]);
+        if (room && isGroup(room)){
+          delete o.patientId;
+          var tgt = (o.roomRef && findRoom(o.roomRef)) || null;
+          if (!tgt || normText(tgt.name) !== normText(o.patient)) tgt = findRoomByName(o.patient);
+          if (tgt && !isGroup(tgt)) o.roomRef = tgt.id; else delete o.roomRef;
+        } else {
+          delete o.roomRef;
+          var cur = findPatientById(o.patientId);
+          if (!(cur && normText(String(cur.nome || "").trim()) === normText(String(o.patient).trim()))){
+            var cands = patsByName(o.patient);
+            if (cands.length === 1) o.patientId = cands[0].id; else delete o.patientId;
+          }
+        }
+      }
+      if (JSON.stringify(o) !== JSON.stringify(v)) ch[k] = o;
+    });
+  });
+}
 function applyBookingChanges(changesByDoc, opts){
   // changesByDoc: { docId: { key: {patient,note} | null, ... }, ... } — null clears that key
   // opts.history: "undo" | "redo" quando a chamada vem do desfazer/refazer.
   opts = opts || {};
+  plannerNormRefs(changesByDoc);
   if (!db){
     showToast("Não salvo: sem conexão com o servidor. Verifique sua internet e recarregue a página.", true);
     return Promise.resolve();
@@ -7078,10 +7206,9 @@ function pickupProtHtml(p, last){
 // Último atendimento do paciente no dia (Agenda), sem bloqueio/reunião/treinamento.
 function agdIsLastOfDay(row){
   if (!row || bookingKind(row) || !row.patient) return false;
-  var n = normText(String(row.patient).trim());
   return !Object.keys(AD.rows || {}).some(function(id){
     var r = AD.rows[id];
-    return r.id !== row.id && r.date === row.date && !bookingKind(r) && normText(String(r.patient || "").trim()) === n && r.time > row.time;
+    return r.id !== row.id && r.date === row.date && !bookingKind(r) && samePatient(r, row) && r.time > row.time;
   });
 }
 function patFirstTreatmentStart(pid){
@@ -7500,6 +7627,16 @@ function openPatientModal(p){
         rec.rotina = rec.rotina.filter(function(r){ return both.indexOf(r) === -1; });
         return true;
       });
+    // Nome igual ao de outro paciente: é permitido (o Planner e a Agenda separam pelo código),
+    // mas avisa antes de salvar.
+    var prevNome = isNew ? "" : String((rawPatient(v.id) || v).nome || "");
+    var twins = (isNew || normText(prevNome) !== normText(rec.nome)) ? state.patientsRaw.filter(function(x){ return x.id !== rec.id && normText(String(x.nome || "").trim()) === normText(String(rec.nome || "").trim()); }) : [];
+    if (twins.length) go = go.then(function(ok){
+      return ok && confirmDialog({title: "Nome igual ao de outro paciente",
+        message: "Já existe " + (twins.length === 1 ? "um paciente" : twins.length + " pacientes") + " com o nome <b>" + esc(rec.nome) + "</b> (" + esc(twins.map(patDisambig).join("; ")) + ").<br>" +
+          "Os dois ficam separados no sistema; ao agendar, escolha o certo na lista (aparece a data de nascimento ou a mãe). Salvar assim mesmo?",
+        confirmLabel: "Salvar assim mesmo"});
+    });
     go.then(function(ok){ if (!ok) return;
     var list = state.patients.slice();
     if (isNew) list.push(rec); else list = list.map(function(x){ return x.id === rec.id ? rec : x; });
@@ -7674,8 +7811,8 @@ function openPatientMergeModal(){
     var my = ++seq, dn = normText(String(d.nome).trim());
     var c = agdClient();
     Promise.all([
-      plannerUseCount(function(key, r){ return normText(String(r.patient || "").trim()) === dn; }),
-      apptUseCount("patient", d.nome),
+      plannerUseCount(function(key, r){ return recIsPatient(r, d); }),
+      apptPatientCount(d),
       c ? c.from("clinical_records").select("id", {count: "exact", head: true}).eq("patient_id", d.id).then(function(r){ return r.error ? 0 : (r.count || 0); }, function(){ return 0; }) : Promise.resolve(0)
     ]).then(function(n){
       if (my !== seq || !document.getElementById("ovMg")) return;
@@ -7707,15 +7844,15 @@ function patientMerge(I){
   return step1.then(function(){
     // Planner: os agendamentos com o nome do 2º passam a ter o nome do 1º.
     if (!db) return;
-    var dn = normText(String(drop.nome).trim());
     return currentBookingsFor(plannerAllDocIds()).then(function(all){
       var changes = {}, n = 0;
       Object.keys(all).forEach(function(docId){
         Object.keys(all[docId] || {}).forEach(function(k){
           var v = all[docId][k]; if (!v) return;
           var rec = typeof v === "string" ? {patient: v} : v;
-          if (normText(String(rec.patient || "").trim()) !== dn) return;
-          (changes[docId] = changes[docId] || {})[k] = Object.assign({}, rec, {patient: keep.nome}); n++;
+          if (bookingKind(rec) || !recIsPatient(rec, drop)) return;
+          var gr = findRoom(k.split("|")[1]); if (gr && isGroup(gr)) return;
+          (changes[docId] = changes[docId] || {})[k] = Object.assign({}, rec, {patient: keep.nome, patientId: keep.id}); n++;
         });
       });
       return n ? applyBookingChanges(changes, {patientHoursOk: true, therapistOk: true}) : true;
@@ -7763,22 +7900,20 @@ function trHoursText(t){
   }).filter(Boolean).join(" · ");
 }
 
-// Nome do paciente trocado no cadastro: o Planner e a Agenda guardam o NOME (não o id), então
-// os agendamentos com o nome antigo passam para o novo; o nome nas evoluções e nos planos
-// terapêuticos também (Agenda/Prontuário/Plano pelo banco: rename_patient). Se outro paciente
-// tem o mesmo nome antigo, não renomeia (não dá para saber de quem é cada agendamento).
+// Nome do paciente trocado no cadastro: o Planner e a Agenda guardam o código E uma cópia do
+// nome; os agendamentos deste paciente (pelo código; sem código, pelo nome antigo quando nenhum
+// outro paciente tem esse nome) passam para o nome novo, e o nome nas evoluções e nos planos
+// terapêuticos também (Agenda/Prontuário/Plano pelo banco: rename_patient).
 function patientRenameEverywhere(id, oldName, newName){
   var oldT = String(oldName || "").trim(), nn = String(newName || "").trim(), on = normText(oldT);
   if (!on || !nn || oldT === nn) return Promise.resolve();
-  if (state.patientsRaw.some(function(x){ return x.id !== id && normText(String(x.nome || "").trim()) === on; })){
-    showToast("Outro paciente também se chama " + oldT + ": os agendamentos não foram renomeados. Confira no Planner e na Agenda.", true);
-    return Promise.resolve();
-  }
+  var homo = state.patientsRaw.some(function(x){ return x.id !== id && normText(String(x.nome || "").trim()) === on; });
+  function mine(rec){ var pid = recPid(rec); return pid ? pid === id : (!homo && normText(String(rec.patient || "").trim()) === on); }
   var msgs = [], c = agdClient();
   var srv = c ? c.rpc("rename_patient", {p_id: id, p_old: oldT, p_new: nn}).then(function(r){
       if (r.error){ msgs.push(/rename_patient/.test(r.error.message || "") ? "Agenda não atualizada: falta rodar a atualização do banco (renomear paciente)" : "Agenda não atualizada: " + r.error.message); return; }
       var n = (r.data && r.data.agenda) || 0; if (n) msgs.push(n + (n === 1 ? " atendimento" : " atendimentos") + " na Agenda");
-      Object.keys(AD.rows || {}).forEach(function(k){ var x = AD.rows[k]; if (x && normText(String(x.patient || "").trim()) === on) x.patient = nn; });
+      Object.keys(AD.rows || {}).forEach(function(k){ var x = AD.rows[k]; if (x && !bookingKind(x) && mine(x)) x.patient = nn; });
     }, function(e){ msgs.push("Agenda não atualizada: " + agdErr(e)); }) : Promise.resolve();
   var pl = !db ? Promise.resolve() : currentBookingsFor(plannerAllDocIds()).then(function(all){
     var changes = {}, n = 0;
@@ -7786,8 +7921,9 @@ function patientRenameEverywhere(id, oldName, newName){
       Object.keys(all[docId] || {}).forEach(function(k){
         var v = all[docId][k]; if (!v) return;
         var rec = typeof v === "string" ? {patient: v} : v;
-        if (normText(String(rec.patient || "").trim()) !== on) return;
-        (changes[docId] = changes[docId] || {})[k] = Object.assign({}, rec, {patient: nn}); n++;
+        if (bookingKind(rec) || !mine(rec)) return;
+        var gr = findRoom(k.split("|")[1]); if (gr && isGroup(gr)) return;   // coluna de grupo guarda sala, não paciente
+        (changes[docId] = changes[docId] || {})[k] = Object.assign({}, rec, {patient: nn, patientId: id}); n++;
       });
     });
     if (!n) return;
@@ -9429,7 +9565,10 @@ function openRoomModal(r, asGroup){
     // Colunas tiradas com agendamentos no Planner: mover antes (obrigatório); coluna que
     // trocou de profissional: perguntar. Junto, limpa agendamentos de colunas que já não existem.
     plannerSeatRemovalFlow(rec, removedSeats, list, changedSeats).then(function(ok){
-      if (ok) writeRooms(list).then(close);
+      if (ok) writeRooms(list).then(function(saved){
+        if (saved === true && !isNew && String(r.name || "").trim() !== name) roomRenameEverywhere(rec, r.name, name);
+        close();
+      });
     });
   });
 }
@@ -9444,8 +9583,47 @@ function writeRooms(list){
   renderRelatorioTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
-  return db.doc("config/rooms").set({list:list}).catch(function(){
+  return db.doc("config/rooms").set({list:list}).then(function(){ return true; }).catch(function(){
     showToast("Não foi possível salvar a sala.", true);
+  });
+}
+
+// Sala ou grupo renomeado: o nome guardado nos agendamentos acompanha.
+// Sala: células das colunas de GRUPO no Planner que marcam esta sala (roomRef ou nome antigo).
+// Grupo: atendimentos da Agenda com o grupo no lugar do paciente (group_id ou nome antigo),
+// pelo banco (rename_group). O Planner não guarda nome de grupo (o grupo é a coluna).
+function roomRenameEverywhere(room, oldName, newName){
+  var oldT = String(oldName || "").trim(), nn = String(newName || "").trim(), on = normText(oldT);
+  if (!on || !nn || oldT === nn) return Promise.resolve();
+  var msgs = [];
+  if (isGroup(room)){
+    var c = agdClient();
+    if (!c) return Promise.resolve();
+    return c.rpc("rename_group", {p_id: room.id, p_old: oldT, p_new: nn}).then(function(r){
+      if (r.error){ showToast(/rename_group/.test(r.error.message || "") ? "Agenda não atualizada: falta rodar a atualização do banco (código do paciente e do grupo)." : "Agenda não atualizada: " + r.error.message, true); return; }
+      var n = (r.data && r.data.agenda) || 0;
+      Object.keys(AD.rows || {}).forEach(function(k){ var x = AD.rows[k]; if (x && !bookingKind(x) && (x.group_id === room.id || (!x.group_id && !x.patient_id && normText(String(x.patient || "").trim()) === on))) x.patient = nn; });
+      if (n) showToast("Nome atualizado também em " + n + (n === 1 ? " atendimento" : " atendimentos") + " na Agenda.");
+      if (state.tab === "agendadia") agdRender();
+    }, function(e){ showToast("Agenda não atualizada: " + agdErr(e), true); });
+  }
+  if (!db) return Promise.resolve();
+  return currentBookingsFor(plannerAllDocIds()).then(function(all){
+    var changes = {}, n = 0;
+    Object.keys(all).forEach(function(docId){
+      Object.keys(all[docId] || {}).forEach(function(k){
+        var v = all[docId][k]; if (!v || typeof v !== "object" || bookingKind(v)) return;
+        var g = findRoom(k.split("|")[1]); if (!g || !isGroup(g)) return;
+        if (!(v.roomRef === room.id || (!v.roomRef && normText(String(v.patient || "").trim()) === on))) return;
+        (changes[docId] = changes[docId] || {})[k] = Object.assign({}, v, {patient: nn, roomRef: room.id}); n++;
+      });
+    });
+    if (!n) return;
+    return Promise.resolve(applyBookingChanges(changes, {noHistory: true, patientHoursOk: true, therapistOk: true, areaOk: true})).then(function(r){
+      if (r === false) msgs.push("Planner não atualizado (sem permissão de editar o Planner)");
+      else msgs.push(n + (n === 1 ? " agendamento" : " agendamentos") + " de grupo no Planner");
+      showToast("Nome da sala atualizado também: " + msgs.join(" · ") + ".", r === false);
+    });
   });
 }
 
@@ -10061,6 +10239,11 @@ function agdLoadWeek(){
   var rangeKey = AD.rangeFrom + "|" + AD.rangeTo;
   if (!(AD.loaded && !AD.error && AD._loadedRange === rangeKey)){ AD.loaded = false; agdRender(); }
   agdEnsureChannel();
+  // O banco já tem as colunas patient_id / group_id (atualização 2026-10-07c)?
+  if (AD.hasPid === undefined){
+    AD.hasPid = false;
+    try { c.from("appointments").select("patient_id,group_id").limit(1).then(function(r){ AD.hasPid = !r.error; }, function(){}); } catch (e){}
+  }
   // Em páginas de 1000: o banco nunca entrega mais que isso numa leitura, e uma semana
   // cheia passa disso (sem as páginas, a semana apareceria incompleta, sem aviso).
   var from = AD.rangeFrom, to = AD.rangeTo, all = [];
@@ -10120,8 +10303,8 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   else if (kind === "reuniao"){ fill = MEETING_COLOR; cls = " pcolor"; }
   else if (kind === "treinamento"){ fill = TRAINING_COLOR; cls = " pcolor"; }
   else {
-    var pRec = findPatientAt(row.patient, row.date);   // cor/ABA da época do atendimento
-    var room = !pRec ? findRoomByName(row.patient) : null;
+    var pRec = findPatientAt(row, row.date);   // cor/ABA da época do atendimento
+    var room = !pRec ? bookingRoomRef(row) : null;
     fill = pRec ? (otherService(row) ? TRAINING_COLOR : patientColor(bookingPatient(pRec, row))) : (room ? roomFillColor(room) : null);
     if (fill) cls = " pcolor";
   }
@@ -10176,7 +10359,7 @@ function agdSetStatus(row, statusId){
 var FINAL_STATUS = "finalizado";
 function agdChangeStatus(row, v){
   if (v !== FINAL_STATUS) return agdSetStatus(row, v);
-  var p = findPatientByName(row.patient);
+  var p = findPatientByName(row);
   if (!p) return agdSetStatus(row, v);
   var fMode = sysMode("ag_final_evolucao");   // Acesso → Sistema
   if (fMode === "off") return agdSetStatus(row, v);
@@ -10418,6 +10601,8 @@ function agdPatchGrid(host, html){
 // Atendimento da Agenda que é de um grupo de suporte (o nome do grupo no lugar do paciente).
 function agdIsGroupRow(row){
   if (!row || !row.patient || bookingKind(row)) return false;
+  if (row.group_id) return true;
+  if (row.patient_id) return false;
   var n = normText(row.patient);
   return supportGroups().some(function(g){ return normText(g.name) === n; });
 }
@@ -10510,8 +10695,8 @@ function agdDaySummary(iso){
 // Mostra os dados, o botão "Registrar / Editar Atendimento" (prontuário) e o Status.
 function agdOpenDetails(row){
   var kind = bookingKind(row);
-  var pat = !kind ? findPatientAt(row.patient, row.date) : null;
-  var grp = !kind && !pat ? findRoomByName(row.patient) : null;
+  var pat = !kind ? findPatientAt(row, row.date) : null;
+  var grp = !kind && !pat ? bookingRoomRef(row) : null;
   if (grp && !isGroup(grp)) grp = null;
   var prof = findProfessional(row.professional_id), room = row.room_id ? findRoom(row.room_id) : null;
   var name = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : row.patient;
@@ -10605,7 +10790,7 @@ function agdOpenModal(opts){
   var stLocked = agdFinalLocked(curStatus);
   var canChangeStatus = showStatus && !stLocked && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
   // Botão "Atendimento" (prontuário): só para paciente cadastrado e quem pode ver o prontuário.
-  var showPront = !!row && !rowKind && !!findPatientByName(row.patient) && prCan("view");
+  var showPront = !!row && !rowKind && !!findPatientByName(row) && prCan("view");
   var statusHtml = !showStatus ? "" :
     '<div class="field"><label for="agdStatus">Status</label><select id="agdStatus"'+(canChangeStatus ? '' : ' disabled')+'>' +
       '<option value="">Em Aberto</option>' +
@@ -10621,7 +10806,7 @@ function agdOpenModal(opts){
         '<div class="modal-sub">'+agdBrDate(date)+(time ? ' às '+time : '')+'</div></div>' +
         '<div class="agd-head-actions">' +         '<button class="modal-close" id="agdClose" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' +
-        (row && !rowKind && findPatientAt(row.patient, row.date) ? pickupBoxHtml(findPatientAt(row.patient, row.date), agdIsLastOfDay(row)) : '') +
+        (row && !rowKind && findPatientAt(row, row.date) ? pickupBoxHtml(findPatientAt(row, row.date), agdIsLastOfDay(row)) : '') +
         '<div class="field"><label for="agdPac">Paciente ou grupo de suporte</label><input id="agdPac" type="text" autocomplete="off" placeholder="Nome do paciente ou do grupo…" value="'+esc(row && !rowKind ? row.patient : "")+'"'+(canSave && !rowKind?'':' disabled')+'><div class="autolist" id="agdSuggest" hidden></div></div>' +
         '<div class="field"><label for="agdServ">Serviço</label><select id="agdServ"'+(canSave && !rowKind?'':' disabled')+'>' +
           serviceOptionsHtml((row && row.service) || DEFAULT_SERVICE_ID, profId) + '</select></div>' +
@@ -10690,6 +10875,7 @@ function agdOpenModal(opts){
   var kindField = document.getElementById("agdKindField");
   var pacEl = document.getElementById("agdPac"), typedPac = pacEl.value;
   var pacSuggest = document.getElementById("agdSuggest");
+  bookingPidWire(pacEl, pacSuggest, row && row.patient_id);
   pacEl.addEventListener("input", function(){
     var q = normText(pacEl.value.trim());
     if (!q){ pacSuggest.hidden = true; return; }
@@ -10750,7 +10936,12 @@ function agdOpenModal(opts){
       var regName = agdBookingName(rec.patient);
       if (!regName){ showToast("Paciente ou grupo não cadastrado. Escolha um nome da lista (pacientes do cadastro ou grupos de suporte).", true); pacEl.focus(); return; }
       rec.patient = regName;
-    }
+      // Código do paciente (homônimos: o escolhido na lista) ou do grupo de suporte.
+      var grpHit = patsByName(regName).length ? null : supportGroups(true).filter(function(g){ return normText(g.name) === normText(regName); })[0];
+      var pick = grpHit ? {id: ""} : bookingPatientPick(pacEl, regName, row && row.patient_id);
+      if (pick.err){ showToast(pick.err, true); pacEl.focus(); return; }
+      if (AD.hasPid){ rec.patient_id = pick.id || null; rec.group_id = grpHit ? grpHit.id : null; }
+    } else if (AD.hasPid){ rec.patient_id = null; rec.group_id = null; }
     if (!isNew && !can("agendamentos","edit")){ showToast(permDeniedMsg("agendamentos","edit"), true); return; }
 
     function doSave(){
@@ -10829,8 +11020,8 @@ function agdPatientConfirmHours(pairs){
   var out = pairs.map(function(x){
     var rec = x.rec, old = x.old;
     if (!rec || !rec.patient || bookingKind(rec)) return null;
-    if (old && normText(old.patient || "") === normText(rec.patient) && old.date === rec.date && old.time === rec.time) return null;
-    var p = findPatientAt(rec.patient, rec.date);
+    if (old && samePatient(old, rec) && old.date === rec.date && old.time === rec.time) return null;
+    var p = findPatientAt(rec, rec.date);
     var dayKey = AD_WEEKDAY_KEYS[agdParse(rec.date).getDay()];
     if (!p || patientSlotOk(p, dayKey, rec.time)) return null;
     return "<b>" + esc(p.nome) + "</b> — " + esc(agdBrDate(rec.date)) + " às " + esc(rec.time);
@@ -10845,9 +11036,9 @@ function agdTherapistCheck(pairs){
   var msgs = pairs.map(function(x){
     var rec = x.rec, old = x.old;
     if (!rec || bookingKind(rec)) return null;
-    if (old && old.professional_id === rec.professional_id && normText(old.patient || "") === normText(rec.patient || "") &&
+    if (old && old.professional_id === rec.professional_id && samePatient(old, rec) &&
         (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return null;
-    return therapistMismatchMsg(rec.patient, rec.professional_id, rec.service, rec.date);
+    return therapistMismatchMsg(rec, rec.professional_id, rec.service, rec.date);
   }).filter(Boolean);
   return sysGate("ag_terapeuta", "Terapeuta diferente do tratamento", msgs, function(){ return therapistConfirm(msgs); }).then(function(ok){ return ok ? agdAreaCheck(pairs) : false; }).then(function(ok){ return ok ? agdGoalsCheck(pairs) : false; });
 }
@@ -10855,9 +11046,9 @@ function agdAreaCheck(pairs){
   var msgs = pairs.map(function(x){
     var rec = x.rec, old = x.old;
     if (!rec || bookingKind(rec)) return null;
-    if (old && old.professional_id === rec.professional_id && normText(old.patient || "") === normText(rec.patient || "") &&
+    if (old && old.professional_id === rec.professional_id && samePatient(old, rec) &&
         (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return null;
-    return areaMismatchMsg(rec.patient, rec.professional_id, rec.service, rec.date);
+    return areaMismatchMsg(rec, rec.professional_id, rec.service, rec.date);
   }).filter(Boolean);
   var uniq = msgs.filter(function(m, i){ return msgs.indexOf(m) === i; });
   return sysGate("ag_area", "Profissional fora das especialidades do tratamento", uniq, function(){ return areaConfirm(uniq); });
@@ -10873,15 +11064,15 @@ function agdGoalsCheck(pairs){
     pairs.forEach(function(x){
       var rec = x.rec, old = x.old;
       if (!rec || bookingKind(rec)) return;
-      if (old && old.professional_id === rec.professional_id && old.date === rec.date && old.time === rec.time && normText(old.patient || "") === normText(rec.patient || "")) return;
-      var p = findPatientAt(rec.patient, rec.date); if (!p) return;
+      if (old && old.professional_id === rec.professional_id && old.date === rec.date && old.time === rec.time && samePatient(old, rec)) return;
+      var p = findPatientAt(rec, rec.date); if (!p) return;
       var mine = planActiveObjs(planVigente(p.id), rec.professional_id); if (!mine.length) return;
       var keys = mine.map(function(y){ return normText(y.o.objetivo || ""); });
       var others = Object.keys(AD.rows || {}).map(function(id){ return AD.rows[id]; }).concat(batch).filter(function(o){
         return o && o !== rec && (!rec.id || o.id !== rec.id) && !(old && o.id === old.id) && !bookingKind(o) && o.date === rec.date && o.time === rec.time && o.professional_id === rec.professional_id;
       });
       others.forEach(function(o){
-        var q = findPatientAt(o.patient, o.date); if (!q || q.id === p.id) return;
+        var q = findPatientAt(o, o.date); if (!q || q.id === p.id) return;
         var theirs = planActiveObjs(planVigente(q.id), rec.professional_id); if (!theirs.length) return;
         if (theirs.some(function(y){ return keys.indexOf(normText(y.o.objetivo || "")) !== -1; })) return;
         var k = [p.id, q.id].sort().join("|"); if (seen[k]) return; seen[k] = 1;
@@ -10898,7 +11089,7 @@ function agdGoalsCheck(pairs){
 // (do banco e/ou da mesma operação); rec = a linha que vai ser gravada.
 function agdConflictIn(rows, rec){
   if (!rec || !rec.patient || bookingKind(rec)) return null;
-  var isPatient = !!findPatientByName(rec.patient);
+  var isPatient = !!findPatientByName(rec);
   // Paciente "não ABA" (mesma regra do Planner): em sala SEM "ABA" no nome ocupa a sala
   // toda; em sala COM "ABA" no nome, o horário do profissional (sem exceção).
   var recRoom = rec.room_id ? findRoom(rec.room_id) : null;
@@ -10932,7 +11123,7 @@ function agdConflictIn(rows, rec){
       var p = findProfessional(rec.professional_id);
       if ((x = hit("ag_prof_dois", profBusyMsg(p ? p.name : "", rec.time, oRoom ? oRoom.name : (o.patient || ""))))) return x;
     }
-    if (isPatient && normText(o.patient) === normText(rec.patient) && (o.service || "") === (rec.service || "")){
+    if (isPatient && samePatient(o, rec) && (o.service || "") === (rec.service || "")){
       var op = findProfessional(o.professional_id);
       if ((x = hit("ag_pac_servico", patientBusyMsg(rec.patient, bookingServiceName(o), rec.time, (oRoom ? oRoom.name : "") + (op ? " (" + op.name + ")" : ""))))) return x;
     }
@@ -11229,6 +11420,9 @@ function agdRowCore(r){
   // migração 2026-10-02c; sem a coluna, fica de fora para não quebrar o desfazer.
   if (r.source !== undefined) o.source = r.source;
   if (r.status !== undefined) o.status = r.status;
+  // Código do paciente / grupo (colunas da atualização 2026-10-07c).
+  if (r.patient_id !== undefined) o.patient_id = r.patient_id;
+  if (r.group_id !== undefined) o.group_id = r.group_id;
   return o;
 }
 // Busca/apaga por id em lotes (listas grandes, ex. Limpar semana, estourariam a URL).
@@ -11687,7 +11881,7 @@ function openFixPatientModal(back){
       var bk = docs[docId] || {}, parts = docId.split("-");
       Object.keys(bk).forEach(function(k){
         var b = bk[k];
-        if (!b || !b.patient || bookingKind(b) || normText(b.patient) !== n) return;
+        if (!b || !b.patient || bookingKind(b) || !recIsPatient(b, p)) return;
         var kp = k.split("|"), room = findRoom(kp[1]), ther = room ? findTherapist(room, kp[2]) : null;
         var prof = ther && ther.professionalId ? findProfessional(ther.professionalId) : null;
         var dO = DAYS.filter(function(d){ return d.key === parts[0]; })[0];
@@ -11831,7 +12025,7 @@ function openFixPatientModal(back){
     var list = inScope(patientBookings(p)); if (!list.length){ showToast("Nenhum agendamento do paciente neste período."); return; }
     var changes = {}, ok = 0, skipped = 0;
     list.forEach(function(x){
-      var rec = Object.assign({}, x.rec, {patient: np.nome});
+      var rec = Object.assign({}, x.rec, {patient: np.nome, patientId: np.id});
       if (sysHard(plannerConflict(x.docId, x.key, rec))){ skipped++; return; }
       (changes[x.docId] = changes[x.docId] || {})[x.key] = rec; ok++;
     });
@@ -12025,7 +12219,7 @@ function plannerExportCsv(){
         var kp = k.split("|"), room = findRoom(kp[1]); if (!room || !shownRooms[room.id]) return;
         var ther = findTherapist(room, kp[2]);
         var kind = bookingKind(b);
-        var tipo = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : (isGroup(room) ? "Sala (grupo)" : (findPatientByName(b.patient) ? "Paciente" : "Outro"));
+        var tipo = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : (isGroup(room) ? "Sala (grupo)" : (findPatientByName(b) ? "Paciente" : "Outro"));
         rows.push({sort: [week, DAYS.indexOf(dObj), kp[0], roomOrder[room.id] || 0, kp[2]],
           cells: [WEEK_LABEL[week], dObj ? dObj.full : dayKey, kp[0], room.name + (isGroup(room) ? " (grupo)" : ""),
             ther ? therapistDisplayName(ther) : "", kind ? "" : b.patient, tipo, kind ? "" : bookingServiceName(b), b.note || ""]});
@@ -12160,7 +12354,7 @@ function openFreeSlotModal(){
     var wb = document.querySelector('#weekSeg button[data-week="' + x.w + '"]'); if (wb) wb.click();
     openBookingModal({key: x.key, docId: x.docId, dayKey: x.d.key, week: x.w, roomId: x.room.id, therapistId: x.seat.id, time: x.time});
     var inp = document.getElementById("bkPatient");
-    if (inp){ inp.value = p.nome; inp.dispatchEvent(new Event("input", {bubbles: true})); var sg = document.getElementById("bkSuggest"); if (sg) sg.hidden = true; }
+    if (inp){ inp.value = p.nome; inp.dispatchEvent(new Event("input", {bubbles: true})); inp.dataset.pid = p.id; var sg = document.getElementById("bkSuggest"); if (sg) sg.hidden = true; }
   });
 }
 
@@ -12209,19 +12403,21 @@ function plannerSendPlan(dayKey, week, dateIso, skipTime){
             rec.patient = slotKindRecord(kind).patient; rec.blocked = kind === "bloqueado"; rec.service = null;
             rec.room_id = isGroup(room) ? null : room.id;
           } else if (isGroup(room)){
-            var target = findRoomByName(b.patient);
+            var target = bookingRoomRef(b);
             rec.patient = room.name; rec.blocked = false; rec.service = b.service || null;
             rec.room_id = target && !isGroup(target) ? target.id : null;
+            if (AD.hasPid){ rec.group_id = room.id; rec.patient_id = null; }
             info.what = room.name + " (" + b.patient + ")";
           } else {
             rec.patient = b.patient; rec.blocked = false; rec.service = b.service || DEFAULT_SERVICE_ID;
             rec.room_id = room.id;
+            if (AD.hasPid){ var bp = findPatientRef(b); rec.patient_id = bp ? bp.id : null; rec.group_id = null; }
           }
           if (!agdInHours(prof, time, date)){ plan.skipped.push(Object.assign(info, {why: "off"})); return; }
           var holName = skipTime ? skipTime(time) : "";
           if (holName){ plan.skipped.push(Object.assign(info, {why: "holiday", detail: holName})); return; }
           var here = taken.filter(function(a){ return sameSlot(a, rec); });
-          var twin = here.filter(function(a){ return normText(a.patient) === normText(rec.patient) && (kind || (a.room_id || null) === (rec.room_id || null)); })[0];
+          var twin = here.filter(function(a){ return samePatient(a, rec) && (kind || (a.room_id || null) === (rec.room_id || null)); })[0];
           if (twin){
             // Repetido dentro do próprio envio (ex.: Reunião Clínica do mesmo profissional
             // em duas salas): vai uma vez só, sem aviso. Já existente na Agenda: avisa.
@@ -12233,9 +12429,9 @@ function plannerSendPlan(dayKey, week, dateIso, skipTime){
           var conflictMsg = agdConflictIn(taken, rec);
           if (typeof conflictMsg === "string" && conflictMsg){ plan.skipped.push(Object.assign(info, {why: "conflict", detail: conflictMsg})); return; }
           // Regras de aviso (Acesso → Sistema): Avisar = caixa na prévia; Bloquear = fica de fora.
-          var patRule = !kind && !isGroup(room), pa = patRule ? findPatientAt(rec.patient, dateIso) : null;
+          var patRule = !kind && !isGroup(room), pa = patRule ? findPatientAt(rec, dateIso) : null;
           var outH = !!pa && sysOn("ag_fora_paciente") && !patientSlotOk(pa, dayKey, time);
-          var outT = patRule && sysOn("ag_terapeuta") && !!therapistMismatchMsg(rec.patient, prof.id, rec.service, dateIso);
+          var outT = patRule && sysOn("ag_terapeuta") && !!therapistMismatchMsg(rec, prof.id, rec.service, dateIso);
           if (outH && sysMode("ag_fora_paciente") === "block"){ plan.skipped.push(Object.assign(info, {why: "conflict", detail: "Fora do horário do paciente"})); return; }
           if (outT && sysMode("ag_terapeuta") === "block"){ plan.skipped.push(Object.assign(info, {why: "conflict", detail: "Terapeuta diferente do tratamento"})); return; }
           taken.push(rec);
@@ -13658,7 +13854,7 @@ function prOpenEditor(opts){
 // Botão "Atendimento" da Agenda: vai para o prontuário do paciente e abre a
 // evolução deste atendimento (se já existir e for do usuário) ou uma nova.
 function prFromAppointment(row){
-  var p = findPatientByName(row.patient);
+  var p = findPatientByName(row);
   if (!p){ showToast("Este atendimento não é de um paciente cadastrado.", true); return; }
   var tabBtn = document.querySelector('#mainTabs button[data-tab="prontuario"]');
   if (!tabBtn || tabBtn.hidden){ showToast("Seu nível de permissão não dá acesso ao Prontuário.", true); return; }
@@ -13950,7 +14146,7 @@ var RP_BUILDERS = {
   "frequencia": function(rows, o){
     var by = {};
     rpPatientRows(rows).forEach(function(a){
-      var p = findPatientByName(a.patient); if (!p) return; // só pacientes cadastrados (grupos ficam de fora)
+      var p = findPatientByName(a); if (!p) return; // só pacientes cadastrados (grupos ficam de fora)
       if (o.pac && normText(p.nome).indexOf(o.pac) === -1) return;
       var s = by[p.id] = by[p.id] || {name: p.nome, total: 0, fin: 0, falta: 0, just: 0, aberto: 0, outros: 0};
       s.total++;
@@ -13970,7 +14166,7 @@ var RP_BUILDERS = {
     var by = {};
     rpPatientRows(rows).forEach(function(a){
       if (a.status !== "finalizado") return;
-      var p = findPatientAt(a.patient, a.date); if (!p) return;   // convênio/plano do tratamento da data
+      var p = findPatientAt(a, a.date); if (!p) return;   // convênio/plano do tratamento da data
       var conv = patientConvenioName(p) || "Sem convênio";
       if (o.conv && conv !== o.conv) return;
       var k = conv + "|" + (p.plano || "") + "|" + bookingServiceName(a);
@@ -13993,7 +14189,7 @@ var RP_BUILDERS = {
     var done = {}; // tratamento|especialidade -> sessões finalizadas
     rpPatientRows(rows).forEach(function(a){
       if (a.status !== "finalizado") return;
-      var p0 = findPatientByName(a.patient); if (!p0) return;
+      var p0 = findPatientByName(a); if (!p0) return;
       var t = treatmentAt(p0.id, a.date), tk = p0.id + "|" + (t ? t.id : "");
       var pr = findProfessional(a.professional_id);
       var k = tk + "|" + ((pr && pr.specialtyId) || "");
@@ -14028,7 +14224,7 @@ var RP_BUILDERS = {
       sections: [{title: "Por paciente, tratamento e especialidade", head: ["Paciente", "Tratamento (início)", "Especialidade", "Contratado/mês", "Esperado no período", "Realizado", "Diferença"], rows: out}]};
   },
   "pendentes": function(rows, o, recIds){
-    var list = rpPatientRows(rows).filter(function(a){ return a.status === "finalizado" && findPatientByName(a.patient) && !recIds[a.id]; });
+    var list = rpPatientRows(rows).filter(function(a){ return a.status === "finalizado" && findPatientByName(a) && !recIds[a.id]; });
     var by = {};
     list.forEach(function(a){ var n = rpProfName(a.professional_id) || "(sem profissional)"; by[n] = (by[n] || 0) + 1; });
     return {note: "Atendimentos de pacientes com status Finalizado e sem evolução ligada a eles no prontuário.",
@@ -14092,7 +14288,7 @@ var RP_BUILDERS = {
   },
   "sem-atendimento": function(rows, o){
     var seen = {};
-    rpPatientRows(rows).forEach(function(a){ var p = findPatientByName(a.patient); if (p) seen[p.id] = 1; });
+    rpPatientRows(rows).forEach(function(a){ var p = findPatientByName(a); if (p) seen[p.id] = 1; });
     // Só quem tinha tratamento valendo no período (o encerrado antes do período não
     // entra); convênio e plano do tratamento vigente no fim do período.
     function inForce(p){
@@ -14511,7 +14707,7 @@ function patientAt(p, iso){
   }
   return _patAt.map[k];
 }
-function findPatientAt(name, iso){ var p = findPatientByName(name); return p && iso ? patientAt(p, iso) : p; }
+function findPatientAt(name, iso){ var p = findPatientByName(name); return p && iso ? patientAt(p, iso) : p; }  // name: nome ou agendamento
 function subscribeTreatments(){
   db.doc("treatments/all").onSnapshot(function(snap){
     state.treatments = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
@@ -14583,7 +14779,8 @@ function trLoadLast(force){
   var out = {}, done = {}, used = {}, appts = {}, page = 1000, today = trTodayIso();
   var monthEnd = trMonthEnd(today);   // agendados até o fim do mês atual (Contratado × realizado)
   function add(a, n){
-    var k = normText(String(a.patient || "").trim()); if (!k) return;
+    // Chave = código do paciente (patient_id; sem ele, o paciente com esse nome).
+    var pp = findPatientRef(a), k = pp ? pp.id : ""; if (!k) return;
     for (var i = 0; i < (n || 1); i++){
       (appts[k] = appts[k] || []).push({d: a.date, prof: a.professional_id || "", svc: a.service || DEFAULT_SERVICE_ID, st: a.status || ""});
       if (a.date > today) continue;
@@ -14597,7 +14794,7 @@ function trLoadLast(force){
   function nextSum(from){
     return c.rpc("treatment_appt_summary", {p_until: monthEnd}).range(from, from + page - 1).then(function(r){
       if (r.error) throw r.error;
-      (r.data || []).forEach(function(x){ add({patient: x.patient, date: x.d, professional_id: x.prof, service: x.svc, status: x.st}, x.n); });
+      (r.data || []).forEach(function(x){ add({patient: x.patient, patient_id: x.pid || null, date: x.d, professional_id: x.prof, service: x.svc, status: x.st}, x.n); });
       return (r.data || []).length === page ? nextSum(from + page) : null;
     });
   }
@@ -14648,7 +14845,7 @@ function trMonthly(t){
   if (end > trMonthEnd(today)) end = trMonthEnd(today);
   if (end < t.inicio) return {months: []};
   var specs = (Array.isArray(t.specHours) ? t.specHours : []).filter(function(r){ return Number(r.hours) > 0; });
-  var mine = (TR.appts[normText(String(p.nome || "").trim())] || []).filter(function(a){
+  var mine = (TR.appts[p.id] || []).filter(function(a){
     if (a.d < t.inicio || a.d > end) return false;
     var x = treatmentAt(t.patientId, a.d); return x && x.id === t.id;
   });
@@ -14713,7 +14910,7 @@ function trMonthlyHtml(t){
 function trCountIn(map, t){
   if (!t || !map) return null;
   var p = rawPatient(t.patientId); if (!p) return 0;
-  return (map[normText(String(p.nome || "").trim())] || []).filter(function(d){
+  return (map[p.id] || []).filter(function(d){
     var x = treatmentAt(t.patientId, d); return x && x.id === t.id;
   }).length;
 }
@@ -14732,7 +14929,7 @@ function trQtyKey(o){
 function trEnd(t){
   if (!TR.last) return "";
   var p = rawPatient(t.patientId); if (!p) return "";
-  var dates = TR.last[normText(String(p.nome || "").trim())] || [];
+  var dates = TR.last[p.id] || [];
   var after = treatmentsOf(t.patientId).filter(function(x){ return x.id !== t.id && x.inicio && t.inicio && x.inicio > t.inicio; })
     .map(function(x){ return x.inicio; }).sort()[0] || "9999-99-99";
   var best = "";
@@ -15194,7 +15391,6 @@ function trInactivatePatient(patId, list){
 // no prontuário ficam (regra da Agenda). As duas remoções entram no desfazer.
 function trOfferRemoveBookings(patId){
   var p = rawPatient(patId); if (!p || !p.nome || !db) return;
-  var key = normText(String(p.nome).trim());
   var canPl = can("agenda", "delete"), cli = agdClient(), canAg = !!cli && can("agendamentos", "delete");
   if (!canPl && !canAg) return;
   var plChanges = {}, plN = 0;
@@ -15204,7 +15400,8 @@ function trOfferRemoveBookings(patId){
       Object.keys(bk).forEach(function(k){
         var v = bk[k]; if (!v) return;
         var rec = typeof v === "string" ? {patient: v} : v;
-        if (normText(String(rec.patient || "").trim()) !== key) return;
+        if (bookingKind(rec) || !recIsPatient(rec, p)) return;
+        var gr = findRoom(k.split("|")[1]); if (gr && isGroup(gr)) return;
         (plChanges[docId] = plChanges[docId] || {})[k] = clearValueFor(dayKey, k.split("|")[0]);
         plN++;
       });
@@ -15237,7 +15434,7 @@ function trOfferRemoveBookings(patId){
       if (!cli || !$("rbFrom")) return;
       var from = $("rbFrom").value || trTodayIso(), my = ++seq; agRows = null; refresh();
       $("rbAgCount").textContent = "Contando…";
-      cli.from("appointments").select("*").eq("patient", p.nome).gte("date", from).then(function(r){
+      apptSelectPatient(cli, p, function(q){ return q.gte("date", from); }).then(function(r){
         if (my !== seq || !$("rbAgCount")) return;
         if (r.error){ $("rbAgCount").textContent = "Não foi possível contar os atendimentos."; return; }
         agRows = r.data || [];
@@ -15406,6 +15603,7 @@ var HELP_TOPICS = [
     rules: [
       "Trocar o nome do paciente no cadastro troca também nos agendamentos do Planner e da Agenda, nas evoluções do Prontuário e no Plano terapêutico. Se outro paciente tem o mesmo nome antigo, nada é trocado (aparece um aviso para conferir à mão).",
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",
+      "Dois pacientes podem ter o mesmo nome: ao salvar, o sistema avisa e pede confirmação. No Planner e na Agenda eles ficam separados pelo código do cadastro (na lista de sugestões aparece a data de nascimento ou a mãe para escolher o certo).",
       "Paciente com medida protetiva ativa tem o escudo vermelho ao lado do nome na lista. Na Agenda, o último atendimento do paciente no dia fica com borda e escudo vermelhos, e a janela do atendimento mostra quem não pode e quem pode retirar.",
       "A observação da medida protetiva só aparece (na janela, na Agenda e na ficha impressa) para quem pode marcar o status Finalizado. A mesma pessoa não pode estar nas duas listas: ao salvar, o sistema oferece tirá-la dos Responsáveis pela retirada.",
       "<b>CPF do paciente é obrigatório</b> (o Administrador pode mudar em Campos obrigatórios) e não pode repetir: o sistema não salva dois pacientes com o mesmo CPF.",
@@ -15641,6 +15839,7 @@ var HELP_TOPICS = [
       "Use as setas ▲▼ para mudar a ordem das salas e das colunas."
     ],
     rules: [
+      "Trocar o nome da sala troca também o nome nas marcações das colunas dos grupos de suporte do Planner que apontam para ela.",
       "Sala <b>com \"ABA\" no nome</b>: paciente que não faz ABA ocupa só o horário do mesmo profissional. Sala <b>sem \"ABA\"</b>: ocupa a sala toda.",
       "As regras de quem não faz ABA valem só para o serviço <b>Sessão</b>: atendimento de outro serviço (avaliação, triagem, orientação…) não ocupa o horário e pode ser marcado no horário listrado por essa regra.",
       "Tirar uma coluna que tem agendamentos no Planner abre a janela <b>Colunas com agendamentos</b>: os agendamentos precisam ser <b>movidos</b> para outra coluna (sala → sala, grupo → grupo) antes de a coluna sair. O sistema já sugere a coluna: primeiro outra do mesmo profissional, depois a mesma sala, depois as outras. Se algum agendamento não cabe no destino (horário ocupado, conflito ou fora do horário do profissional), escolha outra coluna ou mova esses agendamentos no Planner antes; enquanto isso a coluna não sai.",
@@ -15654,6 +15853,7 @@ var HELP_TOPICS = [
     purpose: "Colunas especiais do Planner (ex.: Coordenador, Aplicador ABA) em que se agenda uma <b>sala</b>, não um paciente.",
     steps: ["Cadastros → <b>Grupos de Suporte</b> → <b>+ Incluir</b>."],
     rules: [
+      "Trocar o nome do grupo troca também o nome nos atendimentos da Agenda em que o grupo está no lugar do paciente.",
       "Na célula de grupo só se agenda o nome de uma sala; na célula de sala, só paciente.",
       "Profissional com agendamento num grupo fica bloqueado em todas as salas no mesmo horário, inclusive a sala que o grupo marca.",
       "Um grupo agendado para a sala não muda a regra de quem não faz ABA: o profissional continua sem poder ter dois pacientes que não fazem ABA juntos."
@@ -15672,6 +15872,7 @@ var HELP_TOPICS = [
       "Botão <b>Tela cheia</b> (quatro cantos, na barra): mostra só a grade, sem o topo, a barra e a legenda. Para voltar: Esc ou <b>Sair da tela cheia</b> no canto."
     ],
     rules: [
+      "Cada agendamento guarda o paciente pelo código do cadastro, além do nome: pacientes com o mesmo nome ficam separados. Quando há mais de um paciente com o nome digitado, escolha o certo na lista de sugestões (aparece a data de nascimento ou a mãe); sem escolher, o sistema não salva.",
       "Bloquear só preenche horários livres; liberar só tira bloqueios; limpar apaga tudo do período.",
       "Na segunda às 11:20 há a Reunião Clínica automática.",
       "Célula cinza ou listrada = fora do horário do profissional ou bloqueada por regra (passe o mouse para ver o motivo)."
@@ -15729,6 +15930,7 @@ var HELP_TOPICS = [
       "Toda ferramenta mostra uma <b>prévia</b> antes de gravar (o que vai mudar e o que fica de fora, com o motivo) e entra no desfazer (Ctrl+Z)."
     ],
     rules: [
+      "Cada atendimento guarda o paciente (ou o grupo de suporte) pelo código do cadastro, além do nome: pacientes com o mesmo nome ficam separados. Com nomes repetidos, escolha o paciente certo na lista de sugestões (aparece a data de nascimento ou a mãe).",
       "Limpar por período e Trocar profissional nunca mexem em atendimento com status (Finalizado, Não compareceu…) nem com evolução no prontuário. Status em lote não marca Finalizado (precisa da evolução de cada atendimento).",
       "Os horários seguem o horário da clínica e a duração padrão (Acesso → Clínica): cabem só sessões inteiras na manhã e na tarde. A linha do almoço mostra a saída da última sessão da manhã e a última linha a saída da última sessão da tarde (na Semana, o dia com saída diferente mostra a dele).",
       "Fora do horário de trabalho do profissional (cadastrado em Cadastros → Colaboradores) a célula é hachurada e não aceita marcação. A janela do atendimento também recusa profissional, data ou horário fora desse horário (atendimento antigo pode ser editado se continuar no mesmo profissional, data e horário).",
@@ -18138,13 +18340,13 @@ function agdSameSlotPatients(row){
   Object.keys(AD.rows || {}).forEach(function(id){
     var r = AD.rows[id];
     if (!r || r.id === row.id || r.date !== row.date || r.time !== row.time || r.professional_id !== row.professional_id || bookingKind(r)) return;
-    var p = findPatientAt(r.patient, r.date);
+    var p = findPatientAt(r, r.date);
     if (p && out.every(function(x){ return x.id !== p.id; })) out.push(p);
   });
   return out;
 }
 function agdGoalsData(row, records){
-  var pat = findPatientAt(row.patient, row.date); if (!pat) return null;
+  var pat = findPatientAt(row, row.date); if (!pat) return null;
   var plan = planVigente(pat.id); if (!plan) return {pat: pat, plan: null};
   var mine = planActiveObjs(plan, row.professional_id);
   var others = agdSameSlotPatients(row).filter(function(p){ return p.id !== pat.id; }).map(function(p){
@@ -18201,7 +18403,7 @@ function agdGoalsBoxHtml(d){
 }
 // Coloca o quadro no elemento host (carrega os planos e as evoluções antes). Só com permissão de ver o plano.
 function agdGoalsFill(host, row){
-  var pat = row && !bookingKind(row) ? findPatientAt(row.patient, row.date) : null;
+  var pat = row && !bookingKind(row) ? findPatientAt(row, row.date) : null;
   if (!host || !planCan("view") || !pat) return;
   host.innerHTML = '<div class="ag-obj-box"><div class="ag-obj-head"><span class="ag-obj-title">Objetivos</span></div><div class="pl-hint">Carregando…</div></div>';
   Promise.all([planLoadAll(), planEvoLoad(pat.id)]).then(function(res){

@@ -69,7 +69,7 @@ var TABLES = {
   appointments: {
     key: "id",
     cols: ["id", "date", "time", "professional_id", "room_id", "patient", "note", "blocked", "service",
-           "source", "status", "created_by", "updated_by", "created_at", "updated_at"],
+           "source", "status", "patient_id", "group_id", "created_by", "updated_by", "created_at", "updated_at"],
     users: ["created_by", "updated_by"]
   },
   patient_health: {

@@ -2404,4 +2404,28 @@ homônimos no Planner (2638) e na Agenda (141), 15 profissionais todos com colab
   NÃO é mais gravada quando há nascimento (janela do paciente e importação de planilha);
   sem nascimento a idade digitada continua valendo (`patientAgeYears`); `profissionais`
   saiu de `MODULES` (`js/pipo-supabase.js`) e de `PERM_MODULE_LABELS`.
-- Próximas: 2) paciente por código; 3) colaborador único; 4) renomear nomes internos.
+- **Etapa 2 (feita, 2026-10-07): paciente e grupo por código.** Decisões do usuário:
+  homônimos PERMITIDOS com aviso; grupos da Agenda também por código.
+  - Planner: cada booking leva `patientId` (coluna de sala) ou `roomRef` (coluna de grupo =
+    sala marcada); `plannerNormRefs(changesByDoc)` no início de `applyBookingChanges`
+    preenche/acerta (homônimo sem código escolhido fica sem). O desfazer compara sem os
+    códigos (`histCmpStr`). Agenda: colunas `appointments.patient_id` / `group_id`
+    (migração `supabase/2026-10-07c-paciente-por-codigo.sql`: gatilho `appointments_refs`
+    preenche pelo nome quando só um paciente tem o nome; preenche os existentes e o Planner;
+    `rename_patient`/`merge_patient_records` pelo código; `rename_group` novo;
+    `treatment_appt_summary` devolve `pid`). O app só manda `patient_id`/`group_id` depois
+    de confirmar que as colunas existem (`AD.hasPid`, sonda em `agdLoadWeek`); `agdRowCore`
+    leva os dois quando a linha tem.
+  - Busca: `findPatientByName(x)` e `findPatientAt(x, iso)` aceitam o agendamento (código
+    primeiro, nome de reserva) — `findPatientRef`, `findPatientById`, `recPid`,
+    `recIsPatient(rec, p)`, `samePatient(a, b)`, `patsByName`, `patNameCount`,
+    `bookingRoomRef(rec)`. Regras de conflito, "último do dia", Editar agendamento,
+    contagens de uso, mesclar, remover agendamentos e `TR.*` (agora chave = id do paciente)
+    usam o código.
+  - Homônimos: sugestões com `data-pid` e `.autolist-sub` (`patDisambig`: nascimento/mãe);
+    `bookingPidWire` guarda a escolha em `input.dataset.pid`; `bookingPatientPick` recusa
+    salvar sem escolher. Cadastrar paciente com nome repetido pede confirmação.
+  - Renomear sala → células dos grupos no Planner (`roomRenameEverywhere`, chamado no salvar da
+    sala; `writeRooms` resolve `true` quando gravou); renomear grupo → Agenda (`rename_group`).
+  - Teste `tests/run_patient_code.js` (no `npm test`). Backup restaura as colunas novas.
+- Próximas: 3) colaborador único; 4) renomear nomes internos.

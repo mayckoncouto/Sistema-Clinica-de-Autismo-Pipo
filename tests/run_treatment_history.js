@@ -68,7 +68,7 @@ const path = require('path');
   // Tratamento com atendimentos Finalizados: não exclui e não muda a quantidade de sessões.
   const lk = await ev(`(function(){
     var pat = state.patientsRaw.filter(function(p){ return p.id === "duda-vermelho"; })[0];
-    TR.done = {}; TR.done[normText(pat.nome)] = ["2026-02-10"];   // finalizado no tempo do t1
+    TR.done = {}; TR.done[pat.id] = ["2026-02-10"];   // finalizado no tempo do t1
     var t1 = state.treatments.filter(function(t){ return t.id === "t1"; })[0];
     var t2 = state.treatments.filter(function(t){ return t.id === "t2"; })[0];
     return {c1: trDoneCount(t1), c2: trDoneCount(t2)};
@@ -134,8 +134,8 @@ const path = require('path');
     });
     rebuildPatients();
     TR.used = {}; TR.done = TR.done || {};
-    TR.used[normText(p6.nome)] = ["2026-02-01","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06"];   // 6 de 10 → restam 4
-    TR.used[normText(p7.nome)] = ["2026-02-01","2026-02-02","2026-02-03"];                                         // 3 de 3 → esgotado
+    TR.used[p6.id] = ["2026-02-01","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06"];   // 6 de 10 → restam 4
+    TR.used[p7.id] = ["2026-02-01","2026-02-02","2026-02-03"];                                         // 3 de 3 → esgotado
     function st(id){ var t = state.treatments.filter(function(x){ return x.id === id; })[0]; var d = t && trDue(t); return d ? d.state + ":" + d.rest : "-"; }
     return {s1: st("s1"), s2: st("s2"), txt: trDueText(state.treatments.filter(function(x){ return x.id === "s1"; })[0] || {})};
   })()`);
@@ -159,7 +159,7 @@ const path = require('path');
     state.treatments = [{id: "m1", patientId: pat.id, inicio: ini, status: "ativo", tipo: "novo",
       specHours: [{specId: prof.specialtyId, hours: 8}, {specId: "svc:avaliacao", hours: 1}]}];
     rebuildPatients();
-    var k = normText(pat.nome), A = [];
+    var k = pat.id, A = [];
     function add(dt, st, svc){ A.push({d: dt, prof: prof.id, svc: svc || "sessao", st: st || ""}); }
     add(iso(Y, M - 2, 22), "finalizado"); add(iso(Y, M - 2, 25), "nao-compareceu");          // 1º mês: 2 de round(8*(dim-19)/dim)
     for (var i = 1; i <= 8; i++) add(iso(Y, M - 1, i), "finalizado");                          // mês passado: 8 de 8 sessão
