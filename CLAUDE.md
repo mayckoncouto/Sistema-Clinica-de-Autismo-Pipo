@@ -2381,3 +2381,13 @@ padrão; regras que evitam duplicidade ou dados inconsistentes ficam travadas (�
   tr_cancel_motivo) só recusam no modo Bloquear. Testada no PGlite.
 - Teste `tests/run_sistema.js` (cria `tests/page_sys.html`).
 
+
+## Revisão de nomes e campos (2026-10-07, EM ANDAMENTO)
+Pedido do usuário: rever nomes/campos que mudaram (profissional → funcionário → colaborador
+etc.). Decisões: RENOMEAR também os nomes internos (com análise de riscos e verificações),
+fazer as 3 etapas — 1) limpeza (campos antigos de paciente/profissional, horário antigo,
+idade sempre calculada pelo nascimento, permissão `profissionais` e sobras), 2) paciente
+por código no Planner e na Agenda (além do nome), 3) colaborador único (profissional vira a
+parte "atendimento" do colaborador, um campo `nome`, códigos no mesmo padrão). Primeiro passo:
+`supabase/conferencia-nomes-e-campos.sql` (SÓ LEITURA, 31 verificações) para o usuário rodar
+e devolver os números antes de qualquer correção.
