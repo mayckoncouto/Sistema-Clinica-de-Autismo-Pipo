@@ -55,6 +55,15 @@ const path = require('path');
   })()`);
   console.log('import reads bands, warns unknown, empty scope keeps the old one?', JSON.stringify(imp.a) === '["0-4","10+"]' && imp.b.length === 0 && imp.w === 1 && imp.st === 'atualizar' && /Faixas etárias/.test(imp.msg) && !/Escopo/.test(imp.msg), JSON.stringify(imp));
 
+  const exp = await ev(`(function(){
+    var k = IO_KINDS.habilidades, rows = k.exportRows(), b = rows.filter(function(r){ return r.nome === "Brincar simbólico"; })[0];
+    var c = rows.filter(function(r){ return r.nome === "Comunicação"; })[0];
+    var pl = ioHabPlan([{_line: 2, nome: "Brincar simbólico", escopo: "", faixas: "Todas as idades", specs: ""}]);
+    return {cols: k.cols.map(function(x){ return x.h; }).join("|"), b: b, c: c.faixas, st: pl.items[0].st, msg: pl.items[0].msgs.join(" ")};
+  })()`);
+  console.log('export has Escopo and Faixas etárias (empty = "Todas as idades")?', exp.cols === 'Habilidade|Escopo|Faixas etárias|Especialidades sugeridas' &&
+    exp.b.escopo === 'Faz de conta, uso de objetos.' && exp.c === 'Todas as idades', JSON.stringify(exp));
+  console.log('importing "Todas as idades" clears the bands?', exp.st === 'atualizar' && /Todas as idades/.test(exp.msg));
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

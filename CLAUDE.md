@@ -2543,6 +2543,7 @@ paciente, atualizando junto) e Especialidades sugeridas; no plano, as da idade p
   etárias, Especialidades sugeridas.
 - Plano (`#plAddArea`): habilidades da faixa do paciente (ou sem faixa) primeiro; as outras no
   fim com "(fora da faixa)". Paciente sem idade = tudo igual. Não bloqueia.
-- Planilha de Habilidades: colunas Escopo e Faixas etárias (`ioAgeBands`, aceita "0–4 anos",
+- Planilha de Habilidades: colunas Habilidade, Escopo, Faixas etárias e Especialidades sugeridas; exportar
+  escreve "Todas as idades" quando não há faixa e importar aceita esse texto (limpa as faixas). `ioAgeBands` aceita "0–4 anos",
   "0-4", "10+"; texto desconhecido = aviso); célula vazia não apaga. Sem SQL.
   Teste `tests/run_habilidades.js`.
