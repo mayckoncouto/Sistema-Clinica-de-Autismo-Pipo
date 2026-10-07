@@ -281,9 +281,15 @@ const path = require('path');
     PLAN.evoMem = [{patient_id: "bruno-verde", appointment_date: "2026-10-01", plan_goals: [{planId: p.id, specId: "fono", objId: o.id, scaleId: o.scaleId, levelId: sc.levels[0].id}]},
                    {patient_id: "bruno-verde", appointment_date: "2026-10-15", plan_goals: [{planId: p.id, specId: "psico", objId: o.id, scaleId: o.scaleId, levelId: sc.levels[2].id}]}]; })()`);
   await ev('openPlanFor("bruno-verde")'); await page.waitForSelector('#plCharts .pv-fig');
-  const fig = await page.$eval('#plCharts', (h) => ({figs: h.querySelectorAll('.pv-fig').length, lines: h.querySelectorAll('.pv-line').length, dots: h.querySelectorAll('.pv-dot').length, cap: h.querySelector('figcaption').textContent,
+  const fig = await page.$eval('#plCharts', (h) => ({figs: h.querySelectorAll('.pv-fig').length, bars: h.querySelectorAll('.pv-bar').length, lines: h.querySelectorAll('.pv-line').length, cap: h.querySelector('figcaption b').textContent,
+    opts: Array.prototype.map.call(h.querySelectorAll('select[data-pv-sel] option'), (x) => x.textContent).length,
+    fill: (h.querySelector('.pv-bar') || {}).getAttribute && h.querySelector('.pv-bar').style.fill,
     tips: Array.prototype.map.call(h.querySelectorAll('.pv-hit'), (x) => x.getAttribute('data-tip')).join(' | ')}));
-  console.log('chart by skill, one line of 2 points; tooltip shows the specialty that evaluated?', fig.figs === 1 && fig.lines === 1 && fig.dots === 2 && /^Comunicação/.test(fig.cap) && /\(FN\)/.test(fig.tips) && /\(PS/.test(fig.tips), JSON.stringify(fig));
+  console.log('bar chart by skill: one bar per objective (last level), blue by level, objective selector next to the scale?', fig.figs === 1 && fig.bars === 1 && fig.lines === 0 && fig.cap === 'Comunicação' && fig.opts === 2 && /--pvb-/.test(fig.fill) && /\(PS\)/.test(fig.tips), JSON.stringify(fig));
+  await page.$eval('#plCharts select[data-pv-sel]', (e) => { e.value = e.options[1].value; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  const one = await page.$eval('#plCharts', (h) => ({bars: h.querySelectorAll('.pv-bar').length, xl: Array.prototype.map.call(h.querySelectorAll('.pv-xlab'), (x) => x.textContent).join(','),
+    tips: Array.prototype.map.call(h.querySelectorAll('.pv-hit'), (x) => x.getAttribute('data-tip')).join(' | ')}));
+  console.log('choosing an objective shows one bar per evolution (dates; specialty in the tooltip)?', one.bars === 2 && one.xl === '01/10,15/10' && /FN/.test(one.tips) && /PS/.test(one.tips), JSON.stringify(one));
   await page.click('#plCancel');
 
   // Agenda: Detalhes do agendamento com "Objetivos do atendimento" e botão Editar.

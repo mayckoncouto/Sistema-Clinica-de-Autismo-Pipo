@@ -2593,3 +2593,16 @@ como "Objetivo que não está mais no plano". Teste no fim de `tests/run_plano.j
   é recolhível (`[data-goal-toggle]` com seta + `.pr-goal-items` `hidden`; começa fechada, aberta
   se já tem objetivo marcado — edição). Título com "N objetivos · M marcados"
   (`prGoalCountText`, `[data-goal-count]`); `prGoalsWire(body)` liga a seta e o contador.
+
+## Plano: gráfico de barras com seletor de objetivo (2026-10-07)
+Decisões do usuário: barras; seletor ao lado do nome da escala começa em "Todos os objetivos"
+(uma barra por objetivo = último nível registrado, Nº embaixo); escolher um objetivo = uma barra
+por evolução (data embaixo); tons de azul pelo NÍVEL (mais escuro = mais alto).
+- `planChartSvg(ch, sel)` (barras com topo arredondado 4px, linha de base, dica por barra com
+  nível/data/sigla da especialidade em `.pv-hit`), `planChartBodyHtml(ch, sel)` (legenda numerada,
+  gráfico, tabela), `planChartsHtml(charts)` (`figure[data-pv]` + `select[data-pv-sel]`).
+  `planChartsWire` troca o corpo no `change` usando `host.__charts` (gravado ao carregar).
+- Cor: `planLvColor(idx, nLevels)` → `--pvb-1..5` (rampa ordinal azul validada pelo validador
+  da skill dataviz: claro #86b6ef→#104281; escuro #1c5cab→#b7d3f6, nível alto mais claro).
+  Escalas com mais de 5 níveis repetem tons vizinhos (a altura continua diferenciando).
+  `PLAN_VIZ_MAX = 30` barras na visão "Todos". Teste no `tests/run_plano.js`.
