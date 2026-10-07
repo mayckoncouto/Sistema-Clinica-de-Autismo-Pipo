@@ -61,7 +61,7 @@ const path = require('path');
   await page.waitForTimeout(80);
 
   // ---- TEST: the Relatório specialty header cells use each specialty's own color ----
-  await page.$eval('#mainTabs button[data-tab="relatorio"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
+  await page.$eval('#mainTabs button[data-tab="resumo"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(200);
   const fonoHeaderBg = await page.locator('.rpt-spec-name', { hasText: 'Fonoaudiologia' }).evaluate(el => getComputedStyle(el).backgroundColor);
   console.log('Relatório "Fonoaudiologia" header uses its saved hex color?', fonoHeaderBg === hexRgb);

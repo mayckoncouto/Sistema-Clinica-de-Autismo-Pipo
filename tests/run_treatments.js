@@ -32,10 +32,10 @@ const path = require('path');
   console.log('first treatment is "novo" and the type field is locked?', await page.$eval('#trTipo', (s) => s.value === 'novo' && s.disabled));
   console.log('old ABA "Não" comes from the patient record?', (await page.$eval('#pAba', (s) => s.value)) === 'Não');
   await page.fill('#trVal', '1.500,00'); await page.fill('#trDesp', '200');
-  console.log('final value = valor - despesas?', (await page.inputValue('#trFinal')) === 'R$ 1.300,00');
+  console.log('final value = valor - descontos?', (await page.inputValue('#trFinal')) === 'R$ 1.300,00');
   await save();
   let L = await store();
-  console.log('saved as Ativo/Novo with numbers?', L.length === 1 && L[0].status === 'ativo' && L[0].tipo === 'novo' && L[0].valor === 1500 && L[0].despesas === 200);
+  console.log('saved as Ativo/Novo with numbers?', L.length === 1 && L[0].status === 'ativo' && L[0].tipo === 'novo' && L[0].valor === 1500 && L[0].descontos === 200);
 
   // 2º com o 1º ainda ativo: confirma, o 1º vira Renegociado e o novo é Renegociado.
   await openNew('duda-vermelho');
@@ -93,7 +93,7 @@ const path = require('path');
   console.log('patient record itself keeps no treatment copy for Bruno (ABA stays as before)?', await page.evaluate(() => window.__STORE__['patients/all'].list.find((p) => p.id === 'bruno-verde').aba === 'Sim'));
 
   // Planner: Bruno (Psicologia indicada para Andrelisa) na coluna da Ana → dupla verificação.
-  await page.$eval('#mainTabs button[data-tab="agenda"]', (b) => b.click()); await page.waitForTimeout(400);
+  await page.$eval('#mainTabs button[data-tab="planner"]', (b) => b.click()); await page.waitForTimeout(400);
   await page.locator('td.slotcell[data-doc="seg-1"][data-key="08:00|r1|r1-t1"]').click(); await page.waitForSelector('#ovBook');
   await page.fill('#bkPatient', 'Bruno Verde'); await page.click('#bkSave'); await page.waitForTimeout(250);
   console.log('Planner asks before booking with a different therapist?', (await page.locator('#cfTitle').textContent().catch(() => '')) === 'Terapeuta diferente do tratamento');

@@ -22,7 +22,7 @@ const path = require('path');
   }, perms);
 
   // Só Pacientes em Cadastros e só Planner no menu Planner
-  await setPerm({ pacientes: ['view'], agenda: ['view'] });
+  await setPerm({ pacientes: ['view'], planner: ['view'] });
   const cad = page.locator('#cadBtn');
   console.log('only Pacientes allowed: button reads "Pacientes" (no arrow)?', (await cad.innerText()).trim() === 'Pacientes' && (await cad.locator('svg').count()) === 0);
   console.log('button has no menu popup?', (await cad.getAttribute('aria-haspopup')) === null);
@@ -34,10 +34,10 @@ const path = require('path');
   console.log('only Planner allowed: Planner button reads "Planner"?', (await page.locator('#plBtn').innerText()).trim() === 'Planner');
   await page.click('#plBtn');
   await page.waitForTimeout(200);
-  console.log('click opens the Planner directly?', await page.evaluate(() => window.__ev("state.tab") === 'agenda') && await page.locator('#plMenu').isHidden());
+  console.log('click opens the Planner directly?', await page.evaluate(() => window.__ev("state.tab") === 'planner') && await page.locator('#plMenu').isHidden());
 
   // Pacientes + Tratamentos: volta a ser o menu "Cadastros"
-  await setPerm({ pacientes: ['view'], tratamentos: ['view'], agenda: ['view'] });
+  await setPerm({ pacientes: ['view'], tratamentos: ['view'], planner: ['view'] });
   console.log('two allowed: button reads "Cadastros" with arrow?', /^Cadastros/.test((await cad.innerText()).trim()) && (await cad.locator('svg').count()) === 1);
   await cad.click();
   const items = await page.locator('#cadMenu button:visible').allInnerTexts();
@@ -45,11 +45,11 @@ const path = require('path');
   await page.keyboard.press('Escape');
 
   // Nenhuma: o botão some
-  await setPerm({ agenda: ['view'] });
+  await setPerm({ planner: ['view'] });
   console.log('none allowed: Cadastros button hidden?', await cad.isHidden());
 
   // Celular: grupo com uma opção aparece direto
-  await setPerm({ pacientes: ['view'], agenda: ['view'] });
+  await setPerm({ pacientes: ['view'], planner: ['view'] });
   await page.evaluate(() => window.__ev("mnavRender()"));
   const mob = await page.evaluate(() => ({ grp: [...document.querySelectorAll('#mnavPanel .mnav-grp')].map((b) => b.textContent.trim()), direct: !!document.querySelector('#mnavPanel > button[data-mnav="pacientes"]') }));
   console.log('mobile menu: Pacientes shown directly, no Cadastros group?', mob.direct && !mob.grp.some((t) => /Cadastros/.test(t)));

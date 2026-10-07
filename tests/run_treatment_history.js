@@ -81,7 +81,7 @@ const path = require('path');
   console.log('therapist per specialty still editable?', !(await page.$eval('#specRowsHost .spec-prof', (s) => s.disabled)));
   await page.$eval('#pPac', (i) => { i.disabled = false; i.value = '99'; });
   await page.click('#trSave'); await page.waitForTimeout(200);
-  console.log('saving with a changed quantity is refused?', !!(await page.$('#ovTreat')) && (await ev(`state.treatments.filter(function(t){ return t.id === "t1"; })[0].pacoteHoras`)) === undefined);
+  console.log('saving with a changed quantity is refused?', !!(await page.$('#ovTreat')) && (await ev(`state.treatments.filter(function(t){ return t.id === "t1"; })[0].sessoesMes`)) === undefined);
   await page.click('#trCancel');
   await ev(`openTreatmentModal(state.treatments.filter(function(t){ return t.id === "t2"; })[0])`);
   await page.waitForSelector('#ovTreat');

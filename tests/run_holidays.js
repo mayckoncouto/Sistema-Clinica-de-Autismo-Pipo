@@ -61,7 +61,7 @@ const path = require('path');
   const ag = await ev(`(function(){
     agdClient = function(){ return null; };
     AD.error = ""; AD.loaded = true; AD.rows = {}; AD.view = "semana"; AD.mode = "prof"; AD.date = new Date(2026, 11, 22);
-    document.getElementById("tab-agendadia").hidden = false;
+    document.getElementById("tab-agenda").hidden = false;
     agdRender();
     return {gray: document.querySelectorAll('#agdGrid td.agd-hol[data-d="2026-12-25"]').length, other: document.querySelectorAll('#agdGrid td.agd-hol[data-d="2026-12-23"]').length,
       head: (document.querySelector('#agdGrid .agd-hol-name') || {}).textContent};

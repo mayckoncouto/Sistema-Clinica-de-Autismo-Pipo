@@ -99,7 +99,7 @@ const path = require('path');
   const rebuildsWhileHidden = await page.evaluate(() => window.__hostInnerHTMLSets);
   console.log('no grid DOM work happened while Agenda tab was hidden?', rebuildsWhileHidden === 0, '(host.innerHTML sets: ' + rebuildsWhileHidden + ')');
 
-  await page.$eval('#mainTabs button[data-tab="agenda"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
+  await page.$eval('#mainTabs button[data-tab="planner"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(150);
   const cellAfterReturn = page.locator('table.sched[data-doc="seg-2"] td.slotcell[data-key="07:20|r1|r1-t1"]');
   const textAfterReturn = await cellAfterReturn.innerText();

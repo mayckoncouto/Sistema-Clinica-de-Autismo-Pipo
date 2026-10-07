@@ -92,7 +92,7 @@ const path = require('path');
   console.log('renaming the room renames the group cells?', !!g2 && g2.patient === 'Sala Azul Clara' && g2.roomRef === 'r2', JSON.stringify(g2));
 
   // 6) Desfazer continua funcionando com os códigos acrescentados na gravação.
-  await ev(`(function(){ state.tab = "agenda"; })()`);
+  await ev(`(function(){ state.tab = "planner"; })()`);
   await ev(`applyBookingChanges({"seg-1": {"09:20|r1|r1-t1": {patient: "Carla Laranja", note: ""}}}, {patientHoursOk: true, therapistOk: true, areaOk: true})`);
   await page.waitForTimeout(200);
   const withCode = await bk('seg-1', '09:20|r1|r1-t1');

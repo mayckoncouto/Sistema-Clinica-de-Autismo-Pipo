@@ -15,8 +15,8 @@
   var auth = window.pipoAuth;
   // actions: ações que fazem sentido na tela (as demais aparecem como "—").
   var MODULES = [
-    { key: "agendamentos", label: "Agenda", hint: "atendimentos por data" },
-    { key: "agenda", label: "Planner", hint: "grade de 4 semanas" },
+    { key: "agenda", label: "Agenda", hint: "atendimentos por data" },
+    { key: "planner", label: "Planner", hint: "grade de 4 semanas" },
     { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
     { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)" },
     { key: "plano_terapeutico", label: "Plano Terapêutico", hint: "ver: consultar; incluir: criar e revisar; editar: tudo. Profissional sem editar muda só situação/status nas especialidades dele" },
@@ -29,8 +29,8 @@
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, descontos e valor final", actions: ["view", "edit"] },
     // Colaboradores (Cadastros): todas as pessoas, inclusive os profissionais; valores com permissão exclusiva.
-    { key: "rh_funcionarios", label: "Colaboradores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)" },
-    { key: "rh_remuneracao", label: "Colaboradores – valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
+    { key: "colaboradores", label: "Colaboradores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)" },
+    { key: "colaboradores_valores", label: "Colaboradores – valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
     { key: "motivos_cancelamento", label: "Motivos de cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
     { key: "convenios", label: "Convênios", hint: "" },
     { key: "servicos", label: "Serviços", hint: "" },
@@ -154,10 +154,15 @@
   }
 
   /* ---------------- dados ---------------- */
+  var dbNew = true;
   function loadRoles() {
     return auth.client.from("roles").select("*").order("sort", { ascending: true }).then(function (r) {
       if (r.error) { toast("Não foi possível carregar os níveis: " + r.error.message, true); return; }
       // Níveis em ordem alfabética (lista de níveis e escolha do nível do usuário).
+      // Permissões sempre no formato novo na tela; dbNew = o banco já está no formato novo
+      // (atualização 2026-10-07e). Antes dela, grava convertendo para o formato antigo.
+      dbNew = (r.data || []).some(function (x) { return window.pipoPerms.isNew(x.permissions); });
+      (r.data || []).forEach(function (x) { x.permissions = window.pipoPerms.upgrade(x.permissions); });
       roles = (r.data || []).sort(function (a, b) { return (a.name || "").localeCompare(b.name || "", "pt-BR", { sensitivity: "base" }); });
       loaded.roles = true;
     });
@@ -283,7 +288,7 @@
   // conta sem colaborador (ex.: contador externo).
   function newUser() {
     if (!window.pipoOpenStaffNew) { openUserModal(null); return; }
-    var canStaff = auth.can("rh_funcionarios", "create");
+    var canStaff = auth.can("colaboradores", "create");
     if (!auth.isAdmin()) {
       if (canStaff) window.pipoOpenStaffNew();
       else toast("O usuário é criado no cadastro da pessoa (Cadastros → Colaboradores). Seu nível não tem permissão para incluir.", true);
@@ -447,6 +452,7 @@
   }
 
   /* ================= Tela: Níveis de permissão ================= */
+  function dbPerms(p) { return dbNew ? p : window.pipoPerms.downgrade(p); }
   function normalizePerms(p) {
     var out = {};
     p = p || {};
@@ -570,7 +576,7 @@
           '<button class="modal-close" id="rClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
           '<div class="field"><label for="rName">Nome do nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
-          roleGridHtml(role ? (role.permissions || {}) : { agendamentos: { view: true }, agenda: { view: true }, resumo: { view: true }, pacientes: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
+          roleGridHtml(role ? (role.permissions || {}) : { agenda: { view: true }, planner: { view: true }, resumo: { view: true }, pacientes: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
           statusPermsHtml(role ? (role.permissions || {}) : {}, locked) +
           reportPermsHtml(role ? (role.permissions || {}) : {}, locked) +
           (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +
@@ -638,9 +644,9 @@
       if (isNew) {
         var base = slugify(name), id = base, i = 2;
         while (roleById(id)) id = base + "-" + (i++);
-        q = auth.client.from("roles").insert({ id: id, name: name, permissions: readPerms() });
+        q = auth.client.from("roles").insert({ id: id, name: name, permissions: dbPerms(readPerms()) });
       } else {
-        q = auth.client.from("roles").update({ name: name, permissions: readPerms() }).eq("id", role.id);
+        q = auth.client.from("roles").update({ name: name, permissions: dbPerms(readPerms()) }).eq("id", role.id);
       }
       q.then(function (r) {
         if (r.error) {
@@ -704,7 +710,7 @@
     var all = PROF_STAFF || (window.pipoProfessionals ? window.pipoProfessionals() : []).map(function (p) { return { prof: p, staffId: "", email: "" }; });
     return all.filter(function (x) {
       return !byProf[x.prof.id] && !(x.staffId && byStaff[x.staffId]) && !(x.email && byMail[x.email]);
-    }).sort(function (a, b) { return (a.prof.name || "").localeCompare(b.prof.name || "", "pt-BR"); });
+    }).sort(function (a, b) { return (a.prof.nome || a.prof.name || "").localeCompare(b.prof.nome || b.prof.name || "", "pt-BR"); });
   }
   function emailPart(s) { return normText(s).replace(/[^a-z0-9]/g, ""); }
   function suggestEmails(list) {
@@ -744,7 +750,7 @@
           '<table class="adm-table"><thead><tr><th style="width:36px"></th><th>Profissional</th><th>Usuário (e-mail)</th><th style="width:90px">Situação</th></tr></thead><tbody>' +
             rows.map(function (r, i) {
               return '<tr data-i="' + i + '"><td><input type="checkbox" class="bk-on" checked aria-label="Criar acesso"></td>' +
-                '<td class="u-name">' + esc(r.prof.name) + "</td>" +
+                '<td class="u-name">' + esc(r.prof.nome || r.prof.name) + "</td>" +
                 '<td><input type="email" class="bk-email" value="' + esc(r.email) + '" style="width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font:inherit;font-size:12.5px"></td>' +
                 '<td class="bk-status pt-muted">—</td></tr>';
             }).join("") +
@@ -784,7 +790,7 @@
           var email = tr.querySelector(".bk-email").value.trim().toLowerCase();
           var st = tr.querySelector(".bk-status");
           st.textContent = "criando…";
-          var body = { action: "create", email: email, password: pass, full_name: r.prof.name, role_id: "profissional", professional_id: r.prof.id };
+          var body = { action: "create", email: email, password: pass, full_name: r.prof.nome || r.prof.name, role_id: "profissional", professional_id: r.prof.id };
           if (r.staffId) body.staff_id = r.staffId;
           return adminApi(body)
             .then(function () { ok++; tr.setAttribute("data-done", "1"); st.innerHTML = '<span class="u-badge ok">Criado</span>'; tr.querySelector(".bk-on").disabled = true; })

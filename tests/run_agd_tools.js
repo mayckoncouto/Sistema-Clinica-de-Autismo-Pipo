@@ -57,7 +57,7 @@ const path = require('path');
     agdClient = function(){ return fake; };
     AD.channel = {}; AD.error = ""; AD.loaded = true; AD.rows = {}; AD.view = "semana"; AD.mode = "prof"; AD.sel = "ana-terapeuta";
     AD.date = new Date(2030, 0, 7);
-    document.querySelectorAll("#mainTabs button[data-tab]").forEach(function(b){ if (b.getAttribute("data-tab") === "agendadia") b.click(); });
+    document.querySelectorAll("#mainTabs button[data-tab]").forEach(function(b){ if (b.getAttribute("data-tab") === "agenda") b.click(); });
     function a(id, date, time, prof, patient, extra){ db.appointments.push(Object.assign({id: id, date: date, time: time, professional_id: prof, room_id: "r1", patient: patient, note: "", blocked: false, service: "sessao", status: null, source: null}, extra || {})); }
     a("a1", "2030-01-07", "08:00", "ana-terapeuta", "Paciente Um");
     a("a2", "2030-01-07", "08:40", "ana-terapeuta", "Bruno Verde", {status: "finalizado"});

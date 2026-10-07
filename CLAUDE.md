@@ -2440,4 +2440,30 @@ homônimos no Planner (2638) e na Agenda (141), 15 profissionais todos com colab
   situação pelo atendimento). Códigos `prof-…`/`user-…`/`func-…` dos colaboradores ficaram
   (internos, ligados a usuários e remuneração; trocar não traz ganho). Testes em `run_staff.js`.
 - Produção (2026-10-07): `2026-10-07d` rodada (conferência 0/0).
-- Próxima: 4) renomear nomes internos.
+- **Etapa 4 (feita, 2026-10-07): nomes internos novos** (o usuário escolheu os 4 grupos).
+  **Daqui em diante valem os nomes NOVOS; as seções antigas deste arquivo usam os antigos:**
+  | antigo | novo |
+  |---|---|
+  | aba `agenda` (Planner), `#tab-agenda`, permissão `agenda` | aba/seção/permissão `planner` (`#tab-planner`) |
+  | aba `agendadia` (Agenda), `#tab-agendadia`, permissão `agendamentos` | aba/seção/permissão `agenda` (`#tab-agenda`) |
+  | aba `relatorio` (Resumo), `#tab-relatorio` | `resumo` (`#tab-resumo`; permissão já era `resumo`) |
+  | permissão `rh_funcionarios` / `rh_remuneracao` | `colaboradores` / `colaboradores_valores` |
+  | aba `funcionarios` / `tiposfunc` | `colaboradores` / `tiposcolab` |
+  | tratamento `pacoteHoras` / `despesas` (e coluna `treatment_finance.despesas`) | `sessoesMes` / `descontos` |
+  | profissional (`config/professionals`) `name` | `nome` |
+  Continuam iguais: `SYS_RULES` (`pl_*`/`ag_*`, grupos `planner`/`agenda`), `source: "planner"`,
+  tópicos da Ajuda, chaves `agendaPipo:*`, prefixo `agd`, nomes de funções (`renderRelatorioTab`…),
+  tabelas `staff`/`staff_pay`, `config/staff_types`, `config/skill_areas`, `config/goal_bank`,
+  sala/serviço/especialidade com `name`.
+  - Compatibilidade (o app funciona antes E depois do SQL): `window.pipoPerms` em
+    `js/pipo-supabase.js` (`permsUpgrade`: nível sem a chave `planner` = formato antigo,
+    convertido ao ler em `can`/`canDefault`; `js/usuarios.js` grava convertendo de volta
+    enquanto `dbNew` for falso); `trNormLegacy` (tratamentos e pacientes ao carregar);
+    `TR.finCol` + `finDbRow` (coluna `descontos` ou `despesas`); `profNorm` (ao carregar e em
+    `writeProfessionals`: grava `nome` e deixa `.name` só como leitura não enumerável) e
+    `profNome(p)`; `navOldHash` (endereços `#agendadia`, `#relatorio`, `#funcionarios`,
+    `#tiposfunc`); `api/admin-backup.js` aceita `despesas` de cópias antigas.
+  - Migração `supabase/2026-10-07e-nomes-internos.sql` (níveis, `module_for_path`,
+    `documents_enforce`, `agenda_scope_professional`, `set_appointment_status`, políticas de
+    `appointments`/`staff`/`staff_pay`, `sync_professional_user_names` e
+    `profiles_professional_name` lendo `nome`, dados e coluna). Teste `tests/run_nomes.js`.

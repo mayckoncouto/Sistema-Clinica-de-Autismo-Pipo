@@ -66,7 +66,7 @@ const path = require('path');
     var P = state.patientsRaw.slice(0, 4);
     state.treatments = [
       {id: "tr-" + P[0].id, patientId: P[0].id, inicio: "2026-01-10", status: "ativo", tipo: "novo", aba: "Não", specHours: [{specId: "fono", hours: 4, profId: ""}], horarios: {seg: {ativo: true}}},
-      {id: "tx-1", patientId: P[1].id, inicio: "2025-03-01", status: "ativo", tipo: "novo", aba: "Sim", plano: "Velho", pacoteHoras: 8}
+      {id: "tx-1", patientId: P[1].id, inicio: "2025-03-01", status: "ativo", tipo: "novo", aba: "Sim", plano: "Velho", sessoesMes: 8}
     ];
     P.forEach(function(p){ delete p.suporte; delete p.cid; });
     rebuildPatients();
@@ -88,7 +88,7 @@ const path = require('path');
       return {unknown: R.unknown, st: st, notes: plan.notes.join(" | "), msg: msg,
         p0: L.map(function(t){ return [t.inicio, t.status, t.tipo, t.statusEm || "", (t.specHours || []).length, t.aba, t.id === "tr-" + P[0].id ? "mig" : ""].join("/"); }),
         p0val: trMoney(L[2]), p0sup: rawPatient(P[0].id).suporte,
-        p1: [t1.id, t1.plano, t1.pacoteHoras, t1.aba, t1.convenioId, trFinal(t1), (t1.historico || []).slice(-1)[0].acao], p1cid: rawPatient(P[1].id).cid,
+        p1: [t1.id, t1.plano, t1.sessoesMes, t1.aba, t1.convenioId, trFinal(t1), (t1.historico || []).slice(-1)[0].acao], p1cid: rawPatient(P[1].id).cid,
         p2: [t2.status, !!t2.motivoPendente, t2.statusEm, t2.obs],
         again: again};
     });

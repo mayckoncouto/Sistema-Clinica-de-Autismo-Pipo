@@ -40,7 +40,7 @@ const path = require('path');
   const ag = await ev(`(function(){
     agdClient = function(){ return null; };
     AD.error = ""; AD.loaded = true; AD.rows = {}; AD.view = "semana"; AD.mode = "prof"; AD.sel = "ana-terapeuta"; AD.date = new Date(2030, 0, 7);
-    document.getElementById("tab-agendadia").hidden = false;
+    document.getElementById("tab-agenda").hidden = false;
     agdRender();
     var lunch = document.querySelector('#agdGrid tr.agd-lunch:not(.agd-endrow) td.agd-tcol');
     var end = document.querySelector('#agdGrid tr.agd-endrow');

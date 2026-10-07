@@ -21,14 +21,14 @@ const path = require('path');
   const r = await ev(`(function(){
     state.treatments = [
       // a: ativo desde jan (vale fev e mar)
-      {id: "a", patientId: "ana-azul", inicio: "2026-01-10", tipo: "novo", status: "ativo", valor: 1000, despesas: 100},
+      {id: "a", patientId: "ana-azul", inicio: "2026-01-10", tipo: "novo", status: "ativo", valor: 1000, descontos: 100},
       // b: novo em março
-      {id: "b", patientId: "bruno-verde", inicio: "2026-03-05", tipo: "novo", status: "ativo", valor: 500, despesas: 0},
+      {id: "b", patientId: "bruno-verde", inicio: "2026-03-05", tipo: "novo", status: "ativo", valor: 500, descontos: 0},
       // c: desde jan, renegociado em 15/03 por d (c vale até 14/03)
-      {id: "c", patientId: "carla-laranja", inicio: "2026-01-02", tipo: "novo", status: "renegociado", statusEm: "2026-03-15", valor: 300, despesas: 0},
-      {id: "d", patientId: "carla-laranja", inicio: "2026-03-15", tipo: "renegociado", status: "ativo", valor: 400, despesas: 0},
+      {id: "c", patientId: "carla-laranja", inicio: "2026-01-02", tipo: "novo", status: "renegociado", statusEm: "2026-03-15", valor: 300, descontos: 0},
+      {id: "d", patientId: "carla-laranja", inicio: "2026-03-15", tipo: "renegociado", status: "ativo", valor: 400, descontos: 0},
       // e: cancelado em 20/02 (vale em fev, não em mar)
-      {id: "e", patientId: "duda-vermelho", inicio: "2026-01-05", tipo: "novo", status: "cancelado", statusEm: "2026-02-20", valor: 200, despesas: 0, motivoCancel: "financeiro"}
+      {id: "e", patientId: "duda-vermelho", inicio: "2026-01-05", tipo: "novo", status: "cancelado", statusEm: "2026-02-20", valor: 200, descontos: 0, motivoCancel: "financeiro"}
     ];
     var m = finMonth("2026-03"), p = finMonth("2026-02");
     var rep = RP_BUILDERS.financeiro([], {from: "2026-02-01", to: "2026-03-31"});

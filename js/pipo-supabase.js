@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var MODULES = ["agendamentos", "agenda", "resumo", "pacientes", "saude_paciente", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "cbo", "conselhos", "feriados", "campos_paciente", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "objetivos", "escalas", "habilidades", "rh_funcionarios", "rh_remuneracao"];
+  var MODULES = ["agenda", "planner", "resumo", "pacientes", "saude_paciente", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "cbo", "conselhos", "feriados", "campos_paciente", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "objetivos", "escalas", "habilidades", "colaboradores", "colaboradores_valores"];
   var ACTIONS = ["view", "create", "edit", "delete"];
 
   var client = null;
@@ -156,6 +156,34 @@
   }
 
   /* ---------------- permissões ---------------- */
+  // Nomes das permissões (2026-10-07): planner (antes "agenda" = Planner), agenda (antes
+  // "agendamentos"), colaboradores (antes "rh_funcionarios"), colaboradores_valores (antes
+  // "rh_remuneracao"). Nível com a chave "planner" já está no formato novo; sem ela, é do
+  // formato antigo (antes da atualização 2026-10-07e do banco) e é convertido ao ler.
+  var PERM_OLD = {planner: "agenda", agenda: "agendamentos", colaboradores: "rh_funcionarios", colaboradores_valores: "rh_remuneracao"};
+  function permsIsNew(p) { return !!p && Object.prototype.hasOwnProperty.call(p, "planner"); }
+  var _pu = {src: null, out: null};
+  function permsUpgrade(p) {
+    p = p || {};
+    if (_pu.src === p) return _pu.out;
+    var o = {};
+    Object.keys(p).forEach(function (k) { o[k] = p[k]; });
+    if (!permsIsNew(p)) {
+      Object.keys(PERM_OLD).forEach(function (k) { delete o[k]; });
+      Object.keys(PERM_OLD).forEach(function (k) { if (p[PERM_OLD[k]] !== undefined) o[k] = p[PERM_OLD[k]]; });
+    }
+    delete o.agendamentos; delete o.rh_funcionarios; delete o.rh_remuneracao;
+    _pu = {src: p, out: o};
+    return o;
+  }
+  // Para gravar num banco que ainda está no formato antigo.
+  function permsDowngrade(p) {
+    var o = {};
+    Object.keys(p || {}).forEach(function (k) { if (!PERM_OLD[k]) o[k] = p[k]; });
+    Object.keys(PERM_OLD).forEach(function (k) { if (p && p[k] !== undefined) o[PERM_OLD[k]] = p[k]; });
+    return o;
+  }
+  window.pipoPerms = {upgrade: permsUpgrade, downgrade: permsDowngrade, isNew: permsIsNew};
   // As permissões vêm do NÍVEL do usuário (profile.role, tabela roles).
   function isAdmin() {
     return !!(profile && profile.active && profile.role && profile.role.is_admin);
@@ -163,7 +191,7 @@
   function can(module, action) {
     if (!profile || !profile.active || !profile.role) return false;
     if (profile.role.is_admin) return true;
-    var p = profile.role.permissions || {};
+    var p = permsUpgrade(profile.role.permissions);
     return !!(p[module] && p[module][action]);
   }
   // Permissão com valor padrão quando o nível ainda não tem o item gravado
@@ -171,7 +199,7 @@
   function canDefault(module, action, dflt) {
     if (!profile || !profile.active || !profile.role) return false;
     if (profile.role.is_admin) return true;
-    var p = profile.role.permissions || {};
+    var p = permsUpgrade(profile.role.permissions);
     return p[module] ? !!p[module][action] : !!dflt;
   }
   function canWriteAnything() {

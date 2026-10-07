@@ -79,7 +79,7 @@ var TABLES = {
   },
   treatment_finance: {
     key: "treatment_id",
-    cols: ["treatment_id", "valor", "despesas", "updated_at", "updated_by"],
+    cols: ["treatment_id", "valor", "descontos", "updated_at", "updated_by"],
     users: ["updated_by"]
   },
   convenio_finance: {
@@ -143,6 +143,8 @@ module.exports = async function handler(req, res) {
     var clean = [];
     rows.forEach(function (r) {
       if (!r || typeof r !== "object" || r[cfg.key] == null || r[cfg.key] === "") return;
+      // Cópias anteriores a 2026-10-07: coluna "despesas" virou "descontos".
+      if (body.table === "treatment_finance" && r.descontos === undefined && r.despesas !== undefined) r = Object.assign({}, r, { descontos: r.despesas });
       var o = {};
       cfg.cols.forEach(function (c) { if (Object.prototype.hasOwnProperty.call(r, c)) o[c] = r[c]; });
       cfg.users.forEach(function (c) { if (o[c] && !known[o[c]]) o[c] = null; });

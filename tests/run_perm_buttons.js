@@ -33,11 +33,11 @@ const path = require('path');
   await page.click('#pCancel');
 
   // Grades: sem incluir no Planner, o "+" das células some.
-  await setPerm({ agenda: ['view'], agendamentos: ['view', 'create'] });
+  await setPerm({ planner: ['view'], agenda: ['view', 'create'] });
   await ev('permToolClasses()');
-  console.log('Planner without create hides the "+" of empty cells?', await page.$eval('#tab-agenda', (s) => s.classList.contains('perm-no-create')) &&
-    !(await page.$eval('#tab-agenda .empty-plus', (x) => x.offsetParent !== null)));
-  console.log('Agenda without delete gets the no-delete class?', await page.$eval('#tab-agendadia', (s) => s.classList.contains('perm-no-delete') && !s.classList.contains('perm-no-create')));
+  console.log('Planner without create hides the "+" of empty cells?', await page.$eval('#tab-planner', (s) => s.classList.contains('perm-no-create')) &&
+    !(await page.$eval('#tab-planner .empty-plus', (x) => x.offsetParent !== null)));
+  console.log('Agenda without delete gets the no-delete class?', await page.$eval('#tab-agenda', (s) => s.classList.contains('perm-no-delete') && !s.classList.contains('perm-no-create')));
 
   // Acesso total: paciente em uso (tem tratamento) → Inativar.
   await page.evaluate(() => { delete window.pipoAuth; });

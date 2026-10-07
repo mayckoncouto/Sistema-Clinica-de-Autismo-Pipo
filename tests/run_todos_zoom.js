@@ -108,7 +108,7 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(100);
   console.log('zoom control hidden on Pacientes tab?', await page.locator('#zoomCtrl').isHidden());
-  await page.$eval('#mainTabs button[data-tab="agenda"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
+  await page.$eval('#mainTabs button[data-tab="planner"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
 
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });

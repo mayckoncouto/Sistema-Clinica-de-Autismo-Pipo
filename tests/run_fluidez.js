@@ -23,7 +23,7 @@ const path = require('path');
   const patch = await ev(`(function(){
     agdClient = function(){ return null; };
     AD.error = ""; AD.loaded = true; AD.rows = {}; AD.view = "semana"; AD.mode = "prof"; AD.sel = "ana-terapeuta"; AD.date = new Date(2030, 0, 7);
-    document.getElementById("tab-agendadia").hidden = false;
+    document.getElementById("tab-agenda").hidden = false;
     agdRender();
     var tds = document.querySelectorAll('#agdGrid td.agd-slot'); tds.forEach(function(td){ td.__tag = 1; });
     var table = document.querySelector('#agdGrid table');
@@ -38,10 +38,10 @@ const path = require('path');
   // --- Agenda: várias mudanças em tempo real = um redesenho só
   const burst = await ev(`(async function(){
     var n = 0, orig = agdRender; agdRender = function(){ n++; return orig.apply(this, arguments); };
-    state.tab = "agendadia";
+    state.tab = "agenda";
     for (var k = 0; k < 200; k++) agdRenderIfVisible();
     await new Promise(function(r){ setTimeout(r, 400); });
-    agdRender = orig; state.tab = "agenda";
+    agdRender = orig; state.tab = "planner";
     return n;
   })()`);
   check('Agenda: 200 realtime changes = 1 redraw?', burst === 1, burst);
@@ -66,7 +66,7 @@ const path = require('path');
 
   // --- Planner Todos×Todos: cada tabela só é desenhada quando chega perto da tela
   await page.evaluate(() => { location.hash = '#planner'; });
-  await ev(`(function(){ var b = document.querySelector('#mainTabs button[data-tab="agenda"]'); b.click(); })()`);
+  await ev(`(function(){ var b = document.querySelector('#mainTabs button[data-tab="planner"]'); b.click(); })()`);
   await page.waitForTimeout(400);
   await page.click('#daySeg button[data-day="todos"]'); await page.click('#weekSeg button[data-week="todos"]');
   await page.waitForTimeout(600);
@@ -93,10 +93,10 @@ const path = require('path');
   check('one day × one week: no lazy wrapper?', single === 0, single);
 
   // --- Tela cheia
-  await page.click('#tab-agenda [data-full-toggle]');
+  await page.click('#tab-planner [data-full-toggle]');
   await page.waitForTimeout(200);
   const fs1 = await ev(`(function(){ var vis = function(sel){ var e = document.querySelector(sel); return !!(e && e.offsetParent !== null); };
-    return {full: document.body.classList.contains("grid-full"), top: vis(".topbar"), bar: vis("#tab-agenda .controls"), legend: vis("#tab-agenda .color-legend"), grid: vis("#gridHost table.sched"), exit: document.getElementById("fullExit").getBoundingClientRect().width > 0}; })()`);
+    return {full: document.body.classList.contains("grid-full"), top: vis(".topbar"), bar: vis("#tab-planner .controls"), legend: vis("#tab-planner .color-legend"), grid: vis("#gridHost table.sched"), exit: document.getElementById("fullExit").getBoundingClientRect().width > 0}; })()`);
   check('full screen: only the grid + exit button?', fs1.full && !fs1.top && !fs1.bar && !fs1.legend && fs1.grid && fs1.exit, JSON.stringify(fs1));
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);

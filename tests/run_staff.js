@@ -21,8 +21,8 @@ const path = require('path');
 
   // Menu RH e lista: os profissionais já cadastrados aparecem como tipo Profissional.
   const cad = await ev(`(function(){ renderNavMenus(); return Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav") + "=" + b.textContent; }); })()`);
-  console.log('Profissionais left Cadastros; Colaboradores and Tipos de colaborador are there; no RH menu?', !cad.some((x) => x.startsWith('profissionais=')) && cad.indexOf('funcionarios=Colaboradores') !== -1 && cad.indexOf('tiposfunc=Tipos de colaborador') !== -1 && !(await page.$('#rhBtn')), JSON.stringify(cad));
-  await page.$eval('#mainTabs button[data-tab=funcionarios]', (b) => b.click()); await page.waitForTimeout(300);
+  console.log('Profissionais left Cadastros; Colaboradores and Tipos de colaborador are there; no RH menu?', !cad.some((x) => x.startsWith('profissionais=')) && cad.indexOf('colaboradores=Colaboradores') !== -1 && cad.indexOf('tiposcolab=Tipos de colaborador') !== -1 && !(await page.$('#rhBtn')), JSON.stringify(cad));
+  await page.$eval('#mainTabs button[data-tab=colaboradores]', (b) => b.click()); await page.waitForTimeout(300);
   const nProf = await ev('state.professionals.filter(function(p){ return !p.inativo; }).length');
   const rows0 = await page.$$eval('#staffListHost tbody tr', (r) => r.map((x) => x.cells[1].textContent));
   console.log('existing professionals listed with type Profissional?', rows0.length === nProf && rows0.every((t) => t === 'Profissional'), rows0.length, nProf);
@@ -102,7 +102,7 @@ const path = require('path');
   await page.click('#profCancel');
 
   // Desligamento até hoje: fica inativo (pessoa e profissional).
-  await page.$eval('#mainTabs button[data-tab=funcionarios]', (b) => b.click()); await page.waitForTimeout(200);
+  await page.$eval('#mainTabs button[data-tab=colaboradores]', (b) => b.click()); await page.waitForTimeout(200);
   await page.click('#staffListHost tbody tr'); await page.waitForSelector('#ovProf');
   const today = await ev('staffTodayIso()');
   await setv('#sf-deslig', today);
@@ -114,14 +114,14 @@ const path = require('path');
   console.log('dismissed person leaves the list (search "rita", Inativos off)?', listed === 0, listed);
 
   // Tipos de funcionário: Profissional travado.
-  await page.$eval('#mainTabs button[data-tab=tiposfunc]', (b) => b.click()); await page.waitForTimeout(200);
-  const types = await page.$$eval('#reg-tiposfunc-host tbody tr', (r) => r.length);
+  await page.$eval('#mainTabs button[data-tab=tiposcolab]', (b) => b.click()); await page.waitForTimeout(200);
+  const types = await page.$$eval('#reg-tiposcolab-host tbody tr', (r) => r.length);
   console.log('Tipos de funcionário lists the 10 default types?', types === 10, types);
 
   // Funcionário com usuário/atendimentos: Excluir vira Inativar (mesma regra dos profissionais); inativo ganha Reativar.
-  await page.$eval('#mainTabs button[data-tab=funcionarios]', (b) => b.click()); await page.waitForTimeout(200);
+  await page.$eval('#mainTabs button[data-tab=colaboradores]', (b) => b.click()); await page.waitForTimeout(200);
   await page.$eval('#staffSearch', (e) => { e.value = ''; e.dispatchEvent(new Event('input', { bubbles: true })); });
-  await page.click('#tab-funcionarios .inact-toggle input');
+  await page.click('#tab-colaboradores .inact-toggle input');
   await page.$eval('#staffSearch', (e) => { e.value = 'rita'; e.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.click('#staffListHost tbody tr'); await page.waitForSelector('#ovProf'); await page.waitForTimeout(300);
   const react = await page.$('#profDeleteReactivate');

@@ -47,7 +47,7 @@ const path = require('path');
   await page.waitForTimeout(150);
   console.log('new professional appears in the list?', (await page.locator('#profList').innerText()).includes('Nova Terapeuta'));
   const profStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['config/professionals'])));
-  console.log('new professional persisted with specialtyId "fono"?', profStore.list.filter(p => p.name === 'Nova Terapeuta')[0].specialtyId === 'fono');
+  console.log('new professional persisted with specialtyId "fono"?', profStore.list.filter(p => p.nome === 'Nova Terapeuta' && p.name === undefined)[0].specialtyId === 'fono');
 
   // ---- TEST: room modal therapist rows are selects wired to the registry ----
   await page.$eval('#mainTabs button[data-tab="salas"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
@@ -64,7 +64,7 @@ const path = require('path');
 
   // ---- TEST: Relatório tab — four-row header (especialidade / total esp. /
   // profissional / total prof.) + the "Pacientes" mid-row + data rows ----
-  await page.$eval('#mainTabs button[data-tab="relatorio"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
+  await page.$eval('#mainTabs button[data-tab="resumo"]', (b) => b.click()); // aba aberta pelos menus (botão oculto)
   await page.waitForTimeout(200);
   const reportText = await page.locator('#reportHost').innerText();
   console.log('report shows "Coordenador" row?', reportText.includes('Coordenador'));
