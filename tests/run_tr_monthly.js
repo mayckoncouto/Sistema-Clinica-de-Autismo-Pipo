@@ -60,6 +60,47 @@ const path = require('path');
   const ref = await ev(`(function(){ var d = document.createElement("div"); d.className = "pat-count"; document.body.appendChild(d); var f = getComputedStyle(d).fontSize; d.remove(); return f; })()`);
   console.log('explanation uses the same text style as the hours note?', font === ref, font);
 
+  // Janela: Histórico recolhido, "Outras opções" no topo, valores em R$ depois de Convênio/Plano.
+  const win = await ev(`(function(){
+    var t = state.treatments[0]; t.valor = 1500; t.descontos = 100;
+    try { localStorage.removeItem("agendaPipo:trHistOpen"); } catch(e){}
+    openTreatmentModal(t);
+    var all = Array.from(document.querySelectorAll("#ovTreat input[id]")).map(function(e){ return e.id; });
+    var menu = Array.from(document.querySelectorAll("#trMoreMenu button")).map(function(b){ return b.textContent; });
+    return {histHidden: document.getElementById("trHistBody").hidden, menu: menu, inBody: !!document.querySelector("#ovTreat .modal-body #trOpenPlan"),
+      order: all.indexOf("pPlano") < all.indexOf("trVal") && all.indexOf("trVal") < all.indexOf("pPac"), val: document.getElementById("trVal").value, fin: document.getElementById("trFinal").value};
+  })()`);
+  console.log('Histórico starts hidden?', win.histHidden);
+  console.log('"Outras opções" has patient and plan, plan link left the body?', win.menu.join('|') === 'Cadastro do paciente|Abrir plano terapêutico' && !win.inBody, win.menu);
+  console.log('Valor/Descontos/Valor final after Convênio/Plano, in R$?', win.order && /^R\$ 1\.500,00$/.test(win.val) && /^R\$ 1\.400,00$/.test(win.fin), win.val, win.fin);
+  await page.click('#trHistToggle');
+  console.log('arrow opens the Histórico?', !(await page.$eval('#trHistBody', (e) => e.hidden)));
+  await page.fill('#trDesp', '50'); await page.click('#trVal');
+  console.log('leaving a value field formats it in R$?', /^R\$ 50,00$/.test(await page.inputValue('#trDesp')));
+  await ev('document.getElementById("modalHost").innerHTML = ""');
+
+  // Lista: Cancelados/Renegociados ocultos até marcar; "Sem vencimento".
+  const list = await ev(`(function(){
+    state.treatments = [
+      {id: "a1", patientId: "ana-azul", inicio: "2026-01-01", status: "ativo", vencPor: "sem"},
+      {id: "c1", patientId: "bruno-verde", inicio: "2025-01-01", status: "cancelado", motivoCancel: "financeiro", statusEm: "2025-06-01"},
+      {id: "r1", patientId: "ana-azul", inicio: "2025-01-01", status: "renegociado", statusEm: "2025-12-31"}];
+    rebuildPatients();
+    document.querySelectorAll("#mainTabs button[data-tab=tratamentos]")[0].click();
+    renderTreatmentsTab();
+    var n0 = document.querySelectorAll("#trHost tbody tr").length, txt = document.getElementById("trHost").textContent;
+    document.getElementById("trShowCanc").checked = true; renderTreatmentsTab();
+    var n1 = document.querySelectorAll("#trHost tbody tr").length;
+    document.getElementById("trShowReneg").checked = true; renderTreatmentsTab();
+    var n2 = document.querySelectorAll("#trHost tbody tr").length;
+    document.getElementById("trShowCanc").checked = false; document.getElementById("trShowReneg").checked = false;
+    var f = document.getElementById("trFilter"); f.value = "cancelado"; renderTreatmentsTab();
+    var n3 = document.querySelectorAll("#trHost tbody tr").length; f.value = ""; renderTreatmentsTab();
+    return [n0, n1, n2, n3, /Sem vencimento/.test(txt)];
+  })()`);
+  console.log('cancelled/renegotiated hidden until checked (status filter still finds them)?', JSON.stringify(list.slice(0, 4)) === '[1,2,3,1]', JSON.stringify(list));
+  console.log('Vencimento shows "Sem vencimento"?', list[4]);
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

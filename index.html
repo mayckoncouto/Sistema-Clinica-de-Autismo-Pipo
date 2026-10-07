@@ -303,7 +303,6 @@ div.ag-obj-head{cursor:default}
 .pl-due.vencendo{color:#8a5a00;background:#fff3d6;border:1px solid #f0d08a}
 .pl-due.vencido{color:#a42d27;background:#fde7e5;border:1px solid #f2b6b1}
 .pl-rev-chip{padding-top:8px}
-.tr-plan-link{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0}
 .sf-compl{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}.sf-compl-row{display:flex;gap:6px;align-items:center}.sf-compl-row>*:first-child{flex:1;min-width:0}
 .sc-levels{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
 .sc-level{display:flex;align-items:center;gap:8px}.sc-level input{flex:1;min-width:0}
@@ -1860,6 +1859,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
         <option value="sem">Pacientes sem tratamento ativo</option>
       </select>
       <span class="pat-count" id="trCount"></span>
+      <label class="inact-toggle" title="Mostrar os tratamentos cancelados"><input type="checkbox" id="trShowCanc"> Cancelados</label>
+      <label class="inact-toggle" title="Mostrar os tratamentos renegociados"><input type="checkbox" id="trShowReneg"> Renegociados</label>
       <span id="trMissing"></span>
       <span id="trDue"></span>
       <div class="spacer"></div>
@@ -6766,6 +6767,7 @@ function treatFieldsEditor(v, opts){
           '</div></div>' +
           '<div class="field"><label for="pPlano">Plano</label><input id="pPlano" type="text" value="'+esc(v.plano || "")+'"></div>' +
         '</div>' +
+        (opts && opts.afterConv || "") +
         '<div class="field-row">' +
           '<div class="field"><label for="pPac">Sessão/Mês</label><input id="pPac" type="text" value="'+esc(v.sessoesMes == null ? "" : v.sessoesMes)+'"></div>' +
           '<div class="field"><label for="pAba">ABA</label><select id="pAba">' +
@@ -15202,6 +15204,23 @@ function trMonthViewHtml(t, ym){
   if (v.other) html += '<div class="pat-count" style="margin-top:4px">' + v.other + ' atendimento(s) neste mês em especialidades ou serviços que não estão no tratamento.</div>';
   return html;
 }
+// Seção recolhível genérica da janela do tratamento (título com seta; começa fechada;
+// aberta/fechada lembrada neste navegador pela chave `key`).
+var TR_HIST_OPEN_KEY = "agendaPipo:trHistOpen";
+function trCollapseHtml(id, title, inner, key){
+  var open = false; try { open = localStorage.getItem(key) === "1"; } catch (e) {}
+  return '<button type="button" class="tr-sec tr-sec-toggle" id="' + id + 'Toggle" aria-expanded="' + open + '" aria-controls="' + id + 'Body">' +
+    esc(title) + '<span class="tr-sec-arrow" aria-hidden="true">▾</span></button>' +
+    '<div id="' + id + 'Body"' + (open ? '' : ' hidden') + '>' + inner + '</div>';
+}
+function trCollapseWire(id, key){
+  var tg = document.getElementById(id + "Toggle"), body = document.getElementById(id + "Body");
+  if (!tg || !body) return;
+  tg.addEventListener("click", function(){
+    var open = body.hidden; body.hidden = !open; tg.setAttribute("aria-expanded", String(open));
+    try { localStorage.setItem(key, open ? "1" : "0"); } catch (e) {}
+  });
+}
 // Seção recolhível com o seletor ‹ mês ›. Aberta/fechada fica lembrada neste navegador.
 var TR_MONTH_OPEN_KEY = "agendaPipo:trMonthOpen";
 function trMonthSectionHtml(){
@@ -15326,7 +15345,13 @@ function renderTreatmentsTab(){
     return;
   }
   var all = state.treatments.slice();
+  // Cancelados e Renegociados ficam ocultos, a não ser que a caixa esteja marcada ou o
+  // filtro de status peça exatamente por eles.
+  var showCanc = (document.getElementById("trShowCanc") || {}).checked || filter === "cancelado" || filter === "semmotivo";
+  var showReneg = (document.getElementById("trShowReneg") || {}).checked || filter === "renegociado";
   var shown = all.filter(function(t){
+    if (t.status === "cancelado" && !showCanc) return false;
+    if (t.status === "renegociado" && !showReneg) return false;
     if (filter === "abaixo"){ if (t.status !== "ativo") return false; var ms = trMonthSummary(t); if (!ms || !ms.below) return false; }
     else if (filter === "vencendo" || filter === "vencidos"){ var dd = trDue(t); if (!dd || dd.state !== (filter === "vencidos" ? "vencido" : "vencendo")) return false; }
     else if (filter === "semmotivo"){ if (t.status !== "cancelado" || t.motivoCancel) return false; }
@@ -15362,7 +15387,7 @@ function renderTreatmentsTab(){
     var fin = trFinal(t);
     var cells = [(function(){ var c = trColor(t); return c ? '<span class="pcolor-dot" style="background:' + c + '" title="Cor por idade/ABA"></span>' : ''; })() + esc(p ? p.nome : "(paciente excluído)"),
       esc(trBr(t.inicio)),
-      (trDueText(t) ? esc(trDueText(t)) : '<span class="pt-muted">—</span>') + trDueChip(t),
+      (trDueText(t) ? esc(trDueText(t)) : '<span class="pt-muted">Sem vencimento</span>') + trDueChip(t),
       esc(conv || "—"),
       trAbaCell(t),
       esc(trEndText(t)),
@@ -15398,6 +15423,7 @@ function wireTreatmentsTab(){
   if (!h) return;
   if (s) s.addEventListener("input", renderTreatmentsTab);
   if (f) f.addEventListener("change", renderTreatmentsTab);
+  ["trShowCanc", "trShowReneg"].forEach(function(id){ var c = document.getElementById(id); if (c) c.addEventListener("change", renderTreatmentsTab); });
   if (a) a.addEventListener("click", function(){ openTreatmentModal(null, {}); });
   function open(e){
     var tr = e.target.closest("tr[data-tr-id]");
@@ -15442,7 +15468,14 @@ function openTreatmentModal(t, opts){
     total: isNew ? "" : (t.totalSessoes || "")
   };
   // Observações logo depois das especialidades/serviços, antes do horário.
-  var ed = treatFieldsEditor(v, {beforeHours: '<div class="field"><label for="trObs">Observações</label><textarea id="trObs" rows="2" placeholder="Opcional">' + esc(d.obs) + '</textarea></div>'});
+  // Valor, Descontos e Valor final (R$) logo depois de Convênio/Plano.
+  var moneyRow = canSeeVal ? (
+    '<div class="field-row">' +
+      '<div class="field"><label for="trVal">Valor</label><input type="text" inputmode="decimal" id="trVal" placeholder="R$ 0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.valor === "" ? "" : fmtMoney(parseMoney(d.valor))) + '"></div>' +
+      '<div class="field"><label for="trDesp">Descontos</label><input type="text" inputmode="decimal" id="trDesp" placeholder="R$ 0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.descontos === "" ? "" : fmtMoney(parseMoney(d.descontos))) + '"></div>' +
+      '<div class="field"><label>Valor final</label><input type="text" id="trFinal" disabled></div>' +
+    '</div>') : '';
+  var ed = treatFieldsEditor(v, {afterConv: moneyRow, beforeHours: '<div class="field"><label for="trObs">Observações</label><textarea id="trObs" rows="2" placeholder="Opcional">' + esc(d.obs) + '</textarea></div>'});
   var wasCancelled = !isNew && t.status === "cancelado" && sysOn("tr_cancelado_def");
   var mots = activeOnly(cancelReasonsList(), isNew ? "" : t.motivoCancel);
   if (!isNew && t.motivoCancel && !mots.some(function(m){ return m.id === t.motivoCancel; })) mots.push({id: t.motivoCancel, name: t.motivoCancelNome || t.motivoCancel});
@@ -15461,7 +15494,13 @@ function openTreatmentModal(t, opts){
     '<div class="overlay" id="ovTreat"><div class="modal wide" style="max-width:720px">' +
       '<div class="modal-head"><div><h3>' + (opts.renegotiateFrom ? "Renegociar tratamento" : (isNew ? "Novo tratamento" : "Tratamento")) + '</h3>' +
         '<div class="modal-sub">Cada paciente tem só um tratamento Ativo. O tipo é automático: <b>Novo</b> quando não há tratamento anterior ou o anterior foi Cancelado; <b>Renegociado</b> quando o anterior foi Renegociado.</div></div>' +
-        '<div class="modal-head-acts">' + (can("pacientes", "view") ? '<button type="button" class="btn ghost" id="trOpenPat" data-ro-ok>Cadastro do paciente</button>' : '') +
+        '<div class="modal-head-acts">' +
+          ((can("pacientes", "view") || (!isNew && can("plano_terapeutico", "view"))) ?
+            '<div class="cad-wrap pl-tools-wrap tr-more-wrap"><button type="button" class="btn ghost" id="trMoreBtn" data-ro-ok aria-haspopup="menu" aria-expanded="false">Outras opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+            '<div class="cad-menu pl-tools-menu" id="trMoreMenu" role="menu" hidden>' +
+              (can("pacientes", "view") ? '<button type="button" class="btn ghost" id="trOpenPat" data-ro-ok>Cadastro do paciente</button>' : '') +
+              (!isNew && can("plano_terapeutico", "view") ? '<button type="button" class="btn ghost" id="trOpenPlan" data-ro-ok>Abrir plano terapêutico</button>' : '') +
+            '</div></div>' : '') +
         '<button class="modal-close" id="trClose" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' +
         '<div class="tr-cancel" id="trLockNote" hidden><p class="tr-cancel-note" id="trLockText"></p></div>' +
@@ -15481,12 +15520,6 @@ function openTreatmentModal(t, opts){
           '<div class="field"><label for="trDur">Duração (meses)</label><input type="number" min="1" max="60" step="1" inputmode="numeric" id="trDur" placeholder="Opcional" value="' + esc(d.duracao) + '"></div>' +
           '<div class="field"><label for="trVenc">Válido até <span id="trVencChip">' + (isNew ? '' : trDueChip(t)) + '</span></label><input type="date" id="trVenc" value="' + esc(d.validoAte) + '"></div>' +
         '</div>' +
-        (canSeeVal ? (
-        '<div class="field-row">' +
-          '<div class="field"><label for="trVal">Valor</label><input type="text" inputmode="decimal" id="trVal" placeholder="0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.valor === "" ? "" : parseMoney(d.valor).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
-          '<div class="field"><label for="trDesp">Descontos</label><input type="text" inputmode="decimal" id="trDesp" placeholder="0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.descontos === "" ? "" : parseMoney(d.descontos).toLocaleString("pt-BR", {minimumFractionDigits: 2})) + '"></div>' +
-          '<div class="field"><label>Valor final</label><input type="text" id="trFinal" disabled></div>' +
-        '</div>') : '') +
         '<div class="field-row">' +
           '<div class="field"><label for="trTipo">Tipo (automático)</label><select id="trTipo" disabled>' + opt(TR_TIPOS, d.tipo) + '</select></div>' +
           '<div class="field"><label for="trSt">Status</label><select id="trSt"' + (wasCancelled ? ' disabled' : '') + '>' + opt(TR_STATUS, d.status) + '</select></div>' +
@@ -15498,11 +15531,10 @@ function openTreatmentModal(t, opts){
           '</div>' +
           '<div class="field"><label for="trObsCancel">Observação do cancelamento <span id="trObsCancelReq" class="hint"></span></label><textarea id="trObsCancel" rows="2" placeholder="Detalhe o motivo, se necessário">' + esc(isNew ? "" : (t.obsCancel || "")) + '</textarea></div>' +
         '</div>' +
-        (!isNew && can("plano_terapeutico", "view") ? '<div class="tr-plan-link"><button type="button" class="btn ghost" id="trOpenPlan">Abrir plano terapêutico</button><span class="pl-hint">Objetivos por habilidade, resumo do quadro clínico e revisão.</span></div>' : '') +
         '<div class="tr-sec">Convênio, pacote e horário</div>' +
         ed.html +
         (isNew ? '' : trMonthSectionHtml()) +
-        (isNew ? '' : '<div class="tr-sec">Histórico</div>' + trHistHtml(t)) +
+        (isNew ? '' : trCollapseHtml("trHist", "Histórico", trHistHtml(t), TR_HIST_OPEN_KEY)) +
       '</div>' +
       '<div class="modal-foot">' +
         (canDel ? '<button class="btn danger" id="trDel">Excluir</button>' : '') +
@@ -15531,6 +15563,18 @@ function openTreatmentModal(t, opts){
       close(); openPatientModal(p);
     });
   }
+  (function(){
+    var mb = document.getElementById("trMoreBtn"), mm = document.getElementById("trMoreMenu");
+    if (!mb || !mm) return;
+    function setOpen(o){ mm.hidden = !o; mb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ placeToolsMenu(mb, mm); var f = mm.querySelector("button:not([hidden])"); if (f) f.focus(); } }
+    function syncMore(){ mb.hidden = !mm.querySelector("button:not([hidden])"); }
+    mb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(mm.hidden); });
+    mm.addEventListener("click", function(e){ if (e.target.closest("button")) setOpen(false); });
+    overlay.addEventListener("mousedown", function(e){ if (!e.target.closest(".tr-more-wrap")) setOpen(false); });
+    mm.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); setOpen(false); mb.focus(); } });
+    syncMore();
+    var ps = document.getElementById("trPat"); if (ps) ps.addEventListener("change", function(){ setTimeout(syncMore, 0); });
+  })();
   var trPlanBtn = document.getElementById("trOpenPlan");
   if (trPlanBtn) trPlanBtn.addEventListener("click", function(){ var pid = t.patientId; close(); planFromTreatment(pid); });
   function upFinal(){
@@ -15538,8 +15582,12 @@ function openTreatmentModal(t, opts){
   }
   if (canSeeVal){
     upFinal();
-    document.getElementById("trVal").addEventListener("input", upFinal);
-    document.getElementById("trDesp").addEventListener("input", upFinal);
+    ["trVal", "trDesp"].forEach(function(id){
+      var el = document.getElementById(id);
+      el.addEventListener("input", upFinal);
+      // Ao sair do campo, mostra no formato R$ 1.234,56 (vazio continua vazio).
+      el.addEventListener("blur", function(){ if (String(el.value).trim()) el.value = fmtMoney(parseMoney(el.value)); });
+    });
   }
   // Vencimento: duração (meses) + início calculam o "Válido até" (que pode ser ajustado à mão).
   function syncVenc(){
@@ -15558,6 +15606,7 @@ function openTreatmentModal(t, opts){
   document.getElementById("trVencPor").addEventListener("change", syncVencPor);
   syncVencPor();
   var trMonthSec = trMonthSectionWire(t);
+  trCollapseWire("trHist", TR_HIST_OPEN_KEY);
   if (!isNew && (trUsedCount(t) === null || !TR.appts) && agdClient()) trLoadLast(false).then(function(){
     if (!document.getElementById("ovTreat")) return;
     syncVencPor();
@@ -15965,14 +16014,16 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir). Campos obrigatórios: permissão <b>Pacientes – campos</b>. Mesclar cadastros: só Administrador."},
   {id: "tratamentos", group: "Cadastros", title: "Tratamentos", mod: "tratamentos", tab: "tratamentos",
-    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, ABA, especialidades/serviços com o terapeuta e o ABA de cada uma, horário de atendimento, vencimento e valores (Valor, Descontos e Valor final). O botão <b>Abrir plano terapêutico</b> leva aos objetivos do paciente.",
+    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, ABA, especialidades/serviços com o terapeuta e o ABA de cada uma, horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
-      "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: ele cria um novo tratamento copiando o atual, e o anterior vira Renegociado.",
+      "Valor, Descontos e Valor final ficam em <b>Convênio, pacote e horário</b>, logo depois de Convênio e Plano. Ao sair do campo, o valor aparece no formato R$ 1.234,56.",
+      "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: abre um novo tratamento copiando o atual. Ao clicar em Salvar, o atual vira Renegociado e o novo fica Ativo; cancelando a janela, nada muda.",
       "Para encerrar, mude o Status para <b>Cancelado</b> e escolha o motivo.",
-      "O botão <b>Cadastro do paciente</b>, no topo da janela, abre o cadastro do paciente do tratamento.",
-      "Na tela, use os filtros: status, Cancelados sem motivo, Vencendo, Vencidos, Abaixo do contratado e Pacientes sem tratamento ativo.",
+      "<b>Outras opções ▾</b>, no topo da janela: <b>Cadastro do paciente</b> abre o cadastro do paciente do tratamento; <b>Abrir plano terapêutico</b> abre o plano dele.",
+      "Na tela, os tratamentos <b>Cancelados</b> e <b>Renegociados</b> ficam ocultos: marque as caixas ao lado do contador para mostrá-los. A coluna Vencimento mostra \"Sem vencimento\" quando o tratamento não vence.",
+      "Use também os filtros: status, Cancelados sem motivo, Vencendo, Vencidos, Abaixo do contratado e Pacientes sem tratamento ativo.",
       "<b>Outras opções ▾</b>: <b>Exportar planilha</b> e <b>Importar planilha</b> (veja o tópico Planilhas)."
     ],
     rules: [
@@ -15987,7 +16038,7 @@ var HELP_TOPICS = [
       "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b> e a quantidade de sessões fica travada. Para mudar, use Renegociar.",
       "A <b>Data de término</b> pode ser digitada (não pode ser antes do início); o tratamento vale até ela nos relatórios e no contratado × realizado. Vazia, é automática: o último atendimento da Agenda no período do tratamento.",
       "Atendimentos de datas passadas usam o tratamento que valia <b>na data</b> deles (cor, regras e relatórios).",
-      "O histórico na janela mostra cada troca de status: quem, quando e o motivo."
+      "O <b>Histórico</b> na janela fica recolhido: clique no título (com a seta) para ver cada troca de status: quem, quando e o motivo."
     ],
     who: "Permissão <b>Tratamentos</b>. Os valores dependem de <b>Tratamentos – valores</b>."},
   {id: "planilhas", group: "Cadastros", title: "Planilhas: exportar e importar", mod: null,
@@ -16324,7 +16375,7 @@ var HELP_TOPICS = [
     purpose: "Plano de cada paciente: resumo do quadro clínico e objetivos por habilidade (cada objetivo com as especialidades que podem trabalhá-lo), com escala, situação, status e revisão a cada 6 meses.",
     steps: [
       "Abra <b>Prontuário ▾ → Plano Terapêutico</b>. A lista mostra um plano por paciente, com a coluna <b>Revisão</b> (aviso 30 dias antes e quando vence). O filtro mostra só os que vencem ou já venceram.",
-      "<b>+ Incluir</b>: escolha o paciente. Também dá para abrir pelo botão <b>Abrir plano terapêutico</b> na janela do Tratamento.",
+      "<b>+ Incluir</b>: escolha o paciente. Também dá para abrir pela janela do Tratamento: <b>Outras opções ▾ → Abrir plano terapêutico</b>.",
       "<b>Quadro clínico</b>: os dados da seção Saúde do cadastro do paciente aparecem sozinhos e sempre atualizados; escreva o <b>Resumo do quadro clínico</b> no campo abaixo deles.",
       "Cada <b>habilidade</b> é um quadro: use <b>Incluir habilidade…</b> no fim da lista e, dentro do quadro, <b>+ Inserir objetivo</b>. Preencha: Objetivo, Critério de sucesso, <b>Especialidades</b> (as que podem trabalhar o objetivo; as do tratamento aparecem primeiro e as outras como apoio), Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
       "O objetivo novo já vem com as <b>especialidades sugeridas</b> da habilidade (cadastro de Habilidades) que estão no tratamento.",

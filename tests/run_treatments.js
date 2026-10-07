@@ -12,6 +12,8 @@ const path = require('path');
   await page.goto('file://' + path.join(__dirname, 'page.html') + '#tratamentos');
   await page.waitForSelector('#trHost');
   await page.waitForTimeout(500);
+  // Cancelados e Renegociados ficam ocultos por padrão: os testes mostram todos.
+  await page.check('#trShowCanc'); await page.check('#trShowReneg');
 
   const store = () => page.evaluate(() => JSON.parse(JSON.stringify((window.__STORE__['treatments/all'] || {list: []}).list)));
   async function openNew(pid){

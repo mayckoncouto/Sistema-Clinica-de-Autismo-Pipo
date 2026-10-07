@@ -80,7 +80,7 @@ const path = require('path');
   check('one line changes alone?', ed.after === 'Sim,Não', ed.after);
 
   const btnVisible = await page.$eval('#trOpenPat', (b) => !b.hidden).catch(() => false);
-  if (btnVisible) await page.click('#trOpenPat');
+  if (btnVisible){ await page.click('#trMoreBtn'); await page.click('#trOpenPat'); }
   await page.waitForTimeout(300);
   const patOpen = !(await page.$('#ovTreat')) && !!(await page.$('#pNome'));
   check('"Cadastro do paciente" opens the patient window?', btnVisible && patOpen);

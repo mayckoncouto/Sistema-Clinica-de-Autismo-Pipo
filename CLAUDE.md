@@ -2514,3 +2514,17 @@ tarde pela grade da clínica), `routineConflictMsg`. Aviso: Planner `routineConf
 entre `agdPatientConfirmHours` e `agdTherapistCheck`. Regras do Sistema `pl_rotina`/`ag_rotina`
 (padrão Avisar). Ficha: seção "Rotina atual" em `patientFichaHtml`. Sem SQL. Teste
 `tests/run_rotina.js`.
+
+## Janela e lista de Tratamentos: ajustes (2026-10-07)
+Pedidos do usuário (Renegociar continua mudando só ao Salvar; "Pacote/Mês" foi descartado).
+- **Histórico** recolhível (começa fechado; `trCollapseHtml(id, título, html, chave)` /
+  `trCollapseWire`, ids `#trHistToggle`/`#trHistBody`, lembrado em `agendaPipo:trHistOpen`).
+- Topo da janela: **Outras opções ▾** (`#trMoreBtn`/`#trMoreMenu`, `.tr-more-wrap`, posição por
+  `placeToolsMenu`) com **Cadastro do paciente** (`#trOpenPat`) e **Abrir plano terapêutico**
+  (`#trOpenPlan`; saiu do corpo, `.tr-plan-link` não existe mais). Sem nenhum item, o botão some.
+- **Valor, Descontos, Valor final** (R$, `fmtMoney`; ao sair do campo formata) foram para
+  "Convênio, pacote e horário", logo depois de Convênio/Plano: `treatFieldsEditor(v, {afterConv})`.
+- Lista: caixas **Cancelados** (`#trShowCanc`) e **Renegociados** (`#trShowReneg`) ao lado do
+  contador; desmarcadas, esses tratamentos ficam ocultos (o filtro de status Cancelados /
+  Cancelados sem motivo / Renegociados mostra mesmo assim). Vencimento vazio = "Sem vencimento".
+- Testes no fim de `tests/run_tr_monthly.js`; `run_treatments.js` marca as duas caixas no início.
