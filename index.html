@@ -549,6 +549,14 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .tr-hist-when{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:6px}
 .tr-hist-obs{color:var(--muted);margin-top:2px;white-space:pre-wrap}
 .tr-sec{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
+button.tr-sec-toggle{display:flex;align-items:center;gap:6px;width:100%;background:none;border:0;border-top:1px solid var(--line);padding:12px 0 2px;font-family:inherit;cursor:pointer;text-align:left}
+button.tr-sec-toggle:hover{color:var(--ink)}
+.tr-sec-arrow{font-size:13px;transition:transform .15s}
+button.tr-sec-toggle[aria-expanded="false"] .tr-sec-arrow{transform:rotate(-90deg)}
+.tr-month-nav{display:flex;align-items:center;gap:8px;margin:8px 0 4px}
+.tr-month-nav .btn{padding:4px 10px}
+.tr-month-nav b{min-width:120px;text-align:center;font-size:13.5px}
+.tr-month td.tr-zero{color:#3d7a39;font-weight:700}
 .pt-treat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
 .pt-treat-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .pt-treat-txt{font-size:12.5px;color:var(--ink-2);line-height:1.5}
@@ -14821,7 +14829,8 @@ function trLoadLast(force){
   if (!force && TR.last && Date.now() - TR.lastAt < 120000) return Promise.resolve();
   TR.loading = true;
   var out = {}, done = {}, used = {}, appts = {}, page = 1000, today = trTodayIso();
-  var monthEnd = trMonthEnd(today);   // agendados até o fim do mês atual (Contratado × realizado)
+  // Atendimentos até o fim do PRÓXIMO mês (Contratado × realizado mostra também o mês seguinte).
+  var monthEnd = (function(){ var d = agdParse(today); return agdIso(new Date(d.getFullYear(), d.getMonth() + 2, 0)); })();
   function add(a, n){
     // Chave = código do paciente (patient_id; sem ele, o paciente com esse nome).
     var pp = findPatientRef(a), k = pp ? pp.id : ""; if (!k) return;
@@ -14973,39 +14982,113 @@ function trMonthCell(t){
   return '<span class="tr-mchip ' + cls + '" title="' + esc(s.m.label + (s.m.current ? " (mês atual: realizados + agendados)" : "")) + '">' + esc(txt) + '</span>' +
     (s.prev && s.prev.falta ? ' <span class="tr-mchip tr-falta" title="Mês anterior abaixo do contratado">' + esc(s.prev.label) + ' ↓</span>' : '');
 }
-// Avisos de onde está o problema numa linha (ou no total) do mês.
-function trMonthWarns(r, mo){
-  var w = [];
-  if (r.plan !== null && r.plan !== undefined && r.plan < r.contr) w.push(["Falta no Planner", "Planner com menos sessões que o contratado"]);
-  if (r.plan !== null && r.plan !== undefined && r.ag < r.plan && !mo.past) w.push(["Falta enviar para a Agenda", "Agenda do mês com menos atendimentos que o Planner"]);
-  if (r.semSt) w.push([r.semSt + " sem status", "Atendimentos que já passaram e ainda não têm status"]);
-  return w.map(function(x){ return '<span class="tr-warn" title="' + esc(x[1]) + '">' + esc(x[0]) + '</span>'; }).join("");
+// ---- Janela do tratamento: um mês por vez ----
+// Linhas = especialidades/serviços do tratamento (Especialidades/serviços e sessão).
+// Contratado = sessões/mês (sem proporção). Dif. Planner = Contratado − Planner.
+// Dif. Agenda = Contratado − Agenda + Justificado (falta justificada precisa ser reposta).
+// Positivo = falta; negativo = sobra.
+function trYmAdd(ym, n){ var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1 + n; var d = new Date(y, m, 1); return agdIso(d).slice(0, 7); }
+function trYmLabel(ym){ return TR_MONTHS[+ym.slice(5, 7) - 1] + "/" + ym.slice(0, 4); }
+// Meses que dá para ver: do início do tratamento até o mês seguinte ao atual (ou até o fim dele).
+function trMonthRange(t){
+  var cur = trTodayIso().slice(0, 7), last = trYmAdd(cur, 1);
+  var end = trPeriodEnd(t); if (end && end.slice(0, 7) < last) last = end.slice(0, 7);
+  var first = (t.inicio || trTodayIso()).slice(0, 7); if (last < first) last = first;
+  return {first: first, last: last, dflt: cur < first ? first : (cur > last ? last : cur)};
 }
-function trMonthlyHtml(t){
-  var r = trMonthly(t);
-  if (!r) return '<div class="hint">' + (agdClient() ? "Carregando atendimentos…" : "Disponível no sistema online.") + '</div>';
-  if (!r.months.length) return '<div class="hint">Sem meses no período do tratamento.</div>';
-  var curYm = trTodayIso().slice(0, 7);
-  function num(v){ return v === null || v === undefined ? '<span class="pt-muted">…</span>' : v; }
-  function cells(row, mo){
-    return '<td>' + row.contr + '</td><td>' + num(row.plan) + '</td><td>' + row.ag + '</td><td>' + row.real + '</td>' +
-      '<td>' + (row.just || '<span class="pt-muted">0</span>') + '</td>' +
-      '<td class="' + trDiffCls(row.diff) + '" title="' + esc(mo.current ? "Realizado + marcados até o fim do mês − contratado" : "Realizado − contratado") + '">' + (row.diff > 0 ? "+" : "") + row.diff + '</td>';
-  }
-  var html = '<div class="tr-month-wrap"><table class="tr-month"><thead><tr><th>Mês</th><th>Especialidade / serviço</th><th>Contratado</th><th>Planner</th><th>Agenda</th><th>Realizado</th><th title="Falta justificada">Falta just.</th><th>Diferença</th></tr></thead><tbody>';
-  r.months.slice().reverse().forEach(function(mo){
-    mo.past = mo.ym < curYm;
-    var rows = mo.rows.length ? mo.rows : [{specId: "", contr: 0, plan: null, ag: 0, real: 0, sched: 0, just: 0, semSt: 0, diff: 0}];
-    var span = rows.length + (rows.length > 1 ? 1 : 0);
-    rows.forEach(function(row, i){
-      var wn = trMonthWarns(row, mo);
-      html += '<tr' + (i === 0 ? ' class="tr-month-first"' : '') + '>' +
-        (i === 0 ? '<td rowspan="' + span + '"><b>' + esc(mo.label) + '</b>' + (mo.current ? '<div class="hint">em andamento</div>' : (mo.partial ? '<div class="hint">mês parcial</div>' : '')) + '</td>' : '') +
-        '<td>' + esc(row.specId ? specialtyName(row.specId) : "—") + (wn ? '<div class="tr-warns">' + wn + '</div>' : '') + '</td>' + cells(row, mo) + '</tr>';
-    });
-    if (rows.length > 1) html += '<tr class="tr-month-tot"><td>Total</td>' + cells(mo.tot, mo) + '</tr>';
+function trMonthView(t, ym){
+  var p = t && rawPatient(t.patientId); if (!p) return null;
+  var today = trTodayIso(), plan = trPlannerCounts(p), rows = [], by = {};
+  (Array.isArray(t.specHours) ? t.specHours : []).forEach(function(r){
+    if (!r.specId || by[r.specId]) return;
+    var row = by[r.specId] = {specId: r.specId, contr: Number(String(r.hours == null ? "" : r.hours).replace(",", ".")) || 0,
+      plan: plan ? (plan[r.specId] || 0) : null, ag: 0, real: 0, just: 0, semSt: 0};
+    rows.push(row);
   });
-  return html + '</tbody></table></div>';
+  var other = 0, loaded = !!TR.appts;
+  (TR.appts && TR.appts[p.id] || []).forEach(function(a){
+    if (a.d.slice(0, 7) !== ym || (t.inicio && a.d < t.inicio)) return;
+    var x = treatmentAt(t.patientId, a.d); if (!x || x.id !== t.id) return;
+    var row = by[trSpecKey(a)]; if (!row){ other++; return; }
+    row.ag++;
+    if (TR_USED_STATUS.indexOf(a.st) !== -1) row.real++;
+    else if (a.st === TR_JUST_STATUS) row.just++;
+    else if (!a.st && a.d < today) row.semSt++;
+  });
+  var tot = {contr: 0, plan: plan ? 0 : null, ag: 0, real: 0, just: 0, semSt: 0};
+  rows.forEach(function(r){
+    r.difPl = r.plan === null ? null : r.contr - r.plan;
+    r.difAg = r.contr - r.ag + r.just;
+    ["contr", "ag", "real", "just", "semSt"].forEach(function(f){ tot[f] += r[f]; });
+    if (tot.plan !== null) tot.plan += r.plan;
+  });
+  tot.difPl = tot.plan === null ? null : tot.contr - tot.plan;
+  tot.difAg = tot.contr - tot.ag + tot.just;
+  return {ym: ym, rows: rows, tot: tot, other: other, loaded: loaded};
+}
+function trDifCell(v, what){
+  if (v === null || v === undefined) return '<td><span class="pt-muted">…</span></td>';
+  var cls = v > 0 ? "tr-falta" : (v < 0 ? "tr-sobra" : "tr-zero");
+  var tip = v > 0 ? "Faltam " + v + " no " + what : (v < 0 ? (-v) + " a mais no " + what : "Igual ao contratado");
+  return '<td class="' + cls + '" title="' + esc(tip) + '">' + (v < 0 ? "+" + (-v) : v) + '</td>';
+}
+function trMonthViewHtml(t, ym){
+  var v = trMonthView(t, ym);
+  if (!v) return '<div class="hint">Sem paciente.</div>';
+  if (!v.rows.length) return '<div class="pat-count">Nenhuma especialidade ou serviço em "Especialidades/serviços e sessão (mês)".</div>';
+  var wait = !v.loaded ? (agdClient() ? "…" : "—") : null;
+  function n(x){ return wait !== null ? '<span class="pt-muted">' + wait + '</span>' : x; }
+  function cells(r){
+    return '<td>' + r.contr + '</td><td>' + (r.plan === null ? '<span class="pt-muted">…</span>' : r.plan) + '</td>' + trDifCell(r.difPl, "Planner") +
+      '<td>' + n(r.ag) + '</td><td>' + n(r.real) + '</td><td>' + n(r.just) + '</td>' + (wait !== null ? '<td>' + n(0) + '</td>' : trDifCell(r.difAg, "Agenda"));
+  }
+  var html = '<div class="tr-month-wrap"><table class="tr-month"><thead><tr><th>Especialidade / serviço</th><th>Contratado</th><th>Planner</th>' +
+    '<th title="Contratado − Planner">Dif. Planner</th><th>Agenda</th><th>Realizado</th><th title="Falta justificada">Justificado</th>' +
+    '<th title="Contratado − Agenda + Justificado">Dif. Agenda</th></tr></thead><tbody>';
+  v.rows.forEach(function(r){
+    html += '<tr><td>' + esc(specialtyName(r.specId)) +
+      (r.semSt ? '<div class="tr-warns"><span class="tr-warn" title="Atendimentos que já passaram e ainda não têm status">' + r.semSt + ' sem status</span></div>' : '') +
+      '</td>' + cells(r) + '</tr>';
+  });
+  html += '<tr class="tr-month-tot"><td>Total</td>' + cells(v.tot) + '</tr></tbody></table></div>';
+  if (v.other) html += '<div class="pat-count" style="margin-top:4px">' + v.other + ' atendimento(s) neste mês em especialidades ou serviços que não estão no tratamento.</div>';
+  return html;
+}
+// Seção recolhível com o seletor ‹ mês ›. Aberta/fechada fica lembrada neste navegador.
+var TR_MONTH_OPEN_KEY = "agendaPipo:trMonthOpen";
+function trMonthSectionHtml(){
+  var open = false; try { open = localStorage.getItem(TR_MONTH_OPEN_KEY) === "1"; } catch (e) {}
+  return '<button type="button" class="tr-sec tr-sec-toggle" id="trMonthToggle" aria-expanded="' + open + '" aria-controls="trMonthBody">' +
+      'Contratado × realizado (mês a mês)<span class="tr-sec-arrow" aria-hidden="true">▾</span></button>' +
+    '<div id="trMonthBody"' + (open ? '' : ' hidden') + '>' +
+      '<div class="tr-month-nav"><button type="button" class="btn ghost" id="trMonthPrev" aria-label="Mês anterior">‹</button>' +
+      '<b id="trMonthLabel"></b><button type="button" class="btn ghost" id="trMonthNext" aria-label="Próximo mês">›</button>' +
+      '<button type="button" class="btn ghost" id="trMonthToday">Mês atual</button></div>' +
+      '<div id="trMonthly"></div>' +
+      '<div class="pat-count" style="margin-top:6px">Contratado = sessões/mês do tratamento. Planner = sessões do paciente no modelo de 4 semanas; Dif. Planner = Contratado − Planner. ' +
+        'Agenda = atendimentos marcados no mês (qualquer status). Realizado = Finalizado + Não compareceu. Justificado = Falta justificada. ' +
+        'Dif. Agenda = Contratado − Agenda + Justificado. Vermelho = faltam sessões; âmbar com "+" = sessões a mais; verde = igual.</div>' +
+    '</div>';
+}
+function trMonthSectionWire(t){
+  var tg = document.getElementById("trMonthToggle"); if (!tg) return { refresh: function(){} };
+  var body = document.getElementById("trMonthBody"), rg = trMonthRange(t), ym = rg.dflt;
+  function draw(){
+    document.getElementById("trMonthLabel").textContent = trYmLabel(ym) + (ym === trTodayIso().slice(0, 7) ? " (atual)" : "");
+    document.getElementById("trMonthPrev").disabled = ym <= rg.first;
+    document.getElementById("trMonthNext").disabled = ym >= rg.last;
+    document.getElementById("trMonthToday").hidden = ym === rg.dflt;
+    document.getElementById("trMonthly").innerHTML = trMonthViewHtml(t, ym);
+  }
+  tg.addEventListener("click", function(){
+    var open = body.hidden; body.hidden = !open; tg.setAttribute("aria-expanded", String(open));
+    try { localStorage.setItem(TR_MONTH_OPEN_KEY, open ? "1" : "0"); } catch (e) {}
+  });
+  document.getElementById("trMonthPrev").addEventListener("click", function(){ if (ym > rg.first){ ym = trYmAdd(ym, -1); draw(); } });
+  document.getElementById("trMonthNext").addEventListener("click", function(){ if (ym < rg.last){ ym = trYmAdd(ym, 1); draw(); } });
+  document.getElementById("trMonthToday").addEventListener("click", function(){ ym = rg.dflt; draw(); });
+  draw();
+  return { refresh: draw };
 }
 function trCountIn(map, t){
   if (!t || !map) return null;
@@ -15270,9 +15353,7 @@ function openTreatmentModal(t, opts){
         (!isNew && can("plano_terapeutico", "view") ? '<div class="tr-plan-link"><button type="button" class="btn ghost" id="trOpenPlan">Abrir plano terapêutico</button><span class="pl-hint">Objetivos por habilidade, resumo do quadro clínico e revisão.</span></div>' : '') +
         '<div class="tr-sec">Convênio, pacote e horário</div>' +
         ed.html +
-        (isNew ? '' : '<div class="tr-sec">Contratado × realizado (mês a mês)</div>' +
-          '<div class="hint">Planner = sessões do paciente no modelo de 4 semanas. Agenda = atendimentos marcados no mês (qualquer status). Realizado = Finalizado + Não compareceu. Diferença: meses passados = Realizado − Contratado; mês atual = Realizado + o que ainda está marcado até o fim do mês − Contratado. Primeiro e último mês: Contratado e Planner proporcionais aos dias.</div>' +
-          '<div id="trMonthly">' + trMonthlyHtml(t) + '</div>') +
+        (isNew ? '' : trMonthSectionHtml()) +
         (isNew ? '' : '<div class="tr-sec">Histórico</div>' + trHistHtml(t)) +
       '</div>' +
       '<div class="modal-foot">' +
@@ -15328,14 +15409,13 @@ function openTreatmentModal(t, opts){
   }
   document.getElementById("trVencPor").addEventListener("change", syncVencPor);
   syncVencPor();
+  var trMonthSec = trMonthSectionWire(t);
   if (!isNew && (trUsedCount(t) === null || !TR.appts) && agdClient()) trLoadLast(false).then(function(){
     if (!document.getElementById("ovTreat")) return;
     syncVencPor();
-    var mh = document.getElementById("trMonthly"); if (mh) mh.innerHTML = trMonthlyHtml(t);
+    trMonthSec.refresh();
   });
-  if (!isNew) trLoadPlanner().then(function(){
-    var mh = document.getElementById("ovTreat") && document.getElementById("trMonthly"); if (mh) mh.innerHTML = trMonthlyHtml(t);
-  });
+  if (!isNew) trLoadPlanner().then(function(){ if (document.getElementById("ovTreat")) trMonthSec.refresh(); });
   document.getElementById("trIni").addEventListener("change", syncVenc);
   // Com atendimentos Finalizados: não exclui e não muda a quantidade de sessões
   // (pacote e especialidades/serviços) — para isso, Renegociar ou Cancelar.
@@ -15803,20 +15883,21 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Tratamentos</b>."},
   {id: "tratamentos-mes", group: "Cadastros", title: "Tratamento: contratado × realizado", mod: "tratamentos", tab: "tratamentos",
-    purpose: "Compara, mês a mês, as sessões contratadas com as realizadas, por especialidade e serviço.",
+    purpose: "Compara, mês a mês, as sessões contratadas com o Planner, a Agenda e o que foi realizado, por especialidade e serviço.",
     steps: [
-      "Abra o tratamento: a seção <b>Contratado × realizado</b> mostra uma tabela por mês, com as colunas Contratado, Planner, Agenda, Realizado, Falta justificada e Diferença.",
-      "Os avisos embaixo de cada especialidade mostram onde está o problema: <b>Falta no Planner</b> (o modelo de 4 semanas tem menos sessões que o contratado), <b>Falta enviar para a Agenda</b> (a Agenda do mês tem menos que o Planner) e <b>N sem status</b> (atendimentos que já passaram sem status).",
+      "Abra o tratamento e clique em <b>Contratado × realizado (mês a mês)</b> para mostrar ou esconder a tabela.",
+      "Use <b>‹</b> e <b>›</b> para trocar o mês; <b>Mês atual</b> volta para o mês de hoje. A tabela abre sempre no mês atual.",
       "Na lista, a coluna <b>Mês</b> mostra o mês atual (ex.: \"6 + 8 agend. de 16\").",
       "Use o filtro <b>Abaixo do contratado</b> para achar quem está com sessões faltando."
     ],
     rules: [
-      "Realizado = Finalizado + Não compareceu (falta justificada não conta).",
-      "Planner = sessões do paciente nas 4 semanas do Planner (o mesmo número todo mês). Agenda = tudo o que está marcado no mês, com qualquer status.",
-      "Diferença: meses passados = Realizado − Contratado; mês atual = Realizado + o que ainda está marcado até o fim do mês − Contratado.",
-      "Com mais de uma especialidade, a linha Total soma o mês.",
-      "Primeiro e último mês do tratamento: Contratado e Planner proporcionais aos dias.",
-      "Vermelho = falta; âmbar = sobra; verde = fechado."
+      "Aparecem só as especialidades e serviços de \"Especialidades/serviços e sessão (mês)\" do tratamento, com a linha Total.",
+      "Contratado = sessões/mês do tratamento (o mês inteiro, sem proporção).",
+      "Planner = sessões do paciente no modelo de 4 semanas. Dif. Planner = Contratado − Planner.",
+      "Agenda = atendimentos marcados no mês, com qualquer status. Realizado = Finalizado + Não compareceu. Justificado = Falta justificada.",
+      "Dif. Agenda = Contratado − Agenda + Justificado: a falta justificada não conta como sessão dada.",
+      "Vermelho = faltam sessões; âmbar com \"+\" = sessões a mais; verde = igual ao contratado.",
+      "Dá para ver do mês de início do tratamento até o mês seguinte ao atual. A etiqueta \"N sem status\" mostra atendimentos que já passaram sem status."
     ],
     who: "Permissão <b>Tratamentos</b>."},
   {id: "tratamentos-valores", group: "Cadastros", title: "Tratamento: valores", mod: "tratamentos_valores", tab: "tratamentos",

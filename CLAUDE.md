@@ -2481,10 +2481,17 @@ problema; linha Total por mês; faltas justificadas à parte.
   via `plannerLoadDocs`, cache 2 min; chave = `trSpecKey` com o profissional da coluna);
   null = ainda não lido ("…"). `ag` = atendimentos do mês na Agenda (qualquer status, sem
   bloqueio); `just` = `TR_JUST_STATUS` ("falta-justificada"); `semSt` = já passou sem status.
-- `trMonthlyHtml`: colunas Mês, Especialidade/serviço, Contratado, Planner, Agenda,
-  Realizado, Falta just., Diferença; avisos `.tr-warn` (`trMonthWarns`): "Falta no Planner"
-  (plan < contr), "Falta enviar para a Agenda" (ag < plan, só mês atual), "N sem status";
-  linha `.tr-month-tot` com 2+ linhas. A coluna "Mês" da lista (`trMonthCell`) não mudou.
+- (2026-10-07, refeito a pedido do usuário) A JANELA mostra um mês por vez: seção recolhível
+  (`trMonthSectionHtml`/`trMonthSectionWire`, botão `#trMonthToggle` com seta, começa fechada,
+  aberta/fechada lembrada em `agendaPipo:trMonthOpen`), seletor `‹ mês ›` (`#trMonthPrev/Next`,
+  "Mês atual"; do mês de início até o mês seguinte ao atual — `trMonthRange`; abre no mês
+  atual). `trMonthView(t, ym)` / `trMonthViewHtml`: só as linhas de `specHours` (mesmo com 0),
+  Contratado MENSAL (sem proporção), Planner, **Dif. Planner = Contratado − Planner**, Agenda,
+  Realizado, Justificado, **Dif. Agenda = Contratado − Agenda + Justificado** (positivo = falta,
+  vermelho; negativo = "+N" âmbar; 0 verde, `trDifCell`), linha Total, etiqueta "N sem status",
+  nota de atendimentos em especialidades fora do tratamento. Explicação com `.pat-count` (mesmo
+  texto da nota do horário do paciente). `trLoadLast` lê até o fim do PRÓXIMO mês.
+  `trMonthly` (proporcional) continua só para a coluna "Mês" da lista e o filtro "Abaixo do contratado".
 - Teste `tests/run_tr_monthly.js`.
 ## Data de término digitável no tratamento (2026-10-07)
 Pedido do usuário. `#trFim` virou campo de data (digitável, `dpEnhanceDate`) gravado em
