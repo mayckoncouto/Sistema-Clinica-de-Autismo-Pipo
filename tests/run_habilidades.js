@@ -34,6 +34,11 @@ const path = require('path');
   const saved = await page.evaluate(() => (window.__STORE__['config/skill_areas'].list || []).filter((a) => a.name === 'Brincar simbólico')[0]);
   console.log('saves scope and age bands?', !!saved && saved.escopo === 'Faz de conta, uso de objetos.' && JSON.stringify(saved.faixas) === '["0-4"]', JSON.stringify(saved));
   const row = await page.textContent('#reg-habilidades-host');
+  const esc1 = await page.locator('#reg-habilidades-host tbody tr', { hasText: 'Brincar simbólico' }).evaluate((r) => {
+    const d = r.cells[1].querySelector('.reg-oneline'); const cs = d && getComputedStyle(d);
+    return {head: r.closest('table').querySelectorAll('thead th')[1].textContent.trim(), txt: d && d.textContent, title: d && d.title, nowrap: cs && cs.whiteSpace === 'nowrap' && cs.textOverflow === 'ellipsis', h: d && d.getBoundingClientRect().height};
+  });
+  console.log('Escopo column shows one line (full text on hover)?', esc1.head === 'Escopo' && esc1.txt === 'Faz de conta, uso de objetos.' && esc1.title === esc1.txt && esc1.nowrap && esc1.h < 24, JSON.stringify(esc1));
   console.log('list shows the bands and "Todas as idades"?', /0–4 anos/.test(row) && /Todas as idades/.test(row));
 
   // Plano: paciente de 7 anos → a habilidade só de 0–4 vem depois, "fora da faixa".

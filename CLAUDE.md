@@ -2539,8 +2539,9 @@ paciente, atualizando junto) e Especialidades sugeridas; no plano, as da idade p
   vazio = "Todas as idades" (`ageBandText`).
 - `config/skill_areas` ganhou `escopo` (texto) e `faixas`. Janela: `#regName` com rótulo
   "Habilidade" (`REG_CFG.habilidades.nameLabel`), `#regHabEscopo`, `#regHabAges` (caixas
-  `.lib-opt` com bolinha da cor), `#regHabSpecs`. Lista: Habilidade (+ escopo resumido), Faixas
-  etárias, Especialidades sugeridas.
+  `.lib-opt` com bolinha da cor), `#regHabSpecs`. Lista: Habilidade, Escopo (uma linha só,
+  `.reg-oneline` com "…", texto inteiro no `title`; oculto no celular), Faixas
+  etárias, Especialidades sugeridas (`REG_CFG.habilidades.widths`; `renderRegistryTab` aceita `widths`).
 - Plano (`#plAddArea`): habilidades da faixa do paciente (ou sem faixa) primeiro; as outras no
   fim com "(fora da faixa)". Paciente sem idade = tudo igual. Não bloqueia.
 - Planilha de Habilidades: colunas Habilidade, Escopo, Faixas etárias e Especialidades sugeridas; exportar

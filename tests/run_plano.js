@@ -49,7 +49,7 @@ const path = require('path');
   await page.$eval('#regHabSpecs input[value="fono"]', (e) => { e.checked = true; e.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.click('#regSave'); await page.waitForTimeout(300);
   const habSaved = await ev('JSON.stringify(skillAreasList().filter(function(a){ return a.id === "comunicacao"; })[0].specIds)');
-  const habCol = await page.locator('#reg-habilidades-host tbody tr', { hasText: 'Comunicação' }).evaluate((r) => r.cells[2].textContent);
+  const habCol = await page.locator('#reg-habilidades-host tbody tr', { hasText: 'Comunicação' }).evaluate((r) => r.cells[3].textContent);
   console.log('skill saves the suggested specialties and shows them in the list?', habName === 'Comunicação' && habSaved === '["fono"]' && /Fonoaudiologia/.test(habCol), habSaved, habCol);
 
   // Plano novo para Bruno Verde (tratamento com Psicologia e Fonoaudiologia): quadros por habilidade.
