@@ -86,7 +86,10 @@ const path = require('path');
   const atendShown = await page.$eval('[data-sfsec="atend"]', (e) => !e.hidden);
   const cnt = await page.$eval('#profHoursTotal', (e) => e.textContent);
   console.log('checking Profissional shows Atendimento and counts appointments?', atendShown && /atendimentos por semana/.test(cnt), cnt);
+  await page.fill('#profCpf', '529.982.247-25');
   await page.click('#profSave'); await page.waitForTimeout(300);
+  const cpfWhere = await ev(`(function(){ var p = state.professionals.filter(function(x){ return x.name === "Rita Recepção"; })[0]; var r = STAFF.rows.filter(function(x){ return x.data.nome === "Rita Recepção"; })[0]; return {prof: p ? (p.cpf === undefined ? "none" : p.cpf) : "?", staff: r.data.cpf}; })()`);
+  console.log('CPF goes only to the protected staff record, not to the Planner/Agenda record?', cpfWhere.prof === 'none' && cpfWhere.staff === '52998224725', JSON.stringify(cpfWhere));
   const prof = await ev(`(function(){ var p = state.professionals.filter(function(x){ return x.name === "Rita Recepção"; })[0]; var r = STAFF.rows.filter(function(x){ return x.data.nome === "Rita Recepção"; })[0]; return p ? {pid: p.id, link: r.professional_id, sab: p.horarios.sab, okSat: profSlotOk(p, "sab", "08:40"), offSun: profSlotOk(p, "dom", "08:40")} : null; })()`);
   console.log('became a professional: linked, hours copied to the Planner/Agenda record?', !!prof && prof.link === prof.pid && prof.sab.manha.inicio === '08:00' && prof.okSat && !prof.offSun, JSON.stringify(prof));
 
@@ -123,7 +126,11 @@ const path = require('path');
   await page.click('#staffListHost tbody tr'); await page.waitForSelector('#ovProf'); await page.waitForTimeout(300);
   const react = await page.$('#profDeleteReactivate');
   console.log('inactive person shows "Reativar"?', !!react);
-  await page.click('#profCancel');
+  // Uma situação só: reativar o colaborador reativa também o atendimento.
+  await ev(`(function(){ STAFF.rows = STAFF.rows.map(function(r){ return r.data.nome === "Rita Recepção" ? Object.assign({}, r, {data: Object.assign({}, r.data, {desligamento: ""})}) : r; }); })()`);
+  await page.click('#profDeleteReactivate'); await page.waitForTimeout(300);
+  const on = await ev(`(function(){ var p = state.professionals.filter(function(x){ return x.name === "Rita Recepção"; })[0]; var r = STAFF.rows.filter(function(x){ return x.data.nome === "Rita Recepção"; })[0]; return {p: !!p.inativo, r: !!r.data.inativo}; })()`);
+  console.log('reactivating the person reactivates the Planner/Agenda record too?', !on.p && !on.r, JSON.stringify(on));
 
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();

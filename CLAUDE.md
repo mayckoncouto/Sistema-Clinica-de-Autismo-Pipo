@@ -2429,4 +2429,14 @@ homônimos no Planner (2638) e na Agenda (141), 15 profissionais todos com colab
     sala; `writeRooms` resolve `true` quando gravou); renomear grupo → Agenda (`rename_group`).
   - Teste `tests/run_patient_code.js` (no `npm test`). Backup restaura as colunas novas.
 - Produção (2026-10-07): o usuário rodou a `2026-10-07b` (conferência 0/0/0/0/nenhuma) e a `2026-10-07c`.
-- Próximas: 3) colaborador único; 4) renomear nomes internos.
+- **Etapa 3 (feita, 2026-10-07): colaborador único.** Decisões do usuário: CPF na parte
+  protegida; uma situação só. CPF de quem atende fica só em `staff.data.cpf` (o salvar do
+  colaborador grava `cpf: undefined` no profissional quando tem acesso ao RH; `staffView` lê o
+  do RH e, de reserva, o antigo do profissional). Situação: o salvar põe `inativo` do
+  profissional = colaborador (desligado ou inativo); Inativar/Reativar (`setupInactivate` do
+  colaborador, `stItem.inativo` = situação do colaborador) grava os dois — o profissional só
+  volta a ativo se o colaborador tiver o tipo Profissional. Migração
+  `supabase/2026-10-07d-colaborador-unico.sql` (CPF → staff, tira do documento, alinha a
+  situação pelo atendimento). Códigos `prof-…`/`user-…`/`func-…` dos colaboradores ficaram
+  (internos, ligados a usuários e remuneração; trocar não traz ganho). Testes em `run_staff.js`.
+- Próxima: 4) renomear nomes internos.

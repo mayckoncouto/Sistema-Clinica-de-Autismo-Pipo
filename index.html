@@ -8518,12 +8518,13 @@ function staffEntryForProf(p){
   var r = p ? STAFF.rows.filter(function(x){ return x.professional_id === p.id; })[0] : null;
   return {row: r || null, prof: p || null};
 }
-// Dados para mostrar: os do RH com nome/CPF/tipo do cadastro do profissional.
+// Dados para mostrar: os do RH com nome/nome social/tipo do cadastro do profissional.
+// CPF fica só no RH (parte protegida); o do profissional vale só para cadastros antigos.
 function staffView(e){
   var d = Object.assign({}, e.row ? e.row.data : {});
   d.tipos = Array.isArray(d.tipos) ? d.tipos.slice() : [];
   if (e.prof){
-    d.nome = e.prof.name; d.nomeSocial = e.prof.nomeSocial || d.nomeSocial || ""; d.cpf = e.prof.cpf || d.cpf || "";
+    d.nome = e.prof.name; d.nomeSocial = e.prof.nomeSocial || d.nomeSocial || ""; d.cpf = d.cpf || e.prof.cpf || "";
     if (!e.row && d.tipos.indexOf(STAFF_PROF_TYPE) === -1) d.tipos.unshift(STAFF_PROF_TYPE);
     d.inativo = !!(d.inativo || (e.prof.inativo && d.tipos.indexOf(STAFF_PROF_TYPE) !== -1 && d.tipos.length === 1));
   }
@@ -9034,7 +9035,7 @@ function openStaffModal(entry, opts){
     // Mesmas regras do antigo cadastro de profissional: em uso (atendimentos, salas,
     // tratamentos ou usuário de acesso) não exclui, inativa; inativo ganha "Reativar".
     if (!can("rh_funcionarios", "delete")) delBtn.hidden = true;
-    var stItem = prof ? prof : {id: row.id, inativo: !!d.inativo};
+    var stItem = prof ? Object.assign({}, prof, {inativo: row ? !!d.inativo : !!prof.inativo}) : {id: row.id, inativo: !!d.inativo};
     setupInactivate({btn: "profDelete", mod: "rh_funcionarios", item: stItem, name: d.nome || "", close: close,
       usage: function(){
         var u = window.pipoAuth && row ? window.pipoAuth.userForStaff(row.id) : Promise.resolve(null);
@@ -9042,7 +9043,10 @@ function openStaffModal(entry, opts){
       },
       save: function(it){
         var steps = [];
-        if (prof) steps.push(writeProfessionals(state.professionals.map(function(x){ return x.id === prof.id ? Object.assign({}, x, {inativo: it.inativo}) : x; })));
+        // Uma situação só: inativar/reativar o colaborador vale para o atendimento (quem não tem
+        // mais o tipo Profissional continua fora da grade).
+        var profOff = it.inativo || (!!row && d.tipos.indexOf(STAFF_PROF_TYPE) === -1);
+        if (prof) steps.push(writeProfessionals(state.professionals.map(function(x){ return x.id === prof.id ? Object.assign({}, x, {inativo: profOff || undefined}) : x; })));
         if (row) steps.push(staffSaveRow(Object.assign({}, row, {data: Object.assign({}, row.data, {inativo: it.inativo})})));
         return Promise.all(steps).then(function(){ renderStaffTab(); }).catch(function(e){ showToast(e.message, true); });
       }});
@@ -9108,11 +9112,14 @@ function openStaffModal(entry, opts){
           horarios: keepHours,
           servicos: (state.services.length && msSelected().length) ? msSelected() : undefined,
           horaInicio: undefined, horaFim: undefined,
-          conselho: val("profConselho"), registro: val("profRegistro"), cpf: cpf,
+          conselho: val("profConselho"), registro: val("profRegistro"),
+          // CPF fica só no cadastro do colaborador (protegido); sem acesso a ele, mantém o antigo.
+          cpf: (hr && hrSave) ? undefined : (prof ? prof.cpf : cpf),
           nomeSocial: val("profSocial"), cbos: val("profCbos"),
-          complementares: complValue()
+          complementares: complValue(),
+          // Uma situação só: o atendimento segue o colaborador.
+          inativo: (desligado || d.inativo) ? true : undefined
         });
-        if (desligado) rec.inativo = true;
         var list = prof ? state.professionals.map(function(x){ return x.id === rec.id ? rec : x; }) : state.professionals.concat([rec]);
         profStep = writeProfessionals(list, true);
       } else if (!isProf && prof && !prof.inativo){
@@ -15725,6 +15732,8 @@ var HELP_TOPICS = [
       "Busque por nome, cargo ou CPF e filtre pelo tipo. \"Inativos\" mostra também os desligados."
     ],
     rules: [
+      "O CPF fica só no cadastro do colaborador, que aparece apenas para quem tem a permissão Colaboradores. A parte de atendimento (usada pelo Planner e pela Agenda) guarda nome, nome social, especialidades, serviços e horário.",
+      "Quem atende tem uma situação só: inativar ou reativar o colaborador vale também para o Planner e a Agenda. Tirar o tipo Profissional tira a pessoa da grade, sem inativar o colaborador.",
       "A soma das formas de pagamento é comparada com o valor contratado (aviso quando não confere).",
       "Com data de desligamento até hoje, a pessoa fica inativa, o acesso ao sistema é desativado e, se for profissional, ela sai das listas do Planner e da Agenda (aviso se ainda há atendimentos marcados depois do desligamento).",
       "Quem está em uso (atendimentos, colunas de sala, tratamentos ou usuário de acesso) não é excluído: o botão vira <b>Inativar</b>. Inativo some das listas e das opções; <b>Reativar</b> volta ao normal.",
