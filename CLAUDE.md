@@ -2382,7 +2382,7 @@ padrão; regras que evitam duplicidade ou dados inconsistentes ficam travadas (�
 - Teste `tests/run_sistema.js` (cria `tests/page_sys.html`).
 
 
-## Revisão de nomes e campos (2026-10-07, EM ANDAMENTO)
+## Revisão de nomes e campos (2026-10-07, CONCLUÍDA)
 Pedido do usuário: rever nomes/campos que mudaram (profissional → funcionário → colaborador
 etc.). Decisões: RENOMEAR também os nomes internos (com análise de riscos e verificações),
 fazer as 3 etapas — 1) limpeza (campos antigos de paciente/profissional, horário antigo,
@@ -2467,3 +2467,6 @@ homônimos no Planner (2638) e na Agenda (141), 15 profissionais todos com colab
     `documents_enforce`, `agenda_scope_professional`, `set_appointment_status`, políticas de
     `appointments`/`staff`/`staff_pay`, `sync_professional_user_names` e
     `profiles_professional_name` lendo `nome`, dados e coluna). Teste `tests/run_nomes.js`.
+  - Produção (2026-10-07): `2026-10-07e` rodada (conferência 0/0/0/0/descontos). A
+    compatibilidade com os nomes antigos continua no código (lê cópias de segurança antigas e
+    endereços salvos); pode ser removida no futuro, com cuidado.
