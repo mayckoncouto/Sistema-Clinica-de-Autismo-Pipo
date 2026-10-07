@@ -69,6 +69,19 @@ const path = require('path');
   console.log('export has Escopo and Faixas etárias (empty = "Todas as idades")?', exp.cols === 'Habilidade|Escopo|Faixas etárias|Especialidades sugeridas' &&
     exp.b.escopo === 'Faz de conta, uso de objetos.' && exp.c === 'Todas as idades', JSON.stringify(exp));
   console.log('importing "Todas as idades" clears the bands?', exp.st === 'atualizar' && /Todas as idades/.test(exp.msg));
+  // Janela do objetivo: ordem e tipo dos campos.
+  const gl = await ev(`(function(){
+    openGoalModal(null, {});
+    var labs = Array.from(document.querySelectorAll("#ovGoal .modal-body > .field > label")).map(function(l){ return l.textContent.trim(); });
+    var r = {labs: labs, name: document.getElementById("glName").tagName + ":" + document.getElementById("glName").type, crit: document.getElementById("glCrit").tagName + ":" + document.getElementById("glCrit").type};
+    return r;
+  })()`);
+  console.log('goal window: Habilidade, Objetivo, Critério, Escala, Especialidades; texts on one line?',
+    JSON.stringify(gl.labs) === JSON.stringify(['Habilidade', 'Objetivo', 'Critério de sucesso (sugerido)', 'Escala (sugerida)', 'Especialidades (nenhuma marcada = todas)']) &&
+    gl.name === 'INPUT:text' && gl.crit === 'INPUT:text', JSON.stringify(gl));
+  await page.waitForTimeout(80);
+  console.log('goal window starts on Habilidade?', await page.evaluate(() => !!document.activeElement.closest('.dp-combo') && document.getElementById('glArea').parentNode.contains(document.activeElement)));
+  await ev('document.getElementById("modalHost").innerHTML = ""');
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

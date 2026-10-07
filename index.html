@@ -16222,7 +16222,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Conselhos</b>."},
   {id: "objetivos", group: "Prontuário", title: "Objetivos", mod: "objetivos", tab: "objetivos",
     purpose: "Objetivos prontos para usar no Plano terapêutico, com habilidade, critério de sucesso e escala sugeridos.",
-    steps: ["Prontuário ▾ → <b>Objetivos</b> → <b>+ Incluir</b>: objetivo, habilidade, especialidades (nenhuma marcada = todas), critério de sucesso e escala.",
+    steps: ["Prontuário ▾ → <b>Objetivos</b> → <b>+ Incluir</b>: habilidade, objetivo, critério de sucesso, escala e especialidades (nenhuma marcada = todas). Objetivo e critério são textos de uma linha.",
       "No Plano terapêutico, ao digitar no campo <b>Objetivo</b>, aparecem os objetivos do banco da mesma habilidade do quadro (e, se o objetivo já tem especialidades, os delas ou de todas). Escolha com o mouse ou com ↑ ↓ e Enter: o texto entra no objetivo, o critério e a escala vêm junto e as especialidades do banco que estão no tratamento são marcadas.",
       "Para guardar um objetivo novo sem sair do plano, digite o texto e escolha <b>+ Salvar no Banco de objetivos</b>: abre uma janela por cima, já preenchida com o que está na linha (habilidade e especialidades).",
       "<b>Outras opções ▾</b>: <b>Exportar planilha</b> e <b>Importar planilha</b> (veja o tópico Planilhas)."],
@@ -19057,13 +19057,12 @@ function openGoalModal(item, opts){
       '<div class="modal-sub">Objetivo pronto para usar no plano terapêutico: ao escolher no campo Objetivo, a habilidade, o critério e a escala vêm junto.</div></div>' +
       '<button class="modal-close" id="glClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body">' +
-      '<div class="field"><label for="glName">Objetivo</label><textarea id="glName" rows="3" placeholder="Ex.: Pedir ajuda usando frase de 2 palavras"' + dis + '>' + esc(v.name) + '</textarea></div>' +
-      '<div class="field-row">' +
-        '<div class="field"><label for="glArea">Habilidade</label><select id="glArea" data-combo' + dis + '>' + opt(skillAreasList().filter(function(a){ return isActive(a) || a.id === v.areaId; }), v.areaId, "Escolha…") + '</select></div>' +
-      '</div>' +
-      '<div class="field"><label>Especialidades (nenhuma marcada = todas)</label>' + specCheckGridHtml("glSpecs", v.specIds, canSave) + '</div>' +
-      '<div class="field"><label for="glCrit">Critério de sucesso (sugerido)</label><textarea id="glCrit" rows="2" placeholder="Ex.: 80% das tentativas em 3 sessões seguidas"' + dis + '>' + esc(v.criterio) + '</textarea></div>' +
+      // Ordem pedida: Habilidade, Objetivo, Critério, Escala, Especialidades (textos numa linha só).
+      '<div class="field"><label for="glArea">Habilidade</label><select id="glArea" data-combo' + dis + '>' + opt(skillAreasList().filter(function(a){ return isActive(a) || a.id === v.areaId; }), v.areaId, "Escolha…") + '</select></div>' +
+      '<div class="field"><label for="glName">Objetivo</label><input type="text" id="glName" placeholder="Ex.: Pedir ajuda usando frase de 2 palavras" value="' + esc(String(v.name || "").replace(/\s*\n\s*/g, " ")) + '"' + dis + '></div>' +
+      '<div class="field"><label for="glCrit">Critério de sucesso (sugerido)</label><input type="text" id="glCrit" placeholder="Ex.: 80% das tentativas em 3 sessões seguidas" value="' + esc(String(v.criterio || "").replace(/\s*\n\s*/g, " ")) + '"' + dis + '></div>' +
       '<div class="field"><label for="glScale">Escala (sugerida)</label><select id="glScale" data-combo' + dis + '>' + opt(scalesList().filter(function(x){ return isActive(x) || x.id === v.scaleId; }), v.scaleId, "Sem escala sugerida") + '</select></div>' +
+      '<div class="field"><label>Especialidades (nenhuma marcada = todas)</label>' + specCheckGridHtml("glSpecs", v.specIds, canSave) + '</div>' +
     '</div>' +
     '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="glDel">Excluir</button>' : '') +
       '<div class="spacer"></div><button class="btn ghost" id="glCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
@@ -19075,7 +19074,13 @@ function openGoalModal(item, opts){
   $("glClose").addEventListener("click", close);
   $("glCancel").addEventListener("click", close);
   var glSpecsSel = specCheckGridWire($("glSpecs"));
-  setTimeout(function(){ var n = $("glName"); if (n && canSave){ n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 0);
+  // Começa pela Habilidade (1º campo); com a habilidade já escolhida, vai direto ao Objetivo.
+  setTimeout(function(){
+    if (!canSave) return;
+    var hab = $("glArea") && $("glArea").parentNode.querySelector(".dp-combo input");
+    if (!v.areaId && hab){ hab.focus(); return; }
+    var n = $("glName"); if (n){ n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+  }, 30);
   function save(list, rec){
     return writeSimpleList("objetivos", list).then(function(ok){
       if (!ok) return;

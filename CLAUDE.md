@@ -2548,3 +2548,10 @@ paciente, atualizando junto) e Especialidades sugeridas; no plano, as da idade p
   escreve "Todas as idades" quando não há faixa e importar aceita esse texto (limpa as faixas). `ioAgeBands` aceita "0–4 anos",
   "0-4", "10+"; texto desconhecido = aviso); célula vazia não apaga. Sem SQL.
   Teste `tests/run_habilidades.js`.
+
+## Janela do Objetivo (Banco de objetivos): ordem dos campos (2026-10-07)
+Pedido do usuário. `openGoalModal`: Habilidade (`#glArea`, lista), Objetivo (`#glName`, texto
+de UMA linha), Critério de sucesso (`#glCrit`, uma linha), Escala (`#glScale`), Especialidades
+(`#glSpecs`). Quebras de linha antigas viram espaço ao abrir. Foco inicial na Habilidade (ou no
+Objetivo quando a habilidade já vem preenchida, ex.: "+ Salvar no Banco de objetivos" do plano).
+Teste no fim de `tests/run_habilidades.js`.
