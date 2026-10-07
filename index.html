@@ -14875,6 +14875,11 @@ function trSpecKey(a){
 }
 // Fim do período do tratamento: véspera do início do seguinte, ou o encerramento.
 function trPeriodEnd(t){
+  var r = trPeriodEndAuto(t);
+  // Término digitado na janela do tratamento: o tratamento vale só até ele.
+  return t && t.termino && (!r || t.termino < r) ? t.termino : r;
+}
+function trPeriodEndAuto(t){
   var nx = treatmentsOf(t.patientId).filter(function(x){ return x.id !== t.id && x.inicio && t.inicio && x.inicio > t.inicio; })
     .map(function(x){ return x.inicio; }).sort()[0];
   if (nx){ var d = agdParse(nx); d.setDate(d.getDate() - 1); return agdIso(d); }
@@ -15020,8 +15025,13 @@ function trQtyKey(o){
     (Array.isArray(o.specHours) ? o.specHours : []).map(function(r){ return [r.specId, String(r.hours == null ? "" : r.hours).trim()]; }),
     o.vencPor === "sessoes" ? String(o.totalSessoes || "") : ""]);
 }
-// Término = último atendimento entre o início deste tratamento e o início do seguinte.
+// Término = o digitado na janela do tratamento; sem ele, o último atendimento entre o início
+// deste tratamento e o início do seguinte (automático).
 function trEnd(t){
+  if (t && t.termino) return t.termino;
+  return trEndAuto(t);
+}
+function trEndAuto(t){
   if (!TR.last) return "";
   var p = rawPatient(t.patientId); if (!p) return "";
   var dates = TR.last[p.id] || [];
@@ -15032,9 +15042,13 @@ function trEnd(t){
   return best;
 }
 function trEndText(t){
+  if (t && t.termino) return trBr(t.termino);
+  return trEndAutoText(t);
+}
+function trEndAutoText(t){
   if (!agdClient()) return "—";
   if (!TR.last) return "…";
-  var e = trEnd(t);
+  var e = trEndAuto(t);
   if (t.status === "ativo") return e ? "Em andamento (último " + trBr(e) + ")" : "Em andamento";
   return e ? trBr(e) : "Sem atendimento";
 }
@@ -15184,6 +15198,7 @@ function openTreatmentModal(t, opts){
   TREAT_FIELDS.forEach(function(k){ if (base[k] !== undefined) v[k] = base[k]; });
   var d = {
     inicio: isNew ? trTodayIso() : (t.inicio || ""),
+    termino: isNew ? "" : (t.termino || ""),
     valor: src ? trMoney(src).valor : "",
     descontos: src ? trMoney(src).descontos : "",
     tipo: isNew ? (pid ? (opts.renegotiateFrom ? "renegociado" : trTipoAuto(pid)) : "novo") : trTipoFor(t),
@@ -15223,7 +15238,8 @@ function openTreatmentModal(t, opts){
         '<div class="field-row">' +
           '<div class="field"><label for="trIni">Data de início</label><input type="date" id="trIni" value="' + esc(d.inicio) + '">' +
             (trPatEntrada(pid) ? '<div class="pat-count" id="trEntradaHint">Cadastrado em ' + esc(trBr(trPatEntrada(pid))) + ' (o início não pode ser antes)</div>' : '') + '</div>' +
-          '<div class="field"><label>Data de término</label><input type="text" id="trFim" disabled value="' + esc(isNew ? "Em andamento" : trEndText(t)) + '"></div>' +
+          '<div class="field"><label for="trFim">Data de término</label><input type="date" id="trFim" value="' + esc(d.termino) + '">' +
+            '<div class="pat-count" id="trFimHint">' + esc((isNew ? "Em andamento" : trEndAutoText(t)) === "—" ? "Vazio = automático (último atendimento na Agenda)." : "Vazio = automático: " + (isNew ? "Em andamento" : trEndAutoText(t)) + ".") + '</div></div>' +
         '</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="trVencPor">Vencimento por</label><select id="trVencPor">' +
@@ -15380,6 +15396,8 @@ function openTreatmentModal(t, opts){
     if (!ini){ showToast("Informe a data de início.", true); return; }
     var entP = trPatEntrada(patId);
     if (entP && ini < entP && !sysSaveGate(sv, "pac_entrada", "Data de entrada", "O paciente foi cadastrado em " + trBr(entP) + ": o início do tratamento não pode ser antes dessa data.")) return;
+    var fimV = document.getElementById("trFim").value;
+    if (fimV && fimV < ini){ showToast("A data de término não pode ser antes do início.", true); return; }
     var durV = parseInt(document.getElementById("trDur").value, 10);
     var vencV = document.getElementById("trVenc").value;
     if (vencV && vencV < ini){ showToast("A data de vencimento não pode ser antes do início.", true); return; }
@@ -15416,6 +15434,7 @@ function openTreatmentModal(t, opts){
       atualizadoEm: now
     });
     if (!t || t.status !== st) rec.statusEm = trTodayIso();
+    if (fimV) rec.termino = fimV; else delete rec.termino;
     rec.vencPor = ["sem", "sessoes"].indexOf(document.getElementById("trVencPor").value) !== -1 ? document.getElementById("trVencPor").value : "data";
     var totV = parseInt(document.getElementById("trTotal").value, 10);
     rec.totalSessoes = rec.vencPor === "sessoes" && totV > 0 ? totV : "";
@@ -15737,7 +15756,7 @@ var HELP_TOPICS = [
       "Ao <b>cancelar ou renegociar</b> um tratamento, o sistema pergunta se remove os agendamentos do paciente: do <b>Planner</b> (as 4 semanas) e/ou da <b>Agenda</b> a partir de uma data que você escolhe. Atendimentos com evolução no prontuário ficam. As remoções entram no desfazer do Planner e da Agenda.",
       "No tratamento novo, a lista de pacientes mostra também os inativos, com \"(inativo)\" ao lado do nome. Salvar o tratamento novo <b>reativa o paciente</b> (menos quando ele já é salvo como Cancelado).",
       "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b> e a quantidade de sessões fica travada. Para mudar, use Renegociar.",
-      "A <b>Data de término</b> é o último atendimento da Agenda no período do tratamento.",
+      "A <b>Data de término</b> pode ser digitada (não pode ser antes do início); o tratamento vale até ela nos relatórios e no contratado × realizado. Vazia, é automática: o último atendimento da Agenda no período do tratamento.",
       "Atendimentos de datas passadas usam o tratamento que valia <b>na data</b> deles (cor, regras e relatórios).",
       "O histórico na janela mostra cada troca de status: quem, quando e o motivo."
     ],

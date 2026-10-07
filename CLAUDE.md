@@ -2486,3 +2486,10 @@ problema; linha Total por mês; faltas justificadas à parte.
   (plan < contr), "Falta enviar para a Agenda" (ag < plan, só mês atual), "N sem status";
   linha `.tr-month-tot` com 2+ linhas. A coluna "Mês" da lista (`trMonthCell`) não mudou.
 - Teste `tests/run_tr_monthly.js`.
+## Data de término digitável no tratamento (2026-10-07)
+Pedido do usuário. `#trFim` virou campo de data (digitável, `dpEnhanceDate`) gravado em
+`termino` (vazio = apaga). Não pode ser antes do início. `trEnd(t)` / `trEndText(t)` usam o
+digitado; sem ele, o automático (`trEndAuto` / `trEndAutoText` = último atendimento da Agenda,
+mostrado na dica `#trFimHint`). `trPeriodEnd(t)` = o menor entre o término digitado e o
+automático (`trPeriodEndAuto`): vale no contratado × realizado, relatório financeiro e
+tratamento vigente. Renegociar começa sem término. Sem SQL. Teste no fim de `tests/run_treatments.js`.

@@ -155,6 +155,25 @@ const path = require('path');
     ph.head.join('|') === 'Dia|Disponível' && ph.items.length === 3 && ph.offOk && ph.undoShown && ph.undoOk && ph.cleared && ph.copied, JSON.stringify(ph));
   await page.click('#trCancel').catch(() => {});
 
+  // Data de término digitável: antes do início é recusada; válida fica gravada e aparece na lista.
+  if (await page.$('#ovTreat')) await page.click('#trCancel').catch(() => {});
+  await page.$eval('#mainTabs button[data-tab=tratamentos]', (b) => b.click()); await page.waitForTimeout(200);
+  await page.click('#trHost tbody tr'); await page.waitForSelector('#ovTreat');
+  const fimInfo = await page.evaluate(() => ({ini: document.getElementById('trIni').value, editable: !document.getElementById('trFim').disabled, hint: (document.getElementById('trFimHint') || {}).textContent || ''}));
+  await page.$eval('#trFim', (e) => { e.value = '2000-01-01'; e.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.evaluate(() => { document.getElementById('toastHost').innerHTML = ''; });
+  await page.click('#trSave'); await page.waitForTimeout(200);
+  const fimErr = await page.innerText('#toastHost');
+  const fimDate = '2099-12-31';
+  await page.$eval('#trFim', (e, v) => { e.value = v; e.dispatchEvent(new Event('change', {bubbles: true})); }, fimDate);
+  const trId = await page.evaluate(() => { var o = document.getElementById('ovTreat'); return o && o.dataset && o.dataset.tr || null; });
+  await page.click('#trSave'); await page.waitForTimeout(300);
+  if (await page.$('#cfOk')) { await page.click('#cfOk'); await page.waitForTimeout(300); }
+  const savedFim = await page.evaluate((v) => (window.__STORE__['treatments/all'].list || []).some((x) => x.termino === v), fimDate);
+  const listShows = await page.$$eval('#trHost tbody tr', (r) => r.some((x) => x.textContent.indexOf("31/12/2099") !== -1));
+  console.log('Término is editable: before the start is refused; a valid date is saved and shown in the list?',
+    fimInfo.editable && /automático/.test(fimInfo.hint) && /término não pode ser antes do início/.test(fimErr) && savedFim && listShows, JSON.stringify(fimInfo), fimErr);
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });
