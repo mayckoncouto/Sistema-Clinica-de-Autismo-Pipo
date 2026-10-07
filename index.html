@@ -339,6 +339,32 @@ tr.is-inactive td{color:var(--muted)}
 .seg{display:flex;background:var(--surface-2);border-radius:9px;padding:3px;gap:2px}
 .seg button{border:0;background:transparent;padding:6px 12px;border-radius:6px;font:inherit;font-weight:700;font-size:12.5px;color:var(--ink-2);cursor:pointer;white-space:nowrap}
 .seg button.active{background:var(--accent);color:var(--accent-ink)}
+/* Acesso → Sistema (regras com chave) */
+.sys-bar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.sys-bar input[type=search]{flex:1 1 220px;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit}
+.sys-group{margin-bottom:16px}
+.sys-group-head{display:flex;align-items:center;gap:10px;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px}
+.sys-group-head h4{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2)}
+.sys-reset-g{padding:3px 8px;font-size:11.5px}
+.sys-rule{display:flex;align-items:center;gap:14px;padding:9px 2px;border-bottom:1px solid var(--line)}
+.sys-txt{flex:1 1 auto;min-width:0}
+.sys-label{font-weight:700;font-size:13px}
+.sys-desc{font-size:12px;color:var(--muted);margin-top:2px}
+.sys-seg{flex:none}
+.sys-seg button{padding:5px 10px;font-size:12px}
+.sys-seg button.sys-m-off.active{background:var(--ink-2);color:var(--surface)}
+.sys-seg button.sys-m-warn.active{background:#C98A12;color:#fff}
+.sys-lock{flex:none;font-size:12px;color:var(--muted);white-space:nowrap}
+.sys-locked .sys-label{color:var(--ink-2)}
+.sys-changed,.sys-db{display:inline-block;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:4px;vertical-align:1px}
+.sys-changed{background:var(--accent-weak);color:var(--accent)}
+.sys-db{background:var(--surface-2);color:var(--muted)}
+.sys-hist-tbl{width:100%}
+@media (max-width:760px){
+  .sys-rule{flex-wrap:wrap}
+  .sys-seg{width:100%}
+  .sys-seg button{flex:1 1 0}
+}
 .search-wrap{position:relative;flex:1;min-width:180px;max-width:320px}
 .search-wrap input{width:100%;padding:7px 10px 7px 30px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
 .search-wrap input:focus{outline:none;box-shadow:var(--ring);border-color:var(--accent)}
@@ -2971,6 +2997,8 @@ function patientConvenioName(p){
 // Para mostrar de novo: true (botão, tela de entrada, clique na logo).
 var INICIO_ON = false;
 var state = {
+  sysRules: {},          // Acesso → Sistema: {regra: modo} (config/system)
+  sysHist: [],
   tab: INICIO_ON ? "inicio" : "agenda",
   day: "seg",
   week: 1,
@@ -3313,6 +3341,7 @@ function connectDb(){
     subscribeSimpleLists();
     subscribeStatuses();
     subscribeClinic();
+    subscribeSystem();
     subscribeProfessionals();
     subscribeSchedule();
     subscribeReportDocs();
@@ -3570,6 +3599,209 @@ function confirmDialog(opts){
     document.getElementById("cfOk").addEventListener("click", function(){ done(true); });
     // Foco em "Cancelar": um Enter distraído não exclui nada.
     document.getElementById("cfCancel").focus();
+  });
+}
+/* ---------------- Sistema: regras com chave (Acesso → Sistema, só Administrador) ----------------
+ * Documento config/system {rules: {id: "block"|"warn"|"off"}, historico: [{em, por, id, de, para}]}.
+ * Cada regra tem um modo padrão (def) e os modos permitidos (modes). "locked" = regra de
+ * segurança (evita registros duplicados ou dados inconsistentes): aparece na lista, sem chave.
+ * "db" = o banco também confere (lê config/system: só recusa no modo Bloquear).
+ * Uso no código: sysMode(id) / sysOn(id); sysGate(id, título, mensagens, confirmação) para
+ * regras de aviso; plannerConflict / agdConflictIn devolvem {warn, msg} no modo Avisar. */
+var SYS_GROUPS = [
+  {k: "planner", label: "Planner"},
+  {k: "agenda", label: "Agenda"},
+  {k: "pacientes", label: "Pacientes"},
+  {k: "tratamentos", label: "Tratamentos"},
+  {k: "plano", label: "Plano Terapêutico"}
+];
+var SYS_MODE_LABEL = {block: "Bloquear", warn: "Avisar", off: "Desligado"};
+var BWO = ["block", "warn", "off"];
+var SYS_RULES = [
+  {id: "pl_nao_aba", g: "planner", label: "Paciente que não faz ABA ocupa o horário", desc: "Sessão de paciente que não faz ABA ocupa o horário do profissional (sala com ABA no nome) ou a sala toda (sala sem ABA).", def: "block", modes: BWO},
+  {id: "pl_prof_dois", g: "planner", label: "Profissional em dois lugares", desc: "O mesmo profissional não pode estar em duas salas ou grupos no mesmo horário.", def: "block", modes: BWO},
+  {id: "pl_pac_prof", g: "planner", label: "Paciente duas vezes com o mesmo profissional", desc: "O paciente não pode ter dois atendimentos com o mesmo profissional no mesmo horário.", def: "block", modes: BWO},
+  {id: "pl_pac_servico", g: "planner", label: "Paciente com o mesmo serviço em dois lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
+  {id: "pl_fora_prof", g: "planner", label: "Fora do horário de trabalho do profissional", desc: "Célula fora do horário de trabalho do profissional da coluna fica cinza e não aceita agendamento.", def: "block", modes: ["block", "off"]},
+  {id: "pl_fora_paciente", g: "planner", label: "Fora do horário do paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
+  {id: "pl_terapeuta", g: "planner", label: "Terapeuta diferente do tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
+  {id: "pl_area", g: "planner", label: "Profissional fora das especialidades do tratamento", desc: "Sessão com profissional cuja especialidade (principal ou complementar) não está no tratamento.", def: "warn", modes: BWO},
+  {id: "pl_so_cadastrado", g: "planner", label: "Só agenda quem está cadastrado", desc: "O nome precisa ser de um paciente (ou de uma sala, nos grupos) do cadastro.", def: "block", locked: true},
+  {id: "pl_grupo_sala", g: "planner", label: "Grupo só recebe sala; sala só recebe paciente", desc: "Célula de grupo de suporte só aceita nome de sala; célula de sala só aceita paciente.", def: "block", locked: true},
+  {id: "ag_nao_aba", g: "agenda", label: "Paciente que não faz ABA ocupa o horário", desc: "Mesma regra do Planner, pela data do atendimento.", def: "block", modes: BWO},
+  {id: "ag_prof_dois", g: "agenda", label: "Profissional em dois lugares", desc: "O mesmo profissional não pode estar em salas diferentes no mesmo horário.", def: "block", modes: BWO},
+  {id: "ag_pac_servico", g: "agenda", label: "Paciente com o mesmo serviço em dois lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
+  {id: "ag_fora_trabalho", g: "agenda", label: "Fora do horário de trabalho do profissional", desc: "Horário fora do expediente do profissional fica hachurado e não aceita agendamento.", def: "block", modes: ["block", "off"]},
+  {id: "ag_feriado", g: "agenda", label: "Feriado ou recesso", desc: "Agendar em data cadastrada em Feriados e recessos.", def: "warn", modes: BWO},
+  {id: "ag_fora_paciente", g: "agenda", label: "Fora do horário do paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
+  {id: "ag_terapeuta", g: "agenda", label: "Terapeuta diferente do tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
+  {id: "ag_area", g: "agenda", label: "Profissional fora das especialidades do tratamento", desc: "Sessão com profissional cuja especialidade não está no tratamento.", def: "warn", modes: BWO},
+  {id: "ag_objetivos", g: "agenda", label: "Sem objetivos em comum", desc: "Pacientes do mesmo profissional e horário sem nenhum objetivo em comum no plano terapêutico.", def: "warn", modes: BWO},
+  {id: "ag_final_evolucao", g: "agenda", label: "Finalizado exige evolução", desc: "Para marcar Finalizado é preciso registrar a evolução no prontuário. Avisar = pergunta e deixa finalizar sem evolução.", def: "block", modes: BWO, db: true},
+  {id: "ag_final_terapeuta", g: "agenda", label: "Finalizado travado para o terapeuta", desc: "O terapeuta não altera o status de um atendimento já finalizado.", def: "block", modes: ["block", "off"], db: true},
+  {id: "ag_evolucao_apagar", g: "agenda", label: "Atendimento com evolução não é apagado", desc: "Só o Administrador exclui atendimento que tem evolução no prontuário.", def: "block", locked: true},
+  {id: "pac_cpf_unico", g: "pacientes", label: "CPF do paciente válido e único", desc: "Dois pacientes não podem ter o mesmo CPF.", def: "block", locked: true},
+  {id: "pac_cpf_pais", g: "pacientes", label: "CPF de mãe ou pai igual ao de outro paciente", desc: "Aviso ao salvar quando o CPF da mãe ou do pai já está em outro paciente (irmãos, por exemplo).", def: "warn", modes: ["warn", "off"]},
+  {id: "pac_entrada", g: "pacientes", label: "Data de entrada × início do tratamento", desc: "A data de entrada não passa do início do 1º tratamento, e o tratamento não começa antes dela.", def: "block", modes: BWO},
+  {id: "tr_um_ativo", g: "tratamentos", label: "Um só tratamento Ativo por paciente", desc: "Salvar outro Ativo passa o anterior para Renegociado.", def: "block", locked: true},
+  {id: "tr_cancelado_def", g: "tratamentos", label: "Cancelado é definitivo", desc: "Tratamento cancelado não volta a outro status; para retomar, crie um novo.", def: "block", modes: ["block", "off"], db: true},
+  {id: "tr_cancel_motivo", g: "tratamentos", label: "Cancelar exige motivo", desc: "Ao cancelar, escolher o motivo (\"Outro\" exige observação).", def: "block", modes: ["block", "off"], db: true},
+  {id: "tr_soma", g: "tratamentos", label: "Sessão/Mês diferente da soma das especialidades", desc: "Salvar o tratamento com a soma das especialidades/serviços diferente de Sessão/Mês.", def: "warn", modes: BWO},
+  {id: "tr_realizados", g: "tratamentos", label: "Tratamento com atendimentos realizados fica travado", desc: "Com atendimento Finalizado, o pacote e as quantidades não mudam e o tratamento não é excluído (use Renegociar).", def: "block", modes: BWO},
+  {id: "plan_um_vigente", g: "plano", label: "Um plano vigente por paciente", desc: "Revisar cria uma nova versão; a anterior fica guardada.", def: "block", locked: true},
+  {id: "plan_obj_spec", g: "plano", label: "Objetivo precisa de especialidade", desc: "Cada objetivo tem ao menos uma especialidade que pode trabalhá-lo.", def: "block", locked: true}
+];
+var SYS_RULE_MAP = {};
+SYS_RULES.forEach(function(r){ if (!r.modes) r.modes = [r.def]; SYS_RULE_MAP[r.id] = r; });
+function sysMode(id){
+  var r = SYS_RULE_MAP[id]; if (!r) return "block";
+  if (r.locked) return r.def;
+  var v = state.sysRules && state.sysRules[id];
+  return (v && r.modes.indexOf(v) !== -1) ? v : r.def;
+}
+function sysOn(id){ return sysMode(id) !== "off"; }
+function sysPlain(html){ var d = document.createElement("div"); d.innerHTML = String(html || "").replace(/<br\s*\/?>/gi, " · "); return (d.textContent || "").trim(); }
+// Regra de aviso: sem mensagens = segue; Desligado = segue; Bloquear = recusa com aviso;
+// Avisar = a confirmação de sempre (warnFn) ou uma confirmação simples.
+function sysGate(id, title, msgs, warnFn){
+  msgs = (msgs || []).filter(Boolean);
+  if (!msgs.length) return Promise.resolve(true);
+  var m = sysMode(id);
+  if (m === "off") return Promise.resolve(true);
+  if (m === "block"){ showToast(title + ": " + sysPlain(msgs[0]) + (msgs.length > 1 ? " (e mais " + (msgs.length - 1) + ")" : ""), true); return Promise.resolve(false); }
+  return warnFn ? warnFn() : sysWarnConfirm(title, msgs);
+}
+function sysWarnConfirm(title, msgs){
+  msgs = Array.isArray(msgs) ? msgs : [msgs];
+  return confirmDialog({title: title, message: msgs.slice(0, 8).map(function(m){ return /<[a-z]/i.test(m) ? m : esc(m); }).join("<br>") + (msgs.length > 8 ? "<br>…" : "") + "<br>Continuar mesmo assim?", confirmLabel: "Continuar assim mesmo"});
+}
+// Conflito vindo de plannerConflict / agdConflictIn: texto = recusa; {warn, msg} = pergunta.
+function sysConflictGate(conflict){
+  if (!conflict) return Promise.resolve(true);
+  if (typeof conflict === "object" && conflict.warn) return sysWarnConfirm("Regra do sistema", [conflict.msg]);
+  showToast(conflict, true);
+  return Promise.resolve(false);
+}
+// Botão Salvar com regra (Acesso → Sistema): Bloquear = aviso e para; Avisar = pergunta e,
+// confirmando, clica de novo no botão com a regra liberada; Desligado = segue.
+function sysSaveGate(btn, id, title, msg, onBlock){
+  var m = sysMode(id);
+  if (m === "off" || (btn && btn._sysOk && btn._sysOk[id])) return true;
+  if (m === "block" || !btn){ if (onBlock) onBlock(); showToast(msg, true); return false; }
+  sysWarnConfirm(title, [msg]).then(function(ok){
+    if (!ok) return;
+    btn._sysOk = btn._sysOk || {}; btn._sysOk[id] = true;
+    try { btn.click(); } finally { delete btn._sysOk[id]; }
+  });
+  return false;
+}
+// Ferramentas em lote: só a recusa conta (regra em "Avisar" deixa passar).
+function sysHard(c){ return typeof c === "string" ? c : null; }
+function sysIsAdmin(){ return !window.pipoAuth || window.pipoAuth.isAdmin(); }
+function subscribeSystem(){
+  if (!db) return;
+  db.doc("config/system").onSnapshot(function(snap){
+    var d = (snap.exists && snap.data()) || {};
+    state.sysRules = d.rules || {};
+    state.sysHist = Array.isArray(d.historico) ? d.historico : [];
+    if (state.tab === "agenda" && typeof renderGrid === "function") renderGrid();
+    if (state.tab === "agendadia" && typeof agdRenderIfVisible === "function") agdRenderIfVisible();
+  }, function(){});
+}
+window.pipoOpenSystem = function(){ openSystemModal(); }; // menu Acesso → Sistema
+function openSystemModal(){
+  if (!sysIsAdmin()){ showToast("Só o Administrador abre as regras do sistema.", true); return; }
+  var host = document.getElementById("modalHost");
+  var cur = {}; SYS_RULES.forEach(function(r){ cur[r.id] = sysMode(r.id); });
+  var q = "";
+  function segHtml(r){
+    if (r.locked) return '<span class="sys-lock" title="Regra de segurança: evita registros duplicados ou dados inconsistentes">🔒 Sempre ligada</span>';
+    return '<div class="seg sys-seg" role="group" aria-label="' + esc(r.label) + '">' + r.modes.map(function(m){
+      return '<button type="button" class="' + (cur[r.id] === m ? 'active ' : '') + 'sys-m-' + m + '" data-sys="' + r.id + '" data-mode="' + m + '" aria-pressed="' + (cur[r.id] === m) + '">' + SYS_MODE_LABEL[m] + '</button>';
+    }).join("") + '</div>';
+  }
+  function body(){
+    var nq = normText(q);
+    return SYS_GROUPS.map(function(g){
+      var rules = SYS_RULES.filter(function(r){ return r.g === g.k && (!nq || normText(r.label + " " + r.desc + " " + g.label).indexOf(nq) !== -1); });
+      if (!rules.length) return "";
+      var anyChange = rules.some(function(r){ return !r.locked && cur[r.id] !== r.def; });
+      return '<section class="sys-group"><div class="sys-group-head"><h4>' + esc(g.label) + '</h4>' +
+        (anyChange ? '<button type="button" class="btn ghost sys-reset-g" data-sys-reset="' + g.k + '">Restaurar padrão do grupo</button>' : '') + '</div>' +
+        rules.map(function(r){
+          var changed = !r.locked && cur[r.id] !== r.def;
+          return '<div class="sys-rule' + (r.locked ? ' sys-locked' : '') + '" data-rule="' + r.id + '"><div class="sys-txt"><div class="sys-label">' + esc(r.label) +
+            (changed ? ' <span class="sys-changed" title="Padrão: ' + esc(SYS_MODE_LABEL[r.def]) + '">alterada</span>' : '') +
+            (r.db ? ' <span class="sys-db" title="O banco de dados também confere esta regra">banco</span>' : '') +
+            '</div><div class="sys-desc">' + esc(r.desc) + '</div></div>' + segHtml(r) + '</div>';
+        }).join("") + '</section>';
+    }).join("") || '<p class="pat-count">Nenhuma regra encontrada.</p>';
+  }
+  function histHtml(){
+    var h = (state.sysHist || []).slice().reverse();
+    if (!h.length) return '<p class="pat-count">Nenhuma mudança registrada.</p>';
+    return '<table class="pat-table sys-hist-tbl"><thead><tr><th>Quando</th><th>Quem</th><th>Regra</th><th>De</th><th>Para</th></tr></thead><tbody>' +
+      h.slice(0, 200).map(function(x){
+        var r = SYS_RULE_MAP[x.id], g = r && SYS_GROUPS.filter(function(y){ return y.k === r.g; })[0];
+        var dt = x.em ? new Date(x.em) : null;
+        return '<tr><td>' + esc(dt ? dt.toLocaleDateString("pt-BR") + " " + dt.toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"}) : "") + '</td><td>' + esc(x.por || "") + '</td><td>' +
+          esc((g ? g.label + " · " : "") + (r ? r.label : x.id)) + '</td><td>' + esc(SYS_MODE_LABEL[x.de] || x.de || "") + '</td><td>' + esc(SYS_MODE_LABEL[x.para] || x.para || "") + '</td></tr>';
+      }).join("") + '</tbody></table>';
+  }
+  host.innerHTML =
+    '<div class="overlay" id="ovSys" role="dialog" aria-modal="true" aria-labelledby="sysTitle"><div class="modal" style="max-width:860px">' +
+      '<div class="modal-head"><div><h3 id="sysTitle">Sistema</h3><div class="modal-sub">Regras do sistema por tela. <b>Bloquear</b> recusa; <b>Avisar</b> pergunta e deixa continuar; <b>Desligado</b> não confere. As regras com 🔒 evitam registros duplicados ou dados inconsistentes e ficam sempre ligadas.</div></div>' +
+        '<button class="modal-close" id="sysClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="sys-bar"><input type="search" id="sysSearch" placeholder="Buscar regra…" aria-label="Buscar regra">' +
+          '<div class="seg" id="sysView"><button type="button" class="active" data-view="regras">Regras</button><button type="button" data-view="hist">Histórico</button></div></div>' +
+        '<div id="sysBody">' + body() + '</div><div id="sysHist" hidden>' + histHtml() + '</div>' +
+      '</div>' +
+      '<div class="modal-foot"><button class="btn ghost" id="sysResetAll">Restaurar tudo</button><div class="spacer"></div>' +
+        '<button class="btn ghost" id="sysCancel">Cancelar</button><button class="btn primary" id="sysSave">Salvar</button></div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovSys"), bodyEl = document.getElementById("sysBody");
+  function close(){ host.innerHTML = ""; }
+  function redraw(){ bodyEl.innerHTML = body(); }
+  document.getElementById("sysClose").addEventListener("click", close);
+  document.getElementById("sysCancel").addEventListener("click", close);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("sysSearch").addEventListener("input", function(e){ q = e.target.value; redraw(); });
+  document.getElementById("sysView").addEventListener("click", function(e){
+    var b = e.target.closest("[data-view]"); if (!b) return;
+    var hist = b.getAttribute("data-view") === "hist";
+    this.querySelectorAll("button").forEach(function(x){ x.classList.toggle("active", x === b); });
+    bodyEl.hidden = hist; document.getElementById("sysHist").hidden = !hist; document.getElementById("sysSearch").hidden = hist;
+  });
+  bodyEl.addEventListener("click", function(e){
+    var b = e.target.closest("[data-sys]");
+    if (b){ cur[b.getAttribute("data-sys")] = b.getAttribute("data-mode"); redraw(); return; }
+    var rg = e.target.closest("[data-sys-reset]");
+    if (rg){ var gk = rg.getAttribute("data-sys-reset"); SYS_RULES.forEach(function(r){ if (r.g === gk) cur[r.id] = r.def; }); redraw(); }
+  });
+  document.getElementById("sysResetAll").addEventListener("click", function(){
+    confirmDialog({title: "Restaurar tudo", message: "Voltar todas as regras ao padrão do sistema? (Só vale depois de Salvar.)", confirmLabel: "Restaurar"}).then(function(ok){
+      if (!ok) return; SYS_RULES.forEach(function(r){ cur[r.id] = r.def; }); redraw();
+    });
+  });
+  document.getElementById("sysSave").addEventListener("click", function(){
+    var rules = {}, hist = (state.sysHist || []).slice(), now = new Date().toISOString(), who = trWho() || "Administrador", n = 0;
+    SYS_RULES.forEach(function(r){
+      if (r.locked) return;
+      if (cur[r.id] !== r.def) rules[r.id] = cur[r.id];
+      var was = sysMode(r.id);
+      if (was !== cur[r.id]){ hist.push({em: now, por: who, id: r.id, de: was, para: cur[r.id]}); n++; }
+    });
+    if (!n){ close(); return; }
+    if (hist.length > 300) hist = hist.slice(hist.length - 300);
+    if (!db){ state.sysRules = rules; state.sysHist = hist; close(); showToast("Regras alteradas (sem conexão: só nesta tela)."); return; }
+    var btn = this; btn.disabled = true;
+    db.doc("config/system").set({rules: rules, historico: hist}).then(function(){
+      state.sysRules = rules; state.sysHist = hist; close();
+      showToast(n === 1 ? "1 regra alterada." : n + " regras alteradas.");
+      if (state.tab === "agenda") renderGrid();
+      if (state.tab === "agendadia" && typeof agdRenderIfVisible === "function") agdRenderIfVisible();
+    }).catch(function(err){ btn.disabled = false; showToast("Não foi possível salvar: " + ((err && err.message) || err), true); });
   });
 }
 // Lista de cadastro com "+" ao lado (incluir na hora, sem sair da janela).
@@ -4448,20 +4680,22 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         // aparecendo normalmente para poder ser movido ou desmarcado.
         var abaOwn = t.professionalId ? abaByProf[t.professionalId] : null;
         var abaHolder = abaAny || abaOwn;
-        var abaLock = !(b && b.patient) && !!abaHolder;
+        var abaLock = !(b && b.patient) && !!abaHolder && sysOn("pl_nao_aba");
         // atendimento do mesmo profissional em OUTRA sala ou grupo neste horário
         // (inclusive o grupo do profissional que marca esta mesma sala — 2026-10-06)
         var pw = t.professionalId ? (profWhere[t.professionalId] || []).filter(function(x){ return x.id !== r.id; }) : [];
         var busyAt = pw[0] || null;
-        var busyLock = !(b && b.patient) && !!busyAt;
+        var busyLock = !(b && b.patient) && !!busyAt && sysOn("pl_prof_dois");
+        var busyWarn = busyLock && sysMode("pl_prof_dois") === "warn";
         var isOff = abaLock || busyLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
         // Só a regra "não ABA" travando: dá para marcar outro serviço (não Sessão) — a
         // célula aceita clique/colar/soltar e a gravação confere o serviço.
-        var abaSoft = abaLock && !busyLock && seatAvailable(t, dayObj.key, row.time);
+        // Regra em "Avisar" (Acesso → Sistema): a célula aceita e a gravação pergunta.
+        var abaSoft = (abaLock || busyWarn) && (!busyLock || busyWarn) && seatAvailable(t, dayObj.key, row.time);
         var offTitle = abaLock ? abaRoomMsg(abaHolder, r.name, row.time, roomIsABA(r) ? professionalName(t.professionalId) : "") + (abaSoft ? " Outros serviços (que não Sessão) podem ser marcados." : "")
           : busyLock ? professionalName(t.professionalId) + (busyAt.grp ? " tem agendamento no grupo " : " está atendendo em ") + busyAt.name + " neste horário."
           : "Fora do horário do profissional";
-        html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock'+(abaSoft ? ' aba-soft' : '') : (busyLock ? ' prof-busy' : '')) : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
+        html += '<td class="slotcell'+(isOff ? ' slot-off'+(abaLock ? ' aba-lock'+(abaSoft ? ' aba-soft' : '') : (busyLock ? ' prof-busy'+(abaSoft ? ' aba-soft' : '') : '')) : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
         if (isOff){
           html += '<div class="book"><div class="book-main off-box" aria-hidden="true"></div></div>';
         } else if (b && b.patient){
@@ -4990,6 +5224,16 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
   var svc = rec.service || DEFAULT_SERVICE_ID;
   var recNaoABA = !isGroup(room) && isNaoABABooking(rec, profId);
   var rooms = plannerRooms();
+  // Acesso → Sistema: regra em "Bloquear" recusa (texto); "Avisar" guarda o 1º aviso
+  // e segue procurando recusas ({warn, msg} no fim); "Desligado" não confere.
+  var warned = null;
+  function hit(id, msg){
+    var m = sysMode(id);
+    if (m === "off") return null;
+    if (m === "warn"){ if (!warned) warned = {warn: true, rule: id, msg: msg}; return null; }
+    return msg;
+  }
+  var x;
   for (var i=0;i<rooms.length;i++){
     var r = rooms[i], seats = r.therapists || [];
     for (var j=0;j<seats.length;j++){
@@ -5001,24 +5245,22 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       // profissional; em sala sem "ABA" no nome vale para a sala toda.
       var sameProfSeat = !!profId && t.professionalId === profId;
       if (r.id === room.id && !isGroup(room) && (sameProfSeat || !roomIsABA(room))){
-        if (recNaoABA) return roomIsABA(room)
+        if (recNaoABA && (x = hit("pl_nao_aba", roomIsABA(room)
           ? "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + professionalName(profId) + " já tem " + b.patient + " às " + time + " em " + room.name + "."
-          : "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + ".";
-        if (svc === DEFAULT_SERVICE_ID && isNaoABABooking(b, t.professionalId)) return abaRoomMsg(b.patient, room.name, time, roomIsABA(room) ? professionalName(profId) : "");
+          : "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + "."))) return x;
+        if (!recNaoABA && svc === DEFAULT_SERVICE_ID && isNaoABABooking(b, t.professionalId) && (x = hit("pl_nao_aba", abaRoomMsg(b.patient, room.name, time, roomIsABA(room) ? professionalName(profId) : "")))) return x;
       }
       // Profissional em dois lugares: vale também para o grupo que marca a mesma sala
       // (2026-10-06 — sem exceção nos dois sentidos).
-      if (profId && t.professionalId === profId && r.id !== room.id) return profBusyMsg(professionalName(profId), time, r.name);
+      if (profId && t.professionalId === profId && r.id !== room.id && (x = hit("pl_prof_dois", profBusyMsg(professionalName(profId), time, r.name)))) return x;
       // Mesmo paciente com o MESMO profissional no mesmo horário: nunca (nem com outro serviço).
-      if (patientRule && !isGroup(r) && profId && t.professionalId === profId && normText(b.patient) === normText(rec.patient)){
-        return rec.patient + " já está com " + professionalName(profId) + " às " + time + " em " + r.name + ". O mesmo paciente não pode ter dois atendimentos com o mesmo profissional no mesmo horário, nem com outro serviço.";
-      }
-      if (patientRule && !isGroup(r) && normText(b.patient) === normText(rec.patient) && (b.service || DEFAULT_SERVICE_ID) === svc){
-        return patientBusyMsg(rec.patient, bookingServiceName(b), time, r.name + " (" + therapistDisplayName(t) + ")");
-      }
+      if (patientRule && !isGroup(r) && profId && t.professionalId === profId && normText(b.patient) === normText(rec.patient) &&
+          (x = hit("pl_pac_prof", rec.patient + " já está com " + professionalName(profId) + " às " + time + " em " + r.name + ". O mesmo paciente não pode ter dois atendimentos com o mesmo profissional no mesmo horário, nem com outro serviço."))) return x;
+      if (patientRule && !isGroup(r) && normText(b.patient) === normText(rec.patient) && (b.service || DEFAULT_SERVICE_ID) === svc &&
+          (x = hit("pl_pac_servico", patientBusyMsg(rec.patient, bookingServiceName(b), time, r.name + " (" + therapistDisplayName(t) + ")")))) return x;
     }
   }
-  return null;
+  return warned;
 }
 
 // Item da lista de sugestões ao agendar (Planner e Agenda): paciente com a
@@ -5138,8 +5380,7 @@ function openBookingModal(ctx){
     }
     var rec = kind ? slotKindRecord(kind, note) : {patient: name, note: note, service: serviceSel.value || DEFAULT_SERVICE_ID};
     var conflict = plannerConflict(ctx.docId, ctx.key, rec);
-    if (conflict){ showToast(conflict, true); return; }
-    writeBooking(ctx.docId, ctx.key, rec).then(close);
+    sysConflictGate(conflict).then(function(ok){ if (ok) writeBooking(ctx.docId, ctx.key, rec).then(close); });
   });
 }
 
@@ -5476,30 +5717,30 @@ function applyBookingChanges(changesByDoc, opts){
   }
   // Fora do horário de atendimento do paciente: confirmação dupla (não vale para desfazer/refazer).
   if (!opts.history && !opts.patientHoursOk){
-    var outside = patientHoursOutside(changesByDoc);
+    var outside = sysOn("pl_fora_paciente") ? patientHoursOutside(changesByDoc) : [];
     if (outside.length){
       var many = outside.length > 1;
-      return confirmDialog({title: "Fora do horário do paciente",
+      return sysGate("pl_fora_paciente", "Fora do horário do paciente", outside, function(){ return confirmDialog({title: "Fora do horário do paciente",
         message: (many ? "Estes agendamentos ficam" : "Este agendamento fica") + " fora do horário de atendimento cadastrado para o paciente:<br>" + outside.slice(0, 8).join("<br>") + (outside.length > 8 ? "<br>…" : ""),
         confirmLabel: "Continuar"})
-        .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar mesmo fora do horário do paciente?", confirmLabel: "Agendar assim mesmo"}); })
+        .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar mesmo fora do horário do paciente?", confirmLabel: "Agendar assim mesmo"}); }); })
         .then(function(ok){ return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {patientHoursOk: true})) : false; });
     }
   }
   // Terapeuta diferente do indicado no tratamento: confirmação dupla (não vale para desfazer/refazer).
   if (!opts.history && !opts.therapistOk){
-    var mism = therapistMismatches(changesByDoc);
+    var mism = sysOn("pl_terapeuta") ? therapistMismatches(changesByDoc) : [];
     if (mism.length){
-      return therapistConfirm(mism).then(function(ok){
+      return sysGate("pl_terapeuta", "Terapeuta diferente do tratamento", mism, function(){ return therapistConfirm(mism); }).then(function(ok){
         return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {therapistOk: true})) : false;
       });
     }
   }
   // Profissional fora das especialidades do tratamento: aviso (não vale para desfazer/refazer).
   if (!opts.history && !opts.areaOk){
-    var outArea = areaMismatches(changesByDoc);
+    var outArea = sysOn("pl_area") ? areaMismatches(changesByDoc) : [];
     if (outArea.length){
-      return areaConfirm(outArea).then(function(ok){
+      return sysGate("pl_area", "Profissional fora das especialidades do tratamento", outArea, function(){ return areaConfirm(outArea); }).then(function(ok){
         return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {areaOk: true})) : false;
       });
     }
@@ -5636,9 +5877,11 @@ function moveBooking(fromDocId, fromKey, toDocId, toKey){
   var dstNow = effectiveBooking(toBk, toKey, toDocId.split("-")[0], toKey.split("|")[0]);
   var sameDoc = fromDocId === toDocId, ex1 = {}, ex2 = {};
   if (sameDoc){ ex1[fromKey] = dstNow || null; ex2[toKey] = src; }
-  var conflict = plannerConflict(toDocId, toKey, src, sameDoc ? [fromKey] : [], ex1) ||
-    (dstNow ? plannerConflict(fromDocId, fromKey, dstNow, sameDoc ? [toKey] : [], ex2) : null);
-  if (conflict){ showToast(conflict, true); return Promise.resolve(false); }
+  var cA = plannerConflict(toDocId, toKey, src, sameDoc ? [fromKey] : [], ex1),
+    cB = dstNow ? plannerConflict(fromDocId, fromKey, dstNow, sameDoc ? [toKey] : [], ex2) : null;
+  var conflict = (typeof cA === "string" && cA) || (typeof cB === "string" && cB) || cA || cB;
+  return sysConflictGate(conflict).then(function(ok){ return ok ? moveDo() : false; });
+  function moveDo(){
   if (fromDocId === toDocId){
     var toTime = toKey.split("|")[0];
     var dst = effectiveBooking(srcBookings, toKey, fromDayKey, toTime);
@@ -5659,6 +5902,7 @@ function moveBooking(fromDocId, fromKey, toDocId, toKey){
   byDoc2[toDocId] = {};
   byDoc2[toDocId][toKey] = src;
   return applyBookingChanges(byDoc2);
+  }
 }
 
 function buildPasteChanges(toDocId, toKey){
@@ -5697,7 +5941,11 @@ function pasteToSlot(toDocId, toKey){
   var clipRec = state.clipboard.rec || {patient: state.clipboard.patient, blocked: state.clipboard.blocked};
   var conflict = plannerConflict(toDocId, toKey, clipRec,
     (state.clipboard.mode === "move" && state.clipboard.sourceDocId === toDocId) ? [state.clipboard.sourceKey] : []);
-  if (conflict){ showToast(conflict, true); return; }
+  if (conflict){ sysConflictGate(conflict).then(function(ok){ if (ok) pasteGo(toDocId, toKey); }); return; }
+  pasteGo(toDocId, toKey);
+}
+function pasteGo(toDocId, toKey){
+  if (!state.clipboard) return;
   if (state.clipboard.mode === "move" && toDocId === state.clipboard.sourceDocId && toKey === state.clipboard.sourceKey){
     // Dropping/clicking back onto its own source cell is a no-op cancel.
     state.clipboard = null;
@@ -7080,7 +7328,7 @@ function openPatientModal(p){
   ["mae", "pai"].forEach(function(role){
     var el = $("pm-" + role + "-cpf"); if (!el) return;
     function chk(){
-      var others = patSameParent(el.value, v.id), note = overlay.querySelector('[data-note="' + role + '"]');
+      var others = sysOn("pac_cpf_pais") ? patSameParent(el.value, v.id) : [], note = overlay.querySelector('[data-note="' + role + '"]');
       if (!note) return;
       note.hidden = !others.length;
       note.textContent = others.length ? "Já existe cadastro com " + (role === "mae" ? "a mesma mãe" : "o mesmo pai") + ": " + others.join(", ") + "." : "";
@@ -7229,7 +7477,7 @@ function openPatientModal(p){
     var mailsAll = (d.emails || []).map(function(m){ return m.email; }).concat(d.financeiro ? [d.financeiro.email] : []).filter(Boolean);
     if (mailsAll.some(function(m){ return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m); })){ focusSec("contato"); showToast("Confira os e-mails: há um e-mail inválido.", true); return; }
     var firstTr = !isNew ? patFirstTreatmentStart(v.id) : "";
-    if (d.entrada && firstTr && d.entrada > firstTr){ focusSec("ident"); showToast("Este paciente tem tratamento desde " + trBr(firstTr) + ": a data de entrada precisa ser até essa data.", true); return; }
+    if (d.entrada && firstTr && d.entrada > firstTr && !sysSaveGate($("pSave"), "pac_entrada", "Data de entrada", "Este paciente tem tratamento desde " + trBr(firstTr) + ": a data de entrada precisa ser até essa data.", function(){ focusSec("ident"); })) return;
     var nascVal = d.nascimento !== undefined ? d.nascimento : (v.nascimento || "");
     var idadeManualInp = $("pIdade"), idadeOut;
     if (nascVal){ var calcAge = computeAgeFromBirth(nascVal); idadeOut = calcAge != null ? calcAge : ""; }
@@ -8822,6 +9070,7 @@ var PROF_WEEKDAYS = [
 // A coluna (assento) de uma sala está disponível nesse dia/horário? Segue o
 // horário do profissional ligado a ela; coluna sem profissional = sempre disponível.
 function seatAvailable(t, dayKey, time){
+  if (!sysOn("pl_fora_prof")) return true;   // Acesso → Sistema
   var prof = t && t.professionalId ? findProfessional(t.professionalId) : null;
   if (!prof) return true;
   return profSlotOk(prof, dayKey, time);
@@ -9377,7 +9626,7 @@ function plannerSeatRemovalFlow(rec, removedSeats, newList, changedSeats){
           var dst = (state.scheduleDocs[it.docId] && state.scheduleDocs[it.docId].bookings) || {};
           var ok = !used[uk] && !bkHasContent(effectiveBooking(dst, tk, dayKey, it.time));
           if (ok && !bookingKind(it.rec)){
-            ok = seatAvailable(tg.seat, dayKey, it.time) && !slotRefusal(tg.room.id, it.rec) && !plannerConflict(it.docId, tk, it.rec, srcKeys);
+            ok = seatAvailable(tg.seat, dayKey, it.time) && !slotRefusal(tg.room.id, it.rec) && !sysHard(plannerConflict(it.docId, tk, it.rec, srcKeys));
           }
           if (ok){ changes[it.docId][tk] = it.rec; used[uk] = true; moved++; } else left++;
         });
@@ -9781,7 +10030,7 @@ function agdProfRoom(profId){
 // Horário do profissional na data (cada dia da semana tem o seu); null = não atende.
 function agdProfHours(p, date){ return profDayHours(p, AD_WEEKDAY_KEYS[(date || AD.date).getDay()]); }
 function agdHoursText(h){ return h ? h.ranges.map(function(r){ return r.start + "–" + r.end; }).join(" e ") : "Não atende"; }
-function agdInHours(p, t, date){ return profSlotOk(p, AD_WEEKDAY_KEYS[(date || AD.date).getDay()], t); }
+function agdInHours(p, t, date){ return !sysOn("ag_fora_trabalho") || profSlotOk(p, AD_WEEKDAY_KEYS[(date || AD.date).getDay()], t); }
 function agdResColor(r){
   if (AD.mode === "sala") return swatchVar(r.color || "teal");
   var s = r.specialtyId ? state.specialties.filter(function(x){ return x.id === r.specialtyId; })[0] : null;
@@ -9929,8 +10178,23 @@ function agdChangeStatus(row, v){
   if (v !== FINAL_STATUS) return agdSetStatus(row, v);
   var p = findPatientByName(row.patient);
   if (!p) return agdSetStatus(row, v);
+  var fMode = sysMode("ag_final_evolucao");   // Acesso → Sistema
+  if (fMode === "off") return agdSetStatus(row, v);
   return agdClient().from("clinical_records").select("id").eq("appointment_id", row.id).then(function(r){
     if (!r.error && (r.data || []).length) return agdSetStatus(row, v);
+    if (fMode === "warn"){
+      return confirmDialog({title: "Finalizar sem evolução?",
+        message: "Este atendimento ainda não tem evolução no prontuário.<br><b>Finalizar sem evolução</b> marca o status agora." + (prCan("create") ? " <b>Cancelar</b> abre a evolução para registrar." : ""),
+        confirmLabel: "Finalizar sem evolução"}).then(function(ok){
+          if (ok) return agdSetStatus(row, v);
+          if (!prCan("create")) return false;
+          return new Promise(function(resolve){
+            prOpenEditor({patient: p, appointment: row,
+              onSaved: function(){ agdSetStatus(row, v).then(resolve); },
+              onCancel: function(){ resolve(false); }});
+          });
+        });
+    }
     if (!prCan("create")){
       showToast("Para finalizar, é preciso registrar a evolução deste atendimento no prontuário (seu nível não tem essa permissão).", true);
       return false;
@@ -10537,8 +10801,7 @@ function agdOpenModal(opts){
     saveBtn.disabled = true;
     agdConflictsFor([rec], row ? [row.id] : []).then(function(conflict){
       saveBtn.disabled = false;
-      if (conflict){ showToast(conflict, true); return; }
-      agdPatientConfirm([{rec: rec, old: row}]).then(function(ok){ if (ok) checkRoomThenSave(); });
+      sysConflictGate(conflict).then(function(go){ if (go) agdPatientConfirm([{rec: rec, old: row}]).then(function(ok){ if (ok) checkRoomThenSave(); }); });
     }).catch(function(err){ saveBtn.disabled = false; showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
   });
   var first = document.getElementById(canSave && !rowKind ? "agdPac" : "agdCancel");
@@ -10557,9 +10820,9 @@ function agdPatientConfirm(pairs){
     var h = holidayAt(rec.date, rec.time);
     return h ? esc(agdBrDate(rec.date)) + " às " + esc(rec.time) + " — <b>" + esc(h.name) + "</b>" : null;
   }).filter(Boolean);
-  if (hols.length) return confirmDialog({title: "Feriado ou recesso",
+  if (hols.length && sysOn("ag_feriado")) return sysGate("ag_feriado", "Feriado ou recesso", hols, function(){ return confirmDialog({title: "Feriado ou recesso",
     message: (hols.length > 1 ? "Estes horários caem" : "Este horário cai") + " em feriado ou recesso:<br>" + hols.slice(0, 8).join("<br>") + "<br>Marcar mesmo assim?",
-    confirmLabel: "Marcar assim mesmo"}).then(function(ok){ return ok ? agdPatientConfirmHours(pairs) : false; });
+    confirmLabel: "Marcar assim mesmo"}); }).then(function(ok){ return ok ? agdPatientConfirmHours(pairs) : false; });
   return agdPatientConfirmHours(pairs);
 }
 function agdPatientConfirmHours(pairs){
@@ -10572,10 +10835,10 @@ function agdPatientConfirmHours(pairs){
     if (!p || patientSlotOk(p, dayKey, rec.time)) return null;
     return "<b>" + esc(p.nome) + "</b> — " + esc(agdBrDate(rec.date)) + " às " + esc(rec.time);
   }).filter(Boolean);
-  var first = !out.length ? Promise.resolve(true) : confirmDialog({title: "Fora do horário do paciente",
+  var first = sysGate("ag_fora_paciente", "Fora do horário do paciente", out, function(){ return confirmDialog({title: "Fora do horário do paciente",
     message: (out.length > 1 ? "Estes agendamentos ficam" : "Este agendamento fica") + " fora do horário de atendimento cadastrado no tratamento do paciente:<br>" + out.slice(0, 8).join("<br>"),
     confirmLabel: "Continuar"})
-    .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar mesmo fora do horário do paciente?", confirmLabel: "Agendar assim mesmo"}); });
+    .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar mesmo fora do horário do paciente?", confirmLabel: "Agendar assim mesmo"}); }); });
   return first.then(function(ok){ return ok ? agdTherapistCheck(pairs) : false; });
 }
 function agdTherapistCheck(pairs){
@@ -10586,7 +10849,7 @@ function agdTherapistCheck(pairs){
         (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return null;
     return therapistMismatchMsg(rec.patient, rec.professional_id, rec.service, rec.date);
   }).filter(Boolean);
-  return therapistConfirm(msgs).then(function(ok){ return ok ? agdAreaCheck(pairs) : false; }).then(function(ok){ return ok ? agdGoalsCheck(pairs) : false; });
+  return sysGate("ag_terapeuta", "Terapeuta diferente do tratamento", msgs, function(){ return therapistConfirm(msgs); }).then(function(ok){ return ok ? agdAreaCheck(pairs) : false; }).then(function(ok){ return ok ? agdGoalsCheck(pairs) : false; });
 }
 function agdAreaCheck(pairs){
   var msgs = pairs.map(function(x){
@@ -10596,13 +10859,14 @@ function agdAreaCheck(pairs){
         (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return null;
     return areaMismatchMsg(rec.patient, rec.professional_id, rec.service, rec.date);
   }).filter(Boolean);
-  return areaConfirm(msgs.filter(function(m, i){ return msgs.indexOf(m) === i; }));
+  var uniq = msgs.filter(function(m, i){ return msgs.indexOf(m) === i; });
+  return sysGate("ag_area", "Profissional fora das especialidades do tratamento", uniq, function(){ return areaConfirm(uniq); });
 }
 // Agenda: pacientes do mesmo profissional no mesmo dia e horário sem nenhum objetivo em
 // comum no plano terapêutico (objetivos ativos nas áreas do profissional) → aviso com
 // confirmação. Paciente sem plano vigente (ou sem objetivos ativos) não entra na conta.
 function agdGoalsCheck(pairs){
-  if (!planCan("view")) return Promise.resolve(true);
+  if (!planCan("view") || !sysOn("ag_objetivos")) return Promise.resolve(true);
   return planLoadAll().then(function(){
     var msgs = [], seen = {};
     var batch = pairs.map(function(x){ return x.rec; }).filter(Boolean);
@@ -10625,9 +10889,9 @@ function agdGoalsCheck(pairs){
       });
     });
     if (!msgs.length) return true;
-    return confirmDialog({title: "Sem objetivos em comum",
+    return sysGate("ag_objetivos", "Sem objetivos em comum", msgs, function(){ return confirmDialog({title: "Sem objetivos em comum",
       message: "Os pacientes deste horário não têm objetivos em comum no plano terapêutico:<br>" + msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : "") + "<br>Agendar mesmo assim?",
-      confirmLabel: "Agendar assim mesmo"});
+      confirmLabel: "Agendar assim mesmo"}); });
   });
 }
 // Agenda: regras de horário (ver profBusyMsg / patientBusyMsg). rows = outras linhas
@@ -10639,6 +10903,14 @@ function agdConflictIn(rows, rec){
   // toda; em sala COM "ABA" no nome, o horário do profissional (sem exceção).
   var recRoom = rec.room_id ? findRoom(rec.room_id) : null;
   var recNao = !!recRoom && !isGroup(recRoom) && !agdIsGroupRow(rec) && isNaoABABooking(rec);
+  // Acesso → Sistema: igual ao plannerConflict (texto = recusa; {warn, msg} = pergunta).
+  var warned = null, x;
+  function hit(id, msg){
+    var m = sysMode(id);
+    if (m === "off") return null;
+    if (m === "warn"){ if (!warned) warned = {warn: true, rule: id, msg: msg}; return null; }
+    return msg;
+  }
   for (var i=0;i<rows.length;i++){
     var o = rows[i];
     if (!o || o === rec || !o.patient || bookingKind(o) || o.date !== rec.date || o.time !== rec.time) continue;
@@ -10649,23 +10921,23 @@ function agdConflictIn(rows, rec){
         var oNao = isNaoABABooking(o);
         {
           var pn = roomIsABA(recRoom) ? professionalName(rec.professional_id) : "";
-          if (recNao) return roomIsABA(recRoom)
+          if (recNao && (x = hit("ag_nao_aba", roomIsABA(recRoom)
             ? "Paciente que não faz intervenção ABA ocupa o horário do profissional na sala: " + pn + " já tem " + o.patient + " às " + rec.time + " em " + recRoom.name + "."
-            : "Paciente que não faz intervenção ABA ocupa a sala toda: " + recRoom.name + " já tem " + o.patient + " às " + rec.time + ".";
-          if (oNao && (rec.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID) return abaRoomMsg(o.patient, recRoom.name, rec.time, pn);
+            : "Paciente que não faz intervenção ABA ocupa a sala toda: " + recRoom.name + " já tem " + o.patient + " às " + rec.time + "."))) return x;
+          if (!recNao && oNao && (rec.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID && (x = hit("ag_nao_aba", abaRoomMsg(o.patient, recRoom.name, rec.time, pn)))) return x;
         }
       }
     }
     if (o.professional_id === rec.professional_id && (o.room_id || "") !== (rec.room_id || "")){
       var p = findProfessional(rec.professional_id);
-      return profBusyMsg(p ? p.name : "", rec.time, oRoom ? oRoom.name : (o.patient || ""));
+      if ((x = hit("ag_prof_dois", profBusyMsg(p ? p.name : "", rec.time, oRoom ? oRoom.name : (o.patient || ""))))) return x;
     }
     if (isPatient && normText(o.patient) === normText(rec.patient) && (o.service || "") === (rec.service || "")){
       var op = findProfessional(o.professional_id);
-      return patientBusyMsg(rec.patient, bookingServiceName(o), rec.time, (oRoom ? oRoom.name : "") + (op ? " (" + op.name + ")" : ""));
+      if ((x = hit("ag_pac_servico", patientBusyMsg(rec.patient, bookingServiceName(o), rec.time, (oRoom ? oRoom.name : "") + (op ? " (" + op.name + ")" : ""))))) return x;
     }
   }
-  return null;
+  return warned;
 }
 // Confere no banco (todas as linhas das datas envolvidas). ignoreIds = linhas que
 // vão mudar de lugar nesta operação. Promise<mensagem|null>.
@@ -10676,11 +10948,13 @@ function agdConflictsFor(recs, ignoreIds){
     var err = rs.filter(function(r){ return r.error; })[0];
     if (err) throw err.error;
     var rows = [].concat.apply([], rs.map(function(r){ return r.data || []; })).filter(function(o){ return ign.indexOf(String(o.id)) === -1; });
+    var warn = null;
     for (var i=0;i<recs.length;i++){
       var msg = agdConflictIn(rows.concat(recs.filter(function(x, j){ return j !== i; })), recs[i]);
-      if (msg) return msg;
+      if (typeof msg === "string" && msg) return msg;
+      if (msg && !warn) warn = msg;
     }
-    return null;
+    return warn;
   });
 }
 // Erro de "um atendimento por horário": só acontece enquanto o banco não recebe
@@ -11252,8 +11526,8 @@ function agdPlace(row, td, mode, swapWith){
     var back = agdTargetFor(occupant, row.date, row.time, AD.mode === "prof" ? row.professional_id : (row.room_id || ""));
     var occPayload = {patient: occupant.patient, note: occupant.note || "", blocked: !!occupant.blocked, service: occupant.service || null,
       professional_id: back.professional_id, room_id: back.room_id, date: back.date, time: back.time};
-    agdConflictsFor([payload, occPayload], [row.id, occupant.id]).then(function(conflict){
-    if (conflict){ showToast(conflict, true); return; }
+    agdConflictsFor([payload, occPayload], [row.id, occupant.id]).then(sysConflictGate).then(function(go){
+    if (!go) return;
     return agdPatientConfirm([{rec: payload, old: row}, {rec: occPayload, old: occupant}]).then(function(ok){
     if (!ok) return;
     // Os dois são atualizados (nada é apagado e recriado): cada um mantém o id e a evolução.
@@ -11280,8 +11554,8 @@ function agdPlace(row, td, mode, swapWith){
       done(isCopy ? "Atendimento colado." : "Atendimento movido.");
     });
   }
-  agdConflictsFor([payload], isCopy ? [] : [row.id]).then(function(conflict){
-    if (conflict){ showToast(conflict, true); return; }
+  agdConflictsFor([payload], isCopy ? [] : [row.id]).then(sysConflictGate).then(function(go){
+    if (!go) return;
     return agdPatientConfirm([{rec: payload, old: isCopy ? null : row}]).then(function(ok){ if (ok) write(); });
   }).catch(function(err){ showToast("Não foi possível conferir a agenda: " + agdErr(err), true); });
 }
@@ -11534,7 +11808,7 @@ function openFixPatientModal(back){
     src.forEach(function(x){
       var tDoc = x.dayKey + "-" + to, cur = effectiveBooking(docs[tDoc] || {}, x.key, x.dayKey, x.time);
       var rec = Object.assign({}, x.rec);
-      if ((cur && cur.patient) || plannerConflict(tDoc, x.key, rec)){ busy++; return; }
+      if ((cur && cur.patient) || sysHard(plannerConflict(tDoc, x.key, rec))){ busy++; return; }
       (changes[tDoc] = changes[tDoc] || {})[x.key] = rec; ok++;
     });
     if (!ok){ showToast("Nada copiado: os horários na " + WEEK_LABEL[to] + " já estão ocupados ou dariam conflito.", true); return; }
@@ -11558,7 +11832,7 @@ function openFixPatientModal(back){
     var changes = {}, ok = 0, skipped = 0;
     list.forEach(function(x){
       var rec = Object.assign({}, x.rec, {patient: np.nome});
-      if (plannerConflict(x.docId, x.key, rec)){ skipped++; return; }
+      if (sysHard(plannerConflict(x.docId, x.key, rec))){ skipped++; return; }
       (changes[x.docId] = changes[x.docId] || {})[x.key] = rec; ok++;
     });
     if (!ok){ showToast("Nenhum agendamento pôde ser trocado: todos dariam conflito de horário para " + np.nome + ".", true); return; }
@@ -11850,7 +12124,7 @@ function openFreeSlotModal(){
               var key = time + "|" + r.id + "|" + t.id, cur = effectiveBooking(bk, key, d.key, time);
               if (cur && (cur.patient || cur.blocked)) return;
               if (!seatAvailable(t, d.key, time)) return;
-              if (plannerConflict(docId, key, rec)) return;
+              if (sysHard(plannerConflict(docId, key, rec))) return;
               found.push({w: w, d: d, time: time, room: r, seat: t, prof: prof, docId: docId, key: key});
             });
           });
@@ -11957,16 +12231,20 @@ function plannerSendPlan(dayKey, week, dateIso, skipTime){
           if (here.some(function(a){ return bookingKind(a) === "bloqueado"; })){ plan.skipped.push(Object.assign(info, {why: "blockedThere"})); return; }
           if (rec.blocked && here.length){ plan.skipped.push(Object.assign(info, {why: "busy"})); return; }
           var conflictMsg = agdConflictIn(taken, rec);
-          if (conflictMsg){ plan.skipped.push(Object.assign(info, {why: "conflict", detail: conflictMsg})); return; }
+          if (typeof conflictMsg === "string" && conflictMsg){ plan.skipped.push(Object.assign(info, {why: "conflict", detail: conflictMsg})); return; }
+          // Regras de aviso (Acesso → Sistema): Avisar = caixa na prévia; Bloquear = fica de fora.
+          var patRule = !kind && !isGroup(room), pa = patRule ? findPatientAt(rec.patient, dateIso) : null;
+          var outH = !!pa && sysOn("ag_fora_paciente") && !patientSlotOk(pa, dayKey, time);
+          var outT = patRule && sysOn("ag_terapeuta") && !!therapistMismatchMsg(rec.patient, prof.id, rec.service, dateIso);
+          if (outH && sysMode("ag_fora_paciente") === "block"){ plan.skipped.push(Object.assign(info, {why: "conflict", detail: "Fora do horário do paciente"})); return; }
+          if (outT && sysMode("ag_terapeuta") === "block"){ plan.skipped.push(Object.assign(info, {why: "conflict", detail: "Terapeuta diferente do tratamento"})); return; }
           taken.push(rec);
           plan.send.push(rec);
-          // Avisos (não impedem): fora do horário do paciente / terapeuta diferente do tratamento.
-          if (!kind && !isGroup(room)){
-            var msgs = [], pa = findPatientAt(rec.patient, dateIso);
-            if (pa && !patientSlotOk(pa, dayKey, time)) msgs.push("Fora do horário do paciente");
-            if (therapistMismatchMsg(rec.patient, prof.id, rec.service, dateIso)) msgs.push("Terapeuta diferente do tratamento");
-            if (msgs.length) plan.warns.push({rec: rec, info: info, msgs: msgs});
-          }
+          var msgs = [];
+          if (outH) msgs.push("Fora do horário do paciente");
+          if (outT) msgs.push("Terapeuta diferente do tratamento");
+          if (conflictMsg && conflictMsg.msg) msgs.push(conflictMsg.msg);
+          if (msgs.length) plan.warns.push({rec: rec, info: info, msgs: msgs});
         });
       });
     });
@@ -12756,6 +13034,7 @@ function agdOpenSwapPeriod(){
         var rec = Object.assign({}, r, {professional_id: f.b});
         var dayRows = cur.filter(function(x){ return x.id !== r.id && x.date === r.date && x.time === r.time; });
         var why = bookingKind(rec) ? null : agdConflictIn(dayRows, rec);
+        if (why && typeof why !== "string") why = null;   // regra em "Avisar": a prévia já mostra o que muda
         if (!why && dayRows.some(function(x){ return x.professional_id === f.b && bookingKind(x) === "bloqueado"; })) why = "Horário bloqueado para " + (profB ? profB.name : "");
         if (why){ fail.push({r: r, why: why}); return; }
         ok.push(r);
@@ -12838,10 +13117,10 @@ function agdOpenCopyPeriod(){
             var why = null, prof = findProfessional(r.professional_id);
             if (d < today) why = "Data que já passou";
             else if (!dayEnabled(AD_WEEKDAY_KEYS[dDate.getDay()]) || agdSlots(dDate).indexOf(r.time) === -1) why = "Clínica fechada neste horário";
-            else if (holidayAt(d, r.time)) why = "Feriado ou recesso";
+            else if (sysOn("ag_feriado") && holidayAt(d, r.time)) why = "Feriado ou recesso";
             else if (!prof || !agdInHours(prof, r.time, dDate)) why = "Fora do horário de trabalho";
             else if (dstRows.some(function(x){ return x.date === d && x.time === r.time && x.professional_id === r.professional_id; })) why = "Horário ocupado";
-            else if (!bookingKind(rec)) why = agdConflictIn(dstRows.filter(function(x){ return x.date === d && x.time === r.time; }), rec);
+            else if (!bookingKind(rec)){ why = agdConflictIn(dstRows.filter(function(x){ return x.date === d && x.time === r.time; }), rec); if (why && typeof why !== "string") why = null; }
             if (why){ skip.push({r: Object.assign({}, rec), why: why}); return; }
             ins.push(rec); dstRows.push(rec);
           });
@@ -13773,7 +14052,7 @@ var RP_BUILDERS = {
       days.forEach(function(d){
         var iso = agdIso(d);
         agdSlots(d).forEach(function(t){
-          if (t === "ALMOCO" || !agdInHours(p, t, d)) return;
+          if (t === "ALMOCO" || !profSlotOk(p, AD_WEEKDAY_KEYS[d.getDay()], t)) return;
           avail++;
           var k = p.id + "|" + iso + "|" + t;
           if (used[k]) busy++; else if (kinds[k]) blocked++;
@@ -14626,7 +14905,7 @@ function openTreatmentModal(t, opts){
   };
   // Observações logo depois das especialidades/serviços, antes do horário.
   var ed = treatFieldsEditor(v, {beforeHours: '<div class="field"><label for="trObs">Observações</label><textarea id="trObs" rows="2" placeholder="Opcional">' + esc(d.obs) + '</textarea></div>'});
-  var wasCancelled = !isNew && t.status === "cancelado";
+  var wasCancelled = !isNew && t.status === "cancelado" && sysOn("tr_cancelado_def");
   var mots = activeOnly(cancelReasonsList(), isNew ? "" : t.motivoCancel);
   if (!isNew && t.motivoCancel && !mots.some(function(m){ return m.id === t.motivoCancel; })) mots.push({id: t.motivoCancel, name: t.motivoCancelNome || t.motivoCancel});
   var motOpts = '<option value="">Selecione o motivo…</option>' + mots.map(function(m){
@@ -14674,7 +14953,7 @@ function openTreatmentModal(t, opts){
           '<div class="field"><label for="trSt">Status</label><select id="trSt"' + (wasCancelled ? ' disabled' : '') + '>' + opt(TR_STATUS, d.status) + '</select></div>' +
         '</div>' +
         '<div class="tr-cancel" id="trCancelBox"' + (d.status === "cancelado" ? '' : ' hidden') + '>' +
-          '<p class="tr-cancel-note">' + (wasCancelled ? 'Tratamento cancelado: o status não pode mais ser alterado. Para retomar, crie um novo tratamento.' : 'Cancelado é definitivo: depois de salvo, o tratamento não volta a outro status.') + '</p>' +
+          '<p class="tr-cancel-note">' + (wasCancelled ? 'Tratamento cancelado: o status não pode mais ser alterado. Para retomar, crie um novo tratamento.' : (sysOn("tr_cancelado_def") ? 'Cancelado é definitivo: depois de salvo, o tratamento não volta a outro status.' : '')) + '</p>' +
           '<div class="field-row">' +
             '<div class="field"><label for="trMot">Motivo do cancelamento</label><select id="trMot">' + motOpts + '</select></div>' +
           '</div>' +
@@ -14753,7 +15032,7 @@ function openTreatmentModal(t, opts){
   function applyLock(){
     if (!document.getElementById("ovTreat")) return;
     doneN = trDoneCount(t);
-    if (!doneN) return;
+    if (!doneN || sysMode("tr_realizados") !== "block") return;
     var note = document.getElementById("trLockNote");
     note.hidden = false;
     document.getElementById("trLockText").textContent = "Este tratamento já tem " + doneN + (doneN === 1 ? " atendimento realizado (Finalizado)" : " atendimentos realizados (Finalizados)") +
@@ -14785,7 +15064,7 @@ function openTreatmentModal(t, opts){
   var del = document.getElementById("trDel");
   if (del) del.addEventListener("click", function(){
     var p = rawPatient(t.patientId);
-    var n0 = trDoneCount(t);
+    var n0 = sysMode("tr_realizados") === "block" ? trDoneCount(t) : 0;
     if (n0 === null && agdClient()){ trLoadLast(false).then(function(){ applyLock(); var n1 = trDoneCount(t); if (n1 === null) showToast("Não foi possível conferir os atendimentos deste tratamento. Tente de novo.", true); else if (n1) showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); else del.click(); }); return; }
     if (n0){ showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); return; }
     confirmDialog({title: "Confirmar exclusão", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Confirmar exclusão"})
@@ -14805,27 +15084,27 @@ function openTreatmentModal(t, opts){
     var ini = document.getElementById("trIni").value;
     if (!ini){ showToast("Informe a data de início.", true); return; }
     var entP = trPatEntrada(patId);
-    if (entP && ini < entP){ showToast("O paciente foi cadastrado em " + trBr(entP) + ": o início do tratamento não pode ser antes dessa data.", true); return; }
+    if (entP && ini < entP && !sysSaveGate(sv, "pac_entrada", "Data de entrada", "O paciente foi cadastrado em " + trBr(entP) + ": o início do tratamento não pode ser antes dessa data.")) return;
     var durV = parseInt(document.getElementById("trDur").value, 10);
     var vencV = document.getElementById("trVenc").value;
     if (vencV && vencV < ini){ showToast("A data de vencimento não pode ser antes do início.", true); return; }
     var r = ed.read();
     var qtyNew = Object.assign({}, r.fields, {vencPor: document.getElementById("trVencPor").value, totalSessoes: parseInt(document.getElementById("trTotal").value, 10) || ""});
-    if (!isNew && trDoneCount(t) && trQtyKey(qtyNew) !== trQtyKey(Object.assign({vencPor: "data"}, t))){
-      showToast("Já há atendimentos realizados neste tratamento: a quantidade de sessões não pode ser alterada. Use Renegociar.", true); return;
-    }
+    if (!isNew && trDoneCount(t) && trQtyKey(qtyNew) !== trQtyKey(Object.assign({vencPor: "data"}, t)) &&
+        !sysSaveGate(sv, "tr_realizados", "Tratamento com atendimentos realizados", "Já há atendimentos realizados neste tratamento: a quantidade de sessões não pode ser alterada. Use Renegociar.")) return;
     var sm = specSumRead();
-    if (!sv._sumOk && sm && sm.total != null && sm.any && sm.total !== sm.sum){
+    if (!sv._sumOk && sm && sm.total != null && sm.any && sm.total !== sm.sum && sysOn("tr_soma")){
+      if (sysMode("tr_soma") === "block"){ showToast("A soma das especialidades/serviços (" + String(sm.sum).replace(".", ",") + ") é diferente de Sessão/Mês (" + String(sm.total).replace(".", ",") + ").", true); return; }
       confirmDialog({title: "Sessão/Mês diferente da soma",
         message: "A soma das especialidades/serviços (<b>" + String(sm.sum).replace(".", ",") + "</b>) é diferente de Sessão/Mês (<b>" + String(sm.total).replace(".", ",") + "</b>). Salvar assim mesmo?",
         confirmLabel: "Salvar assim mesmo"}).then(function(ok){ if (ok){ sv._sumOk = true; try { sv.click(); } finally { sv._sumOk = false; } } });
       return;
     }
     var st = document.getElementById("trSt").value;
-    if (wasCancelled) st = "cancelado";   // cancelado é definitivo
+    if (wasCancelled) st = "cancelado";   // cancelado é definitivo (regra do Sistema)
     var motId = document.getElementById("trMot").value;
     var obsCancel = document.getElementById("trObsCancel").value.trim();
-    if (st === "cancelado"){
+    if (st === "cancelado" && sysOn("tr_cancel_motivo")){
       if (!motId){ showToast("Escolha o motivo do cancelamento.", true); document.getElementById("trMot").focus(); return; }
       if (motId === CANCEL_OTHER_ID && !obsCancel){ showToast("Com o motivo \"Outro\", descreva o motivo na observação do cancelamento.", true); document.getElementById("trObsCancel").focus(); return; }
     }
@@ -15565,6 +15844,22 @@ var HELP_TOPICS = [
       "A <b>cor do botão</b> vale para todos os botões, caixas de marcar e destaques do sistema, inclusive a tela de login. <b>Restaurar padrão</b> volta ao verde do sistema."
     ],
     who: "Permissão <b>Clínica</b> (ver/editar)."},
+  {id: "sistema", group: "Acesso", title: "Sistema (regras)", mod: "admin",
+    purpose: "Ligar, deixar só como aviso ou desligar as regras do sistema, separadas por tela: Planner, Agenda, Pacientes, Tratamentos e Plano Terapêutico.",
+    steps: [
+      "Acesso ▾ → <b>Sistema</b>.",
+      "Em cada regra escolha <b>Bloquear</b> (recusa), <b>Avisar</b> (pergunta e deixa continuar) ou <b>Desligado</b> (não confere). Algumas regras só têm duas opções.",
+      "Use a busca para achar uma regra; <b>Restaurar padrão do grupo</b> ou <b>Restaurar tudo</b> voltam ao padrão.",
+      "Clique em <b>Salvar</b>. A mudança vale na hora para todos os usuários.",
+      "A aba <b>Histórico</b> mostra quem mudou cada regra, quando, e de qual modo para qual."
+    ],
+    rules: [
+      "Regras com 🔒 ficam sempre ligadas porque evitam registros duplicados ou dados inconsistentes (ex.: um só tratamento Ativo, CPF único, atendimento com evolução não é apagado).",
+      "Regras marcadas <b>banco</b> também são conferidas pelo banco de dados, que só recusa no modo Bloquear.",
+      "Nas ferramentas em lote (Enviar para a Agenda, copiar, trocar profissional, horário livre), regra em Avisar entra como aviso na prévia ou deixa passar; em Bloquear o item fica de fora.",
+      "A etiqueta <b>alterada</b> mostra as regras que estão diferentes do padrão."
+    ],
+    who: "Só o Administrador."},
   {id: "backup", group: "Acesso", title: "Backup", mod: "backup",
     purpose: "Guardar e restaurar todos os dados do sistema.",
     steps: [
@@ -17926,7 +18221,7 @@ function agdTherapistUser(){
   var me = prMe();
   return !!((me && me.professional_id) || window.__planProfId) && !(window.pipoAuth && window.pipoAuth.isAdmin && window.pipoAuth.isAdmin());
 }
-function agdFinalLocked(status){ return status === FINAL_STATUS && agdTherapistUser(); }
+function agdFinalLocked(status){ return status === FINAL_STATUS && agdTherapistUser() && sysOn("ag_final_terapeuta"); }
 var AGD_FINAL_LOCK_MSG = "Atendimento finalizado: o status não pode ser alterado pelo terapeuta. Para corrigir, edite a evolução em Prontuário.";
 
 // Dica ao passar o mouse nos pontos (delegado no contêiner dos gráficos).
@@ -18643,7 +18938,7 @@ function ioTrPlan(recs){
     var target = sheetActive || ok[ok.length - 1] || null;     // recebe especialidades/horários do substituído
     ok.forEach(function(o){
       o.match = existing.filter(function(t){ return t.inicio === o.inicio; })[0] || null;
-      if (o.match && o.match.status === "cancelado" && o.status !== "cancelado") o.msgs.push("No sistema este tratamento está Cancelado, e Cancelado não muda de status.");
+      if (sysOn("tr_cancelado_def") && o.match && o.match.status === "cancelado" && o.status !== "cancelado") o.msgs.push("No sistema este tratamento está Cancelado, e Cancelado não muda de status.");
       if (!o.match && !canNew) o.msgs.push("Seu nível não pode incluir tratamentos.");
     });
     var keep = ok.filter(function(o){ return !o.msgs.length; });

@@ -2353,3 +2353,31 @@ a sala liberava o MESMO profissional a ter dois pacientes "não ABA" juntos. Sa�
 `grpOk` de `agdConflictIn`. As regras "não ABA" valem igual com ou sem grupo marcando a sala.
 (As seções acima que citam essa exceção ficaram históricas.) Teste no fim de
 `tests/run_aba_linha.js`.
+
+## Acesso → Sistema: regras com chave (2026-10-07)
+Decisões do usuário: três modos por regra (**Bloquear** recusa / **Avisar** pergunta e deixa
+continuar / **Desligado** não confere); só Administrador; histórico de mudanças e restaurar
+padrão; regras que evitam duplicidade ou dados inconsistentes ficam travadas (🔒).
+- Menu Acesso → **Sistema** (`data-act="sistema"` em `js/pipo-supabase.js`, só `isAdmin()`) →
+  `window.pipoOpenSystem` → `openSystemModal()` (bloco "Sistema: regras com chave", logo depois de
+  `confirmDialog`). Grupos `SYS_GROUPS` (Planner, Agenda, Pacientes, Tratamentos, Plano
+  Terapêutico), catálogo `SYS_RULES` `{id, g, label, desc, def, modes, db, locked}`, busca, etiqueta
+  "alterada", "Restaurar padrão do grupo", "Restaurar tudo", aba Histórico.
+- Documento `config/system {rules: {id: modo}, historico: [{em, por, id, de, para}]}` (só grava o
+  que difere do padrão; histórico com até 300 itens). `subscribeSystem` → `state.sysRules`,
+  `state.sysHist`.
+- Uso no código: `sysMode(id)` / `sysOn(id)`; `sysGate(id, título, msgs, confirmaçãoDeSempre)`
+  para regras de aviso; `sysSaveGate(btn, id, título, msg)` nos botões Salvar (Avisar = pergunta e
+  clica de novo com a regra liberada); `plannerConflict` e `agdConflictIn` devolvem texto (recusa)
+  ou `{warn, msg}` (Avisar) — `sysConflictGate` nas janelas/arrastar/colar; `sysHard(c)` nas
+  ferramentas em lote (Avisar deixa passar; "Enviar para a Agenda" mostra como aviso na prévia).
+  `seatAvailable` (pl_fora_prof) e `agdInHours` (ag_fora_trabalho) já respeitam a chave; o
+  relatório de ocupação usa `profSlotOk` direto.
+- Regra nova com chave: incluir em `SYS_RULES` e conferir com `sysMode`/`sysGate` no lugar dela;
+  regra que evita dado duplicado/inconsistente entra com `locked: true`.
+- Banco (migração `supabase/2026-10-07-sistema-regras.sql`): caminho `config/system` (módulo
+  `sistema`, só Administrador), função `sys_rule(id, padrão)`; `appointments_status_guard`
+  (ag_final_evolucao, ag_final_terapeuta) e `treatments_cancel_rules` (tr_cancelado_def,
+  tr_cancel_motivo) só recusam no modo Bloquear. Testada no PGlite.
+- Teste `tests/run_sistema.js` (cria `tests/page_sys.html`).
+

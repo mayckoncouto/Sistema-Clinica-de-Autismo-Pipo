@@ -312,7 +312,8 @@
             // Configuração do sistema
             [((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : ""),
              ((isAdmin() || can("usuarios", "view")) ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : ""),
-             ((isAdmin() || can("backup", "view")) ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : "")],
+             ((isAdmin() || can("backup", "view")) ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : ""),
+             (isAdmin() ? '<button type="button" role="menuitem" data-act="sistema">Sistema</button>' : "")],
             // Pessoal
             [(canDefault("senha", "view", true) ? '<button type="button" role="menuitem" data-act="senha">Senha</button>' : ""),
              (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : "")],
@@ -350,6 +351,8 @@
         if (window.pipoOpenClinic) window.pipoOpenClinic();
       } else if (act === "ajuda") {
         if (window.pipoOpenHelp) window.pipoOpenHelp();
+      } else if (act === "sistema") {
+        if (window.pipoOpenSystem) window.pipoOpenSystem();
       } else if (act === "backup") {
         if (window.pipoOpenBackup) window.pipoOpenBackup();
       } else if (act === "status") {
