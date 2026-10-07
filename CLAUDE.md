@@ -2500,3 +2500,17 @@ digitado; sem ele, o automático (`trEndAuto` / `trEndAutoText` = último atendi
 mostrado na dica `#trFimHint`). `trPeriodEnd(t)` = o menor entre o término digitado e o
 automático (`trPeriodEndAuto`): vale no contratado × realizado, relatório financeiro e
 tratamento vigente. Renegociar começa sem término. Sem SQL. Teste no fim de `tests/run_treatments.js`.
+
+## Cadastro do paciente: Rotina atual (2026-10-07)
+Decisões do usuário: tipo (lista) + detalhe (texto); segunda a sexta; "Copiar segunda" em cada
+coluna; aviso ao agendar; ficha impressa; Campos obrigatórios. Grupo `rotinaatual` logo depois
+de Escola (`PAT_SECTIONS`), campo `rotinaAtual` (`type: "weekroutine"`; a chave `rotina` já era
+"Responsáveis pela retirada"). Formato: `rotinaAtual = {seg: {m: {tipo, txt}, t: {...}}, … sex}`
+em `patients/all`. Tipos `ROUTINE_TYPES` (escola, terapia, atividade, outro = `busy`; casa =
+livre). `routineHtml`/`routineRead`/`routineWire` (ids `rt-<dia>-<m|t>-tipo|txt`,
+`[data-rt-copy]`, `#rtUndo` 15 s), `routineCell`, `routineText`, `routinePer(dia, hora)` (manhã/
+tarde pela grade da clínica), `routineConflictMsg`. Aviso: Planner `routineConflicts` em
+`applyBookingChanges` (`opts.routineOk`, depois do horário do paciente); Agenda `agdRoutineCheck`
+entre `agdPatientConfirmHours` e `agdTherapistCheck`. Regras do Sistema `pl_rotina`/`ag_rotina`
+(padrão Avisar). Ficha: seção "Rotina atual" em `patientFichaHtml`. Sem SQL. Teste
+`tests/run_rotina.js`.

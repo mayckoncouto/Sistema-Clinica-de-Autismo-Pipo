@@ -247,6 +247,21 @@ div.ag-obj-head{cursor:default}
 .pl-lv-dot{flex:none;width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.15);display:inline-block;vertical-align:middle}
 .pl-lv-chip{display:inline-flex;align-items:center;gap:4px;margin:1px 8px 1px 0;font-size:12px;white-space:nowrap}
 .pl-rm-cell{text-align:center}
+/* Rotina atual do paciente */
+.rt-wrap{overflow-x:auto}
+.rt-table{border-collapse:collapse;width:100%;table-layout:fixed}
+.rt-table th,.rt-table td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:middle}
+.rt-table thead th{font-size:11.5px;font-weight:700;color:var(--muted)}
+.rt-table tbody th{font-size:12.5px;font-weight:700}
+.rt-table thead th:first-child{width:76px}
+.rt-cell{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:6px}
+.rt-txt{width:100%;min-width:0;min-height:34px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
+.rt-txt:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
+.rt-cell .dp-btn{width:100%;min-width:0}
+.btn.rt-copy{margin-left:8px;padding:2px 9px;font-size:11px;font-weight:700;background:var(--accent-weak);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);border-radius:7px}
+.btn.rt-copy:hover{background:var(--accent);color:var(--accent-ink)}
+.rt-undo{margin-top:6px;font-size:12.5px;color:var(--ink-2)}
+@media (max-width:760px){.rt-cell{grid-template-columns:1fr}.rt-table{min-width:0}}
 /* Plano por habilidade (2026-10-06): quadros recolhíveis, especialidades do objetivo, cobertura. */
 .pl-area-toggle{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:0;margin:0;font:inherit;color:var(--ink);cursor:pointer}
 .pl-area-toggle b{font-size:14px}.pl-area-caret{font-size:11px;color:var(--muted);width:12px}
@@ -3721,6 +3736,7 @@ var SYS_RULES = [
   {id: "pl_pac_prof", g: "planner", label: "Paciente duas vezes com o mesmo profissional", desc: "O paciente não pode ter dois atendimentos com o mesmo profissional no mesmo horário.", def: "block", modes: BWO},
   {id: "pl_pac_servico", g: "planner", label: "Paciente com o mesmo serviço em dois lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
   {id: "pl_fora_prof", g: "planner", label: "Fora do horário de trabalho do profissional", desc: "Célula fora do horário de trabalho do profissional da coluna fica cinza e não aceita agendamento.", def: "block", modes: ["block", "off"]},
+  {id: "pl_rotina", g: "planner", label: "Rotina atual do paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "pl_fora_paciente", g: "planner", label: "Fora do horário do paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
   {id: "pl_terapeuta", g: "planner", label: "Terapeuta diferente do tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
   {id: "pl_area", g: "planner", label: "Profissional fora das especialidades do tratamento", desc: "Sessão com profissional cuja especialidade (principal ou complementar) não está no tratamento.", def: "warn", modes: BWO},
@@ -3731,6 +3747,7 @@ var SYS_RULES = [
   {id: "ag_pac_servico", g: "agenda", label: "Paciente com o mesmo serviço em dois lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
   {id: "ag_fora_trabalho", g: "agenda", label: "Fora do horário de trabalho do profissional", desc: "Horário fora do expediente do profissional fica hachurado e não aceita agendamento.", def: "block", modes: ["block", "off"]},
   {id: "ag_feriado", g: "agenda", label: "Feriado ou recesso", desc: "Agendar em data cadastrada em Feriados e recessos.", def: "warn", modes: BWO},
+  {id: "ag_rotina", g: "agenda", label: "Rotina atual do paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "ag_fora_paciente", g: "agenda", label: "Fora do horário do paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
   {id: "ag_terapeuta", g: "agenda", label: "Terapeuta diferente do tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
   {id: "ag_area", g: "agenda", label: "Profissional fora das especialidades do tratamento", desc: "Sessão com profissional cuja especialidade não está no tratamento.", def: "warn", modes: BWO},
@@ -5879,6 +5896,15 @@ function applyBookingChanges(changesByDoc, opts){
         .then(function(ok){ return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {patientHoursOk: true})) : false; });
     }
   }
+  // Rotina atual do paciente (escola, outra terapia…) no período: aviso (não vale para desfazer/refazer).
+  if (!opts.history && !opts.routineOk){
+    var rtn = sysOn("pl_rotina") ? routineConflicts(changesByDoc) : [];
+    if (rtn.length){
+      return sysGate("pl_rotina", "Rotina atual do paciente", rtn, function(){ return routineConfirm(rtn); }).then(function(ok){
+        return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {routineOk: true})) : false;
+      });
+    }
+  }
   // Terapeuta diferente do indicado no tratamento: confirmação dupla (não vale para desfazer/refazer).
   if (!opts.history && !opts.therapistOk){
     var mism = sysOn("pl_terapeuta") ? therapistMismatches(changesByDoc) : [];
@@ -7052,7 +7078,7 @@ var PAT_SECTIONS = [
   {id: "ident", label: "Identificação"}, {id: "endereco", label: "Endereço"},
   {id: "filiacao", label: "Filiação"}, {id: "rotina", label: "Responsáveis pela retirada"}, {id: "protetiva", label: "Medida protetiva"},
   {id: "contato", label: "Contato"}, {id: "financeiro", label: "Responsável financeiro"},
-  {id: "escola", label: "Escola"}, {id: "saude", label: "Saúde"}, {id: "admin", label: "Administrativo"}
+  {id: "escola", label: "Escola"}, {id: "rotinaatual", label: "Rotina atual"}, {id: "saude", label: "Saúde"}, {id: "admin", label: "Administrativo"}
 ];
 var CID_SUGGESTIONS = ["F84.0 Autismo infantil", "F84.1 Autismo atípico", "F84.5 Síndrome de Asperger", "F84.8 Outros transtornos globais do desenvolvimento",
   "F84.9 Transtorno global do desenvolvimento não especificado", "F90.0 TDAH", "F80.1 Transtorno expressivo de linguagem", "F80.2 Transtorno receptivo de linguagem",
@@ -7079,6 +7105,7 @@ var PAT_FIELDS = [
   {key: "escolaTurno", label: "Turno da escola", sec: "escola", type: "select", opts: ["Manhã", "Tarde", "Integral", "Noite"]},
   {key: "professor", label: "Professor(a)", sec: "escola"},
   {key: "mediador", label: "Tem mediador / AT", sec: "escola", type: "select", opts: ["Sim", "Não"]},
+  {key: "rotinaAtual", label: "Rotina atual", sec: "rotinaatual", type: "weekroutine", hint: "pelo menos um período"},
   {key: "medicoId", label: "Médico", sec: "saude", type: "reg", reg: "medicos", wide: true},
   {key: "cid", label: "Diagnóstico (CID)", sec: "saude", type: "list", list: CID_SUGGESTIONS, wide: true},
   {key: "diagData", label: "Data do diagnóstico", sec: "saude", type: "date"},
@@ -7090,6 +7117,109 @@ var PAT_FIELDS = [
   {key: "comoConheceu", label: "Como conheceu a clínica", sec: "admin", type: "list", list: ["Indicação médica", "Indicação de outro paciente", "Escola", "Convênio", "Internet / redes sociais", "Outro"]},
   {key: "obs", label: "Observações", sec: "admin", type: "area"}
 ];
+// Rotina atual do paciente fora da clínica (cadastro do paciente, grupo "Rotina atual"):
+// rotinaAtual = {seg: {m: {tipo, txt}, t: {tipo, txt}}, … sex}. Ao agendar num período de um
+// tipo "ocupado", o Planner e a Agenda avisam (regras pl_rotina / ag_rotina do Sistema).
+var ROUTINE_DAYS = [["seg", "Segunda"], ["ter", "Terça"], ["qua", "Quarta"], ["qui", "Quinta"], ["sex", "Sexta"]];
+var ROUTINE_TYPES = [
+  {id: "escola", name: "Escola", busy: true}, {id: "terapia", name: "Outra terapia", busy: true},
+  {id: "atividade", name: "Atividade", busy: true}, {id: "casa", name: "Em casa / livre"}, {id: "outro", name: "Outro", busy: true}
+];
+function routineTypeName(id){ var x = ROUTINE_TYPES.filter(function(r){ return r.id === id; })[0]; return x ? x.name : (id || ""); }
+function routineCell(p, day, per){ var r = p && p.rotinaAtual && p.rotinaAtual[day]; return r && r[per] && r[per].tipo ? r[per] : null; }
+function routineText(c){ return c ? routineTypeName(c.tipo) + (c.txt ? " (" + c.txt + ")" : "") : ""; }
+// Manhã ou tarde do horário naquele dia (pela grade da clínica).
+function routinePer(dayKey, time){
+  var d = findDayObj(dayKey);
+  if (d && d.morning.indexOf(time) !== -1) return "m";
+  if (d && d.afternoon.indexOf(time) !== -1) return "t";
+  return time < "12:00" ? "m" : "t";
+}
+function routineConflictMsg(p, dayKey, time, label){
+  if (!p) return null;
+  var per = routinePer(dayKey, time), c = routineCell(p, dayKey, per);
+  var ty = c && ROUTINE_TYPES.filter(function(x){ return x.id === c.tipo; })[0];
+  if (!ty || !ty.busy) return null;
+  return "<b>" + esc(p.nome) + "</b> — " + esc(label) + " às " + esc(time) + ": " + (per === "m" ? "manhã" : "tarde") + " de " + esc(routineText(c));
+}
+function routineConfirm(msgs){
+  return confirmDialog({title: "Rotina atual do paciente",
+    message: "Pela rotina atual, o paciente tem outro compromisso neste período:<br>" + msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : "") + "<br>Agendar assim mesmo?",
+    confirmLabel: "Agendar assim mesmo"});
+}
+function routineHtml(r){
+  r = r || {};
+  function cell(day, per){
+    var c = (r[day] || {})[per] || {}, id = "rt-" + day + "-" + per;
+    return '<td><div class="rt-cell"><select class="rt-tipo" id="' + id + '-tipo" aria-label="' + (per === "m" ? "Manhã" : "Tarde") + '"><option value="">—</option>' +
+      ROUTINE_TYPES.map(function(x){ return '<option value="' + x.id + '"' + (c.tipo === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join("") + '</select>' +
+      '<input type="text" class="rt-txt" id="' + id + '-txt" placeholder="Detalhe (opcional)" maxlength="60" value="' + esc(c.txt || "") + '"></div></td>';
+  }
+  function copyBtn(per){ return ' <button type="button" class="btn ghost rt-copy" data-rt-copy="' + per + '" title="Copiar ' + (per === "m" ? "a manhã" : "a tarde") + ' de segunda para os outros dias">Copiar segunda</button>'; }
+  return '<div class="pat-count">Onde o paciente está fora da clínica em cada período (escola, outra terapia, atividade…). Ao agendar num período ocupado, o Planner e a Agenda avisam.</div>' +
+    '<div class="rt-wrap"><table class="rt-table"><thead><tr><th>Dia</th><th>Manhã' + copyBtn("m") + '</th><th>Tarde' + copyBtn("t") + '</th></tr></thead><tbody>' +
+    ROUTINE_DAYS.map(function(d){ return '<tr data-rt-day="' + d[0] + '"><th>' + d[1] + '</th>' + cell(d[0], "m") + cell(d[0], "t") + '</tr>'; }).join("") +
+    '</tbody></table></div><div class="rt-undo" id="rtUndo" hidden><span id="rtUndoTxt"></span> <button type="button" class="btn ghost" id="rtUndoBtn">Desfazer</button></div>';
+}
+function routineRead(){
+  var out = {}, any = false;
+  ROUTINE_DAYS.forEach(function(d){
+    ["m", "t"].forEach(function(per){
+      var s = document.getElementById("rt-" + d[0] + "-" + per + "-tipo"), x = document.getElementById("rt-" + d[0] + "-" + per + "-txt");
+      var tipo = s ? s.value : "", txt = x ? x.value.trim() : "";
+      if (!tipo && !txt) return;
+      (out[d[0]] = out[d[0]] || {})[per] = {tipo: tipo || "outro", txt: txt}; any = true;
+    });
+  });
+  return any ? out : {};
+}
+function routineSet(day, per, c){
+  var s = document.getElementById("rt-" + day + "-" + per + "-tipo"), x = document.getElementById("rt-" + day + "-" + per + "-txt");
+  if (s){ s.value = c.tipo || ""; s.dispatchEvent(new Event("change", {bubbles: true})); }
+  if (x){ x.value = c.txt || ""; x.dispatchEvent(new Event("input", {bubbles: true})); }
+}
+// "Copiar segunda": copia a manhã (ou a tarde) de segunda para terça a sexta; Desfazer por 15 s.
+function routineWire(root){
+  var undoT = 0, undoData = null;
+  root.addEventListener("click", function(e){
+    var b = e.target.closest("[data-rt-copy]");
+    if (b){
+      var per = b.getAttribute("data-rt-copy");
+      var src = {tipo: (document.getElementById("rt-seg-" + per + "-tipo") || {}).value || "", txt: ((document.getElementById("rt-seg-" + per + "-txt") || {}).value || "").trim()};
+      undoData = ROUTINE_DAYS.slice(1).map(function(d){ return {day: d[0], per: per, tipo: document.getElementById("rt-" + d[0] + "-" + per + "-tipo").value, txt: document.getElementById("rt-" + d[0] + "-" + per + "-txt").value}; });
+      ROUTINE_DAYS.slice(1).forEach(function(d){ routineSet(d[0], per, src); });
+      var u = document.getElementById("rtUndo");
+      if (u){ document.getElementById("rtUndoTxt").textContent = (per === "m" ? "Manhã" : "Tarde") + " de segunda copiada para os outros dias."; u.hidden = false; }
+      clearTimeout(undoT); undoT = setTimeout(function(){ var x = document.getElementById("rtUndo"); if (x) x.hidden = true; undoData = null; }, 15000);
+      return;
+    }
+    if (e.target.closest("#rtUndoBtn") && undoData){
+      undoData.forEach(function(x){ routineSet(x.day, x.per, x); });
+      undoData = null; clearTimeout(undoT);
+      var u2 = document.getElementById("rtUndo"); if (u2) u2.hidden = true;
+    }
+  });
+}
+// Planner: agendamentos novos num período ocupado da rotina atual do paciente.
+function routineConflicts(changesByDoc){
+  var out = [];
+  Object.keys(changesByDoc).forEach(function(docId){
+    var changes = changesByDoc[docId], parts = docId.split("-"), dayKey = parts[0], week = parts[1];
+    var doc = state.scheduleDocs[docId] || state.reportDocs[docId], oldB = (doc && doc.bookings) || {};
+    var d = ALL_WEEKDAYS.filter(function(x){ return x.key === dayKey; })[0];
+    Object.keys(changes).forEach(function(k){
+      var rec = changes[k];
+      if (!rec || !rec.patient || bookingKind(rec)) return;
+      var kp = k.split("|"), time = kp[0], room = findRoom(kp[1]);
+      if (!room || isGroup(room)) return;
+      var old = effectiveBooking(oldB, k, dayKey, time);
+      if (old && old.patient && samePatient(old, rec)) return;
+      var m = routineConflictMsg(findPatientByName(rec), dayKey, time, (d ? d.full : dayKey) + (week ? " (" + week + "ª semana)" : ""));
+      if (m) out.push(m);
+    });
+  });
+  return out;
+}
 // Campos do formato anterior (abas) que viram os novos ao abrir o cadastro.
 var PAT_LEGACY_KEYS = ["responsaveis", "finOutro", "telefone", "email", "prefContato", "escolaContato"];
 function patFieldCfg(key){
@@ -7140,6 +7270,7 @@ function patValueEmpty(f, d){
   if (f.type === "address"){ var e = v || {}; return ["cep", "rua", "numero", "bairro", "cidade", "uf"].some(function(k){ return !String(e[k] || "").trim(); }); }
   if (f.type === "parent") return !(v && String(v.nome || "").trim());
   if (f.type === "rotina" || f.type === "protetiva") return !(v || []).some(function(r){ return String(r.nome || "").trim(); });
+  if (f.type === "weekroutine") return !Object.keys(v || {}).some(function(d){ var x = v[d] || {}; return (x.m && x.m.tipo) || (x.t && x.t.tipo); });
   if (f.type === "phones") return !(v || []).some(function(t){ return digitsOnly(t.numero).length >= 8; });
   if (f.type === "emails") return !(v || []).some(function(m){ return String(m.email || "").trim(); });
   if (f.type === "fin") return !(v && String(v.nome || "").trim() && digitsOnly(v.doc));
@@ -7281,6 +7412,7 @@ function openPatientModal(p){
     else if (sec.id === "filiacao") html = (patFieldCfg("mae").show ? parentHtml("mae", "Mãe") : "") + (patFieldCfg("pai").show ? parentHtml("pai", "Pai") : "");
     else if (sec.id === "rotina") html = '<div class="pat-count">Só podem retirar o paciente as pessoas desta lista. Mãe e Pai entram sozinhos quando preenchidos.</div><div id="rotHost" class="pm-list"></div>' +
       '<button type="button" class="btn ghost add-row-btn" id="rotAdd">+ Incluir</button>';
+    else if (sec.id === "rotinaatual") html = routineHtml(v.rotinaAtual);
     else if (sec.id === "protetiva") html = '<div class="pat-count">Pessoas que NÃO podem retirar o paciente. O aviso aparece no último atendimento do dia na Agenda.' +
       (protCanSeeObs() ? '' : ' A observação só aparece para quem pode finalizar atendimentos.') + '</div><div id="protHost" class="pm-list"></div>' +
       '<button type="button" class="btn ghost add-row-btn" id="protAdd">+ Incluir pessoa impedida</button>';
@@ -7329,6 +7461,7 @@ function openPatientModal(p){
     '</div></div>';
 
   var overlay = document.getElementById("ovPat");
+  routineWire(overlay);
   function $(id){ return document.getElementById(id); }
   function val(id){ var el = $(id); return el ? el.value.trim() : ""; }
   function parentNow(role){ return {nome: val("pm-" + role + "-nome"), cpf: digitsOnly(val("pm-" + role + "-cpf"))}; }
@@ -7531,6 +7664,7 @@ function openPatientModal(p){
       if (t === "parent"){ out[f.key] = parentNow(f.key); return; }
       if (t === "rotina"){ out.rotina = rotina.filter(function(r){ return r.nome; }).map(function(r){ return r.src ? {nome: r.nome, src: r.src} : (r.rel ? {nome: r.nome, rel: r.rel} : {nome: r.nome}); }); out.rotinaOff = rotOff; return; }
       if (t === "protetiva"){ protSync(); out.protetiva = prot.filter(function(m){ return m.nome; }).map(function(m){ return {nome: m.nome, rel: m.rel || "", obs: m.obs || "", ate: m.ate || ""}; }); return; }
+      if (t === "weekroutine"){ out.rotinaAtual = routineRead(); return; }
       if (t === "phones"){ out.telefones = phones.filter(function(x){ return x.numero; }).map(function(x){ return {numero: x.numero, nome: x.nome, via: x.via || "whatsapp"}; }); return; }
       if (t === "emails"){ out.emails = mails.filter(function(x){ return x.email; }).map(function(x){ return {email: x.email, nome: x.nome}; }); return; }
       if (t === "fin"){
@@ -7766,6 +7900,10 @@ function patientFichaHtml(p){
     ["Responsável financeiro", row("Nome", v.financeiro.nome) + row("CPF/CNPJ", v.financeiro.doc && v.financeiro.doc.length === 11 ? formatCpf(v.financeiro.doc) : v.financeiro.doc) +
       row("Telefone", v.financeiro.telefone ? formatPhone(v.financeiro.telefone) : "") + row("E-mail", v.financeiro.email) + row("Endereço", v.financeiro.endereco)],
     ["Escola", row("Escola", regName("escolas", v.escolaId)) + row("Série / ano", v.escolaSerie) + row("Turno", v.escolaTurno) + row("Professor(a)", v.professor) + row("Mediador / AT", v.mediador)],
+    ["Rotina atual", ROUTINE_DAYS.map(function(d){
+      var m = routineCell(v, d[0], "m"), tt = routineCell(v, d[0], "t");
+      return m || tt ? row(d[1], (m ? "Manhã: " + routineText(m) : "") + (m && tt ? " · " : "") + (tt ? "Tarde: " + routineText(tt) : "")) : "";
+    }).join("")],
     ["Saúde", !healthCanSee() ? "" : row("Médico", regName("medicos", v.medicoId)) + row("Diagnóstico (CID)", v.cid) + row("Data do diagnóstico", v.diagData ? trBr(v.diagData) : "") +
       row("Nível de suporte", v.suporte) + row("Comunicação", v.comunicacao) + row("Alergias", v.alergias) + row("Medicações", v.medicacoes) + row("Restrições alimentares", v.restricoes)],
     ["Administrativo", row("Como conheceu", v.comoConheceu) + row("Observações", v.obs)]
@@ -11062,7 +11200,17 @@ function agdPatientConfirmHours(pairs){
     message: (out.length > 1 ? "Estes agendamentos ficam" : "Este agendamento fica") + " fora do horário de atendimento cadastrado no tratamento do paciente:<br>" + out.slice(0, 8).join("<br>"),
     confirmLabel: "Continuar"})
     .then(function(ok){ return ok && confirmDialog({title: "Tem certeza?", message: "Agendar mesmo fora do horário do paciente?", confirmLabel: "Agendar assim mesmo"}); }); });
-  return first.then(function(ok){ return ok ? agdTherapistCheck(pairs) : false; });
+  return first.then(function(ok){ return ok ? agdRoutineCheck(pairs) : false; });
+}
+function agdRoutineCheck(pairs){
+  var msgs = pairs.map(function(x){
+    var rec = x.rec, old = x.old;
+    if (!rec || !rec.patient || bookingKind(rec)) return null;
+    if (old && samePatient(old, rec) && old.date === rec.date && old.time === rec.time) return null;
+    var p = findPatientAt(rec, rec.date); if (!p) return null;
+    return routineConflictMsg(p, AD_WEEKDAY_KEYS[agdParse(rec.date).getDay()], rec.time, agdBrDate(rec.date));
+  }).filter(Boolean);
+  return sysGate("ag_rotina", "Rotina atual do paciente", msgs, function(){ return routineConfirm(msgs); }).then(function(ok){ return ok ? agdTherapistCheck(pairs) : false; });
 }
 function agdTherapistCheck(pairs){
   var msgs = pairs.map(function(x){
@@ -15798,6 +15946,7 @@ var HELP_TOPICS = [
       "<b>Outras opções ▾</b>: <b>Campos obrigatórios</b>, <b>Imprimir ficha cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica), <b>Mesclar cadastros</b> (só Administrador) e <b>Exportar planilha</b> / <b>Importar planilha</b> (veja o tópico Planilhas)."
     ],
     rules: [
+      "<b>Rotina atual</b> (abaixo de Escola): para cada dia de segunda a sexta, manhã e tarde, escolha onde o paciente está fora da clínica (Escola, Outra terapia, Atividade, Em casa / livre ou Outro) e, se quiser, um detalhe. <b>Copiar segunda</b>, acima de Manhã ou de Tarde, repete aquele período de segunda nos outros dias (com Desfazer por alguns segundos). Ao agendar no Planner ou na Agenda num período de Escola, Outra terapia, Atividade ou Outro, o sistema avisa (regra em Acesso → Sistema). A rotina sai na ficha impressa e pode ser obrigatória em Campos obrigatórios.",
       "Trocar o nome do paciente no cadastro troca também nos agendamentos do Planner e da Agenda, nas evoluções do Prontuário e no Plano terapêutico. Se outro paciente tem o mesmo nome antigo, nada é trocado (aparece um aviso para conferir à mão).",
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",
       "Dois pacientes podem ter o mesmo nome: ao salvar, o sistema avisa e pede confirmação. No Planner e na Agenda eles ficam separados pelo código do cadastro (na lista de sugestões aparece a data de nascimento ou a mãe para escolher o certo).",
