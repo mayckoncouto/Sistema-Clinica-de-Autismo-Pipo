@@ -172,7 +172,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .pl-clin{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px 14px;margin:6px 0 10px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px}
 .pl-clin-it span{display:block;font-size:11px;color:var(--muted)}.pl-clin-it b{font-weight:600;font-size:13px;white-space:pre-line}
 .pl-hint{font-size:11.5px;color:var(--muted)}
-.pl-spec{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--surface)}
+.pl-spec{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--surface)}
 .pl-spec-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}.pl-spec-head b{font-size:14px}
 .pl-spec-count{margin-left:auto;font-size:12px;color:var(--muted)}
 .pl-out{font-size:11px;font-weight:700;color:#9a5b00;background:#fff3d6;border:1px solid #f0d08a;border-radius:999px;padding:1px 8px}
@@ -278,6 +278,14 @@ div.ag-obj-head{cursor:default}
 .pl-sec-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .pl-mine{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--ink-2);cursor:pointer}
 .pl-cover{font-size:12.5px;color:#7a4a00;background:#fff6e0;border:1px solid #f0d08a;border-radius:8px;padding:6px 10px;margin:6px 0}
+.pl-sec-inline{justify-content:flex-start;flex-wrap:wrap;row-gap:6px}.pl-sec-inline .pl-mine{margin-left:auto}
+.pl-sec-note{font-size:12.5px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted)}
+.pl-sec-inline #plCover{text-transform:none;letter-spacing:0;font-weight:500}.pl-sec-inline .pl-cover{margin:0;padding:3px 10px}
+.pl-goal-btn .pl-specs-txt{font-size:13px}.pl-goal-btn.empty .pl-specs-txt{color:var(--muted)}
+.pl-crit{font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px}
+.pl-goal-pop .dp-filter{position:sticky;top:0;margin:0;border-radius:0;border:0;border-bottom:1px solid var(--line);width:100%;box-sizing:border-box;padding:8px 10px;font:inherit;font-size:13px;background:var(--surface);color:var(--ink)}
+.pl-goal-pop .pl-goal-grp{padding:6px 10px 2px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.pl-goal-pop button[disabled]{opacity:.55;cursor:default}
 .pl-cover.ok{color:#245c3a;background:color-mix(in srgb,#2E9E5B 9%,var(--surface));border-color:color-mix(in srgb,#2E9E5B 35%,var(--surface))}
 .ag-obj-area{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--accent);padding:8px 0 2px}
 /* Linhas compactas (2026-10-05): texto de 1 linha que cresce ao digitar, listas mais baixas, "até" ao lado do prazo. */
@@ -3549,7 +3557,7 @@ function useTxt(n, one, many){ return n ? n + " " + (n === 1 ? one : many) : nul
 // Onde cada cadastro está em uso (lista de textos; vazia = livre para excluir).
 var USAGE = {
   escalas: function(sc){ return planUseCount("scaleId", sc.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos")].filter(Boolean); }); },
-  objetivos: function(){ return Promise.resolve([]); },
+  objetivos: function(g){ return planUseCount("goalId", g.id).then(function(n){ return n ? [n + (n === 1 ? " objetivo em plano terapêutico" : " objetivos em planos terapêuticos")] : []; }); },
   habilidades: function(a){ return planUseCount("areaId", a.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos")].filter(Boolean); }); },
   tiposcolab: function(t){ return Promise.resolve([useTxt(staffTypeUseCount(t.id), "pessoa", "pessoas")].filter(Boolean)); },
   medicos: function(m){ return Promise.resolve([useTxt(patientsUsing("medicoId", m.id), "paciente", "pacientes")].filter(Boolean)); },
@@ -11262,14 +11270,14 @@ function agdGoalsCheck(pairs){
       if (old && old.professional_id === rec.professional_id && old.date === rec.date && old.time === rec.time && samePatient(old, rec)) return;
       var p = findPatientAt(rec, rec.date); if (!p) return;
       var mine = planActiveObjs(planVigente(p.id), rec.professional_id); if (!mine.length) return;
-      var keys = mine.map(function(y){ return normText(y.o.objetivo || ""); });
+      var keys = mine.map(function(y){ return planObjKey(y.o); });
       var others = Object.keys(AD.rows || {}).map(function(id){ return AD.rows[id]; }).concat(batch).filter(function(o){
         return o && o !== rec && (!rec.id || o.id !== rec.id) && !(old && o.id === old.id) && !bookingKind(o) && o.date === rec.date && o.time === rec.time && o.professional_id === rec.professional_id;
       });
       others.forEach(function(o){
         var q = findPatientAt(o, o.date); if (!q || q.id === p.id) return;
         var theirs = planActiveObjs(planVigente(q.id), rec.professional_id); if (!theirs.length) return;
-        if (theirs.some(function(y){ return keys.indexOf(normText(y.o.objetivo || "")) !== -1; })) return;
+        if (theirs.some(function(y){ return keys.indexOf(planObjKey(y.o)) !== -1; })) return;
         var k = [p.id, q.id].sort().join("|"); if (seen[k]) return; seen[k] = 1;
         msgs.push("<b>" + esc(p.nome) + "</b> e <b>" + esc(q.nome) + "</b> (" + esc(agdBrDate(rec.date)) + " " + esc(rec.time) + ")");
       });
@@ -16222,11 +16230,12 @@ var HELP_TOPICS = [
     who: "Permissão <b>Conselhos</b>."},
   {id: "objetivos", group: "Prontuário", title: "Objetivos", mod: "objetivos", tab: "objetivos",
     purpose: "Objetivos prontos para usar no Plano terapêutico, com habilidade, critério de sucesso e escala sugeridos.",
-    steps: ["Prontuário ▾ → <b>Objetivos</b> → <b>+ Incluir</b>: habilidade, objetivo, critério de sucesso, escala e especialidades (nenhuma marcada = todas). Objetivo e critério são textos de uma linha.",
-      "No Plano terapêutico, ao digitar no campo <b>Objetivo</b>, aparecem os objetivos do banco da mesma habilidade do quadro (e, se o objetivo já tem especialidades, os delas ou de todas). Escolha com o mouse ou com ↑ ↓ e Enter: o texto entra no objetivo, o critério e a escala vêm junto e as especialidades do banco que estão no tratamento são marcadas.",
-      "Para guardar um objetivo novo sem sair do plano, digite o texto e escolha <b>+ Salvar no Banco de objetivos</b>: abre uma janela por cima, já preenchida com o que está na linha (habilidade e especialidades).",
+    steps: ["Prontuário ▾ → <b>Objetivos</b> → <b>+ Incluir</b>: habilidade, faixas etárias, objetivo, critério de sucesso, escala e especialidades (nenhuma marcada = todas). Objetivo e critério são textos de uma linha.",
+      "<b>Faixas etárias</b>: as mesmas da cor do paciente. No plano, o objetivo aparece com a faixa antes do nome, ex.: <b>[0–4] Pedir ajuda</b>. Nenhuma marcada = todas as idades (sem a etiqueta).",
+      "No Plano terapêutico, o campo <b>Objetivo</b> é uma lista com os objetivos desta habilidade: os da faixa etária do paciente primeiro e os de <b>Outras faixas etárias</b> depois. O critério, a escala e as especialidades do cadastro que estão no tratamento vêm junto.",
+      "Para cadastrar um objetivo sem sair do plano, use <b>+ Incluir objetivo</b> no fim da lista: abre esta janela por cima, já com a habilidade e a faixa do paciente; ao salvar, ele já fica escolhido na linha.",
       "<b>Outras opções ▾</b>: <b>Exportar planilha</b> e <b>Importar planilha</b> (veja o tópico Planilhas)."],
-    rules: ["Não pode haver dois objetivos com o mesmo texto na mesma habilidade.", "Mudar ou excluir um objetivo do banco não muda os planos que já usaram o texto."],
+    rules: ["Não pode haver dois objetivos com o mesmo texto na mesma habilidade.", "Mudar o texto, a faixa ou o critério de um objetivo muda também nos planos que o usam.", "Objetivo usado em algum plano não é excluído: é <b>Inativado</b> (sai da lista do plano, mas continua nos planos que já o têm)."],
     who: "Permissão <b>Objetivos</b>."},
   {id: "escalas", group: "Prontuário", title: "Escalas", mod: "escalas", tab: "escalas",
     purpose: "Escalas usadas na Situação dos objetivos do Plano terapêutico (ex.: Likert de 0 a 5, ABA).",
@@ -16389,12 +16398,14 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>Prontuário ▾ → Plano Terapêutico</b>. A lista mostra um plano por paciente, com a coluna <b>Revisão</b> (aviso 30 dias antes e quando vence). O filtro mostra só os que vencem ou já venceram.",
       "<b>+ Incluir</b>: escolha o paciente. Também dá para abrir pela janela do Tratamento: <b>Outras opções ▾ → Abrir plano terapêutico</b>.",
+      "O título mostra o nome e a idade do paciente.",
       "<b>Quadro clínico</b>: os dados da seção Saúde do cadastro do paciente aparecem sozinhos e sempre atualizados; escreva o <b>Resumo do quadro clínico</b> no campo abaixo deles.",
-      "Cada <b>habilidade</b> é um quadro: use <b>Incluir habilidade…</b> no fim da lista e, dentro do quadro, <b>+ Inserir objetivo</b>. Preencha: Objetivo, Critério de sucesso, <b>Especialidades</b> (as que podem trabalhar o objetivo; as do tratamento aparecem primeiro e as outras como apoio), Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
+      "Cada <b>habilidade</b> é um quadro: use <b>Incluir habilidade…</b> no fim da lista e, dentro do quadro, <b>+ Inserir objetivo</b>. Preencha: <b>Objetivo</b> (lista do cadastro de Objetivos), <b>Especialidades</b> (as que podem trabalhar o objetivo; as do tratamento aparecem primeiro e as outras como apoio), Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
       "O objetivo novo já vem com as <b>especialidades sugeridas</b> da habilidade (cadastro de Habilidades) que estão no tratamento.",
-      "No campo <b>Objetivo</b>, ao digitar, aparecem sugestões do <b>Banco de objetivos</b> da mesma habilidade; escolher uma traz o critério, a escala e as especialidades. <b>+ Salvar no Banco de objetivos</b> guarda o texto digitado para usar em outros planos.",
+      "O campo <b>Objetivo</b> abre a lista dos objetivos cadastrados nesta habilidade, com a faixa etária antes do nome (ex.: [0–4] Objetivo): os da faixa do paciente primeiro, depois <b>Outras faixas etárias</b>. Digite no topo da lista para buscar. Escolher um traz a escala e as especialidades do cadastro. <b>+ Incluir objetivo</b>, no fim da lista, cadastra um objetivo novo sem sair do plano.",
+      "O <b>Critério de sucesso</b> vem do cadastro do objetivo e aparece só para leitura (o texto inteiro ao passar o mouse); para mudar, altere o objetivo em <b>Prontuário ▾ → Objetivos</b>.",
       "O <b>Nº</b> é a prioridade dentro da habilidade: use ▲▼ na própria linha para subir ou descer; os números se ajustam sozinhos. Clique no nome da habilidade para recolher ou abrir o quadro; o título mostra quantos objetivos, ativos e atingidos.",
-      "Acima dos quadros, a conferência avisa as <b>especialidades do tratamento sem objetivo ativo</b> e as <b>habilidades sem objetivo ativo</b>.",
+      "Ao lado do título \"Objetivos por habilidade\", a conferência avisa as <b>especialidades do tratamento sem objetivo ativo</b> e as <b>habilidades sem objetivo ativo</b>.",
       "Para quem é profissional, <b>Só as minhas especialidades</b> esconde os objetivos que ele não trabalha.",
       "<b>Revisar (nova versão)</b>: cria a versão seguinte a partir de hoje, copiando o resumo e os objetivos; a versão anterior fica guardada e abre pela lista <b>Versões anteriores</b> (só leitura).",
       "<b>Imprimir</b> gera o plano em PDF com a logo da clínica e espaço para as assinaturas."
@@ -16803,10 +16814,10 @@ var REG_CFG = {
     list: function(){ return goalBankList(); },
     write: function(l){ return writeSimpleList("objetivos", l); },
     open: function(item){ openGoalModal(item); },
-    search: function(g){ return [g.name, skillAreaName(g.areaId), planSpecNames(goalSpecIds(g)), g.criterio].join(" "); },
-    cols: ["Objetivo", "Habilidade", "Especialidades", "Critério de sucesso", "Escala"],
-    row: function(g){ var sc = scaleById(g.scaleId), gs = goalSpecIds(g); return ['<b>' + esc(g.name) + '</b>', esc(g.areaId ? skillAreaName(g.areaId) : "—"), esc(gs.length ? planSpecNames(gs) : "Todas"), esc(g.criterio || "—"), esc(sc ? sc.name : "—")]; },
-    vals: function(g){ var sc = scaleById(g.scaleId), gs = goalSpecIds(g); return [g.name, g.areaId ? skillAreaName(g.areaId) : "", planSpecNames(gs), g.criterio || "", sc ? sc.name : ""]; }
+    search: function(g){ return [g.name, skillAreaName(g.areaId), ageBandText(g.faixas), planSpecNames(goalSpecIds(g)), g.criterio].join(" "); },
+    cols: ["Objetivo", "Habilidade", "Faixas etárias", "Especialidades", "Critério de sucesso", "Escala"],
+    row: function(g){ var sc = scaleById(g.scaleId), gs = goalSpecIds(g); return ['<b>' + esc(g.name) + '</b>', esc(g.areaId ? skillAreaName(g.areaId) : "—"), esc(ageBandText(g.faixas)), esc(gs.length ? planSpecNames(gs) : "Todas"), esc(g.criterio || "—"), esc(sc ? sc.name : "—")]; },
+    vals: function(g){ var sc = scaleById(g.scaleId), gs = goalSpecIds(g); return [g.name, g.areaId ? skillAreaName(g.areaId) : "", ageBandText(g.faixas), planSpecNames(gs), g.criterio || "", sc ? sc.name : ""]; }
   },
   escalas: {
     title: "escala", plural: "escalas", module: "escalas", newLabel: "+ Incluir", fem: true,
@@ -18193,6 +18204,9 @@ function openPlanModal(plan, opts){
   d.sections.forEach(function(s){ s.objectives.forEach(function(o){ orig[o.id] = planObjSpecs(o).slice(); }); });
   var treatSpecs = planTreatSpecs(pid);
   var scales = scalesList(), areas = skillAreasList();
+  var pAge = p ? patientAgeYears(p) : null;
+  pAge = pAge == null || !isFinite(pAge) ? null : Math.floor(pAge);
+  var pBand = ageBandOf(pAge);
   var collapsed = {}, onlyMine = false;
 
   // Coordenação ("editar") muda tudo. Profissional: inclui objetivos (a especialidade principal
@@ -18222,6 +18236,12 @@ function openPlanModal(plan, opts){
     return '<button type="button" class="pl-specs-btn' + (ids.length ? '' : ' empty') + '" data-specs' + dis + ' title="' + esc(ids.length ? planSpecNames(ids) : "Escolha as especialidades que trabalham este objetivo") + '">' + specsBtnInner(o) + '</button>' +
       (out ? '<div class="pl-hint pl-out-hint">Fora do tratamento atual</div>' : '');
   }
+  // Objetivo: lista do cadastro de Objetivos (com a faixa etária) — goalOpen.
+  function goalCell(o, dis){
+    var t = planObjLabel(o);
+    return '<button type="button" class="pl-specs-btn pl-goal-btn' + (t ? '' : ' empty') + '" data-goal-pick' + dis + ' title="' + esc(t || "Escolha o objetivo") + '">' +
+      '<span class="pl-specs-txt">' + esc(t || "Escolha o objetivo…") + '</span><span class="pl-specs-caret" aria-hidden="true">▾</span></button>';
+  }
   function objRow(s, o, i, n){
     var editAll = canFull(o), editSt = canSt(o);
     var dA = editAll ? '' : ' disabled', dS = editSt ? '' : ' disabled';
@@ -18230,8 +18250,8 @@ function openPlanModal(plan, opts){
       '<td class="pl-num"><div class="pl-num-in">' + (full ? '<span class="pl-move">' +
         '<button type="button" class="pl-mv" data-mv="-1"' + (i ? '' : ' disabled') + ' aria-label="Subir" title="Subir">▲</button>' +
         '<button type="button" class="pl-mv" data-mv="1"' + (i < n - 1 ? '' : ' disabled') + ' aria-label="Descer" title="Descer">▼</button></span>' : '') + '<b>' + (i + 1) + '</b></div></td>' +
-      '<td><textarea data-f="objetivo" rows="1"' + dA + ' placeholder="Objetivo">' + esc(o.objetivo || "") + '</textarea></td>' +
-      '<td><textarea data-f="criterio" rows="1"' + dA + ' placeholder="Critério de sucesso">' + esc(o.criterio || "") + '</textarea></td>' +
+      '<td>' + goalCell(o, dA) + '</td>' +
+      '<td><div class="pl-crit" title="' + esc(planObjCrit(o) || "Sem critério no cadastro do objetivo") + '">' + esc(planObjCrit(o) || "—") + '</div></td>' +
       '<td>' + specsCell(o, dA) + '</td>' +
       '<td><div class="pl-prazo"><select data-f="prazo"' + dA + '>' + optList(PLAN_PRAZOS, o.prazo || 3) + '</select><span class="pl-hint" title="Prazo até ' + esc(trBr(prazoAte)) + '">até ' + esc(trBr(prazoAte).slice(0, 6) + trBr(prazoAte).slice(8)) + '</span></div></td>' +
       '<td><select data-f="scaleId" data-combo' + dA + '>' + optList(scales.filter(function(x){ return isActive(x) || x.id === o.scaleId; }), o.scaleId) + '</select></td>' +
@@ -18277,7 +18297,7 @@ function openPlanModal(plan, opts){
   var canRev = !isNew && !readOnlyVersion && planCan("create") && planFull();
   var canSave = full || prof;
   host.innerHTML = '<div class="overlay" id="ovPlan"><div class="modal pl-modal">' +
-    '<div class="modal-head"><div><h3>Plano terapêutico — ' + esc(p ? p.nome : (plan ? plan.patient_name : "")) + '</h3>' +
+    '<div class="modal-head"><div><h3>Plano terapêutico — ' + esc(p ? p.nome : (plan ? plan.patient_name : "")) + (pAge != null ? ' <span class="pl-age">(' + pAge + (pAge === 1 ? ' ano' : ' anos') + ')</span>' : '') + '</h3>' +
       '<div class="modal-sub">' + (isNew ? "Novo plano" : "Versão " + plan.version + (readOnlyVersion ? " (encerrada — só leitura)" : "") + " · atualizado por " + esc(plan.updated_by_name || "—") + " em " + esc(trBr(String(plan.updated_at || "").slice(0, 10)))) +
         (prof ? ' · Você inclui objetivos (sua especialidade principal já vem marcada) e altera os que têm a sua especialidade principal; nos das áreas complementares, a situação e o status.' : '') + '</div></div>' +
       '<button class="modal-close" id="plClose" aria-label="Fechar">✕</button></div>' +
@@ -18287,12 +18307,10 @@ function openPlanModal(plan, opts){
         '<div class="field"><label for="plReview">Revisão até (validade 6 meses)</label><input id="plReview" type="date" value="' + esc(d.review_date || "") + '"' + (full ? '' : ' disabled') + '></div>' +
         '<div class="field"><label>Situação da revisão</label><div class="pl-rev-chip" id="plRevChip">' + planReviewChip({review_date: d.review_date}) + '</div></div>' +
       '</div>' +
-      '<div class="tr-sec">Quadro clínico</div>' +
-      '<div class="pl-hint">Dados da seção Saúde do cadastro do paciente (atualizam sozinhos).</div>' + planClinicalHtml(p) +
+      '<div class="tr-sec pl-sec-row pl-sec-inline"><span>Quadro clínico</span><span class="pl-sec-note">Dados da seção Saúde do cadastro do paciente (atualizam sozinhos).</span></div>' + planClinicalHtml(p) +
       '<div class="field"><label for="plSummary">Resumo do quadro clínico</label><textarea id="plSummary" rows="4"' + (full ? '' : ' disabled') + ' placeholder="Resumo do quadro clínico do paciente">' + esc(d.summary) + '</textarea></div>' +
-      '<div class="tr-sec pl-sec-row"><span>Objetivos por habilidade</span>' +
+      '<div class="tr-sec pl-sec-row pl-sec-inline"><span>Objetivos por habilidade</span><div id="plCover"></div>' +
         (meSpecs.main && !isNew ? '<label class="pl-mine"><input type="checkbox" id="plOnlyMine"> Só as minhas especialidades</label>' : '') + '</div>' +
-      '<div id="plCover"></div>' +
       '<div id="plSecs"></div>' +
       (canAdd() ? '<div class="pl-add-spec"><select id="plAddArea"><option value="">Incluir habilidade…</option></select></div>' : '') +
       (isNew ? '' : '<div class="tr-sec">Evolução dos objetivos</div><div class="pl-hint">Níveis registrados nas evoluções do Prontuário: um gráfico por habilidade e escala, uma linha por objetivo (a dica do ponto mostra a especialidade que avaliou).</div><div id="plCharts" class="pv-host"><div class="pl-hint">Carregando…</div></div>') +
@@ -18320,7 +18338,6 @@ function openPlanModal(plan, opts){
     $("plSecs").innerHTML = d.sections.length ? d.sections.map(secHtml).join("")
       : '<div class="pl-empty">Nenhuma habilidade no plano.' + (canAdd() ? ' Use "Incluir habilidade…" para começar.' : '') + '</div>';
     $("plCover").innerHTML = coverHtml();
-    Array.prototype.forEach.call($("plSecs").querySelectorAll(".pl-tbl textarea"), planGrow);
     var add = $("plAddArea");
     if (add){
       var used = d.sections.map(function(s){ return s.areaId; });
@@ -18397,34 +18414,64 @@ function openPlanModal(plan, opts){
     findObj(tr).o[f] = e.target.value;
     planGrow(e.target);
   });
-  // Campo Objetivo: sugestões do Banco de objetivos (da habilidade do quadro, das especialidades
-  // do objetivo ou de todas) e "+ Salvar no Banco de objetivos" para o texto digitado.
+  // Campo Objetivo: lista do cadastro de Objetivos da habilidade do quadro (os da faixa etária do
+  // paciente primeiro), com busca no topo e "+ Incluir objetivo" no fim (abre o cadastro por cima).
   var goalPop = document.createElement("div");
-  goalPop.className = "autolist pl-goal-pop"; goalPop.hidden = true; ov.appendChild(goalPop);
-  var goalTa = null;
-  function goalHide(){ goalPop.hidden = true; goalTa = null; }
-  function goalShow(ta){
-    if (!ta || ta.disabled || !document.body.contains(ta)) return goalHide();
-    var x = findObj(ta), q = ta.value.trim();
-    var list = goalMatches(q, x.s.areaId, planObjSpecs(x.o), 8).filter(function(g){ return normText(g.name) !== normText(q); });
-    var canNew = !!q && can("objetivos", "create") && !goalBankList().some(function(g){ return normText(g.name) === normText(q); });
-    if (!list.length && !canNew) return goalHide();
-    goalTa = ta;
-    goalPop.innerHTML = list.map(function(g){
-      var gs = goalSpecIds(g);
-      return '<button type="button" data-goal="' + esc(g.id) + '"><span class="autolist-name">' + esc(g.name) + '</span><span class="autolist-kind">' + esc(gs.length ? planSpecSiglas(gs) : "Todas") + '</span></button>';
-    }).join("") + (canNew ? '<button type="button" class="autolist-new" data-goal-new>+ Salvar no Banco de objetivos</button>' : '');
-    var r = ta.getBoundingClientRect();
-    goalPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 528)) + "px";
-    goalPop.style.width = Math.min(520, Math.max(r.width, 340)) + "px";
+  goalPop.className = "autolist pl-goal-pop"; goalPop.hidden = true; goalPop.setAttribute("role", "listbox"); ov.appendChild(goalPop);
+  var goalFor = null;
+  function goalHide(){ goalPop.hidden = true; goalFor = null; }
+  function objById(id){
+    for (var i = 0; i < d.sections.length; i++){ var s = d.sections[i], o = s.objectives.filter(function(z){ return z.id === id; })[0]; if (o) return {s: s, o: o}; }
+    return null;
+  }
+  function goalListHtml(x, q){
+    var words = normText(q || "").split(/\s+/).filter(Boolean), used = {};
+    x.s.objectives.forEach(function(o){ if (o.goalId && o !== x.o) used[o.goalId] = 1; });
+    var all = goalBankList().filter(function(g){ return (isActive(g) && g.areaId === x.s.areaId) || g.id === x.o.goalId; })
+      .filter(function(g){ var t = normText(goalLabel(g) + " " + (g.criterio || "")); return words.every(function(w){ return t.indexOf(w) !== -1; }); })
+      .sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
+    function btn(g){
+      var gs = goalSpecIds(g), dup = !!used[g.id];
+      return '<button type="button" role="option" data-goal="' + esc(g.id) + '"' + (dup ? ' disabled title="Já está neste quadro"' : '') + (g.id === x.o.goalId ? ' class="sel" aria-selected="true"' : '') + '>' +
+        '<span class="autolist-name">' + esc(goalLabel(g)) + (dup ? ' <span class="pt-muted">(já no quadro)</span>' : '') + '</span>' +
+        '<span class="autolist-kind">' + esc(gs.length ? planSpecSiglas(gs) : "Todas") + '</span></button>';
+    }
+    var fit = all.filter(function(g){ return goalFitsAge(g, pBand); }), out = all.filter(function(g){ return !goalFitsAge(g, pBand); });
+    var html = fit.map(btn).join("") + (out.length ? '<div class="pl-goal-grp">Outras faixas etárias</div>' + out.map(btn).join("") : '');
+    if (!all.length) html = '<div class="dp-none">' + (q ? 'Nenhum objetivo encontrado.' : 'Nenhum objetivo cadastrado nesta habilidade.') + '</div>';
+    if (can("objetivos", "create")) html += '<button type="button" class="autolist-new" data-goal-new>+ Incluir objetivo</button>';
+    return html;
+  }
+  function goalFill(q){
+    var x = goalFor && objById(goalFor.objId); if (!x) return goalHide();
+    var list = goalPop.querySelector(".pl-goal-list");
+    list.innerHTML = goalListHtml(x, q);
+    var first = list.querySelector("button:not([disabled])"); if (first && q) first.classList.add("kb");
+  }
+  function goalOpen(btn){
+    var x = findObj(btn); if (!x.o) return;
+    goalFor = {btn: btn, objId: x.o.id};
+    goalPop.innerHTML = '<input type="text" class="dp-filter" placeholder="Digite para buscar…" aria-label="Buscar objetivo"><div class="pl-goal-list"></div>';
+    goalFill("");
+    var r = btn.getBoundingClientRect();
+    goalPop.style.width = Math.min(560, Math.max(r.width, 380)) + "px";
+    goalPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - goalPop.offsetWidth - 8)) + "px";
     goalPop.hidden = false;
+    goalPlace();
+    goalPop.querySelector(".dp-filter").focus({preventScroll: true});
+  }
+  // Acompanha a linha quando a janela rola (inclusive o ajuste automático ao incluir linhas).
+  function goalPlace(){
+    if (!goalFor || !document.body.contains(goalFor.btn)) return goalHide();
+    var r = goalFor.btn.getBoundingClientRect(), box = ov.querySelector(".modal-body").getBoundingClientRect();
+    if (r.bottom < box.top || r.top > box.bottom) return goalHide();
+    goalPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - goalPop.offsetWidth - 8)) + "px";
     var below = window.innerHeight - r.bottom - 8, h = goalPop.offsetHeight;
     goalPop.style.top = (h <= below || r.top < h ? r.bottom + 4 : r.top - h - 4) + "px";
   }
   function goalApply(o, g){
-    o.objetivo = g.name;
-    if (!String(o.criterio || "").trim() && g.criterio) o.criterio = g.criterio;
-    // Especialidades do banco que estão no tratamento entram junto (as já marcadas ficam).
+    o.goalId = g.id; o.objetivo = g.name; o.criterio = g.criterio || "";
+    // Especialidades do cadastro que estão no tratamento entram junto (as já marcadas ficam).
     var ids = planObjSpecs(o);
     goalSpecIds(g).forEach(function(id){ if (ids.indexOf(id) === -1 && (treatSpecs.indexOf(id) !== -1 || !treatSpecs.length)) ids.push(id); });
     var lock = lockedSpec(o); if (lock && ids.indexOf(lock) === -1) ids.unshift(lock);
@@ -18435,37 +18482,39 @@ function openPlanModal(plan, opts){
       if (o.status === "atingido"){ o.status = "ativo"; o.statusEm = today; }
     }
   }
-  function isGoalTa(t){ return t && t.tagName === "TEXTAREA" && t.getAttribute("data-f") === "objetivo"; }
-  secsEl.addEventListener("focusin", function(e){ if (isGoalTa(e.target)) goalShow(e.target); });
-  secsEl.addEventListener("input", function(e){ if (isGoalTa(e.target)) goalShow(e.target); });
-  secsEl.addEventListener("focusout", function(e){ if (isGoalTa(e.target)) setTimeout(function(){ if (document.activeElement !== goalTa) goalHide(); }, 0); });
-  secsEl.addEventListener("keydown", function(e){
-    if (goalPop.hidden || e.target !== goalTa) return;
-    var items = Array.prototype.slice.call(goalPop.querySelectorAll("button"));
-    var cur = goalPop.querySelector("button.kb"), i = items.indexOf(cur);
-    if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); goalHide(); return; }
-    if (e.key === "Enter" && cur){ e.preventDefault(); cur.click(); return; }
+  function goalPicked(objId, g){
+    var x = objById(objId); if (!x) return;
+    goalApply(x.o, g); render(); $("plCover").innerHTML = coverHtml();
+    var b = secsEl.querySelector('tr[data-obj="' + objId + '"] [data-goal-pick]'); if (b) b.focus();
+  }
+  goalPop.addEventListener("input", function(e){ if (e.target.classList.contains("dp-filter")) goalFill(e.target.value); });
+  goalPop.addEventListener("keydown", function(e){
+    var items = Array.prototype.slice.call(goalPop.querySelectorAll(".pl-goal-list button:not([disabled])"));
+    var cur = goalPop.querySelector(".pl-goal-list button.kb"), i = items.indexOf(cur);
+    if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); var b0 = goalFor && goalFor.btn; goalHide(); if (b0) b0.focus(); return; }
+    if (e.key === "Enter"){ e.preventDefault(); (cur || items[0] || {click: function(){}}).click(); return; }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
+    if (!items.length) return;
     i = e.key === "ArrowDown" ? Math.min(items.length - 1, i + 1) : Math.max(0, i - 1);
     items.forEach(function(b){ b.classList.remove("kb"); });
     items[i].classList.add("kb"); items[i].scrollIntoView({block: "nearest"});
-  }, true);
-  goalPop.addEventListener("mousedown", function(e){ e.preventDefault(); });
+  });
   goalPop.addEventListener("click", function(e){
-    var b = e.target.closest("button"); if (!b || !goalTa) return;
-    var x = findObj(goalTa), objId = x.o.id;
+    var b = e.target.closest("button"); if (!b || b.disabled || !goalFor) return;
+    var objId = goalFor.objId, x = objById(objId);
     goalHide();
-    var refocus = function(){ var t = secsEl.querySelector('tr[data-obj="' + objId + '"] textarea[data-f="criterio"]'); if (t) t.focus(); };
+    if (!x) return;
     if (b.hasAttribute("data-goal-new")){
-      openGoalModal(null, {stack: true, prefill: {name: String(x.o.objetivo || "").trim(), areaId: x.s.areaId, criterio: x.o.criterio, scaleId: x.o.scaleId, specIds: planObjSpecs(x.o)},
-        onSaved: function(rec){ goalApply(x.o, rec); render(); refocus(); }});
+      openGoalModal(null, {stack: true, prefill: {areaId: x.s.areaId, faixas: pBand ? [pBand.id] : [], scaleId: x.o.scaleId, specIds: planObjSpecs(x.o)},
+        onSaved: function(rec){ goalPicked(objId, rec); }});
       return;
     }
-    var g = goalBankList().filter(function(z){ return z.id === b.getAttribute("data-goal"); })[0];
-    if (g){ goalApply(x.o, g); render(); refocus(); }
+    var g = goalById(b.getAttribute("data-goal"));
+    if (g) goalPicked(objId, g);
   });
-  ov.querySelector(".modal-body").addEventListener("scroll", function(){ if (goalTa) goalShow(goalTa); });
+  ov.addEventListener("mousedown", function(e){ if (!goalPop.hidden && !goalPop.contains(e.target) && !(goalFor && goalFor.btn.contains(e.target))) goalHide(); });
+  ov.querySelector(".modal-body").addEventListener("scroll", function(){ if (!goalPop.hidden) goalPlace(); });
   secsEl.addEventListener("change", function(e){
     var f = e.target.getAttribute("data-f"), tr = e.target.closest("tr[data-obj]");
     if (!f || !tr || e.target.tagName === "TEXTAREA") return;
@@ -18491,6 +18540,8 @@ function openPlanModal(plan, opts){
     if (tg){ var aid = tg.closest("[data-area]").getAttribute("data-area"); collapsed[aid] = !collapsed[aid]; render(); return; }
     var sb = e.target.closest("[data-specs]");
     if (sb){ if (specFor && specFor.btn === sb){ specHide(); return; } specOpen(sb); return; }
+    var gb = e.target.closest("[data-goal-pick]");
+    if (gb){ if (goalFor && goalFor.btn === gb){ goalHide(); return; } goalOpen(gb); return; }
     var mv = e.target.closest("[data-mv]");
     if (mv){
       var x = findObj(mv), j = x.i + Number(mv.getAttribute("data-mv"));
@@ -18501,8 +18552,8 @@ function openPlanModal(plan, opts){
     if (e.target.closest("[data-rm-obj]")){
       var y = findObj(e.target.closest("tr[data-obj]"));
       var go = function(){ y.s.objectives.splice(y.i, 1); render(); };
-      if (!orig[y.o.id] && !(y.o.objetivo || "").trim()) return go();
-      confirmDialog({title: "Confirmar exclusão", message: "Excluir o objetivo <b>" + esc(y.o.objetivo || "(sem texto)") + "</b> do plano?", confirmLabel: "Confirmar exclusão"}).then(function(ok){ if (ok) go(); });
+      if (!orig[y.o.id] && !planObjLabel(y.o).trim()) return go();
+      confirmDialog({title: "Confirmar exclusão", message: "Excluir o objetivo <b>" + esc(planObjLabel(y.o) || "(sem objetivo)") + "</b> do plano?", confirmLabel: "Confirmar exclusão"}).then(function(ok){ if (ok) go(); });
       return;
     }
     var add = e.target.closest("[data-add-obj]");
@@ -18516,7 +18567,7 @@ function openPlanModal(plan, opts){
       collapsed[s.areaId] = false;
       render();
       var rows = secsEl.querySelectorAll('[data-area="' + s.areaId + '"] tr[data-obj]');
-      var last = rows[rows.length - 1]; if (last){ var ta = last.querySelector('textarea[data-f="objetivo"]'); if (ta) ta.focus(); }
+      var last = rows[rows.length - 1]; if (last){ var gp = last.querySelector('[data-goal-pick]'); if (gp && !gp.disabled) goalOpen(gp); }
     }
   });
   var addArea = $("plAddArea");
@@ -18542,7 +18593,12 @@ function openPlanModal(plan, opts){
   function sectionsToSave(){
     var saved = ((plan && plan.sections) || []).map(function(s){ return s.areaId; });
     return d.sections.filter(function(s){ return s.objectives.length || saved.indexOf(s.areaId) !== -1; })
-      .map(function(s){ return {areaId: s.areaId, objectives: s.objectives.map(function(o){ return Object.assign({}, o, {specIds: planObjSpecs(o)}); })}; });
+      .map(function(s){ return {areaId: s.areaId, objectives: s.objectives.map(function(o){
+        // Ligado ao cadastro de Objetivos: grava o texto e o critério atuais do cadastro.
+        var g = goalById(o.goalId), extra = {specIds: planObjSpecs(o)};
+        if (g && canFull(o)){ extra.objetivo = g.name; extra.criterio = g.criterio || ""; }
+        return Object.assign({}, o, extra);
+      })}; });
   }
   function validate(){
     for (var i = 0; i < d.sections.length; i++){
@@ -18550,7 +18606,7 @@ function openPlanModal(plan, opts){
       for (var j = 0; j < s.objectives.length; j++){
         var o = s.objectives[j], where = " nº " + (j + 1) + " de " + skillAreaName(s.areaId) + ".";
         if (!canFull(o)) continue;
-        if (!String(o.objetivo || "").trim()){ showToast("Preencha o objetivo" + where, true); return false; }
+        if (!planObjLabel(o).trim()){ collapsed[s.areaId] = false; render(); showToast("Escolha o objetivo" + where, true); return false; }
         if (!planObjSpecs(o).length){ collapsed[s.areaId] = false; render(); showToast("Escolha as especialidades do objetivo" + where, true); return false; }
       }
     }
@@ -18630,7 +18686,7 @@ function planEvoGoalsHtml(data){
         var sp = planObjSpecs(x.o);
         return '<div class="pr-goal" data-goal-obj="' + esc(x.o.id) + '" data-goal-spec="' + esc(x.spec || "") + '">' +
           '<label class="pr-goal-main"><input type="checkbox" data-goal-on' + (x.pick ? ' checked' : '') + ' aria-label="Objetivo trabalhado">' +
-          '<span class="pr-goal-txt"><span><b>' + x.n + '.</b> ' + esc(x.o.objetivo || "") + (sp.length ? ' <span class="autolist-kind" title="' + esc(planSpecNames(sp)) + '">' + esc(planSpecSiglas(sp)) + '</span>' : '') + '</span>' +
+          '<span class="pr-goal-txt"><span><b>' + x.n + '.</b> ' + esc(planObjLabel(x.o)) + (sp.length ? ' <span class="autolist-kind" title="' + esc(planSpecNames(sp)) + '">' + esc(planSpecSiglas(sp)) + '</span>' : '') + '</span>' +
             '<span class="pl-hint">' + planObjMetaHtml(data.plan, x.o).replace(/^<div class="ag-obj-meta">|<\/div>$/g, "") + '</span>' +
             planLastHtml(x.o, data.last).replace('class="ag-obj-meta"', 'class="pl-hint"') + '</span></label>' +
           '<span class="pr-goal-lv"><span class="pl-lv-dot" style="background:' + esc(((lv.filter(function(l){ return l.id === cur; })[0]) || {}).color || "transparent") + '"></span>' +
@@ -18735,11 +18791,11 @@ function planChartsHtml(charts){
     var dates = []; series.forEach(function(s){ s.pts.forEach(function(p){ if (dates.indexOf(p.d) === -1) dates.push(p.d); }); }); dates.sort();
     return '<figure class="pv-fig">' +
       '<figcaption><b>' + esc(skillAreaName(ch.areaId)) + '</b> · escala ' + esc(ch.scale.name) + '</figcaption>' +
-      '<div class="pv-legend">' + series.map(function(s, k){ return '<span class="pv-key"><span class="pv-sw" style="background:var(--viz-' + (k + 1) + ')"></span><b>' + s.n + '.</b> ' + esc((s.o.objetivo || "").length > 60 ? s.o.objetivo.slice(0, 59) + "…" : s.o.objetivo) + '</span>'; }).join("") + '</div>' +
+      '<div class="pv-legend">' + series.map(function(s, k){ return '<span class="pv-key"><span class="pv-sw" style="background:var(--viz-' + (k + 1) + ')"></span><b>' + s.n + '.</b> ' + esc(planObjLabel(s.o).length > 60 ? planObjLabel(s.o).slice(0, 59) + "…" : planObjLabel(s.o)) + '</span>'; }).join("") + '</div>' +
       '<div class="pv-plot">' + planChartSvg(ch) + '<div class="pv-tip" hidden></div></div>' +
       (ch.series.length > PLAN_VIZ_MAX ? '<div class="pl-hint">Mostrando os ' + PLAN_VIZ_MAX + ' primeiros objetivos (ordem de prioridade).</div>' : '') +
       '<details class="pv-table"><summary>Ver tabela</summary><div class="pl-tbl-wrap"><table class="pat-table"><thead><tr><th>Objetivo</th>' + dates.map(function(d){ return '<th>' + esc(trBr(d)) + '</th>'; }).join("") + '</tr></thead><tbody>' +
-        series.map(function(s){ return '<tr><td><b>' + s.n + '.</b> ' + esc(s.o.objetivo || "") + '</td>' + dates.map(function(d){ var p = s.pts.filter(function(q){ return q.d === d; }).pop(); return '<td>' + (p ? esc(ch.scale.levels[p.idx].name) : "—") + '</td>'; }).join("") + '</tr>'; }).join("") +
+        series.map(function(s){ return '<tr><td><b>' + s.n + '.</b> ' + esc(planObjLabel(s.o)) + '</td>' + dates.map(function(d){ var p = s.pts.filter(function(q){ return q.d === d; }).pop(); return '<td>' + (p ? esc(ch.scale.levels[p.idx].name) : "—") + '</td>'; }).join("") + '</tr>'; }).join("") +
       '</tbody></table></div></details>' +
     '</figure>';
   }).join("");
@@ -18755,7 +18811,7 @@ function planObjMetaHtml(plan, o){
   var sc = scaleById(o.scaleId), lv = scaleLevel(o.scaleId, o.levelId);
   var st = PLAN_STATUS.filter(function(x){ return x.id === (o.status || "ativo"); })[0];
   var parts = [];
-  if (o.criterio) parts.push('Critério: ' + esc(o.criterio));
+  if (planObjCrit(o)) parts.push('Critério: ' + esc(planObjCrit(o)));
   if (o.prazo) parts.push('Prazo: ' + o.prazo + ' meses (até ' + esc(trBr(trAddMonths(plan.plan_date, Number(o.prazo) || 0))) + ')');
   if (sc) parts.push('Escala: ' + esc(sc.name));
   parts.push('Situação: ' + (lv ? '<span class="pl-lv-dot" style="background:' + esc(lv.color || "transparent") + '"></span>' + esc(lv.name) : '—') + (o.levelEm ? ' (em ' + esc(trBr(o.levelEm)) + ')' : ''));
@@ -18793,8 +18849,8 @@ function agdGoalsData(row, records){
   }).filter(function(o){ return o.objs.length; });   // sem plano vigente (ou sem objetivos ativos) não conta
   var common = [], own = [];
   mine.forEach(function(x){
-    var key = normText(x.o.objetivo || "");
-    var with_ = others.filter(function(oo){ return key && oo.objs.some(function(y){ return normText(y.o.objetivo || "") === key; }); }).map(function(oo){ return oo.p.nome; });
+    var key = planObjKey(x.o);
+    var with_ = others.filter(function(oo){ return key && oo.objs.some(function(y){ return planObjKey(y.o) === key; }); }).map(function(oo){ return oo.p.nome; });
     (with_.length ? common : own).push(Object.assign({with: with_}, x));
   });
   var prof = row.professional_id ? findProfessional(row.professional_id) : null;
@@ -18819,8 +18875,8 @@ function agdGoalsBoxHtml(d){
     var st = PLAN_STATUS.filter(function(z){ return z.id === (o.status || "ativo"); })[0];
     var also = x.specIds.filter(function(s){ return s !== mySpec; });
     return '<div class="ag-obj-line">' +
-      '<div class="ag-obj-txt"><b>' + x.n + '.</b> ' + esc(o.objetivo || "") + '</div>' +
-      '<div class="ag-obj-meta">Critério: ' + esc(o.criterio || "—") + ' · Escala: ' + esc(sc ? sc.name : "—") + '</div>' +
+      '<div class="ag-obj-txt"><b>' + x.n + '.</b> ' + esc(planObjLabel(o)) + '</div>' +
+      '<div class="ag-obj-meta">Critério: ' + esc(planObjCrit(o) || "—") + ' · Escala: ' + esc(sc ? sc.name : "—") + '</div>' +
       '<div class="ag-obj-meta">Status: ' + esc(st ? st.name : "—") + ' · Situação: ' + (lv ? '<span class="pl-lv-dot" style="background:' + esc(lv.color || "transparent") + '"></span>' + esc(lv.name) : '—') + '</div>' +
       '<div class="ag-obj-meta">Especialidades: ' + esc(planSpecNames(x.specIds) || "—") + (also.length && mySpec && x.specIds.indexOf(mySpec) !== -1 ? ' <span class="ag-obj-with">(também ' + esc(planSpecSiglas(also)) + ')</span>' : '') + '</div>' +
       planLastHtml(o, d.last) +
@@ -18896,7 +18952,7 @@ function planPrint(plan){
       return '<h3>' + esc(skillAreaName(s.areaId)) + '</h3><table><thead><tr><th>Nº</th><th>Objetivo</th><th>Critério de sucesso</th><th>Especialidades</th><th>Prazo</th><th>Escala</th><th>Situação</th><th>Status</th></tr></thead><tbody>' +
         s.objectives.map(function(o, i){
           var sc = scaleById(o.scaleId), lv = scaleLevel(o.scaleId, o.levelId);
-          return '<tr><td>' + (i + 1) + '</td><td>' + esc(o.objetivo || "") + '</td><td>' + esc(o.criterio || "") + '</td><td>' + esc(planSpecNames(planObjSpecs(o))) + '</td><td>' + esc(trLabel(PLAN_PRAZOS, Number(o.prazo))) + '</td><td>' + esc(sc ? sc.name : "—") + '</td>' +
+          return '<tr><td>' + (i + 1) + '</td><td>' + esc(planObjLabel(o)) + '</td><td>' + esc(planObjCrit(o)) + '</td><td>' + esc(planSpecNames(planObjSpecs(o))) + '</td><td>' + esc(trLabel(PLAN_PRAZOS, Number(o.prazo))) + '</td><td>' + esc(sc ? sc.name : "—") + '</td>' +
             '<td>' + (lv ? '<span class="dot" style="background:' + esc(lv.color || "#999") + '"></span>' + esc(lv.name) : "—") + '</td><td>' + esc(trLabel(PLAN_STATUS, o.status || "ativo")) + '</td></tr>';
         }).join("") + '</tbody></table>';
     }).join("") +
@@ -19007,6 +19063,36 @@ function openScaleModal(item){
  * objetivos" para o texto digitado (openGoalModal com stack: janela por cima).
  */
 function goalBankList(){ return (state.goalBank || []).slice(); }
+// Faixa etária do objetivo: "[0–4] Nome" no plano. No cadastro fica em faixas (ids de AGE_BANDS)
+// e o nome sem o prefixo. goalNamePrefix separa um "[0–4]" que venha digitado no começo do nome.
+function ageBandShort(b){ return String(b.label).replace(/\s*anos?$/, ""); }
+function goalNamePrefix(name){
+  var s = String(name || ""), m = s.match(/^\s*\[([^\]]+)\]\s*/);
+  if (!m) return {name: s.trim(), faixas: null};
+  var warn = [], ids = ioAgeBands(m[1], warn);
+  if (warn.length || !ids.length) return {name: s.trim(), faixas: null};
+  return {name: s.slice(m[0].length).trim(), faixas: ids};
+}
+function goalAgeTag(faixas){
+  var v = ageBandIds(faixas);
+  if (!v.length || v.length >= AGE_BANDS.length) return "";
+  return "[" + AGE_BANDS.filter(function(b){ return v.indexOf(b.id) !== -1; }).map(ageBandShort).join(", ") + "] ";
+}
+function goalById(id){ return id ? goalBankList().filter(function(g){ return g.id === id; })[0] || null : null; }
+function goalLabel(g){ return g ? goalAgeTag(g.faixas) + (g.name || "") : ""; }
+// Texto do objetivo no plano: o do cadastro (com a faixa) quando está ligado; senão o gravado.
+function planObjLabel(o){ var g = o && goalById(o.goalId); return g ? goalLabel(g) : String((o && o.objetivo) || ""); }
+function planObjCrit(o){ var g = o && goalById(o.goalId); return (g && g.criterio) || String((o && o.criterio) || ""); }
+// Chave para comparar objetivos entre pacientes (sem a faixa, sem acento/maiúscula).
+function planObjKey(o){ var g = o && goalById(o.goalId); return normText(g ? g.name : goalNamePrefix((o && o.objetivo) || "").name); }
+// Objetivo combina com a idade do paciente (sem faixa = todas as idades).
+function goalFitsAge(g, band){ var f = ageBandIds(g && g.faixas); return !band || !f.length || f.indexOf(band.id) !== -1; }
+// Caixas de marcar das faixas etárias (Habilidades e Objetivos).
+function ageCheckGridHtml(id, selected, canSave, labelId){
+  var sel = ageBandIds(selected);
+  return '<div class="lib-grid" id="' + id + '" role="group"' + (labelId ? ' aria-labelledby="' + labelId + '"' : '') + '>' +
+    AGE_BANDS.map(function(b){ var on = sel.indexOf(b.id) !== -1; return '<label class="lib-opt' + (on ? ' on' : '') + '"><input type="checkbox" value="' + esc(b.id) + '"' + (on ? ' checked' : '') + (canSave ? '' : ' disabled') + '><span><i class="age-dot" style="background:' + b.color + '"></i>' + esc(b.label) + '</span></label>'; }).join("") + '</div>';
+}
 // Especialidades do objetivo do banco (vazio = todas). Itens antigos têm specId único.
 function goalSpecIds(g){ return Array.isArray(g && g.specIds) ? g.specIds.filter(Boolean) : (g && g.specId ? [g.specId] : []); }
 // Sugestões no plano: da mesma habilidade do quadro (ou sem habilidade); com especialidades
@@ -19041,8 +19127,11 @@ function openGoalModal(item, opts){
   var isNew = !item;
   if (isNew && !can("objetivos", "create")){ showToast(permDeniedMsg("objetivos", "create"), true); return; }
   var canSave = isNew || can("objetivos", "edit"), canDel = !isNew && !opts.stack && can("objetivos", "delete");
-  var v = Object.assign({name: "", areaId: "", criterio: "", scaleId: "", specIds: []}, opts.prefill || {}, item || {});
+  var v = Object.assign({name: "", areaId: "", criterio: "", scaleId: "", specIds: [], faixas: []}, opts.prefill || {}, item || {});
   v.specIds = goalSpecIds(v);
+  // "[0–4] Nome" vindo de cadastro antigo: a faixa vai para as caixas e o nome fica sem o prefixo.
+  var pre = goalNamePrefix(v.name);
+  if (pre.faixas){ v.name = pre.name; if (!ageBandIds(v.faixas).length) v.faixas = pre.faixas; }
   var dis = canSave ? '' : ' disabled';
   var host;
   if (opts.stack){
@@ -19059,6 +19148,8 @@ function openGoalModal(item, opts){
     '<div class="modal-body">' +
       // Ordem pedida: Habilidade, Objetivo, Critério, Escala, Especialidades (textos numa linha só).
       '<div class="field"><label for="glArea">Habilidade</label><select id="glArea" data-combo' + dis + '>' + opt(skillAreasList().filter(function(a){ return isActive(a) || a.id === v.areaId; }), v.areaId, "Escolha…") + '</select></div>' +
+      '<div class="field"><label id="glAgeLabel">Faixas etárias</label>' + ageCheckGridHtml("glAges", v.faixas, canSave, "glAgeLabel") +
+        '<div class="pat-count" style="margin-top:4px;font-weight:500">As mesmas faixas da cor do paciente. Nenhuma marcada = todas as idades. No plano aparece antes do objetivo, ex.: [0–4] Objetivo.</div></div>' +
       '<div class="field"><label for="glName">Objetivo</label><input type="text" id="glName" placeholder="Ex.: Pedir ajuda usando frase de 2 palavras" value="' + esc(String(v.name || "").replace(/\s*\n\s*/g, " ")) + '"' + dis + '></div>' +
       '<div class="field"><label for="glCrit">Critério de sucesso (sugerido)</label><input type="text" id="glCrit" placeholder="Ex.: 80% das tentativas em 3 sessões seguidas" value="' + esc(String(v.criterio || "").replace(/\s*\n\s*/g, " ")) + '"' + dis + '></div>' +
       '<div class="field"><label for="glScale">Escala (sugerida)</label><select id="glScale" data-combo' + dis + '>' + opt(scalesList().filter(function(x){ return isActive(x) || x.id === v.scaleId; }), v.scaleId, "Sem escala sugerida") + '</select></div>' +
@@ -19074,6 +19165,7 @@ function openGoalModal(item, opts){
   $("glClose").addEventListener("click", close);
   $("glCancel").addEventListener("click", close);
   var glSpecsSel = specCheckGridWire($("glSpecs"));
+  var glAgesSel = specCheckGridWire($("glAges"));
   // Começa pela Habilidade (1º campo); com a habilidade já escolhida, vai direto ao Objetivo.
   setTimeout(function(){
     if (!canSave) return;
@@ -19089,12 +19181,14 @@ function openGoalModal(item, opts){
     });
   }
   if ($("glSave")) $("glSave").addEventListener("click", function(){
-    var name = $("glName").value.trim();
+    var name = $("glName").value.trim(), faixas = glAgesSel();
+    var px = goalNamePrefix(name);
+    if (px.faixas){ name = px.name; if (!faixas.length) faixas = px.faixas; }
     if (!name){ $("glName").focus(); showToast("Preencha o objetivo.", true); return; }
     if (!$("glArea").value){ showToast("Escolha a habilidade.", true); return; }
     var list = goalBankList(), specs = glSpecsSel();
     if (list.some(function(g){ return normText(g.name) === normText(name) && g.areaId === $("glArea").value && (!item || g.id !== item.id); })){ showToast("Esse objetivo já está no Banco de objetivos (mesma habilidade).", true); return; }
-    var rec = Object.assign({}, item || {}, {name: name, areaId: $("glArea").value, specIds: specs, criterio: $("glCrit").value.trim(), scaleId: $("glScale").value});
+    var rec = Object.assign({}, item || {}, {name: name, areaId: $("glArea").value, faixas: ageBandIds(faixas), specIds: specs, criterio: $("glCrit").value.trim(), scaleId: $("glScale").value});
     delete rec.specId;
     if (isNew) rec.id = uid("goal");
     save(isNew ? list.concat([rec]) : list.map(function(g){ return g.id === rec.id ? rec : g; }), rec);
@@ -19105,7 +19199,7 @@ function openGoalModal(item, opts){
       save: function(it){ return writeSimpleList("objetivos", goalBankList().map(function(g){ return g.id === it.id ? Object.assign({}, g, {inativo: it.inativo}) : g; })).then(function(){ renderRegistryTab("objetivos"); }); }});
     del.addEventListener("click", function(){
       if (delBlocked(this)) return;
-      confirmDialog({title: "Confirmar exclusão", message: "Excluir o objetivo <b>" + esc(item.name) + "</b> do cadastro de Objetivos?<br>Os planos que já usam esse texto não mudam.", confirmLabel: "Confirmar exclusão"}).then(function(ok){
+      confirmDialog({title: "Confirmar exclusão", message: "Excluir o objetivo <b>" + esc(item.name) + "</b> do cadastro de Objetivos?", confirmLabel: "Confirmar exclusão"}).then(function(ok){
         if (ok) save(goalBankList().filter(function(g){ return g.id !== item.id; }));
       });
     });
@@ -19962,6 +20056,9 @@ function ioGoalPlan(recs){
   var items = [], base = goalBankList(), seen = {}, canNew = can("objetivos", "create"), canEdit = can("objetivos", "edit");
   recs.forEach(function(r){
     var it = {line: r._line, msgs: [], warn: []}, nome = ioText(r.objetivo), hab = ioText(r.habilidade);
+    // "[0–4] Objetivo": a faixa do começo do nome vale quando a coluna Faixas etárias está vazia.
+    var pre = goalNamePrefix(nome), fxTxt = ioText(r.faixas);
+    if (pre.faixas) nome = pre.name;
     it.label = esc(nome || "(sem objetivo)") + (hab ? ' <span class="hint">· ' + esc(hab) + '</span>' : '');
     if (!nome){ it.st = "problema"; it.msgs.push("Falta o texto do objetivo."); return items.push(it); }
     var area = hab ? skillAreasList().filter(function(a){ return ioKey(a.name) === ioKey(hab); })[0] : null;
@@ -19976,10 +20073,14 @@ function ioGoalPlan(recs){
     if (ioText(r.criterio)) v.criterio = ioText(r.criterio);
     if (sc) v.scaleId = sc.id;
     if (ioText(r.specs)) v.specIds = ioSpecIds(r.specs, it.warn);
-    var cur = base.filter(function(g){ return ioKey(g.name) === ioKey(nome) && g.areaId === area.id; })[0];
+    if (fxTxt) v.faixas = ioAgeBands(fxTxt, it.warn);
+    else if (pre.faixas) v.faixas = pre.faixas;
+    var cur = base.filter(function(g){ return ioKey(goalNamePrefix(g.name).name) === ioKey(nome) && g.areaId === area.id; })[0];
     it.vals = v; it.cur = cur;
     if (!cur){ it.st = canNew ? "novo" : "problema"; if (!canNew) it.msgs.push("Seu nível não pode incluir objetivos."); return items.push(it); }
     var ch = [];
+    if (cur.name !== nome){ v.name = nome; ch.push(ioDiff("Objetivo", cur.name, nome)); }
+    if (v.faixas && ageBandIds(cur.faixas).slice().sort().join() !== v.faixas.slice().sort().join()) ch.push(ioDiff("Faixas etárias", ageBandText(cur.faixas), ageBandText(v.faixas)));
     if (v.criterio && v.criterio !== (cur.criterio || "")) ch.push(ioDiff("Critério", cur.criterio, v.criterio));
     if (v.scaleId && v.scaleId !== cur.scaleId) ch.push(ioDiff("Escala", (scaleById(cur.scaleId) || {}).name, sc.name));
     if (v.specIds && v.specIds.slice().sort().join() !== goalSpecIds(cur).slice().sort().join()) ch.push(ioDiff("Especialidades", planSpecNames(goalSpecIds(cur)) || "Todas", planSpecNames(v.specIds) || "Todas"));
@@ -19992,7 +20093,7 @@ function ioGoalPlan(recs){
 function ioGoalApply(plan){
   var list = goalBankList();
   plan.items.forEach(function(it){
-    if (it.st === "novo") list.push(Object.assign({id: uid("obj"), criterio: "", scaleId: "", specIds: []}, it.vals));
+    if (it.st === "novo") list.push(Object.assign({id: uid("goal"), criterio: "", scaleId: "", specIds: [], faixas: []}, it.vals));
     else if (it.st === "atualizar") list = list.map(function(g){ if (g.id !== it.cur.id) return g; var n = Object.assign({}, g, it.vals); if (it.vals.specIds) delete n.specId; return n; });
   });
   return writeSimpleList("objetivos", list).then(function(ok){ return ok === false ? false : "Objetivos importados."; });
@@ -20054,13 +20155,15 @@ var IO_KINDS = {
   objetivos: {label: "Objetivos", file: "objetivos", mod: "objetivos",
     sub: "Mesmo objetivo na mesma habilidade = atualiza.",
     help: ["Uma linha por objetivo do Banco de objetivos. A Habilidade precisa estar cadastrada (importe as Habilidades antes, se precisar).",
-      "Especialidades: nomes ou siglas separados por vírgula; vazio = todas. Escala: o nome de uma escala cadastrada."],
+      "Faixas etárias: " + AGE_BANDS.map(function(b){ return b.label; }).join(", ") + " separadas por vírgula, ou \"Todas as idades\". Um \"[0–4]\" no começo do objetivo também vale como faixa (e sai do nome).",
+      "Especialidades: nomes ou siglas separados por vírgula; vazio = todas. Escala: o nome de uma escala cadastrada. Célula vazia não muda o que está no sistema."],
     cols: [
       {k: "objetivo", h: "Objetivo", alias: ["nome"], w: 50, req: true}, {k: "habilidade", h: "Habilidade", alias: ["area", "habilidade / area"], w: 22, req: true},
+      {k: "faixas", h: "Faixas etárias", alias: ["faixa etaria", "faixas", "idades"], w: 18, note: AGE_BANDS.map(function(b){ return b.label; }).join(", ") + " separadas por vírgula, ou Todas as idades"},
       {k: "criterio", h: "Critério de sucesso", alias: ["criterio"], w: 40}, {k: "escala", h: "Escala", w: 14},
       {k: "specs", h: "Especialidades", alias: ["especialidade"], w: 26, note: "nomes ou siglas separados por vírgula; vazio = todas"}
     ],
-    exportRows: function(){ return goalBankList().map(function(g){ var sc = scaleById(g.scaleId); return {objetivo: g.name, habilidade: g.areaId ? skillAreaName(g.areaId) : "", criterio: g.criterio || "", escala: sc ? sc.name : "", specs: planSpecNames(goalSpecIds(g))}; }); },
+    exportRows: function(){ return goalBankList().map(function(g){ var sc = scaleById(g.scaleId); return {objetivo: g.name, habilidade: g.areaId ? skillAreaName(g.areaId) : "", faixas: ageBandText(g.faixas), criterio: g.criterio || "", escala: sc ? sc.name : "", specs: planSpecNames(goalSpecIds(g))}; }); },
     plan: ioGoalPlan, apply: ioGoalApply},
   habilidades: {label: "Habilidades", file: "habilidades", mod: "habilidades",
     sub: "Mesmo nome = atualiza escopo, faixas etárias e especialidades sugeridas.",

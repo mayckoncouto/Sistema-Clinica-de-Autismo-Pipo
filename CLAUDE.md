@@ -2555,3 +2555,27 @@ de UMA linha), Critério de sucesso (`#glCrit`, uma linha), Escala (`#glScale`),
 (`#glSpecs`). Quebras de linha antigas viram espaço ao abrir. Foco inicial na Habilidade (ou no
 Objetivo quando a habilidade já vem preenchida, ex.: "+ Salvar no Banco de objetivos" do plano).
 Teste no fim de `tests/run_habilidades.js`.
+
+## Objetivos com faixa etária; Objetivo do plano = lista do cadastro (2026-10-07)
+Decisões do usuário: no plano só objetivos do cadastro (sem texto livre), os da faixa do
+paciente primeiro; critério só leitura (vem do cadastro); várias faixas por objetivo; script SQL
+que separa o "[0–4]" do nome e liga os planos ao cadastro.
+- Cadastro de Objetivos (`config/goal_bank`): campo `faixas` (ids de `AGE_BANDS`, caixas
+  `#glAges` logo depois da Habilidade, `ageCheckGridHtml`), nome SEM o prefixo. Digitar
+  "[0–4] Nome" separa sozinho (`goalNamePrefix`). Lista com a coluna "Faixas etárias" depois de
+  Habilidade. `goalAgeTag`/`goalLabel(g)` = "[0–4] Nome" (todas as faixas ou nenhuma = sem etiqueta).
+- Plano: objetivo guarda `goalId` (+ `objetivo`/`criterio` copiados do cadastro ao salvar, só nos
+  que o usuário pode editar — `canFull`). Mostrado por `planObjLabel(o)` / `planObjCrit(o)` (cadastro
+  ao vivo; sem ligação, o texto gravado) — também na evolução, gráficos, Detalhes do Agendamento e
+  impressão. Comparação "objetivos em comum" por `planObjKey`. Campo Objetivo = botão
+  `[data-goal-pick]` → lista flutuante `.pl-goal-pop` (`goalOpen`/`goalListHtml`: busca `.dp-filter`,
+  os da faixa do paciente — `goalFitsAge` — e depois "Outras faixas etárias", já usados no quadro
+  desativados, "+ Incluir objetivo" no fim → `openGoalModal` por cima com habilidade e faixa do
+  paciente; ao salvar já fica escolhido). Critério = `.pl-crit` (uma linha, só leitura). "+ Inserir
+  objetivo" já abre a lista. `USAGE.objetivos` conta planos com o `goalId` (em uso = Inativar).
+- Janela do plano: idade ao lado do nome; "Quadro clínico" + explicação e "Objetivos por
+  habilidade" + conferência na mesma linha (`.pl-sec-inline`); quadro da habilidade sem a cor lateral.
+- Planilha de Objetivos: coluna "Faixas etárias" (ou "[0–4]" no começo do nome); o mesmo objetivo
+  com ou sem prefixo é atualizado.
+- Migração `supabase/2026-10-07f-objetivos-faixa-etaria.sql` (testada no PGlite; pode rodar de novo).
+  Testes em `tests/run_plano.js` e `tests/run_habilidades.js`.

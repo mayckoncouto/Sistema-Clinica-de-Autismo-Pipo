@@ -20,6 +20,18 @@ const path = require('path');
   await page.waitForTimeout(800);
   const ev = (code) => page.evaluate((c) => window.__ev(c), code);
   const setv = (sel, v) => page.$eval(sel, (e, x) => { e.value = x; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }, v);
+  // Objetivo do plano = lista do cadastro de Objetivos: abre a lista da linha (se não estiver aberta) e escolhe pelo texto.
+  const pickGoal = async (rowSel, name) => {
+    if (!(await page.$('.pl-goal-pop:not([hidden])'))) await page.click(rowSel + ' [data-goal-pick]');
+    await page.waitForSelector('.pl-goal-pop:not([hidden])');
+    const ok = await page.evaluate((n) => { const b = Array.prototype.filter.call(document.querySelectorAll('.pl-goal-pop [data-goal]'), (x) => x.querySelector('.autolist-name').textContent.indexOf(n) !== -1)[0]; if (b) b.click(); return !!b; }, name);
+    if (!ok) throw new Error('goal not in the list: ' + name);
+    await page.waitForTimeout(50);
+  };
+  const goalTxt = (sel) => page.$$eval(sel + ' [data-goal-pick]', (r) => r.map((x) => x.textContent.replace('▾', '').trim()));
+  // Cadastro de Objetivos fictício (Comunicação, sem especialidade = todas).
+  await ev(`writeSimpleList("objetivos", ["Objetivo 1", "Objetivo 2", "Objetivo 3", "Sem especialidade"].map(function(n, i){ return {id: "g" + (i + 1), name: n, areaId: "comunicacao", criterio: "Crit " + (i + 1), scaleId: "", specIds: []}; }))`);
+  await page.waitForTimeout(100);
 
   // Menus: Prontuário ▾ com Prontuário, Plano terapêutico e os cadastros do plano.
   const menus = await ev(`(function(){ renderNavMenus(); return {
@@ -66,8 +78,7 @@ const path = require('path');
   const Q = '#plSecs [data-area="comunicacao"]';
   for (let k = 0; k < 3; k++){
     if (k) await page.click(Q + ' [data-add-obj]');
-    await page.fill(Q + ' tbody tr:last-child textarea[data-f="objetivo"]', 'Objetivo ' + (k + 1));
-    await page.keyboard.press('Escape');
+    await pickGoal(Q + ' tbody tr:last-child', 'Objetivo ' + (k + 1));
   }
   const specT = await page.$$eval(Q + ' [data-specs]', (r) => r.map((x) => x.title));
   console.log('new objectives come with the suggested specialty (Fonoaudiologia)?', specT.length === 3 && specT.every((t) => t === 'Fonoaudiologia'), JSON.stringify(specT));
@@ -78,7 +89,7 @@ const path = require('path');
   const nums = await page.$$eval(Q + ' .pl-num b', (r) => r.map((x) => x.textContent).join(','));
   console.log('Nº is automatic inside the skill (1,2,3)?', nums === '1,2,3', nums);
   await page.click(Q + ' tbody tr:nth-child(1) [data-mv="1"]');
-  const order = await page.$$eval(Q + ' textarea[data-f="objetivo"]', (r) => r.map((x) => x.value).join('|'));
+  const order = (await goalTxt(Q)).join('|');
   console.log('▼ moves the row and renumbers?', order === 'Objetivo 2|Objetivo 1|Objetivo 3', order);
   // Especialidades do 2º objetivo: marca também Psicologia.
   await page.click(Q + ' tbody tr:nth-child(2) [data-specs]'); await page.waitForSelector('.pl-specs-pop:not([hidden])');
@@ -97,8 +108,7 @@ const path = require('path');
   console.log('Situação follows the chosen scale (ABA levels)?', abaOpts === 'nao-adquirida,parcial,adquirida', abaOpts);
   // Sem especialidade não salva.
   await page.click(Q + ' [data-add-obj]');
-  await page.fill(Q + ' tbody tr:last-child textarea[data-f="objetivo"]', 'Sem especialidade');
-  await page.keyboard.press('Escape');
+  await pickGoal(Q + ' tbody tr:last-child', 'Sem especialidade');
   await page.click(Q + ' tbody tr:last-child [data-specs]'); await page.waitForSelector('.pl-specs-pop:not([hidden])');
   await page.$eval('.pl-specs-pop input[value="fono"]', (e) => { e.checked = false; e.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.keyboard.press('Escape');
@@ -147,8 +157,8 @@ const path = require('path');
     const row = (id) => document.querySelector('#plSecs tr[data-obj="' + id + '"]');
     const fonoRow = document.querySelector('#plSecs [data-area="comunicacao"] tbody tr');
     return {
-      fonoEditable: !fonoRow.querySelector('textarea[data-f="objetivo"]').disabled,
-      psOnlyLocked: row('psonly').querySelector('textarea[data-f="objetivo"]').disabled && !row('psonly').querySelector('select[data-f="levelId"]').disabled,
+      fonoEditable: !fonoRow.querySelector('[data-goal-pick]').disabled,
+      psOnlyLocked: row('psonly').querySelector('[data-goal-pick]').disabled && !row('psonly').querySelector('select[data-f="levelId"]').disabled,
       toLocked: row('toonly').querySelector('select[data-f="levelId"]').disabled,
       noMove: !document.querySelector('#plSecs [data-mv]'),
       noRmSaved: !fonoRow.querySelector('[data-rm-obj]'),
@@ -205,34 +215,40 @@ const path = require('path');
   await page.fill('#glCrit', '8 de 10 tentativas');
   await setv('#glScale', 'aba');
   await page.click('#glSave'); await page.waitForTimeout(300);
-  const bankRows = await page.$$eval('#reg-objetivos-host tbody tr', (r) => r.map((x) => x.cells[0].textContent.trim() + '|' + x.cells[2].textContent.trim()));
-  const bankRec = await ev('JSON.stringify(goalBankList()[0].specIds)');
-  console.log('goal saved in the bank with its specialties?', bankRows.join() === 'Nomear 10 objetos do cotidiano|Fonoaudiologia' && bankRec === '["fono"]', JSON.stringify(bankRows), bankRec);
+  const bankRows = await page.$$eval('#reg-objetivos-host tbody tr', (r) => r.map((x) => x.cells[0].textContent.trim() + '|' + x.cells[3].textContent.trim()));
+  const bankRec = await ev('JSON.stringify(goalBankList().filter(function(g){ return g.name === "Nomear 10 objetos do cotidiano"; })[0].specIds)');
+  console.log('goal saved in the bank with its specialties?', bankRows.indexOf('Nomear 10 objetos do cotidiano|Fonoaudiologia') !== -1 && bankRec === '["fono"]', JSON.stringify(bankRows), bankRec);
   await ev('openPlanFor("bruno-verde")'); await page.waitForSelector('#ovPlan');
   const Q2 = '#plSecs [data-area="comunicacao"]';
   await page.click(Q2 + ' [data-add-obj]');
   const lastRow = Q2 + ' tbody tr:last-child';
-  await page.type(lastRow + ' textarea[data-f="objetivo"]', 'nomear obj');
-  await page.waitForSelector('.pl-goal-pop:not([hidden]) [data-goal]');
+  await page.waitForSelector('.pl-goal-pop:not([hidden]) .dp-filter');
+  const used = await page.$$eval('.pl-goal-pop [data-goal][disabled]', (r) => r.length);
+  console.log('objectives already in the box are disabled in the list?', used === 3, used);
+  await page.type('.pl-goal-pop .dp-filter', 'nomear obj');
   const sugg = await page.$$eval('.pl-goal-pop [data-goal]', (r) => r.map((x) => x.textContent));
-  console.log('typing suggests the bank goal (no accents/case)?', sugg.length === 1 && /Nomear 10 objetos/.test(sugg[0]), JSON.stringify(sugg));
-  await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); await page.waitForTimeout(200);
-  const applied = await page.evaluate((sel) => { const tr = document.querySelector(sel); return {o: tr.querySelector('[data-f=objetivo]').value, c: tr.querySelector('[data-f=criterio]').value, s: tr.querySelector('select[data-f=scaleId]').value, sp: tr.querySelector('[data-specs]').title}; }, lastRow);
-  console.log('choosing fills objective, criterion, scale and specialties?', applied.o === 'Nomear 10 objetos do cotidiano' && applied.c === '8 de 10 tentativas' && applied.s === 'aba' && applied.sp === 'Fonoaudiologia', JSON.stringify(applied));
-  const psicoSugg = await ev('goalMatches("nomear", "comunicacao", ["psico"]).length');
+  console.log('typing filters the bank goals of the skill (no accents/case)?', sugg.length === 1 && /Nomear 10 objetos/.test(sugg[0]), JSON.stringify(sugg));
+  await page.keyboard.press('Enter'); await page.waitForTimeout(200);
+  const applied = await page.evaluate((sel) => { const tr = document.querySelector(sel); return {o: tr.querySelector('[data-goal-pick]').title, c: tr.querySelector('.pl-crit').textContent, s: tr.querySelector('select[data-f=scaleId]').value, sp: tr.querySelector('[data-specs]').title, noTa: !tr.querySelector('textarea')}; }, lastRow);
+  console.log('choosing fills objective, read-only criterion, scale and specialties?', applied.o === 'Nomear 10 objetos do cotidiano' && applied.c === '8 de 10 tentativas' && applied.s === 'aba' && applied.sp === 'Fonoaudiologia' && applied.noTa, JSON.stringify(applied));
   const otherArea = await ev('goalMatches("nomear", "autonomia", []).length');
-  console.log('bank goal of Fonoaudiologia/Comunicação is not suggested for Psicologia nor in another skill?', psicoSugg === 0 && otherArea === 0, psicoSugg, otherArea);
+  console.log('bank goal of Comunicação is not offered in another skill?', otherArea === 0, otherArea);
+  // Faixa etária: [0–4] antes do nome; Bruno tem 7 anos → fica em "Outras faixas etárias".
+  await ev(`writeSimpleList("objetivos", goalBankList().concat([{id: "g04", name: "Apontar para pedir", areaId: "comunicacao", faixas: ["0-4"], criterio: "", specIds: []}, {id: "g59", name: "Contar o fim de semana", areaId: "comunicacao", faixas: ["5-9"], criterio: "", specIds: []}]))`);
   await page.click(Q2 + ' [data-add-obj]');
-  await page.type(lastRow + ' textarea[data-f="objetivo"]', 'Imitar sons de animais');
-  await page.waitForSelector('.pl-goal-pop:not([hidden]) [data-goal-new]');
+  await page.waitForSelector('.pl-goal-pop:not([hidden])');
+  const lst = await page.evaluate(() => { const l = document.querySelector('.pl-goal-pop .pl-goal-list'); const kids = Array.prototype.map.call(l.children, (x) => x.classList.contains('pl-goal-grp') ? '#' + x.textContent : (x.querySelector('.autolist-name') || x).textContent); return kids; });
+  const iGrp = lst.indexOf('#Outras faixas etárias');
+  console.log('age band shown as [0–4] before the name; other bands after "Outras faixas etárias"; "+ Incluir objetivo" last?',
+    iGrp > lst.indexOf('[5–9] Contar o fim de semana') && lst.indexOf('[0–4] Apontar para pedir') > iGrp && /Incluir objetivo/.test(lst[lst.length - 1]), JSON.stringify(lst));
   await page.click('.pl-goal-pop [data-goal-new]'); await page.waitForSelector('#ovGoal');
-  const pre = await page.$eval('#glName', (e) => e.value);
   const preArea = await page.$eval('#glArea', (e) => e.value);
-  const preSpec = await page.$eval('#glSpecs input[value="fono"]', (e) => e.checked);
+  const preAge = await page.$$eval('#glAges input:checked', (r) => r.map((x) => x.value).join());
+  await page.fill('#glName', 'Imitar sons de animais');
   await page.click('#glSave'); await page.waitForTimeout(300);
   const stillPlan = await page.$('#ovPlan');
-  const bankN = await ev('goalBankList().length');
-  console.log('"+ Salvar no Banco" opens prefilled (skill and specialties) over the plan, saves and keeps the plan open?', pre === 'Imitar sons de animais' && preArea === 'comunicacao' && preSpec && !!stillPlan && bankN === 2, JSON.stringify({pre, preArea, preSpec, bankN}));
+  const newRow = await page.$eval(lastRow + ' [data-goal-pick]', (e) => e.title);
+  console.log('"+ Incluir objetivo" opens the goal window over the plan (skill and patient band filled), saves and picks it in the row?', preArea === 'comunicacao' && preAge === '5-9' && !!stillPlan && newRow === '[5–9] Imitar sons de animais', JSON.stringify({preArea, preAge, newRow}));
   await page.click('#plCancel');
 
   // Evolução: objetivos ativos por habilidade, conforme as especialidades do profissional.
