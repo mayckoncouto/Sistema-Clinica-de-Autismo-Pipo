@@ -514,6 +514,10 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .book.pr-flash .book-main{outline:3px solid var(--accent);outline-offset:-3px}
 .pr-card-head .s{font-size:11.5px;color:var(--muted);margin-top:2px}
 .pr-card-body{padding:10px 14px;font-size:13.5px;line-height:1.5;overflow-x:auto}
+.pr-goals{border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:8px 10px;margin:0 0 10px;font-size:13px}
+.pr-goals-t{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.pr-goals ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.pr-goals li{display:flex;align-items:baseline;gap:7px;margin:0}.pr-goals .pl-lv-dot{flex:none;transform:translateY(1px)}
 .pr-content table,.pr-editor table{border-collapse:collapse;margin:6px 0;min-width:40%}
 .pr-content td,.pr-content th,.pr-editor td,.pr-editor th{border:1px solid var(--line-strong,#b9c2c0);padding:4px 8px;min-width:40px;vertical-align:top}
 .pr-content h3,.pr-editor h3{font-size:15px;margin:8px 0 4px}
@@ -13832,6 +13836,23 @@ function prGoToAppointment(rec){
     agdOpenDetails(row);
   });
 }
+// Objetivos marcados na evolução (plan_goals): habilidade, objetivo, nível alcançado e especialidade.
+function prGoalsWorkedHtml(r){
+  var gl = Array.isArray(r.plan_goals) ? r.plan_goals : [];
+  if (!gl.length || !planCan("view")) return "";
+  if (!PLAN.rows) return '<div class="pr-goals"><div class="pr-goals-t">Objetivos trabalhados</div><div class="pt-muted">Carregando…</div></div>';
+  var items = gl.map(function(g){
+    var plan = PLAN.rows.filter(function(x){ return x.id === g.planId; })[0], o = null, area = "", n = 0;
+    ((plan && plan.sections) || []).forEach(function(s){ (s.objectives || []).forEach(function(x, i){ if (x.id === g.objId){ o = x; area = skillAreaName(s.areaId); n = i + 1; } }); });
+    var sc = scaleById(g.scaleId), lv = sc && (sc.levels || []).filter(function(l){ return l.id === g.levelId; })[0];
+    return '<li><span class="pl-lv-dot" style="background:' + esc((lv && lv.color) || "transparent") + '"></span>' +
+      '<span>' + (area ? '<span class="pt-muted">' + esc(area) + ' · </span>' : '') + (n ? '<b>' + n + '.</b> ' : '') +
+      esc(o ? planObjLabel(o) : "Objetivo que não está mais no plano") +
+      ' — <b>' + esc(lv ? lv.name : "—") + '</b>' +
+      (g.specId ? ' <span class="autolist-kind" title="' + esc(specialtyName(g.specId)) + '">' + esc(specialtySigla(g.specId)) + '</span>' : '') + '</span></li>';
+  });
+  return '<div class="pr-goals"><div class="pr-goals-t">Objetivos trabalhados</div><ul>' + items.join("") + '</ul></div>';
+}
 function prRenderDetail(){
   var host = document.getElementById("prDetailView");
   var p = state.patients.filter(function(x){ return x.id === PR.patientId; })[0];
@@ -13860,10 +13881,12 @@ function prRenderDetail(){
         (canEdit ? '<button class="btn ghost" data-pr-edit="' + esc(r.id) + '">Editar</button>' : '') +
         (canDel ? '<button class="btn danger" data-pr-del="' + esc(r.id) + '">Excluir</button>' : '') +
       '</div>' +
-      '<div class="pr-card-body pr-content">' + prSanitize(r.content) + '</div>' +
+      '<div class="pr-card-body pr-content">' + prGoalsWorkedHtml(r) + prSanitize(r.content) + '</div>' +
     '</div>';
   }).join("");
   host.innerHTML = head + '<div class="pr-timeline">' + body + '</div>';
+  if (!PLAN.rows && planCan("view") && PR.records.some(function(r){ return Array.isArray(r.plan_goals) && r.plan_goals.length; }))
+    planLoadAll().then(function(){ if (document.getElementById("prDetailView") && PR.patientId) prRenderDetail(); });
   document.getElementById("prBack").addEventListener("click", function(){ PR.patientId = null; prLoadSummary(); renderProntuarioTab(); });
   var nb = document.getElementById("prNew");
   if (nb) nb.addEventListener("click", function(){ prOpenEditor({patient: p}); });
@@ -16386,7 +16409,8 @@ var HELP_TOPICS = [
       "Abra <b>Prontuário ▾ → Prontuário</b>, busque o paciente e veja a linha do tempo.",
       "<b>+ Incluir</b> para escrever (negrito, títulos, listas, tabelas). Ou marque o atendimento como Finalizado na Agenda.",
       "O ícone de agenda antes da data leva ao atendimento ligado à evolução.",
-      "Antes das <b>Observações</b> ficam os <b>Objetivos do plano terapêutico</b> ativos que o profissional do atendimento pode trabalhar (alguma especialidade marcada no objetivo é a principal ou uma área complementar dele), organizados por habilidade, com as últimas avaliações de cada especialidade: marque os trabalhados e escolha o nível alcançado (escolher o nível já marca o objetivo)."
+      "Antes das <b>Observações</b> ficam os <b>Objetivos do plano terapêutico</b> ativos que o profissional do atendimento pode trabalhar (alguma especialidade marcada no objetivo é a principal ou uma área complementar dele), organizados por habilidade, com as últimas avaliações de cada especialidade: marque os trabalhados e escolha o nível alcançado (escolher o nível já marca o objetivo).",
+      "Na linha do tempo, cada evolução mostra o quadro <b>Objetivos trabalhados</b>: habilidade, objetivo, nível alcançado (com a cor) e a especialidade que avaliou."
     ],
     rules: [
       "Só o autor edita a própria evolução; excluir: autor com permissão ou Administrador.",

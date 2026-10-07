@@ -2581,3 +2581,11 @@ que separa o "[0–4]" do nome e liga os planos ao cadastro.
   Testes em `tests/run_plano.js` e `tests/run_habilidades.js`.
 - Produção (2026-10-07): `2026-10-07f` rodada — 0 com prefixo, 300 objetivos com faixa, 0
   objetivos em planos (ainda não havia plano com objetivos).
+
+## Prontuário: "Objetivos trabalhados" na linha do tempo (2026-10-07)
+Pedido do usuário (só dava para ver os objetivos da evolução entrando em Editar). Cada cartão
+da linha do tempo (`prRenderDetail`) mostra, antes do texto, o quadro `.pr-goals`
+(`prGoalsWorkedHtml(r)`, lê `r.plan_goals`): habilidade, nº, objetivo (`planObjLabel`, com a
+faixa), nível alcançado com a cor e a sigla da especialidade. Só com `plano_terapeutico.view`;
+carrega `PLAN.rows` se ainda não estiver (redesenha depois). Objetivo que saiu do plano aparece
+como "Objetivo que não está mais no plano". Teste no fim de `tests/run_plano.js`.

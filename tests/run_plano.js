@@ -208,7 +208,7 @@ const path = require('path');
 
   // Banco de objetivos: várias especialidades, sugestão no campo Objetivo e "+ Salvar no Banco".
   await page.$eval('#mainTabs button[data-tab=objetivos]', (b) => b.click()); await page.waitForTimeout(200);
-  await page.click('#reg-objetivos-add'); await page.waitForSelector('#ovGoal');
+  await page.click('#reg-objetivos-add'); await page.waitForSelector('#ovGoal'); await page.waitForTimeout(120);
   await page.fill('#glName', 'Nomear 10 objetos do cotidiano');
   await setv('#glArea', 'comunicacao');
   await page.$eval('#glSpecs input[value="fono"]', (e) => { e.checked = true; e.dispatchEvent(new Event('change', { bubbles: true })); });
@@ -378,6 +378,11 @@ const path = require('path');
     !!bruno && bruno[1] === 'Comunicação' && bruno[2] === 5 && bruno[4] === 1 && bruno[6] === '20%' && rep.sections[0].rows.some((r) => r[0] === 'Comunicação') &&
     repTito.sections[1].rows.every((r) => r[2] === 1), JSON.stringify(bruno), JSON.stringify(repTito.sections[1].rows));
 
+  // Linha do tempo do Prontuário: quadro "Objetivos trabalhados" da evolução.
+  const worked = await ev(`(function(){ var p = planVigente("bruno-verde"), s = p.sections[0], o = s.objectives[0], sc = scaleById(o.scaleId);
+    var h = prGoalsWorkedHtml({plan_goals: [{planId: p.id, specId: "fono", objId: o.id, scaleId: o.scaleId, levelId: sc.levels[0].id}]});
+    var d = document.createElement("div"); d.innerHTML = h; return {t: d.textContent, n: d.querySelectorAll("li").length, lv: sc.levels[0].name, obj: planObjLabel(o)}; })()`);
+  console.log('evolution card lists the worked objectives (skill, objective, level, specialty)?', worked.n === 1 && /Objetivos trabalhados/.test(worked.t) && worked.t.indexOf(worked.obj) !== -1 && worked.t.indexOf(worked.lv) !== -1 && /FN/.test(worked.t), JSON.stringify(worked));
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
