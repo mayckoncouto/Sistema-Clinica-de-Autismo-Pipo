@@ -2528,3 +2528,21 @@ Pedidos do usuário (Renegociar continua mudando só ao Salvar; "Pacote/Mês" fo
   contador; desmarcadas, esses tratamentos ficam ocultos (o filtro de status Cancelados /
   Cancelados sem motivo / Renegociados mostra mesmo assim). Vencimento vazio = "Sem vencimento".
 - Testes no fim de `tests/run_tr_monthly.js`; `run_treatments.js` marca as duas caixas no início.
+
+## Habilidades: Escopo e Faixas etárias (2026-10-07)
+Decisões do usuário: campos Habilidade, Escopo (texto), Faixas etárias (as MESMAS da cor do
+paciente, atualizando junto) e Especialidades sugeridas; no plano, as da idade primeiro.
+- `AGE_BANDS` (perto de `PCOLOR_*`): lista única `{id, min, max, label, color}` — 0–4, 5–9,
+  10+. Usada por `patientColor` (`ageBandOf`), pelas legendas do Planner/Agenda
+  (`[data-age-legend]` → `ageLegendHtml`) e pelo cadastro de Habilidades. Mudou a faixa? Só
+  aqui. Habilidade guarda os ids (`faixas: ["0-4"]`); id que sumiu é ignorado (`ageBandIds`);
+  vazio = "Todas as idades" (`ageBandText`).
+- `config/skill_areas` ganhou `escopo` (texto) e `faixas`. Janela: `#regName` com rótulo
+  "Habilidade" (`REG_CFG.habilidades.nameLabel`), `#regHabEscopo`, `#regHabAges` (caixas
+  `.lib-opt` com bolinha da cor), `#regHabSpecs`. Lista: Habilidade (+ escopo resumido), Faixas
+  etárias, Especialidades sugeridas.
+- Plano (`#plAddArea`): habilidades da faixa do paciente (ou sem faixa) primeiro; as outras no
+  fim com "(fora da faixa)". Paciente sem idade = tudo igual. Não bloqueia.
+- Planilha de Habilidades: colunas Escopo e Faixas etárias (`ioAgeBands`, aceita "0–4 anos",
+  "0-4", "10+"; texto desconhecido = aviso); célula vazia não apaga. Sem SQL.
+  Teste `tests/run_habilidades.js`.
