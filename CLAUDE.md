@@ -2439,4 +2439,5 @@ homônimos no Planner (2638) e na Agenda (141), 15 profissionais todos com colab
   `supabase/2026-10-07d-colaborador-unico.sql` (CPF → staff, tira do documento, alinha a
   situação pelo atendimento). Códigos `prof-…`/`user-…`/`func-…` dos colaboradores ficaram
   (internos, ligados a usuários e remuneração; trocar não traz ganho). Testes em `run_staff.js`.
+- Produção (2026-10-07): `2026-10-07d` rodada (conferência 0/0).
 - Próxima: 4) renomear nomes internos.
