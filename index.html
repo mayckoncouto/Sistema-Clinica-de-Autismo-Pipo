@@ -576,6 +576,9 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .tr-month th{font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px;border-bottom:1px solid var(--line)}
 .tr-month td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
 .tr-month tr.tr-month-first td{border-top:2px solid var(--line)}
+.tr-month tr.tr-month-tot td{font-weight:800;background:var(--surface-2)}
+.tr-warns{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.tr-warn{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:999px;background:#fdf1dc;color:#8a5a10;border:1px solid #f0d49c;white-space:nowrap}
 .tr-month td.tr-falta{color:#a3352f;font-weight:800}.tr-month td.tr-sobra{color:#8a5a10;font-weight:800}
 .tr-venc{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:800;color:#fff;white-space:nowrap}
 .tr-venc.vencido{background:#b6403a}.tr-venc.vencendo{background:#b7791f}
@@ -14878,6 +14881,29 @@ function trPeriodEnd(t){
   if (t.status !== "ativo" && t.statusEm) return t.statusEm;
   return "";
 }
+var TR_JUST_STATUS = "falta-justificada";
+// Planner (modelo de 4 semanas que se repete) do paciente, por linha do tratamento
+// (especialidade principal do profissional da coluna na Sessão, ou "svc:<serviço>").
+// TR.plan = {docId: bookings}; null = ainda não lido.
+function trPlannerCounts(p){
+  if (!TR.plan || !p) return null;
+  var out = {};
+  Object.keys(TR.plan).forEach(function(docId){
+    var bk = TR.plan[docId] || {};
+    Object.keys(bk).forEach(function(k){
+      var b = bkRec(bk[k]);
+      if (!b || !b.patient || bookingKind(b) || !recIsPatient(b, p)) return;
+      var kp = k.split("|"), room = findRoom(kp[1]), ther = room ? findTherapist(room, kp[2]) : null;
+      var key = trSpecKey({prof: ther ? ther.professionalId : "", svc: b.service || DEFAULT_SERVICE_ID});
+      if (key) out[key] = (out[key] || 0) + 1;
+    });
+  });
+  return out;
+}
+function trLoadPlanner(){
+  if (TR.plan && Date.now() - (TR.planAt || 0) < 120000) return Promise.resolve();
+  return plannerLoadDocs().then(function(all){ TR.plan = all || {}; TR.planAt = Date.now(); }).catch(function(){});
+}
 function trMonthly(t){
   if (!t || !t.inicio || !TR.appts) return null;
   var p = rawPatient(t.patientId); if (!p) return null;
@@ -14890,6 +14916,7 @@ function trMonthly(t){
     if (a.d < t.inicio || a.d > end) return false;
     var x = treatmentAt(t.patientId, a.d); return x && x.id === t.id;
   });
+  var plan = trPlannerCounts(p);   // modelo de 4 semanas (null = ainda não lido)
   var months = [], y = +t.inicio.slice(0, 4), m = +t.inicio.slice(5, 7) - 1;
   while (true){
     var first = agdIso(new Date(y, m, 1)), last = agdIso(new Date(y, m + 1, 0));
@@ -14898,16 +14925,25 @@ function trMonthly(t){
     var from = t.inicio > first ? t.inicio : first, to = end < last ? end : last;
     var frac = (+to.slice(8, 10) - +from.slice(8, 10) + 1) / dim;
     var cur = ym === curYm, rows = {};
-    specs.forEach(function(r){ rows[r.specId] = {specId: r.specId, contr: Math.round(Number(r.hours) * frac), real: 0, sched: 0}; });
+    function rowFor(k){ return rows[k] || (rows[k] = {specId: k, contr: 0, plan: plan ? 0 : null, ag: 0, real: 0, sched: 0, just: 0, semSt: 0}); }
+    specs.forEach(function(r){ rowFor(r.specId).contr = Math.round(Number(r.hours) * frac); });
+    if (plan) Object.keys(plan).forEach(function(k){ rowFor(k).plan = Math.round(plan[k] * frac); });
     mine.forEach(function(a){
       if (a.d.slice(0, 7) !== ym) return;
       var k = trSpecKey(a); if (!k) return;
-      var row = rows[k] || (rows[k] = {specId: k, contr: 0, real: 0, sched: 0});
+      var row = rowFor(k);
+      row.ag++;
       if (TR_USED_STATUS.indexOf(a.st) !== -1) row.real++;
+      else if (a.st === TR_JUST_STATUS) row.just++;
+      else if (!a.st && a.d < today) row.semSt++;
       else if (cur && !a.st && a.d >= today) row.sched++;
     });
     var list = Object.keys(rows).map(function(k){ var r = rows[k]; r.diff = r.real + r.sched - r.contr; return r; });
-    var tot = list.reduce(function(s2, r){ s2.contr += r.contr; s2.real += r.real; s2.sched += r.sched; return s2; }, {contr: 0, real: 0, sched: 0});
+    var tot = list.reduce(function(s2, r){
+      ["contr", "ag", "real", "sched", "just", "semSt"].forEach(function(f){ s2[f] += r[f]; });
+      if (s2.plan !== null) s2.plan += r.plan;
+      return s2;
+    }, {contr: 0, plan: plan ? 0 : null, ag: 0, real: 0, sched: 0, just: 0, semSt: 0});
     tot.diff = tot.real + tot.sched - tot.contr;
     months.push({ym: ym, label: TR_MONTHS[m] + "/" + String(y).slice(2), current: cur, partial: frac < 1, rows: list, tot: tot,
       falta: list.some(function(r){ return r.diff < 0; }), sobra: list.some(function(r){ return r.diff > 0; })});
@@ -14932,19 +14968,37 @@ function trMonthCell(t){
   return '<span class="tr-mchip ' + cls + '" title="' + esc(s.m.label + (s.m.current ? " (mês atual: realizados + agendados)" : "")) + '">' + esc(txt) + '</span>' +
     (s.prev && s.prev.falta ? ' <span class="tr-mchip tr-falta" title="Mês anterior abaixo do contratado">' + esc(s.prev.label) + ' ↓</span>' : '');
 }
+// Avisos de onde está o problema numa linha (ou no total) do mês.
+function trMonthWarns(r, mo){
+  var w = [];
+  if (r.plan !== null && r.plan !== undefined && r.plan < r.contr) w.push(["Falta no Planner", "Planner com menos sessões que o contratado"]);
+  if (r.plan !== null && r.plan !== undefined && r.ag < r.plan && !mo.past) w.push(["Falta enviar para a Agenda", "Agenda do mês com menos atendimentos que o Planner"]);
+  if (r.semSt) w.push([r.semSt + " sem status", "Atendimentos que já passaram e ainda não têm status"]);
+  return w.map(function(x){ return '<span class="tr-warn" title="' + esc(x[1]) + '">' + esc(x[0]) + '</span>'; }).join("");
+}
 function trMonthlyHtml(t){
   var r = trMonthly(t);
   if (!r) return '<div class="hint">' + (agdClient() ? "Carregando atendimentos…" : "Disponível no sistema online.") + '</div>';
   if (!r.months.length) return '<div class="hint">Sem meses no período do tratamento.</div>';
-  var html = '<div class="tr-month-wrap"><table class="tr-month"><thead><tr><th>Mês</th><th>Especialidade / serviço</th><th>Contratado</th><th>Realizado</th><th>Agendado</th><th>Diferença</th></tr></thead><tbody>';
+  var curYm = trTodayIso().slice(0, 7);
+  function num(v){ return v === null || v === undefined ? '<span class="pt-muted">…</span>' : v; }
+  function cells(row, mo){
+    return '<td>' + row.contr + '</td><td>' + num(row.plan) + '</td><td>' + row.ag + '</td><td>' + row.real + '</td>' +
+      '<td>' + (row.just || '<span class="pt-muted">0</span>') + '</td>' +
+      '<td class="' + trDiffCls(row.diff) + '" title="' + esc(mo.current ? "Realizado + marcados até o fim do mês − contratado" : "Realizado − contratado") + '">' + (row.diff > 0 ? "+" : "") + row.diff + '</td>';
+  }
+  var html = '<div class="tr-month-wrap"><table class="tr-month"><thead><tr><th>Mês</th><th>Especialidade / serviço</th><th>Contratado</th><th>Planner</th><th>Agenda</th><th>Realizado</th><th title="Falta justificada">Falta just.</th><th>Diferença</th></tr></thead><tbody>';
   r.months.slice().reverse().forEach(function(mo){
-    var rows = mo.rows.length ? mo.rows : [{specId: "", contr: 0, real: 0, sched: 0, diff: 0}];
+    mo.past = mo.ym < curYm;
+    var rows = mo.rows.length ? mo.rows : [{specId: "", contr: 0, plan: null, ag: 0, real: 0, sched: 0, just: 0, semSt: 0, diff: 0}];
+    var span = rows.length + (rows.length > 1 ? 1 : 0);
     rows.forEach(function(row, i){
+      var wn = trMonthWarns(row, mo);
       html += '<tr' + (i === 0 ? ' class="tr-month-first"' : '') + '>' +
-        (i === 0 ? '<td rowspan="' + rows.length + '"><b>' + esc(mo.label) + '</b>' + (mo.current ? '<div class="hint">em andamento</div>' : (mo.partial ? '<div class="hint">mês parcial</div>' : '')) + '</td>' : '') +
-        '<td>' + esc(row.specId ? specialtyName(row.specId) : "—") + '</td><td>' + row.contr + '</td><td>' + row.real + '</td><td>' + (mo.current ? row.sched : "—") + '</td>' +
-        '<td class="' + trDiffCls(row.diff) + '">' + (row.diff > 0 ? "+" : "") + row.diff + '</td></tr>';
+        (i === 0 ? '<td rowspan="' + span + '"><b>' + esc(mo.label) + '</b>' + (mo.current ? '<div class="hint">em andamento</div>' : (mo.partial ? '<div class="hint">mês parcial</div>' : '')) + '</td>' : '') +
+        '<td>' + esc(row.specId ? specialtyName(row.specId) : "—") + (wn ? '<div class="tr-warns">' + wn + '</div>' : '') + '</td>' + cells(row, mo) + '</tr>';
     });
+    if (rows.length > 1) html += '<tr class="tr-month-tot"><td>Total</td>' + cells(mo.tot, mo) + '</tr>';
   });
   return html + '</tbody></table></div>';
 }
@@ -15201,7 +15255,7 @@ function openTreatmentModal(t, opts){
         '<div class="tr-sec">Convênio, pacote e horário</div>' +
         ed.html +
         (isNew ? '' : '<div class="tr-sec">Contratado × realizado (mês a mês)</div>' +
-          '<div class="hint">Realizado = Finalizado + Não compareceu. No mês atual, "Agendado" são os atendimentos marcados até o fim do mês ainda sem status. Primeiro e último mês: contratado proporcional aos dias.</div>' +
+          '<div class="hint">Planner = sessões do paciente no modelo de 4 semanas. Agenda = atendimentos marcados no mês (qualquer status). Realizado = Finalizado + Não compareceu. Diferença: meses passados = Realizado − Contratado; mês atual = Realizado + o que ainda está marcado até o fim do mês − Contratado. Primeiro e último mês: Contratado e Planner proporcionais aos dias.</div>' +
           '<div id="trMonthly">' + trMonthlyHtml(t) + '</div>') +
         (isNew ? '' : '<div class="tr-sec">Histórico</div>' + trHistHtml(t)) +
       '</div>' +
@@ -15262,6 +15316,9 @@ function openTreatmentModal(t, opts){
     if (!document.getElementById("ovTreat")) return;
     syncVencPor();
     var mh = document.getElementById("trMonthly"); if (mh) mh.innerHTML = trMonthlyHtml(t);
+  });
+  if (!isNew) trLoadPlanner().then(function(){
+    var mh = document.getElementById("ovTreat") && document.getElementById("trMonthly"); if (mh) mh.innerHTML = trMonthlyHtml(t);
   });
   document.getElementById("trIni").addEventListener("change", syncVenc);
   // Com atendimentos Finalizados: não exclui e não muda a quantidade de sessões
@@ -15729,14 +15786,17 @@ var HELP_TOPICS = [
   {id: "tratamentos-mes", group: "Cadastros", title: "Tratamento: contratado × realizado", mod: "tratamentos", tab: "tratamentos",
     purpose: "Compara, mês a mês, as sessões contratadas com as realizadas, por especialidade e serviço.",
     steps: [
-      "Abra o tratamento: a seção <b>Contratado × realizado</b> mostra uma tabela por mês.",
+      "Abra o tratamento: a seção <b>Contratado × realizado</b> mostra uma tabela por mês, com as colunas Contratado, Planner, Agenda, Realizado, Falta justificada e Diferença.",
+      "Os avisos embaixo de cada especialidade mostram onde está o problema: <b>Falta no Planner</b> (o modelo de 4 semanas tem menos sessões que o contratado), <b>Falta enviar para a Agenda</b> (a Agenda do mês tem menos que o Planner) e <b>N sem status</b> (atendimentos que já passaram sem status).",
       "Na lista, a coluna <b>Mês</b> mostra o mês atual (ex.: \"6 + 8 agend. de 16\").",
       "Use o filtro <b>Abaixo do contratado</b> para achar quem está com sessões faltando."
     ],
     rules: [
       "Realizado = Finalizado + Não compareceu (falta justificada não conta).",
-      "Mês atual = realizado + agendados até o fim do mês ainda sem status.",
-      "Primeiro e último mês do tratamento: contratado proporcional aos dias.",
+      "Planner = sessões do paciente nas 4 semanas do Planner (o mesmo número todo mês). Agenda = tudo o que está marcado no mês, com qualquer status.",
+      "Diferença: meses passados = Realizado − Contratado; mês atual = Realizado + o que ainda está marcado até o fim do mês − Contratado.",
+      "Com mais de uma especialidade, a linha Total soma o mês.",
+      "Primeiro e último mês do tratamento: Contratado e Planner proporcionais aos dias.",
       "Vermelho = falta; âmbar = sobra; verde = fechado."
     ],
     who: "Permissão <b>Tratamentos</b>."},

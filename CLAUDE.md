@@ -2470,3 +2470,19 @@ homônimos no Planner (2638) e na Agenda (141), 15 profissionais todos com colab
   - Produção (2026-10-07): `2026-10-07e` rodada (conferência 0/0/0/0/descontos). A
     compatibilidade com os nomes antigos continua no código (lê cópias de segurança antigas e
     endereços salvos); pode ser removida no futuro, com cuidado.
+
+## Tratamento: Contratado × Planner × Agenda × Realizado (2026-10-07)
+Decisões do usuário: Planner = total das 4 semanas (igual todo mês; proporcional no 1º e
+último mês, como o Contratado); Diferença = Realizado − Contratado nos meses passados e
+Realizado + marcados até o fim do mês − Contratado no mês atual; avisos de onde está o
+problema; linha Total por mês; faltas justificadas à parte.
+- `trMonthly` devolve por linha `{contr, plan, ag, real, sched, just, semSt, diff}` (+ `tot`).
+  `plan` vem de `trPlannerCounts(p)` (lê `TR.plan` = 4 semanas do Planner, `trLoadPlanner()`
+  via `plannerLoadDocs`, cache 2 min; chave = `trSpecKey` com o profissional da coluna);
+  null = ainda não lido ("…"). `ag` = atendimentos do mês na Agenda (qualquer status, sem
+  bloqueio); `just` = `TR_JUST_STATUS` ("falta-justificada"); `semSt` = já passou sem status.
+- `trMonthlyHtml`: colunas Mês, Especialidade/serviço, Contratado, Planner, Agenda,
+  Realizado, Falta just., Diferença; avisos `.tr-warn` (`trMonthWarns`): "Falta no Planner"
+  (plan < contr), "Falta enviar para a Agenda" (ag < plan, só mês atual), "N sem status";
+  linha `.tr-month-tot` com 2+ linhas. A coluna "Mês" da lista (`trMonthCell`) não mudou.
+- Teste `tests/run_tr_monthly.js`.
