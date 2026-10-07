@@ -2589,3 +2589,7 @@ da linha do tempo (`prRenderDetail`) mostra, antes do texto, o quadro `.pr-goals
 faixa), nível alcançado com a cor e a sigla da especialidade. Só com `plano_terapeutico.view`;
 carrega `PLAN.rows` se ainda não estiver (redesenha depois). Objetivo que saiu do plano aparece
 como "Objetivo que não está mais no plano". Teste no fim de `tests/run_plano.js`.
+- (2026-10-07) Janela da evolução: cada habilidade de "Objetivos do plano terapêutico trabalhados"
+  é recolhível (`[data-goal-toggle]` com seta + `.pr-goal-items` `hidden`; começa fechada, aberta
+  se já tem objetivo marcado — edição). Título com "N objetivos · M marcados"
+  (`prGoalCountText`, `[data-goal-count]`); `prGoalsWire(body)` liga a seta e o contador.

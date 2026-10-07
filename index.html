@@ -208,6 +208,9 @@ div.ag-obj-head{cursor:default}
 .pr-goals{margin-bottom:14px}
 .pr-goal-sec{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px}
 .pr-goal-spec{display:flex;align-items:center;gap:8px;font-size:13px;padding:2px 0 6px}
+.pr-goal-toggle{width:100%;background:none;border:0;cursor:pointer;text-align:left;font:inherit;font-size:13px;color:var(--ink);padding:4px 0}
+.pr-goal-toggle:hover b{color:var(--accent)}.pr-goal-toggle .pl-area-caret{color:var(--muted);width:12px}
+.pr-goal-count{margin-left:auto;font-size:12px;color:var(--muted);font-weight:500}
 .pr-goal{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
 .pr-goal-main{flex:1;min-width:0;display:flex;align-items:flex-start;gap:10px;cursor:pointer}
 .pr-goal input[type=checkbox]{margin-top:3px;flex:none;width:16px;height:16px}
@@ -13974,6 +13977,7 @@ function prOpenEditor(opts){
     var body = document.getElementById("prGoalsBody"); if (!body) return;
     goalsData = planEvoGoalsFor(p.id, profId, goalsInit, res[1]);
     body.className = ""; body.innerHTML = planEvoGoalsHtml(goalsData); goalsReady = true;
+    prGoalsWire(body);
     body.addEventListener("change", function(e){
       var lab = e.target.closest("[data-goal-obj]"); if (!lab) return;
       if (e.target.hasAttribute("data-goal-level")){
@@ -16409,7 +16413,7 @@ var HELP_TOPICS = [
       "Abra <b>Prontuário ▾ → Prontuário</b>, busque o paciente e veja a linha do tempo.",
       "<b>+ Incluir</b> para escrever (negrito, títulos, listas, tabelas). Ou marque o atendimento como Finalizado na Agenda.",
       "O ícone de agenda antes da data leva ao atendimento ligado à evolução.",
-      "Antes das <b>Observações</b> ficam os <b>Objetivos do plano terapêutico</b> ativos que o profissional do atendimento pode trabalhar (alguma especialidade marcada no objetivo é a principal ou uma área complementar dele), organizados por habilidade, com as últimas avaliações de cada especialidade: marque os trabalhados e escolha o nível alcançado (escolher o nível já marca o objetivo).",
+      "Antes das <b>Observações</b> ficam os <b>Objetivos do plano terapêutico</b> ativos que o profissional do atendimento pode trabalhar (alguma especialidade marcada no objetivo é a principal ou uma área complementar dele), organizados por habilidade (cada habilidade começa fechada: clique na seta ao lado do nome para abrir; o título mostra quantos objetivos e quantos estão marcados), com as últimas avaliações de cada especialidade: marque os trabalhados e escolha o nível alcançado (escolher o nível já marca o objetivo).",
       "Na linha do tempo, cada evolução mostra o quadro <b>Objetivos trabalhados</b>: habilidade, objetivo, nível alcançado (com a cor) e a especialidade que avaliou."
     ],
     rules: [
@@ -18702,8 +18706,14 @@ function planEvoGoalsFor(pid, profId, picked, records){
 function planEvoGoalsHtml(data){
   if (!data) return '<div class="pl-hint">Paciente sem plano terapêutico vigente.</div>';
   if (!data.secs.length) return '<div class="pl-hint">Nenhum objetivo ativo no plano terapêutico para as especialidades deste atendimento.</div>';
+  // Cada habilidade é um grupo recolhível (seta): começa fechado, aberto se já tem objetivo marcado.
   return data.secs.map(function(s){
-    return '<div class="pr-goal-sec"><div class="pr-goal-spec"><b>' + esc(skillAreaName(s.areaId)) + '</b></div>' +
+    var marked = s.items.filter(function(x){ return x.pick; }).length;
+    return '<div class="pr-goal-sec">' +
+      '<button type="button" class="pr-goal-spec pr-goal-toggle" data-goal-toggle aria-expanded="' + (marked ? "true" : "false") + '">' +
+        '<span class="pl-area-caret" aria-hidden="true">' + (marked ? "▾" : "▸") + '</span><b>' + esc(skillAreaName(s.areaId)) + '</b>' +
+        '<span class="pr-goal-count" data-goal-count>' + prGoalCountText(s.items.length, marked) + '</span></button>' +
+      '<div class="pr-goal-items"' + (marked ? '' : ' hidden') + '>' +
       s.items.map(function(x){
         var sc = scaleById(x.o.scaleId), lv = sc ? sc.levels : [];
         var cur = x.pick ? x.pick.levelId : x.o.levelId;
@@ -18716,8 +18726,26 @@ function planEvoGoalsHtml(data){
           '<span class="pr-goal-lv"><span class="pl-lv-dot" style="background:' + esc(((lv.filter(function(l){ return l.id === cur; })[0]) || {}).color || "transparent") + '"></span>' +
             '<select data-goal-level aria-label="Nível alcançado">' + lv.map(function(l){ return '<option value="' + esc(l.id) + '"' + (l.id === cur ? ' selected' : '') + '>' + esc(l.name) + '</option>'; }).join("") + '</select></span>' +
         '</div>';
-      }).join("") + '</div>';
+      }).join("") + '</div></div>';
   }).join("");
+}
+function prGoalCountText(n, m){ return n + (n === 1 ? " objetivo" : " objetivos") + (m ? " · " + m + (m === 1 ? " marcado" : " marcados") : ""); }
+// Seta dos grupos e contador de marcados (janela da evolução).
+function prGoalsWire(body){
+  body.addEventListener("click", function(e){
+    var b = e.target.closest("[data-goal-toggle]"); if (!b) return;
+    var box = b.nextElementSibling, open = box.hidden;
+    box.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
+    b.querySelector(".pl-area-caret").textContent = open ? "▾" : "▸";
+  });
+  body.addEventListener("change", function(e){
+    var sec = e.target.closest(".pr-goal-sec"); if (!sec) return;
+    // Depois do ouvinte da janela (escolher o nível marca o objetivo).
+    setTimeout(function(){
+      var n = sec.querySelectorAll("[data-goal-obj]").length, m = sec.querySelectorAll("[data-goal-on]:checked").length;
+      sec.querySelector("[data-goal-count]").textContent = prGoalCountText(n, m);
+    }, 0);
+  });
 }
 function planEvoGoalsRead(root, data){
   if (!data) return [];

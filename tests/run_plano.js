@@ -253,14 +253,21 @@ const path = require('path');
 
   // Evolução: objetivos ativos por habilidade, conforme as especialidades do profissional.
   await ev('prOpenEditor({patient: findPatientByName("Bruno Verde"), appointment: {id: "ap1", date: "2026-10-10", time: "08:00", professional_id: null}})');
-  await page.waitForSelector('#prGoalsBody [data-goal-obj]');
+  await page.waitForSelector('#prGoalsBody [data-goal-obj]', { state: 'attached' });
+  const grp0 = await page.$eval('#prGoalsBody .pr-goal-items', (e) => e.hidden);
+  await page.click('#prGoalsBody [data-goal-toggle]');
+  const grp1 = await page.$eval('#prGoalsBody .pr-goal-items', (e) => e.hidden);
+  console.log('skill groups start closed and the arrow opens them?', grp0 === true && grp1 === false, grp0, grp1);
   const evoRows = await page.$$eval('#prGoalsBody [data-goal-obj]', (r) => r.length);
-  const evoHead = await page.$eval('#prGoalsBody .pr-goal-spec', (e) => e.textContent);
+  const evoHead = await page.$eval('#prGoalsBody .pr-goal-spec b', (e) => e.textContent);
   const allActive = await ev('(function(){ var p = planVigente("bruno-verde"); var n = 0; p.sections.forEach(function(s){ s.objectives.forEach(function(o){ if ((o.status || "ativo") === "ativo") n++; }); }); return n; })()');
   console.log('evolution lists the active objectives grouped by skill?', evoRows === allActive && allActive > 0 && evoHead === 'Comunicação', evoRows, allActive, evoHead);
   const firstObj = await page.$eval('#prGoalsBody [data-goal-obj]', (e) => e.getAttribute('data-goal-obj'));
   const lvOpts = await page.$eval('#prGoalsBody [data-goal-obj] select[data-goal-level]', (e) => Array.prototype.map.call(e.options, (x) => x.value));
   await page.$eval('#prGoalsBody [data-goal-obj] select[data-goal-level]', (e, v) => { e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }, lvOpts[lvOpts.length - 1]);
+  await page.waitForTimeout(30);
+  const cnt = await page.$eval('#prGoalsBody [data-goal-count]', (e) => e.textContent);
+  console.log('group counter shows the marked objectives?', / · 1 marcado$/.test(cnt), cnt);
   const read = await ev('JSON.stringify(planEvoGoalsRead(document.getElementById("prGoalsBody"), planEvoGoalsFor("bruno-verde", null, [])))');
   const rd = JSON.parse(read);
   console.log('choosing a level marks the objective as worked and reads planId/objId/level?', rd.length === 1 && rd[0].objId === firstObj && rd[0].levelId === lvOpts[lvOpts.length - 1] && !!rd[0].planId, read);
