@@ -2579,3 +2579,5 @@ que separa o "[0–4]" do nome e liga os planos ao cadastro.
   com ou sem prefixo é atualizado.
 - Migração `supabase/2026-10-07f-objetivos-faixa-etaria.sql` (testada no PGlite; pode rodar de novo).
   Testes em `tests/run_plano.js` e `tests/run_habilidades.js`.
+- Produção (2026-10-07): `2026-10-07f` rodada — 0 com prefixo, 300 objetivos com faixa, 0
+  objetivos em planos (ainda não havia plano com objetivos).
