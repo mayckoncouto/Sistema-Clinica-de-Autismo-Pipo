@@ -2699,3 +2699,4 @@ modo TV, semana e impressão (podem vir depois).
   vermelho (`--heat-nao`), intensidade = valor ÷ maior valor da coluna nas linhas de horário da semana
   mostrada (`heat(kind, v)` em `renderDispTab`, color-mix com `--surface`); zero sem cor; subtotais,
   total e Bloqueios sem cor.
+- 2026-10-08: Visão geral — filtros vazios quando a tela abria antes dos cadastros chegarem: `vgFillFilters()` agora roda em todo `vgRender`, e chegar profissionais/especialidades/salas/status redesenha a Visão geral.

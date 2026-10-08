@@ -87,6 +87,13 @@ const path = require('path');
 
   const tops = await page.$$eval('#vgHost .vg-row:not(.empty)', (rows) => rows.map((r) => new Set(Array.from(r.querySelectorAll('.vg-card')).map((c) => Math.round(c.getBoundingClientRect().top))).size));
   check('every time row keeps its cards on ONE line (width shared)?', tops.every((n) => n === 1), tops);
+  // Filtro escolhido pela lista do sistema (botão) e lista preenchida mesmo se os cadastros chegam depois.
+  await ev('(function(){ var keep = state.professionals; state.professionals = []; vgFillFilters(); state.professionals = keep; vgRender(); return true; })()');
+  await page.click('[data-dp-for="vgProf"]'); await page.waitForTimeout(200);
+  const popOpts = await page.$$eval('#dpPop .dp-opt', (r) => r.length);
+  await page.click('#dpPop .dp-opt[data-v="bia-terapeuta"]'); await page.waitForTimeout(300);
+  check('professional filter list fills even if data arrives late, and picking from it filters?', popOpts > 1 && (await page.$$('#vgHost .vg-card')).length === 1, popOpts);
+  await page.$eval('#vgProf', (s) => { s.value = ""; s.dispatchEvent(new Event("change", {bubbles: true})); });
   // Tela cheia: esconde o topo do sistema; a barra de data/filtros continua.
   await page.click('#tab-visaogeral [data-full-toggle]');
   check('full screen button: hides the top bar, keeps date/filters and the specialty chips?', await page.evaluate(() => document.body.classList.contains('grid-full') &&
