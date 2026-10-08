@@ -24,6 +24,14 @@ const path = require('path');
   // 1) Botão "bloquear manhã" da coluna: livres viram bloqueio (sem paciente), ocupados ficam.
   const before = (await store('schedule/seg-1')).bookings;
   const morning = await ev('findDayObj("seg").morning');
+  // Tabela de horários da janela: limpa tudo e preenche só uma faixa.
+  const onlyHours = async (day, per, a, b) => {
+    await page.click('#plbClearHours');
+    await page.evaluate(([d, p, x, y]) => {
+      const q = (e) => document.querySelector(`.plb-h[data-day="${d}"][data-p="${p}"][data-e="${e}"]`);
+      q('s').value = x; q('e').value = y; q('e').dispatchEvent(new Event('input', { bubbles: true }));
+    }, [day, per, a, b]);
+  };
   const busyKeys = morning.map((t) => t + '|r1|r1-t1').filter((k) => before[k] && before[k].patient);
   const lock = page.locator('tr.periodrow-pre .period-btn-lock[data-doc="seg-1"][data-room="r1"][data-seat="r1-t1"]');
   await lock.click(); await lock.click();
@@ -60,7 +68,15 @@ const path = require('path');
   await setSel('#plbAlvo', 'prof');
   await setSel('#plbId', 'ana-terapeuta');
   for (const w of ['2', '3', '4']) await page.uncheck(`.plb-weeks input[value="${w}"]`);
-  await page.click('[data-plb-per="seg|m"]');
+  // Já vem preenchida com o horário de trabalho da Ana; "Limpar horários" esvazia.
+  const filled = await page.$$eval('.plb-h', (l) => l.filter((x) => x.value).length);
+  await page.click('#plbClearHours');
+  const emptied = await page.$$eval('.plb-h', (l) => l.every((x) => !x.value));
+  const prevEmpty = await page.$eval('#plbPrev', (e) => e.textContent);
+  console.log('hours table comes filled, "Limpar horários" empties it (nothing to save)?', filled > 0 && emptied && /preencha/i.test(prevEmpty) && await page.$eval('#plbSave', (b) => b.disabled));
+  await page.click('#plbDefault');
+  console.log('"Horário padrão" fills it again?', (await page.$$eval('.plb-h', (l) => l.filter((x) => x.value).length)) === filled);
+  await onlyHours('seg', 'm', '00:00', '12:00');
   await setSel('#plbMotivo', 'Férias');
   const prev = await page.$eval('#plbPrev', (e) => e.textContent);
   console.log('preview shows count and the bookings that stay?', /horários/.test(prev) && /continua/.test(prev), prev.slice(0, 160));
@@ -86,7 +102,7 @@ const path = require('path');
   await ev('openPlBlockModal("lock")');
   await page.waitForSelector('#ovPlb');
   await setSel('#plbAlvo', 'clinica');
-  await page.click('[data-plb-cell="ter|' + morning[3] + '"]');
+  await onlyHours('ter', 'm', morning[3], morning[4] || '12:00');
   await page.click('#plbSave'); await page.waitForTimeout(300);
   const terCls = await page.evaluate((t) => Array.prototype.map.call(document.querySelectorAll(`td.slotcell[data-doc="ter-1"][data-time="${t}"]`), (x) => /pl-lock|slot-off/.test(x.className) || x.querySelector('.pname')), morning[3]);
   // (terça pode não estar na tela; confere pela função)
@@ -99,7 +115,7 @@ const path = require('path');
   await setSel('#plbAlvo', 'prof');
   await setSel('#plbId', 'ana-terapeuta');
   for (const w of ['2', '3', '4']) await page.uncheck(`.plb-weeks input[value="${w}"]`);
-  await page.click('[data-plb-per="seg|m"]');
+  await onlyHours('seg', 'm', '00:00', '12:00');
   await page.click('#plbSave'); await page.waitForTimeout(300);
   const after = (await store('config/planner_blocks')).list;
   console.log('"Liberar horário" removes the professional block (clinic block stays)?', after.length === 1 && after[0].alvo === 'clinica' && !/pl-lock/.test(await cell('seg-1', anaFree).getAttribute('class')));

@@ -2734,3 +2734,10 @@ modo TV, semana e impressão (podem vir depois).
   sala (`plbSame(b, alvo, id, roomId)`). Correção: `config/planner_blocks` faltava em
   `documents_path_valid` (erro "violates check constraint") — migração
   `supabase/2026-10-08d-bloqueio-caminho-permitido.sql` (testada no PGlite).
+- 2026-10-08 (pedido do usuário) Bloquear/Liberar horário: a grade de clicar células saiu; no lugar, tabela
+  `#plbHours` igual à do horário de trabalho do colaborador (Dia Seg–Dom × Manhã/Tarde Início/Fim, inputs
+  `.plb-h[data-day][data-p=m|t][data-e=s|e]`, `staffTime`). Vem preenchida (`fillHours`): alvo Profissional =
+  horário de trabalho dele (`staffDayInit`); Sala/Clínica toda = horário da clínica; refaz ao trocar alvo ou
+  profissional. Botões `#plbClearHours` "Limpar horários" e `#plbDefault` "Horário padrão". `cells()` = horários
+  do Planner (`DAYS`) que começam dentro das faixas; dia fechado no Planner fica desativado; faixa inválida ou
+  incompleta trava o botão com o motivo. `plbAllTimes` removida. Teste em `tests/run_bloqueio.js`.

@@ -734,26 +734,14 @@ td.agd-slot:hover .agd-add{opacity:1}
 .plb-weeks{display:flex;gap:16px;flex-wrap:wrap}
 .field label.plb-wk{display:inline-flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:600;cursor:pointer}
 .plb-wk input{margin:0}
-.plb-grid-wrap{max-height:min(46vh,380px);overflow:auto;border:1px solid var(--line);border-radius:8px}
-.plb-grid{border-collapse:separate;border-spacing:0;width:100%;font-size:12px;table-layout:fixed}
-.plb-grid th,.plb-grid td{padding:2px 4px;text-align:center;border-bottom:1px solid var(--line)}
-.plb-grid thead th{position:sticky;top:0;background:var(--surface-2);z-index:3}
-.plb-grid thead th.plb-corner{left:0;z-index:4;width:64px}
-.plb-grid tbody th{position:sticky;left:0;background:var(--surface);z-index:2;width:64px}
-.plb-day,.plb-time,.plb-mini{border:0;background:none;font:inherit;font-weight:700;color:var(--ink);cursor:pointer;padding:2px 4px;border-radius:5px}
-.plb-time{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:600}
-.plb-mini{font-size:10.5px;font-weight:600;color:var(--muted)}
-.plb-day:hover,.plb-time:hover,.plb-mini:hover{background:var(--accent-weak)}
-.plb-per{display:flex;justify-content:center;gap:2px}
-.plb-s{display:none}
-@media (max-width:640px){.plb-l{display:none}.plb-s{display:inline}.plb-grid thead th.plb-corner,.plb-grid tbody th{width:52px}.plb-day{font-size:11px;padding:2px 1px}}
-/* livre = branco; bloqueado = o mesmo cinza de "fora do horário do profissional" no Planner */
-.plb-cell{display:block;width:100%;height:22px;border:1px solid var(--line);border-radius:4px;background:var(--surface);cursor:pointer}
-.plb-cell:hover{border-color:var(--line-strong)}
-.plb-cell.on{background:var(--off-bg);border-color:var(--line-strong);box-shadow:inset 0 0 0 1px var(--line)}
-.plb-legend{display:flex;gap:14px;align-items:center;margin-top:6px;font-size:11.5px;color:var(--muted)}
-.plb-legend i{display:inline-block;width:18px;height:12px;border-radius:3px;border:1px solid var(--line);vertical-align:-2px;margin-right:4px;background:var(--surface)}
-.plb-legend i.on{background:var(--off-bg);border-color:var(--line-strong)}
+.plb-hours-head{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.plb-hours-head label{margin:0}
+.plb-hours-btns{display:flex;gap:6px}
+#plbHours{table-layout:fixed;width:100%;max-width:520px}
+#plbHours th,#plbHours td{padding:4px 3px}
+#plbHours input{width:100%;text-align:center}
+#plbHours input.bad{border-color:var(--danger);background:var(--danger-weak)}
+#plbHours tr.plb-closed td{opacity:.55}
 .plb-prev{margin-top:10px;font-size:12.5px;line-height:1.5;padding:8px 10px;border-radius:8px;background:var(--surface-2)}
 .plb-kept{margin-top:4px;color:var(--ink-2)}
 .slotcell.slot-off.aba-soft{cursor:pointer}
@@ -5584,11 +5572,6 @@ function plLockCellClick(td){
 }
 
 // ---------- Outras opções → Bloquear / Liberar horário ----------
-function plbAllTimes(){
-  var seen = {}, out = [];
-  DAYS.forEach(function(d){ d.morning.concat(d.afternoon).forEach(function(x){ if (!seen[x]){ seen[x] = 1; out.push(x); } }); });
-  return out.sort();
-}
 function plbIsMorning(time){ return DAYS.some(function(d){ return d.morning.indexOf(time) !== -1; }); }
 // Colunas (sala + coluna) que o alvo pega.
 function plbSeats(alvo, id, roomId){
@@ -5603,7 +5586,6 @@ function plbSeats(alvo, id, roomId){
 function openPlBlockModal(mode){
   var lock = mode === "lock";
   if (!can("bloqueio_horario", lock ? "create" : "delete")){ showToast(permDeniedMsg("bloqueio_horario", lock ? "create" : "delete"), true); return; }
-  var times = plbAllTimes(), sel = {};
   var profs = activeOnly(state.professionals).slice().sort(function(a, b){ return profNome(a).localeCompare(profNome(b), "pt-BR"); });
   var rooms = plannerRooms().filter(isActive);
   var host = document.getElementById("modalHost");
@@ -5619,17 +5601,16 @@ function openPlBlockModal(mode){
           '<div class="field" style="flex:2;min-width:180px" id="plbRoomField"><label for="plbRoom">Sala</label><select id="plbRoom"></select></div>' +
         '</div>' +
         '<div class="field"><label>Semanas do Planner</label><div class="plb-weeks">' + WEEKS.map(function(w){ return '<label class="plb-wk"><input type="checkbox" value="' + w + '" checked> ' + w + 'ª</label>'; }).join("") + '</div></div>' +
-        '<div class="field"><label>Horários <span class="plb-hint">clique nas células; no dia, em Manhã/Tarde ou no horário marca a coluna/linha inteira</span></label>' +
-          '<div class="plb-grid-wrap"><table class="plb-grid"><thead><tr><th class="plb-corner"><button type="button" class="plb-mini" data-plb-all>Tudo</button></th>' +
-          DAYS.map(function(d){ return '<th><button type="button" class="plb-day" data-plb-day="' + d.key + '">' + esc(d.name || d.full) + '</button>' +
-            '<div class="plb-per"><button type="button" class="plb-mini" data-plb-per="' + d.key + '|m" title="Manhã"><span class="plb-l">Manhã</span><span class="plb-s">M</span></button><button type="button" class="plb-mini" data-plb-per="' + d.key + '|t" title="Tarde"><span class="plb-l">Tarde</span><span class="plb-s">T</span></button></div></th>'; }).join("") +
-          '</tr></thead><tbody>' + times.map(function(tm){
-            return '<tr><th><button type="button" class="plb-time" data-plb-time="' + tm + '">' + tm + '</button></th>' + DAYS.map(function(d){
-              var ok = d.morning.indexOf(tm) !== -1 || d.afternoon.indexOf(tm) !== -1;
-              return '<td>' + (ok ? '<button type="button" class="plb-cell" data-plb-cell="' + d.key + '|' + tm + '" aria-pressed="false"></button>' : '') + '</td>';
-            }).join("") + '</tr>';
-          }).join("") + '</tbody></table></div>' +
-          '<div class="plb-legend"><span><i></i>Livre</span><span><i class="on"></i>Bloqueado (cinza, como fora do horário do profissional)</span></div></div>' +
+        '<div class="field"><div class="plb-hours-head"><label>Horários <span class="plb-hint">vêm com o horário de trabalho do profissional (sala ou clínica toda: o horário da clínica); ajuste ou apague o que não for ' + (lock ? 'bloquear' : 'liberar') + '</span></label>' +
+          '<span class="plb-hours-btns"><button type="button" class="btn ghost" id="plbDefault">Horário padrão</button><button type="button" class="btn ghost" id="plbClearHours">Limpar horários</button></span></div>' +
+          '<table class="prof-hours plb-hours" id="plbHours"><colgroup><col style="width:56px"><col><col><col><col></colgroup><thead><tr><th rowspan="2">Dia</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th></tr><tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>' +
+          ALL_WEEKDAYS.map(function(wd){
+            var open = !!findDayObj(wd.key) && DAYS.some(function(d){ return d.key === wd.key; });
+            function inp(per, e, lab){ return '<td><input type="text" class="plb-h" data-day="' + wd.key + '" data-p="' + per + '" data-e="' + e + '" inputmode="numeric" maxlength="5" placeholder="--:--" aria-label="' + lab + ' ' + esc(wd.full) + '"' + (open ? '' : ' disabled title="Clínica fechada neste dia no Planner"') + '></td>'; }
+            return '<tr data-plb-row="' + wd.key + '"' + (open ? '' : ' class="plb-closed"') + '><td class="ph-day" title="' + esc(wd.full) + '">' + wd.name.slice(0, 3) + '</td>' +
+              inp("m", "s", "Início manhã") + inp("m", "e", "Fim manhã") + inp("t", "s", "Início tarde") + inp("t", "e", "Fim tarde") + '</tr>';
+          }).join("") + '</tbody></table>' +
+          '<div class="pat-count">Bloqueia os horários do Planner que começam dentro dessas faixas.</div></div>' +
         (lock ? '<div class="field-row" style="display:flex;gap:10px;flex-wrap:wrap"><div class="field" style="flex:1;min-width:160px"><label for="plbMotivo">Motivo</label><select id="plbMotivo"><option value="">Sem motivo</option>' +
           PLB_MOTIVOS.map(function(m){ return '<option>' + esc(m) + '</option>'; }).join("") + '</select></div>' +
           '<div class="field" style="flex:2;min-width:200px"><label for="plbDet">Detalhe (opcional)</label><input id="plbDet" type="text" maxlength="80" placeholder="Ex.: férias de novembro"></div></div>' : '') +
@@ -5657,25 +5638,54 @@ function openPlBlockModal(mode){
     idEl.innerHTML = a === "sala" ? rooms.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + (isGroup(r) ? " (grupo)" : "") + '</option>'; }).join("")
       : profs.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(profNome(p)) + '</option>'; }).join("");
     fillRooms();
-    refresh();
+    fillHours();
   }
   function weeks(){ return Array.prototype.map.call(ov.querySelectorAll(".plb-weeks input:checked"), function(c){ return c.value; }); }
-  function cells(){ return Object.keys(sel).filter(function(k){ return sel[k]; }); }
-  function setCells(list, on){ list.forEach(function(k){ sel[k] = on; }); paint(); }
-  function paint(){
-    Array.prototype.forEach.call(ov.querySelectorAll("[data-plb-cell]"), function(b){ var on = !!sel[b.getAttribute("data-plb-cell")]; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
+  // Faixas digitadas → horários do Planner ("dia|hora") que começam dentro delas.
+  var hoursErr = "";
+  function hIn(day, per, e){ return ov.querySelector('.plb-h[data-day="' + day + '"][data-p="' + per + '"][data-e="' + e + '"]'); }
+  function cells(){
+    var out = []; hoursErr = "";
+    DAYS.forEach(function(d){
+      ["m", "t"].forEach(function(per){
+        var sEl = hIn(d.key, per, "s"), eEl = hIn(d.key, per, "e"); if (!sEl || !eEl) return;
+        var st = staffTime(sEl.value), en = staffTime(eEl.value), lab = (per === "m" ? "manhã" : "tarde") + " de " + (d.full || d.name);
+        sEl.classList.toggle("bad", st === null); eEl.classList.toggle("bad", en === null);
+        if (st === null || en === null){ if (!hoursErr) hoursErr = "Horário inválido na " + lab + "."; return; }
+        if (!st && !en) return;
+        if (!st || !en){ if (!hoursErr) hoursErr = "Preencha início e fim na " + lab + "."; return; }
+        if (en <= st){ if (!hoursErr) hoursErr = "Na " + lab + ", o fim precisa ser depois do início."; return; }
+        d.morning.concat(d.afternoon).forEach(function(tm){ if (tm >= st && tm < en && out.indexOf(d.key + "|" + tm) === -1) out.push(d.key + "|" + tm); });
+      });
+    });
+    return out;
+  }
+  // Padrão: horário de trabalho do profissional; sala / clínica toda = horário da clínica.
+  function fillHours(){
+    var a = alvoEl.value, p = a === "prof" ? findProfessional(idEl.value) : null;
+    ALL_WEEKDAYS.forEach(function(wd){
+      var pp;
+      if (p) pp = staffDayInit(p.horarios, wd.key, p);
+      else { var c = clinicDayCfg(wd.key); pp = c.ativo ? {m: c.manha && c.manha.inicio ? c.manha : null, t: c.tarde && c.tarde.inicio ? c.tarde : null} : {m: null, t: null}; }
+      [["m", pp.m], ["t", pp.t]].forEach(function(x){
+        var sEl = hIn(wd.key, x[0], "s"), eEl = hIn(wd.key, x[0], "e");
+        if (sEl.disabled){ sEl.value = eEl.value = ""; return; }
+        sEl.value = x[1] ? x[1].inicio || "" : ""; eEl.value = x[1] ? x[1].fim || "" : "";
+      });
+    });
     refresh();
   }
-  function toggleGroup(list){ var allOn = list.length && list.every(function(k){ return sel[k]; }); setCells(list, !allOn); }
-  ov.addEventListener("click", function(e){
-    var c = e.target.closest("[data-plb-cell]"); if (c){ var k = c.getAttribute("data-plb-cell"); sel[k] = !sel[k]; paint(); return; }
-    var all = e.target.closest("[data-plb-all]"); if (all){ toggleGroup(Array.prototype.map.call(ov.querySelectorAll("[data-plb-cell]"), function(b){ return b.getAttribute("data-plb-cell"); })); return; }
-    var dy = e.target.closest("[data-plb-day]"); if (dy){ var dk = dy.getAttribute("data-plb-day"); toggleGroup(Array.prototype.map.call(ov.querySelectorAll('[data-plb-cell^="' + dk + '|"]'), function(b){ return b.getAttribute("data-plb-cell"); })); return; }
-    var pr = e.target.closest("[data-plb-per]"); if (pr){ var pp = pr.getAttribute("data-plb-per").split("|"), dd = findDayObj(pp[0]); toggleGroup((pp[1] === "m" ? dd.morning : dd.afternoon).map(function(x){ return pp[0] + "|" + x; })); return; }
-    var tr = e.target.closest("[data-plb-time]"); if (tr){ var tt = tr.getAttribute("data-plb-time"); toggleGroup(Array.prototype.map.call(ov.querySelectorAll('[data-plb-cell$="|' + tt + '"]'), function(b){ return b.getAttribute("data-plb-cell"); })); return; }
+  Array.prototype.forEach.call(ov.querySelectorAll(".plb-h"), function(el){
+    el.addEventListener("input", refresh);
+    el.addEventListener("blur", function(){ var v = staffTime(el.value); if (v) el.value = v; refresh(); });
   });
+  document.getElementById("plbClearHours").addEventListener("click", function(){
+    Array.prototype.forEach.call(ov.querySelectorAll(".plb-h"), function(el){ el.value = ""; });
+    refresh();
+  });
+  document.getElementById("plbDefault").addEventListener("click", fillHours);
   alvoEl.addEventListener("change", fillIds);
-  idEl.addEventListener("change", function(){ fillRooms(); refresh(); });
+  idEl.addEventListener("change", function(){ fillRooms(); fillHours(); });
   roomEl.addEventListener("change", refresh);
   Array.prototype.forEach.call(ov.querySelectorAll(".plb-weeks input"), function(cb){ cb.addEventListener("change", refresh); });
   // Prévia: quantos horários, atendimentos mantidos e (liberar) o que continua bloqueado por outro alvo.
@@ -5684,7 +5694,8 @@ function openPlBlockModal(mode){
     var a = alvoEl.value, id = a === "clinica" ? "" : idEl.value, rid = a === "prof" ? roomEl.value : "", ws = weeks(), cs = cells(), out = document.getElementById("plbPrev"), save = document.getElementById("plbSave");
     plan = null;
     if (a !== "clinica" && !id){ out.innerHTML = '<span class="pat-count">Escolha ' + (a === "sala" ? "a sala" : "o profissional") + '.</span>'; save.disabled = true; return; }
-    if (!ws.length || !cs.length){ out.innerHTML = '<span class="pat-count">Escolha pelo menos uma semana e um horário.</span>'; save.disabled = true; return; }
+    if (hoursErr){ out.innerHTML = '<span class="pat-count" style="color:var(--danger)">' + esc(hoursErr) + '</span>'; save.disabled = true; return; }
+    if (!ws.length || !cs.length){ out.innerHTML = '<span class="pat-count">Escolha pelo menos uma semana e preencha pelo menos um horário.</span>'; save.disabled = true; return; }
     var seats = plbSeats(a, id, rid), kept = [], seatChanges = {}, nSeat = 0, other = 0, ruleHits = 0;
     ws.forEach(function(w){
       cs.forEach(function(k){
@@ -17201,7 +17212,7 @@ var HELP_TOPICS = [
     purpose: "Fechar horários no Planner sem criar agendamento: a célula fica cinza, como fora do horário do profissional.",
     steps: [
       "<b>Botões da grade</b> (cadeado da coluna na manhã/tarde e ao lado de cada horário): bloqueiam ou liberam só aquelas colunas. Clicar numa célula bloqueada assim mostra o motivo e permite liberar.",
-      "<b>Outras opções → Bloquear horário</b>: escolha profissional (em <b>Todas as salas</b> ou numa sala específica onde ele atende), sala ou clínica toda, as semanas (1ª a 4ª), os horários na grade (clique no dia, em Manhã/Tarde ou no horário para marcar a coluna/linha) e o motivo. A prévia mostra quantos horários e quais atendimentos já marcados continuam.",
+      "<b>Outras opções → Bloquear horário</b>: escolha profissional (em <b>Todas as salas</b> ou numa sala específica onde ele atende), sala ou clínica toda, as semanas (1ª a 4ª), os horários na tabela Dia × Manhã/Tarde (início e fim; vem preenchida com o horário de trabalho do profissional — sala ou clínica toda: o horário da clínica —; <b>Limpar horários</b> esvazia tudo e <b>Horário padrão</b> preenche de novo; entram os horários do Planner que começam dentro das faixas) e o motivo. A prévia mostra quantos horários e quais atendimentos já marcados continuam.",
       "<b>Outras opções → Liberar horário</b>: mesma tela; tira os bloqueios desse alvo nesses horários e também os feitos pelos botões da grade nas colunas dele."
     ],
     rules: [
