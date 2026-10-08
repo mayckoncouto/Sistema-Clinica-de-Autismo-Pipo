@@ -66,6 +66,25 @@ const path = require('path');
   check('Quadro hides the finalized columns until "Finalizados"?', !(await page.$('.crm-col[data-crm-drop="contrato"]')));
   await page.click('#crmViewSeg [data-cv="lista"]');
 
+  // Calendário: tarefa no dia do vencimento; arrastar muda o vencimento; + do dia cria com o vencimento
+  await page.click('#crmViewSeg [data-cv="calendario"]');
+  await page.waitForSelector('.crm-cal-grid');
+  const yIso = await ev('agdIso(agdAddDays(agdStartOfDay(new Date()), -1))'), tIso = await ev('crmToday()');
+  check('Calendário: task on its due day (red, overdue) and "em atraso" counter?', !!(await page.$(`.crm-cal-day[data-cal-day="${yIso}"] .crm-cal-task.late[data-crm-id="${tid}"]`)) && /1 em atraso/.test(await page.$eval('.crm-cal-bar', (e) => e.textContent)));
+  check('today highlighted?', !!(await page.$(`.crm-cal-day.today[data-cal-day="${tIso}"]`)));
+  await page.dragAndDrop(`.crm-cal-task[data-crm-id="${tid}"]`, `.crm-cal-day[data-cal-day="${tIso}"]`);
+  await page.waitForTimeout(250);
+  check('dragging the task to another day changes the due date?', (await ev(`CRM.tasks["${tid}"].due_date`)) === tIso);
+  await ev(`(function(){ crmUpdate("${tid}", {due_date: "${yIso}"}); crmRender(); return true; })()`);
+  await page.hover(`.crm-cal-day[data-cal-day="${tIso}"]`);
+  await page.click(`[data-cal-new="${tIso}"]`);
+  await page.waitForSelector('#ovCrm');
+  check('+ on the day opens a new task with that due date?', (await page.$eval('#crmDue', (e) => e.value)) === tIso);
+  await page.click('#crmCancel');
+  const fill = await page.evaluate(() => { const h = document.getElementById('crmHost').getBoundingClientRect(); return h.bottom > window.innerHeight - 40; });
+  check('CRM uses the whole window height?', fill);
+  await page.click('#crmViewSeg [data-cv="lista"]');
+
   // Janela: barra lateral com resumo + comentários; Atividade recolhida no corpo; layout
   await page.click(`#crmHost tr[data-crm-id="${tid}"]`);
   await page.waitForSelector('#crmSide .crm-sum-list li');
