@@ -2662,6 +2662,14 @@ Permissão `disponibilidade` (só ver) em MODULES/`PERM_MODULE_LABELS`; migraç�
 `supabase/2026-10-08b-disponibilidade.sql` (quem vê o Resumo passa a ver). Teste `tests/run_disponibilidade.js`.
 - 2026-10-08: Reunião Clínica / Treinamento GRAVADOS numa coluna ocupam a sala toda (como "não ABA"): paciente não entra nas outras colunas, outra Reunião/Treinamento pode (`roomMeetingKind`, regras `pl_reuniao_sala`/`ag_reuniao_sala` no Sistema; grade `meetLock` = aba-lock + aba-soft). A Reunião automática de segunda 11:20 (sem registro) não trava. Disponibilidade: Bloqueado/Reunião/Treinamento/horário bloqueado contam 1× por profissional. Testes em `run_aba_linha.js`.
 - 2026-10-08: Planner, coluna dos horários: horário em cima e 3 botões lado a lado embaixo (liberar, bloquear, **limpar**; `rowLockButtonsHtml(attrs, withClear)`, `.row-btns-below`, `.row-lock-3`). Limpar a linha = `plannerRowAction("clear")` apaga os agendamentos do horário nas colunas visíveis (bloqueio fica; permissão Planner excluir). Agenda não mudou. Teste `tests/run_row_clear.js`.
+- 2026-10-08 (pedido do usuário, SUBSTITUI a linha "ocupam a sala toda" acima): Reunião Clínica /
+  Treinamento GRAVADOS ocupam o PROFISSIONAL, não a sala. Nesse horário ele não pode ter outro
+  agendamento (paciente, grupo, outra reunião/treinamento) em nenhuma sala ou grupo, inclusive outra
+  coluna dele na mesma sala; os outros profissionais atendem normalmente na sala. Regras do Sistema
+  `pl_reuniao_prof` / `ag_reuniao_prof` (no lugar de `pl_reuniao_sala` / `ag_reuniao_sala`);
+  `profMeetingMsg`; grade: `profMeet[profId]` (só gravado — a Reunião automática de segunda não
+  conta) → colunas vazias dele ficam `.prof-busy`; `plannerConflict` e `agdConflictIn` conferem
+  pelo profissional. Testes em `run_aba_linha.js`.
 
 ## Agenda ▾ → Visão geral (2026-10-08)
 Topo: "Agenda" virou menu (`#agBtn`/`#agMenu`, `AG_ITEMS`/`AG_TABS` em `NAV_MENUS`; botões `data-tab`

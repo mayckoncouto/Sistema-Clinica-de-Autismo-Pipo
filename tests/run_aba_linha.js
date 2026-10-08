@@ -166,29 +166,32 @@ const path = require('path');
   check('room WITH "ABA" in the name: Agenda blocks the other professional too?', /sala toda/.test(whole.agenda || ''), JSON.stringify(whole));
 
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
-  // Reunião Clínica / Treinamento ocupam a sala toda (como "não ABA"); outra reunião pode junto.
+  // Reunião Clínica / Treinamento ocupam o PROFISSIONAL em qualquer sala ou grupo (não a sala).
   const meet = await ev(`(function(){
     var out = {};
-    state.rooms = state.rooms.concat([{id: "rm", name: "Sala Reuniao", color: "teal", therapists: [{id: "rm-1", name: "Ana", professionalId: "ana-terapeuta"}, {id: "rm-2", name: "Bia", professionalId: "bia-terapeuta"}]}]);
+    state.rooms = state.rooms.concat([{id: "rm", name: "Sala Reuniao", color: "teal", therapists: [{id: "rm-1", name: "Ana", professionalId: "ana-terapeuta"}, {id: "rm-2", name: "Bia", professionalId: "bia-terapeuta"}]},
+      {id: "rn", name: "Sala Outra", color: "teal", therapists: [{id: "rn-1", name: "Ana", professionalId: "ana-terapeuta"}]}]);
     var d = state.scheduleDocs["ter-1"] = state.scheduleDocs["ter-1"] || {bookings: {}};
     d.bookings["13:30|rm|rm-1"] = {patient: "Reunião Clínica", note: ""};
-    out.patient = plannerConflict("ter-1", "13:30|rm|rm-2", {patient: "Duda Vermelho", note: "", service: "sessao"});
-    out.meeting = plannerConflict("ter-1", "13:30|rm|rm-2", {patient: "Reunião Clínica", note: ""});
-    out.training = plannerConflict("ter-1", "13:30|rm|rm-2", {patient: "Treinamento", note: "", training: true});
-    var html = buildScheduleTable(findDayObj("ter"), 1, "ter-1", [findRoom("rm")], "").html;
-    out.cell = /<td class="slotcell[^"]*slot-off[^"]*aba-lock[^"]*aba-soft[^"]*" data-key="13:30\\|rm\\|rm-2"/.test(html);
+    out.otherProf = plannerConflict("ter-1", "13:30|rm|rm-2", {patient: "Duda Vermelho", note: "", service: "sessao"});
+    out.sameProf = plannerConflict("ter-1", "13:30|rn|rn-1", {patient: "Duda Vermelho", note: "", service: "sessao"});
+    out.sameProfMeeting = plannerConflict("ter-1", "13:30|rn|rn-1", {patient: "Treinamento", note: "", training: true});
+    var html = buildScheduleTable(findDayObj("ter"), 1, "ter-1", [findRoom("rm"), findRoom("rn")], "").html;
+    out.cellOther = /<td class="slotcell[^"]*slot-off[^"]*" data-key="13:30\\|rm\\|rm-2"/.test(html);
+    out.cellSame = /<td class="slotcell[^"]*slot-off[^"]*prof-busy[^"]*" data-key="13:30\\|rn\\|rn-1"[^>]*title="[^"]*Reunião Clínica/.test(html);
     d.bookings["13:30|rm|rm-1"] = {patient: "Duda Vermelho", note: "", service: "sessao"};
-    out.reverse = plannerConflict("ter-1", "13:30|rm|rm-2", {patient: "Reunião Clínica", note: ""});
+    out.reverse = plannerConflict("ter-1", "13:30|rn|rn-1", {patient: "Reunião Clínica", note: ""});
     delete d.bookings["13:30|rm|rm-1"];
     var rows = [{id: "m1", date: "2030-01-07", time: "13:30", professional_id: "ana-terapeuta", room_id: "rm", patient: "Treinamento", training: true}];
-    out.agPatient = agdConflictIn(rows, {date: "2030-01-07", time: "13:30", professional_id: "bia-terapeuta", room_id: "rm", patient: "Duda Vermelho", service: "sessao"});
-    out.agMeeting = agdConflictIn(rows, {date: "2030-01-07", time: "13:30", professional_id: "bia-terapeuta", room_id: "rm", patient: "Reunião Clínica"});
+    out.agOther = agdConflictIn(rows, {date: "2030-01-07", time: "13:30", professional_id: "bia-terapeuta", room_id: "rm", patient: "Duda Vermelho", service: "sessao"});
+    out.agSame = agdConflictIn(rows, {date: "2030-01-07", time: "13:30", professional_id: "ana-terapeuta", room_id: "rn", patient: "Duda Vermelho", service: "sessao"});
+    out.agSameRoom = agdConflictIn(rows, {date: "2030-01-07", time: "13:30", professional_id: "ana-terapeuta", room_id: "rm", patient: "Duda Vermelho", service: "sessao"});
     return out;
   })()`);
-  check('Planner: Reunião in a room blocks a patient in the other column (gray, clickable for another meeting)?', /ocupa a sala toda/.test(meet.patient || '') && meet.cell, JSON.stringify(meet));
-  check('Planner: another Reunião/Treinamento can join the same room?', meet.meeting === null && meet.training === null, JSON.stringify(meet));
-  check('Planner: Reunião refused where the room already has a patient?', /ocupa a sala toda/.test(meet.reverse || ''), JSON.stringify(meet));
-  check('Agenda: Treinamento blocks a patient in the room; another meeting allowed?', /ocupa a sala toda/.test(meet.agPatient || '') && meet.agMeeting === null, JSON.stringify(meet));
+  check('Planner: Reunião does NOT block another professional in the same room?', meet.otherProf === null && !meet.cellOther, JSON.stringify(meet));
+  check('Planner: Reunião blocks the same professional in another room (rule + gray cell)?', /Reunião Clínica/.test(meet.sameProf || '') && /Reunião Clínica/.test(meet.sameProfMeeting || '') && meet.cellSame, JSON.stringify(meet));
+  check('Planner: Reunião refused where the professional already has a patient elsewhere?', /ocupa o profissional/.test(meet.reverse || ''), JSON.stringify(meet));
+  check('Agenda: Treinamento blocks the same professional anywhere, not the room?', meet.agOther === null && /Treinamento/.test(meet.agSame || '') && /Treinamento/.test(meet.agSameRoom || ''), JSON.stringify(meet));
 
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();

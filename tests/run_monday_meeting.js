@@ -40,6 +40,10 @@ const path = require('path');
   console.log('opens with the "Reunião Clínica" kind ticked?', await page.locator('#ovBook .kind-pick input[value="reuniao"]').isChecked());
   console.log('"Desmarcar" button is present?', (await page.locator('#bkClear').count()) === 1);
 
+  // A Reunião Clínica GRAVADA do mock (Coordenador, Ana, 11:20) ocupa a Ana em qualquer lugar
+  // (regra pl_reuniao_prof): tira-a antes de trocar a reunião automática da coluna dela por paciente.
+  await page.evaluate(async () => { const db = await window.claude.use('db'); const r = db.doc('schedule/seg-1'); const d = JSON.parse(JSON.stringify((await r.get()).data())); delete d.bookings['11:20|coord|coord-t1']; await r.set(d); });
+  await page.waitForTimeout(150);
   // Overriding it with a real patient at that seat should work like any other slot.
   // Desde 2026-10-01 a reunião é um tipo especial marcado: desmarcar libera o campo do paciente.
   await page.uncheck('#ovBook .kind-pick input[value="reuniao"]');
