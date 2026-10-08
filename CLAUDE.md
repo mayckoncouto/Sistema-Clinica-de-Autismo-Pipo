@@ -2686,3 +2686,9 @@ Teste `tests/run_visao_geral.js`. Decisões do usuário: cartão = Paciente/Sala
 especialidade; com filtros/contadores e avisos; SEM status no cartão, sessão do mês, linha do agora,
 modo TV, semana e impressão (podem vir depois).
 - 2026-10-08: avisos do dia REMOVIDOS da Visão geral (pedido do usuário).
+- 2026-10-08 (decisões do usuário) Disponibilidade: horário bloqueado (cadeado / Bloquear horário,
+  célula `pl-lock`) fica FORA da conta (nem vaga livre, nem "Bloqueios / reuniões"). Vaga livre =
+  célula vazia dentro do horário de trabalho e sem trava de regra; profissional com colunas em várias
+  salas conta uma sala (a que já atende ou a com mais colunas vazias: Lara 2 Fono + 2 Fono ABA = 2).
+  Bloqueado / Reunião Clínica / Treinamento = 1 por profissional por horário. Teste em
+  `tests/run_disponibilidade.js`.

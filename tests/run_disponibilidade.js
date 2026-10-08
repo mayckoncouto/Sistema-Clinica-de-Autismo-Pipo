@@ -54,11 +54,20 @@ const path = require('path');
   const d1 = row(await ev('dispCompute([1])'), 'seg', T);
   check('booking Ana: atendidos +1 and her free slots drop?', (d1.at[specA] || 0) === (d0.at[specA] || 0) + 1 && (d1.free[specA] || 0) < (d0.free[specA] || 0), JSON.stringify({d0, d1}));
 
-  // Bloqueio de horário na coluna da Bia: livres −1, Bloqueios +1.
+  // Bloqueio de horário na coluna da Bia: livres −1 e NÃO entra em Bloqueios (fica fora da conta).
   const bBefore = d1.free[specB] || 0;
   await setBk('seg-1', `${T}|r1|r1-t2`, {patient: '', lock: true});
   const d2 = row(await ev('dispCompute([1])'), 'seg', T);
-  check('time block on Bia: free −1 and counted in Bloqueios?', (d2.free[specB] || 0) === bBefore - 1 && d2.blk === d1.blk + 1, JSON.stringify({d1, d2}));
+  check('time block on Bia: free −1 and NOT counted in Bloqueios?', (d2.free[specB] || 0) === bBefore - 1 && d2.blk === d1.blk, JSON.stringify({d1, d2}));
+
+  // Reunião Clínica / Treinamento: 1 por profissional no horário (mesmo em duas colunas) e as colunas
+  // vazias dele deixam de ser vagas (a reunião ocupa o profissional em qualquer sala).
+  await setBk('seg-1', `${T}|r1|r1-t1`, null);
+  await setBk('seg-1', `${T}|rz|rz-1`, {patient: 'Reunião Clínica', note: ''});
+  await setBk('seg-1', `${T}|rz|rz-2`, {patient: 'Treinamento', note: '', training: true});
+  const d3 = row(await ev('dispCompute([1])'), 'seg', T);
+  check('Reunião + Treinamento of Ana in 2 columns: Bloqueios +1 (once) and Ana has no free slot?', d3.blk === d2.blk + 1 && (d3.free[specA] || 0) === 0, JSON.stringify({d2, d3}));
+  await setBk('seg-1', `${T}|rz|rz-1`, null); await setBk('seg-1', `${T}|rz|rz-2`, null);
 
   // Todas = soma das 4 semanas.
   const tot = await ev(`(function(){ function s(o){ return Object.keys(o).reduce(function(a, k){ return a + o[k]; }, 0); }
