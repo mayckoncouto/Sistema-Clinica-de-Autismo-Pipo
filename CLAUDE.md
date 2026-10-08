@@ -2606,3 +2606,12 @@ por evolução (data embaixo); tons de azul pelo NÍVEL (mais escuro = mais alto
   da skill dataviz: claro #86b6ef→#104281; escuro #1c5cab→#b7d3f6, nível alto mais claro).
   Escalas com mais de 5 níveis repetem tons vizinhos (a altura continua diferenciando).
   `PLAN_VIZ_MAX = 30` barras na visão "Todos". Teste no `tests/run_plano.js`.
+- (2026-10-08) **Barras por SEMANA** (decisões do usuário): cada mês tem 4 semanas pelos dias
+  (S1 = 1–7, S2 = 8–14, S3 = 15–21, S4 = 22 até o fim; `planWeekKey`, `planWeekDays`); período =
+  data do plano até hoje (ou até a revisão, se já passou), ampliado se houver evolução fora
+  (`planWeeks`, `ch.start`/`ch.end` de `planEvoCharts`); altura = MÉDIA dos níveis da semana
+  (`planWeekAvg`, `planAvgText`); semana sem evolução fica vazia. Eixo: S1…S4 e o mês embaixo
+  (`.pv-mlab`), divisória tracejada entre meses (`.pv-msep`). "Todos os objetivos" = barras lado a
+  lado em cada semana, na ordem do Nº, tom fixo por objetivo (`planObjColor`, legenda `.pv-sq`);
+  um objetivo = uma barra por semana com a cor pelo nível. Muitas semanas/objetivos = o gráfico
+  alarga e rola para o lado (`.pv-scroll`). Tabela = semanas com dado.
