@@ -85,6 +85,8 @@ const path = require('path');
   check('day total and per-specialty chips?', /3 atendimentos no dia/.test(counts) && (await page.$$('#vgCounts .vg-chip')).length >= 1, counts);
   check('no alerts box (removed by request)?', !(await page.$('#vgAlerts')));
 
+  const tops = await page.$$eval('#vgHost .vg-row:not(.empty)', (rows) => rows.map((r) => new Set(Array.from(r.querySelectorAll('.vg-card')).map((c) => Math.round(c.getBoundingClientRect().top))).size));
+  check('every time row keeps its cards on ONE line (width shared)?', tops.every((n) => n === 1), tops);
   // Filtros.
   await page.$eval('#vgProf', (s) => { s.value = "bia-terapeuta"; s.dispatchEvent(new Event("change", {bubbles: true})); });
   check('filter by professional?', (await page.$$('#vgHost .vg-card')).length === 1 && /com filtro/.test(await page.$eval('#vgCounts', (e) => e.textContent)));

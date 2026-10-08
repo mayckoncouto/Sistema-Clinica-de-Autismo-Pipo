@@ -2692,3 +2692,4 @@ modo TV, semana e impressão (podem vir depois).
   salas conta uma sala (a que já atende ou a com mais colunas vazias: Lara 2 Fono + 2 Fono ABA = 2).
   Bloqueado / Reunião Clínica / Treinamento = 1 por profissional por horário. Teste em
   `tests/run_disponibilidade.js`.
+- 2026-10-08: Visão geral — todos os cartões do horário na MESMA linha, dividindo a largura da janela (`.vg-cards` nowrap, `.vg-card` flex:1 1 0).
