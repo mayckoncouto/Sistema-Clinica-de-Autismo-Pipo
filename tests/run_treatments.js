@@ -28,6 +28,17 @@ const path = require('path');
   }
 
   console.log('missing-treatment notice counts all 6 patients?', (await page.textContent('#trMissing')).includes('6 pacientes'));
+  // Só pacientes ATIVOS sem tratamento entram no aviso.
+  const setInativo = (on) => page.evaluate(async (v) => {
+    const db = await window.claude.use('db');
+    const cur = JSON.parse(JSON.stringify(window.__STORE__['patients/all']));
+    if (v) cur.list[0].inativo = true; else delete cur.list[0].inativo;
+    await db.doc('patients/all').set(cur);
+  }, on);
+  await setInativo(true); await page.waitForTimeout(300);
+  const missTxt = await page.textContent('#trMissing');
+  console.log('an inactive patient is not counted as "sem tratamento ativo"?', missTxt.includes('5 pacientes'), missTxt);
+  await setInativo(false); await page.waitForTimeout(300);
 
   // 1º tratamento: Novo; campos vêm do cadastro antigo; valor final automático.
   await openNew('duda-vermelho');

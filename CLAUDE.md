@@ -2643,3 +2643,5 @@ cinza + motivo no mouse; motivo, prévia, permissão própria; "Bloqueado" antig
   `documents_enforce` (lock → bloqueio_horario), apaga "Bloqueado" antigos do Planner (seg 11:20
   vira marcação vazia). Testada no PGlite. Teste `tests/run_bloqueio.js`; `run_period_lock.js` e
   `run_blocked_roomcolor.js` atualizados.
+
+- 2026-10-08: aviso/filtro "Pacientes sem tratamento ativo" (Tratamentos) só conta pacientes ATIVOS (`isActive(p)` em `renderTreatmentsTab`); a aba Tratamentos redesenha quando o cadastro de pacientes muda (`subscribePatients`). Teste em `run_treatments.js`.
