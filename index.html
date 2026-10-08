@@ -4648,7 +4648,8 @@ function dispDoc(docId){
   return (state.reportDocs && state.reportDocs[docId]) || state.scheduleDocs[docId] || {bookings: {}};
 }
 function dispCompute(weeks){
-  var specs = {}, rows = [];
+  var specs = {}, rows = [], groups = {};
+  supportGroups().forEach(function(g){ groups[g.id] = 1; });
   DAYS.forEach(function(day){
     var perTime = {};
     weeks.forEach(function(w){
@@ -4660,9 +4661,21 @@ function dispCompute(weeks){
       var cells = {}, re = /<td class="slotcell([^"]*)" data-key="([^"]*)"/g, m;
       while ((m = re.exec(html))){
         var key = m[2].replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'"), kp = key.split("|"), time = kp[0];
-        var room = findRoom(kp[1]); if (!room || isGroup(room)) continue;
+        var room = findRoom(kp[1]); if (!room) continue;
         var seat = (room.therapists || []).filter(function(x){ return x.id === kp[2]; })[0];
-        var profId = seat && seat.professionalId; if (!profId) continue;
+        var profId = seat && seat.professionalId;
+        if (isGroup(room)){
+          // Grupo de Suporte: agendamento conta como atendido na coluna do grupo ("grp:<id>" em at,
+          // entra no Total atendido); Reunião/Treinamento do profissional no grupo = 1 bloqueio dele.
+          var bg = effectiveBooking(bookings, key, day.key, time);
+          if (!bg || !bg.patient) continue;
+          var cg = cells[time] = cells[time] || {busy: {}, free: {}, at: {}, blk: 0, nao: 0, lockProf: {}};
+          if (bookingKind(bg)){ if (profId) cg.lockProf[profId] = 1; continue; }
+          groups[room.id] = 1;
+          cg.at["grp:" + room.id] = (cg.at["grp:" + room.id] || 0) + 1;
+          continue;
+        }
+        if (!profId) continue;
         var c = cells[time] = cells[time] || {busy: {}, free: {}, at: {}, blk: 0, nao: 0, lockProf: {}};
         var b = effectiveBooking(bookings, key, day.key, time), spec = professionalSpecialtyId(profId) || "";
         specs[spec] = 1;
@@ -4706,7 +4719,8 @@ function dispCompute(weeks){
     if (!a) return 1; if (!b) return -1;
     return String(specialtyName(a)).localeCompare(String(specialtyName(b)), "pt-BR");
   });
-  return {specs: specList, rows: rows};
+  var groupList = plannerRooms().filter(function(g){ return isGroup(g) && groups[g.id]; }).map(function(g){ return g.id; });
+  return {specs: specList, groups: groupList, rows: rows};
 }
 function dispSum(o){ return Object.keys(o).reduce(function(a, k){ return a + o[k]; }, 0); }
 function renderDispTab(){
@@ -4733,7 +4747,7 @@ function renderDispTab(){
   }
   // Colunas: Dia e Horário fixos à esquerda; as outras podem trocar de ordem (arrastar o título)
   // e de largura (arrastar a borda; duplo clique volta ao padrão). Fica salvo neste navegador.
-  var cols = dispColumns(r.specs, cell);
+  var cols = dispColumns(r.specs, r.groups);
   var cfg = dispWidthCfg(cols);
   function rowCells(d, kind, label1, label2){
     var at = dispSum(d.at), fr = dispSum(d.free), isTime = kind === "time", hk = kind === "time" || kind === "sub", sb = kind === "sub";
@@ -4742,6 +4756,10 @@ function renderDispTab(){
       if (c.spec != null){
         var col = vgSpecColor(c.spec);
         return cell(d, c.spec).replace('<td class="', '<td style="background:color-mix(in srgb,' + col + ' ' + (isTime ? 14 : 26) + '%,var(--surface))" class="');
+      }
+      if (c.grp != null){
+        var gv = d.at["grp:" + c.grp] || 0, gr = findRoom(c.grp), gc = swatchVar(gr ? gr.color : "slate");
+        return '<td class="disp-n' + (gv ? '' : ' zero') + '" style="background:color-mix(in srgb,' + gc + ' ' + (isTime ? 14 : 26) + '%,var(--surface))"><span class="disp-at">' + gv + '</span></td>';
       }
       if (c.k === "tot-at") return '<td class="disp-tot"' + (hk ? heat("at", at, sb) : '') + '>' + at + '</td>';
       if (c.k === "tot-blk") return '<td class="disp-tot">' + d.blk + '</td>';
@@ -4764,9 +4782,9 @@ function renderDispTab(){
   host.innerHTML = '<div class="disp-wrap"><table class="disp-table" style="width:' + cfg.total() + 'px">' +
     '<colgroup>' + cols.map(function(c){ return '<col data-col="' + esc(c.k) + '" style="width:' + cfg.width(c.k) + 'px">'; }).join("") + '</colgroup>' +
     '<thead><tr>' + cols.map(function(c){
-      var st = c.spec != null ? ' style="background:' + vgSpecColor(c.spec) + '"' : '';
+      var st = c.spec != null ? ' style="background:' + vgSpecColor(c.spec) + '"' : c.grp != null ? ' style="background:' + swatchVar((findRoom(c.grp) || {}).color || "slate") + '"' : '';
       var tog = c.k === "day" ? '<button type="button" class="disp-collapse" id="dispCollapse" aria-expanded="' + (DISP.collapsed ? 'false' : 'true') + '" title="' + (DISP.collapsed ? 'Mostrar todos os horários' : 'Recolher: mostrar só os resumos de Manhã e Tarde') + '">' + (DISP.collapsed ? '▸' : '▾') + '</button>' : '';
-      return '<th class="' + c.cls + (c.spec != null ? ' disp-spec-solid' : '') + '"' + st + (c.fixed ? '' : ' draggable="true" data-disp-col="' + esc(c.k) + '"') + ' title="' + esc(c.title || c.label) + (c.fixed ? '' : ' — arraste para mudar a ordem') + '">' +
+      return '<th class="' + c.cls + (c.spec != null || c.grp != null ? ' disp-spec-solid' : '') + '"' + st + (c.fixed ? '' : ' draggable="true" data-disp-col="' + esc(c.k) + '"') + ' title="' + esc(c.title || c.label) + (c.fixed ? '' : ' — arraste para mudar a ordem') + '">' +
         tog + esc(c.label) + (c.sub ? '<span>' + esc(c.sub) + '</span>' : '') +
         '<span class="pat-col-resizer" data-col="' + esc(c.k) + '" title="Arrastar para ajustar a largura (duplo clique volta ao padrão)" aria-hidden="true"></span></th>';
     }).join("") + '</tr></thead><tbody>' + body +
@@ -4782,9 +4800,10 @@ function renderDispTab(){
   });
 }
 var DISP_ORDER_KEY = "agendaPipo:dispColOrder";
-function dispColumns(specs){
+function dispColumns(specs, groups){
   var all = [{k: "day", label: "Dia", cls: "disp-day", fixed: true, w: 120}, {k: "time", label: "Horário", cls: "disp-time", fixed: true, w: 100}];
   var rest = specs.map(function(sp){ var n = sp ? specialtyName(sp) : "Sem especialidade"; return {k: "spec:" + sp, spec: sp, label: n, title: n, sub: "atend. / livres", cls: "disp-spec", w: 120}; })
+    .concat((groups || []).map(function(gid){ var g = findRoom(gid), n = g ? g.name : gid; return {k: "grp:" + gid, grp: gid, label: n, title: n + " (grupo de suporte)", sub: "atendidos", cls: "disp-spec", w: 120}; }))
     .concat([{k: "tot-at", label: "Total atendido", cls: "disp-tot", w: 110}, {k: "tot-blk", label: "Bloqueios / reuniões", cls: "disp-tot", w: 140},
       {k: "tot-fr", label: "Total disponível", cls: "disp-tot", w: 120}, {k: "tot-nao", label: "Não ABA", cls: "disp-tot", w: 90}]);
   var saved = []; try { saved = JSON.parse(localStorage.getItem(DISP_ORDER_KEY) || "[]") || []; } catch(e){}
@@ -17224,7 +17243,7 @@ var HELP_TOPICS = [
       "Em cada especialidade: <b>atendidos / livres</b>. Depois: Total atendido, Bloqueios/reuniões/treinamentos, Total disponível e agendamentos de pacientes \"não ABA\"."
     ],
     rules: [
-      "Conta só as colunas das salas (os Grupos de Suporte ficam de fora) que têm profissional.",
+      "Conta as colunas das salas que têm profissional. Cada Grupo de Suporte tem a própria coluna (na cor do grupo) com os agendamentos dele naquele horário; eles entram no <b>Total atendido</b>. Profissional com agendamento num grupo fica ocupado nas salas nesse horário (as colunas vazias dele não contam como vaga).",
       "Especialidade = a especialidade principal do profissional da coluna.",
       "Vaga livre = coluna vazia dentro do horário de trabalho do profissional e sem trava de regra (\"não ABA\", profissional em Reunião/Treinamento ou em outra sala). Profissional com colunas em mais de uma sala conta só uma sala: a sala onde já está atendendo ou, se está livre, a sala com mais colunas vazias (ex.: 2 colunas em Fono e 2 em Fono ABA = 2 vagas).",
       "Bloqueios / reuniões: Bloqueado, Reunião Clínica e Treinamento contam uma vez por profissional em cada horário, mesmo marcados em várias colunas.",

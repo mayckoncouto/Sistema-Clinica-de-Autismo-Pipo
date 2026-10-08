@@ -69,6 +69,15 @@ const path = require('path');
   check('Reunião + Treinamento of Ana in 2 columns: Bloqueios +1 (once) and Ana has no free slot?', d3.blk === d2.blk + 1 && (d3.free[specA] || 0) === 0, JSON.stringify({d2, d3}));
   await setBk('seg-1', `${T}|rz|rz-1`, null); await setBk('seg-1', `${T}|rz|rz-2`, null);
 
+  // Grupo de Suporte: coluna própria, conta como atendido (entra no Total atendido).
+  const gid = await ev('(supportGroups()[0] || {}).id');
+  const gseat = await ev('(supportGroups()[0].therapists[0] || {}).id');
+  await setBk('seg-1', `${T}|${gid}|${gseat}`, {patient: 'Sala Teste', note: ''});
+  const rg = await ev('dispCompute([1])');
+  const dg = row(rg, 'seg', T);
+  check('group booking counted as attended in the group column?', rg.groups.indexOf(gid) !== -1 && dg.at['grp:' + gid] === 1, JSON.stringify({groups: rg.groups, dg}));
+  await setBk('seg-1', `${T}|${gid}|${gseat}`, null);
+
   // Todas = soma das 4 semanas.
   const tot = await ev(`(function(){ function s(o){ return Object.keys(o).reduce(function(a, k){ return a + o[k]; }, 0); }
     function T(ws){ var r = dispCompute(ws), at = 0, fr = 0; r.rows.forEach(function(x){ if (x.sub){ at += s(x.d.at); fr += s(x.d.free); } }); return [at, fr]; }

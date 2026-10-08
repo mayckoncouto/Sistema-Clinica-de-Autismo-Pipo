@@ -2710,3 +2710,7 @@ modo TV, semana e impressão (podem vir depois).
   `agendaPipo:dispCollapsed`) recolhe a tabela para só os resumos Manhã/Tarde; resumos com aquecimento
   próprio (`hsub`, compara só os resumos de todos os dias). Títulos no formato do Resumo (maiúsculas,
   especialidade com a cor cheia e texto branco `.disp-spec-solid`, quebram linha).
+- 2026-10-08 (pedido do usuário) Disponibilidade: cada Grupo de Suporte ativo tem uma coluna própria
+  ("atendidos", cor do grupo, depois das especialidades; chave `grp:<id>` em `d.at`, então entra no
+  Total atendido e no aquecimento). Reunião/Treinamento no grupo = 1 bloqueio do profissional.
+  `dispCompute` devolve `groups`; colunas em `dispColumns(specs, groups)` (ordem/largura como as outras).
