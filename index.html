@@ -255,6 +255,29 @@ div.ag-obj-head{cursor:default}
 .pl-lv-dot{flex:none;width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.15);display:inline-block;vertical-align:middle}
 .pl-lv-chip{display:inline-flex;align-items:center;gap:4px;margin:1px 8px 1px 0;font-size:12px;white-space:nowrap}
 .pl-rm-cell{text-align:center}
+/* Disponibilidade do Planner */
+#tab-disponibilidade{display:flex;flex-direction:column;min-height:0}
+#tab-disponibilidade[hidden]{display:none}
+.disp-host{flex:1;min-height:0;display:flex;flex-direction:column}
+.disp-wrap{flex:1;min-height:200px;overflow:auto;border-top:1px solid var(--line)}
+.disp-table{border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:100%}
+.disp-table th,.disp-table td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:5px 8px;white-space:nowrap}
+.disp-table thead th{position:sticky;top:0;z-index:2;background:var(--surface-2);font-size:11px;font-weight:800;text-align:center;color:var(--ink-2)}
+.disp-table th.disp-spec span{display:block;font-size:10px;font-weight:600;color:var(--muted)}
+.disp-table .disp-day{position:sticky;left:0;z-index:1;background:var(--surface);font-weight:700;min-width:110px;text-align:left}
+.disp-table thead .disp-day{z-index:3;background:var(--surface-2)}
+.disp-table .disp-time{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;text-align:left}
+.disp-table td.disp-n,.disp-table td.disp-tot{text-align:center;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+.disp-table td.disp-n.zero{color:var(--muted)}
+.disp-at{font-weight:700;color:var(--ink)}.disp-sep{margin:0 3px;color:var(--muted)}
+.disp-fr{font-weight:700;color:#1f7a45}.disp-fr.none{color:var(--muted);font-weight:400}
+.disp-table td.disp-tot{background:color-mix(in srgb,var(--surface-2) 60%,var(--surface));font-weight:700}
+.disp-table td.disp-free{color:#1f7a45}.disp-table td.disp-free.none{color:var(--muted)}
+.disp-table td.disp-nao{color:#b3261e}
+.disp-table tr.disp-first td{border-top:2px solid var(--line-strong)}
+.disp-table tr.disp-sub td{background:var(--accent-weak);font-weight:800}
+.disp-table tr.disp-sub td.disp-day{background:var(--accent-weak)}
+.disp-table tr.disp-total td{background:var(--surface-2);font-weight:800;border-top:2px solid var(--line-strong)}
 /* Rotina atual do paciente */
 .rt-wrap{overflow-x:auto}
 .rt-table{border-collapse:collapse;width:100%;table-layout:fixed}
@@ -1718,6 +1741,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="feriados" hidden>Feriados e recessos</button>
       <button data-tab="salas" hidden>Salas</button>
       <button data-tab="resumo" hidden>Resumo</button>
+      <button data-tab="disponibilidade" hidden>Disponibilidade</button>
       <button data-tab="relatorios" hidden>Relatórios</button>
       <button data-tab="colaboradores" hidden>Colaboradores</button>
       <button data-tab="tiposcolab" hidden>Tipos de colaborador</button>
@@ -2148,6 +2172,20 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <span class="pat-count" id="reportCount"></span>
     </div>
     <div id="reportHost"></div>
+  </section>
+
+  <section id="tab-disponibilidade" class="panel" hidden>
+    <div class="pat-toolbar">
+      <div>
+        <b style="font-size:13px">Disponibilidade do Planner</b>
+        <div class="pat-count" style="margin-top:2px">Por dia e horário: atendidos e vagas livres em cada especialidade (só salas, com todas as regras do Planner).</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="seg" id="dispWeekSeg" role="group" aria-label="Semana">
+        <button type="button" data-dw="1">1ª</button><button type="button" data-dw="2">2ª</button><button type="button" data-dw="3">3ª</button><button type="button" data-dw="4">4ª</button><button type="button" data-dw="todas">Todas</button>
+      </div>
+    </div>
+    <div id="dispHost" class="disp-host"></div>
   </section>
 
   <!-- USUÁRIOS TAB (só administradores; conteúdo montado por js/usuarios.js) -->
@@ -3214,7 +3252,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {planner:"Planner", bloqueio_horario:"Bloqueio de horário", agenda:"Agenda", resumo:"Resumo", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – valores"};
+var PERM_MODULE_LABELS = {planner:"Planner", bloqueio_horario:"Bloqueio de horário", agenda:"Agenda", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – valores"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -3311,7 +3349,7 @@ function permToolClasses(){
 function applyPermissionsUI(){
   if (HEALTH.map === null && healthCanSee()) healthLoad();
   if (!window.pipoAuth) return;
-  var tabModule = {planner:"planner", agenda:"agenda", resumo:"resumo", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores"};
+  var tabModule = {planner:"planner", agenda:"agenda", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -3339,7 +3377,7 @@ function applyPermissionsUI(){
   var curSec = document.getElementById("tab-" + state.tab);
   if (activeHidden || !curSec){
     var first = null;
-    ["inicio", "planner", "agenda", "prontuario", "planos", "resumo", "relatorios"].concat(CAD_TABS).some(function(k){
+    ["inicio", "planner", "agenda", "prontuario", "planos", "resumo", "disponibilidade", "relatorios"].concat(CAD_TABS).some(function(k){
       if (k === "inicio" ? !INICIO_ON : !tabCan(k)) return false;
       first = document.querySelector('#mainTabs button[data-tab="' + k + '"]'); return !!first;
     });
@@ -3395,7 +3433,7 @@ function navInitialTab(){
     tab = mobile ? "agenda" : "planner";
     try { history.replaceState(history.state, "", location.pathname + location.search + (mobile ? "#agenda" : "#planner")); } catch(e){}
   }
-  if (mobile && (tab === "planner" || tab === "resumo")){
+  if (mobile && (tab === "planner" || tab === "resumo" || tab === "disponibilidade")){
     tab = INICIO_ON ? "inicio" : "agenda";
     try { history.replaceState(history.state, "", location.pathname + location.search + "#" + tab); } catch(e){}
   }
@@ -3447,6 +3485,7 @@ function boot(){
   buildDaySeg();
   buildWeekSeg();
   wireTabs();
+  wireDispTab();
   wireBrandHome();
   navInitialTab();
   wireControls();
@@ -4503,9 +4542,123 @@ function makeRenderBatcher(flushFn){
 // snapshots (and again on every live edit anyone makes anywhere) even while
 // the user was looking at a completely different tab.
 var scheduleRelatorioRender = makeRenderBatcher(function(){
+  if (state.tab === "disponibilidade") renderDispTab();
   if (state.tab !== "resumo") return; // wireTabs() re-renders on switching back
   renderRelatorioTab();
 });
+
+/* ---------------- Disponibilidade do Planner (Planner ▾ → Disponibilidade) ----------------
+ * Por dia × horário: atendidos e vagas livres por especialidade (do profissional da coluna),
+ * total atendido, bloqueios/reuniões/treinamentos, total disponível e "não ABA". Só colunas de
+ * SALA com profissional. As vagas usam as MESMAS regras da grade: cada tabela é montada com
+ * buildScheduleTable (sem ir para a tela) e lida pelas classes das células (slot-off = não
+ * livre). Profissional com colunas em várias salas: se atende numa sala, só as colunas livres
+ * dela contam; senão, a sala com mais colunas livres (não soma duas salas).
+ */
+var DISP = {week: "1"};
+function dispDoc(docId){
+  return (state.reportDocs && state.reportDocs[docId]) || state.scheduleDocs[docId] || {bookings: {}};
+}
+function dispCompute(weeks){
+  var specs = {}, rows = [];
+  DAYS.forEach(function(day){
+    var perTime = {};
+    weeks.forEach(function(w){
+      // A grade lê state.scheduleDocs: dia que o Planner ainda não carregou entra só durante a conta.
+      var docId = docIdFor(day.key, w), had = !!state.scheduleDocs[docId];
+      if (!had) state.scheduleDocs[docId] = dispDoc(docId);
+      var bookings = state.scheduleDocs[docId].bookings || {}, html;
+      try { html = buildScheduleTable(day, w, docId, plannerRooms(), "").html; } finally { if (!had) delete state.scheduleDocs[docId]; }
+      var cells = {}, re = /<td class="slotcell([^"]*)" data-key="([^"]*)"/g, m;
+      while ((m = re.exec(html))){
+        var key = m[2].replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'"), kp = key.split("|"), time = kp[0];
+        var room = findRoom(kp[1]); if (!room || isGroup(room)) continue;
+        var seat = (room.therapists || []).filter(function(x){ return x.id === kp[2]; })[0];
+        var profId = seat && seat.professionalId; if (!profId) continue;
+        var c = cells[time] = cells[time] || {busy: {}, free: {}, at: {}, blk: 0, nao: 0, lockProf: {}};
+        var b = effectiveBooking(bookings, key, day.key, time), spec = professionalSpecialtyId(profId) || "";
+        specs[spec] = 1;
+        if (b && b.patient){
+          if (bookingKind(b)){ c.blk++; continue; }
+          c.at[spec] = (c.at[spec] || 0) + 1;
+          if (isNaoABABooking(b, profId)) c.nao++;
+          c.busy[profId] = room.id;
+        } else if (/ pl-lock/.test(m[1])){
+          c.lockProf[profId] = 1;   // horário bloqueado: conta uma vez por profissional
+        } else if (m[1].indexOf("slot-off") === -1){
+          var fr = c.free[profId] = c.free[profId] || {};
+          fr[room.id] = (fr[room.id] || 0) + 1;
+        }
+      }
+      Object.keys(cells).forEach(function(time){
+        var c = cells[time], acc = perTime[time] = perTime[time] || {at: {}, free: {}, blk: 0, nao: 0};
+        Object.keys(c.at).forEach(function(s){ acc.at[s] = (acc.at[s] || 0) + c.at[s]; });
+        Object.keys(c.free).forEach(function(pid){
+          var byRoom = c.free[pid], n = c.busy[pid] ? (byRoom[c.busy[pid]] || 0) : Object.keys(byRoom).reduce(function(mx, r){ return Math.max(mx, byRoom[r]); }, 0);
+          var s = professionalSpecialtyId(pid) || "";
+          acc.free[s] = (acc.free[s] || 0) + n;
+        });
+        acc.blk += c.blk + Object.keys(c.lockProf).length; acc.nao += c.nao;
+      });
+    });
+    [["m", "Manhã", day.morning], ["t", "Tarde", day.afternoon]].forEach(function(per){
+      if (!per[2].length) return;
+      var sub = {at: {}, free: {}, blk: 0, nao: 0};
+      per[2].forEach(function(time){
+        var a = perTime[time] || {at: {}, free: {}, blk: 0, nao: 0};
+        rows.push({day: day, time: time, d: a});
+        Object.keys(a.at).forEach(function(s){ sub.at[s] = (sub.at[s] || 0) + a.at[s]; });
+        Object.keys(a.free).forEach(function(s){ sub.free[s] = (sub.free[s] || 0) + a.free[s]; });
+        sub.blk += a.blk; sub.nao += a.nao;
+      });
+      rows.push({day: day, sub: per[1], d: sub});
+    });
+  });
+  var specList = Object.keys(specs).sort(function(a, b){
+    if (!a) return 1; if (!b) return -1;
+    return String(specialtyName(a)).localeCompare(String(specialtyName(b)), "pt-BR");
+  });
+  return {specs: specList, rows: rows};
+}
+function dispSum(o){ return Object.keys(o).reduce(function(a, k){ return a + o[k]; }, 0); }
+function renderDispTab(){
+  var host = document.getElementById("dispHost"); if (!host) return;
+  Array.prototype.forEach.call(document.querySelectorAll("#dispWeekSeg [data-dw]"), function(b){ b.classList.toggle("active", b.getAttribute("data-dw") === DISP.week); });
+  var weeks = DISP.week === "todas" ? WEEKS.slice() : [Number(DISP.week)];
+  var r = dispCompute(weeks);
+  if (!r.specs.length){ host.innerHTML = '<div class="empty-state"><b>Nada para mostrar</b>Cadastre as salas com os profissionais de cada coluna.</div>'; return; }
+  var tot = {at: {}, free: {}, blk: 0, nao: 0};
+  function cell(d, s){
+    var a = d.at[s] || 0, l = d.free[s] || 0;
+    return '<td class="disp-n' + (a || l ? '' : ' zero') + '"><span class="disp-at">' + a + '</span><span class="disp-sep">/</span><span class="disp-fr' + (l ? '' : ' none') + '">' + l + '</span></td>';
+  }
+  function nums(d){
+    var at = dispSum(d.at), fr = dispSum(d.free);
+    return r.specs.map(function(s){ return cell(d, s); }).join("") +
+      '<td class="disp-tot">' + at + '</td><td class="disp-tot">' + d.blk + '</td><td class="disp-tot disp-free' + (fr ? '' : ' none') + '">' + fr + '</td><td class="disp-tot' + (d.nao ? ' disp-nao' : '') + '">' + d.nao + '</td>';
+  }
+  var lastDay = null, body = r.rows.map(function(x){
+    var first = x.day.key !== lastDay; lastDay = x.day.key;
+    if (x.sub){
+      Object.keys(x.d.at).forEach(function(s){ tot.at[s] = (tot.at[s] || 0) + x.d.at[s]; });
+      Object.keys(x.d.free).forEach(function(s){ tot.free[s] = (tot.free[s] || 0) + x.d.free[s]; });
+      tot.blk += x.d.blk; tot.nao += x.d.nao;
+      return '<tr class="disp-sub"><td class="disp-day"></td><td class="disp-time">' + esc(x.sub) + '</td>' + nums(x.d) + '</tr>';
+    }
+    return '<tr' + (first ? ' class="disp-first"' : '') + '><td class="disp-day">' + (first ? esc(x.day.full) : '') + '</td><td class="disp-time">' + esc(x.time) + '</td>' + nums(x.d) + '</tr>';
+  }).join("");
+  host.innerHTML = '<div class="disp-wrap"><table class="disp-table"><thead><tr><th class="disp-day">Dia</th><th class="disp-time">Horário</th>' +
+    r.specs.map(function(s){ return '<th class="disp-spec" title="' + esc(s ? specialtyName(s) : "Sem especialidade") + '">' + esc(s ? specialtyName(s) : "Sem especialidade") + '<span>atend. / livres</span></th>'; }).join("") +
+    '<th class="disp-tot">Total atendido</th><th class="disp-tot">Bloqueios / reuniões</th><th class="disp-tot">Total disponível</th><th class="disp-tot">Não ABA</th></tr></thead><tbody>' + body +
+    '<tr class="disp-total"><td class="disp-day">Total</td><td class="disp-time">' + (DISP.week === "todas" ? "4 semanas" : DISP.week + "ª semana") + '</td>' + nums(tot) + '</tr></tbody></table></div>';
+}
+function wireDispTab(){
+  var seg = document.getElementById("dispWeekSeg");
+  if (seg) seg.addEventListener("click", function(e){
+    var b = e.target.closest("[data-dw]"); if (!b) return;
+    DISP.week = b.getAttribute("data-dw"); renderDispTab();
+  });
+}
 
 /* ---------------- tabs & controls ---------------- */
 function wireTabs(){
@@ -4539,6 +4692,7 @@ function wireTabs(){
     try {
       if (state.tab === "planner") queueGridUpdate();
       else if (state.tab === "resumo") renderRelatorioTab();
+      else if (state.tab === "disponibilidade") renderDispTab();
       else if (state.tab === "agenda") agdOnShow();
       else if (state.tab === "prontuario") prOnShow();
       else if (state.tab === "planos") planOnShow();
@@ -16693,6 +16847,20 @@ var HELP_TOPICS = [
       "Passe o mouse na célula cinza para ver o motivo."
     ],
     who: "Permissão <b>Bloqueio de horário</b>: incluir = bloquear, excluir = liberar."},
+  {id: "disponibilidade", group: "Planner", title: "Disponibilidade do Planner", mod: "disponibilidade", tab: "disponibilidade",
+    purpose: "Ver, em cada dia e horário do Planner, quantos atendimentos há e quantas vagas livres sobram em cada especialidade.",
+    steps: [
+      "Abra <b>Planner ▾ → Disponibilidade</b> e escolha a semana (1ª a 4ª) ou <b>Todas</b> (soma das 4 semanas).",
+      "Cada linha é um dia e horário; depois da manhã e da tarde aparece o subtotal do período, e no fim o total.",
+      "Em cada especialidade: <b>atendidos / livres</b>. Depois: Total atendido, Bloqueios/reuniões/treinamentos, Total disponível e agendamentos de pacientes \"não ABA\"."
+    ],
+    rules: [
+      "Conta só as colunas das salas (os Grupos de Suporte ficam de fora) que têm profissional.",
+      "Especialidade = a especialidade principal do profissional da coluna.",
+      "Vaga livre = coluna vazia dentro do horário do profissional, sem horário bloqueado e sem bloqueio por regra (\"não ABA\", profissional em outro lugar). Horário bloqueado conta em Bloqueios (uma vez por profissional). Em sala ABA cada coluna livre do profissional conta; profissional com colunas em mais de uma sala conta só uma sala.",
+      "Atualiza sozinha quando alguém mexe no Planner."
+    ],
+    who: "Permissão <b>Disponibilidade</b> (ver)."},
   {id: "resumo", group: "Planner", title: "Resumo do Planner", mod: "resumo", tab: "resumo",
     purpose: "Total de sessões por paciente, profissional e especialidade, somando as 4 semanas do Planner.",
     steps: ["Planner ▾ → <b>Resumo</b>. Busque o paciente; os cabeçalhos ficam fixos ao rolar."],
@@ -16871,7 +17039,7 @@ var HELP_TOPICS = [
 // quando esta lista tiver itens ({date, topic, text}, a mais nova primeiro).
 var HELP_NEWS = [];
 var HELP = {topic: "inicio", search: ""};
-var HELP_TAB_TOPIC = {inicio: "inicio", planner: "planner", resumo: "resumo", agenda: "agenda", prontuario: "prontuario", relatorios: "relatorios",
+var HELP_TAB_TOPIC = {inicio: "inicio", planner: "planner", resumo: "resumo", disponibilidade: "disponibilidade", agenda: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "colaboradores", convenios: "convenios", servicos: "servicos",
   especialidades: "especialidades", motivos: "motivos", medicos: "medicos", escolas: "escolas", cbo: "cbo", conselhos: "conselhos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
   planos: "plano-terapeutico", objetivos: "objetivos", escalas: "escalas", habilidades: "habilidades"};
@@ -17595,9 +17763,10 @@ var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can(
 var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "colaboradores", "tiposcolab", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "planner", ok: function(){ return can("planner", "view"); }},
-  {key: "resumo", label: "Resumo", tab: "resumo", ok: function(){ return can("resumo", "view"); }}
+  {key: "resumo", label: "Resumo", tab: "resumo", ok: function(){ return can("resumo", "view"); }},
+  {key: "disponibilidade", label: "Disponibilidade", tab: "disponibilidade", ok: function(){ return can("disponibilidade", "view"); }}
 ];
-var PL_TABS = ["planner", "resumo"];
+var PL_TABS = ["planner", "resumo", "disponibilidade"];
 // Prontuário ▾: evoluções e Plano terapêutico.
 var PR_ITEMS = [
   {key: "prontuario", label: "Prontuário", tab: "prontuario", ok: function(){ return can("prontuario", "view"); }},
@@ -17693,7 +17862,7 @@ function navSaveHash(){
 // abas, os itens dos menus Cadastros/Planner e os do menu Acesso (que repassa o
 // clique para o botão original de #acessoMenu, em js/pipo-supabase.js).
 // Planner e Resumo não são mostrados no celular (nem no menu ☰, nem como tela inicial).
-var MOBILE_HIDDEN_TABS = ["planner", "resumo"];
+var MOBILE_HIDDEN_TABS = ["planner", "resumo", "disponibilidade"];
 var MOBILE_MQ = window.matchMedia ? window.matchMedia("(max-width:760px)") : null;
 function isMobileView(){ return !!(MOBILE_MQ && MOBILE_MQ.matches); }
 // Primeira tela permitida que aparece no celular (ordem do topo).

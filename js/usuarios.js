@@ -19,6 +19,7 @@
     { key: "planner", label: "Planner", hint: "grade de 4 semanas" },
     { key: "bloqueio_horario", label: "Bloqueio de horário", hint: "Planner: bloquear (incluir) e liberar (excluir) horários — botões da grade e Outras opções" },
     { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
+    { key: "disponibilidade", label: "Disponibilidade", hint: "relatório de atendidos e vagas livres do Planner por dia, horário e especialidade", actions: ["view"] },
     { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)" },
     { key: "plano_terapeutico", label: "Plano Terapêutico", hint: "ver: consultar; incluir: criar e revisar; editar: tudo. Profissional sem editar muda só situação/status nas especialidades dele" },
     { key: "objetivos", label: "Objetivos", hint: "objetivos prontos para usar no plano terapêutico" },
