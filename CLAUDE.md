@@ -2645,3 +2645,4 @@ cinza + motivo no mouse; motivo, prévia, permissão própria; "Bloqueado" antig
   `run_blocked_roomcolor.js` atualizados.
 
 - 2026-10-08: aviso/filtro "Pacientes sem tratamento ativo" (Tratamentos) só conta pacientes ATIVOS (`isActive(p)` em `renderTreatmentsTab`); a aba Tratamentos redesenha quando o cadastro de pacientes muda (`subscribePatients`). Teste em `run_treatments.js`.
+- Produção (2026-10-08): `2026-10-08-bloqueio-horario` rodada (0 bloqueados antigos / 2 níveis com a permissão / bloqueio_horario). Paciente "Reunião Clínica" e tratamentos excluídos por SQL fora do repositório (conferência 0/0/0).
