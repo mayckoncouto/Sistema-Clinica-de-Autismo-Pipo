@@ -2727,3 +2727,10 @@ modo TV, semana e impressão (podem vir depois).
 - 2026-10-08 (pedido do usuário) Disponibilidade, ordem fixa das colunas: Fono, TO, Psicomotricidade, Fisioterapia, Psicologia, Psicopedagogia, Musicoterapia, Nutrição (`DISP_SPEC_ORDER`, pelo começo do nome sem acento; outras especialidades depois, na ordem do cadastro), Coordenador, Aplicador ABA (`DISP_GROUP_ORDER`; outros grupos depois) e os totais **Reunião** (antes "Bloqueios / reuniões"), **Disponível**, **Atendido**, **Individual (não ABA)** (`dispOrderIdx`).
 - 2026-10-08 (pedido do usuário) Disponibilidade: o título "Dia" virou o botão de recolher `#dispCollapse` com setas na vertical (SVG; estendido = setas para dentro + "Recolher", recolhido = setas para fora + "Estender").
 - 2026-10-08 (pedido do usuário) Disponibilidade: Coordenador e Aplicador ABA (grupos) também em **atend. / livres**. Coluna vazia do grupo sem trava = vaga livre do profissional nesse grupo; o grupo entra na escolha de UM lugar por profissional (onde atende; senão sala/grupo com mais colunas vazias) e a vaga vai para `free["grp:<id>"]` (grupo) ou para a especialidade (sala). Agendamento no grupo marca o profissional como ocupado ali. Botão Recolher/Estender com o símbolo DEPOIS do texto. Ajuda da Disponibilidade reescrita.
+- 2026-10-08 Bloquear horário: com alvo **Profissional**, campo **Sala** (`#plbRoom`, "Todas as salas"
+  + salas/grupos onde ele tem coluna; `fillRooms`). Bloqueio guarda `roomId` opcional no alvo prof
+  (`plbHits` confere a sala; `plbSeats(alvo, id, roomId)`; `plbAlvoText` "Fulano em Sala X").
+  Liberar com "Todas as salas" tira também os dele de uma sala só; com sala escolhida, só os daquela
+  sala (`plbSame(b, alvo, id, roomId)`). Correção: `config/planner_blocks` faltava em
+  `documents_path_valid` (erro "violates check constraint") — migração
+  `supabase/2026-10-08d-bloqueio-caminho-permitido.sql` (testada no PGlite).

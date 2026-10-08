@@ -5495,7 +5495,7 @@ function plannerRowAction(action, docId, dayKey, time){
  *  1) botões da grade (coluna/período/linha e "Bloqueado" na janela): só aquela coluna,
  *     gravado no próprio dia do Planner como {patient:"", lock:true[, motivo]} (entra no
  *     desfazer); liberar pelos botões só tira esses.
- *  2) Outras opções → Bloquear horário: profissional (todas as colunas dele), sala ou clínica
+ *  2) Outras opções → Bloquear horário: profissional (todas as salas dele ou uma sala — roomId), sala ou clínica
  *     toda, por dia × horário × semana (1ª–4ª), sem data de fim, com motivo — em
  *     config/planner_blocks {list:[{id, alvo:"prof"|"sala"|"clinica", profId, roomId,
  *     slots:{"1":{seg:["07:20",…]},…}, motivo, criadoEm, criadoPor}]}. Liberar horário tira
@@ -5532,7 +5532,8 @@ function plbIndex(){
 function plbHits(b, room, t){
   if (b.alvo === "clinica") return true;
   if (b.alvo === "sala") return !!room && b.roomId === room.id;
-  if (b.alvo === "prof") return !!(t && t.professionalId) && b.profId === t.professionalId;
+  // Profissional: todas as salas dele ou só uma sala (roomId).
+  if (b.alvo === "prof") return !!(t && t.professionalId) && b.profId === t.professionalId && (!b.roomId || (!!room && b.roomId === room.id));
   return false;
 }
 function plRuleLock(dayKey, week, time, room, t){
@@ -5549,7 +5550,7 @@ function plLockInfo(b, dayKey, week, time, room, t){
   return r ? {rule: r, motivo: r.motivo || ""} : null;
 }
 function plbAlvoText(b){
-  return b.alvo === "clinica" ? "clínica toda" : b.alvo === "sala" ? "sala " + ((findRoom(b.roomId) || {}).name || "?") : professionalName(b.profId);
+  return b.alvo === "clinica" ? "clínica toda" : b.alvo === "sala" ? "sala " + ((findRoom(b.roomId) || {}).name || "?") : professionalName(b.profId) + (b.roomId ? " em " + ((findRoom(b.roomId) || {}).name || "?") : "");
 }
 function plLockTitle(lk){
   return "Horário bloqueado" + (lk.motivo ? ": " + lk.motivo : "") + (lk.rule ? " (" + plbAlvoText(lk.rule) + " — Outras opções → Liberar horário)" : "");
@@ -5590,11 +5591,11 @@ function plbAllTimes(){
 }
 function plbIsMorning(time){ return DAYS.some(function(d){ return d.morning.indexOf(time) !== -1; }); }
 // Colunas (sala + coluna) que o alvo pega.
-function plbSeats(alvo, id){
+function plbSeats(alvo, id, roomId){
   var out = [];
   plannerRooms().forEach(function(r){
     (r.therapists || []).forEach(function(t){
-      if (alvo === "clinica" || (alvo === "sala" && r.id === id) || (alvo === "prof" && t.professionalId && t.professionalId === id)) out.push({room: r, seat: t});
+      if (alvo === "clinica" || (alvo === "sala" && r.id === id) || (alvo === "prof" && t.professionalId && t.professionalId === id && (!roomId || r.id === roomId))) out.push({room: r, seat: t});
     });
   });
   return out;
@@ -5615,6 +5616,7 @@ function openPlBlockModal(mode){
         '<div class="field-row" style="display:flex;gap:10px;flex-wrap:wrap">' +
           '<div class="field" style="flex:1;min-width:150px"><label for="plbAlvo">Bloqueio de</label><select id="plbAlvo"><option value="prof">Profissional</option><option value="sala">Sala</option><option value="clinica">Clínica toda</option></select></div>' +
           '<div class="field" style="flex:2;min-width:200px" id="plbIdField"><label for="plbId" id="plbIdLabel">Profissional</label><select id="plbId"></select></div>' +
+          '<div class="field" style="flex:2;min-width:180px" id="plbRoomField"><label for="plbRoom">Sala</label><select id="plbRoom"></select></div>' +
         '</div>' +
         '<div class="field"><label>Semanas do Planner</label><div class="plb-weeks">' + WEEKS.map(function(w){ return '<label class="plb-wk"><input type="checkbox" value="' + w + '" checked> ' + w + 'ª</label>'; }).join("") + '</div></div>' +
         '<div class="field"><label>Horários <span class="plb-hint">clique nas células; no dia, em Manhã/Tarde ou no horário marca a coluna/linha inteira</span></label>' +
@@ -5635,7 +5637,16 @@ function openPlBlockModal(mode){
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="plbCancel">Cancelar</button><button class="btn ' + (lock ? 'primary' : 'primary') + '" id="plbSave" disabled>' + (lock ? "Bloquear" : "Liberar") + '</button></div>' +
     '</div></div>';
-  var ov = document.getElementById("ovPlb"), alvoEl = document.getElementById("plbAlvo"), idEl = document.getElementById("plbId");
+  var ov = document.getElementById("ovPlb"), alvoEl = document.getElementById("plbAlvo"), idEl = document.getElementById("plbId"), roomEl = document.getElementById("plbRoom");
+  // Sala do bloqueio de profissional: "Todas as salas" ou uma das salas/grupos onde ele tem coluna.
+  function fillRooms(){
+    var a = alvoEl.value, pid = idEl.value;
+    document.getElementById("plbRoomField").hidden = a !== "prof";
+    var mine = rooms.filter(function(r){ return (r.therapists || []).some(function(t){ return t.professionalId === pid; }); });
+    var cur = roomEl.value;
+    roomEl.innerHTML = '<option value="">Todas as salas</option>' + mine.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + (isGroup(r) ? " (grupo)" : "") + '</option>'; }).join("");
+    if (mine.some(function(r){ return r.id === cur; })) roomEl.value = cur;
+  }
   function close(){ host.innerHTML = ""; }
   document.getElementById("plbClose").addEventListener("click", close);
   document.getElementById("plbCancel").addEventListener("click", close);
@@ -5645,6 +5656,7 @@ function openPlBlockModal(mode){
     document.getElementById("plbIdLabel").textContent = a === "sala" ? "Sala" : "Profissional";
     idEl.innerHTML = a === "sala" ? rooms.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + (isGroup(r) ? " (grupo)" : "") + '</option>'; }).join("")
       : profs.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(profNome(p)) + '</option>'; }).join("");
+    fillRooms();
     refresh();
   }
   function weeks(){ return Array.prototype.map.call(ov.querySelectorAll(".plb-weeks input:checked"), function(c){ return c.value; }); }
@@ -5663,16 +5675,17 @@ function openPlBlockModal(mode){
     var tr = e.target.closest("[data-plb-time]"); if (tr){ var tt = tr.getAttribute("data-plb-time"); toggleGroup(Array.prototype.map.call(ov.querySelectorAll('[data-plb-cell$="|' + tt + '"]'), function(b){ return b.getAttribute("data-plb-cell"); })); return; }
   });
   alvoEl.addEventListener("change", fillIds);
-  idEl.addEventListener("change", refresh);
+  idEl.addEventListener("change", function(){ fillRooms(); refresh(); });
+  roomEl.addEventListener("change", refresh);
   Array.prototype.forEach.call(ov.querySelectorAll(".plb-weeks input"), function(cb){ cb.addEventListener("change", refresh); });
   // Prévia: quantos horários, atendimentos mantidos e (liberar) o que continua bloqueado por outro alvo.
   var plan = null;
   function refresh(){
-    var a = alvoEl.value, id = a === "clinica" ? "" : idEl.value, ws = weeks(), cs = cells(), out = document.getElementById("plbPrev"), save = document.getElementById("plbSave");
+    var a = alvoEl.value, id = a === "clinica" ? "" : idEl.value, rid = a === "prof" ? roomEl.value : "", ws = weeks(), cs = cells(), out = document.getElementById("plbPrev"), save = document.getElementById("plbSave");
     plan = null;
     if (a !== "clinica" && !id){ out.innerHTML = '<span class="pat-count">Escolha ' + (a === "sala" ? "a sala" : "o profissional") + '.</span>'; save.disabled = true; return; }
     if (!ws.length || !cs.length){ out.innerHTML = '<span class="pat-count">Escolha pelo menos uma semana e um horário.</span>'; save.disabled = true; return; }
-    var seats = plbSeats(a, id), kept = [], seatChanges = {}, nSeat = 0, other = 0, ruleHits = 0;
+    var seats = plbSeats(a, id, rid), kept = [], seatChanges = {}, nSeat = 0, other = 0, ruleHits = 0;
     ws.forEach(function(w){
       cs.forEach(function(k){
         var p = k.split("|"), day = p[0], time = p[1], docId = docIdFor(day, w), bk = (state.scheduleDocs[docId] && state.scheduleDocs[docId].bookings) || {};
@@ -5682,19 +5695,19 @@ function openPlBlockModal(mode){
           if (lock){ if (hasPat) kept.push(cur.patient + " — " + (findDayObj(day) || {}).name + " " + w + "ª " + time + " (" + s.room.name + ")"); return; }
           if (cur && (cur.lock && !String(cur.patient || "").trim() || cur.blocked || normText(cur.patient) === "bloqueado")){ (seatChanges[docId] = seatChanges[docId] || {})[key] = clearValueFor(day, time); nSeat++; }
           var rl = plbIndex()[day + "|" + w + "|" + time] || [];
-          if (rl.some(function(b){ return plbHits(b, s.room, s.seat) && !plbSame(b, a, id); })) other++;
-          if (rl.some(function(b){ return plbSame(b, a, id); })) ruleHits++;
+          if (rl.some(function(b){ return plbHits(b, s.room, s.seat) && !plbSame(b, a, id, rid); })) other++;
+          if (rl.some(function(b){ return plbSame(b, a, id, rid) && plbHits(b, s.room, s.seat); })) ruleHits++;
         });
       });
     });
     var n = ws.length * cs.length;
-    plan = {alvo: a, id: id, weeks: ws, cells: cs, seatChanges: seatChanges, nSeat: nSeat};
-    var html = '<b>' + n + '</b> ' + (n === 1 ? "horário" : "horários") + ' (' + cs.length + ' por semana × ' + ws.length + (ws.length === 1 ? " semana" : " semanas") + ') — ' + (a === "clinica" ? "clínica toda" : a === "sala" ? "sala " + esc((findRoom(id) || {}).name || "") : esc(professionalName(id))) + ', ' + seats.length + (seats.length === 1 ? " coluna" : " colunas") + ' no Planner.';
+    plan = {alvo: a, id: id, roomId: rid, weeks: ws, cells: cs, seatChanges: seatChanges, nSeat: nSeat};
+    var html = '<b>' + n + '</b> ' + (n === 1 ? "horário" : "horários") + ' (' + cs.length + ' por semana × ' + ws.length + (ws.length === 1 ? " semana" : " semanas") + ') — ' + (a === "clinica" ? "clínica toda" : a === "sala" ? "sala " + esc((findRoom(id) || {}).name || "") : esc(professionalName(id)) + (rid ? " em " + esc((findRoom(rid) || {}).name || "") : " (todas as salas)")) + ', ' + seats.length + (seats.length === 1 ? " coluna" : " colunas") + ' no Planner.';
     if (lock){
       html += kept.length ? '<div class="plb-kept"><b>' + kept.length + '</b> ' + (kept.length === 1 ? "atendimento já marcado continua" : "atendimentos já marcados continuam") + ' (não são alterados):<br>' + kept.slice(0, 8).map(esc).join("<br>") + (kept.length > 8 ? "<br>…" : "") + '</div>' : '<div>Nenhum atendimento marcado nesses horários.</div>';
     } else {
       html += '<div>Sai: ' + (ruleHits ? "bloqueio de Outras opções" : "nenhum bloqueio de Outras opções deste alvo") + (nSeat ? " e " + nSeat + (nSeat === 1 ? " horário bloqueado pelos botões da grade" : " horários bloqueados pelos botões da grade") : "") + '.</div>' +
-        (other ? '<div class="plb-kept">' + other + (other === 1 ? " horário continua bloqueado" : " horários continuam bloqueados") + ' por outro alvo (' + (a === "prof" ? "sala ou clínica toda" : a === "sala" ? "profissional ou clínica toda" : "") + ').</div>' : '');
+        (other ? '<div class="plb-kept">' + other + (other === 1 ? " horário continua bloqueado" : " horários continuam bloqueados") + ' por outro alvo (' + (a === "prof" ? (rid ? "o profissional em todas as salas, a sala ou a clínica toda" : "sala ou clínica toda") : a === "sala" ? "profissional ou clínica toda" : "") + ').</div>' : '');
       if (!ruleHits && !nSeat){ html += '<div class="plb-kept">Nada para liberar com essa escolha.</div>'; }
     }
     out.innerHTML = html;
@@ -5712,7 +5725,7 @@ function openPlBlockModal(mode){
       Object.keys(slots).forEach(function(w){ Object.keys(slots[w]).forEach(function(d){ slots[w][d].sort(); }); });
       var me = window.pipoAuth && window.pipoAuth.profile && window.pipoAuth.profile();
       var rec = {id: uid("plb"), alvo: p.alvo, slots: slots, motivo: [mot, det].filter(Boolean).join(" — "), criadoEm: new Date().toISOString().slice(0, 10), criadoPor: (me && me.full_name) || ""};
-      if (p.alvo === "prof") rec.profId = p.id;
+      if (p.alvo === "prof"){ rec.profId = p.id; if (p.roomId) rec.roomId = p.roomId; }
       if (p.alvo === "sala") rec.roomId = p.id;
       list.push(rec);
       plbWrite(list).then(function(ok){ if (ok){ close(); showToast("Horários bloqueados."); } else saveBtn.disabled = false; });
@@ -5722,7 +5735,7 @@ function openPlBlockModal(mode){
     var rm = {};
     p.weeks.forEach(function(w){ p.cells.forEach(function(k){ rm[w + "|" + k] = 1; }); });
     list = list.map(function(b){
-      if (!plbSame(b, p.alvo, p.id)) return b;
+      if (!plbSame(b, p.alvo, p.id, p.roomId)) return b;
       var s = b.slots || {}, ns = {};
       Object.keys(s).forEach(function(w){ Object.keys(s[w] || {}).forEach(function(d){
         var left = (s[w][d] || []).filter(function(tm){ return !rm[w + "|" + d + "|" + tm]; });
@@ -5738,9 +5751,12 @@ function openPlBlockModal(mode){
   });
   fillIds();
 }
-function plbSame(b, alvo, id){
+// roomId (só profissional): "" = todas as salas — liberar assim tira também os bloqueios dele
+// feitos para uma sala só; com sala escolhida, tira só os daquela sala.
+function plbSame(b, alvo, id, roomId){
   if (alvo === "clinica") return true;   // liberar a clínica toda tira qualquer bloqueio nesses horários
-  return b.alvo === alvo && (alvo === "sala" ? b.roomId === id : b.profId === id);
+  if (alvo === "prof") return b.alvo === "prof" && b.profId === id && (!roomId || b.roomId === roomId);
+  return b.alvo === alvo && b.roomId === id;
 }
 function plbWrite(list){
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(false); }
@@ -17185,7 +17201,7 @@ var HELP_TOPICS = [
     purpose: "Fechar horários no Planner sem criar agendamento: a célula fica cinza, como fora do horário do profissional.",
     steps: [
       "<b>Botões da grade</b> (cadeado da coluna na manhã/tarde e ao lado de cada horário): bloqueiam ou liberam só aquelas colunas. Clicar numa célula bloqueada assim mostra o motivo e permite liberar.",
-      "<b>Outras opções → Bloquear horário</b>: escolha profissional, sala ou clínica toda, as semanas (1ª a 4ª), os horários na grade (clique no dia, em Manhã/Tarde ou no horário para marcar a coluna/linha) e o motivo. A prévia mostra quantos horários e quais atendimentos já marcados continuam.",
+      "<b>Outras opções → Bloquear horário</b>: escolha profissional (em <b>Todas as salas</b> ou numa sala específica onde ele atende), sala ou clínica toda, as semanas (1ª a 4ª), os horários na grade (clique no dia, em Manhã/Tarde ou no horário para marcar a coluna/linha) e o motivo. A prévia mostra quantos horários e quais atendimentos já marcados continuam.",
       "<b>Outras opções → Liberar horário</b>: mesma tela; tira os bloqueios desse alvo nesses horários e também os feitos pelos botões da grade nas colunas dele."
     ],
     rules: [

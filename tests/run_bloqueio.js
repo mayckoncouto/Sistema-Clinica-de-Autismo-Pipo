@@ -120,6 +120,26 @@ const path = require('path');
     window.pipoAuth = old; permToolClasses(); return [msg, hidden]; })()`);
   console.log('without the permission: grid lock buttons hidden and saving is refused?', /Bloqueio de horário/.test(denied[0]) && denied[1] === true, denied[0]);
 
+  // Bloqueio de profissional numa sala específica: só as colunas dele naquela sala.
+  const roomOnly = await ev(`(function(){
+    var keep = PLB.list; var room = findRoom("r1"), t = room.therapists[0];
+    var other = plannerRooms().filter(function(r){ return r.id !== room.id && (r.therapists || []).some(function(x){ return x.professionalId === t.professionalId; }); })[0];
+    PLB.list = [{id: "x", alvo: "prof", profId: t.professionalId, roomId: room.id, slots: {"1": {qua: ["08:00"]}}}]; PLB.idx = null;
+    var inRoom = !!plRuleLock("qua", 1, "08:00", room, t);
+    var otherT = other ? other.therapists.filter(function(x){ return x.professionalId === t.professionalId; })[0] : null;
+    var elsewhere = other ? !!plRuleLock("qua", 1, "08:00", other, otherT) : null;
+    var txt = plbAlvoText(PLB.list[0]);
+    var sameAll = plbSame(PLB.list[0], "prof", t.professionalId, ""), sameOther = plbSame(PLB.list[0], "prof", t.professionalId, other ? other.id : "zz");
+    PLB.list = keep; PLB.idx = null;
+    return {inRoom: inRoom, elsewhere: elsewhere, txt: txt, sameAll: sameAll, sameOther: sameOther, hasOther: !!other};
+  })()`);
+  console.log('professional block in ONE room locks only that room (others stay free; "todas" release removes it)?', roomOnly.inRoom && roomOnly.elsewhere === false && / em /.test(roomOnly.txt) && roomOnly.sameAll && !roomOnly.sameOther && roomOnly.hasOther, JSON.stringify(roomOnly));
+  const roomField = await ev(`(function(){ openPlBlockModal("lock"); var f = document.getElementById("plbRoomField"), r = document.getElementById("plbRoom");
+    var vis = !f.hidden, opts = Array.prototype.map.call(r.options, function(o){ return o.textContent; });
+    var a = document.getElementById("plbAlvo"); a.value = "sala"; a.dispatchEvent(new Event("change")); var hiddenForRoom = f.hidden;
+    document.getElementById("modalHost").innerHTML = ""; return {vis: vis, opts: opts, hiddenForRoom: hiddenForRoom}; })()`);
+  console.log('Bloquear horário: "Sala" field (Todas as salas + rooms of the professional) only for Profissional?', roomField.vis && roomField.opts[0] === 'Todas as salas' && roomField.opts.length >= 2 && roomField.hiddenForRoom, JSON.stringify(roomField));
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
