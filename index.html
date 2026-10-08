@@ -226,7 +226,6 @@ div.ag-obj-head{cursor:default}
 .pv-sq{width:10px;height:10px;border-radius:3px;flex:none}
 .pv-scroll{overflow-x:auto}
 .pv-mlab{fill:var(--ink-2);font-size:11.5px;font-weight:600;font-family:inherit}
-.pv-msep{stroke:var(--line);stroke-width:1;stroke-dasharray:3 3}
 .pv-plot{position:relative}
 .pv-svg{width:100%;height:auto;display:block;max-width:820px}
 .pv-grid{stroke:var(--line);stroke-width:1}
@@ -16447,7 +16446,7 @@ var HELP_TOPICS = [
     rules: [
       "Ao escolher o último nível da escala, o objetivo fica <b>Atingido</b> sozinho e continua no plano.",
       "A <b>Situação</b> se atualiza sozinha com o nível marcado na evolução mais recente (data do atendimento); a data aparece abaixo dela. Evolução de data anterior à última registrada não muda a Situação.",
-      "<b>Evolução dos objetivos</b>: um gráfico de barras por habilidade e escala, com as semanas do período do plano (da data do plano até hoje). Cada mês tem 4 semanas: S1 = dias 1 a 7, S2 = 8 a 14, S3 = 15 a 21 e S4 = 22 até o fim do mês. A altura da barra é a média dos níveis registrados na semana; semana sem evolução fica vazia. Em <b>Todos os objetivos</b>, cada semana mostra as barras dos objetivos lado a lado, na ordem do Nº, cada um com o seu tom de azul (legenda acima). No seletor ao lado do nome da escala, escolha um objetivo para ver só as barras dele; aí o tom de azul mostra o nível (mais escuro = nível mais alto). Passe o mouse numa semana para ver as datas, a média, quantas evoluções e as especialidades que avaliaram; <b>Ver tabela</b> mostra os mesmos dados em tabela.",
+      "<b>Evolução dos objetivos</b>: um gráfico de barras por habilidade e escala, com uma barra por mês, da data do plano até hoje. A altura da barra é a média dos níveis registrados no mês; mês sem evolução fica vazio. Em <b>Todos os objetivos</b>, cada mês mostra as barras dos objetivos lado a lado, na ordem do Nº, cada um com o seu tom de azul (legenda acima). No seletor ao lado do nome da escala, escolha um objetivo para ver só as barras dele; aí o tom de azul mostra o nível (mais escuro = nível mais alto). Passe o mouse num mês para ver a média, quantas evoluções e as especialidades que avaliaram; <b>Ver tabela</b> mostra os mesmos dados em tabela.",
       "A Situação é única por objetivo: vale a evolução mais recente, de qualquer especialidade marcada nele.",
       "Objetivo cujas especialidades não estão mais no tratamento mostra o aviso \"Fora do tratamento atual\".",
       "Validade de 6 meses a partir da data do plano.",
@@ -18347,7 +18346,7 @@ function openPlanModal(plan, opts){
         (meSpecs.main && !isNew ? '<label class="pl-mine"><input type="checkbox" id="plOnlyMine"> Só as minhas especialidades</label>' : '') + '</div>' +
       '<div id="plSecs"></div>' +
       (canAdd() ? '<div class="pl-add-spec"><select id="plAddArea"><option value="">Incluir habilidade…</option></select></div>' : '') +
-      (isNew ? '' : '<div class="tr-sec">Evolução dos objetivos</div><div class="pl-hint">Níveis registrados nas evoluções do Prontuário: um gráfico de barras por habilidade e escala, por semana (4 semanas por mês; altura = média dos níveis da semana). Escolha um objetivo no seletor para ver só a evolução dele.</div><div id="plCharts" class="pv-host"><div class="pl-hint">Carregando…</div></div>') +
+      (isNew ? '' : '<div class="tr-sec">Evolução dos objetivos</div><div class="pl-hint">Níveis registrados nas evoluções do Prontuário: um gráfico de barras por habilidade e escala, uma barra por mês (altura = média dos níveis do mês). Escolha um objetivo no seletor para ver só a evolução dele.</div><div id="plCharts" class="pv-host"><div class="pl-hint">Carregando…</div></div>') +
       (versions.length ? '<div class="tr-sec">Versões anteriores</div><div class="pl-versions">' + versions.map(function(r){
         return '<button type="button" class="pl-ver" data-ver="' + esc(r.id) + '">Versão ' + r.version + ' · ' + esc(trBr(r.plan_date)) + (r.status === "vigente" ? " (vigente)" : "") + '</button>';
       }).join("") + '</div>' : '') +
@@ -18804,33 +18803,26 @@ var PLAN_VIZ_MAX = 30;
 function planLvColor(idx, n){ return "var(--pvb-" + (n <= 1 ? 5 : Math.round(idx / (n - 1) * 4) + 1) + ")"; }
 // Na visão "Todos", cada objetivo tem um tom fixo (ordem do Nº; a partir do 6º os tons se repetem).
 function planObjColor(i){ return "var(--pvb-" + (5 - (i % 5)) + ")"; }
-/* Semanas do gráfico: cada mês tem 4 semanas pelos dias — S1 = 1 a 7, S2 = 8 a 14,
- * S3 = 15 a 21, S4 = 22 até o fim do mês. Período = da data do plano até hoje (ou até a
+/* Meses do gráfico: uma barra por mês. Período = da data do plano até hoje (ou até a
  * revisão, se já passou), ampliado se houver evolução fora dele. */
 var PV_MESES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
-function planWeekKey(d){ var day = +d.slice(8, 10); return d.slice(0, 7) + "-" + (day <= 7 ? 1 : day <= 14 ? 2 : day <= 21 ? 3 : 4); }
-function planWeekDays(k){
-  var ym = k.slice(0, 7), w = +k.slice(8), last = new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate();
-  var a = (w - 1) * 7 + 1, b = w === 4 ? last : w * 7, pad = function(n){ return (n < 10 ? "0" : "") + n; };
-  return pad(a) + "–" + pad(b) + "/" + ym.slice(5, 7);
-}
-function planWeeks(ch){
+function planMonthLabel(ym){ return PV_MESES[+ym.slice(5, 7) - 1] + "/" + ym.slice(2, 4); }
+function planMonths(ch){
   var all = []; ch.series.forEach(function(s){ s.pts.forEach(function(p){ all.push(p.d); }); }); all.sort();
   var from = ch.start || all[0], to = ch.end || all[all.length - 1];
   if (all.length && all[0] < from) from = all[0];
   if (all.length && all[all.length - 1] > to) to = all[all.length - 1];
-  var out = [], k0 = planWeekKey(from), k1 = planWeekKey(to), y = +from.slice(0, 4), m = +from.slice(5, 7);
+  var out = [], last = to.slice(0, 7), y = +from.slice(0, 4), m = +from.slice(5, 7);
   for (var guard = 0; guard < 240; guard++){
-    var ym = y + "-" + (m < 10 ? "0" : "") + m;
-    for (var w = 1; w <= 4; w++){ var k = ym + "-" + w; if (k >= k0 && k <= k1) out.push(k); }
-    if (ym >= k1.slice(0, 7)) break;
+    var ym = y + "-" + (m < 10 ? "0" : "") + m; out.push(ym);
+    if (ym >= last) break;
     m++; if (m > 12){ m = 1; y++; }
   }
   return out;
 }
-// Média dos níveis das evoluções do objetivo na semana: {avg, n, specs}.
-function planWeekAvg(s, k){
-  var ps = s.pts.filter(function(p){ return planWeekKey(p.d) === k; }); if (!ps.length) return null;
+// Média dos níveis das evoluções do objetivo no mês: {avg, n, specs}.
+function planMonthAvg(s, ym){
+  var ps = s.pts.filter(function(p){ return p.d.slice(0, 7) === ym; }); if (!ps.length) return null;
   var specs = []; ps.forEach(function(p){ if (p.specId && specs.indexOf(p.specId) === -1) specs.push(p.specId); });
   return {avg: ps.reduce(function(t, p){ return t + p.idx; }, 0) / ps.length, n: ps.length, specs: specs};
 }
@@ -18839,26 +18831,25 @@ function planAvgText(L, v){
   return (v.n > 1 ? "média " + num + " (" + L[r].name + ") · " + v.n + " evoluções" : L[r].name + " · 1 evolução") +
     (v.specs.length ? " · " + v.specs.map(specialtySigla).join(", ") : "");
 }
-// Barras por semana: sel vazio = barras lado a lado (um objetivo cada, tom fixo); sel = id do
-// objetivo = uma barra por semana (cor pelo nível). Altura = média dos níveis da semana.
+// Barras por mês: sel vazio = barras lado a lado (um objetivo cada, tom fixo); sel = id do
+// objetivo = uma barra por mês (cor pelo nível). Altura = média dos níveis do mês.
 function planChartSvg(ch, sel){
-  var L = ch.scale.levels, series = ch.series.slice(0, PLAN_VIZ_MAX), weeks = planWeeks(ch);
+  var L = ch.scale.levels, series = ch.series.slice(0, PLAN_VIZ_MAX), months = planMonths(ch);
   var one = sel ? ch.series.filter(function(s){ return s.o.id === sel; })[0] : null, list = one ? [one] : series;
-  var per = list.length, barW = per === 1 ? 26 : Math.max(5, Math.min(14, Math.floor(56 / per)));
-  var groupW = Math.max(one ? 40 : 34, per * barW + (per - 1) * 2 + 12);
-  var padL = 222, padR = 16, padT = 12, rowH = 30, base = padT + L.length * rowH, H = base + 40;
-  var plotW = Math.max(760 - padL - padR, weeks.length * groupW), W = padL + padR + plotW, slot = plotW / Math.max(weeks.length, 1);
+  var per = list.length, barW = per === 1 ? 32 : Math.max(6, Math.min(18, Math.floor(80 / per)));
+  var groupW = Math.max(one ? 56 : 48, per * barW + (per - 1) * 2 + 16);
+  var padL = 222, padR = 16, padT = 12, rowH = 30, base = padT + L.length * rowH, H = base + 30;
+  var plotW = Math.max(760 - padL - padR, months.length * groupW), W = padL + padR + plotW, slot = plotW / Math.max(months.length, 1);
   function y(i){ return padT + (L.length - 1 - i) * rowH + rowH / 2; }
   var g = '<line class="pv-base" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + base + '" y2="' + base + '"/>';
   L.forEach(function(l, i){
     g += '<line class="pv-grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(i) + '" y2="' + y(i) + '"/>' +
       '<text class="pv-ylab" x="' + (padL - 10) + '" y="' + (y(i) + 4) + '" text-anchor="end">' + esc(l.name.length > 33 ? l.name.slice(0, 32) + "…" : l.name) + '<title>' + esc(l.name) + '</title></text>';
   });
-  var monthStart = 0;
-  weeks.forEach(function(k, wi){
-    var x0g = padL + slot * wi, cx = x0g + slot / 2, inner = per * barW + (per - 1) * 2, bx = cx - inner / 2, tips = [];
+  months.forEach(function(ym, mi){
+    var x0g = padL + slot * mi, cx = x0g + slot / 2, inner = per * barW + (per - 1) * 2, bx = cx - inner / 2, tips = [];
     list.forEach(function(s, si){
-      var v = planWeekAvg(s, k); if (!v) return;
+      var v = planMonthAvg(s, ym); if (!v) return;
       var x0 = bx + si * (barW + 2), top = y(v.avg) - 4, r = Math.min(4, barW / 2);
       var fill = one ? planLvColor(Math.round(v.avg), L.length) : planObjColor(s.n - 1);
       g += '<path class="pv-bar" style="fill:' + fill + '" d="M' + x0.toFixed(1) + ',' + base + 'V' + (top + r).toFixed(1) +
@@ -18866,30 +18857,22 @@ function planChartSvg(ch, sel){
         'Q' + (x0 + barW).toFixed(1) + ',' + top.toFixed(1) + ' ' + (x0 + barW).toFixed(1) + ',' + (top + r).toFixed(1) + 'V' + base + 'Z"/>';
       tips.push((one ? "" : "Nº " + s.n + ": ") + planAvgText(L, v));
     });
-    g += '<text class="pv-xlab" x="' + cx.toFixed(1) + '" y="' + (base + 15) + '" text-anchor="middle">S' + k.slice(8) + '</text>';
-    var last = wi === weeks.length - 1 || weeks[wi + 1].slice(0, 7) !== k.slice(0, 7);
-    if (last){
-      var mx0 = padL + slot * monthStart, mx1 = padL + slot * (wi + 1);
-      g += '<text class="pv-mlab" x="' + ((mx0 + mx1) / 2).toFixed(1) + '" y="' + (base + 32) + '" text-anchor="middle">' + PV_MESES[+k.slice(5, 7) - 1] + '/' + k.slice(2, 4) + '</text>';
-      if (wi < weeks.length - 1) g += '<line class="pv-msep" x1="' + mx1.toFixed(1) + '" x2="' + mx1.toFixed(1) + '" y1="' + padT + '" y2="' + (base + 36) + '"/>';
-      monthStart = wi + 1;
-    }
-    var head = "Semana " + k.slice(8) + " (" + planWeekDays(k) + ")";
-    g += '<rect class="pv-hit" x="' + x0g.toFixed(1) + '" y="' + padT + '" width="' + slot.toFixed(1) + '" height="' + (base - padT) + '" data-tip="' + esc(head + (tips.length ? " — " + tips.join(" | ") : " — sem evolução")) + '"/>';
+    g += '<text class="pv-mlab" x="' + cx.toFixed(1) + '" y="' + (base + 18) + '" text-anchor="middle">' + planMonthLabel(ym) + '</text>';
+    g += '<rect class="pv-hit" x="' + x0g.toFixed(1) + '" y="' + padT + '" width="' + slot.toFixed(1) + '" height="' + (base - padT) + '" data-tip="' + esc(planMonthLabel(ym) + (tips.length ? " — " + tips.join(" | ") : " — sem evolução")) + '"/>';
   });
-  return '<svg class="pv-svg" viewBox="0 0 ' + W + ' ' + H + '" style="min-width:' + Math.min(W, 760) + 'px;' + (W > 760 ? 'width:' + W + 'px;max-width:none' : '') + '" role="img" aria-label="' + esc(skillAreaName(ch.areaId) + " — " + ch.scale.name + (one ? " — " + planObjLabel(one.o) : "") + " — média do nível por semana") + '">' + g + '</svg>';
+  return '<svg class="pv-svg" viewBox="0 0 ' + W + ' ' + H + '" style="min-width:' + Math.min(W, 760) + 'px;' + (W > 760 ? 'width:' + W + 'px;max-width:none' : '') + '" role="img" aria-label="' + esc(skillAreaName(ch.areaId) + " — " + ch.scale.name + (one ? " — " + planObjLabel(one.o) : "") + " — média do nível por mês") + '">' + g + '</svg>';
 }
 function planChartBodyHtml(ch, sel){
   var series = ch.series.slice(0, PLAN_VIZ_MAX), one = sel ? ch.series.filter(function(s){ return s.o.id === sel; })[0] : null;
   var short = function(t){ return t.length > 60 ? t.slice(0, 59) + "…" : t; }, L = ch.scale.levels;
-  var legend = one ? '<div class="pv-legend"><span class="pv-key"><b>' + one.n + '.</b> ' + esc(planObjLabel(one.o)) + ' · média do nível por semana</span></div>'
+  var legend = one ? '<div class="pv-legend"><span class="pv-key"><b>' + one.n + '.</b> ' + esc(planObjLabel(one.o)) + ' · média do nível por mês</span></div>'
     : '<div class="pv-legend">' + series.map(function(s){ return '<span class="pv-key"><span class="pv-sq" style="background:' + planObjColor(s.n - 1) + '"></span><b>' + s.n + '.</b> ' + esc(short(planObjLabel(s.o))) + '</span>'; }).join("") + '</div>';
-  var weeks = planWeeks(ch).filter(function(k){ return (one ? [one] : series).some(function(s){ return planWeekAvg(s, k); }); });
+  var months = planMonths(ch).filter(function(ym){ return (one ? [one] : series).some(function(s){ return planMonthAvg(s, ym); }); });
   return legend +
     '<div class="pv-plot"><div class="pv-scroll">' + planChartSvg(ch, sel) + '</div><div class="pv-tip" hidden></div></div>' +
     (!one && ch.series.length > PLAN_VIZ_MAX ? '<div class="pl-hint">Mostrando os ' + PLAN_VIZ_MAX + ' primeiros objetivos (ordem de prioridade).</div>' : '') +
-    '<details class="pv-table"><summary>Ver tabela</summary><div class="pl-tbl-wrap"><table class="pat-table"><thead><tr><th>Objetivo</th>' + weeks.map(function(k){ return '<th>S' + k.slice(8) + ' ' + PV_MESES[+k.slice(5, 7) - 1] + '/' + k.slice(2, 4) + '<br><small>' + esc(planWeekDays(k)) + '</small></th>'; }).join("") + '</tr></thead><tbody>' +
-      (one ? [one] : series).map(function(s){ return '<tr><td><b>' + s.n + '.</b> ' + esc(planObjLabel(s.o)) + '</td>' + weeks.map(function(k){ var v = planWeekAvg(s, k); return '<td>' + (v ? esc(planAvgText(L, v)) : "—") + '</td>'; }).join("") + '</tr>'; }).join("") +
+    '<details class="pv-table"><summary>Ver tabela</summary><div class="pl-tbl-wrap"><table class="pat-table"><thead><tr><th>Objetivo</th>' + months.map(function(ym){ return '<th>' + planMonthLabel(ym) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+      (one ? [one] : series).map(function(s){ return '<tr><td><b>' + s.n + '.</b> ' + esc(planObjLabel(s.o)) + '</td>' + months.map(function(ym){ var v = planMonthAvg(s, ym); return '<td>' + (v ? esc(planAvgText(L, v)) : "—") + '</td>'; }).join("") + '</tr>'; }).join("") +
     '</tbody></table></div></details>';
 }
 function planChartsHtml(charts){

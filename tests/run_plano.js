@@ -286,11 +286,11 @@ const path = require('path');
     opts: Array.prototype.map.call(h.querySelectorAll('select[data-pv-sel] option'), (x) => x.textContent).length,
     fill: (h.querySelector('.pv-bar') || {}).getAttribute && h.querySelector('.pv-bar').style.fill,
     tips: Array.prototype.map.call(h.querySelectorAll('.pv-hit'), (x) => x.getAttribute('data-tip')).join(' | ')}));
-  console.log('bar chart by skill and week (S1 = 1-7, S3 = 15-21; empty weeks have no bar), blue tones, objective selector next to the scale?', fig.figs === 1 && fig.bars === 2 && fig.lines === 0 && fig.cap === 'Comunicação' && fig.opts === 2 && /--pvb-/.test(fig.fill) && /Semana 1 \(01–07\/10\) — Nº 1: média 1 \(/.test(fig.tips) && /2 evoluções/.test(fig.tips) && /Semana 3 \(15–21\/10\).*PS/.test(fig.tips) && /Semana 2 \(08–14\/10\) — sem evolução/.test(fig.tips), JSON.stringify(fig));
+  console.log('bar chart by skill and month (average of the month), blue tones, objective selector next to the scale?', fig.figs === 1 && fig.bars === 1 && fig.lines === 0 && fig.cap === 'Comunicação' && fig.opts === 2 && /--pvb-/.test(fig.fill) && /out\/26 — Nº 1: média 1,3 \(/.test(fig.tips) && /3 evoluções · FN, PS/.test(fig.tips), JSON.stringify(fig));
   await page.$eval('#plCharts select[data-pv-sel]', (e) => { e.value = e.options[1].value; e.dispatchEvent(new Event('change', { bubbles: true })); });
-  const one = await page.$eval('#plCharts', (h) => ({bars: h.querySelectorAll('.pv-bar').length, xl: Array.prototype.map.call(h.querySelectorAll('.pv-xlab'), (x) => x.textContent).join(','),
+  const one = await page.$eval('#plCharts', (h) => ({bars: h.querySelectorAll('.pv-bar').length, mx: Array.prototype.map.call(h.querySelectorAll('.pv-mlab'), (x) => x.textContent).join(','),
     tips: Array.prototype.map.call(h.querySelectorAll('.pv-hit'), (x) => x.getAttribute('data-tip')).join(' | ')}));
-  console.log('choosing an objective shows its weekly bars (S1..S4 per month, average of the week; specialty in the tooltip)?', one.bars === 2 && /^S1,S2,S3/.test(one.xl) && one.xl.split(',').every((x) => /^S[1-4]$/.test(x)) && /FN/.test(one.tips) && /PS/.test(one.tips), JSON.stringify(one));
+  console.log('choosing an objective shows its monthly bars (month labels, specialties in the tooltip)?', one.bars === 1 && /out\/26/.test(one.mx) && /FN/.test(one.tips) && /PS/.test(one.tips), JSON.stringify(one));
   await page.click('#plCancel');
 
   // Agenda: Detalhes do agendamento com "Objetivos do atendimento" e botão Editar.
