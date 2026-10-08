@@ -166,6 +166,30 @@ const path = require('path');
   check('room WITH "ABA" in the name: Agenda blocks the other professional too?', /sala toda/.test(whole.agenda || ''), JSON.stringify(whole));
 
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
+  // Reunião Clínica / Treinamento ocupam a sala toda (como "não ABA"); outra reunião pode junto.
+  const meet = await ev(`(function(){
+    var out = {};
+    state.rooms = state.rooms.concat([{id: "rm", name: "Sala Reuniao", color: "teal", therapists: [{id: "rm-1", name: "Ana", professionalId: "ana-terapeuta"}, {id: "rm-2", name: "Bia", professionalId: "bia-terapeuta"}]}]);
+    var d = state.scheduleDocs["ter-1"] = state.scheduleDocs["ter-1"] || {bookings: {}};
+    d.bookings["13:30|rm|rm-1"] = {patient: "Reunião Clínica", note: ""};
+    out.patient = plannerConflict("ter-1", "13:30|rm|rm-2", {patient: "Duda Vermelho", note: "", service: "sessao"});
+    out.meeting = plannerConflict("ter-1", "13:30|rm|rm-2", {patient: "Reunião Clínica", note: ""});
+    out.training = plannerConflict("ter-1", "13:30|rm|rm-2", {patient: "Treinamento", note: "", training: true});
+    var html = buildScheduleTable(findDayObj("ter"), 1, "ter-1", [findRoom("rm")], "").html;
+    out.cell = /<td class="slotcell[^"]*slot-off[^"]*aba-lock[^"]*aba-soft[^"]*" data-key="13:30\\|rm\\|rm-2"/.test(html);
+    d.bookings["13:30|rm|rm-1"] = {patient: "Duda Vermelho", note: "", service: "sessao"};
+    out.reverse = plannerConflict("ter-1", "13:30|rm|rm-2", {patient: "Reunião Clínica", note: ""});
+    delete d.bookings["13:30|rm|rm-1"];
+    var rows = [{id: "m1", date: "2030-01-07", time: "13:30", professional_id: "ana-terapeuta", room_id: "rm", patient: "Treinamento", training: true}];
+    out.agPatient = agdConflictIn(rows, {date: "2030-01-07", time: "13:30", professional_id: "bia-terapeuta", room_id: "rm", patient: "Duda Vermelho", service: "sessao"});
+    out.agMeeting = agdConflictIn(rows, {date: "2030-01-07", time: "13:30", professional_id: "bia-terapeuta", room_id: "rm", patient: "Reunião Clínica"});
+    return out;
+  })()`);
+  check('Planner: Reunião in a room blocks a patient in the other column (gray, clickable for another meeting)?', /ocupa a sala toda/.test(meet.patient || '') && meet.cell, JSON.stringify(meet));
+  check('Planner: another Reunião/Treinamento can join the same room?', meet.meeting === null && meet.training === null, JSON.stringify(meet));
+  check('Planner: Reunião refused where the room already has a patient?', /ocupa a sala toda/.test(meet.reverse || ''), JSON.stringify(meet));
+  check('Agenda: Treinamento blocks a patient in the room; another meeting allowed?', /ocupa a sala toda/.test(meet.agPatient || '') && meet.agMeeting === null, JSON.stringify(meet));
+
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();
   fs.unlinkSync(evPage);

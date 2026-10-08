@@ -3017,6 +3017,11 @@ function bookingKind(b){
   if (b.training || normText(b.patient) === normText(TRAINING_LABEL)) return "treinamento";
   return "";
 }
+// Reunião Clínica / Treinamento: ocupam a sala toda no horário (como paciente "não ABA");
+// outra Reunião/Treinamento pode ser marcada junto (vários profissionais na mesma reunião).
+function roomMeetingKind(b){ var k = bookingKind(b); return (k === "reuniao" || k === "treinamento") ? k : ""; }
+function roomMeetingLabel(k){ return k === "treinamento" ? TRAINING_LABEL : MEETING_LABEL; }
+function roomMeetingMsg(k, roomName, time){ return roomMeetingLabel(k) + " ocupa a sala toda: " + roomName + " às " + time + ". Só outra Reunião Clínica ou Treinamento pode ser marcada junto."; }
 function slotKindRecord(kind, note){
   var k = SLOT_KINDS.filter(function(x){ return x.key === kind; })[0];
   var rec = {patient: k.label, note: note || ""};
@@ -3856,6 +3861,7 @@ var SYS_MODE_LABEL = {block: "Bloquear", warn: "Avisar", off: "Desligado"};
 var BWO = ["block", "warn", "off"];
 var SYS_RULES = [
   {id: "pl_nao_aba", g: "planner", label: "Paciente que não faz ABA ocupa o horário", desc: "Sessão de paciente que não faz ABA ocupa a sala toda no horário (qualquer sala, inclusive as com ABA no nome).", def: "block", modes: BWO},
+  {id: "pl_reuniao_sala", g: "planner", label: "Reunião Clínica / Treinamento ocupa a sala", desc: "Reunião Clínica ou Treinamento numa coluna ocupa a sala toda no horário: paciente não pode ser marcado nas outras colunas (outra Reunião/Treinamento pode).", def: "block", modes: BWO},
   {id: "pl_prof_dois", g: "planner", label: "Profissional em dois lugares", desc: "O mesmo profissional não pode estar em duas salas ou grupos no mesmo horário.", def: "block", modes: BWO},
   {id: "pl_pac_prof", g: "planner", label: "Paciente duas vezes com o mesmo profissional", desc: "O paciente não pode ter dois atendimentos com o mesmo profissional no mesmo horário.", def: "block", modes: BWO},
   {id: "pl_pac_servico", g: "planner", label: "Paciente com o mesmo serviço em dois lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
@@ -3867,6 +3873,7 @@ var SYS_RULES = [
   {id: "pl_so_cadastrado", g: "planner", label: "Só agenda quem está cadastrado", desc: "O nome precisa ser de um paciente (ou de uma sala, nos grupos) do cadastro.", def: "block", locked: true},
   {id: "pl_grupo_sala", g: "planner", label: "Grupo só recebe sala; sala só recebe paciente", desc: "Célula de grupo de suporte só aceita nome de sala; célula de sala só aceita paciente.", def: "block", locked: true},
   {id: "ag_nao_aba", g: "agenda", label: "Paciente que não faz ABA ocupa o horário", desc: "Mesma regra do Planner, pela data do atendimento.", def: "block", modes: BWO},
+  {id: "ag_reuniao_sala", g: "agenda", label: "Reunião Clínica / Treinamento ocupa a sala", desc: "Mesma regra do Planner, pela data do atendimento.", def: "block", modes: BWO},
   {id: "ag_prof_dois", g: "agenda", label: "Profissional em dois lugares", desc: "O mesmo profissional não pode estar em salas diferentes no mesmo horário.", def: "block", modes: BWO},
   {id: "ag_pac_servico", g: "agenda", label: "Paciente com o mesmo serviço em dois lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
   {id: "ag_fora_trabalho", g: "agenda", label: "Fora do horário de trabalho do profissional", desc: "Horário fora do expediente do profissional fica hachurado e não aceita agendamento.", def: "block", modes: ["block", "off"]},
@@ -4579,7 +4586,7 @@ function dispCompute(weeks){
         var b = effectiveBooking(bookings, key, day.key, time), spec = professionalSpecialtyId(profId) || "";
         specs[spec] = 1;
         if (b && b.patient){
-          if (bookingKind(b)){ c.blk++; continue; }
+          if (bookingKind(b)){ c.lockProf[profId] = 1; continue; }   // Bloqueado/Reunião/Treinamento: 1× por profissional
           c.at[spec] = (c.at[spec] || 0) + 1;
           if (isNaoABABooking(b, profId)) c.nao++;
           c.busy[profId] = room.id;
@@ -5029,6 +5036,8 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
       var abaByProf = {};
       if (!isGroup(r)) r.therapists.forEach(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (t2.professionalId && isNaoABABooking(b2, t2.professionalId) && !abaByProf[t2.professionalId]) abaByProf[t2.professionalId] = b2.patient; });
       // Qualquer "não ABA" bloqueia a sala toda (desde 2026-10-08 também nas salas com "ABA" no nome).
+      var meetAny = "";
+      if (!isGroup(r) && sysOn("pl_reuniao_sala")) r.therapists.some(function(t2){ var b2 = bookings[row.time+"|"+r.id+"|"+t2.id]; meetAny = (b2 && b2.patient) ? roomMeetingKind(b2) : ""; return !!meetAny; });   // só reunião gravada (a automática de segunda não trava)
       var abaAny = null;
       if (!isGroup(r)) r.therapists.some(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2, t2.professionalId)){ abaAny = b2.patient; return true; } return false; });
       r.therapists.forEach(function(t){
@@ -5057,12 +5066,15 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         var busyWarn = busyLock && sysMode("pl_prof_dois") === "warn";
         // Horário bloqueado (botões da grade ou Outras opções → Bloquear horário): igual a fora do horário.
         var lk = plLockInfo(b, dayObj.key, week, row.time, r, t);
+        var meetLock = !(b && b.patient) && !!meetAny;
+        if (meetLock){ abaLock = true; }
         var isOff = !!lk || abaLock || busyLock || (!(b && b.patient) && !seatAvailable(t, dayObj.key, row.time));
         // Só a regra "não ABA" travando: dá para marcar outro serviço (não Sessão) — a
         // célula aceita clique/colar/soltar e a gravação confere o serviço.
         // Regra em "Avisar" (Acesso → Sistema): a célula aceita e a gravação pergunta.
         var abaSoft = !lk && (abaLock || busyWarn) && (!busyLock || busyWarn) && seatAvailable(t, dayObj.key, row.time);
-        var offTitle = lk ? plLockTitle(lk) : abaLock ? abaRoomMsg(abaHolder, r.name, row.time, "") + (abaSoft ? " Outros serviços (que não Sessão) podem ser marcados." : "")
+        if (meetLock && !lk && seatAvailable(t, dayObj.key, row.time) && !busyLock) abaSoft = true;
+        var offTitle = lk ? plLockTitle(lk) : meetLock ? roomMeetingMsg(meetAny, r.name, row.time) : abaLock ? abaRoomMsg(abaHolder, r.name, row.time, "") + (abaSoft ? " Outros serviços (que não Sessão) podem ser marcados." : "")
           : busyLock ? professionalName(t.professionalId) + (busyAt.grp ? " tem agendamento no grupo " : " está atendendo em ") + busyAt.name + " neste horário."
           : "Fora do horário do profissional";
         html += '<td class="slotcell'+(isOff ? ' slot-off'+(lk ? ' pl-lock' : '')+(abaLock ? ' aba-lock'+(abaSoft ? ' aba-soft' : '') : (busyLock ? ' prof-busy'+(abaSoft ? ' aba-soft' : '') : '')) : (state.clipboard?' paste-target':''))+(isMatch?' search-hit':(search && b && b.patient ? ' search-dim' : ''))+'" data-key="'+esc(key)+'" data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-week="'+esc(String(week))+'" data-room="'+esc(r.id)+'" data-ther="'+esc(t.id)+'" data-time="'+row.time+'"'+(isOff?' title="'+esc(offTitle)+'"':'')+'>';
@@ -5844,7 +5856,9 @@ function abaRoomMsg(holder, roomName, time, profName){
 // ignoreKeys: células que vão ficar vazias (origem de um mover); extra: {key: rec}
 // com o que vai ocupar outras células na mesma operação (troca de lugar).
 function plannerConflict(docId, key, rec, ignoreKeys, extra){
-  if (!rec || !rec.patient || bookingKind(rec)) return null;
+  if (!rec || !rec.patient) return null;
+  var recMeet = roomMeetingKind(rec);
+  if (bookingKind(rec) && !recMeet) return null;
   ignoreKeys = ignoreKeys || []; extra = extra || {};
   var p = key.split("|"), time = p[0], room = findRoom(p[1]);
   if (!room) return null;
@@ -5872,6 +5886,15 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       var t = seats[j], k = time + "|" + r.id + "|" + t.id;
       if (k === key || ignoreKeys.indexOf(k) !== -1) continue;
       var b = Object.prototype.hasOwnProperty.call(extra, k) ? extra[k] : effectiveBooking(bookings, k, dayKey, time);
+      // Reunião Clínica / Treinamento ocupam a sala toda (paciente não entra; outra reunião sim).
+      // (a Reunião automática de segunda às 11:20, sem registro gravado, não trava a sala)
+      var bStored = Object.prototype.hasOwnProperty.call(extra, k) || Object.prototype.hasOwnProperty.call(bookings, k);
+      if (b && b.patient && bStored && r.id === room.id && !isGroup(room)){
+        var bMeet = roomMeetingKind(b);
+        if (!recMeet && bMeet && (x = hit("pl_reuniao_sala", roomMeetingMsg(bMeet, room.name, time)))) return x;
+        if (recMeet && !bookingKind(b) && (x = hit("pl_reuniao_sala", roomMeetingLabel(recMeet) + " ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + "."))) return x;
+      }
+      if (recMeet) continue;
       if (!b || !b.patient || bookingKind(b)) continue;
       // "Não ABA" vale para a sala toda (desde 2026-10-08 também nas salas com "ABA" no nome).
       if (r.id === room.id && !isGroup(room)){
@@ -11776,7 +11799,9 @@ function agdGoalsCheck(pairs){
 // Agenda: regras de horário (ver profBusyMsg / patientBusyMsg). rows = outras linhas
 // (do banco e/ou da mesma operação); rec = a linha que vai ser gravada.
 function agdConflictIn(rows, rec){
-  if (!rec || !rec.patient || bookingKind(rec)) return null;
+  if (!rec || !rec.patient) return null;
+  var recMeet = roomMeetingKind(rec);
+  if (bookingKind(rec) && !recMeet) return null;
   var isPatient = !!findPatientByName(rec);
   // Paciente "não ABA" (mesma regra do Planner): ocupa a sala toda (sem exceção).
   var recRoom = rec.room_id ? findRoom(rec.room_id) : null;
@@ -11791,7 +11816,14 @@ function agdConflictIn(rows, rec){
   }
   for (var i=0;i<rows.length;i++){
     var o = rows[i];
-    if (!o || o === rec || !o.patient || bookingKind(o) || o.date !== rec.date || o.time !== rec.time) continue;
+    if (!o || o === rec || !o.patient || o.date !== rec.date || o.time !== rec.time) continue;
+    // Reunião Clínica / Treinamento ocupam a sala toda (paciente não entra; outra reunião sim).
+    if (recRoom && !isGroup(recRoom) && o.room_id === rec.room_id && !agdIsGroupRow(o) && !agdIsGroupRow(rec)){
+      var oMeet = roomMeetingKind(o);
+      if (!recMeet && oMeet && (x = hit("ag_reuniao_sala", roomMeetingMsg(oMeet, recRoom.name, rec.time)))) return x;
+      if (recMeet && !bookingKind(o) && (x = hit("ag_reuniao_sala", roomMeetingLabel(recMeet) + " ocupa a sala toda: " + recRoom.name + " já tem " + o.patient + " às " + rec.time + "."))) return x;
+    }
+    if (recMeet || bookingKind(o)) continue;
     var oRoom = o.room_id ? findRoom(o.room_id) : null;
     if (recRoom && !isGroup(recRoom) && o.room_id === rec.room_id && !agdIsGroupRow(o) && !agdIsGroupRow(rec)){
       // "Não ABA" vale para a sala toda (desde 2026-10-08 também nas salas com "ABA" no nome).
@@ -16811,6 +16843,7 @@ var HELP_TOPICS = [
       "Profissional não pode estar em dois lugares (salas/grupos diferentes) no mesmo horário.",
       "No Planner, profissional com paciente numa sala fica com a coluna dele nos Grupos de Suporte bloqueada nesse horário (cinza listrado), mesmo que o grupo seja para a mesma sala. Da mesma forma, com agendamento num grupo, as colunas dele em todas as salas ficam bloqueadas nesse horário, inclusive na sala que o grupo marca.",
       "Paciente não pode ter o mesmo serviço em dois lugares no mesmo horário, nem dois atendimentos com o mesmo profissional.",
+      "<b>Reunião Clínica</b> e <b>Treinamento</b> também ocupam a sala toda: paciente não pode ser marcado nas outras colunas (outra Reunião/Treinamento pode).",
       "Paciente que <b>não faz ABA</b> ocupa a sala toda no horário (qualquer sala, inclusive as com ABA no nome). Vale só para o serviço <b>Sessão</b>: outros serviços não ocupam nem são barrados. Não há exceção: nem um grupo de suporte ou aplicador agendado para a sala permite dois pacientes que não fazem ABA juntos.",
       "Fora do horário do paciente ou com terapeuta diferente do tratamento: pede confirmação duas vezes.",
       "Sessão com profissional cuja especialidade principal e áreas complementares não estão entre as especialidades do tratamento do paciente: aparece um aviso e é preciso confirmar.",
@@ -16857,7 +16890,7 @@ var HELP_TOPICS = [
     rules: [
       "Conta só as colunas das salas (os Grupos de Suporte ficam de fora) que têm profissional.",
       "Especialidade = a especialidade principal do profissional da coluna.",
-      "Vaga livre = coluna vazia dentro do horário do profissional, sem horário bloqueado e sem bloqueio por regra (\"não ABA\", profissional em outro lugar). Horário bloqueado conta em Bloqueios (uma vez por profissional). Em sala ABA cada coluna livre do profissional conta; profissional com colunas em mais de uma sala conta só uma sala.",
+      "Vaga livre = coluna vazia dentro do horário do profissional, sem horário bloqueado e sem bloqueio por regra (\"não ABA\", profissional em outro lugar). Bloqueios / reuniões: Bloqueado, Reunião Clínica, Treinamento e horário bloqueado contam uma vez por profissional. Em sala ABA cada coluna livre do profissional conta; profissional com colunas em mais de uma sala conta só uma sala.",
       "Atualiza sozinha quando alguém mexe no Planner."
     ],
     who: "Permissão <b>Disponibilidade</b> (ver)."},

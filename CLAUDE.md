@@ -2660,3 +2660,4 @@ colunas livres. Código: `DISP`, `dispDoc`, `dispCompute(weeks)`, `renderDispTab
 (`#tab-disponibilidade`, `#dispWeekSeg`, `#dispHost`); atualiza pelo `scheduleRelatorioRender`.
 Permissão `disponibilidade` (só ver) em MODULES/`PERM_MODULE_LABELS`; migração
 `supabase/2026-10-08b-disponibilidade.sql` (quem vê o Resumo passa a ver). Teste `tests/run_disponibilidade.js`.
+- 2026-10-08: Reunião Clínica / Treinamento GRAVADOS numa coluna ocupam a sala toda (como "não ABA"): paciente não entra nas outras colunas, outra Reunião/Treinamento pode (`roomMeetingKind`, regras `pl_reuniao_sala`/`ag_reuniao_sala` no Sistema; grade `meetLock` = aba-lock + aba-soft). A Reunião automática de segunda 11:20 (sem registro) não trava. Disponibilidade: Bloqueado/Reunião/Treinamento/horário bloqueado contam 1× por profissional. Testes em `run_aba_linha.js`.
