@@ -62,6 +62,13 @@ const path = require('path');
   const anaCols = await ev(`physicalRooms().filter(function(r){ return (r.therapists || []).some(function(t){ return t.professionalId === "ana-terapeuta"; }); }).length`);
   check('professional in two rooms counts ONE room (the one with most free columns)?', anaCols >= 2 && (d0.free[specA] || 0) === 2, JSON.stringify({anaCols, d0}));
 
+  // Grupo de suporte também tem vagas livres, sem contar o mesmo profissional duas vezes.
+  const grpHead = await page.$eval('#dispHost thead tr.disp-h1', (e) => /Coordenador\s*atend\. \/ livres/.test(e.textContent));
+  check('group column counts free slots too, one place per professional (no double count)?', ((d0.free[specA] || 0) + (d0.free['grp:coord'] || 0)) === 2 && grpHead, JSON.stringify(d0));
+  const onlyGrp = await ev(`(function(){ var keep = state.rooms; state.rooms = keep.filter(function(r){ return r.id !== "r1" && r.id !== "rz"; });
+    var r = dispCompute([1]); state.rooms = keep; return r.rows.filter(function(x){ return !x.sub && x.day.key === "seg" && x.time === "${T}"; })[0].d.free["grp:coord"] || 0; })()`);
+  check('professional only in the group: free counted in the group column?', onlyGrp === 1, onlyGrp);
+
   // Paciente na coluna da Ana: atendidos +1; livres dela (nas duas salas) somem.
   await setBk('seg-1', `${T}|r1|r1-t1`, {patient: 'Paciente Um', note: '', service: 'sessao'});
   const d1 = row(await ev('dispCompute([1])'), 'seg', T);
