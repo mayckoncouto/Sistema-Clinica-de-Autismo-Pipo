@@ -2662,3 +2662,18 @@ Permissão `disponibilidade` (só ver) em MODULES/`PERM_MODULE_LABELS`; migraç�
 `supabase/2026-10-08b-disponibilidade.sql` (quem vê o Resumo passa a ver). Teste `tests/run_disponibilidade.js`.
 - 2026-10-08: Reunião Clínica / Treinamento GRAVADOS numa coluna ocupam a sala toda (como "não ABA"): paciente não entra nas outras colunas, outra Reunião/Treinamento pode (`roomMeetingKind`, regras `pl_reuniao_sala`/`ag_reuniao_sala` no Sistema; grade `meetLock` = aba-lock + aba-soft). A Reunião automática de segunda 11:20 (sem registro) não trava. Disponibilidade: Bloqueado/Reunião/Treinamento/horário bloqueado contam 1× por profissional. Testes em `run_aba_linha.js`.
 - 2026-10-08: Planner, coluna dos horários: horário em cima e 3 botões lado a lado embaixo (liberar, bloquear, **limpar**; `rowLockButtonsHtml(attrs, withClear)`, `.row-btns-below`, `.row-lock-3`). Limpar a linha = `plannerRowAction("clear")` apaga os agendamentos do horário nas colunas visíveis (bloqueio fica; permissão Planner excluir). Agenda não mudou. Teste `tests/run_row_clear.js`.
+
+## Agenda ▾ → Visão geral (2026-10-08)
+Topo: "Agenda" virou menu (`#agBtn`/`#agMenu`, `AG_ITEMS`/`AG_TABS` em `NAV_MENUS`; botões `data-tab`
+agenda e visaogeral ocultos; celular: grupo "Agenda" no ☰; `prGoToAppointment` confere `can("agenda")`).
+Tela `#tab-visaogeral`: todos os atendimentos de UM dia da Agenda, faixa por horário (contagem ao
+lado), cartões com Paciente, Sala e Serviço na cor da especialidade do profissional (`vgSpecColor`);
+clique = `agdOpenDetails`. Filtros (paciente, profissional, especialidade, sala, status incl. "Sem
+status"), contadores (dia + chips por especialidade = legenda), avisos (feriado, profissional com
+horário bloqueado na Agenda, paciente com horários vizinhos, aniversariantes ativos). Bloqueado não
+vira cartão. Dados: `agdFetchRange(dia, dia)`; tempo real pelo canal da Agenda (`vgOnRealtime`).
+Código: `VG`, `vgOnShow`, `vgLoad`, `vgRender`, `vgAlerts`, `wireVisaoGeral`. Permissão
+`visao_geral` (ver); migração `supabase/2026-10-08c-visao-geral.sql` (quem vê a Agenda passa a ver).
+Teste `tests/run_visao_geral.js`. Decisões do usuário: cartão = Paciente/Sala/Serviço; cor =
+especialidade; com filtros/contadores e avisos; SEM status no cartão, sessão do mês, linha do agora,
+modo TV, semana e impressão (podem vir depois).

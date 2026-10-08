@@ -16,6 +16,7 @@
   // actions: ações que fazem sentido na tela (as demais aparecem como "—").
   var MODULES = [
     { key: "agenda", label: "Agenda", hint: "atendimentos por data" },
+    { key: "visao_geral", label: "Visão geral", hint: "Agenda ▾ → Visão geral: todos os atendimentos do dia numa tela", actions: ["view"] },
     { key: "planner", label: "Planner", hint: "grade de 4 semanas" },
     { key: "bloqueio_horario", label: "Bloqueio de horário", hint: "Planner: bloquear (incluir) e liberar (excluir) horários — botões da grade e Outras opções" },
     { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
