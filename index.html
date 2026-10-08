@@ -376,7 +376,7 @@ body.no-help .help-q{display:none!important}
 #tab-planner.perm-no-create :is(.book-copy,.book-move,.empty-plus),
 #tab-planner.perm-no-lock :is([data-period-action=lock],[data-row-action=lock]),
 #tab-planner.perm-no-unlock :is([data-period-action=unlock],[data-row-action=unlock]),
-#tab-planner.perm-no-delete :is([data-period-action=clear],.book-move),
+#tab-planner.perm-no-delete :is([data-period-action=clear],[data-row-action=clear],.book-move),
 #tab-agenda.perm-no-create :is(.book-copy,.empty-plus,.agd-add,[data-agd-action=lock],[data-agd-row-action=lock]),
 #tab-agenda.perm-no-edit .book-move,
 #tab-agenda.perm-no-delete :is([data-agd-action=unlock],[data-agd-action=clear],[data-agd-row-action=unlock]){display:none!important}
@@ -1073,6 +1073,9 @@ td.timecol:has(.has-row-btns){vertical-align:middle}
 .row-lock .period-btn{width:16px;height:16px;opacity:.35}
 tr:hover .row-lock .period-btn{opacity:.8}
 .row-lock .period-btn.confirm{opacity:1}
+/* Planner: horário em cima e os 3 botões (liberar, bloquear, limpar) lado a lado embaixo */
+.timecell.has-row-btns.row-btns-below{flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:3px 4px}
+.row-lock.row-lock-3{flex-direction:row;gap:3px}
 .periodrow-seat{padding:4px 6px;vertical-align:middle}
 .periodrow-seatname{font-size:10px;font-weight:700;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;opacity:.75;margin-bottom:2px}
 /* Barrinha na cor da sala embaixo do nome do profissional: cabeçalho e linha do almoço. */
@@ -5015,8 +5018,8 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
               '<td colspan="'+colspan+'"><div class="mtext">Reunião clínica da equipe</div></td></tr>';
       return;
     }
-    html += '<tr><td class="timecol"><div class="timecell has-row-btns"><span>'+row.time+'</span>' +
-      rowLockButtonsHtml('data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-time="'+row.time+'"') + '</div></td>';
+    html += '<tr><td class="timecol"><div class="timecell has-row-btns row-btns-below"><span>'+row.time+'</span>' +
+      rowLockButtonsHtml('data-doc="'+esc(docId)+'" data-day="'+esc(dayObj.key)+'" data-time="'+row.time+'"', true) + '</div></td>';
     // Profissional atendendo numa SALA neste horário: a coluna dele nos grupos fica bloqueada.
     // e profissional agendado num GRUPO: as colunas dele nas salas ficam bloqueadas.
     // e em outra sala ou grupo: as colunas dele nas demais salas/grupos ficam bloqueadas.
@@ -5133,11 +5136,12 @@ function armTwoClick(btn, baseTitle){
   btn.__armTimer = setTimeout(function(){ btn.__armed = false; btn.classList.remove("confirm"); btn.title = baseTitle; }, 4000);
   return false;
 }
-var ROW_LOCK_TITLES = {unlock: "Liberar os horários bloqueados desta linha", lock: "Bloquear os horários livres desta linha (ficam cinza; atendimentos continuam)"};
-function rowLockButtonsHtml(dataAttrs){
-  return '<span class="row-lock">' +
+var ROW_LOCK_TITLES = {unlock: "Liberar os horários bloqueados desta linha", lock: "Bloquear os horários livres desta linha (ficam cinza; atendimentos continuam)", clear: "Limpar todos os agendamentos desta linha"};
+function rowLockButtonsHtml(dataAttrs, withClear){
+  return '<span class="row-lock' + (withClear ? ' row-lock-3' : '') + '">' +
     '<button type="button" class="period-btn" data-row-action="unlock" '+dataAttrs+' title="'+ROW_LOCK_TITLES.unlock+'" aria-label="'+ROW_LOCK_TITLES.unlock+'"></button>' +
     '<button type="button" class="period-btn period-btn-lock" data-row-action="lock" '+dataAttrs+' title="'+ROW_LOCK_TITLES.lock+'" aria-label="'+ROW_LOCK_TITLES.lock+'"></button>' +
+    (withClear ? '<button type="button" class="period-btn period-btn-clear" data-row-action="clear" '+dataAttrs+' title="'+ROW_LOCK_TITLES.clear+'" aria-label="'+ROW_LOCK_TITLES.clear+'"></button>' : '') +
   '</span>';
 }
 
@@ -5156,6 +5160,10 @@ function plannerRowAction(action, docId, dayKey, time){
     (r.therapists || []).forEach(function(t){
       var key = time + "|" + r.id + "|" + t.id;
       var cur = effectiveBooking(slotBookings, key, dayKey, time);
+      if (action === "clear"){   // limpa agendamentos (paciente, sala, reunião); bloqueio de horário fica
+        if (cur && String(cur.patient || "").trim()){ changes[key] = clearValueFor(dayKey, time); touched++; }
+        return;
+      }
       var st = plSeatLockStep(action, cur, dayKey, week, time, r, t);
       if (st.change !== undefined){ changes[key] = st.change; touched++; }
       if (st.kept) kept++;
@@ -5163,13 +5171,14 @@ function plannerRowAction(action, docId, dayKey, time){
     });
   });
   if (!touched){
-    showToast((action === "lock" ? "Nenhum horário livre às " + time + " para bloquear." : "Nenhum horário bloqueado pelos botões às " + time + " para liberar.") + plRuleNote(rule));
+    showToast((action === "clear" ? "Nenhum agendamento às " + time + " para limpar." : action === "lock" ? "Nenhum horário livre às " + time + " para bloquear." : "Nenhum horário bloqueado pelos botões às " + time + " para liberar.") + plRuleNote(rule));
     return;
   }
   var byDoc = {}; byDoc[docId] = changes;
   applyBookingChanges(byDoc).then(function(ok){
     if (ok === false) return;
     var n = touched + (touched === 1 ? " horário" : " horários");
+    if (action === "clear"){ showToast(n + " das " + time + (touched === 1 ? " limpo" : " limpos") + ". Use desfazer (Ctrl+Z) se foi engano."); return; }
     showToast(n + " das " + time + (action === "lock" ? (touched === 1 ? " bloqueado" : " bloqueados") : (touched === 1 ? " liberado" : " liberados")) +
       (kept ? " (" + kept + (kept === 1 ? " com atendimento mantido)." : " com atendimento mantidos).") : ".") + plRuleNote(rule));
   });
