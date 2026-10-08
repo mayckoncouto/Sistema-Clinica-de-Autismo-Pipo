@@ -2677,3 +2677,4 @@ Código: `VG`, `vgOnShow`, `vgLoad`, `vgRender`, `vgAlerts`, `wireVisaoGeral`. P
 Teste `tests/run_visao_geral.js`. Decisões do usuário: cartão = Paciente/Sala/Serviço; cor =
 especialidade; com filtros/contadores e avisos; SEM status no cartão, sessão do mês, linha do agora,
 modo TV, semana e impressão (podem vir depois).
+- 2026-10-08: avisos do dia REMOVIDOS da Visão geral (pedido do usuário).

@@ -83,8 +83,7 @@ const path = require('path');
   check('count per time (08:00 = 2)?', t8 === '2', t8);
   const counts = await page.$eval('#vgCounts', (e) => e.textContent);
   check('day total and per-specialty chips?', /3 atendimentos no dia/.test(counts) && (await page.$$('#vgCounts .vg-chip')).length >= 1, counts);
-  const alerts = await page.$eval('#vgAlerts', (e) => e.textContent);
-  check('alerts: blocked professional, consecutive appointments, birthday?', /horário bloqueado: 09:20/.test(alerts) && /Paciente Um.*seguidos: 08:00, 08:40/.test(alerts) && alerts.includes('Duda Vermelho faz aniversário hoje (12 anos)'), alerts);
+  check('no alerts box (removed by request)?', !(await page.$('#vgAlerts')));
 
   // Filtros.
   await page.$eval('#vgProf', (s) => { s.value = "bia-terapeuta"; s.dispatchEvent(new Event("change", {bubbles: true})); });

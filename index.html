@@ -265,9 +265,6 @@ div.ag-obj-head{cursor:default}
 .vg-toolbar .vg-q{min-width:150px;flex:1 1 150px;max-width:230px}
 .vg-toolbar select{max-width:175px}
 .vg-nav .btn{padding:6px 10px}
-.vg-alerts{display:flex;flex-direction:column;gap:4px;padding:0 14px}
-.vg-alerts:empty{display:none}
-.vg-alert{display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,#f5c542 18%,var(--surface));border:1px solid color-mix(in srgb,#f5c542 45%,var(--line))}
 .vg-counts{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 14px;font-size:12.5px}
 .vg-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line)}
 .vg-chip i{width:10px;height:10px;border-radius:3px;background:var(--vg)}
@@ -1855,7 +1852,6 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <select id="vgRoom" aria-label="Sala"></select>
       <select id="vgStatus" aria-label="Status"></select>
     </div>
-    <div id="vgAlerts" class="vg-alerts"></div>
     <div id="vgCounts" class="vg-counts"></div>
     <div id="vgHost" class="vg-host"></div>
   </section>
@@ -4728,8 +4724,7 @@ function wireDispTab(){
  * Todos os atendimentos de UM dia da Agenda numa tela: uma faixa por horário com os cartões
  * lado a lado (Paciente, Sala, Serviço; cor = especialidade do profissional). Clique abre o
  * atendimento (agdOpenDetails). Filtros (paciente, profissional, especialidade, sala, status),
- * contadores (dia, por horário, por especialidade) e avisos do dia (feriado, bloqueios,
- * atendimentos seguidos, aniversariantes). Tempo real pelo canal da Agenda (vgOnRealtime).
+ * contadores (dia, por horário, por especialidade). Tempo real pelo canal da Agenda (vgOnRealtime).
  * Permissão visao_geral (ver); o banco já limita o que cada usuário enxerga da Agenda.
  */
 var VG = {date: "", rows: {}, loaded: false, error: "", seq: 0};
@@ -4803,42 +4798,15 @@ function vgCardHtml(r){
     (svc ? '<span class="vg-line vg-svc">' + esc(svc) + '</span>' : '') +
   '</button>';
 }
-function vgAlerts(rows){
-  var out = [], iso = VG.date;
-  holidaysOn(iso).forEach(function(h){ out.push({ic: "📅", t: "<b>Feriado / recesso:</b> " + esc(h.name || "")}); });
-  // Bloqueios da Agenda no dia, por profissional.
-  var blk = {};
-  rows.forEach(function(r){ if (bookingKind(r) === "bloqueado") (blk[r.professional_id] = blk[r.professional_id] || []).push(r.time); });
-  Object.keys(blk).forEach(function(pid){ out.push({ic: "⛔", t: "<b>" + esc(professionalName(pid)) + "</b> com horário bloqueado: " + blk[pid].sort().join(", ")}); });
-  // Paciente com atendimentos seguidos (horários vizinhos da grade).
-  var day = agdDayObj(agdParse(iso)), slots = day ? day.morning.concat(day.afternoon) : [];
-  var byPat = {};
-  rows.forEach(function(r){ if (bookingKind(r) || agdIsGroupRow(r) || !r.patient) return; var k = r.patient_id || normText(r.patient); (byPat[k] = byPat[k] || {name: r.patient, times: []}).times.push(r.time); });
-  Object.keys(byPat).forEach(function(k){
-    var ts = byPat[k].times.filter(function(x, i, a){ return a.indexOf(x) === i; }).sort();
-    var seq = ts.some(function(x, i){ return i && slots.indexOf(x) !== -1 && slots.indexOf(x) === slots.indexOf(ts[i - 1]) + 1; });
-    if (seq) out.push({ic: "🔁", t: "<b>" + esc(byPat[k].name) + "</b> tem atendimentos seguidos: " + ts.join(", ")});
-  });
-  // Aniversariantes do dia (pacientes ativos).
-  var md = iso.slice(5);
-  (state.patients || []).filter(function(p){ return isActive(p) && p.nascimento && String(p.nascimento).slice(5) === md; }).forEach(function(p){
-    var age = Number(iso.slice(0, 4)) - Number(String(p.nascimento).slice(0, 4));
-    out.push({ic: "🎂", t: "<b>" + esc(p.nome) + "</b> faz aniversário hoje (" + age + " anos)"});
-  });
-  return out;
-}
 function vgRender(){
   var host = document.getElementById("vgHost"); if (!host) return;
   var dEl = document.getElementById("vgDate"); if (dEl && dEl.value !== VG.date) dEl.value = VG.date;
-  var al = document.getElementById("vgAlerts"), cn = document.getElementById("vgCounts");
+  var cn = document.getElementById("vgCounts");
   if (!VG.loaded){ host.innerHTML = '<div class="empty-state"><b>Carregando…</b></div>'; return; }
-  if (VG.error){ host.innerHTML = '<div class="empty-state"><b>' + (VG.error === "offline" ? "A Visão geral funciona no sistema online." : "Não foi possível carregar a Agenda.") + '</b>' + (VG.error === "offline" ? "" : esc(VG.error)) + '</div>'; if (al) al.innerHTML = ""; if (cn) cn.innerHTML = ""; return; }
+  if (VG.error){ host.innerHTML = '<div class="empty-state"><b>' + (VG.error === "offline" ? "A Visão geral funciona no sistema online." : "Não foi possível carregar a Agenda.") + '</b>' + (VG.error === "offline" ? "" : esc(VG.error)) + '</div>'; if (cn) cn.innerHTML = ""; return; }
   var all = Object.keys(VG.rows).map(function(id){ return VG.rows[id]; });
   var f = vgFilters();
   var shown = all.filter(function(r){ return r.patient && bookingKind(r) !== "bloqueado" && vgPass(r, f); });
-  // Avisos
-  var alerts = vgAlerts(all);
-  if (al) al.innerHTML = alerts.map(function(a){ return '<div class="vg-alert"><span aria-hidden="true">' + a.ic + '</span><span>' + a.t + '</span></div>'; }).join("");
   // Contadores: total e por especialidade (também é a legenda das cores)
   var bySpec = {};
   shown.forEach(function(r){ var s = vgSpecOf(r); bySpec[s] = (bySpec[s] || 0) + 1; });
@@ -17105,8 +17073,7 @@ var HELP_TOPICS = [
       "Filtre por paciente, profissional, especialidade, sala ou status. No topo: total do dia e por especialidade (legenda das cores)."
     ],
     rules: [
-      "Avisos do dia: feriado/recesso, profissionais com horário bloqueado na Agenda, pacientes com atendimentos seguidos e aniversariantes.",
-      "Atualiza sozinha quando alguém mexe na Agenda. Bloqueios não viram cartão (aparecem nos avisos)."
+      "Atualiza sozinha quando alguém mexe na Agenda. Bloqueios não viram cartão."
     ],
     who: "Permissão <b>Visão geral</b> (ver). Cada usuário vê os atendimentos que a Agenda já mostra para ele."},
   {id: "disponibilidade", group: "Planner", title: "Disponibilidade do Planner", mod: "disponibilidade", tab: "disponibilidade",
