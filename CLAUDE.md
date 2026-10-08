@@ -2514,6 +2514,7 @@ tarde pela grade da clínica), `routineConflictMsg`. Aviso: Planner `routineConf
 entre `agdPatientConfirmHours` e `agdTherapistCheck`. Regras do Sistema `pl_rotina`/`ag_rotina`
 (padrão Avisar). Ficha: seção "Rotina atual" em `patientFichaHtml`. Sem SQL. Teste
 `tests/run_rotina.js`.
+- 2026-10-07: nova opção **Terapia (Pipo)** (`pipo`, NÃO ocupa — não avisa ao agendar), antes de "Outra terapia" (terapia em outro lugar, avisa). Pedido do usuário.
 
 ## Janela e lista de Tratamentos: ajustes (2026-10-07)
 Pedidos do usuário (Renegociar continua mudando só ao Salvar; "Pacote/Mês" foi descartado).
