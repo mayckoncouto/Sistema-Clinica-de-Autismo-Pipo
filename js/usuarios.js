@@ -17,6 +17,7 @@
   var MODULES = [
     { key: "agenda", label: "Agenda", hint: "atendimentos por data" },
     { key: "planner", label: "Planner", hint: "grade de 4 semanas" },
+    { key: "bloqueio_horario", label: "Bloqueio de horário", hint: "Planner: bloquear (incluir) e liberar (excluir) horários — botões da grade e Outras opções" },
     { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
     { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)" },
     { key: "plano_terapeutico", label: "Plano Terapêutico", hint: "ver: consultar; incluir: criar e revisar; editar: tudo. Profissional sem editar muda só situação/status nas especialidades dele" },

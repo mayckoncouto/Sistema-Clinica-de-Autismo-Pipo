@@ -39,21 +39,10 @@ const path = require('path');
   await page.check('#bkKindField input[value="bloqueado"]');
   await page.click('#bkSave');
   await page.waitForTimeout(150);
-  const blockedText = await td2.innerText();
-  console.log('blocked slot defaults to "Bloqueado" label?', blockedText.includes('Bloqueado'));
-  console.log('blocked slot gets "blocked" class?', (await cls('14:10|r1|r1-t2')).includes('blocked'));
-  console.log('blocked slot background is the dark gray constant?', (await bg('14:10|r1|r1-t2')).replace(/\s/g,'') === 'rgb(74,82,87)');
-
+  // Desde 2026-10-08: no Planner, "Bloqueado" vira horário bloqueado (cinza como fora do horário, sem agendamento).
+  console.log('"Bloqueado" makes the slot a gray time block (slot-off pl-lock, no text)?', /slot-off.*pl-lock/.test(await td2.getAttribute('class')) && !(await td2.innerText()).includes('Bloqueado'));
   const store1 = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/seg-1'])));
-  console.log('booking record has blocked:true?', store1.bookings['14:10|r1|r1-t2'].blocked === true);
-
-  // ---- TEST: reopening a blocked slot shows the checkbox pre-checked ----
-  await td2.locator('.book-main').click();
-  await page.waitForSelector('#ovBook');
-  console.log('reopened blocked slot has checkbox checked?', await page.locator('#bkKindField input[value="bloqueado"]').isChecked());
-  console.log('patient field is disabled while "Bloqueado" is checked?', await page.locator('#bkPatient').isDisabled());
-  await page.click('#bkCancel');
-  await page.waitForTimeout(100);
+  console.log('record is {patient:"", lock:true} (not a booking)?', store1.bookings['14:10|r1|r1-t2'].lock === true && store1.bookings['14:10|r1|r1-t2'].patient === '' && !store1.bookings['14:10|r1|r1-t2'].blocked);
 
   // ---- TEST: Reunião Clínica (amarelo) e Treinamento (ciano #24E2FC) ----
   for (const [key, kind, rgb, label] of [['14:50|r1|r1-t2','reuniao','rgb(245,226,122)','Reunião Clínica'], ['15:30|r1|r1-t2','treinamento','rgb(36,226,252)','Treinamento']]) {
@@ -68,17 +57,6 @@ const path = require('path');
   }
   const storeKinds = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/seg-1'])));
   console.log('treinamento saved with training:true?', storeKinds.bookings['15:30|r1|r1-t2'].training === true);
-
-  // ---- TEST: copying a blocked slot to another cell preserves blocked status ----
-  await td2.hover();
-  await td2.locator('.book-copy').click({ force: true });
-  await page.waitForSelector('.clipboard-bar.on');
-  const td3 = page.locator('td.slotcell[data-key="16:10|r1|r1-t2"]');
-  await td3.locator('.book-main').click();
-  await page.waitForTimeout(150);
-  console.log('pasted copy of blocked slot also shows blocked styling?', (await cls('16:10|r1|r1-t2')).includes('blocked'));
-  const store2 = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/seg-1'])));
-  console.log('pasted copy has blocked:true in store?', store2.bookings['16:10|r1|r1-t2'].blocked === true);
 
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });

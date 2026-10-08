@@ -68,7 +68,7 @@ const path = require('path');
   console.log('bloquear keeps the occupied slot (07:20 r1-t1 still "Paciente Um", not blocked)?',
     !storeAfterLock.bookings['07:20|r1|r1-t1'].blocked && storeAfterLock.bookings['07:20|r1|r1-t1'].patient === 'Paciente Um');
   console.log('bloquear blocks Ana\'s free morning slots (08:00 r1-t1 was empty)?',
-    storeAfterLock.bookings['08:00|r1|r1-t1'] && storeAfterLock.bookings['08:00|r1|r1-t1'].blocked === true);
+    storeAfterLock.bookings['08:00|r1|r1-t1'] && storeAfterLock.bookings['08:00|r1|r1-t1'].lock === true);
   console.log('bloquear never blocks the Monday meeting slot (11:20 keeps the virtual "Reunião Clínica")?',
     !storeAfterLock.bookings['11:20|r1|r1-t1']);
   console.log('Ana\'s OTHER seat (coord-t1, same professional but a different column) is untouched — scoping is per seat, not per professional?',
@@ -77,8 +77,8 @@ const path = require('path');
     !storeAfterLock.bookings['13:30|r1|r1-t1']);
   const cellAfterLock = await anaCell.innerText();
   console.log('grid still shows the patient in Ana\'s occupied slot?', cellAfterLock.includes('Paciente Um'));
-  console.log('grid shows "Bloqueado" in Ana\'s free 08:00 slot?',
-    (await page.locator('td.slotcell[data-key="08:00|r1|r1-t1"]').innerText()).includes('Bloqueado'));
+  console.log('grid shows Ana\'s free 08:00 slot as a gray time block (no booking text)?',
+    /slot-off/.test(await page.locator('td.slotcell[data-key="08:00|r1|r1-t1"]').getAttribute('class')) && !(await page.locator('td.slotcell[data-key="08:00|r1|r1-t1"]').innerText()).includes('Bloqueado'));
   console.log('Bia\'s cell (different seat, pre-existing fixture data) is unaffected?', (await biaCell.innerText()).includes('Bloqueado'));
 
   // ---- TEST: the auto-disarm timeout resets an armed-but-unconfirmed button ----
@@ -88,7 +88,7 @@ const path = require('path');
   await page.waitForTimeout(4300);
   console.log('unlock button auto-disarms after ~4s without a second click?', !(await anaMorningUnlock.evaluate(el => el.classList.contains('confirm'))));
   const storeStillLocked = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/seg-1'])));
-  console.log('auto-disarm did NOT unlock anything (still blocked)?', storeStillLocked.bookings['08:00|r1|r1-t1'].blocked === true);
+  console.log('auto-disarm did NOT unlock anything (still blocked)?', storeStillLocked.bookings['08:00|r1|r1-t1'].lock === true);
 
   // ---- TEST: confirming unlock actually releases just Ana's morning ----
   await anaMorningUnlock.click();
@@ -118,7 +118,7 @@ const path = require('path');
   await page.waitForTimeout(200);
   const storeAfterAfternoonLock = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/seg-1'])));
   console.log('Ana\'s afternoon slot (13:30 r1-t1) is now blocked via the 12:00 row?',
-    storeAfterAfternoonLock.bookings['13:30|r1|r1-t1'] && storeAfterAfternoonLock.bookings['13:30|r1|r1-t1'].blocked === true);
+    storeAfterAfternoonLock.bookings['13:30|r1|r1-t1'] && storeAfterAfternoonLock.bookings['13:30|r1|r1-t1'].lock === true);
   console.log('Ana\'s morning was not touched by the afternoon action?',
     storeAfterAfternoonLock.bookings['07:20|r1|r1-t1'].patient === 'Paciente Um' && !storeAfterAfternoonLock.bookings['08:00|r1|r1-t1']);
 
@@ -144,7 +144,7 @@ const path = require('path');
   console.log('limpar also clears the Monday meeting slot (explicit empty tombstone at 11:20)?',
     storeAfterClear.bookings['11:20|r1|r1-t1'] && storeAfterClear.bookings['11:20|r1|r1-t1'].patient === '');
   console.log('limpar leaves the afternoon (13:30 still blocked) and other seats (Bia 08:40) alone?',
-    storeAfterClear.bookings['13:30|r1|r1-t1'].blocked === true && storeAfterClear.bookings['08:40|r1|r1-t2'].blocked === true);
+    storeAfterClear.bookings['13:30|r1|r1-t1'].lock === true && storeAfterClear.bookings['08:40|r1|r1-t2'].blocked === true);
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(400);
   const storeAfterClearUndo = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['schedule/seg-1'])));

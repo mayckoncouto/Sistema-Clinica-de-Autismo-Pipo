@@ -2614,3 +2614,32 @@ por evolução (data embaixo); tons de azul pelo NÍVEL (mais escuro = mais alto
   evolução fica vazio. "Todos os objetivos" = barras lado a lado em cada mês, na ordem do Nº, tom
   fixo por objetivo (`planObjColor`, legenda `.pv-sq`); um objetivo = uma barra por mês com a cor
   pelo nível. Muitos meses/objetivos = o gráfico alarga e rola para o lado (`.pv-scroll`).
+
+
+## Planner: Bloqueio de horário (2026-10-08)
+Pedido do usuário: bloquear/liberar sem gravar "atendimento Bloqueado" — horário bloqueado = igual a
+fora do horário do profissional (célula cinza, sem clique/colar/soltar); atendimentos já marcados
+continuam e não são tocados. Decisões: só no Planner; alvos Profissional / Sala / Clínica toda;
+SEM "por data" (só dia × horário × semanas 1ª–4ª, sem fim); botões da grade = só a coluna clicada
+(subordinados: não liberam bloqueio de Outras opções, avisam); Liberar horário tira tudo que trava
+ali (bloqueios do alvo + os dos botões nas colunas dele; Clínica toda tira qualquer alvo); mesmo
+cinza + motivo no mouse; motivo, prévia, permissão própria; "Bloqueado" antigos do Planner APAGADOS.
+- Botões da grade e "Bloqueado" da janela gravam no dia do Planner `{patient:"", lock:true[, motivo]}`
+  (entra no desfazer; `describeHistoryEntry` trata como Bloqueado). Clique na célula bloqueada
+  pelo botão: confirma e libera (`plLockCellClick`). `plSeatLockStep` = um passo dos botões.
+- Outras opções → **Bloquear horário** / **Liberar horário** (`#plBlockBtn`/`#plUnblockBtn`,
+  `openPlBlockModal(mode)`): alvo, semanas, grade (célula, dia, Manhã/Tarde, horário, Tudo),
+  motivo (`PLB_MOTIVOS` + detalhe), prévia (`#plbPrev`: horários, colunas, atendimentos que
+  ficam / o que continua bloqueado por outro alvo). Cadastro `config/planner_blocks`
+  `{list:[{id, alvo, profId|roomId, slots:{"1":{seg:[…]}}, motivo, criadoEm, criadoPor}]}`
+  (`subscribePlBlocks`, `PLB`, índice `plbIndex` uma vez por mudança, `plRuleLock`,
+  `plLockInfo`, `plLockTitle`, `plbWrite`).
+- Grade: `buildScheduleTable` põe `slot-off pl-lock` + title com motivo. "Horário livre" e
+  "Trocar profissional" pulam horário bloqueado.
+- Permissão `bloqueio_horario` (MODULES nos 2 js, `PERM_MODULE_LABELS`): incluir = bloquear,
+  excluir = liberar; `bookingPermDenied` (lock) e `permToolClasses` (`perm-no-lock`/`perm-no-unlock`).
+- Migração `supabase/2026-10-08-bloqueio-horario.sql`: permissão nos níveis que editam o Planner,
+  `module_for_path` (planner_blocks), `can_write_path` (schedule = planner OU bloqueio_horario),
+  `documents_enforce` (lock → bloqueio_horario), apaga "Bloqueado" antigos do Planner (seg 11:20
+  vira marcação vazia). Testada no PGlite. Teste `tests/run_bloqueio.js`; `run_period_lock.js` e
+  `run_blocked_roomcolor.js` atualizados.
