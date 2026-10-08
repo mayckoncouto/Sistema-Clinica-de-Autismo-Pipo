@@ -2808,3 +2808,8 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   e no quadro. Janela só no modo modal (saíram o botão de layout e `CRM_LAYOUTS`); barra lateral sempre aberta ao abrir,
   também em tarefa nova; a seção "Atividade" do fim da janela saiu — a lateral (`#crmFeed`) mostra alterações (linhas) e
   comentários (cartões) em ordem de data. Teste `tests/run_crm.js`.
+- 2026-10-08 (pedido do usuário: as imagens do ClickUp eram só conceito) Seletores do CRM no PADRÃO de menu suspenso do
+  sistema (`.cad-menu.crm-pop`: linhas cinzas entre itens, item escolhido na cor do sistema `.sel`, busca `.dp-filter`,
+  caixas de marcar nos Responsáveis). Status SEMPRE com bolinha colorida (`crmStIcon` = `.crm-dot`; sem ícones de
+  andamento, sem grupos — `crmStGroups` saiu), também no cabeçalho das colunas do Quadro. Prioridade com bandeiras (sem
+  números de atalho visíveis; as teclas 1–4 continuam funcionando).
