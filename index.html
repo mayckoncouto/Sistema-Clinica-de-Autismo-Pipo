@@ -4648,6 +4648,11 @@ var DISP = {week: "1", collapsed: (function(){ try { return localStorage.getItem
 function dispDoc(docId){
   return (state.reportDocs && state.reportDocs[docId]) || state.scheduleDocs[docId] || {bookings: {}};
 }
+// Ordem das colunas (pedido do usuário): especialidades, grupos e, no fim, Reunião, Disponível,
+// Atendido e Individual (não ABA). Comparação pelo começo do nome, sem acento.
+var DISP_SPEC_ORDER = ["fono", "terapia ocupacional", "psicomotricidade", "fisioterapia", "psicologia", "psicopedagogia", "musicoterapia", "nutri"];
+var DISP_GROUP_ORDER = ["coordenador", "aplicador"];
+function dispOrderIdx(list, name){ var n = normText(String(name || "")); for (var i = 0; i < list.length; i++) if (n.indexOf(list[i]) === 0) return i; return -1; }
 function dispCompute(weeks){
   var specs = {}, rows = [], groups = {};
   supportGroups().forEach(function(g){ groups[g.id] = 1; });
@@ -4716,14 +4721,16 @@ function dispCompute(weeks){
       rows.push({day: day, sub: per[1], d: sub});
     });
   });
-  // Mesma ordem do Resumo: a do cadastro de Especialidades ("Sem especialidade" no fim).
-  var specPos = {}; state.specialties.forEach(function(s, i){ specPos[s.id] = i; });
+  // Ordem pedida pelo usuário (DISP_SPEC_ORDER, pelo nome); as outras depois, na ordem do cadastro.
+  var specPos = {}; state.specialties.forEach(function(s, i){ specPos[s.id] = 1000 + i; });
+  function sPos(id){ var i = dispOrderIdx(DISP_SPEC_ORDER, specialtyName(id)); return i !== -1 ? i : (id in specPos ? specPos[id] : 1e6); }
   var specList = Object.keys(specs).sort(function(a, b){
     if (!a) return 1; if (!b) return -1;
-    var pa = a in specPos ? specPos[a] : 1e6, pb = b in specPos ? specPos[b] : 1e6;
-    return pa - pb || String(specialtyName(a)).localeCompare(String(specialtyName(b)), "pt-BR");
+    return sPos(a) - sPos(b) || String(specialtyName(a)).localeCompare(String(specialtyName(b)), "pt-BR");
   });
-  var groupList = plannerRooms().filter(function(g){ return isGroup(g) && groups[g.id]; }).map(function(g){ return g.id; });
+  var groupList = plannerRooms().filter(function(g){ return isGroup(g) && groups[g.id]; })
+    .map(function(g, i){ var k = dispOrderIdx(DISP_GROUP_ORDER, g.name); return {id: g.id, k: k === -1 ? 100 + i : k}; })
+    .sort(function(a, b){ return a.k - b.k; }).map(function(x){ return x.id; });
   return {specs: specList, groups: groupList, rows: rows};
 }
 function dispSum(o){ return Object.keys(o).reduce(function(a, k){ return a + o[k]; }, 0); }
@@ -4751,7 +4758,8 @@ function renderDispTab(){
   // Colunas na ordem do Resumo: especialidades (atend. / livres), grupos de suporte e os totais.
   var cols = r.specs.map(function(sp){ return {spec: sp, label: sp ? specialtyName(sp) : "Sem especialidade", sub: "atend. / livres", color: vgSpecColor(sp)}; })
     .concat((r.groups || []).map(function(gid){ var g = findRoom(gid); return {grp: gid, label: g ? g.name : gid, sub: "atendidos", color: swatchVar(g ? g.color : "slate")}; }))
-    .concat([{k: "at", label: "Total atendido"}, {k: "blk", label: "Bloqueios / reuniões"}, {k: "fr", label: "Total disponível"}, {k: "nao", label: "Não ABA"}]);
+    .concat([{k: "blk", label: "Reunião", title: "Bloqueado, Reunião Clínica e Treinamento (1 por profissional)"}, {k: "fr", label: "Disponível", title: "Total de vagas livres"},
+      {k: "at", label: "Atendido", title: "Total atendido (pacientes e grupos)"}, {k: "nao", label: "Individual (não ABA)", title: "Atendimentos de pacientes que não fazem ABA"}]);
   function cells(d, kind){
     var at = dispSum(d.at), fr = dispSum(d.free), hk = kind === "time" || kind === "sub", sb = kind === "sub";
     return cols.map(function(c){
@@ -4788,7 +4796,7 @@ function renderDispTab(){
   var tog = '<button type="button" class="disp-collapse" id="dispCollapse" aria-expanded="' + (DISP.collapsed ? 'false' : 'true') + '" title="' + (DISP.collapsed ? 'Mostrar todos os horários' : 'Recolher: mostrar só Manhã, Tarde e Total do dia') + '">' + (DISP.collapsed ? '▸' : '▾') + '</button>';
   // 1ª linha do título: especialidades (cor cheia, "atend. / livres"); 2ª linha: TOTAL da semana.
   var head1 = '<tr class="disp-h1"><th class="disp-day">' + tog + 'Dia</th><th class="disp-time">Horário</th>' + cols.map(function(c){
-    return '<th class="' + (c.color ? 'disp-spec disp-spec-solid' : 'disp-tot') + '"' + (c.color ? ' style="background:' + c.color + '"' : '') + ' title="' + esc(c.label) + '">' + esc(c.label) + (c.sub ? '<span>' + esc(c.sub) + '</span>' : '') + '</th>';
+    return '<th class="' + (c.color ? 'disp-spec disp-spec-solid' : 'disp-tot') + '"' + (c.color ? ' style="background:' + c.color + '"' : '') + ' title="' + esc(c.title || c.label) + '">' + esc(c.label) + (c.sub ? '<span>' + esc(c.sub) + '</span>' : '') + '</th>';
   }).join("") + '</tr>';
   var head2 = '<tr class="disp-h2"><th class="disp-day">Total</th><th class="disp-time">' + (DISP.week === "todas" ? "4 semanas" : DISP.week + "ª semana") + '</th>' +
     cells(tot, "total").replace(/<td /g, "<th ").replace(/<\/td>/g, "</th>") + '</tr>';
@@ -17186,17 +17194,17 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>Planner ▾ → Disponibilidade</b> e escolha a semana (1ª a 4ª) ou <b>Todas</b> (soma das 4 semanas).",
       "Cada linha é um dia e horário; depois da manhã e da tarde aparece o subtotal do período, e no fim o total.",
-      "Em cada especialidade: <b>atendidos / livres</b>. Depois: Total atendido, Bloqueios/reuniões/treinamentos, Total disponível e agendamentos de pacientes \"não ABA\"."
+      "Em cada especialidade: <b>atendidos / livres</b>. Colunas nesta ordem: Fonoaudiologia, Terapia Ocupacional, Psicomotricidade, Fisioterapia, Psicologia, Psicopedagogia, Musicoterapia, Nutrição, Coordenador, Aplicador ABA e os totais Reunião, Disponível, Atendido e Individual (não ABA)."
     ],
     rules: [
       "Conta as colunas das salas que têm profissional. Cada Grupo de Suporte tem a própria coluna (na cor do grupo) com os agendamentos dele naquele horário; eles entram no <b>Total atendido</b>. Profissional com agendamento num grupo fica ocupado nas salas nesse horário (as colunas vazias dele não contam como vaga).",
       "Especialidade = a especialidade principal do profissional da coluna.",
       "Vaga livre = coluna vazia dentro do horário de trabalho do profissional e sem trava de regra (\"não ABA\", profissional em Reunião/Treinamento ou em outra sala). Profissional com colunas em mais de uma sala conta só uma sala: a sala onde já está atendendo ou, se está livre, a sala com mais colunas vazias (ex.: 2 colunas em Fono e 2 em Fono ABA = 2 vagas).",
-      "Bloqueios / reuniões: Bloqueado, Reunião Clínica e Treinamento contam uma vez por profissional em cada horário, mesmo marcados em várias colunas.",
+      "Reunião: Bloqueado, Reunião Clínica e Treinamento contam uma vez por profissional em cada horário, mesmo marcados em várias colunas.",
       "Horário bloqueado (cadeado ou Outras opções → Bloquear horário) fica fora da conta: não é vaga livre nem entra em Bloqueios / reuniões.",
       "A seta ao lado de <b>Dia</b> recolhe a tabela e mostra só os resumos de Manhã e Tarde de cada dia (clique de novo para ver todos os horários). Os resumos também têm cor de aquecimento, comparando só os resumos entre si.",
       "Colunas: arraste o título de uma coluna para mudar a ordem e a borda do título para mudar a largura (duplo clique na borda volta à largura padrão). Dia e Horário ficam sempre à esquerda. Fica salvo neste computador; <b>Colunas padrão</b> volta a ordem e as larguras originais. As colunas de especialidade têm a cor da especialidade.",
-      "Os totais de cada horário têm cor de \"aquecimento\": quanto maior o número, mais forte a cor (Total atendido em laranja, Total disponível em verde, Não ABA em vermelho), comparando com os outros horários da semana mostrada. Zero fica sem cor.",
+      "Os totais de cada horário têm cor de \"aquecimento\": quanto maior o número, mais forte a cor (Atendido em laranja, Disponível em verde, Individual (não ABA) em vermelho), comparando com os outros horários da semana mostrada. Zero fica sem cor.",
       "Atualiza sozinha quando alguém mexe no Planner."
     ],
     who: "Permissão <b>Disponibilidade</b> (ver)."},

@@ -28,9 +28,9 @@ const path = require('path');
   const head = await page.$$eval('#dispHost thead tr.disp-h1 th', (r) => r.map((x) => x.textContent));
   const head2 = await page.$$eval('#dispHost thead tr.disp-h2 th', (r) => r.map((x) => x.textContent));
   check('1st title row: Dia, Horário, specialties (atend. / livres), totals?', /Dia$/.test(head[0]) && head[1] === 'Horário' && head.some((h) => /atend\. \/ livres/.test(h)) &&
-    head.slice(-4).join('|') === 'Total atendido|Bloqueios / reuniões|Total disponível|Não ABA', JSON.stringify(head));
-  const specOrder = await ev('(function(){ var pos = {}; state.specialties.forEach(function(s, i){ pos[s.name] = i; }); return Array.prototype.map.call(document.querySelectorAll("#dispHost thead tr.disp-h1 th.disp-spec"), function(th){ return pos[th.getAttribute("title")]; }).filter(function(x){ return x !== undefined; }); })()');
-  check('specialties in the same order as the Resumo (Especialidades registry)?', specOrder.length >= 2 && specOrder.every((x, i) => !i || x > specOrder[i - 1]), JSON.stringify(specOrder));
+    head.slice(-4).join('|') === 'Reunião|Disponível|Atendido|Individual (não ABA)', JSON.stringify(head));
+  const specOrder = await ev('(function(){ return Array.prototype.map.call(document.querySelectorAll("#dispHost thead tr.disp-h1 th.disp-spec"), function(th){ return dispOrderIdx(DISP_SPEC_ORDER.concat(DISP_GROUP_ORDER.map(function(g){ return g; })), th.getAttribute("title")); }).filter(function(x){ return x !== -1; }); })()');
+  check('columns in the requested order (Fono, TO, Psicomotricidade, …, Coordenador, Aplicador ABA)?', specOrder.length >= 2 && specOrder.every((x, i) => !i || x > specOrder[i - 1]), JSON.stringify(specOrder));
   check('2nd title row is TOTAL of the week?', head2[0] === 'Total' && head2[1] === '1ª semana' && head2.length === head.length, JSON.stringify(head2));
   const subs = await page.$$eval('#dispHost tr.disp-sub .disp-time', (r) => r.map((x) => x.textContent));
   const dayTots = await page.$$eval('#dispHost tr.disp-daytot .disp-time', (r) => r.map((x) => x.textContent));
