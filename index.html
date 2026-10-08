@@ -301,12 +301,8 @@ div.ag-obj-head{cursor:default}
 .disp-table td.disp-free{color:#1f7a45}.disp-table td.disp-free.none{color:var(--muted)}
 .disp-table td.disp-nao{color:#b3261e}
 .disp-table{--heat-at:#ed7d31;--heat-fr:#63be7b;--heat-nao:#f8696b}
-.disp-table{table-layout:fixed;min-width:0}
+.disp-table{table-layout:fixed;width:100%}
 .disp-table th{position:sticky;overflow:hidden;text-overflow:ellipsis}
-.disp-table th[draggable="true"]{cursor:grab}
-.disp-table th.dragging{opacity:.45}
-.disp-table th.drop-before{box-shadow:inset 3px 0 0 var(--accent)!important}
-.disp-table th.drop-after{box-shadow:inset -3px 0 0 var(--accent)!important}
 .disp-table td{overflow:hidden;text-overflow:ellipsis}
 .disp-table th,.disp-table td,.disp-table .disp-day,.disp-table .disp-time{text-align:center;vertical-align:middle}
 /* Mesma formatação do Resumo: títulos em maiúsculas; especialidade com a cor cheia e texto branco. */
@@ -319,9 +315,15 @@ div.ag-obj-head{cursor:default}
 .disp-collapse:hover{color:var(--accent)}
 .disp-table td.disp-tot[style]{color:var(--ink)}
 .disp-table tr.disp-first td{border-top:2px solid var(--line-strong)}
-.disp-table tr.disp-sub td{background:var(--accent-weak);font-weight:800}
-.disp-table tr.disp-sub td.disp-day{background:var(--accent-weak)}
-.disp-table tr.disp-total td{background:var(--surface-2);font-weight:800;border-top:2px solid var(--line-strong)}
+/* horários: branco e cinza alternados (como o Resumo); Manhã/Tarde cinza; Total do dia um pouco mais escuro */
+.disp-table tbody td{background:var(--surface)}
+.disp-table tbody tr.disp-alt td{background:var(--surface-2)}
+.disp-table tbody tr.disp-sub td{background:color-mix(in srgb,var(--line) 45%,var(--surface));font-weight:800}
+.disp-table tbody tr.disp-daytot td{background:color-mix(in srgb,var(--line) 85%,var(--surface));font-weight:800}
+.disp-table tbody td.disp-tot[style]{font-weight:700}
+.disp-table tbody tr.disp-sub td.disp-time,.disp-table tbody tr.disp-daytot td.disp-time{font-family:inherit;font-size:12.5px}
+.disp-table thead tr.disp-h2 th{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;text-transform:none;letter-spacing:0;background:var(--surface-2);color:var(--ink);border-bottom:2px solid var(--line-strong)}
+.disp-table thead tr.disp-h2 th.disp-day,.disp-table thead tr.disp-h2 th.disp-time{font-family:inherit;text-transform:uppercase;letter-spacing:.02em;font-size:11px}
 /* Rotina atual do paciente */
 .rt-wrap{overflow-x:auto}
 .rt-table{border-collapse:collapse;width:100%;table-layout:fixed}
@@ -2259,7 +2261,6 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <div class="seg" id="dispWeekSeg" role="group" aria-label="Semana">
         <button type="button" data-dw="1">1ª</button><button type="button" data-dw="2">2ª</button><button type="button" data-dw="3">3ª</button><button type="button" data-dw="4">4ª</button><button type="button" data-dw="todas">Todas</button>
       </div>
-      <button type="button" class="btn ghost" id="dispResetCols" title="Volta a ordem e a largura padrão das colunas">Colunas padrão</button>
     </div>
     <div id="dispHost" class="disp-host"></div>
   </section>
@@ -4715,9 +4716,12 @@ function dispCompute(weeks){
       rows.push({day: day, sub: per[1], d: sub});
     });
   });
+  // Mesma ordem do Resumo: a do cadastro de Especialidades ("Sem especialidade" no fim).
+  var specPos = {}; state.specialties.forEach(function(s, i){ specPos[s.id] = i; });
   var specList = Object.keys(specs).sort(function(a, b){
     if (!a) return 1; if (!b) return -1;
-    return String(specialtyName(a)).localeCompare(String(specialtyName(b)), "pt-BR");
+    var pa = a in specPos ? specPos[a] : 1e6, pb = b in specPos ? specPos[b] : 1e6;
+    return pa - pb || String(specialtyName(a)).localeCompare(String(specialtyName(b)), "pt-BR");
   });
   var groupList = plannerRooms().filter(function(g){ return isGroup(g) && groups[g.id]; }).map(function(g){ return g.id; });
   return {specs: specList, groups: groupList, rows: rows};
@@ -4729,15 +4733,14 @@ function renderDispTab(){
   var weeks = DISP.week === "todas" ? WEEKS.slice() : [Number(DISP.week)];
   var r = dispCompute(weeks);
   if (!r.specs.length){ host.innerHTML = '<div class="empty-state"><b>Nada para mostrar</b>Cadastre as salas com os profissionais de cada coluna.</div>'; return; }
-  var tot = {at: {}, free: {}, blk: 0, nao: 0};
-  function cell(d, s){
-    var a = d.at[s] || 0, l = d.free[s] || 0;
-    return '<td class="disp-n' + (a || l ? '' : ' zero') + '"><span class="disp-at">' + a + '</span><span class="disp-sep">/</span><span class="disp-fr' + (l ? '' : ' none') + '">' + l + '</span></td>';
+  function blank(){ return {at: {}, free: {}, blk: 0, nao: 0}; }
+  function add(acc, d){
+    Object.keys(d.at).forEach(function(s){ acc.at[s] = (acc.at[s] || 0) + d.at[s]; });
+    Object.keys(d.free).forEach(function(s){ acc.free[s] = (acc.free[s] || 0) + d.free[s]; });
+    acc.blk += d.blk; acc.nao += d.nao;
   }
-  // "Aquecimento" dos totais por horário (como no Excel): quanto maior o número, mais forte a cor
-  // (Atendidos = laranja, Disponível = verde, Não ABA = vermelho). Escala pelo maior valor da
-  // coluna nas linhas de horário da semana mostrada; zero fica sem cor. Subtotais e total, sem cor.
-  // Os resumos (Manhã/Tarde) têm o próprio aquecimento, comparando só os resumos de todos os dias.
+  // "Aquecimento" das colunas de total (Atendidos laranja, Disponível verde, Não ABA vermelho):
+  // linhas de horário comparadas entre si; resumos Manhã/Tarde comparados entre si.
   var hmax = {at: 0, fr: 0, nao: 0}, hsub = {at: 0, fr: 0, nao: 0};
   r.rows.forEach(function(x){ var h = x.sub ? hsub : hmax; h.at = Math.max(h.at, dispSum(x.d.at)); h.fr = Math.max(h.fr, dispSum(x.d.free)); h.nao = Math.max(h.nao, x.d.nao); });
   function heat(kind, v, sub){
@@ -4745,52 +4748,58 @@ function renderDispTab(){
     if (!v || !mx) return "";
     return ' style="background:color-mix(in srgb,var(--heat-' + kind + ') ' + Math.round(12 + 68 * v / mx) + '%,var(--surface))"';
   }
-  // Colunas: Dia e Horário fixos à esquerda; as outras podem trocar de ordem (arrastar o título)
-  // e de largura (arrastar a borda; duplo clique volta ao padrão). Fica salvo neste navegador.
-  var cols = dispColumns(r.specs, r.groups);
-  var cfg = dispWidthCfg(cols);
-  function rowCells(d, kind, label1, label2){
-    var at = dispSum(d.at), fr = dispSum(d.free), isTime = kind === "time", hk = kind === "time" || kind === "sub", sb = kind === "sub";
-    var vals = {at: at, fr: fr};
-    return '<td class="disp-day">' + label1 + '</td><td class="disp-time">' + label2 + '</td>' + cols.slice(2).map(function(c){
+  // Colunas na ordem do Resumo: especialidades (atend. / livres), grupos de suporte e os totais.
+  var cols = r.specs.map(function(sp){ return {spec: sp, label: sp ? specialtyName(sp) : "Sem especialidade", sub: "atend. / livres", color: vgSpecColor(sp)}; })
+    .concat((r.groups || []).map(function(gid){ var g = findRoom(gid); return {grp: gid, label: g ? g.name : gid, sub: "atendidos", color: swatchVar(g ? g.color : "slate")}; }))
+    .concat([{k: "at", label: "Total atendido"}, {k: "blk", label: "Bloqueios / reuniões"}, {k: "fr", label: "Total disponível"}, {k: "nao", label: "Não ABA"}]);
+  function cells(d, kind){
+    var at = dispSum(d.at), fr = dispSum(d.free), hk = kind === "time" || kind === "sub", sb = kind === "sub";
+    return cols.map(function(c){
       if (c.spec != null){
-        var col = vgSpecColor(c.spec);
-        return cell(d, c.spec).replace('<td class="', '<td style="background:color-mix(in srgb,' + col + ' ' + (isTime ? 14 : 26) + '%,var(--surface))" class="');
+        var a = d.at[c.spec] || 0, l = d.free[c.spec] || 0;
+        return '<td class="disp-n' + (a || l ? '' : ' zero') + '"><span class="disp-at">' + a + '</span><span class="disp-sep">/</span><span class="disp-fr' + (l ? '' : ' none') + '">' + l + '</span></td>';
       }
-      if (c.grp != null){
-        var gv = d.at["grp:" + c.grp] || 0, gr = findRoom(c.grp), gc = swatchVar(gr ? gr.color : "slate");
-        return '<td class="disp-n' + (gv ? '' : ' zero') + '" style="background:color-mix(in srgb,' + gc + ' ' + (isTime ? 14 : 26) + '%,var(--surface))"><span class="disp-at">' + gv + '</span></td>';
-      }
-      if (c.k === "tot-at") return '<td class="disp-tot"' + (hk ? heat("at", at, sb) : '') + '>' + at + '</td>';
-      if (c.k === "tot-blk") return '<td class="disp-tot">' + d.blk + '</td>';
-      if (c.k === "tot-fr") return '<td class="disp-tot disp-free' + (fr ? '' : ' none') + '"' + (hk ? heat("fr", fr, sb) : '') + '>' + fr + '</td>';
+      if (c.grp != null){ var gv = d.at["grp:" + c.grp] || 0; return '<td class="disp-n' + (gv ? '' : ' zero') + '"><span class="disp-at">' + gv + '</span></td>'; }
+      if (c.k === "at") return '<td class="disp-tot"' + (hk ? heat("at", at, sb) : '') + '>' + at + '</td>';
+      if (c.k === "blk") return '<td class="disp-tot">' + d.blk + '</td>';
+      if (c.k === "fr") return '<td class="disp-tot disp-free' + (fr ? '' : ' none') + '"' + (hk ? heat("fr", fr, sb) : '') + '>' + fr + '</td>';
       return '<td class="disp-tot' + (d.nao ? ' disp-nao' : '') + '"' + (hk ? heat("nao", d.nao, sb) : '') + '>' + d.nao + '</td>';
     }).join("");
   }
-  var lastDay = null, body = r.rows.map(function(x){
-    var first = x.day.key !== lastDay; lastDay = x.day.key;
-    if (x.sub){
-      Object.keys(x.d.at).forEach(function(s){ tot.at[s] = (tot.at[s] || 0) + x.d.at[s]; });
-      Object.keys(x.d.free).forEach(function(s){ tot.free[s] = (tot.free[s] || 0) + x.d.free[s]; });
-      tot.blk += x.d.blk; tot.nao += x.d.nao;
-      var firstSub = DISP.collapsed && x.sub === r.rows.filter(function(y){ return y.sub && y.day.key === x.day.key; })[0].sub;
-      return '<tr class="disp-sub' + (firstSub ? ' disp-first' : '') + '">' + rowCells(x.d, "sub", esc(x.day.full), esc(x.sub)) + '</tr>';
+  // Corpo: por dia, horários (branco e cinza alternados), Manhã, Tarde e Total do dia.
+  // Recolhido: só Manhã, Tarde e Total do dia.
+  var tot = blank(), body = "";
+  DAYS.forEach(function(day){
+    var list = r.rows.filter(function(x){ return x.day.key === day.key; });
+    if (!list.length) return;
+    var dayTot = blank(), alt = 0, first = true, name = esc(day.full);
+    function tr(cls, label2, d, kind){
+      var h = '<tr class="' + cls + (first ? ' disp-first' : '') + '"><td class="disp-day">' + name + '</td><td class="disp-time">' + label2 + '</td>' + cells(d, kind) + '</tr>';
+      first = false; return h;
     }
-    if (DISP.collapsed) return '';   // recolhido: só os resumos de Manhã e Tarde
-    return '<tr' + (first ? ' class="disp-first"' : '') + '>' + rowCells(x.d, "time", esc(x.day.full), esc(x.time)) + '</tr>';
-  }).join("");
-  host.innerHTML = '<div class="disp-wrap"><table class="disp-table" style="width:' + cfg.total() + 'px">' +
-    '<colgroup>' + cols.map(function(c){ return '<col data-col="' + esc(c.k) + '" style="width:' + cfg.width(c.k) + 'px">'; }).join("") + '</colgroup>' +
-    '<thead><tr>' + cols.map(function(c){
-      var st = c.spec != null ? ' style="background:' + vgSpecColor(c.spec) + '"' : c.grp != null ? ' style="background:' + swatchVar((findRoom(c.grp) || {}).color || "slate") + '"' : '';
-      var tog = c.k === "day" ? '<button type="button" class="disp-collapse" id="dispCollapse" aria-expanded="' + (DISP.collapsed ? 'false' : 'true') + '" title="' + (DISP.collapsed ? 'Mostrar todos os horários' : 'Recolher: mostrar só os resumos de Manhã e Tarde') + '">' + (DISP.collapsed ? '▸' : '▾') + '</button>' : '';
-      return '<th class="' + c.cls + (c.spec != null || c.grp != null ? ' disp-spec-solid' : '') + '"' + st + (c.fixed ? '' : ' draggable="true" data-disp-col="' + esc(c.k) + '"') + ' title="' + esc(c.title || c.label) + (c.fixed ? '' : ' — arraste para mudar a ordem') + '">' +
-        tog + esc(c.label) + (c.sub ? '<span>' + esc(c.sub) + '</span>' : '') +
-        '<span class="pat-col-resizer" data-col="' + esc(c.k) + '" title="Arrastar para ajustar a largura (duplo clique volta ao padrão)" aria-hidden="true"></span></th>';
-    }).join("") + '</tr></thead><tbody>' + body +
-    '<tr class="disp-total">' + rowCells(tot, "total", "Total", DISP.week === "todas" ? "4 semanas" : DISP.week + "ª semana") + '</tr></tbody></table></div>';
-  wirePatColResize(host, cfg);
-  dispWireReorder(host, cols);
+    list.forEach(function(x){
+      if (x.sub){ add(dayTot, x.d); body += tr("disp-sub", esc(x.sub), x.d, "sub"); return; }
+      if (DISP.collapsed) return;
+      body += tr(alt++ % 2 ? "disp-alt" : "", esc(x.time), x.d, "time");
+    });
+    body += tr("disp-daytot", "Total do dia", dayTot, "day");
+    add(tot, dayTot);
+  });
+  var tog = '<button type="button" class="disp-collapse" id="dispCollapse" aria-expanded="' + (DISP.collapsed ? 'false' : 'true') + '" title="' + (DISP.collapsed ? 'Mostrar todos os horários' : 'Recolher: mostrar só Manhã, Tarde e Total do dia') + '">' + (DISP.collapsed ? '▸' : '▾') + '</button>';
+  // 1ª linha do título: especialidades (cor cheia, "atend. / livres"); 2ª linha: TOTAL da semana.
+  var head1 = '<tr class="disp-h1"><th class="disp-day">' + tog + 'Dia</th><th class="disp-time">Horário</th>' + cols.map(function(c){
+    return '<th class="' + (c.color ? 'disp-spec disp-spec-solid' : 'disp-tot') + '"' + (c.color ? ' style="background:' + c.color + '"' : '') + ' title="' + esc(c.label) + '">' + esc(c.label) + (c.sub ? '<span>' + esc(c.sub) + '</span>' : '') + '</th>';
+  }).join("") + '</tr>';
+  var head2 = '<tr class="disp-h2"><th class="disp-day">Total</th><th class="disp-time">' + (DISP.week === "todas" ? "4 semanas" : DISP.week + "ª semana") + '</th>' +
+    cells(tot, "total").replace(/<td /g, "<th ").replace(/<\/td>/g, "</th>") + '</tr>';
+  // Largura: a tabela ocupa a janela; Dia e Horário fixos, o resto dividido igualmente (mínimo 64px).
+  var minW = 120 + 112 + cols.length * 64;
+  host.innerHTML = '<div class="disp-wrap"><table class="disp-table" style="min-width:' + minW + 'px">' +
+    '<colgroup><col style="width:120px"><col style="width:112px">' + cols.map(function(){ return '<col>'; }).join("") + '</colgroup>' +
+    '<thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div>';
+  // 2ª linha do título fica logo abaixo da 1ª ao rolar.
+  var h1 = host.querySelector("tr.disp-h1"), hh = h1 ? h1.getBoundingClientRect().height : 0;
+  Array.prototype.forEach.call(host.querySelectorAll("tr.disp-h2 th"), function(th){ th.style.top = hh + "px"; });
   var ct = document.getElementById("dispCollapse");
   if (ct) ct.addEventListener("click", function(e){
     e.stopPropagation();
@@ -4799,70 +4808,7 @@ function renderDispTab(){
     renderDispTab();
   });
 }
-var DISP_ORDER_KEY = "agendaPipo:dispColOrder";
-function dispColumns(specs, groups){
-  var all = [{k: "day", label: "Dia", cls: "disp-day", fixed: true, w: 120}, {k: "time", label: "Horário", cls: "disp-time", fixed: true, w: 100}];
-  var rest = specs.map(function(sp){ var n = sp ? specialtyName(sp) : "Sem especialidade"; return {k: "spec:" + sp, spec: sp, label: n, title: n, sub: "atend. / livres", cls: "disp-spec", w: 120}; })
-    .concat((groups || []).map(function(gid){ var g = findRoom(gid), n = g ? g.name : gid; return {k: "grp:" + gid, grp: gid, label: n, title: n + " (grupo de suporte)", sub: "atendidos", cls: "disp-spec", w: 120}; }))
-    .concat([{k: "tot-at", label: "Total atendido", cls: "disp-tot", w: 110}, {k: "tot-blk", label: "Bloqueios / reuniões", cls: "disp-tot", w: 140},
-      {k: "tot-fr", label: "Total disponível", cls: "disp-tot", w: 120}, {k: "tot-nao", label: "Não ABA", cls: "disp-tot", w: 90}]);
-  var saved = []; try { saved = JSON.parse(localStorage.getItem(DISP_ORDER_KEY) || "[]") || []; } catch(e){}
-  if (Array.isArray(saved) && saved.length){
-    var pos = {}; saved.forEach(function(k, i){ pos[k] = i; });
-    // coluna nova (especialidade nova) entra no lugar padrão, depois das que já foram ordenadas
-    rest = rest.map(function(c, i){ return {c: c, i: i}; }).sort(function(a, b){
-      var pa = a.c.k in pos ? pos[a.c.k] : 1000 + a.i, pb = b.c.k in pos ? pos[b.c.k] : 1000 + b.i;
-      return pa - pb;
-    }).map(function(x){ return x.c; });
-  }
-  return all.concat(rest);
-}
-function dispWidthCfg(cols){
-  var def = {}, min = {};
-  cols.forEach(function(c){ def[c.k] = c.w; min[c.k] = 60; });
-  function width(k){ var w = gtWidths("disp")[k]; return (typeof w === "number" && isFinite(w) && w > 0) ? w : def[k]; }
-  return {width: width, min: min,
-    total: function(){ return cols.reduce(function(t, c){ return t + width(c.k); }, 0); },
-    set: function(k, w){ gtWidths("disp")[k] = w; var t = document.querySelector("#dispHost table.disp-table"); if (t) t.style.width = this.total() + "px"; },
-    reset: function(k){ delete gtWidths("disp")[k]; },
-    save: function(){ try { localStorage.setItem("agendaPipo:colWidths:disp", JSON.stringify(gtWidths("disp"))); } catch(e){} },
-    render: renderDispTab};
-}
-function dispWireReorder(host, cols){
-  var drag = null;
-  function clear(){ Array.prototype.forEach.call(host.querySelectorAll("th.drop-before,th.drop-after,th.dragging"), function(t){ t.classList.remove("drop-before", "drop-after", "dragging"); }); }
-  host.querySelectorAll("th[data-disp-col]").forEach(function(th){
-    th.addEventListener("dragstart", function(e){
-      if (document.body.classList.contains("pat-col-resizing")){ e.preventDefault(); return; }
-      drag = th.getAttribute("data-disp-col"); th.classList.add("dragging");
-      try { e.dataTransfer.setData("text/plain", drag); e.dataTransfer.effectAllowed = "move"; } catch(x){}
-    });
-    th.addEventListener("dragover", function(e){
-      if (!drag) return; e.preventDefault();
-      var rc = th.getBoundingClientRect(), after = e.clientX > rc.left + rc.width / 2;
-      clear(); host.querySelector('th[data-disp-col="' + drag + '"]').classList.add("dragging");
-      th.classList.add(after ? "drop-after" : "drop-before");
-    });
-    th.addEventListener("drop", function(e){
-      if (!drag) return; e.preventDefault();
-      var to = th.getAttribute("data-disp-col"), after = th.classList.contains("drop-after");
-      var keys = cols.slice(2).map(function(c){ return c.k; }).filter(function(k){ return k !== drag; });
-      var i = keys.indexOf(to); if (i === -1) i = keys.length; else if (after) i++;
-      keys.splice(i, 0, drag);
-      try { localStorage.setItem(DISP_ORDER_KEY, JSON.stringify(keys)); } catch(x){}
-      drag = null; renderDispTab();
-    });
-    th.addEventListener("dragend", function(){ drag = null; clear(); });
-  });
-}
-function dispResetColumns(){
-  try { localStorage.removeItem(DISP_ORDER_KEY); localStorage.removeItem("agendaPipo:colWidths:disp"); } catch(e){}
-  delete GT_SORT["w:disp"];
-  renderDispTab();
-}
 function wireDispTab(){
-  var rb = document.getElementById("dispResetCols");
-  if (rb) rb.addEventListener("click", dispResetColumns);
   var seg = document.getElementById("dispWeekSeg");
   if (seg) seg.addEventListener("click", function(e){
     var b = e.target.closest("[data-dw]"); if (!b) return;

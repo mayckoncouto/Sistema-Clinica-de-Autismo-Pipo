@@ -25,11 +25,24 @@ const path = require('path');
   check('Planner menu: Disponibilidade right after Resumo?', items.indexOf('disponibilidade') === items.indexOf('resumo') + 1, JSON.stringify(items));
   await ev('(function(){ state.tab = "disponibilidade"; document.querySelector(\'[data-tab="disponibilidade"]\').click(); return true; })()');
   await page.waitForSelector('#dispHost table.disp-table');
-  const head = await page.$$eval('#dispHost thead th', (r) => r.map((x) => x.textContent));
-  check('columns: Dia, Horário, specialties (atend. / livres), totals?', /Dia$/.test(head[0]) && head[1] === 'Horário' && head.some((h) => /atend\. \/ livres/.test(h)) &&
+  const head = await page.$$eval('#dispHost thead tr.disp-h1 th', (r) => r.map((x) => x.textContent));
+  const head2 = await page.$$eval('#dispHost thead tr.disp-h2 th', (r) => r.map((x) => x.textContent));
+  check('1st title row: Dia, Horário, specialties (atend. / livres), totals?', /Dia$/.test(head[0]) && head[1] === 'Horário' && head.some((h) => /atend\. \/ livres/.test(h)) &&
     head.slice(-4).join('|') === 'Total atendido|Bloqueios / reuniões|Total disponível|Não ABA', JSON.stringify(head));
+  const specOrder = await ev('(function(){ var pos = {}; state.specialties.forEach(function(s, i){ pos[s.name] = i; }); return Array.prototype.map.call(document.querySelectorAll("#dispHost thead tr.disp-h1 th.disp-spec"), function(th){ return pos[th.getAttribute("title")]; }).filter(function(x){ return x !== undefined; }); })()');
+  check('specialties in the same order as the Resumo (Especialidades registry)?', specOrder.length >= 2 && specOrder.every((x, i) => !i || x > specOrder[i - 1]), JSON.stringify(specOrder));
+  check('2nd title row is TOTAL of the week?', head2[0] === 'Total' && head2[1] === '1ª semana' && head2.length === head.length, JSON.stringify(head2));
   const subs = await page.$$eval('#dispHost tr.disp-sub .disp-time', (r) => r.map((x) => x.textContent));
-  check('subtotal per period (Manhã/Tarde) and a final total?', subs.includes('Manhã') && subs.includes('Tarde') && (await page.$('#dispHost tr.disp-total')) !== null);
+  const dayTots = await page.$$eval('#dispHost tr.disp-daytot .disp-time', (r) => r.map((x) => x.textContent));
+  check('Manhã, Tarde and "Total do dia" rows?', subs.includes('Manhã') && subs.includes('Tarde') && dayTots.length >= 1 && dayTots.every((x) => x === 'Total do dia'));
+  const look = await page.evaluate(() => {
+    const bg = (sel) => { const e = document.querySelector(sel); return e ? getComputedStyle(e).backgroundColor : ''; };
+    return {white: bg('#dispHost tbody tr:not(.disp-alt):not(.disp-sub):not(.disp-daytot) td.disp-n'), gray: bg('#dispHost tbody tr.disp-alt td.disp-n'),
+      sub: bg('#dispHost tbody tr.disp-sub td.disp-n'), day: bg('#dispHost tbody tr.disp-daytot td.disp-n'),
+      noDrag: !document.querySelector('#dispHost th[draggable]') && !document.getElementById('dispResetCols') && !document.querySelector('#dispHost .pat-col-resizer'),
+      fill: document.querySelector('#dispHost table').getBoundingClientRect().width >= document.querySelector('#dispHost .disp-wrap').clientWidth - 2};
+  });
+  check('time rows alternate white/gray; Manhã/Tarde gray; Total do dia darker; no drag; table fills the window?', look.white !== look.gray && look.sub !== look.day && look.noDrag && look.fill, JSON.stringify(look));
 
   // Números pelo cálculo (semana 1, segunda).
   const T = await ev('findDayObj("seg").morning[2]');   // horário de teste
@@ -87,27 +100,19 @@ const path = require('path');
   // Seletor de semana redesenha; grupos de suporte ficam de fora.
   await page.click('#dispWeekSeg [data-dw="todas"]');
   check('week selector "Todas" is active and total row says "4 semanas"?', (await page.$eval('#dispWeekSeg [data-dw="todas"]', (b) => b.classList.contains('active'))) &&
-    /4 semanas/.test(await page.$eval('#dispHost tr.disp-total', (e) => e.textContent)));
+    /4 semanas/.test(await page.$eval('#dispHost thead tr.disp-h2', (e) => e.textContent)));
 
-  // Nome do dia em todas as linhas; ordem das colunas salva (arrastar) e "Colunas padrão" volta.
-  const days = await page.$$eval('#dispHost tbody tr:not(.disp-total) td.disp-day', (r) => r.map((x) => x.textContent));
+  // Nome do dia em todas as linhas.
+  const days = await page.$$eval('#dispHost tbody tr td.disp-day', (r) => r.map((x) => x.textContent));
   check('day name on every row of the day?', days.length > 10 && days.every((d) => d), JSON.stringify(days.slice(0, 10)));
-  const order = await ev(`(function(){ localStorage.setItem("agendaPipo:dispColOrder", JSON.stringify(["tot-nao"])); renderDispTab();
-    var o = Array.prototype.map.call(document.querySelectorAll("#dispHost thead th"), function(t){ return t.getAttribute("data-disp-col") || t.textContent; });
-    document.getElementById("dispResetCols").click();
-    var o2 = Array.prototype.map.call(document.querySelectorAll("#dispHost thead th"), function(t){ return t.getAttribute("data-disp-col") || t.textContent; });
-    return [o, o2]; })()`);
-  check('saved column order is applied (Não ABA first after Dia/Horário) and "Colunas padrão" restores it?', order[0][2] === 'tot-nao' && order[1][order[1].length - 1] === 'tot-nao', JSON.stringify(order));
-  const spec = await page.$eval('#dispHost tbody tr td.disp-n', (td) => td.getAttribute('style') || '');
-  check('specialty cells use the specialty color?', /color-mix/.test(spec), spec);
 
   // Recolher (seta no Dia): só os resumos de Manhã/Tarde, com aquecimento entre os resumos.
   await page.click('#dispCollapse');
-  const col = await page.evaluate(() => ({rows: document.querySelectorAll('#dispHost tbody tr:not(.disp-sub):not(.disp-total)').length, subs: document.querySelectorAll('#dispHost tbody tr.disp-sub').length,
+  const col = await page.evaluate(() => ({rows: document.querySelectorAll('#dispHost tbody tr:not(.disp-sub):not(.disp-daytot)').length, dayTot: document.querySelectorAll('#dispHost tbody tr.disp-daytot').length, subs: document.querySelectorAll('#dispHost tbody tr.disp-sub').length,
     heat: Array.prototype.some.call(document.querySelectorAll('#dispHost tbody tr.disp-sub td.disp-tot'), (td) => /color-mix/.test(td.getAttribute('style') || ''))}));
-  check('collapse shows only the Manhã/Tarde summaries, with heat colors?', col.rows === 0 && col.subs >= 2 && col.heat, JSON.stringify(col));
+  check('collapse shows only Manhã/Tarde and "Total do dia", with heat colors?', col.rows === 0 && col.subs >= 2 && col.dayTot >= 1 && col.heat, JSON.stringify(col));
   await page.click('#dispCollapse');
-  check('expanding shows the times again?', (await page.$$('#dispHost tbody tr:not(.disp-sub):not(.disp-total)')).length > 0);
+  check('expanding shows the times again?', (await page.$$('#dispHost tbody tr:not(.disp-sub):not(.disp-daytot)')).length > 0);
 
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();

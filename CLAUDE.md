@@ -2714,3 +2714,13 @@ modo TV, semana e impressão (podem vir depois).
   ("atendidos", cor do grupo, depois das especialidades; chave `grp:<id>` em `d.at`, então entra no
   Total atendido e no aquecimento). Reunião/Treinamento no grupo = 1 bloqueio do profissional.
   `dispCompute` devolve `groups`; colunas em `dispColumns(specs, groups)` (ordem/largura como as outras).
+- 2026-10-08 (pedido do usuário, SUBSTITUI arrastar/largura/"Colunas padrão"): Disponibilidade no
+  formato do Resumo — especialidades na ordem do cadastro de Especialidades (igual ao Resumo), depois
+  os grupos e os totais; tabela na largura da janela (`width:100%`, Dia 120px e Horário 112px fixos,
+  resto dividido; mínimo 64px por coluna). Título em 2 linhas: 1ª = especialidades com a cor cheia e
+  "atend. / livres" (`tr.disp-h1`); 2ª = TOTAL da semana (`tr.disp-h2`, presa logo abaixo da 1ª ao
+  rolar; substitui a linha Total do fim). Corpo por dia: horários alternando branco/cinza
+  (`tr.disp-alt`), Manhã e Tarde em cinza (`tr.disp-sub`) e **Total do dia** um pouco mais escuro
+  (`tr.disp-daytot`); recolher (▸ no Dia) mostra Manhã, Tarde e Total do dia. Saíram
+  `dispColumns`/`dispWidthCfg`/`dispWireReorder`/`dispResetColumns` e as cores por especialidade nas
+  células (só no título). Aquecimento das colunas de total continua (horários e resumos).
