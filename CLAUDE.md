@@ -2776,3 +2776,22 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   tempo real, níveis que veem a Agenda ganham tudo nas 4 listas). Testada no PGlite (RLS com usuário
   comum). Teste `tests/run_crm.js`.
 - 2026-10-08 (pedido do usuário: "tudo que criar deve partir do estilo que já temos") CRM no padrão do sistema: "Listas e status" com os componentes das janelas de Status/Sala (`.therapist-row`, bolinha `.spec-color-btn` + `openColorPicker`, ▲▼ `.col-move`, ✕ `.rm`, opções `.kind-opt` dentro de `.field`, "+ status"/"+ lista" `.add-row-btn`); janela da tarefa com h3 "Nova tarefa/Editar tarefa", campo Título comum e seções no estilo `.pm-sec-title`. **Regra: tela nova reaproveita classes/componentes existentes, nada de input/visual próprio.**
+- 2026-10-08 (pedidos do usuário, com imagens do ClickUp) CRM refeito no padrão do sistema:
+  - Lista = tabela de Tratamentos (`gtRender` "crm-lista"/"crm-mine"): Status, Tarefa, Paciente ou Lead
+    (`crmWhoName`, selo "lead"), Convênio (`crmConvName`: do paciente/tratamento ou do lead),
+    Vencimento; "Minhas tarefas" com a coluna Lista. Contador `#crmCount` e caixa **Finalizados**
+    (`#crmShowDone`): sem ela, tarefas em status `done` somem da lista e o Quadro esconde essas colunas.
+    Status "Encerra" passou a se chamar **Finalizado** (chave `done`).
+  - Janela da tarefa (`crmOpenTask`): campos em 2 colunas (`.crm-props` / `.field.crm-prop`): Tarefa,
+    Status, Responsáveis (lista de marcar `.ms` como os Tipos do colaborador), Vencimento, Prioridade,
+    **Paciente ou Lead** (`#crmWho`: sugestões de paciente; nome sem cadastro = lead `lead.nome`),
+    Motivo de perda (status `lost`), "Dados do lead" (só lead em lista `lead`: nascimento, responsável,
+    telefone, e-mail, convênio, plano, origem = lista "Como conheceu a clínica"), Descrição. Saíram
+    Etiquetas e Nome da criança. **Cadastrar paciente** (`#crmRegPat`, só para lead) abre
+    `openPatientModal(null, {prefill, noTreatment, onSaved})` preenchido e liga a tarefa ao paciente.
+  - Barra lateral recolhível `#crmSide` (lembrada em `agendaPipo:crmSide`): resumo das alterações em
+    texto (`#crmSideSum`), comentários (`#crmSideCom`) e campo de comentário com @menção. No corpo,
+    "Atividade" recolhida (`#crmActTog`) com o histórico completo. Botão **Alternar layout**
+    (`#crmLayBtn`: Modal / Tela cheia / Barra lateral, `agendaPipo:crmLayout`).
+  - **Tarefa finalizada não pode ser excluída**: Excluir desativado na janela + gatilho
+    `tasks_delete_guard` (migração `supabase/2026-10-08f-crm-finalizada-nao-exclui.sql`, testada).
