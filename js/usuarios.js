@@ -195,12 +195,14 @@
     });
   }
 
+  // Telas fixas + uma linha por lista do CRM (cadastro das listas vem do app: window.pipoCrmModules).
+  function allModules() { return MODULES.concat(window.pipoCrmModules ? window.pipoCrmModules() : []); }
   // Resumo curto das permissões de um nível, para a escolha no cadastro.
   function roleSummary(role) {
     if (!role) return "";
     if (role.is_admin) return "Acesso total, inclusive Usuários e Níveis de permissão";
     var p = role.permissions || {};
-    var parts = MODULES.map(function (m) {
+    var parts = allModules().map(function (m) {
       var mp = p[m.key] || {};
       if (!mp.view) return null;
       var w = [];
@@ -459,7 +461,7 @@
   function normalizePerms(p) {
     var out = {};
     p = p || {};
-    MODULES.forEach(function (m) {
+    allModules().forEach(function (m) {
       out[m.key] = {};
       // Item ainda não gravado no nível: vale o padrão (Ajuda e Trocar senha = marcados).
       ACTIONS.forEach(function (a) { out[m.key][a.key] = modActs(m).indexOf(a.key) !== -1 && (p[m.key] ? !!p[m.key][a.key] : !!m.dflt); });
@@ -552,7 +554,7 @@
     return '<table class="perm-grid" id="rPermGrid"><thead><tr><th>Tela</th>' +
       ACTIONS.map(function (a) { return "<th>" + a.label + "</th>"; }).join("") +
       "</tr></thead><tbody>" +
-      MODULES.map(function (m) {
+      allModules().map(function (m) {
         return (m.group ? '<tr class="perm-group"><td colspan="' + (ACTIONS.length + 1) + '">' + m.group + "</td></tr>" : "") +
           "<tr><td><b>" + m.label + "</b>" + (m.hint ? "<small>" + m.hint + "</small>" : "") + "</td>" +
           ACTIONS.map(function (a) {

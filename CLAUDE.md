@@ -2741,3 +2741,37 @@ modo TV, semana e impressão (podem vir depois).
   profissional. Botões `#plbClearHours` "Limpar horários" e `#plbDefault` "Horário padrão". `cells()` = horários
   do Planner (`DAYS`) que começam dentro das faixas; dia fechado no Planner fica desativado; faixa inválida ou
   incompleta trava o botão com o motivo. `plbAllTimes` removida. Teste em `tests/run_bloqueio.js`.
+
+## CRM — Fase 1: listas, tarefas, Lista/Quadro, atividade (2026-10-08)
+Projeto do usuário: trazer para o sistema o que usam no ClickUp (CRM, Agendas, Fature, Canal...).
+**Mapa aprovado:** Fase 1 tarefas + CRM (FEITA) · Fase 2 checklist, subtarefas e anexos · Fase 3
+calendário/filtros/"Minhas tarefas" avançado · Fase 4 integração (Contrato assinado → paciente +
+tratamento; automações: tratamento cancelado/vencendo cria tarefa; "Criar tarefa" no paciente/Agenda)
+· Fase 5 Canal (chat) · Fase 6 importar do ClickUp. Decisões: lead (contato) à parte do paciente;
+listas e status configuráveis (só Administrador); anexos depois; responsável = usuários do sistema;
+permissão POR LISTA; contato com básico + convênio/plano + origem + motivo de perda; avisos =
+contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a lista do funil se chama
+**Atendimento**; listas iniciais Atendimento, Agendas, Fature, Gestão.
+- Topo `#crmBtn`/`#crmMenu` (`CRM_ITEMS` montado por `crmRebuildNav` a partir do cadastro; `CRM_TABS`
+  em `NAV_MENUS`; grupo "CRM" no ☰), badge `#crmBadge` (`crmBadgeRender`: minhas abertas vencidas +
+  menções não lidas). Itens: Minhas tarefas (`CRM.list = "__mine"`), uma por lista (`crm-<id>`),
+  Listas e status (`crmOpenListsModal`, só admin). `tabCan("crm")` = alguma lista visível.
+- Cadastro `config/task_lists {list:[{id, name, color, lead, statuses:[{id, name, color, done, lost}]}]}`
+  (`subscribeTaskLists`; sem documento = `CRM_DEFAULT_LISTS`). `done` = encerra (sai de Minhas
+  tarefas, não fica vencida); `lost` (só em lista `lead`) = pede motivo de perda.
+- Tabelas `tasks` (list_id, status, title, description, priority urgente|alta|normal|baixa, due_date,
+  assignees uuid[], tags text[], patient_id, lead jsonb {nome, nascimento, responsavel, telefone, email,
+  convenio, plano, origem, motivoPerda}, position, created_by/_name, closed_at), `task_events` (comment |
+  create | status | field; histórico escrito pelo gatilho `tasks_history`; usuário só insere comment),
+  `task_reads` (seen_at por pessoa). RLS por `has_perm('crm_' || list_id, …)`; `crm_people()` (nomes dos
+  usuários ativos). Tempo real em `tasks`/`task_events` (`crmEnsureChannel`).
+- Tela `#tab-crm`: Lista (`crmGroupHtml`, grupos por status recolhíveis) e Quadro (`.crm-board`,
+  arrastar = `crmSetStatus`), filtros (busca, responsável incl. Eu/Sem, prioridade, vencimento).
+  Janela `crmOpenTask(task, {listId, status})` com dados do contato (lista `lead`), atividade
+  (`crmActivityLoad`, `crmEventText`) e comentário com @menção (`crmMentionWire`; menções = nomes
+  "@Nome" no texto). Abrir a tarefa = `crmMarkRead`. Sem sistema online tudo em `CRM.mem`.
+- Permissões: `window.pipoCrmModules()` → `js/usuarios.js` `allModules()` (grade, resumo e
+  `normalizePerms`) mostra "CRM – <lista>". Migração `supabase/2026-10-08e-crm-tarefas.sql` (caminho
+  permitido, `module_for_path` = `crm_listas` → só admin grava, tabelas, gatilhos, RLS, `crm_people`,
+  tempo real, níveis que veem a Agenda ganham tudo nas 4 listas). Testada no PGlite (RLS com usuário
+  comum). Teste `tests/run_crm.js`.
