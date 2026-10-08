@@ -660,22 +660,31 @@ td.agd-slot:hover .agd-add{opacity:1}
 /* Planner: horário fora do expediente do profissional da coluna (cinza, inativo). */
 .slotcell.slot-off{cursor:not-allowed}
 .slotcell.slot-off.pl-lock{cursor:pointer}
-.plb-modal{max-width:760px}
+.modal.plb-modal{max-width:min(860px,calc(100vw - 32px))}
 .plb-hint{font-weight:400;color:var(--muted);font-size:11px;margin-left:6px}
-.plb-weeks{display:flex;gap:14px;flex-wrap:wrap}
-.plb-wk{display:flex;align-items:center;gap:4px;font-weight:600}
-.plb-grid-wrap{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px}
-.plb-grid{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
-.plb-grid th,.plb-grid td{padding:2px 3px;text-align:center;border-bottom:1px solid var(--line)}
-.plb-grid thead th{position:sticky;top:0;background:var(--surface-2);z-index:1}
-.plb-grid tbody th{position:sticky;left:0;background:var(--surface);z-index:1}
+.plb-weeks{display:flex;gap:16px;flex-wrap:wrap}
+.field label.plb-wk{display:inline-flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:600;cursor:pointer}
+.plb-wk input{margin:0}
+.plb-grid-wrap{max-height:min(46vh,380px);overflow:auto;border:1px solid var(--line);border-radius:8px}
+.plb-grid{border-collapse:separate;border-spacing:0;width:100%;font-size:12px;table-layout:fixed}
+.plb-grid th,.plb-grid td{padding:2px 4px;text-align:center;border-bottom:1px solid var(--line)}
+.plb-grid thead th{position:sticky;top:0;background:var(--surface-2);z-index:3}
+.plb-grid thead th.plb-corner{left:0;z-index:4;width:64px}
+.plb-grid tbody th{position:sticky;left:0;background:var(--surface);z-index:2;width:64px}
 .plb-day,.plb-time,.plb-mini{border:0;background:none;font:inherit;font-weight:700;color:var(--ink);cursor:pointer;padding:2px 4px;border-radius:5px}
 .plb-time{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:600}
 .plb-mini{font-size:10.5px;font-weight:600;color:var(--muted)}
 .plb-day:hover,.plb-time:hover,.plb-mini:hover{background:var(--accent-weak)}
 .plb-per{display:flex;justify-content:center;gap:2px}
-.plb-cell{width:100%;min-width:44px;height:20px;border:1px solid var(--line);border-radius:4px;background:var(--surface);cursor:pointer}
-.plb-cell.on{background:repeating-linear-gradient(45deg,#9aa3a1 0 4px,#c3c9c7 4px 8px);border-color:#7d8785}
+.plb-s{display:none}
+@media (max-width:640px){.plb-l{display:none}.plb-s{display:inline}.plb-grid thead th.plb-corner,.plb-grid tbody th{width:52px}.plb-day{font-size:11px;padding:2px 1px}}
+/* livre = branco; bloqueado = o mesmo cinza de "fora do horário do profissional" no Planner */
+.plb-cell{display:block;width:100%;height:22px;border:1px solid var(--line);border-radius:4px;background:var(--surface);cursor:pointer}
+.plb-cell:hover{border-color:var(--line-strong)}
+.plb-cell.on{background:var(--off-bg);border-color:var(--line-strong);box-shadow:inset 0 0 0 1px var(--line)}
+.plb-legend{display:flex;gap:14px;align-items:center;margin-top:6px;font-size:11.5px;color:var(--muted)}
+.plb-legend i{display:inline-block;width:18px;height:12px;border-radius:3px;border:1px solid var(--line);vertical-align:-2px;margin-right:4px;background:var(--surface)}
+.plb-legend i.on{background:var(--off-bg);border-color:var(--line-strong)}
 .plb-prev{margin-top:10px;font-size:12.5px;line-height:1.5;padding:8px 10px;border-radius:8px;background:var(--surface-2)}
 .plb-kept{margin-top:4px;color:var(--ink-2)}
 .slotcell.slot-off.aba-soft{cursor:pointer}
@@ -5133,13 +5142,14 @@ function openPlBlockModal(mode){
         '<div class="field"><label>Horários <span class="plb-hint">clique nas células; no dia, em Manhã/Tarde ou no horário marca a coluna/linha inteira</span></label>' +
           '<div class="plb-grid-wrap"><table class="plb-grid"><thead><tr><th class="plb-corner"><button type="button" class="plb-mini" data-plb-all>Tudo</button></th>' +
           DAYS.map(function(d){ return '<th><button type="button" class="plb-day" data-plb-day="' + d.key + '">' + esc(d.name || d.full) + '</button>' +
-            '<div class="plb-per"><button type="button" class="plb-mini" data-plb-per="' + d.key + '|m">Manhã</button><button type="button" class="plb-mini" data-plb-per="' + d.key + '|t">Tarde</button></div></th>'; }).join("") +
+            '<div class="plb-per"><button type="button" class="plb-mini" data-plb-per="' + d.key + '|m" title="Manhã"><span class="plb-l">Manhã</span><span class="plb-s">M</span></button><button type="button" class="plb-mini" data-plb-per="' + d.key + '|t" title="Tarde"><span class="plb-l">Tarde</span><span class="plb-s">T</span></button></div></th>'; }).join("") +
           '</tr></thead><tbody>' + times.map(function(tm){
             return '<tr><th><button type="button" class="plb-time" data-plb-time="' + tm + '">' + tm + '</button></th>' + DAYS.map(function(d){
               var ok = d.morning.indexOf(tm) !== -1 || d.afternoon.indexOf(tm) !== -1;
               return '<td>' + (ok ? '<button type="button" class="plb-cell" data-plb-cell="' + d.key + '|' + tm + '" aria-pressed="false"></button>' : '') + '</td>';
             }).join("") + '</tr>';
-          }).join("") + '</tbody></table></div></div>' +
+          }).join("") + '</tbody></table></div>' +
+          '<div class="plb-legend"><span><i></i>Livre</span><span><i class="on"></i>Bloqueado (cinza, como fora do horário do profissional)</span></div></div>' +
         (lock ? '<div class="field-row" style="display:flex;gap:10px;flex-wrap:wrap"><div class="field" style="flex:1;min-width:160px"><label for="plbMotivo">Motivo</label><select id="plbMotivo"><option value="">Sem motivo</option>' +
           PLB_MOTIVOS.map(function(m){ return '<option>' + esc(m) + '</option>'; }).join("") + '</select></div>' +
           '<div class="field" style="flex:2;min-width:200px"><label for="plbDet">Detalhe (opcional)</label><input id="plbDet" type="text" maxlength="80" placeholder="Ex.: férias de novembro"></div></div>' : '') +
