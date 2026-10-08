@@ -309,6 +309,14 @@ div.ag-obj-head{cursor:default}
 .disp-table th.drop-after{box-shadow:inset -3px 0 0 var(--accent)!important}
 .disp-table td{overflow:hidden;text-overflow:ellipsis}
 .disp-table th,.disp-table td,.disp-table .disp-day,.disp-table .disp-time{text-align:center;vertical-align:middle}
+/* Mesma formatação do Resumo: títulos em maiúsculas; especialidade com a cor cheia e texto branco. */
+.disp-table thead th{text-transform:uppercase;letter-spacing:.02em;font-size:11px;font-weight:800;padding:7px 8px;white-space:normal;line-height:1.25}
+.disp-table thead th.disp-spec-solid{color:#fff}
+.disp-table thead th.disp-spec-solid span{color:rgba(255,255,255,.85);text-transform:none;letter-spacing:0}
+.disp-table td{padding:7px 8px}
+.disp-table td.disp-day{font-size:12.5px}
+.disp-collapse{border:0;background:transparent;color:var(--ink-2);cursor:pointer;font-size:12px;padding:0 6px 0 0;line-height:1}
+.disp-collapse:hover{color:var(--accent)}
 .disp-table td.disp-tot[style]{color:var(--ink)}
 .disp-table tr.disp-first td{border-top:2px solid var(--line-strong)}
 .disp-table tr.disp-sub td{background:var(--accent-weak);font-weight:800}
@@ -4635,7 +4643,7 @@ var scheduleRelatorioRender = makeRenderBatcher(function(){
  * livre). Profissional com colunas em várias salas: se atende numa sala, só as colunas livres
  * dela contam; senão, a sala com mais colunas livres (não soma duas salas).
  */
-var DISP = {week: "1"};
+var DISP = {week: "1", collapsed: (function(){ try { return localStorage.getItem("agendaPipo:dispCollapsed") === "1"; } catch(e){ return false; } })()};
 function dispDoc(docId){
   return (state.reportDocs && state.reportDocs[docId]) || state.scheduleDocs[docId] || {bookings: {}};
 }
@@ -4715,28 +4723,30 @@ function renderDispTab(){
   // "Aquecimento" dos totais por horário (como no Excel): quanto maior o número, mais forte a cor
   // (Atendidos = laranja, Disponível = verde, Não ABA = vermelho). Escala pelo maior valor da
   // coluna nas linhas de horário da semana mostrada; zero fica sem cor. Subtotais e total, sem cor.
-  var hmax = {at: 0, fr: 0, nao: 0};
-  r.rows.forEach(function(x){ if (x.sub) return; hmax.at = Math.max(hmax.at, dispSum(x.d.at)); hmax.fr = Math.max(hmax.fr, dispSum(x.d.free)); hmax.nao = Math.max(hmax.nao, x.d.nao); });
-  function heat(kind, v){
-    if (!v || !hmax[kind]) return "";
-    return ' style="background:color-mix(in srgb,var(--heat-' + kind + ') ' + Math.round(12 + 68 * v / hmax[kind]) + '%,var(--surface))"';
+  // Os resumos (Manhã/Tarde) têm o próprio aquecimento, comparando só os resumos de todos os dias.
+  var hmax = {at: 0, fr: 0, nao: 0}, hsub = {at: 0, fr: 0, nao: 0};
+  r.rows.forEach(function(x){ var h = x.sub ? hsub : hmax; h.at = Math.max(h.at, dispSum(x.d.at)); h.fr = Math.max(h.fr, dispSum(x.d.free)); h.nao = Math.max(h.nao, x.d.nao); });
+  function heat(kind, v, sub){
+    var mx = (sub ? hsub : hmax)[kind];
+    if (!v || !mx) return "";
+    return ' style="background:color-mix(in srgb,var(--heat-' + kind + ') ' + Math.round(12 + 68 * v / mx) + '%,var(--surface))"';
   }
   // Colunas: Dia e Horário fixos à esquerda; as outras podem trocar de ordem (arrastar o título)
   // e de largura (arrastar a borda; duplo clique volta ao padrão). Fica salvo neste navegador.
   var cols = dispColumns(r.specs, cell);
   var cfg = dispWidthCfg(cols);
   function rowCells(d, kind, label1, label2){
-    var at = dispSum(d.at), fr = dispSum(d.free), isTime = kind === "time";
+    var at = dispSum(d.at), fr = dispSum(d.free), isTime = kind === "time", hk = kind === "time" || kind === "sub", sb = kind === "sub";
     var vals = {at: at, fr: fr};
     return '<td class="disp-day">' + label1 + '</td><td class="disp-time">' + label2 + '</td>' + cols.slice(2).map(function(c){
       if (c.spec != null){
         var col = vgSpecColor(c.spec);
         return cell(d, c.spec).replace('<td class="', '<td style="background:color-mix(in srgb,' + col + ' ' + (isTime ? 14 : 26) + '%,var(--surface))" class="');
       }
-      if (c.k === "tot-at") return '<td class="disp-tot"' + (isTime ? heat("at", at) : '') + '>' + at + '</td>';
+      if (c.k === "tot-at") return '<td class="disp-tot"' + (hk ? heat("at", at, sb) : '') + '>' + at + '</td>';
       if (c.k === "tot-blk") return '<td class="disp-tot">' + d.blk + '</td>';
-      if (c.k === "tot-fr") return '<td class="disp-tot disp-free' + (fr ? '' : ' none') + '"' + (isTime ? heat("fr", fr) : '') + '>' + fr + '</td>';
-      return '<td class="disp-tot' + (d.nao ? ' disp-nao' : '') + '"' + (isTime ? heat("nao", d.nao) : '') + '>' + d.nao + '</td>';
+      if (c.k === "tot-fr") return '<td class="disp-tot disp-free' + (fr ? '' : ' none') + '"' + (hk ? heat("fr", fr, sb) : '') + '>' + fr + '</td>';
+      return '<td class="disp-tot' + (d.nao ? ' disp-nao' : '') + '"' + (hk ? heat("nao", d.nao, sb) : '') + '>' + d.nao + '</td>';
     }).join("");
   }
   var lastDay = null, body = r.rows.map(function(x){
@@ -4745,25 +4755,35 @@ function renderDispTab(){
       Object.keys(x.d.at).forEach(function(s){ tot.at[s] = (tot.at[s] || 0) + x.d.at[s]; });
       Object.keys(x.d.free).forEach(function(s){ tot.free[s] = (tot.free[s] || 0) + x.d.free[s]; });
       tot.blk += x.d.blk; tot.nao += x.d.nao;
-      return '<tr class="disp-sub">' + rowCells(x.d, "sub", esc(x.day.full), esc(x.sub)) + '</tr>';
+      var firstSub = DISP.collapsed && x.sub === r.rows.filter(function(y){ return y.sub && y.day.key === x.day.key; })[0].sub;
+      return '<tr class="disp-sub' + (firstSub ? ' disp-first' : '') + '">' + rowCells(x.d, "sub", esc(x.day.full), esc(x.sub)) + '</tr>';
     }
+    if (DISP.collapsed) return '';   // recolhido: só os resumos de Manhã e Tarde
     return '<tr' + (first ? ' class="disp-first"' : '') + '>' + rowCells(x.d, "time", esc(x.day.full), esc(x.time)) + '</tr>';
   }).join("");
   host.innerHTML = '<div class="disp-wrap"><table class="disp-table" style="width:' + cfg.total() + 'px">' +
     '<colgroup>' + cols.map(function(c){ return '<col data-col="' + esc(c.k) + '" style="width:' + cfg.width(c.k) + 'px">'; }).join("") + '</colgroup>' +
     '<thead><tr>' + cols.map(function(c){
-      var st = c.spec != null ? ' style="background:color-mix(in srgb,' + vgSpecColor(c.spec) + ' 30%,var(--surface));box-shadow:inset 0 -3px 0 ' + vgSpecColor(c.spec) + '"' : '';
-      return '<th class="' + c.cls + '"' + st + (c.fixed ? '' : ' draggable="true" data-disp-col="' + esc(c.k) + '"') + ' title="' + esc(c.title || c.label) + (c.fixed ? '' : ' — arraste para mudar a ordem') + '">' +
-        esc(c.label) + (c.sub ? '<span>' + esc(c.sub) + '</span>' : '') +
+      var st = c.spec != null ? ' style="background:' + vgSpecColor(c.spec) + '"' : '';
+      var tog = c.k === "day" ? '<button type="button" class="disp-collapse" id="dispCollapse" aria-expanded="' + (DISP.collapsed ? 'false' : 'true') + '" title="' + (DISP.collapsed ? 'Mostrar todos os horários' : 'Recolher: mostrar só os resumos de Manhã e Tarde') + '">' + (DISP.collapsed ? '▸' : '▾') + '</button>' : '';
+      return '<th class="' + c.cls + (c.spec != null ? ' disp-spec-solid' : '') + '"' + st + (c.fixed ? '' : ' draggable="true" data-disp-col="' + esc(c.k) + '"') + ' title="' + esc(c.title || c.label) + (c.fixed ? '' : ' — arraste para mudar a ordem') + '">' +
+        tog + esc(c.label) + (c.sub ? '<span>' + esc(c.sub) + '</span>' : '') +
         '<span class="pat-col-resizer" data-col="' + esc(c.k) + '" title="Arrastar para ajustar a largura (duplo clique volta ao padrão)" aria-hidden="true"></span></th>';
     }).join("") + '</tr></thead><tbody>' + body +
     '<tr class="disp-total">' + rowCells(tot, "total", "Total", DISP.week === "todas" ? "4 semanas" : DISP.week + "ª semana") + '</tr></tbody></table></div>';
   wirePatColResize(host, cfg);
   dispWireReorder(host, cols);
+  var ct = document.getElementById("dispCollapse");
+  if (ct) ct.addEventListener("click", function(e){
+    e.stopPropagation();
+    DISP.collapsed = !DISP.collapsed;
+    try { localStorage.setItem("agendaPipo:dispCollapsed", DISP.collapsed ? "1" : ""); } catch(x){}
+    renderDispTab();
+  });
 }
 var DISP_ORDER_KEY = "agendaPipo:dispColOrder";
 function dispColumns(specs){
-  var all = [{k: "day", label: "Dia", cls: "disp-day", fixed: true, w: 120}, {k: "time", label: "Horário", cls: "disp-time", fixed: true, w: 80}];
+  var all = [{k: "day", label: "Dia", cls: "disp-day", fixed: true, w: 120}, {k: "time", label: "Horário", cls: "disp-time", fixed: true, w: 100}];
   var rest = specs.map(function(sp){ var n = sp ? specialtyName(sp) : "Sem especialidade"; return {k: "spec:" + sp, spec: sp, label: n, title: n, sub: "atend. / livres", cls: "disp-spec", w: 120}; })
     .concat([{k: "tot-at", label: "Total atendido", cls: "disp-tot", w: 110}, {k: "tot-blk", label: "Bloqueios / reuniões", cls: "disp-tot", w: 140},
       {k: "tot-fr", label: "Total disponível", cls: "disp-tot", w: 120}, {k: "tot-nao", label: "Não ABA", cls: "disp-tot", w: 90}]);
@@ -17209,6 +17229,7 @@ var HELP_TOPICS = [
       "Vaga livre = coluna vazia dentro do horário de trabalho do profissional e sem trava de regra (\"não ABA\", profissional em Reunião/Treinamento ou em outra sala). Profissional com colunas em mais de uma sala conta só uma sala: a sala onde já está atendendo ou, se está livre, a sala com mais colunas vazias (ex.: 2 colunas em Fono e 2 em Fono ABA = 2 vagas).",
       "Bloqueios / reuniões: Bloqueado, Reunião Clínica e Treinamento contam uma vez por profissional em cada horário, mesmo marcados em várias colunas.",
       "Horário bloqueado (cadeado ou Outras opções → Bloquear horário) fica fora da conta: não é vaga livre nem entra em Bloqueios / reuniões.",
+      "A seta ao lado de <b>Dia</b> recolhe a tabela e mostra só os resumos de Manhã e Tarde de cada dia (clique de novo para ver todos os horários). Os resumos também têm cor de aquecimento, comparando só os resumos entre si.",
       "Colunas: arraste o título de uma coluna para mudar a ordem e a borda do título para mudar a largura (duplo clique na borda volta à largura padrão). Dia e Horário ficam sempre à esquerda. Fica salvo neste computador; <b>Colunas padrão</b> volta a ordem e as larguras originais. As colunas de especialidade têm a cor da especialidade.",
       "Os totais de cada horário têm cor de \"aquecimento\": quanto maior o número, mais forte a cor (Total atendido em laranja, Total disponível em verde, Não ABA em vermelho), comparando com os outros horários da semana mostrada. Zero fica sem cor.",
       "Atualiza sozinha quando alguém mexe no Planner."

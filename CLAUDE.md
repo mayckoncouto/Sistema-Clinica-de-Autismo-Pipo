@@ -2706,3 +2706,7 @@ modo TV, semana e impressão (podem vir depois).
   `dispColumns`, `dispWireReorder`, `agendaPipo:dispColOrder`; especialidade nova entra no lugar
   padrão) e largura pela borda (`dispWidthCfg` + `wirePatColResize`, `agendaPipo:colWidths:disp`;
   duplo clique volta). Botão `#dispResetCols` "Colunas padrão" (`dispResetColumns`).
+- 2026-10-08 Disponibilidade: seta ▾/▸ no título "Dia" (`#dispCollapse`, `DISP.collapsed`, salvo em
+  `agendaPipo:dispCollapsed`) recolhe a tabela para só os resumos Manhã/Tarde; resumos com aquecimento
+  próprio (`hsub`, compara só os resumos de todos os dias). Títulos no formato do Resumo (maiúsculas,
+  especialidade com a cor cheia e texto branco `.disp-spec-solid`, quebram linha).

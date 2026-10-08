@@ -26,7 +26,7 @@ const path = require('path');
   await ev('(function(){ state.tab = "disponibilidade"; document.querySelector(\'[data-tab="disponibilidade"]\').click(); return true; })()');
   await page.waitForSelector('#dispHost table.disp-table');
   const head = await page.$$eval('#dispHost thead th', (r) => r.map((x) => x.textContent));
-  check('columns: Dia, Horário, specialties (atend. / livres), totals?', head[0] === 'Dia' && head[1] === 'Horário' && head.some((h) => /atend\. \/ livres/.test(h)) &&
+  check('columns: Dia, Horário, specialties (atend. / livres), totals?', /Dia$/.test(head[0]) && head[1] === 'Horário' && head.some((h) => /atend\. \/ livres/.test(h)) &&
     head.slice(-4).join('|') === 'Total atendido|Bloqueios / reuniões|Total disponível|Não ABA', JSON.stringify(head));
   const subs = await page.$$eval('#dispHost tr.disp-sub .disp-time', (r) => r.map((x) => x.textContent));
   check('subtotal per period (Manhã/Tarde) and a final total?', subs.includes('Manhã') && subs.includes('Tarde') && (await page.$('#dispHost tr.disp-total')) !== null);
@@ -91,6 +91,14 @@ const path = require('path');
   check('saved column order is applied (Não ABA first after Dia/Horário) and "Colunas padrão" restores it?', order[0][2] === 'tot-nao' && order[1][order[1].length - 1] === 'tot-nao', JSON.stringify(order));
   const spec = await page.$eval('#dispHost tbody tr td.disp-n', (td) => td.getAttribute('style') || '');
   check('specialty cells use the specialty color?', /color-mix/.test(spec), spec);
+
+  // Recolher (seta no Dia): só os resumos de Manhã/Tarde, com aquecimento entre os resumos.
+  await page.click('#dispCollapse');
+  const col = await page.evaluate(() => ({rows: document.querySelectorAll('#dispHost tbody tr:not(.disp-sub):not(.disp-total)').length, subs: document.querySelectorAll('#dispHost tbody tr.disp-sub').length,
+    heat: Array.prototype.some.call(document.querySelectorAll('#dispHost tbody tr.disp-sub td.disp-tot'), (td) => /color-mix/.test(td.getAttribute('style') || ''))}));
+  check('collapse shows only the Manhã/Tarde summaries, with heat colors?', col.rows === 0 && col.subs >= 2 && col.heat, JSON.stringify(col));
+  await page.click('#dispCollapse');
+  check('expanding shows the times again?', (await page.$$('#dispHost tbody tr:not(.disp-sub):not(.disp-total)')).length > 0);
 
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
