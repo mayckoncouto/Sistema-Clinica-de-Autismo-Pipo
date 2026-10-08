@@ -2693,3 +2693,4 @@ modo TV, semana e impressão (podem vir depois).
   Bloqueado / Reunião Clínica / Treinamento = 1 por profissional por horário. Teste em
   `tests/run_disponibilidade.js`.
 - 2026-10-08: Visão geral — todos os cartões do horário na MESMA linha, dividindo a largura da janela (`.vg-cards` nowrap, `.vg-card` flex:1 1 0).
+- 2026-10-08: Visão geral com botão de tela cheia (`data-full-toggle`, mesmo `gridFullscreen` do Planner/Agenda); na tela cheia some o topo do sistema, mas a barra de data/filtros e os selos por especialidade continuam.

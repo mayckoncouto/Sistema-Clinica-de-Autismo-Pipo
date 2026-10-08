@@ -87,6 +87,14 @@ const path = require('path');
 
   const tops = await page.$$eval('#vgHost .vg-row:not(.empty)', (rows) => rows.map((r) => new Set(Array.from(r.querySelectorAll('.vg-card')).map((c) => Math.round(c.getBoundingClientRect().top))).size));
   check('every time row keeps its cards on ONE line (width shared)?', tops.every((n) => n === 1), tops);
+  // Tela cheia: esconde o topo do sistema; a barra de data/filtros continua.
+  await page.click('#tab-visaogeral [data-full-toggle]');
+  check('full screen button: hides the top bar, keeps date/filters and the specialty chips?', await page.evaluate(() => document.body.classList.contains('grid-full') &&
+    getComputedStyle(document.querySelector('.topbar')).display === 'none' && getComputedStyle(document.querySelector('.vg-toolbar')).display !== 'none' &&
+    getComputedStyle(document.querySelector('#vgCounts')).display !== 'none' && document.querySelectorAll('#vgCounts .vg-chip').length > 0));
+  await page.click('#fullExit');
+  check('"Sair da tela cheia" goes back?', await page.evaluate(() => !document.body.classList.contains('grid-full')));
+
   // Filtros.
   await page.$eval('#vgProf', (s) => { s.value = "bia-terapeuta"; s.dispatchEvent(new Event("change", {bubbles: true})); });
   check('filter by professional?', (await page.$$('#vgHost .vg-card')).length === 1 && /com filtro/.test(await page.$eval('#vgCounts', (e) => e.textContent)));
