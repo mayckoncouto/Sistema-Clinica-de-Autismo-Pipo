@@ -2796,3 +2796,15 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   - **Tarefa finalizada não pode ser excluída**: Excluir desativado na janela + gatilho
     `tasks_delete_guard` (migração `supabase/2026-10-08f-crm-finalizada-nao-exclui.sql`, testada).
 - 2026-10-08 (pedido do usuário) CRM: a tela ocupa a altura toda (`#tab-crm{flex:1}`; Quadro com colunas até o fim). Nova visualização **Calendário** (`CRM.view = "calendario"`, também em Minhas tarefas; Quadro não): mês domingo→sábado (`crmCalHtml`, `CRM.calMonth`, ‹ Hoje ›, `crmCalShift`), tarefas pelo vencimento com a cor do status (vencida em vermelho, finalizada riscada), até 4 por dia + "+ N mais" (`CRM.calOpen`), hoje destacado, contadores "sem vencimento" e "em atraso", arrastar para outro dia muda o vencimento (`crmSetDue`), + no dia cria tarefa com aquele vencimento (`crmOpenTask(null, {due})`). Testes em `run_crm.js`.
+- 2026-10-08 (pedidos do usuário) CRM: status como bolinha + texto (`crmStDot`) na lista e na atividade. Seletores
+  flutuantes (`crmPop`, `#crmPop`): Status agrupado Não iniciado / Ativo / Concluído / Perdido com ícone de andamento
+  (`crmStatusMenu`, `crmStGroups`, `crmStIcon`), Responsáveis com busca, "Eu" primeiro e iniciais coloridas
+  (`crmPeopleMenu`, `crmAv`, `crmAvColor`), Prioridade com bandeiras e teclas 1–4 (`crmPrioMenu`, `crmFlagSvg`; sem
+  "Limpar": a prioridade é obrigatória no banco, padrão Normal). Na janela: `#crmStBtn`/`#crmSt` (hidden),
+  `#crmPrioBtn`/`#crmPrio` (hidden), Responsáveis pelo mesmo `#crmPeopleMs .ms-btn` (o painel `#crmPeople` com as
+  caixas continua escondido como armazenamento). Na lista: colunas Responsáveis e Prioridade e cliques
+  `[data-crm-st]`, `[data-crm-people]`, `[data-crm-prio]` mudam sem abrir a tarefa (perda em lista de atendimento sem
+  motivo abre a tarefa). Contador de comentários por tarefa (`crmLoadComCount`, `CRM.comCount`, `crmComHtml`) na lista
+  e no quadro. Janela só no modo modal (saíram o botão de layout e `CRM_LAYOUTS`); barra lateral sempre aberta ao abrir,
+  também em tarefa nova; a seção "Atividade" do fim da janela saiu — a lateral (`#crmFeed`) mostra alterações (linhas) e
+  comentários (cartões) em ordem de data. Teste `tests/run_crm.js`.
