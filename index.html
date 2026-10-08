@@ -300,6 +300,8 @@ div.ag-obj-head{cursor:default}
 .disp-table td.disp-tot{background:color-mix(in srgb,var(--surface-2) 60%,var(--surface));font-weight:700}
 .disp-table td.disp-free{color:#1f7a45}.disp-table td.disp-free.none{color:var(--muted)}
 .disp-table td.disp-nao{color:#b3261e}
+.disp-table{--heat-at:#ed7d31;--heat-fr:#63be7b;--heat-nao:#f8696b}
+.disp-table td.disp-tot[style]{color:var(--ink)}
 .disp-table tr.disp-first td{border-top:2px solid var(--line-strong)}
 .disp-table tr.disp-sub td{background:var(--accent-weak);font-weight:800}
 .disp-table tr.disp-sub td.disp-day{background:var(--accent-weak)}
@@ -4697,10 +4699,19 @@ function renderDispTab(){
     var a = d.at[s] || 0, l = d.free[s] || 0;
     return '<td class="disp-n' + (a || l ? '' : ' zero') + '"><span class="disp-at">' + a + '</span><span class="disp-sep">/</span><span class="disp-fr' + (l ? '' : ' none') + '">' + l + '</span></td>';
   }
-  function nums(d){
+  // "Aquecimento" dos totais por horário (como no Excel): quanto maior o número, mais forte a cor
+  // (Atendidos = laranja, Disponível = verde, Não ABA = vermelho). Escala pelo maior valor da
+  // coluna nas linhas de horário da semana mostrada; zero fica sem cor. Subtotais e total, sem cor.
+  var hmax = {at: 0, fr: 0, nao: 0};
+  r.rows.forEach(function(x){ if (x.sub) return; hmax.at = Math.max(hmax.at, dispSum(x.d.at)); hmax.fr = Math.max(hmax.fr, dispSum(x.d.free)); hmax.nao = Math.max(hmax.nao, x.d.nao); });
+  function heat(kind, v){
+    if (!v || !hmax[kind]) return "";
+    return ' style="background:color-mix(in srgb,var(--heat-' + kind + ') ' + Math.round(12 + 68 * v / hmax[kind]) + '%,var(--surface))"';
+  }
+  function nums(d, isTime){
     var at = dispSum(d.at), fr = dispSum(d.free);
     return r.specs.map(function(s){ return cell(d, s); }).join("") +
-      '<td class="disp-tot">' + at + '</td><td class="disp-tot">' + d.blk + '</td><td class="disp-tot disp-free' + (fr ? '' : ' none') + '">' + fr + '</td><td class="disp-tot' + (d.nao ? ' disp-nao' : '') + '">' + d.nao + '</td>';
+      '<td class="disp-tot"' + (isTime ? heat("at", at) : '') + '>' + at + '</td><td class="disp-tot">' + d.blk + '</td><td class="disp-tot disp-free' + (fr ? '' : ' none') + '"' + (isTime ? heat("fr", fr) : '') + '>' + fr + '</td><td class="disp-tot' + (d.nao ? ' disp-nao' : '') + '"' + (isTime ? heat("nao", d.nao) : '') + '>' + d.nao + '</td>';
   }
   var lastDay = null, body = r.rows.map(function(x){
     var first = x.day.key !== lastDay; lastDay = x.day.key;
@@ -4710,7 +4721,7 @@ function renderDispTab(){
       tot.blk += x.d.blk; tot.nao += x.d.nao;
       return '<tr class="disp-sub"><td class="disp-day"></td><td class="disp-time">' + esc(x.sub) + '</td>' + nums(x.d) + '</tr>';
     }
-    return '<tr' + (first ? ' class="disp-first"' : '') + '><td class="disp-day">' + (first ? esc(x.day.full) : '') + '</td><td class="disp-time">' + esc(x.time) + '</td>' + nums(x.d) + '</tr>';
+    return '<tr' + (first ? ' class="disp-first"' : '') + '><td class="disp-day">' + (first ? esc(x.day.full) : '') + '</td><td class="disp-time">' + esc(x.time) + '</td>' + nums(x.d, true) + '</tr>';
   }).join("");
   host.innerHTML = '<div class="disp-wrap"><table class="disp-table"><thead><tr><th class="disp-day">Dia</th><th class="disp-time">Horário</th>' +
     r.specs.map(function(s){ return '<th class="disp-spec" title="' + esc(s ? specialtyName(s) : "Sem especialidade") + '">' + esc(s ? specialtyName(s) : "Sem especialidade") + '<span>atend. / livres</span></th>'; }).join("") +
@@ -17100,6 +17111,7 @@ var HELP_TOPICS = [
       "Vaga livre = coluna vazia dentro do horário de trabalho do profissional e sem trava de regra (\"não ABA\", profissional em Reunião/Treinamento ou em outra sala). Profissional com colunas em mais de uma sala conta só uma sala: a sala onde já está atendendo ou, se está livre, a sala com mais colunas vazias (ex.: 2 colunas em Fono e 2 em Fono ABA = 2 vagas).",
       "Bloqueios / reuniões: Bloqueado, Reunião Clínica e Treinamento contam uma vez por profissional em cada horário, mesmo marcados em várias colunas.",
       "Horário bloqueado (cadeado ou Outras opções → Bloquear horário) fica fora da conta: não é vaga livre nem entra em Bloqueios / reuniões.",
+      "Os totais de cada horário têm cor de \"aquecimento\": quanto maior o número, mais forte a cor (Total atendido em laranja, Total disponível em verde, Não ABA em vermelho), comparando com os outros horários da semana mostrada. Zero fica sem cor.",
       "Atualiza sozinha quando alguém mexe no Planner."
     ],
     who: "Permissão <b>Disponibilidade</b> (ver)."},

@@ -2694,3 +2694,8 @@ modo TV, semana e impressão (podem vir depois).
   `tests/run_disponibilidade.js`.
 - 2026-10-08: Visão geral — todos os cartões do horário na MESMA linha, dividindo a largura da janela (`.vg-cards` nowrap, `.vg-card` flex:1 1 0).
 - 2026-10-08: Visão geral com botão de tela cheia (`data-full-toggle`, mesmo `gridFullscreen` do Planner/Agenda); na tela cheia some o topo do sistema, mas a barra de data/filtros e os selos por especialidade continuam.
+- 2026-10-08 (pedido do usuário, com imagem do Excel) Disponibilidade: "aquecimento" nos totais de
+  cada horário — Total atendido laranja (`--heat-at`), Total disponível verde (`--heat-fr`), Não ABA
+  vermelho (`--heat-nao`), intensidade = valor ÷ maior valor da coluna nas linhas de horário da semana
+  mostrada (`heat(kind, v)` em `renderDispTab`, color-mix com `--surface`); zero sem cor; subtotais,
+  total e Bloqueios sem cor.
