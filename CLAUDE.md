@@ -2775,3 +2775,4 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   permitido, `module_for_path` = `crm_listas` → só admin grava, tabelas, gatilhos, RLS, `crm_people`,
   tempo real, níveis que veem a Agenda ganham tudo nas 4 listas). Testada no PGlite (RLS com usuário
   comum). Teste `tests/run_crm.js`.
+- 2026-10-08 (pedido do usuário: "tudo que criar deve partir do estilo que já temos") CRM no padrão do sistema: "Listas e status" com os componentes das janelas de Status/Sala (`.therapist-row`, bolinha `.spec-color-btn` + `openColorPicker`, ▲▼ `.col-move`, ✕ `.rm`, opções `.kind-opt` dentro de `.field`, "+ status"/"+ lista" `.add-row-btn`); janela da tarefa com h3 "Nova tarefa/Editar tarefa", campo Título comum e seções no estilo `.pm-sec-title`. **Regra: tela nova reaproveita classes/componentes existentes, nada de input/visual próprio.**
