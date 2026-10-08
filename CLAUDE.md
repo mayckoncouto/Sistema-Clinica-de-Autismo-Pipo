@@ -2700,3 +2700,9 @@ modo TV, semana e impressão (podem vir depois).
   mostrada (`heat(kind, v)` em `renderDispTab`, color-mix com `--surface`); zero sem cor; subtotais,
   total e Bloqueios sem cor.
 - 2026-10-08: Visão geral — filtros vazios quando a tela abria antes dos cadastros chegarem: `vgFillFilters()` agora roda em todo `vgRender`, e chegar profissionais/especialidades/salas/status redesenha a Visão geral.
+- 2026-10-08 (pedidos do usuário) Disponibilidade: nome do dia em TODAS as linhas (inclusive Manhã/Tarde);
+  tudo centralizado nas células; colunas com cor da especialidade (título 30% + barra embaixo, células
+  14%, subtotais 26%, `vgSpecColor`); ordem das colunas por arrastar o título (Dia e Horário fixos;
+  `dispColumns`, `dispWireReorder`, `agendaPipo:dispColOrder`; especialidade nova entra no lugar
+  padrão) e largura pela borda (`dispWidthCfg` + `wirePatColResize`, `agendaPipo:colWidths:disp`;
+  duplo clique volta). Botão `#dispResetCols` "Colunas padrão" (`dispResetColumns`).

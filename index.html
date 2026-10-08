@@ -290,7 +290,7 @@ div.ag-obj-head{cursor:default}
 .disp-table th,.disp-table td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:5px 8px;white-space:nowrap}
 .disp-table thead th{position:sticky;top:0;z-index:2;background:var(--surface-2);font-size:11px;font-weight:800;text-align:center;color:var(--ink-2)}
 .disp-table th.disp-spec span{display:block;font-size:10px;font-weight:600;color:var(--muted)}
-.disp-table .disp-day{position:sticky;left:0;z-index:1;background:var(--surface);font-weight:700;min-width:110px;text-align:left}
+.disp-table .disp-day{position:sticky;left:0;z-index:1;background:var(--surface);font-weight:700;text-align:left}
 .disp-table thead .disp-day{z-index:3;background:var(--surface-2)}
 .disp-table .disp-time{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;text-align:left}
 .disp-table td.disp-n,.disp-table td.disp-tot{text-align:center;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
@@ -301,6 +301,14 @@ div.ag-obj-head{cursor:default}
 .disp-table td.disp-free{color:#1f7a45}.disp-table td.disp-free.none{color:var(--muted)}
 .disp-table td.disp-nao{color:#b3261e}
 .disp-table{--heat-at:#ed7d31;--heat-fr:#63be7b;--heat-nao:#f8696b}
+.disp-table{table-layout:fixed;min-width:0}
+.disp-table th{position:sticky;overflow:hidden;text-overflow:ellipsis}
+.disp-table th[draggable="true"]{cursor:grab}
+.disp-table th.dragging{opacity:.45}
+.disp-table th.drop-before{box-shadow:inset 3px 0 0 var(--accent)!important}
+.disp-table th.drop-after{box-shadow:inset -3px 0 0 var(--accent)!important}
+.disp-table td{overflow:hidden;text-overflow:ellipsis}
+.disp-table th,.disp-table td,.disp-table .disp-day,.disp-table .disp-time{text-align:center;vertical-align:middle}
 .disp-table td.disp-tot[style]{color:var(--ink)}
 .disp-table tr.disp-first td{border-top:2px solid var(--line-strong)}
 .disp-table tr.disp-sub td{background:var(--accent-weak);font-weight:800}
@@ -2243,6 +2251,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <div class="seg" id="dispWeekSeg" role="group" aria-label="Semana">
         <button type="button" data-dw="1">1ª</button><button type="button" data-dw="2">2ª</button><button type="button" data-dw="3">3ª</button><button type="button" data-dw="4">4ª</button><button type="button" data-dw="todas">Todas</button>
       </div>
+      <button type="button" class="btn ghost" id="dispResetCols" title="Volta a ordem e a largura padrão das colunas">Colunas padrão</button>
     </div>
     <div id="dispHost" class="disp-host"></div>
   </section>
@@ -4712,10 +4721,23 @@ function renderDispTab(){
     if (!v || !hmax[kind]) return "";
     return ' style="background:color-mix(in srgb,var(--heat-' + kind + ') ' + Math.round(12 + 68 * v / hmax[kind]) + '%,var(--surface))"';
   }
-  function nums(d, isTime){
-    var at = dispSum(d.at), fr = dispSum(d.free);
-    return r.specs.map(function(s){ return cell(d, s); }).join("") +
-      '<td class="disp-tot"' + (isTime ? heat("at", at) : '') + '>' + at + '</td><td class="disp-tot">' + d.blk + '</td><td class="disp-tot disp-free' + (fr ? '' : ' none') + '"' + (isTime ? heat("fr", fr) : '') + '>' + fr + '</td><td class="disp-tot' + (d.nao ? ' disp-nao' : '') + '"' + (isTime ? heat("nao", d.nao) : '') + '>' + d.nao + '</td>';
+  // Colunas: Dia e Horário fixos à esquerda; as outras podem trocar de ordem (arrastar o título)
+  // e de largura (arrastar a borda; duplo clique volta ao padrão). Fica salvo neste navegador.
+  var cols = dispColumns(r.specs, cell);
+  var cfg = dispWidthCfg(cols);
+  function rowCells(d, kind, label1, label2){
+    var at = dispSum(d.at), fr = dispSum(d.free), isTime = kind === "time";
+    var vals = {at: at, fr: fr};
+    return '<td class="disp-day">' + label1 + '</td><td class="disp-time">' + label2 + '</td>' + cols.slice(2).map(function(c){
+      if (c.spec != null){
+        var col = vgSpecColor(c.spec);
+        return cell(d, c.spec).replace('<td class="', '<td style="background:color-mix(in srgb,' + col + ' ' + (isTime ? 14 : 26) + '%,var(--surface))" class="');
+      }
+      if (c.k === "tot-at") return '<td class="disp-tot"' + (isTime ? heat("at", at) : '') + '>' + at + '</td>';
+      if (c.k === "tot-blk") return '<td class="disp-tot">' + d.blk + '</td>';
+      if (c.k === "tot-fr") return '<td class="disp-tot disp-free' + (fr ? '' : ' none') + '"' + (isTime ? heat("fr", fr) : '') + '>' + fr + '</td>';
+      return '<td class="disp-tot' + (d.nao ? ' disp-nao' : '') + '"' + (isTime ? heat("nao", d.nao) : '') + '>' + d.nao + '</td>';
+    }).join("");
   }
   var lastDay = null, body = r.rows.map(function(x){
     var first = x.day.key !== lastDay; lastDay = x.day.key;
@@ -4723,16 +4745,85 @@ function renderDispTab(){
       Object.keys(x.d.at).forEach(function(s){ tot.at[s] = (tot.at[s] || 0) + x.d.at[s]; });
       Object.keys(x.d.free).forEach(function(s){ tot.free[s] = (tot.free[s] || 0) + x.d.free[s]; });
       tot.blk += x.d.blk; tot.nao += x.d.nao;
-      return '<tr class="disp-sub"><td class="disp-day"></td><td class="disp-time">' + esc(x.sub) + '</td>' + nums(x.d) + '</tr>';
+      return '<tr class="disp-sub">' + rowCells(x.d, "sub", esc(x.day.full), esc(x.sub)) + '</tr>';
     }
-    return '<tr' + (first ? ' class="disp-first"' : '') + '><td class="disp-day">' + (first ? esc(x.day.full) : '') + '</td><td class="disp-time">' + esc(x.time) + '</td>' + nums(x.d, true) + '</tr>';
+    return '<tr' + (first ? ' class="disp-first"' : '') + '>' + rowCells(x.d, "time", esc(x.day.full), esc(x.time)) + '</tr>';
   }).join("");
-  host.innerHTML = '<div class="disp-wrap"><table class="disp-table"><thead><tr><th class="disp-day">Dia</th><th class="disp-time">Horário</th>' +
-    r.specs.map(function(s){ return '<th class="disp-spec" title="' + esc(s ? specialtyName(s) : "Sem especialidade") + '">' + esc(s ? specialtyName(s) : "Sem especialidade") + '<span>atend. / livres</span></th>'; }).join("") +
-    '<th class="disp-tot">Total atendido</th><th class="disp-tot">Bloqueios / reuniões</th><th class="disp-tot">Total disponível</th><th class="disp-tot">Não ABA</th></tr></thead><tbody>' + body +
-    '<tr class="disp-total"><td class="disp-day">Total</td><td class="disp-time">' + (DISP.week === "todas" ? "4 semanas" : DISP.week + "ª semana") + '</td>' + nums(tot) + '</tr></tbody></table></div>';
+  host.innerHTML = '<div class="disp-wrap"><table class="disp-table" style="width:' + cfg.total() + 'px">' +
+    '<colgroup>' + cols.map(function(c){ return '<col data-col="' + esc(c.k) + '" style="width:' + cfg.width(c.k) + 'px">'; }).join("") + '</colgroup>' +
+    '<thead><tr>' + cols.map(function(c){
+      var st = c.spec != null ? ' style="background:color-mix(in srgb,' + vgSpecColor(c.spec) + ' 30%,var(--surface));box-shadow:inset 0 -3px 0 ' + vgSpecColor(c.spec) + '"' : '';
+      return '<th class="' + c.cls + '"' + st + (c.fixed ? '' : ' draggable="true" data-disp-col="' + esc(c.k) + '"') + ' title="' + esc(c.title || c.label) + (c.fixed ? '' : ' — arraste para mudar a ordem') + '">' +
+        esc(c.label) + (c.sub ? '<span>' + esc(c.sub) + '</span>' : '') +
+        '<span class="pat-col-resizer" data-col="' + esc(c.k) + '" title="Arrastar para ajustar a largura (duplo clique volta ao padrão)" aria-hidden="true"></span></th>';
+    }).join("") + '</tr></thead><tbody>' + body +
+    '<tr class="disp-total">' + rowCells(tot, "total", "Total", DISP.week === "todas" ? "4 semanas" : DISP.week + "ª semana") + '</tr></tbody></table></div>';
+  wirePatColResize(host, cfg);
+  dispWireReorder(host, cols);
+}
+var DISP_ORDER_KEY = "agendaPipo:dispColOrder";
+function dispColumns(specs){
+  var all = [{k: "day", label: "Dia", cls: "disp-day", fixed: true, w: 120}, {k: "time", label: "Horário", cls: "disp-time", fixed: true, w: 80}];
+  var rest = specs.map(function(sp){ var n = sp ? specialtyName(sp) : "Sem especialidade"; return {k: "spec:" + sp, spec: sp, label: n, title: n, sub: "atend. / livres", cls: "disp-spec", w: 120}; })
+    .concat([{k: "tot-at", label: "Total atendido", cls: "disp-tot", w: 110}, {k: "tot-blk", label: "Bloqueios / reuniões", cls: "disp-tot", w: 140},
+      {k: "tot-fr", label: "Total disponível", cls: "disp-tot", w: 120}, {k: "tot-nao", label: "Não ABA", cls: "disp-tot", w: 90}]);
+  var saved = []; try { saved = JSON.parse(localStorage.getItem(DISP_ORDER_KEY) || "[]") || []; } catch(e){}
+  if (Array.isArray(saved) && saved.length){
+    var pos = {}; saved.forEach(function(k, i){ pos[k] = i; });
+    // coluna nova (especialidade nova) entra no lugar padrão, depois das que já foram ordenadas
+    rest = rest.map(function(c, i){ return {c: c, i: i}; }).sort(function(a, b){
+      var pa = a.c.k in pos ? pos[a.c.k] : 1000 + a.i, pb = b.c.k in pos ? pos[b.c.k] : 1000 + b.i;
+      return pa - pb;
+    }).map(function(x){ return x.c; });
+  }
+  return all.concat(rest);
+}
+function dispWidthCfg(cols){
+  var def = {}, min = {};
+  cols.forEach(function(c){ def[c.k] = c.w; min[c.k] = 60; });
+  function width(k){ var w = gtWidths("disp")[k]; return (typeof w === "number" && isFinite(w) && w > 0) ? w : def[k]; }
+  return {width: width, min: min,
+    total: function(){ return cols.reduce(function(t, c){ return t + width(c.k); }, 0); },
+    set: function(k, w){ gtWidths("disp")[k] = w; var t = document.querySelector("#dispHost table.disp-table"); if (t) t.style.width = this.total() + "px"; },
+    reset: function(k){ delete gtWidths("disp")[k]; },
+    save: function(){ try { localStorage.setItem("agendaPipo:colWidths:disp", JSON.stringify(gtWidths("disp"))); } catch(e){} },
+    render: renderDispTab};
+}
+function dispWireReorder(host, cols){
+  var drag = null;
+  function clear(){ Array.prototype.forEach.call(host.querySelectorAll("th.drop-before,th.drop-after,th.dragging"), function(t){ t.classList.remove("drop-before", "drop-after", "dragging"); }); }
+  host.querySelectorAll("th[data-disp-col]").forEach(function(th){
+    th.addEventListener("dragstart", function(e){
+      if (document.body.classList.contains("pat-col-resizing")){ e.preventDefault(); return; }
+      drag = th.getAttribute("data-disp-col"); th.classList.add("dragging");
+      try { e.dataTransfer.setData("text/plain", drag); e.dataTransfer.effectAllowed = "move"; } catch(x){}
+    });
+    th.addEventListener("dragover", function(e){
+      if (!drag) return; e.preventDefault();
+      var rc = th.getBoundingClientRect(), after = e.clientX > rc.left + rc.width / 2;
+      clear(); host.querySelector('th[data-disp-col="' + drag + '"]').classList.add("dragging");
+      th.classList.add(after ? "drop-after" : "drop-before");
+    });
+    th.addEventListener("drop", function(e){
+      if (!drag) return; e.preventDefault();
+      var to = th.getAttribute("data-disp-col"), after = th.classList.contains("drop-after");
+      var keys = cols.slice(2).map(function(c){ return c.k; }).filter(function(k){ return k !== drag; });
+      var i = keys.indexOf(to); if (i === -1) i = keys.length; else if (after) i++;
+      keys.splice(i, 0, drag);
+      try { localStorage.setItem(DISP_ORDER_KEY, JSON.stringify(keys)); } catch(x){}
+      drag = null; renderDispTab();
+    });
+    th.addEventListener("dragend", function(){ drag = null; clear(); });
+  });
+}
+function dispResetColumns(){
+  try { localStorage.removeItem(DISP_ORDER_KEY); localStorage.removeItem("agendaPipo:colWidths:disp"); } catch(e){}
+  delete GT_SORT["w:disp"];
+  renderDispTab();
 }
 function wireDispTab(){
+  var rb = document.getElementById("dispResetCols");
+  if (rb) rb.addEventListener("click", dispResetColumns);
   var seg = document.getElementById("dispWeekSeg");
   if (seg) seg.addEventListener("click", function(e){
     var b = e.target.closest("[data-dw]"); if (!b) return;
@@ -17118,6 +17209,7 @@ var HELP_TOPICS = [
       "Vaga livre = coluna vazia dentro do horário de trabalho do profissional e sem trava de regra (\"não ABA\", profissional em Reunião/Treinamento ou em outra sala). Profissional com colunas em mais de uma sala conta só uma sala: a sala onde já está atendendo ou, se está livre, a sala com mais colunas vazias (ex.: 2 colunas em Fono e 2 em Fono ABA = 2 vagas).",
       "Bloqueios / reuniões: Bloqueado, Reunião Clínica e Treinamento contam uma vez por profissional em cada horário, mesmo marcados em várias colunas.",
       "Horário bloqueado (cadeado ou Outras opções → Bloquear horário) fica fora da conta: não é vaga livre nem entra em Bloqueios / reuniões.",
+      "Colunas: arraste o título de uma coluna para mudar a ordem e a borda do título para mudar a largura (duplo clique na borda volta à largura padrão). Dia e Horário ficam sempre à esquerda. Fica salvo neste computador; <b>Colunas padrão</b> volta a ordem e as larguras originais. As colunas de especialidade têm a cor da especialidade.",
       "Os totais de cada horário têm cor de \"aquecimento\": quanto maior o número, mais forte a cor (Total atendido em laranja, Total disponível em verde, Não ABA em vermelho), comparando com os outros horários da semana mostrada. Zero fica sem cor.",
       "Atualiza sozinha quando alguém mexe no Planner."
     ],

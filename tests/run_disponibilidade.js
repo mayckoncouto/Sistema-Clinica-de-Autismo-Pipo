@@ -80,6 +80,18 @@ const path = require('path');
   check('week selector "Todas" is active and total row says "4 semanas"?', (await page.$eval('#dispWeekSeg [data-dw="todas"]', (b) => b.classList.contains('active'))) &&
     /4 semanas/.test(await page.$eval('#dispHost tr.disp-total', (e) => e.textContent)));
 
+  // Nome do dia em todas as linhas; ordem das colunas salva (arrastar) e "Colunas padrão" volta.
+  const days = await page.$$eval('#dispHost tbody tr:not(.disp-total) td.disp-day', (r) => r.map((x) => x.textContent));
+  check('day name on every row of the day?', days.length > 10 && days.every((d) => d), JSON.stringify(days.slice(0, 10)));
+  const order = await ev(`(function(){ localStorage.setItem("agendaPipo:dispColOrder", JSON.stringify(["tot-nao"])); renderDispTab();
+    var o = Array.prototype.map.call(document.querySelectorAll("#dispHost thead th"), function(t){ return t.getAttribute("data-disp-col") || t.textContent; });
+    document.getElementById("dispResetCols").click();
+    var o2 = Array.prototype.map.call(document.querySelectorAll("#dispHost thead th"), function(t){ return t.getAttribute("data-disp-col") || t.textContent; });
+    return [o, o2]; })()`);
+  check('saved column order is applied (Não ABA first after Dia/Horário) and "Colunas padrão" restores it?', order[0][2] === 'tot-nao' && order[1][order[1].length - 1] === 'tot-nao', JSON.stringify(order));
+  const spec = await page.$eval('#dispHost tbody tr td.disp-n', (td) => td.getAttribute('style') || '');
+  check('specialty cells use the specialty color?', /color-mix/.test(spec), spec);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
