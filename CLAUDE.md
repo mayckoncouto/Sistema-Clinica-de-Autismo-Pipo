@@ -842,7 +842,7 @@ regra "profissional em dois lugares" de `plannerConflict`.
   pacientes "não ABA" na sala naquele horário, a não ser que outro grupo
   continue marcando a sala: `abaGroupDependencyDenied(changesByDoc)`, conferido
   em `applyBookingChanges` logo depois de `bookingPermDenied`.
-- Sala SEM "ABA" no nome (`roomIsABA(r)` falso — ex.: "Psicologia",
+- (SUBSTITUÍDO em 2026-10-08: "não ABA" bloqueia a sala toda em QUALQUER sala; `roomIsABA` saiu.) Sala SEM "ABA" no nome (`roomIsABA(r)` falso — ex.: "Psicologia",
   "Fisioterapia"): o paciente "não ABA" bloqueia a SALA TODA no horário, inclusive
   as colunas de outros profissionais (`abaAny` na grade; `plannerConflict` confere
   todas as colunas da sala). Sala COM "ABA" no nome (ex.: "Fonoaudiologia ABA"):
@@ -2646,3 +2646,4 @@ cinza + motivo no mouse; motivo, prévia, permissão própria; "Bloqueado" antig
 
 - 2026-10-08: aviso/filtro "Pacientes sem tratamento ativo" (Tratamentos) só conta pacientes ATIVOS (`isActive(p)` em `renderTreatmentsTab`); a aba Tratamentos redesenha quando o cadastro de pacientes muda (`subscribePatients`). Teste em `run_treatments.js`.
 - Produção (2026-10-08): `2026-10-08-bloqueio-horario` rodada (0 bloqueados antigos / 2 níveis com a permissão / bloqueio_horario). Paciente "Reunião Clínica" e tratamentos excluídos por SQL fora do repositório (conferência 0/0/0).
+- 2026-10-08: paciente "não ABA" bloqueia a SALA TODA em qualquer sala, inclusive com "ABA" no nome (Planner e Agenda; `roomIsABA` removida). Pedido do usuário (sala Fonoaudiologia ABA). Teste em `run_aba_linha.js`.

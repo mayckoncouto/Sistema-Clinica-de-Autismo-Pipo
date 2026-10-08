@@ -148,6 +148,23 @@ const path = require('path');
   check('Planner: group booked for the room does NOT allow two não ABA together?', /não faz intervenção ABA/.test(grp.planner || '') && grp.noDepFn, JSON.stringify(grp));
   check('Agenda: group row in the room does NOT allow two não ABA together?', /não faz intervenção ABA/.test(grp.agenda || ''), JSON.stringify(grp));
 
+  // Desde 2026-10-08: sala COM "ABA" no nome também fica toda bloqueada (outro profissional incluído).
+  const whole = await ev(`(function(){
+    var out = {};
+    state.rooms = state.rooms.concat([{id: "ry", name: "Fonoaudiologia ABA", color: "teal", therapists: [{id: "ry-1", name: "Ana", professionalId: "ana-terapeuta"}, {id: "ry-2", name: "Bia", professionalId: "bia-terapeuta"}]}]);
+    var d = state.scheduleDocs["ter-1"] = state.scheduleDocs["ter-1"] || {bookings: {}};
+    d.bookings["10:40|ry|ry-1"] = {patient: "Eva Teste", note: "", service: "sessao"};
+    out.planner = plannerConflict("ter-1", "10:40|ry|ry-2", {patient: "Duda Vermelho", note: "", service: "sessao"});
+    var html = buildScheduleTable(findDayObj("ter"), 1, "ter-1", [findRoom("ry")], "").html;
+    out.cellOff = /<td class="slotcell[^"]*slot-off[^"]*aba-lock[^"]*" data-key="10:40\\|ry\\|ry-2"/.test(html);
+    delete d.bookings["10:40|ry|ry-1"];
+    var rows = [{id: "a1", date: "2030-01-07", time: "10:40", professional_id: "ana-terapeuta", room_id: "ry", patient: "Eva Teste", service: "sessao"}];
+    out.agenda = agdConflictIn(rows, {date: "2030-01-07", time: "10:40", professional_id: "bia-terapeuta", room_id: "ry", patient: "Duda Vermelho", service: "sessao"});
+    return out;
+  })()`);
+  check('room WITH "ABA" in the name: não ABA blocks the other professional too (Planner grid + rule)?', whole.cellOff && /sala toda/.test(whole.planner || ''), JSON.stringify(whole));
+  check('room WITH "ABA" in the name: Agenda blocks the other professional too?', /sala toda/.test(whole.agenda || ''), JSON.stringify(whole));
+
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();
