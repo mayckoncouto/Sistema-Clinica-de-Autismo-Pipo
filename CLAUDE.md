@@ -2725,3 +2725,4 @@ modo TV, semana e impressão (podem vir depois).
   `dispColumns`/`dispWidthCfg`/`dispWireReorder`/`dispResetColumns` e as cores por especialidade nas
   células (só no título). Aquecimento das colunas de total continua (horários e resumos).
 - 2026-10-08 (pedido do usuário) Disponibilidade, ordem fixa das colunas: Fono, TO, Psicomotricidade, Fisioterapia, Psicologia, Psicopedagogia, Musicoterapia, Nutrição (`DISP_SPEC_ORDER`, pelo começo do nome sem acento; outras especialidades depois, na ordem do cadastro), Coordenador, Aplicador ABA (`DISP_GROUP_ORDER`; outros grupos depois) e os totais **Reunião** (antes "Bloqueios / reuniões"), **Disponível**, **Atendido**, **Individual (não ABA)** (`dispOrderIdx`).
+- 2026-10-08 (pedido do usuário) Disponibilidade: o título "Dia" virou o botão de recolher `#dispCollapse` com setas na vertical (SVG; estendido = setas para dentro + "Recolher", recolhido = setas para fora + "Estender").

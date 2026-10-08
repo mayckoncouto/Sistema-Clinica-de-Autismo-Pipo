@@ -27,7 +27,7 @@ const path = require('path');
   await page.waitForSelector('#dispHost table.disp-table');
   const head = await page.$$eval('#dispHost thead tr.disp-h1 th', (r) => r.map((x) => x.textContent));
   const head2 = await page.$$eval('#dispHost thead tr.disp-h2 th', (r) => r.map((x) => x.textContent));
-  check('1st title row: Dia, Horário, specialties (atend. / livres), totals?', /Dia$/.test(head[0]) && head[1] === 'Horário' && head.some((h) => /atend\. \/ livres/.test(h)) &&
+  check('1st title row: Dia, Horário, specialties (atend. / livres), totals?', /^(Recolher|Estender)$/.test(head[0]) && head[1] === 'Horário' && head.some((h) => /atend\. \/ livres/.test(h)) &&
     head.slice(-4).join('|') === 'Reunião|Disponível|Atendido|Individual (não ABA)', JSON.stringify(head));
   const specOrder = await ev('(function(){ return Array.prototype.map.call(document.querySelectorAll("#dispHost thead tr.disp-h1 th.disp-spec"), function(th){ return dispOrderIdx(DISP_SPEC_ORDER.concat(DISP_GROUP_ORDER.map(function(g){ return g; })), th.getAttribute("title")); }).filter(function(x){ return x !== -1; }); })()');
   check('columns in the requested order (Fono, TO, Psicomotricidade, …, Coordenador, Aplicador ABA)?', specOrder.length >= 2 && specOrder.every((x, i) => !i || x > specOrder[i - 1]), JSON.stringify(specOrder));
@@ -107,10 +107,12 @@ const path = require('path');
   check('day name on every row of the day?', days.length > 10 && days.every((d) => d), JSON.stringify(days.slice(0, 10)));
 
   // Recolher (seta no Dia): só os resumos de Manhã/Tarde, com aquecimento entre os resumos.
+  check('expanded: toggle says Recolher', (await page.$eval('#dispCollapse', (b) => b.textContent)) === 'Recolher');
   await page.click('#dispCollapse');
   const col = await page.evaluate(() => ({rows: document.querySelectorAll('#dispHost tbody tr:not(.disp-sub):not(.disp-daytot)').length, dayTot: document.querySelectorAll('#dispHost tbody tr.disp-daytot').length, subs: document.querySelectorAll('#dispHost tbody tr.disp-sub').length,
     heat: Array.prototype.some.call(document.querySelectorAll('#dispHost tbody tr.disp-sub td.disp-tot'), (td) => /color-mix/.test(td.getAttribute('style') || ''))}));
   check('collapse shows only Manhã/Tarde and "Total do dia", with heat colors?', col.rows === 0 && col.subs >= 2 && col.dayTot >= 1 && col.heat, JSON.stringify(col));
+  check('collapsed: toggle says Estender', (await page.$eval('#dispCollapse', (b) => b.textContent)) === 'Estender');
   await page.click('#dispCollapse');
   check('expanding shows the times again?', (await page.$$('#dispHost tbody tr:not(.disp-sub):not(.disp-daytot)')).length > 0);
 
