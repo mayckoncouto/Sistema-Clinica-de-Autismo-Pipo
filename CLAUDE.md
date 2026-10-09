@@ -3037,3 +3037,9 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   `#tab-tratamentos`, `#tab-colaboradores`, `#tab-tiposcolab` e `#tab-salas` viraram coluna flex de altura fixa no
   `@media (max-width:760px)` (os outros cadastros já eram — regra `#tab-convenios,…,#tab-feriados`). Salas/Grupos:
   os cartões continuam iguais, só `#roomList` rola (`overflow-y:auto`). Status é janela (rola por dentro).
+- (2026-10-09, pedido do usuário) **Cadastros → Status virou tela de cadastro** igual às outras (`#tab-status`,
+  `REG_CFG.status`, `data-tab="status"` em `CAD_TABS`, permissão `cadastro_status`): busca, contador, "+ Incluir",
+  tabela Status (bolinha da cor) | Regra (`statusRuleText`: finalizado/não compareceu/falta justificada), na ordem do
+  cadastro; clicar abre `openStatusItem(item)` (nome + cor, Excluir com confirmação, nome repetido recusado). Mesma
+  rolagem de Pacientes no celular. `openStatusesModal` ficou no código sem uso; `window.pipoOpenStatuses` abre a tela.
+  Teste `tests/run_status_cad.js` (no `npm test`).

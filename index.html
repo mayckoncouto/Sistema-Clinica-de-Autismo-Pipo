@@ -796,7 +796,7 @@ div.ag-obj-head{cursor:default}
 .cad-menu .cad-sep{flex:none;height:5px;background:var(--surface-2);border-bottom:1px solid var(--line)}
 .cad-menu button{border:0;background:transparent;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 .cad-menu button:hover,.cad-menu button:focus{background:var(--accent-weak);outline:none}
-#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-cbo,#tab-conselhos,#tab-feriados{flex:1;min-height:0;display:flex;flex-direction:column}
+#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-cbo,#tab-conselhos,#tab-feriados,#tab-status{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-host{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-table tbody tr{cursor:pointer}
 .reg-table tbody tr:hover td{background:var(--accent-weak)}
@@ -2236,6 +2236,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button data-tab="servicos" hidden>Serviços</button>
       <button data-tab="especialidades" hidden>Especialidades</button>
       <button data-tab="motivos" hidden>Motivos de cancelamento</button>
+      <button data-tab="status" hidden>Status</button>
       <button data-tab="medicos" hidden>Médicos</button>
       <button data-tab="escolas" hidden>Escolas</button>
       <button data-tab="cbo" hidden>CBO</button>
@@ -2549,6 +2550,19 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
       <button class="btn primary" id="reg-motivos-add">+ Incluir</button>
     </div>
     <div id="reg-motivos-host" class="reg-host"></div>
+  </section>
+
+  <section id="tab-status" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-status-search" type="text" placeholder="Buscar status…">
+      </div>
+      <span class="pat-count" id="reg-status-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-status-add">+ Incluir</button>
+    </div>
+    <div id="reg-status-host" class="reg-host"></div>
   </section>
 
   <section id="tab-medicos" class="panel reg-panel" hidden>
@@ -3909,7 +3923,7 @@ function permToolClasses(){
 function applyPermissionsUI(){
   if (HEALTH.map === null && healthCanSee()) healthLoad();
   if (!window.pipoAuth) return;
-  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores"};
+  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", cbo:"cbo", conselhos:"conselhos", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : k === "crm" ? crmMainCan() : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -4686,7 +4700,7 @@ window.pipoProfStaff = function(){
   });
 };
 window.pipoStatuses = function(){ return statusesList(); }; // níveis de permissão (js/usuarios.js)
-window.pipoOpenStatuses = function(){ openStatusesModal(); }; // Cadastros → Status (CAD_ITEMS)
+window.pipoOpenStatuses = function(){ var it = CAD_ITEMS.filter(function(x){ return x.key === "status"; })[0]; if (it) navActivate(it); }; // Cadastros → Status (tela de cadastro)
 window.pipoOpenBackup = function(){ openBackupModal(); }; // menu Acesso → Backup
 window.pipoOpenClinic = function(){ openClinicModal(); }; // menu Acesso → Clínica
 function namesList(names){
@@ -4758,6 +4772,7 @@ function subscribeStatuses(){
     state.statuses = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
     if (typeof agdRender === "function" && state.tab === "agenda") agdRender();
     if (state.tab === "visaogeral") vgRender();
+    if (state.tab === "status") renderRegistryTab("status");
   }, function(){});
 }
 function subscribeCancelReasons(){
@@ -11061,6 +11076,68 @@ function openStatusesModal(){
       }).catch(function(){ showToast("Não foi possível salvar os status.", true); });
     });
   });
+}
+
+// Regra fixa ligada a alguns status (só para mostrar na lista do cadastro).
+function statusRuleText(id){
+  return id === "finalizado" ? "Exige evolução no prontuário; conta como sessão realizada" :
+    id === "nao-compareceu" ? "Conta como sessão usada (realizado)" :
+    id === "falta-justificada" ? "Fica à parte no contratado × realizado" : "";
+}
+// Cadastros → Status: janela de um status (nome e cor), no padrão dos outros cadastros.
+function openStatusItem(item){
+  var isNew = !item;
+  if (isNew && !can("cadastro_status", "create")){ showToast(permDeniedMsg("cadastro_status", "create"), true); return; }
+  var canSave = isNew || can("cadastro_status", "edit"), canDel = !isNew && can("cadastro_status", "delete");
+  var color = item && item.color ? item.color : "#5b6b68";
+  var host = document.getElementById("modalHost");
+  host.innerHTML =
+    '<div class="overlay" id="ovStItem"><div class="modal" style="max-width:440px">' +
+      '<div class="modal-head"><div><h3>' + (isNew ? "Novo status" : (canSave ? "Editar status" : "Status")) + '</h3>' +
+        '<div class="modal-sub">Situação marcada nos atendimentos da Agenda. Quem pode usar cada status é definido nos Níveis de permissão.</div></div>' +
+        '<button class="modal-close" id="stiClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="field"><label for="stiName">Nome</label><div class="therapist-row" style="margin:0">' +
+          '<button type="button" class="spec-color-btn" id="stiColor" style="background:' + esc(color) + '" title="Cor do status" aria-label="Cor do status"' + (canSave ? '' : ' disabled') + '></button>' +
+          '<input id="stiName" type="text" value="' + esc(item ? item.name : "") + '" placeholder="Nome do status"' + (canSave ? '' : ' disabled') + '></div></div>' +
+        (item && statusRuleText(item.id) ? '<div class="field-hint">' + esc(statusRuleText(item.id)) + '.</div>' : '') +
+      '</div>' +
+      '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="stiDel">Excluir</button>' : '<span></span>') +
+        '<div class="spacer"></div><button class="btn ghost" id="stiCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
+        (canSave ? '<button class="btn primary" id="stiSave">Salvar</button>' : '') + '</div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovStItem");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("stiClose").addEventListener("click", close);
+  document.getElementById("stiCancel").addEventListener("click", close);
+  var cb = document.getElementById("stiColor");
+  cb.addEventListener("click", function(){ if (cb.disabled) return; openColorPicker(cb, color, function(hex){ color = hex; cb.style.background = hex; }); });
+  function write(list, msg){
+    if (!db){ state.statuses = list; close(); renderRegistryTab("status"); showToast(msg); return Promise.resolve(); }
+    return db.doc("config/statuses").set({list: list}).then(function(){
+      state.statuses = list; close(); showToast(msg); renderRegistryTab("status"); if (state.tab === "agenda") agdRender();
+    }, function(){ showToast("Não foi possível salvar os status.", true); });
+  }
+  var sv = document.getElementById("stiSave");
+  if (sv) sv.addEventListener("click", function(){
+    var name = document.getElementById("stiName").value.trim();
+    if (!name){ showToast("Preencha o nome do status.", true); document.getElementById("stiName").focus(); return; }
+    var all = statusesList();
+    if (all.some(function(s){ return (!item || s.id !== item.id) && normText(s.name) === normText(name); })){ showToast('Já existe o status "' + name + '".', true); return; }
+    var list = isNew ? all.concat([{id: uid(slugify(name) || "status"), name: name, color: color}])
+      : all.map(function(s){ return s.id === item.id ? {id: s.id, name: name, color: color} : s; });
+    var denied = listPermDenied("cadastro_status", all, list); if (denied){ showToast(denied, true); return; }
+    write(list, isNew ? "Status incluído." : "Status alterado.");
+  });
+  var del = document.getElementById("stiDel");
+  if (del) del.addEventListener("click", function(){
+    confirmDialog({title: "Confirmar exclusão", message: 'Excluir o status <b>' + esc(item.name) + '</b>? Atendimentos que já estão com ele ficam sem status na tela.', confirmLabel: "Confirmar exclusão"}).then(function(ok){
+      if (!ok) return;
+      write(statusesList().filter(function(s){ return s.id !== item.id; }), "Status excluído.");
+    });
+  });
+  setTimeout(function(){ var n = document.getElementById("stiName"); if (n && !n.disabled) n.focus(); }, 0);
 }
 
 function writeServices(list){
@@ -19064,6 +19141,7 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Cada nível só usa os status liberados para ele (Níveis de permissão → Status dos atendimentos).",
+      "Os status ficam em Cadastros → Status: lista com busca, “+ Incluir” e, ao clicar num status, a janela para mudar nome e cor ou excluir (com confirmação). Precisa da permissão “Status (cadastro)”.",
       "Finalizado e Não compareceu contam como sessão usada no tratamento."
     ],
     who: "Conforme a permissão de cada status."},
@@ -19201,7 +19279,7 @@ var HELP_NEWS = [];
 var HELP = {topic: "inicio", search: ""};
 var HELP_TAB_TOPIC = {crm: "crm", inicio: "inicio", planner: "planner", visaogeral: "visaogeral", resumo: "resumo", disponibilidade: "disponibilidade", agenda: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "colaboradores", convenios: "convenios", servicos: "servicos",
-  especialidades: "especialidades", motivos: "motivos", medicos: "medicos", escolas: "escolas", cbo: "cbo", conselhos: "conselhos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
+  especialidades: "especialidades", motivos: "motivos", status: "agenda-status", medicos: "medicos", escolas: "escolas", cbo: "cbo", conselhos: "conselhos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
   planos: "plano-terapeutico", objetivos: "objetivos", escalas: "escalas", habilidades: "habilidades"};
 function helpCan(t){
   if (!t.mod) return true;
@@ -19635,6 +19713,16 @@ var REG_CFG = {
     row: function(h){ return ['<b>' + esc(h.name) + '</b>', esc(holWhenText(h)), esc(trLabel(HOLIDAY_PERIODOS, h.periodo || "dia")), esc(trLabel(HOLIDAY_TIPOS, h.tipo))]; },
     vals: function(h){ return [h.name, holSortKey(h), h.periodo || "dia", h.tipo || ""]; }
   },
+  status: {
+    title: "status", plural: "status", module: "cadastro_status", newLabel: "+ Incluir",
+    list: function(){ return statusesList(); },
+    open: function(item){ openStatusItem(item); },
+    sort: function(){ return 0; },   // na ordem do cadastro (é a ordem das listas de status)
+    cols: ["Status", "Regra"],
+    widths: [300, 360],
+    row: function(st){ return ['<span class="pcolor-dot" style="background:' + esc(st.color || "#5b6b68") + '"></span><b>' + esc(st.name) + '</b>', esc(statusRuleText(st.id) || "—")]; },
+    vals: function(st){ return [st.name, statusRuleText(st.id)]; }
+  },
   motivos: {
     title: "motivo", plural: "motivos", module: "motivos_cancelamento", newLabel: "+ Incluir",
     list: function(){ return cancelReasonsList(); },   // sem cadastro no banco: os motivos iniciais
@@ -19916,11 +20004,11 @@ var CAD_ITEMS = [
   {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }},
   {key: "feriados", label: "Feriados e recessos", tab: "feriados", ok: function(){ return can("feriados", "view"); }},
   // Status dos atendimentos: abre a janela de cadastro (sem tela própria).
-  {key: "status", label: "Status", open: function(){ openStatusesModal(); }, ok: function(){ return can("cadastro_status", "view"); }}
+  {key: "status", label: "Status", tab: "status", ok: function(){ return can("cadastro_status", "view"); }}
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
-var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "colaboradores", "tiposcolab", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados"];
+var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "colaboradores", "tiposcolab", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados", "status"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "planner", ok: function(){ return can("planner", "view"); }},
   {key: "resumo", label: "Resumo", tab: "resumo", ok: function(){ return can("resumo", "view"); }},
@@ -20169,7 +20257,7 @@ function wireMobileNav(){
   setTimeout(openNavFromHash, 0);
   wireMobileNav();
   wirePlansTab();
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "feriados", "tiposcolab", "objetivos", "escalas", "habilidades"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "cbo", "conselhos", "feriados", "tiposcolab", "objetivos", "escalas", "habilidades", "status"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
     var a = document.getElementById("reg-" + k + "-add");
