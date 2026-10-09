@@ -34,6 +34,10 @@ const path = require('path');
     const due = tds[2].querySelector('.crm-prio-btn'), pr = tds[3].querySelector('svg');
     return {who: tds[1].textContent.trim(), oneLine: tds[1].getBoundingClientRect().height < 50, dueFits: due.scrollWidth <= due.clientWidth + 1, due: due.textContent.trim(), flag: !!pr && pr.getBoundingClientRect().right <= tds[3].getBoundingClientRect().right + 1}; });
   check('patient name in one line, full date and the flag visible?', /Criança Teste/.test(cellsOk.who) && cellsOk.oneLine && cellsOk.dueFits && /\d\d\/\d\d\/\d\d/.test(cellsOk.due) && cellsOk.flag, JSON.stringify(cellsOk));
+  await ev('(function(){ crmInsert({list_id: "atendimento", status: "triagem", title: "Ligar e agendar triagem com a família", priority: "normal", due_date: "2026-10-09", assignees: ["local-me", "u2"], lead: {nome: "Marcos Antônio da Silva Pereira Junior"}}); crmRender(); return 1; })()');
+  await page.waitForTimeout(150);
+  const rowsH = await page.$$eval('#crmHost tbody tr', (r) => r.map((x) => Math.round(x.getBoundingClientRect().height)));
+  check('every list row has the height of one line (long names do not grow the row)?', rowsH.length >= 2 && Math.max.apply(null, rowsH) <= 44 && Math.max.apply(null, rowsH) - Math.min.apply(null, rowsH) <= 1, rowsH);
   check('page has no sideways scroll?', (await ev('document.documentElement.scrollWidth')) <= 390);
   // Menu ☰: só a tela aberta marcada, grupo dela aberto e em destaque
   await page.click('#mnavBtn');

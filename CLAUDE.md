@@ -3014,3 +3014,9 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
 - (2026-10-09, pedido do usuário, celular) Lista do CRM no celular: **Status, Paciente (ou lead), Venc., Prio.** (a
   Tarefa saiu). Lista esconde as colunas 3, 4, 5; Minhas tarefas esconde 2, 4, 5, 6. Paciente numa linha com "…"
   (etiqueta "lead" oculta), Venc. com 82px (data inteira dd/mm/aa), Prio. 44px, botões das células sem padding lateral.
+- (2026-10-09, CORREÇÃO URGENTE) O texto da Ajuda do CRM ganhou aspas retas dentro de uma string entre aspas
+  ("…") e quebrou o script inteiro (sistema em branco); os testes não acusaram porque o script de conferência
+  contava só linhas com " false" — com a página quebrada o teste cai antes. **Ao conferir testes, confira também a
+  linha "no JS errors? true" (ou o código de saída).** Texto novo na Ajuda: usar aspas curvas “ ” ou &quot;.
+- (2026-10-09, pedido do usuário, celular) Linhas da lista do CRM sempre com UMA linha de altura (40px): todo `td`
+  com `white-space:nowrap` (antes o nome quebrava e a linha crescia). Teste em `run_crm_mobile.js`.
