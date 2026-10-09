@@ -48,6 +48,11 @@ const path = require('path');
   for (const t of tabs){
     await page.evaluate((t) => { document.querySelector('#mainTabs button[data-tab="' + t + '"]').click(); }, t);
     await page.waitForTimeout(250);
+    const lay = await page.evaluate((t) => { const s = document.getElementById('tab-' + t);
+      const ths = [...s.querySelectorAll('.pat-table thead th')].filter((x) => getComputedStyle(x).display !== 'none').length;
+      const hs = [...s.querySelectorAll('.pat-table tbody tr')].map((r) => Math.round(r.getBoundingClientRect().height));
+      return {cols: ths, maxH: hs.length ? Math.max.apply(null, hs) : 0, sw: document.documentElement.scrollWidth}; }, t);
+    check(t + ': list with 2-3 columns, one line per row, no sideways scroll?', (!lay.cols || (lay.cols <= 3)) && lay.maxH <= 44 && lay.sw <= 390, JSON.stringify(lay));
     const r1 = await probe('#tab-' + t);
     if (r1.tested) check(t + ': selection fields on the screen open the bottom window?', !r1.bad.length, JSON.stringify(r1));
     const add = addBtn[t] || '#reg-' + t + '-add';

@@ -3055,3 +3055,11 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
 - (2026-10-09, pedido do usuário) Cadastro do paciente (computador e celular): grupos na ordem Identificação, Endereço,
   Filiação, Responsáveis pela retirada, Medida protetiva, Contato, Responsável financeiro, **Saúde, Escola, Rotina atual**,
   Administrativo, Tratamento (`PAT_SECTIONS`; vale também para Campos obrigatórios e a ficha impressa).
+- (2026-10-09, aprovado pelo usuário, celular) Listas dos cadastros (menos Salas/Grupos) com UMA linha por item
+  (`white-space:nowrap` + "…") e 2–3 colunas: Pacientes = Nome, Idade, Tratamento; Tratamentos = Paciente, Início,
+  Status; Convênios = Nome, Pacientes; Motivos = Nome, Tratamentos cancelados; Médicos = Nome, Especialidade,
+  Pacientes; Escolas = Nome, Pacientes; Colaboradores = Nome, Tipos, Situação; Tipos de colaborador = Nome, Pessoas;
+  Especialidades/Serviços = Nome, Sigla, Profissionais; CBO = Código, Descrição; Conselhos = Sigla, Nome; Feriados =
+  Nome, Quando; Status = só Status. Nome com o espaço que sobra, colunas curtas com largura fixa (bloco "Cadastros no
+  celular" do `@media (max-width:760px)`). Mudou a ordem das colunas no computador? Ajustar os `:nth-child`.
+  Conferido em `tests/run_cad_sheets.js`.
