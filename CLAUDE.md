@@ -3020,3 +3020,9 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   linha "no JS errors? true" (ou o código de saída).** Texto novo na Ajuda: usar aspas curvas “ ” ou &quot;.
 - (2026-10-09, pedido do usuário, celular) Linhas da lista do CRM sempre com UMA linha de altura (40px): todo `td`
   com `white-space:nowrap` (antes o nome quebrava e a linha crescia). Teste em `run_crm_mobile.js`.
+- (2026-10-09, pedido do usuário) Níveis de permissão: o grupo **CRM** começa com **CRM – Listas e status** (módulo
+  `crm_listas`, ver/incluir/editar/excluir) e depois uma linha por lista (`crm_<id>`, inclusive as criadas depois) —
+  `window.pipoCrmModules()`. App: `crmListsCan(a)` (Administrador sempre); o menu "Listas e status" aparece com
+  "ver"; a janela salva só o que o nível pode (lista nova = incluir, tirada = excluir, mudada = editar; senão
+  aviso) e sem nenhuma das três fica só leitura ("Fechar"). Banco: sem SQL — `module_for_path('config/task_lists')`
+  já era `crm_listas` e `documents_enforce` confere item a item.

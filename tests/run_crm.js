@@ -211,6 +211,8 @@ const path = require('path');
   check('priority filter?', (await page.$$('#crmHost tr[data-crm-id]')).length === 1);
   await setv('#crmFPrio', '');
 
+  const mods = await ev('window.pipoCrmModules().map(function(m){ return m.key + "|" + (m.group || ""); }).join(",")');
+  check('Níveis de permissão: CRM group starts with Listas e status, then one row per list?', /^crm_listas\|CRM,crm_atendimento\|,crm_agendas\|/.test(mods), mods);
   // Listas e status: "Finalizado" e nova lista
   await ev('crmOpenListsModal()');
   await page.waitForSelector('#ovCrmL');
@@ -223,8 +225,8 @@ const path = require('path');
   const items2 = await page.$$eval('#crmMenu [data-nav]', (r) => r.map((x) => x.textContent));
   check('new list "Compras" in the menu?', items2.indexOf('Compras') !== -1 && !!(await ev('crmListById("compras")')), items2);
   await page.keyboard.press('Escape');
-  const mods = await ev('window.pipoCrmModules().map(function(m){ return m.key; })');
-  check('permission modules per list?', mods.indexOf('crm_atendimento') === 0 && mods.indexOf('crm_compras') !== -1, mods);
+  const mods2 = await ev('window.pipoCrmModules().map(function(m){ return m.key; })');
+  check('permission modules: Listas e status first, then one per list (new list included)?', mods2[0] === 'crm_listas' && mods2[1] === 'crm_atendimento' && mods2.indexOf('crm_compras') !== -1, mods2);
 
   // Velocidade: com o tempo real conectado, abrir o CRM de novo não relê tudo do banco
   const cache = await ev(`(async function(){

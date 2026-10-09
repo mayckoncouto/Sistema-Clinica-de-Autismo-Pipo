@@ -5475,6 +5475,8 @@ var CRM = {lists: CRM_DEFAULT_LISTS, listsLoaded: false, tasks: {}, people: [], 
 function crmClient(){ return agdClient(); }
 function crmMe(){ var p = window.pipoAuth && window.pipoAuth.profile && window.pipoAuth.profile(); return p ? p.id : "local-me"; }
 function crmIsAdmin(){ return !window.pipoAuth || (window.pipoAuth.isAdmin && window.pipoAuth.isAdmin()); }
+// Listas e status do CRM: permissão própria "crm_listas" em Níveis de permissão (o Administrador sempre pode).
+function crmListsCan(a){ return crmIsAdmin() || can("crm_listas", a); }
 function crmCan(listId, action){ return can("crm_" + listId, action); }
 function crmVisibleLists(){ return (CRM.lists || []).filter(function(l){ return crmCan(l.id, "view"); }); }
 function crmListById(id){ return (CRM.lists || []).filter(function(l){ return l.id === id; })[0] || null; }
@@ -5495,7 +5497,8 @@ function crmTaskTags(task){
 }
 // Permissões das listas para a tela Níveis de permissão (js/usuarios.js).
 window.pipoCrmModules = function(){
-  return (CRM.lists || []).map(function(l, i){ return {key: "crm_" + l.id, label: "CRM – " + l.name, hint: i === 0 ? "tarefas da lista (CRM ▾); cada lista tem a sua permissão" : "", group: i === 0 ? "CRM" : ""}; });
+  return [{key: "crm_listas", label: "CRM – Listas e status", hint: "CRM ▾ → Listas e status: criar (incluir), renomear, mudar cores, ordem e status (editar) e excluir listas", group: "CRM"}]
+    .concat((CRM.lists || []).map(function(l, i){ return {key: "crm_" + l.id, label: "CRM – " + l.name, hint: i === 0 ? "tarefas da lista (CRM ▾); cada lista, inclusive as criadas depois, tem a sua permissão" : ""}; }));
 };
 
 // ----- cadastro das listas -----
@@ -5541,7 +5544,7 @@ function crmRebuildNav(){
   (CRM.lists || []).forEach(function(l, i){
     CRM_ITEMS.push({key: "crm-" + l.id, label: l.name, tab: "crm", sep: i === 0, isOn: function(){ return state.tab === "crm" && CRM.list === l.id; }, ok: function(){ return crmCan(l.id, "view"); }, open: function(){ crmGo(l.id); }});
   });
-  CRM_ITEMS.push({key: "crm-listas", label: "Listas e status", sep: true, ok: crmIsAdmin, open: function(){ crmOpenListsModal(); }});
+  CRM_ITEMS.push({key: "crm-listas", label: "Listas e status", sep: true, ok: function(){ return crmListsCan("view"); }, open: function(){ crmOpenListsModal(); }});
   if (typeof renderNavMenus === "function") renderNavMenus();
   crmBadgeRender();
   crmPreload();
@@ -6520,7 +6523,8 @@ function crmMentionWire(){
 
 // ----- Listas e status (só Administrador) -----
 function crmOpenListsModal(){
-  if (!crmIsAdmin()){ showToast("Só o Administrador cria e edita as listas do CRM.", true); return; }
+  if (!crmListsCan("view")){ showToast("Seu nível não tem acesso a Listas e status do CRM.", true); return; }
+  var canC = crmListsCan("create"), canE = crmListsCan("edit"), canD = crmListsCan("delete");
   var draft = JSON.parse(JSON.stringify(CRM.lists || []));
   var host = document.getElementById("modalHost");
   function used(listId, stId){ return Object.keys(CRM.tasks).some(function(k){ var x = CRM.tasks[k]; return x.list_id === listId && (!stId || x.status === stId); }); }
@@ -6551,7 +6555,7 @@ function crmOpenListsModal(){
   host.innerHTML = '<div class="overlay" id="ovCrmL"><div class="modal" style="max-width:640px"><div class="modal-head"><div><h3>Listas e status do CRM</h3>' +
     '<div class="modal-sub">Cada lista aparece no menu CRM. Depois de criar uma lista, marque quem pode usá-la em Acesso → Usuários → Níveis de permissão.</div></div>' +
     '<button class="modal-close" id="crmLClose" aria-label="Fechar">✕</button></div><div class="modal-body" id="crmLBody"></div>' +
-    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="crmLCancel">Cancelar</button><button class="btn primary" id="crmLSave">Salvar</button></div></div></div>';
+    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="crmLCancel">Cancelar</button>' + ((canC || canE || canD) ? '<button class="btn primary" id="crmLSave">Salvar</button>' : '') + '</div></div></div>';
   render();
   var ov = document.getElementById("ovCrmL");
   function close(){ host.innerHTML = ""; }
@@ -6580,7 +6584,9 @@ function crmOpenListsModal(){
     if (b.hasAttribute("data-smv")){ var t2 = si + (+b.getAttribute("data-smv")); if (t2 >= 0 && t2 < l.statuses.length){ l.statuses.splice(t2, 0, l.statuses.splice(si, 1)[0]); render(); } return; }
     if (b.hasAttribute("data-sdel")){ if (l.statuses.length <= 1){ showToast("A lista precisa de pelo menos um status.", true); return; } if (s.id && l.id && used(l.id, s.id)){ showToast("Há tarefas neste status: mude o status delas antes.", true); return; } l.statuses.splice(si, 1); render(); }
   });
-  document.getElementById("crmLSave").addEventListener("click", function(){
+  var saveBtn = document.getElementById("crmLSave");
+  if (!(canC || canE || canD)){ var cb = document.getElementById("crmLCancel"); if (cb) cb.textContent = "Fechar"; }
+  if (saveBtn) saveBtn.addEventListener("click", function(){
     var ids = {};
     for (var i = 0; i < draft.length; i++){
       var l = draft[i]; l.name = String(l.name || "").trim();
@@ -6597,6 +6603,18 @@ function crmOpenListsModal(){
       }
       if (!l.lead) delete l.lead;
     }
+    // Mesma conta do banco: lista nova = incluir, tirada = excluir, mudada (nome, cor, status, ordem) = editar.
+    var orig = CRM.lists || [], byId = {};
+    orig.forEach(function(o){ byId[o.id] = o; });
+    var added = draft.filter(function(l){ return !byId[l.id]; }), removed = orig.filter(function(o){ return !draft.some(function(l){ return l.id === o.id; }); });
+    var keptOrig = orig.filter(function(o){ return !removed.includes(o); }), keptNew = draft.filter(function(l){ return byId[l.id]; });
+    function norm(l){ return JSON.stringify({id: l.id, name: l.name, color: l.color || "", lead: !!l.lead, st: (l.statuses || []).map(function(x){ return [x.id, String(x.name || "").trim(), x.color || "", !!x.done, !!(x.lost && l.lead)]; })}); }
+    var changed = keptNew.some(function(l, i){ return norm(l) !== norm(byId[l.id]) || (keptOrig[i] && keptOrig[i].id !== l.id); });
+    var miss = [];
+    if (added.length && !canC) miss.push("incluir listas");
+    if (removed.length && !canD) miss.push("excluir listas");
+    if (changed && !canE) miss.push("editar listas");
+    if (miss.length){ showToast("Seu nível não pode " + miss.join(", ") + " (Níveis de permissão → CRM – Listas e status).", true); return; }
     if (!db){ CRM.lists = draft; crmRebuildNav(); close(); crmRender(); return; }
     db.doc("config/task_lists").set({list: draft}).then(function(){ close(); showToast("Listas salvas."); }, function(e){ showToast("Não foi possível salvar: " + ((e && e.message) || e), true); });
   });
@@ -18956,7 +18974,7 @@ var HELP_TOPICS = [
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
       "Vencimento passado fica em vermelho (menos nos status que encerram a tarefa).",
       "Ir para um status de perda (ex.: Cancelado) pede o motivo de perda. Tarefa num status finalizado não pode ser excluída.",
-      "Cada lista tem a sua permissão (ver, incluir, editar, excluir) em Níveis de permissão. Listas e status: só o Administrador (CRM ▾ → Listas e status).",
+      "Cada lista tem a sua permissão (ver, incluir, editar, excluir) em Níveis de permissão. Em Níveis de permissão, o grupo CRM começa por <b>CRM – Listas e status</b> (ver a janela; incluir, editar e excluir listas e seus status) e depois traz uma linha para cada lista, inclusive as criadas depois. O Administrador sempre pode tudo.",
       "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Origem, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o nome do paciente ou lead (cortado com “…” quando não cabe), Vencimento e a bandeira da Prioridade; no Quadro, cada status ocupa a tela toda: deslize para o lado ou escolha o status no campo acima dos quadros; no Calendário, toque num dia para ver as tarefas dele. Na janela da tarefa, os botões <b>Detalhes</b> (campos e descrição) e <b>Atividade</b> (alterações, comentários e o campo para comentar) trocam o que aparece. Na tarefa nova já dá para comentar: o comentário fica marcado \"enviado ao salvar\" e vai junto quando a tarefa é salva."
     ],
     who: "Permissão de cada lista do CRM."},
