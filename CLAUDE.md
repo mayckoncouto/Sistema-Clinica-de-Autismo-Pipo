@@ -3138,3 +3138,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   uma linha" no fim do `<style>`, com `!important`): inputs de texto/e-mail/telefone/número/senha/busca/data/hora,
   `select` simples, `.dp-btn` (listas, datas, combos), `.ms-btn`, `.crm-pager-btn`. Exceção: a grade de objetivos do
   Plano (`.pl-tbl`, linhas compactas pedidas antes). Campo novo herda sozinho; não definir altura própria.
+- (2026-10-09) `supabase/conferencia-migracoes.sql`: script SÓ DE LEITURA que diz, para cada migração da pasta,
+  se já foi rodada no banco (SIM / NÃO / — sem marca própria), com as pendentes primeiro. Migração nova: acrescentar
+  uma linha com a marca que ela deixa (função, tabela, coluna, caminho em `documents_path_valid`, nível pendente).
+  Testado no PGlite. 05h NÃO deve ser rodada (desfeita pela 05i).
