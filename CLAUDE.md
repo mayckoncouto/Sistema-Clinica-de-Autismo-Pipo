@@ -2872,3 +2872,10 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   comentar fica liberado na tarefa nova; cada comentário entra em `pendingCom` e aparece no feed tracejado
   (`.crm-cmt.pending`, "enviado ao salvar"); ao salvar, depois do `crmInsert`, cada um é enviado por `crmComment`
   (texto ainda no campo também vai). `crmCommentHtml(e, textoDaHora)` monta os cartões (feed e pendentes).
+- 2026-10-09 (pedido do usuário) Cadastro do paciente: Alergias, Medicações em uso e Restrições alimentares viraram
+  campos de UMA linha (`type: "line"`; texto antigo com quebra de linha aparece separado por ";"); Observações com
+  6 linhas (`rows: 6`). Linhas organizadas: Escola (2 colunas, `span2`) | Série/ano; Turno | Professor(a) | Mediador;
+  Médico | Diagnóstico (CID) (`span2`); Data do diagnóstico | Nível de suporte | Comunicação. **"Nome social /
+  apelido" do PACIENTE saiu** (campo, busca, ficha impressa, planilha; `nomeSocial` em `PAT_LEGACY_KEYS` → apagado
+  ao salvar). O nome social do colaborador continua. Migração `supabase/2026-10-09b-paciente-sem-nome-social.sql`
+  (apaga dos pacientes e de `config/patient_fields`; testada no PGlite).

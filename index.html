@@ -8651,7 +8651,7 @@ function renderPatientsTab(){
   var list = state.patients.filter(function(p){
     if (!SHOW_INACTIVE.pacientes && !isActive(p)) return false;
     if (!q) return true;
-    if (by === "paciente") return hit(p.nome, p.cpf) || (p.nomeSocial && hit(p.nomeSocial, ""));
+    if (by === "paciente") return hit(p.nome, p.cpf);
     var n = patNormalize(p);
     if (by === "mae") return hit(n.mae.nome, n.mae.cpf);
     if (by === "pai") return hit(n.pai.nome, n.pai.cpf);
@@ -9321,7 +9321,6 @@ var CID_SUGGESTIONS = ["F84.0 Autismo infantil", "F84.1 Autismo atípico", "F84.
   "F82 Transtorno do desenvolvimento motor", "F70 Retardo mental leve", "F81.9 Transtorno do desenvolvimento das habilidades escolares"];
 var PAT_FIELDS = [
   {key: "nome", label: "Nome", sec: "ident", lock: true, wide: true},
-  {key: "nomeSocial", label: "Nome social / apelido", sec: "ident"},
   {key: "nascimento", label: "Data de nascimento", sec: "ident", type: "date"},
   {key: "sexo", label: "Sexo", sec: "ident", type: "select", opts: ["Feminino", "Masculino", "Outro"]},
   {key: "cpf", label: "CPF", sec: "ident", type: "cpf", dfltReq: true},
@@ -9336,22 +9335,22 @@ var PAT_FIELDS = [
   {key: "telefones", label: "Telefones", sec: "contato", type: "phones", hint: "pelo menos um"},
   {key: "emails", label: "E-mails", sec: "contato", type: "emails", hint: "pelo menos um"},
   {key: "financeiro", label: "Responsável financeiro", sec: "financeiro", type: "fin", fixed: true, hint: "nome e CPF/CNPJ"},
-  {key: "escolaId", label: "Escola", sec: "escola", type: "reg", reg: "escolas", wide: true},
+  {key: "escolaId", label: "Escola", sec: "escola", type: "reg", reg: "escolas", span2: true},
   {key: "escolaSerie", label: "Série / ano", sec: "escola"},
   {key: "escolaTurno", label: "Turno da escola", sec: "escola", type: "select", opts: ["Manhã", "Tarde", "Integral", "Noite"]},
   {key: "professor", label: "Professor(a)", sec: "escola"},
   {key: "mediador", label: "Tem mediador / AT", sec: "escola", type: "select", opts: ["Sim", "Não"]},
   {key: "rotinaAtual", label: "Rotina atual", sec: "rotinaatual", type: "weekroutine", hint: "pelo menos um período"},
-  {key: "medicoId", label: "Médico", sec: "saude", type: "reg", reg: "medicos", wide: true},
-  {key: "cid", label: "Diagnóstico (CID)", sec: "saude", type: "list", list: CID_SUGGESTIONS, wide: true},
+  {key: "medicoId", label: "Médico", sec: "saude", type: "reg", reg: "medicos"},
+  {key: "cid", label: "Diagnóstico (CID)", sec: "saude", type: "list", list: CID_SUGGESTIONS, span2: true},
   {key: "diagData", label: "Data do diagnóstico", sec: "saude", type: "date"},
   {key: "suporte", label: "Nível de suporte", sec: "saude", type: "select", opts: ["Nível 1", "Nível 2", "Nível 3"]},
   {key: "comunicacao", label: "Comunicação", sec: "saude", type: "select", opts: ["Verbal", "Pouco verbal", "Não verbal", "Usa CAA (comunicação alternativa)"]},
-  {key: "alergias", label: "Alergias", sec: "saude", type: "area"},
-  {key: "medicacoes", label: "Medicações em uso", sec: "saude", type: "area"},
-  {key: "restricoes", label: "Restrições alimentares", sec: "saude", type: "area"},
+  {key: "alergias", label: "Alergias", sec: "saude", type: "line"},
+  {key: "medicacoes", label: "Medicações em uso", sec: "saude", type: "line"},
+  {key: "restricoes", label: "Restrições alimentares", sec: "saude", type: "line"},
   {key: "comoConheceu", label: "Como conheceu a clínica", sec: "admin", type: "list", list: ["Indicação médica", "Indicação de outro paciente", "Escola", "Convênio", "Internet / redes sociais", "Outro"]},
-  {key: "obs", label: "Observações", sec: "admin", type: "area"}
+  {key: "obs", label: "Observações", sec: "admin", type: "area", rows: 6}
 ];
 // Rotina atual do paciente fora da clínica (cadastro do paciente, grupo "Rotina atual"):
 // rotinaAtual = {seg: {m: {tipo, txt}, t: {tipo, txt}}, … sex}. Ao agendar num período de um
@@ -9457,7 +9456,7 @@ function routineConflicts(changesByDoc){
   return out;
 }
 // Campos do formato anterior (abas) que viram os novos ao abrir o cadastro.
-var PAT_LEGACY_KEYS = ["responsaveis", "finOutro", "telefone", "email", "prefContato", "escolaContato"];
+var PAT_LEGACY_KEYS = ["responsaveis", "finOutro", "telefone", "email", "prefContato", "escolaContato", "nomeSocial"];
 function patFieldCfg(key){
   var f = PAT_FIELDS.filter(function(x){ return x.key === key; })[0];
   if (!f) return {show: false, req: false};
@@ -9519,7 +9518,9 @@ function patFieldInputHtml(f, v){
   if (t === "date") return lab + '<input id="' + id + '" type="date" value="' + esc(val || "") + '">';
   if (t === "select") return lab + '<select id="' + id + '"><option value="">Não informado</option>' + f.opts.map(function(o){ return '<option' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join("") +
     (val && f.opts.indexOf(val) === -1 ? '<option selected>' + esc(val) + '</option>' : '') + '</select>';
-  if (t === "area") return lab + '<textarea id="' + id + '" rows="2">' + esc(val || "") + '</textarea>';
+  if (t === "area") return lab + '<textarea id="' + id + '" rows="' + (f.rows || 2) + '">' + esc(val || "") + '</textarea>';
+  // Uma linha só (texto antigo com quebras de linha aparece separado por ";").
+  if (t === "line") return lab + '<input id="' + id + '" type="text" value="' + esc(String(val || "").replace(/\s*\n+\s*/g, "; ")) + '">';
   if (t === "list") return lab + '<input id="' + id + '" type="text" list="' + id + '-dl" value="' + esc(val || "") + '"><datalist id="' + id + '-dl">' + f.list.map(function(o){ return '<option value="' + esc(o) + '">'; }).join("") + '</datalist>';
   if (t === "reg") return lab + regPickHtml(f.reg, id, regOptionsHtml(f.reg, val, "Não informado"));
   var extra = t === "cpf" ? ' inputmode="numeric" placeholder="000.000.000-00" data-mask="cpf"' : t === "digits" ? ' inputmode="numeric" maxlength="' + (f.max || 20) + '" data-mask="digits"' : '';
@@ -9670,7 +9671,7 @@ function openPatientModal(p, opts){
         fi("endereco", "Endereço (para nota fiscal)", '', '<button type="button" class="btn ghost pm-copy" data-copy="endereco">Copiar endereço</button>', 'pm-wide') + '</div>';
     } else {
       html = '<div class="pm-grid">' + fs.map(function(f){
-        var cell = '<div class="field' + (f.wide || f.type === "area" ? ' pm-wide' : '') + '" data-pf="' + f.key + '">' + patFieldInputHtml(f, v).replace('</label>', reqMark(f.key) + '</label>') + '</div>';
+        var cell = '<div class="field' + (f.wide || f.type === "area" || f.type === "line" ? ' pm-wide' : f.span2 ? ' pm-span2' : '') + '" data-pf="' + f.key + '">' + patFieldInputHtml(f, v).replace('</label>', reqMark(f.key) + '</label>') + '</div>';
         if (f.key === "nascimento") cell += '<div class="field" id="pIdadeField"></div>';
         return cell;
       }).join("") + '</div>';
@@ -10127,7 +10128,7 @@ function patientFichaHtml(p){
   function regName(kind, id){ var it = REG_CFG[kind].list().filter(function(x){ return x.id === id; })[0]; return it ? it.name : ""; }
   var age = v.nascimento ? computeAgeFromBirth(v.nascimento) : null;
   var secs = [
-    ["Identificação", row("Nome", v.nome) + row("Nome social", v.nomeSocial) + row("Nascimento", v.nascimento ? trBr(v.nascimento) + (age != null ? " (" + age + " anos)" : "") : "") +
+    ["Identificação", row("Nome", v.nome) + row("Nascimento", v.nascimento ? trBr(v.nascimento) + (age != null ? " (" + age + " anos)" : "") : "") +
       row("Sexo", v.sexo) + row("CPF", v.cpf ? formatCpf(v.cpf) : "") + row("RG", v.rg) + row("Cartão SUS", v.cns) + row("Data de entrada", v.entrada ? trBr(v.entrada) : "")],
     ["Endereço", row("Endereço", patAddressText(v.endereco))],
     ["Filiação", row("Mãe", v.mae.nome + (v.mae.cpf ? " — CPF " + formatCpf(v.mae.cpf) : "")) + row("Pai", v.pai.nome + (v.pai.cpf ? " — CPF " + formatCpf(v.pai.cpf) : ""))],
@@ -22341,7 +22342,7 @@ function ioTrExportRows(){
 }
 
 /* ---- Pacientes ---- */
-var IO_PAT_SIMPLE = [["nomeSocial", "nomeSocial"], ["sexo", "sexo"], ["rg", "rg"], ["cns", "cns"], ["escolaSerie", "escolaSerie"], ["escolaTurno", "escolaTurno"],
+var IO_PAT_SIMPLE = [["sexo", "sexo"], ["rg", "rg"], ["cns", "cns"], ["escolaSerie", "escolaSerie"], ["escolaTurno", "escolaTurno"],
   ["professor", "professor"], ["mediador", "mediador"], ["comoConheceu", "comoConheceu"], ["obs", "obs"]];
 var IO_PAT_HEALTH = [["cid", "cid"], ["comunicacao", "comunicacao"], ["alergias", "alergias"], ["medicacoes", "medicacoes"], ["restricoes", "restricoes"]];
 function ioPatPlan(recs){
@@ -22460,7 +22461,7 @@ function ioPatExportRows(){
   return state.patientsRaw.slice().sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); }).map(function(p0){
     var p = patNormalize(Object.assign({}, p0, healthOf(p0.id))), e = p.endereco || {}, f = p.financeiro || {};
     var esc0 = p.escolaId ? ((state.schools || []).filter(function(s){ return s.id === p.escolaId; })[0] || {}).name : "";
-    var o = {nome: p.nome || "", nomeSocial: p.nomeSocial || "", nascimento: p.nascimento ? trBr(p.nascimento) : "", sexo: p.sexo || "", cpf: p.cpf ? formatCpf(p.cpf) : "",
+    var o = {nome: p.nome || "", nascimento: p.nascimento ? trBr(p.nascimento) : "", sexo: p.sexo || "", cpf: p.cpf ? formatCpf(p.cpf) : "",
       rg: p.rg || "", cns: p.cns || "", entrada: p.entrada ? trBr(p.entrada) : "",
       mae: (p.mae || {}).nome || "", maeCpf: (p.mae || {}).cpf ? formatCpf(p.mae.cpf) : "", pai: (p.pai || {}).nome || "", paiCpf: (p.pai || {}).cpf ? formatCpf(p.pai.cpf) : "",
       telefone: (p.telefones || []).map(function(t){ return formatPhone(t.numero || ""); }).filter(Boolean).join("; "), email: (p.emails || []).map(function(m){ return m.email; }).filter(Boolean).join("; "),
@@ -22654,7 +22655,7 @@ var IO_KINDS = {
       "Vários telefones ou e-mails: separe com ponto e vírgula. Datas no formato dd/mm/aaaa. Escola: o nome precisa estar em Cadastros → Escolas."],
     cols: [
       {k: "nome", h: "Nome", alias: ["paciente", "nome do paciente"], w: 36, req: true},
-      {k: "nomeSocial", h: "Nome social", alias: ["apelido"], w: 16}, {k: "nascimento", h: "Data de nascimento", alias: ["nascimento", "data nascimento"], w: 14},
+      {k: "nascimento", h: "Data de nascimento", alias: ["nascimento", "data nascimento"], w: 14},
       {k: "sexo", h: "Sexo", w: 11}, {k: "cpf", h: "CPF", w: 16}, {k: "rg", h: "RG", w: 14}, {k: "cns", h: "Cartão SUS", alias: ["cns"], w: 18},
       {k: "entrada", h: "Data de entrada", alias: ["entrada"], w: 14},
       {k: "mae", h: "Mãe", alias: ["nome da mae"], w: 30}, {k: "maeCpf", h: "CPF da mãe", w: 16}, {k: "pai", h: "Pai", alias: ["nome do pai"], w: 30}, {k: "paiCpf", h: "CPF do pai", w: 16},
