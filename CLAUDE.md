@@ -2959,3 +2959,9 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
 - (2026-10-09, pedido do usuário) Prioridade do CRM só **Urgente, Alta, Normal** (padrão Normal):
   "Baixa" saiu de `CRM_PRIOS` e do filtro `#crmFPrio`; tarefa antiga gravada com "baixa" aparece,
   filtra e ordena como Normal (`crmPrio`). Sem SQL (o banco ainda aceita "baixa").
+- (2026-10-09, pedido do usuário, SUBSTITUI "Descrição ao lado" e o "rótulo em cima" do computador)
+  Janela da tarefa do CRM no computador: nome do campo à ESQUERDA (coluna de 120px) e o campo ao
+  lado (`#ovCrm .crm-prop` em grid `120px 1fr`), nesta ordem por linha: Tarefa (linha toda);
+  Status | Responsáveis; Vencimento | Prioridade; Descrição (linha toda, 3 linhas, `#crmDescBox`);
+  depois "Dados do lead" na mesma ordem de antes e no mesmo formato. `.crm-top` saiu. No celular,
+  nome em cima e um campo por linha.
