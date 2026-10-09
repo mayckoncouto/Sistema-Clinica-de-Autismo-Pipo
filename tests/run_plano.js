@@ -402,6 +402,17 @@ const path = require('path');
   await page.click('[data-det-pat="r2"]');
   const gOpen = await page.$eval('#ovAgdDet .agd-det-name', (e) => e.textContent);
   console.log('tapping a patient opens that patient\'s details?', /Carla Laranja/.test(gOpen), gOpen);
+  // Quem só vê a própria agenda: os pacientes dos outros profissionais vêm do banco (group_slot_appointments).
+  await ev(`(function(){ document.getElementById("modalHost").innerHTML = "";
+    window.__oldClient = agdClient;
+    var chain = new Proxy(function(){}, {get: function(t, k){ return k === "then" ? function(ok){ return Promise.resolve({data: []}).then(ok); } : function(){ return chain; }; }});
+    agdClient = function(){ return {from: function(){ return chain; }, rpc: function(fn, args){ window.__rpc = fn + ":" + args.p_id; return Promise.resolve({data: [
+      {id: "x1", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Ana Azul", patient_id: "ana-azul", room_id: "r1", service: "sessao", status: ""}]}); }}; };
+    AD.rows = {g1: {id: "g1", date: "2026-10-12", time: "08:00", professional_id: "ana-terapeuta", patient: "Coordenador", group_id: "coord", room_id: "r1", status: ""}};
+    agdOpenDetails(AD.rows.g1); })()`);
+  await page.waitForFunction(() => /Pacientes \(1\)/.test((document.querySelector('#agdDetSeg [data-det="pa"]') || {}).textContent || ''));
+  const gDb = await ev(`(function(){ var t = document.querySelector('[data-det-pane="pa"]').textContent; agdClient = window.__oldClient; return window.__rpc + "|" + t; })()`);
+  console.log('group details read the room patients from the database when the week does not have them?', /^group_slot_appointments:g1\|.*Ana Azul/.test(gDb), gDb);
   await ev('(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = ""; AD.rows = {}; })()');
 
   // Relatório "Evolução por habilidade" (planos vigentes).

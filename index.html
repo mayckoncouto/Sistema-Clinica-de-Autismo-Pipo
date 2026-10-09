@@ -12940,11 +12940,23 @@ function agdOpenDetails(row){
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("agdDetClose").addEventListener("click", close);
   document.getElementById("agdDetOk").addEventListener("click", close);
-  if (grp) agdGroupGoalsFill(document.getElementById("agdDetGoals"), grpItems);
+  if (grp){
+    agdGroupGoalsFill(document.getElementById("agdDetGoals"), grpItems);
+    // A semana carregada pode não ter os atendimentos dos outros profissionais (quem só vê a
+    // própria agenda): busca no banco os pacientes da sala no horário e redesenha.
+    agdGroupSlotFetch(row).then(function(items){
+      if (!items || !document.body.contains(ov)) return;
+      grpItems = items;
+      var b = ov.querySelector('[data-det="pa"]'); if (b) b.textContent = "Pacientes (" + items.length + ")";
+      var pane = ov.querySelector('[data-det-pane="pa"]'); if (pane) pane.innerHTML = agdGroupPatientsHtml(items);
+      agdGroupGoalsFill(document.getElementById("agdDetGoals"), items);
+    });
+  }
   else agdGoalsFill(document.getElementById("agdDetGoals"), row);
   ov.addEventListener("click", function(e){
     var pb = e.target.closest("[data-det-pat]"); if (!pb) return;
-    var r2 = AD.rows[pb.getAttribute("data-det-pat")]; if (r2) agdOpenDetails(r2);
+    var id = pb.getAttribute("data-det-pat"), it = grpItems.filter(function(x){ return x.row.id === id; })[0];
+    var r2 = AD.rows[id] || (it && it.row); if (r2) agdOpenDetails(r2);
   });
   var detSeg = document.getElementById("agdDetSeg");
   if (detSeg) detSeg.addEventListener("click", function(e){
@@ -21090,15 +21102,28 @@ function agdGoalsFill(host, row){
  * ELE está agendado; primeiro os em comum (mesmo objetivo em 2 ou mais pacientes), depois um
  * quadro recolhido por paciente com os objetivos só dele.
  */
-function agdGroupSlotRows(row){
-  var out = [];
-  Object.keys(AD.rows || {}).forEach(function(id){
-    var r = AD.rows[id];
+function agdGroupSlotRows(row, extra){
+  var out = [], src = Object.assign({}, AD.rows || {});
+  (extra || []).forEach(function(r){ if (r && r.id && !src[r.id]) src[r.id] = r; });
+  Object.keys(src).forEach(function(id){
+    var r = src[id];
     if (!r || r.id === row.id || !row.room_id || r.room_id !== row.room_id || r.date !== row.date || r.time !== row.time || bookingKind(r) || agdIsGroupRow(r)) return;
     var p = findPatientAt(r, r.date);
     if (p && out.every(function(x){ return x.p.id !== p.id; })) out.push({row: r, p: p});
   });
   return out.sort(function(a, b){ return String(a.p.nome).localeCompare(String(b.p.nome), "pt-BR"); });
+}
+// Pacientes da sala no horário do agendamento de grupo, lidos no banco (função
+// group_slot_appointments, migração 2026-10-09). Sem a função, devolve null (fica o da semana).
+function agdGroupSlotFetch(row){
+  var c = agdClient();
+  if (!c || !row.room_id || !row.id) return Promise.resolve(null);
+  try {
+    return c.rpc("group_slot_appointments", {p_id: row.id}).then(function(r){
+      if (r.error) return null;
+      return agdGroupSlotRows(row, r.data || []);
+    }, function(){ return null; });
+  } catch (e){ return Promise.resolve(null); }
 }
 function agdGroupPatientsHtml(items){
   if (!items.length) return '<div class="pl-hint">Nenhum paciente agendado nesta sala neste horário.</div>';

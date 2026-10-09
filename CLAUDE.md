@@ -2838,3 +2838,9 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   "Pacientes: …") e um quadro recolhido "Objetivos de <paciente>" com os só dele; cada paciente filtrado pelo
   profissional com quem ELE está agendado. Linhas/quadros reaproveitam `agdObjLine`/`agdObjGrouped`/`agdObjBox`
   (extraídos de `agdGoalsBoxHtml`). Teste no `tests/run_plano.js`.
+- 2026-10-09 (correção) Pacientes do grupo vazios em produção: a lista lia só `AD.rows`, e quem só vê a
+  própria agenda (`agenda_scope_professional`) não recebe os atendimentos dos outros profissionais.
+  `agdGroupSlotFetch(row)` chama a RPC `group_slot_appointments(p_id)` (security definer: confere
+  `agenda.view` e que a pessoa vê o agendamento do grupo; devolve atendimentos da mesma sala/data/hora,
+  sem bloqueio e sem `group_id`) e redesenha "Pacientes (N)", a lista e os objetivos; sem a função, fica o
+  da semana carregada. Migração `supabase/2026-10-09-pacientes-do-grupo.sql` (testada no PGlite).
