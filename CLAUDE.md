@@ -3083,3 +3083,9 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   `supabase/2026-10-09e-crm-responsavel-com-acesso.sql` (`crm_user_can(usuário, lista)`, `crm_people` novo, gatilho
   `tasks_assignees_guard`: recusa responsável NOVO sem acesso; mudar a tarefa de lista confere todos; testada no PGlite).
   @menção continua com todos os usuários.
+- (2026-10-09, pedido do usuário) **Comentários do CRM com negrito, itálico e sublinhado**: botões B / I / U
+  (`CRM_FMT_TOOLS`, `.crm-fmt`, 40px no celular) na barra `.crm-compose-tools` da caixa de comentar e da janela
+  Editar mensagem; Ctrl+B/I/U também. O texto continua simples, com marcas como no WhatsApp (`*negrito*`,
+  `_itálico_`, `__sublinhado__`; `crmFmtApply` envolve a seleção ou põe as marcas com o cursor no meio) e o feed
+  mostra formatado (`crmFmt` em `crmCommentHtml`; marca só vale encostada no texto e separada por espaço, então
+  `nome_sobrenome` e `2*3` não mudam). Sem SQL.

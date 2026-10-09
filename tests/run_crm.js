@@ -273,6 +273,17 @@ const path = require('path');
     return JSON.stringify({names: names, dOn: dOn}); })()`);
   const pj = JSON.parse(ppl);
   check('responsáveis: only people with access to CRM and the list (+ current without access marked)?', pj.names.join('|') === 'Eu|Bia|Duda (sem acesso)' && pj.dOn === 'false', ppl);
+  // Comentário: negrito / itálico / sublinhado (botões na barra da caixa e formatação no feed)
+  const fmt = JSON.parse(await ev(`(function(){
+    var box = document.createElement('div'); box.className = 'crm-compose'; box.innerHTML = '<textarea>oi mundo</textarea><div class="crm-compose-bar"><div class="crm-compose-tools">' + CRM_FMT_TOOLS + '</div></div>';
+    document.body.appendChild(box); var ta = box.querySelector('textarea');
+    ta.setSelectionRange(3, 8); box.querySelector('[data-fmt="b"]').click(); var v1 = ta.value;
+    ta.value = 'a b'; ta.setSelectionRange(2, 3); box.querySelector('[data-fmt="u"]').click(); var v2 = ta.value;
+    var n = box.querySelectorAll('.crm-fmt').length; box.remove();
+    var h = crmCommentHtml({author_name: 'X', body: '*forte* _leve_ __linha__ nome_sobrenome 2*3*4', created_at: new Date().toISOString()});
+    return JSON.stringify({n: n, v1: v1, v2: v2, h: h.split('crm-cmt-b">')[1]}); })()`));
+  check('comment B/I/U: 3 buttons wrap selection and the feed shows bold/italic/underline?', fmt.n === 3 && fmt.v1 === 'oi *mundo*' && fmt.v2 === 'a __b__' &&
+    fmt.h.indexOf('<b>forte</b>') !== -1 && fmt.h.indexOf('<i>leve</i>') !== -1 && fmt.h.indexOf('<u>linha</u>') !== -1 && fmt.h.indexOf('nome_sobrenome') !== -1 && fmt.h.indexOf('2*3*4') !== -1, JSON.stringify(fmt));
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

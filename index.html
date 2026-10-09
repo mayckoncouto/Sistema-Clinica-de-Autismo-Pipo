@@ -625,6 +625,9 @@ div.ag-obj-head{cursor:default}
 .crm-compose textarea{display:block;width:100%;box-sizing:border-box;border:0!important;background:transparent!important;box-shadow:none!important;outline:none;resize:none!important;padding:12px 14px 4px;font:inherit;font-size:13.5px;line-height:1.5;color:var(--ink);min-height:64px}
 .crm-compose-bar{display:flex;align-items:center;gap:6px;padding:6px 8px 8px 10px;background:var(--surface);border-radius:0 0 14px 14px}
 .crm-compose-tools{flex:1;display:flex;align-items:center;gap:4px;min-height:30px}
+.crm-fmt{width:30px;height:30px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:14px;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.crm-fmt:hover{background:var(--surface-2);color:var(--ink)}
+@media (max-width:760px){.crm-fmt{width:40px;height:40px;font-size:17px}}
 .crm-send{width:34px;height:30px;border-radius:9px;border:0;display:inline-flex;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-ink);cursor:pointer}
 .crm-send:disabled{background:var(--surface-2);color:var(--muted);cursor:default}
 .crm-compose.off{opacity:.7}
@@ -5774,6 +5777,39 @@ function crmCommentDelete(id){
 }
 // Janela "Editar mensagem": a mesma caixa do comentário (texto + botão de enviar).
 // Enter salva, Shift+Enter quebra a linha, Esc/✕/clique fora cancela. Devolve o texto novo ou null.
+// Comentários do CRM: negrito / itálico / sublinhado. O texto continua simples, com marcas (como no
+// WhatsApp): *negrito*, _itálico_, __sublinhado__. Botões na barra da caixa (ou Ctrl+B / Ctrl+I / Ctrl+U)
+// envolvem o texto escolhido; sem texto escolhido, põem as marcas e o cursor no meio. crmFmt mostra formatado.
+var CRM_FMT = {b: ["*", "*"], i: ["_", "_"], u: ["__", "__"]};
+var CRM_FMT_TOOLS = '<button type="button" class="crm-fmt" data-fmt="b" title="Negrito (Ctrl+B)" aria-label="Negrito"><b>B</b></button>' +
+  '<button type="button" class="crm-fmt" data-fmt="i" title="Itálico (Ctrl+I)" aria-label="Itálico"><i>I</i></button>' +
+  '<button type="button" class="crm-fmt" data-fmt="u" title="Sublinhado (Ctrl+U)" aria-label="Sublinhado"><u>U</u></button>';
+function crmFmtApply(ta, k){
+  var m = CRM_FMT[k]; if (!ta || !m) return;
+  var a = ta.selectionStart, b = ta.selectionEnd, v = ta.value, sel = v.slice(a, b);
+  // tira espaços das pontas da seleção (a marca precisa encostar no texto)
+  while (sel && /\s/.test(sel.charAt(0))){ a++; sel = sel.slice(1); }
+  while (sel && /\s/.test(sel.charAt(sel.length - 1))){ b--; sel = sel.slice(0, -1); }
+  ta.value = v.slice(0, a) + m[0] + sel + m[1] + v.slice(b);
+  var s0 = a + m[0].length; ta.focus(); ta.setSelectionRange(s0, s0 + sel.length);
+  ta.dispatchEvent(new Event("input", {bubbles: true}));
+}
+function crmFmt(html){
+  return html
+    .replace(/(^|[\s(>])__(?=\S)([^\n]*?\S)__(?=[\s.,;:!?)<]|$)/g, "$1<u>$2</u>")
+    .replace(/(^|[\s(>])\*(?=\S)([^*\n]*?\S)\*(?=[\s.,;:!?)<]|$)/g, "$1<b>$2</b>")
+    .replace(/(^|[\s(>])_(?=[^\s_])([^\n]*?[^\s_])_(?=[\s.,;:!?)<]|$)/g, "$1<i>$2</i>");
+}
+document.addEventListener("mousedown", function(e){ if (e.target.closest && e.target.closest(".crm-fmt")) e.preventDefault(); }, true);
+document.addEventListener("click", function(e){
+  var b = e.target.closest && e.target.closest(".crm-fmt"); if (!b) return;
+  var box = b.closest(".crm-compose"); crmFmtApply(box && box.querySelector("textarea"), b.getAttribute("data-fmt"));
+});
+document.addEventListener("keydown", function(e){
+  var ta = e.target; if (!(e.ctrlKey || e.metaKey) || e.altKey || !ta || ta.tagName !== "TEXTAREA" || !ta.closest(".crm-compose")) return;
+  var k = {b: "b", i: "i", u: "u"}[String(e.key).toLowerCase()]; if (!k) return;
+  e.preventDefault(); crmFmtApply(ta, k);
+});
 function crmEditDialog(old){
   return new Promise(function(resolve){
     var host = document.getElementById("confirmHost");
@@ -5782,7 +5818,7 @@ function crmEditDialog(old){
       '<div class="modal" style="max-width:520px">' +
         '<div class="modal-head"><div><h3 id="ceTitle">Editar mensagem</h3></div><button class="modal-close" id="ceClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body"><div class="crm-compose"><textarea id="ceText" rows="4" aria-label="Mensagem"></textarea>' +
-          '<div class="crm-compose-bar"><div class="crm-compose-tools"></div><button type="button" class="crm-send" id="ceSend" title="Salvar (Enter) · Shift+Enter quebra a linha" aria-label="Salvar mensagem">' +
+          '<div class="crm-compose-bar"><div class="crm-compose-tools">' + CRM_FMT_TOOLS + '</div><button type="button" class="crm-send" id="ceSend" title="Salvar (Enter) · Shift+Enter quebra a linha" aria-label="Salvar mensagem">' +
           '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13.5l12-5.5L2 2.5l1.8 5.5z" fill="currentColor"/><path d="M3.8 8H9" stroke="var(--surface)" stroke-width="1.3" stroke-linecap="round"/></svg></button></div></div></div>' +
       '</div></div>';
     var ov = document.getElementById("ovCmtEdit"), ta = document.getElementById("ceText"), send = document.getElementById("ceSend");
@@ -6326,7 +6362,7 @@ function crmOpenTask(task, opts){
     '<div class="crm-side-head"><b>Atividade</b></div>' +
     '<div class="crm-side-body"><div class="crm-feed" id="crmFeed"><div class="pat-count">' + (isNew ? 'A criação e as alterações aparecem aqui depois de salvar. Comentários escritos agora são enviados junto com a tarefa.' : 'Carregando…') + '</div></div></div>' +
     '<div class="field crm-comment"><div class="crm-compose"><textarea id="crmCommentIn" rows="3" placeholder="Escreva um comentário… @ para mencionar alguém"></textarea>' +
-      '<div class="crm-compose-bar"><div class="crm-compose-tools"></div><button type="button" class="crm-send" id="crmCommentSend" title="Enviar (Enter) · Shift+Enter quebra a linha" aria-label="Enviar comentário" disabled>' +
+      '<div class="crm-compose-bar"><div class="crm-compose-tools">' + CRM_FMT_TOOLS + '</div><button type="button" class="crm-send" id="crmCommentSend" title="Enviar (Enter) · Shift+Enter quebra a linha" aria-label="Enviar comentário" disabled>' +
       '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13.5l12-5.5L2 2.5l1.8 5.5z" fill="currentColor"/><path d="M3.8 8H9" stroke="var(--surface)" stroke-width="1.3" stroke-linecap="round"/></svg></button></div>' +
       '<div class="crm-mention-pop" id="crmMentionPop" hidden></div></div></div></aside>';
   host.innerHTML =
@@ -6559,7 +6595,7 @@ function crmCommentHtml(e, whenText, pendIdx){
   CRM.people.forEach(function(p){ body = body.split("@" + esc(p.full_name)).join('<span class="crm-mention">@' + esc(p.full_name) + '</span>'); });
   return '<div class="crm-cmt' + (whenText ? ' pending' : '') + '"' + (pend ? ' data-pend="' + pendIdx + '"' : (e.id ? ' data-cmt-id="' + esc(e.id) + '"' : '')) + '><div class="crm-cmt-h"><b>' + esc(e.author_name || "") + '</b><span class="crm-cmt-when" title="' + esc(whenText || crmWhen(e.created_at)) + '">' + esc(whenText || crmAgo(e.created_at)) + '</span>' +
     (e.edited_at ? '<span class="crm-cmt-when" title="Editado em ' + esc(crmWhen(e.edited_at)) + '">(editado)</span>' : '') +
-    (acts ? '<span class="crm-cmt-acts">' + acts + '</span>' : '') + '</div><div class="crm-cmt-b">' + body.replace(/\n/g, "<br>") + '</div></div>';
+    (acts ? '<span class="crm-cmt-acts">' + acts + '</span>' : '') + '</div><div class="crm-cmt-b">' + crmFmt(body).replace(/\n/g, "<br>") + '</div></div>';
 }
 function crmActivityLoad(taskId){
   var task = CRM.tasks[taskId], list = task ? crmListById(task.list_id) : null;
@@ -19117,6 +19153,7 @@ var HELP_TOPICS = [
     rules: [
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
       "Vencimento passado fica em vermelho (menos nos status que encerram a tarefa).",
+      "Comentários: os botões <b>B</b>, <i>I</i> e <u>U</u> na barra da caixa (ou Ctrl+B, Ctrl+I, Ctrl+U) deixam o texto escolhido em negrito, itálico ou sublinhado. Também dá para digitar as marcas: *negrito*, _itálico_, __sublinhado__.",
       "Só pode ser responsável por uma tarefa quem tem acesso ao CRM e à lista dela (Níveis de permissão). Quem perdeu o acesso continua na tarefa com “(sem acesso)” até alguém tirar.",
       "Ir para um status de perda (ex.: Cancelado) pede o motivo de perda. Tarefa num status finalizado não pode ser excluída.",
       "Cada lista tem a sua permissão (ver, incluir, editar, excluir) em Níveis de permissão. Em Níveis de permissão, o grupo CRM começa pela permissão <b>CRM</b>: “Ver” dá o botão CRM do topo (tela CRM e Minhas tarefas) e a janela Listas e status; “Incluir”, “Editar” e “Excluir” valem para as listas e seus status. Depois vem uma linha para cada lista (ver, incluir, editar e excluir as tarefas dela), e toda lista nova ganha a sua linha. O Administrador sempre pode tudo.",
