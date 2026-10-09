@@ -2988,3 +2988,4 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   permissões: `crmResolveList()` roda em todo `crmRender` (e o `onProfile` redesenha o CRM);
   `crmFillFilters` sempre grava `.value` (o botão do filtro Responsável aparecia vazio).
   Janela da tarefa mais estreita (com a lateral 1060px; nome do campo em 96px, colunas a 14px).
+- (2026-10-09, pedido do usuário) Janela da tarefa (computador): menos espaço entre a Descrição e "Dados do lead" (`.crm-props` sem margem embaixo, `#crmDesc` em bloco, `.crm-sec` com 4px; antes ~44px, agora 16px).
