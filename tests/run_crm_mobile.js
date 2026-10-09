@@ -42,8 +42,9 @@ const path = require('path');
   // Menu ☰: só a tela aberta marcada, grupo dela aberto e em destaque
   await page.click('#mnavBtn');
   const mn = await page.evaluate(() => ({on: [...document.querySelectorAll('#mnavPanel button.on')].map((b) => b.textContent.trim()),
-    grp: [...document.querySelectorAll('#mnavPanel .mnav-grp.has-on')].map((b) => b.textContent.trim() + ':' + b.getAttribute('aria-expanded'))}));
-  check('mobile menu marks only the open list (CRM group open)?', mn.on.join() === 'Atendimento' && mn.grp.join() === 'CRM:true', JSON.stringify(mn));
+    grp: [...document.querySelectorAll('#mnavPanel .mnav-grp.has-on')].map((b) => b.textContent.trim() + ':' + b.getAttribute('aria-expanded')),
+    open: [...document.querySelectorAll('#mnavPanel .mnav-items')].filter((x) => !x.hidden).length}));
+  check('mobile menu: all groups collapsed, CRM title highlighted, only the open list marked?', mn.on.join() === 'Atendimento' && mn.grp.join() === 'CRM:false' && mn.open === 0, JSON.stringify(mn));
   await page.click('#mnavBtn');
   // filtro
   await page.click('[data-dp-for="crmFPrio"]');

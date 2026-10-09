@@ -3063,3 +3063,6 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   Nome, Quando; Status = só Status. Nome com o espaço que sobra, colunas curtas com largura fixa (bloco "Cadastros no
   celular" do `@media (max-width:760px)`). Mudou a ordem das colunas no computador? Ajustar os `:nth-child`.
   Conferido em `tests/run_cad_sheets.js`.
+- (2026-10-09, pedido do usuário, celular) Menu ☰: TODOS os grupos (Cadastros, Agenda, CRM, Prontuário, Acesso…)
+  abrem recolhidos (`mnavGroup`: `aria-expanded="false"` e `.mnav-items` hidden); o grupo da tela aberta só fica com
+  o título na cor do sistema (`.has-on`). (Substitui "o grupo que tem a tela aberta já abre".)
