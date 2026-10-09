@@ -3026,3 +3026,10 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   "ver"; a janela salva só o que o nível pode (lista nova = incluir, tirada = excluir, mudada = editar; senão
   aviso) e sem nenhuma das três fica só leitura ("Fechar"). Banco: sem SQL — `module_for_path('config/task_lists')`
   já era `crm_listas` e `documents_enforce` confere item a item.
+- (2026-10-09, pedido do usuário, SUBSTITUI o item anterior) Permissão **CRM** (chave continua `crm_listas`, primeira
+  linha do grupo CRM em Níveis de permissão): "ver" = botão CRM do topo (tela CRM, Minhas tarefas) E a janela Listas
+  e status; incluir/editar/excluir = listas e status. Depois uma linha por lista (`crm_<id>`; lista nova ganha a
+  dela). App: `crmMainCan()` (Administrador sempre; nível sem o item gravado = "ver" se enxerga alguma lista, via
+  `pipoAuth.canDefault`), `crmListsCan(a)`; `tabCan("crm")`, itens CRM/Minhas tarefas e cada lista exigem
+  `crmMainCan()`. Migração `supabase/2026-10-09d-permissao-crm.sql` (dá "ver" em CRM a quem já via alguma lista;
+  testada no PGlite).
