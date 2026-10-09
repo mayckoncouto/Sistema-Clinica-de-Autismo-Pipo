@@ -96,6 +96,20 @@ const path = require('path');
   await page.click('#mSheet [data-pick]:not([data-pick="__new"])');
   check('tapping a task in the window opens it?', !!(await page.$('#ovCrm')) && (await ev('document.getElementById("crmTitleIn").value')) === 'Ligar para a família para agendar avaliação');
   await page.click('#crmClose');
+  // Tarefa nova: Detalhes | Atividade e comentário enviado junto ao salvar
+  await page.click('[data-cv="lista"]');
+  await page.click('#crmAdd');
+  await page.waitForSelector('#ovCrm');
+  check('new task has Detalhes | Atividade too?', await page.$eval('#crmMTabs', (e) => getComputedStyle(e).display !== 'none'));
+  await page.fill('#crmTitleIn', 'Tarefa nova com comentário');
+  await page.click('#crmMTabs [data-mtab="act"]');
+  await page.fill('#crmCommentIn', 'Primeiro contato feito');
+  await page.press('#crmCommentIn', 'Enter');
+  check('comment on a new task waits in the activity (sent on save)?', /Primeiro contato feito/.test(await page.$eval('#crmFeed', (e) => e.textContent)) && !!(await page.$('#crmFeed .crm-cmt.pending')));
+  await page.click('#crmSave');
+  await page.waitForTimeout(300);
+  const sent = await ev('JSON.stringify(CRM.mem.events.filter(function(e){ var t = CRM.tasks[e.task_id]; return e.kind === "comment" && t && t.title === "Tarefa nova com comentário"; }).map(function(e){ return e.body; }))');
+  check('saving the new task sends its comment?', sent === '["Primeiro contato feito"]', sent);
   // Listas e status
   await ev('crmOpenListsModal()');
   await page.waitForSelector('#ovCrmL');

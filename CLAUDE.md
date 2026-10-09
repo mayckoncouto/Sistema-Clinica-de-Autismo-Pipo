@@ -2868,3 +2868,7 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   em cima `.crm-pager` (bolinha, nome, quantidade; oculta no computador): tocar leva ao status, deslizar marca o atual
   (`crmBoardPager`, `CRM.boardPage` mantém o status ao redesenhar). Correção: a regra do celular que esconde `.crm-t`
   ficou só na tabela (`#crmHost .pat-table .crm-t`); antes sumia o título nos cartões do Quadro ("— —").
+- 2026-10-09 (pedido do usuário) **Tarefa nova = mesma janela da edição**, com a Atividade desde o cadastro: o campo de
+  comentar fica liberado na tarefa nova; cada comentário entra em `pendingCom` e aparece no feed tracejado
+  (`.crm-cmt.pending`, "enviado ao salvar"); ao salvar, depois do `crmInsert`, cada um é enviado por `crmComment`
+  (texto ainda no campo também vai). `crmCommentHtml(e, textoDaHora)` monta os cartões (feed e pendentes).
