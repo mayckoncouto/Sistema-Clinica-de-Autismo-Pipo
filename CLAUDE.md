@@ -3099,3 +3099,27 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   (esquerda = Atividade, direita = Detalhes): `touchstart`/`touchend` em `#ovCrm .crm-modal`, gesto horizontal de
   60px+ (1,5× mais horizontal que vertical, até 800 ms); não começa em campo de texto, seletor nem área com rolagem
   lateral. Só no celular (`isMobileView`).
+- (2026-10-09, pedido do usuário, REGRA FIXA) **"+ Incluir" no fim das listas que consultam um cadastro** (computador e
+  celular), só para quem pode INCLUIR no cadastro do campo. Lista aprovada (12 campos): Diagnóstico (Paciente, lead do
+  CRM), Médico e Escola (Paciente), Como conheceu / Origem (Paciente, lead), Convênio (Tratamento, lead), Especialidade
+  (Tratamento, especialidades cobertas do Convênio, especialidade principal do Colaborador), Motivo do cancelamento
+  (Tratamento, Inativar paciente), Tipo de colaborador, CBO e Conselho (Colaborador), Habilidade e Escala (Banco de
+  objetivos, Plano Terapêutico). Filtros/relatórios/consultas, Serviço e Status do atendimento, Paciente/Profissional/
+  Sala nas agendas ficam SEM (decisão do usuário).
+  - Como fazer num campo novo: `<select data-reg-add="<chave do REG_CFG>">` (opcional `data-reg-val="name"` quando o campo
+    guarda outra coisa que não o id). `regAddOptHtml(el)` põe o botão `.dp-opt.dp-add` no fim da lista (combo do
+    computador `dpEnhanceCombo` e lista/janela de baixo `dpEnhanceTimeList`; a busca não o esconde; texto digitado vira o
+    nome); `regAddRun(el, digitado)` → `REG_CFG[k].quick(nome)` ou `quickAddRegistry(k, nome)` → acrescenta a opção e
+    escolhe (`dpCommit`). `regAddKind` confere `can(REG_CFG[k].module, "create")`.
+  - Janela pequena numa camada própria `#quickHost` (`regQuickHost`), por cima até de janela no `#confirmHost`. Escala
+    abre a janela completa por cima (`openScaleModal(null, {stack, name, onDone})`, `REG_CFG.escalas.quick`).
+  - `regPickHtml` (Médico, Escola, CBO, Conselho) não tem mais o botão "+" ao lado. Tipos do colaborador: `.ms-add`
+    no fim do painel `#sfTypes` (o tipo novo entra marcado). Convênio e Especialidade do tratamento (sugestões
+    `.autolist`): último item "+ Incluir" (com texto: cria com o nome digitado; sem texto: janela de cadastro).
+  - **Cadastros novos**: **Diagnósticos** (`config/diagnoses {list:[{id, code, name}]}`, `REG_CFG.diagnosticos`,
+    permissão `diagnosticos`, `diagnosesList`/`diagLabel`/`diagOptionsHtml`) e **Origens** (`config/origins`,
+    `REG_CFG.origens`, permissão `origens`, `originsList`/`originOptionsHtml`), em Cadastros depois de Escolas. O
+    paciente (`cid`, `comoConheceu` — tipo de campo `regtext`) e o lead do CRM (`#crmLDiag`, `#crmLOrig`) continuam
+    gravando o TEXTO ("F84.0 Autismo infantil"). Sem documento no banco valem as listas iniciais + o já gravado.
+    Migração `supabase/2026-10-09f-diagnosticos-e-origens.sql` (caminhos, `module_for_path`, níveis copiam Pacientes,
+    listas iniciais com o que já existe em pacientes, saúde e leads; testada no PGlite). Teste `tests/run_reg_add.js`.

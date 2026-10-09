@@ -10,6 +10,8 @@ const path = require('path');
   const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
   const i = src.indexOf('"use strict";');
   const evPage = path.join(__dirname, 'page_pf.html');
+  // "+ Incluir" no fim da lista do campo (lista de cadastro)
+  const listAdd = async (id) => { await page.click('[data-dp-for="' + id + '"] .dp-in'); await page.waitForSelector('#dpPop .dp-add'); await page.click('#dpPop .dp-add'); };
   fs.writeFileSync(evPage, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
   const browser = await chromium.launch(require('./launch-opts'));
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
@@ -66,7 +68,7 @@ const path = require('path');
   await page.click('[data-copy="endereco"]'); await page.waitForTimeout(100);
   console.log('Copiar endereço copies the patient address?', /Rua das Flores, 10/.test(await page.inputValue('#fi-endereco')));
   // Médico pelo "+".
-  await page.click('[data-regadd="medicos"]'); await page.waitForSelector('#ovQuick');
+  await listAdd('pf-medicoId'); await page.waitForSelector('#ovQuick');
   await page.fill('#qkName', 'Dra. Teste Neuro'); await page.fill('#regf-crm', '1234/SC');
   await page.click('#qkSave'); await page.waitForTimeout(200);
   const docId = await page.inputValue('#pf-medicoId');
@@ -207,22 +209,22 @@ const path = require('path');
   console.log('CBO registry starts with the suggested codes?', /2515-10/.test(await page.textContent('#reg-cbo-host')) && /Fonoaudiólogo/.test(await page.textContent('#reg-cbo-host')));
   await ev('openProfessionalModal(state.professionals[0])'); await page.waitForTimeout(300);
   console.log('professional CBO is a registry list (typeable)?', !!(await page.$('[data-dp-for="profCbos"].dp-combo')));
-  await page.click('[data-regadd="cbo"]'); await page.waitForSelector('#ovQuick');
+  await listAdd('profCbos'); await page.waitForSelector('#ovQuick');
   await page.fill('#regf-code', '2235-05'); await page.fill('#qkName', 'Enfermeiro'); await page.click('#qkSave'); await page.waitForTimeout(200);
   console.log('"+" adds a CBO and selects it for the professional?', (await page.inputValue('#profCbos')) === '2235-05' &&
     (await page.evaluate(() => (window.__STORE__['config/cbo'] || {list: []}).list.some((c) => c.code === '2235-05') && window.__STORE__['config/cbo'].list.some((c) => c.code === '2515-10'))));
-  await page.click('[data-regadd="cbo"]'); await page.waitForSelector('#ovQuick');
+  await listAdd('profCbos'); await page.waitForSelector('#ovQuick');
   await page.fill('#regf-code', '223505'); await page.fill('#qkName', 'Repetido'); await page.click('#qkSave'); await page.waitForTimeout(150);
   console.log('duplicate CBO code refused?', await page.isVisible('#ovQuick'));
 
   await page.click('#ovQuick #qkCancel'); await page.waitForTimeout(100);
   // Conselho: lista do cadastro de Conselhos + "+".
   console.log('professional Conselho is a registry list?', !!(await page.$('[data-dp-for="profConselho"].dp-combo')));
-  await page.click('[data-regadd="conselhos"]'); await page.waitForSelector('#ovQuick');
+  await listAdd('profConselho'); await page.waitForSelector('#ovQuick');
   await page.fill('#regf-sigla', 'CRBM'); await page.fill('#qkName', 'Conselho Regional de Biomedicina'); await page.click('#qkSave'); await page.waitForTimeout(200);
   console.log('"+" adds a council and selects it (defaults kept)?', (await page.inputValue('#profConselho')) === 'CRBM' &&
     (await page.evaluate(() => { const l = (window.__STORE__['config/councils'] || {list: []}).list; return l.some((c) => c.sigla === 'CRBM') && l.some((c) => c.sigla === 'CRP'); })));
-  await page.click('[data-regadd="conselhos"]'); await page.waitForSelector('#ovQuick');
+  await listAdd('profConselho'); await page.waitForSelector('#ovQuick');
   await page.fill('#regf-sigla', 'crp'); await page.fill('#qkName', 'Repetido'); await page.click('#qkSave'); await page.waitForTimeout(150);
   console.log('duplicate council sigla refused?', await page.isVisible('#ovQuick'));
   await page.click('#ovQuick #qkCancel'); await page.click('#profCancel').catch(() => {}); await page.waitForTimeout(100);

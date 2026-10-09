@@ -40,6 +40,8 @@
     { key: "especialidades", label: "Especialidades", hint: "" },
     { key: "medicos", label: "Médicos", hint: "médicos dos pacientes" },
     { key: "escolas", label: "Escolas", hint: "escolas dos pacientes" },
+    { key: "diagnosticos", label: "Diagnósticos", hint: "lista de diagnósticos (CID) do paciente e do lead do CRM" },
+    { key: "origens", label: "Origens", hint: "como o paciente conheceu a clínica (paciente e lead do CRM)" },
     { key: "cbo", label: "CBO", hint: "lista de CBO usada no cadastro dos profissionais" },
     { key: "conselhos", label: "Conselhos", hint: "conselhos profissionais (CRP, CRFa…) do cadastro dos profissionais" },
     { key: "feriados", label: "Feriados e recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },
