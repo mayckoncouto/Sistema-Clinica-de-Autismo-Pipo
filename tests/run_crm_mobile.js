@@ -114,7 +114,7 @@ const path = require('path');
   await page.fill('#crmTitleIn', 'Tarefa nova com comentário');
   await page.click('#crmMTabs [data-mtab="act"]');
   await page.fill('#crmCommentIn', 'Primeiro contato feito');
-  await page.press('#crmCommentIn', 'Enter');
+  await page.press('#crmCommentIn', 'Control+Enter');
   check('comment on a new task waits in the activity (sent on save)?', /Primeiro contato feito/.test(await page.$eval('#crmFeed', (e) => e.textContent)) && !!(await page.$('#crmFeed .crm-cmt.pending')));
   await page.click('#crmSave');
   await page.waitForTimeout(300);

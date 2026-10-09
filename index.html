@@ -5776,7 +5776,7 @@ function crmCommentDelete(id){
   });
 }
 // Janela "Editar mensagem": a mesma caixa do comentário (texto + botão de enviar).
-// Enter salva, Shift+Enter quebra a linha, Esc/✕/clique fora cancela. Devolve o texto novo ou null.
+// Ctrl+Enter salva, Enter quebra a linha, Esc/✕/clique fora cancela. Devolve o texto novo ou null.
 // Comentários do CRM: negrito / itálico / sublinhado. O texto continua simples, com marcas (como no
 // WhatsApp): *negrito*, _itálico_, __sublinhado__. Botões na barra da caixa (ou Ctrl+B / Ctrl+I / Ctrl+U)
 // envolvem o texto escolhido; sem texto escolhido, põem as marcas e o cursor no meio. crmFmt mostra formatado.
@@ -5818,7 +5818,7 @@ function crmEditDialog(old){
       '<div class="modal" style="max-width:520px">' +
         '<div class="modal-head"><div><h3 id="ceTitle">Editar mensagem</h3></div><button class="modal-close" id="ceClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body"><div class="crm-compose"><textarea id="ceText" rows="4" aria-label="Mensagem"></textarea>' +
-          '<div class="crm-compose-bar"><div class="crm-compose-tools">' + CRM_FMT_TOOLS + '</div><button type="button" class="crm-send" id="ceSend" title="Salvar (Enter) · Shift+Enter quebra a linha" aria-label="Salvar mensagem">' +
+          '<div class="crm-compose-bar"><div class="crm-compose-tools">' + CRM_FMT_TOOLS + '</div><button type="button" class="crm-send" id="ceSend" title="Salvar (Ctrl+Enter) · Enter quebra a linha" aria-label="Salvar mensagem">' +
           '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13.5l12-5.5L2 2.5l1.8 5.5z" fill="currentColor"/><path d="M3.8 8H9" stroke="var(--surface)" stroke-width="1.3" stroke-linecap="round"/></svg></button></div></div></div>' +
       '</div></div>';
     var ov = document.getElementById("ovCmtEdit"), ta = document.getElementById("ceText"), send = document.getElementById("ceSend");
@@ -5832,7 +5832,7 @@ function crmEditDialog(old){
     document.getElementById("ceClose").addEventListener("click", function(){ done(null); });
     send.addEventListener("click", save);
     ta.addEventListener("input", state);
-    ta.addEventListener("keydown", function(e){ if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); save(); } });
+    ta.addEventListener("keydown", function(e){ if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing){ e.preventDefault(); save(); } });
     state(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
   });
 }
@@ -6362,7 +6362,7 @@ function crmOpenTask(task, opts){
     '<div class="crm-side-head"><b>Atividade</b></div>' +
     '<div class="crm-side-body"><div class="crm-feed" id="crmFeed"><div class="pat-count">' + (isNew ? 'A criação e as alterações aparecem aqui depois de salvar. Comentários escritos agora são enviados junto com a tarefa.' : 'Carregando…') + '</div></div></div>' +
     '<div class="field crm-comment"><div class="crm-compose"><textarea id="crmCommentIn" rows="3" placeholder="Escreva um comentário… @ para mencionar alguém"></textarea>' +
-      '<div class="crm-compose-bar"><div class="crm-compose-tools">' + CRM_FMT_TOOLS + '</div><button type="button" class="crm-send" id="crmCommentSend" title="Enviar (Enter) · Shift+Enter quebra a linha" aria-label="Enviar comentário" disabled>' +
+      '<div class="crm-compose-bar"><div class="crm-compose-tools">' + CRM_FMT_TOOLS + '</div><button type="button" class="crm-send" id="crmCommentSend" title="Enviar (Ctrl+Enter) · Enter quebra a linha" aria-label="Enviar comentário" disabled>' +
       '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13.5l12-5.5L2 2.5l1.8 5.5z" fill="currentColor"/><path d="M3.8 8H9" stroke="var(--surface)" stroke-width="1.3" stroke-linecap="round"/></svg></button></div>' +
       '<div class="crm-mention-pop" id="crmMentionPop" hidden></div></div></div></aside>';
   host.innerHTML =
@@ -6478,12 +6478,13 @@ function crmOpenTask(task, opts){
     var cIn = document.getElementById("crmCommentIn"), cSend = document.getElementById("crmCommentSend");
     function sendState(){ cSend.disabled = !cIn.value.trim(); }
     cIn.addEventListener("input", sendState);
-    // Enter envia; Shift+Enter quebra a linha; com a lista de @menção aberta, Enter escolhe a primeira pessoa.
+    // Enter quebra a linha; Ctrl+Enter (Cmd+Enter no Mac) envia; com a lista de @menção aberta, Enter escolhe a primeira pessoa.
     cIn.addEventListener("keydown", function(e){
-      if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
-      e.preventDefault();
+      if (e.key !== "Enter" || e.isComposing) return;
       var mp = document.getElementById("crmMentionPop"), first = mp && !mp.hidden && mp.querySelector("[data-mention]");
-      if (first){ first.dispatchEvent(new MouseEvent("mousedown", {bubbles: true})); return; }
+      if (first && !e.ctrlKey && !e.metaKey){ e.preventDefault(); first.dispatchEvent(new MouseEvent("mousedown", {bubbles: true})); return; }
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
       if (!cSend.disabled) cSend.click();
     });
     cSend.addEventListener("click", function(){
@@ -19148,7 +19149,7 @@ var HELP_TOPICS = [
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
-      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com o campo de comentário (3 linhas) logo no alto; embaixo dele aparecem as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Enter</b> envia o comentário (Shift+Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Enter salva, Shift+Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
+      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com o campo de comentário (3 linhas) logo no alto; embaixo dele aparecem as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],
     rules: [
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
