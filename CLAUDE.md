@@ -3043,3 +3043,12 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   cadastro; clicar abre `openStatusItem(item)` (nome + cor, Excluir com confirmação, nome repetido recusado). Mesma
   rolagem de Pacientes no celular. `openStatusesModal` ficou no código sem uso; `window.pipoOpenStatuses` abre a tela.
   Teste `tests/run_status_cad.js` (no `npm test`).
+- (2026-10-09, pedido do usuário, celular) **Cadastros com a janela de baixo nas escolhas** (como no CRM), menos
+  Salas/Grupos: `SHEET_SCOPE` ganhou as telas de cadastro (`#tab-pacientes`, `#tab-tratamentos`, … `#tab-status`) e as
+  janelas deles (`#ovPat`, `#ovPf`, `#ovMg`, `#ovPp`, `#ovTreat`, `#ovCancTr`, `#ovRmBk`, `#ovReg`, `#ovConv`, `#ovHol`,
+  `#ovStItem`, `#ovProf`, `#ovQuick`, `#ovIo`). Listas de cadastro (`DP_COMBO_SEL`, de digitar no computador) viram
+  lista com busca dentro da janela de baixo quando `useSheet(el)` (`dpEnhanceTimeList`); `dpMakeButton` não passa a
+  classe desses selects para o botão. Painéis de várias opções (`.ms-panel`, ex.: Tipos e Serviços do colaborador):
+  ouvinte de clique em `.ms-btn` põe `.ms-sheet` (painel fixo embaixo, sombra de fundo) e o cabeçalho
+  `.ms-sheet-head` (título + ✕) sem tirar o painel do lugar. `sheetTitleFor` ignora os rótulos das opções.
+  Teste `tests/run_cad_sheets.js` (percorre telas e janelas de "+ Incluir"; no `npm test`).
