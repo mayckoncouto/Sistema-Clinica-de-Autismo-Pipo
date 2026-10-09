@@ -303,6 +303,13 @@ div.ag-obj-head{cursor:default}
 .crm-prio-btn{border:0;background:none;padding:3px 6px;border-radius:6px;cursor:pointer;font:inherit;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
 .crm-prio-btn:hover:not(:disabled){background:var(--surface-2)}
 .crm-prio-btn:disabled{cursor:default}
+/* Lista do CRM: botões de Status, Responsáveis, Vencimento e Prioridade ocupam a célula toda. */
+.crm-main td:has(> .crm-prio-btn:not(:disabled)){cursor:pointer}
+.crm-main td > .crm-prio-btn{width:100%;justify-content:flex-start;min-height:32px;text-align:left}
+.crm-main td:hover > .crm-prio-btn:not(:disabled){background:var(--surface-2)}
+.crm-main td > .crm-due-edit{display:block}
+.crm-main td > .crm-due-edit .dp-btn{width:100%;min-height:32px;padding:4px 8px}
+.crm-main td > .crm-due-edit .dp-in{width:10.5ch}
 .field .crm-prio-btn.crm-prio-field{width:100%;justify-content:flex-start;border:1px solid var(--line);background:var(--surface-2);padding:9px 12px;border-radius:10px;min-height:42px;font-size:13px}
 /* Seletores do CRM no padrão dos menus suspensos do sistema: linhas cinzas entre os itens,
    cor do sistema só no item escolhido. Status sempre com bolinha colorida; prioridade com bandeira. */
@@ -5836,7 +5843,7 @@ function crmRender(){
     cells.push(who ? esc(who) + (crmIsLead(x) ? ' <span class="crm-lead-tag">lead</span>' : '') : '<span class="pt-muted">—</span>');
     cells.push(esc(conv || "—"));
     cells.push('<button type="button" class="crm-prio-btn" data-crm-people="' + esc(x.id) + '"' + (canE ? ' title="Escolher responsáveis"' : ' disabled') + '>' + crmAvatars(x.assignees) + '</button>');
-    cells.push(crmDueHtml(x));
+    cells.push('<button type="button" class="crm-prio-btn" data-crm-due="' + esc(x.id) + '"' + (canE ? ' title="Mudar o vencimento"' : ' disabled') + '>' + crmDueHtml(x) + '</button>');
     var pr = crmPrio(x.priority);
     cells.push('<button type="button" class="crm-prio-btn" data-crm-prio="' + esc(x.id) + '" title="' + (crmCan(x.list_id, "edit") ? "Mudar a prioridade" : "Prioridade") + '"' + (crmCan(x.list_id, "edit") ? '' : ' disabled') + '>' + crmFlagSvg(pr) + '<span class="crm-prio-name">' + esc(pr.name) + '</span></button>');
     vals = vals.concat([x.title, who, conv, (x.assignees || []).map(crmPersonName).join(", "), x.due_date || "", CRM_PRIOS.indexOf(pr)]);
@@ -5857,6 +5864,16 @@ function wireCrm(){
     var cw = e.target.closest("[data-cal-new]"); if (cw){ crmOpenTask(null, {listId: CRM.list, due: cw.getAttribute("data-cal-new")}); return; }
     // Celular: tocar num dia do calendário abre a janela com as tarefas daquele dia.
     var cd = isMobileView() && e.target.closest("[data-cal-day]"); if (cd){ crmCalDaySheet(cd, cd.getAttribute("data-cal-day")); return; }
+    // A célula inteira das colunas de escolha funciona como o botão (sem abrir a tarefa por engano).
+    var tdc = e.target.closest("#crmHost td");
+    if (tdc && !e.target.closest("button, .dp-btn, input")){ var cb0 = tdc.querySelector("[data-crm-st],[data-crm-people],[data-crm-prio],[data-crm-due]"); if (cb0){ e.stopPropagation(); if (!cb0.disabled) cb0.click(); return; } }
+    if (e.target.closest(".crm-due-edit")) return;
+    var dd2 = e.target.closest("[data-crm-due]");
+    if (dd2){
+      e.stopPropagation(); var tdd = CRM.tasks[dd2.getAttribute("data-crm-due")]; if (!tdd || dd2.disabled) return;
+      crmDueEdit(dd2, tdd);
+      return;
+    }
     var sb2 = e.target.closest("[data-crm-st]");
     if (sb2){
       e.stopPropagation(); var ts = CRM.tasks[sb2.getAttribute("data-crm-st")]; if (!ts || sb2.disabled) return;
@@ -5983,6 +6000,19 @@ function crmCalShift(n){
   if (!n){ CRM.calMonth = crmToday().slice(0, 7); }
   else { var y = +CRM.calMonth.slice(0, 4), m = +CRM.calMonth.slice(5, 7) - 1 + n; var d = new Date(y, m, 1); CRM.calMonth = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2); }
   CRM.calOpen = null; crmRender();
+}
+// Vencimento na lista: a célula vira o campo de data (digitar ou calendário) até escolher ou clicar fora.
+function crmDueEdit(btn, x){
+  var td = btn.parentNode, box = document.createElement("span"); box.className = "crm-due-edit";
+  var inp = document.createElement("input"); inp.type = "date"; inp.value = x.due_date || ""; inp.setAttribute("aria-label", "Vencimento");
+  box.appendChild(inp); td.replaceChild(box, btn); dpEnhanceDate(inp);
+  var done = false;
+  function finish(){ if (done) return; done = true; document.removeEventListener("mousedown", outside, true); setTimeout(crmRender, 0); }
+  function outside(ev){ if (box.contains(ev.target) || ev.target.closest("#dpPop, #mSheet, #mSheetBg")) return; finish(); }
+  inp.addEventListener("change", function(){ var v = inp.value || null; if (v !== (x.due_date || null)){ done = true; document.removeEventListener("mousedown", outside, true); crmSetDue(x, v); } else finish(); });
+  box.addEventListener("keydown", function(ev){ if (ev.key === "Escape" && !document.getElementById("dpPop")) finish(); });
+  setTimeout(function(){ document.addEventListener("mousedown", outside, true); }, 0);
+  var dp = box.querySelector(".dp-btn"); if (dp) dp.click();
 }
 function crmSetDue(x, iso){
   if (!crmCan(x.list_id, "edit")){ showToast("Você não tem permissão para editar nesta lista.", true); crmRender(); return; }
@@ -6264,7 +6294,7 @@ function crmWhen(iso){ if (!iso) return ""; var d = new Date(iso); return isNaN(
 function crmCommentHtml(e, whenText){
   var body = esc(e.body || "");
   CRM.people.forEach(function(p){ body = body.split("@" + esc(p.full_name)).join('<span class="crm-mention">@' + esc(p.full_name) + '</span>'); });
-  return '<div class="crm-cmt' + (whenText ? ' pending' : '') + '"><div class="crm-cmt-h">' + crmAv(e.author_id || e.author_name, e.author_name || "?") + '<b>' + esc(e.author_name || "") + '</b><span class="crm-cmt-when" title="' + esc(whenText || crmWhen(e.created_at)) + '">' + esc(whenText || crmAgo(e.created_at)) + '</span></div><div class="crm-cmt-b">' + body.replace(/\n/g, "<br>") + '</div></div>';
+  return '<div class="crm-cmt' + (whenText ? ' pending' : '') + '"><div class="crm-cmt-h"><b>' + esc(e.author_name || "") + '</b><span class="crm-cmt-when" title="' + esc(whenText || crmWhen(e.created_at)) + '">' + esc(whenText || crmAgo(e.created_at)) + '</span></div><div class="crm-cmt-b">' + body.replace(/\n/g, "<br>") + '</div></div>';
 }
 function crmActivityLoad(taskId){
   var task = CRM.tasks[taskId], list = task ? crmListById(task.list_id) : null;
@@ -6294,7 +6324,7 @@ function crmMentionWire(){
     var q = query(); if (!q){ hide(); return; }
     var nq = normText(q.q), list = CRM.people.filter(function(p){ return !nq || normText(p.full_name).indexOf(nq) !== -1; }).slice(0, 8);
     if (!list.length){ hide(); return; }
-    pop.innerHTML = list.map(function(p){ return '<button type="button" data-mention="' + esc(p.full_name) + '"><span class="crm-av">' + esc(agdInitials(p.full_name)) + '</span>' + esc(p.full_name) + '</button>'; }).join("");
+    pop.innerHTML = list.map(function(p){ return '<button type="button" data-mention="' + esc(p.full_name) + '">' + esc(p.full_name) + '</button>'; }).join("");
     pop.hidden = false;
   });
   pop.addEventListener("mousedown", function(e){
@@ -18735,7 +18765,7 @@ var HELP_TOPICS = [
     purpose: "Acompanhar contatos (funil de atendimento) e tarefas da equipe por lista, com responsáveis, vencimento, prioridade, comentários e histórico.",
     steps: [
       "Abra <b>CRM ▾</b> e escolha a lista (Atendimento, Agendas, Fature, Gestão…) ou <b>Minhas tarefas</b> (tudo o que está aberto com você).",
-      "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Tarefa (com o número de comentários), Paciente ou Lead, Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique no status, nos responsáveis ou na prioridade de uma linha para mudar ali mesmo, sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
+      "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Tarefa (com o número de comentários), Paciente ou Lead, Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta, Normal e Baixa.",
       "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos: mostra as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Enter</b> envia o comentário (Shift+Enter quebra a linha); o botão de enviar fica no canto da caixa. Numa tarefa nova, a atividade e os comentários aparecem depois de salvar."

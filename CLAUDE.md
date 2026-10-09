@@ -2944,3 +2944,10 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   mesmo instante, alteração antes do comentário). Responsáveis sem bolinhas de iniciais: lista,
   quadro e campo mostram só os primeiros nomes (`crmAvatars` → `.crm-pp-names`, nomes completos no
   `title`); menu de escolha só com caixa + nome.
+- (2026-10-09, pedido do usuário) Lista do CRM: Status, Responsáveis, **Vencimento** e Prioridade se
+  mudam na própria lista; a célula inteira é o botão (`.crm-main td > .crm-prio-btn` com 100% da
+  largura; clique no espaço da célula é repassado ao botão, nunca abre a tarefa). Vencimento:
+  `[data-crm-due]` → `crmDueEdit(btn, tarefa)` troca a célula por um campo de data
+  (`dpEnhanceDate`, digitar ou calendário), grava com `crmSetDue` (vazio = sem vencimento) e volta
+  ao clicar fora ou Esc. Sem bolinhas de iniciais em todo o CRM (comentários e lista de @menção
+  também; `crmAv` ficou sem uso).

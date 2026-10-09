@@ -75,6 +75,20 @@ const path = require('path');
   await page.click('#crmPop [data-pick="avaliacao"]'); await page.waitForTimeout(150);
   check('list: status picker changes the status (dot + text in the cell)?', (await ev(`CRM.tasks["${tid}"].status`)) === 'avaliacao' && /Avaliação/.test(await page.$eval(`#crmHost [data-crm-st="${tid}"] .crm-st-dot`, (e) => e.textContent)));
   await ev(`(CRM.tasks["${tid}"].status = "triagem", crmRender(), true)`);
+  // Célula inteira = botão: clicar no espaço vazio da célula de Prioridade abre o menu (não a tarefa)
+  const prioTd = await page.$(`#crmHost tr[data-crm-id="${tid}"] td:has([data-crm-prio])`);
+  const pbx = await prioTd.boundingBox();
+  await page.mouse.click(pbx.x + pbx.width - 4, pbx.y + 3); await page.waitForTimeout(150);
+  check('list: clicking anywhere in the Prioridade cell opens its menu, not the task?', !!(await page.$('#crmPop [data-pick]')) && !(await page.$('#ovCrm')));
+  await page.keyboard.press('Escape'); await page.waitForTimeout(100);
+  // Vencimento na lista: abre o calendário e grava
+  const prevDue = await ev(`CRM.tasks["${tid}"].due_date || null`);
+  await page.click(`#crmHost [data-crm-due="${tid}"]`); await page.waitForTimeout(150);
+  const dueIso = await ev('(function(){ var d = new Date(); d.setDate(15); return dpIso(d); })()');
+  const calOk = !!(await page.$('#dpPop .dp-day'));
+  await page.click(`#dpPop .dp-day[data-iso="${dueIso}"]`); await page.waitForTimeout(200);
+  check('list: Vencimento cell opens the calendar and saves the chosen date?', calOk && (await ev(`CRM.tasks["${tid}"].due_date`)) === dueIso && !(await page.$('#ovCrm')), await ev(`CRM.tasks["${tid}"].due_date`));
+  await ev(`(crmSetDue(CRM.tasks["${tid}"], ${JSON.stringify(prevDue)}), true)`); await page.waitForTimeout(150);
   await ev(`(CRM.mem.events.push({id: "cx", task_id: "${tid}", kind: "comment", body: "oi", author_name: "Bia Sec", created_at: new Date().toISOString()}), crmLoadComCount(), true)`);
   check('list: comment counter on the task?', /1/.test(await page.$eval(`#crmHost tr[data-crm-id="${tid}"] .crm-com-n`, (e) => e.textContent)));
   await ev(`(CRM.mem.events = CRM.mem.events.filter(function(e){ return e.id !== "cx"; }), crmLoadComCount(), true)`);
@@ -143,6 +157,7 @@ const path = require('path');
   await page.fill('#crmWho', 'Novo Lead Teste'); await page.dispatchEvent('#crmWho', 'input');
   await setv('#crmLNasc', '2020-05-10');
   await page.fill('#crmLResp', 'Pai Teste');
+  await page.dispatchEvent('#crmWho', 'input');
   await page.waitForSelector('#crmRegPat:not([hidden])', {timeout: 10000}).catch(() => {});
   await page.click('#crmRegPat');
   await page.waitForSelector('#ovPat');
