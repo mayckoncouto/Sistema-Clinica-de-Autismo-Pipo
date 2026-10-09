@@ -65,7 +65,7 @@ const path = require('path');
   await page.click('#crmSave'); await page.waitForTimeout(250);
   const tid = await ev('Object.keys(CRM.tasks)[0]');
   const head = await page.$$eval('#crmHost .pat-table thead th .th-label', (r) => r.map((x) => x.textContent));
-  check('list in the Tratamentos table style: Status, Tarefa, Paciente ou Lead, Convênio, Responsáveis, Vencimento, Prioridade?', head.join('|') === 'Status|Tarefa|Paciente ou Lead|Convênio|Responsáveis|Vencimento|Prioridade', head);
+  check('list in the Tratamentos table style: Status, Paciente ou Lead, Tarefa, Convênio, Responsáveis, Vencimento, Prioridade?', head.join('|') === 'Status|Paciente ou Lead|Tarefa|Convênio|Responsáveis|Vencimento|Prioridade', head);
   const row = await page.$eval(`#crmHost tr[data-crm-id="${tid}"]`, (e) => ({t: e.textContent, late: !!e.querySelector('.crm-due.late'), lead: !!e.querySelector('.crm-lead-tag')}));
   check('row: Triagem, task, lead name with "lead", Unimed, red overdue date?', /Triagem/.test(row.t) && /Ligar para a família/.test(row.t) && /Criança Teste/.test(row.t) && row.lead && /Unimed/.test(row.t) && row.late, JSON.stringify(row));
   await page.click(`#crmHost [data-crm-prio="${tid}"]`);

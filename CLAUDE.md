@@ -2965,3 +2965,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   Status | Responsáveis; Vencimento | Prioridade; Descrição (linha toda, 3 linhas, `#crmDescBox`);
   depois "Dados do lead" na mesma ordem de antes e no mesmo formato. `.crm-top` saiu. No celular,
   nome em cima e um campo por linha.
+- (2026-10-09, pedido do usuário) Lista do CRM, ordem das colunas: Status, (Lista, só em Minhas
+  tarefas), **Paciente ou Lead, Tarefa**, Convênio, Responsáveis, Vencimento, Prioridade. Celular
+  continua Status, Tarefa, Venc., Prio. (`:nth-child` ajustados: lista esconde 2,4,5; Minhas
+  tarefas esconde 2,3,5,6).
