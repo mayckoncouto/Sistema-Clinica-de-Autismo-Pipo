@@ -3033,3 +3033,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   `pipoAuth.canDefault`), `crmListsCan(a)`; `tabCan("crm")`, itens CRM/Minhas tarefas e cada lista exigem
   `crmMainCan()`. Migração `supabase/2026-10-09d-permissao-crm.sql` (dá "ver" em CRM a quem já via alguma lista;
   testada no PGlite).
+- (2026-10-09, pedido do usuário, celular) Cadastros com a mesma rolagem de Pacientes (barra parada, só a lista rola):
+  `#tab-tratamentos`, `#tab-colaboradores`, `#tab-tiposcolab` e `#tab-salas` viraram coluna flex de altura fixa no
+  `@media (max-width:760px)` (os outros cadastros já eram — regra `#tab-convenios,…,#tab-feriados`). Salas/Grupos:
+  os cartões continuam iguais, só `#roomList` rola (`overflow-y:auto`). Status é janela (rola por dentro).
