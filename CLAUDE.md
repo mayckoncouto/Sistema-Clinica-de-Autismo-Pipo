@@ -2880,3 +2880,25 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   ao salvar). O nome social do colaborador continua. Migração `supabase/2026-10-09b-paciente-sem-nome-social.sql`
   (apaga dos pacientes e de `config/patient_fields`; testada no PGlite).
 - Produção (2026-10-09): `2026-10-09b-paciente-sem-nome-social` rodada.
+
+## Revisão de lentidão e comunicação com o banco — etapa 1 (2026-10-09)
+Medido com volume real fictício (110 pacientes, 40 colunas, 75% ocupado, CPU 4× mais lenta).
+- `js/pipo-supabase.js`: documentos pedidos no mesmo instante vão numa consulta só
+  (`fetchDoc` com fila `fetchQueue` + `flushFetch`, `.in("path", …)` em lotes de 50; a mesma
+  leitura em andamento é reaproveitada; `fetchDoc(path, true)` = precisa do valor de agora).
+  Abertura: ~30 leituras → 1. Ao conectar o tempo real (`SUBSCRIBED`, também na 1ª vez)
+  `refetchAll` relê tudo numa consulta e só avisa o que mudou (fecha a brecha entre a leitura
+  e a conexão). Com o canal ao vivo, um ouvinte novo de documento já lido (`liveFresh`) recebe
+  o valor guardado sem ir ao banco; canal caiu = `liveFresh` zera. Mudança do tempo real que
+  chega durante uma leitura vence a leitura (`rtSeq`). Aviso do tempo real SEM o conteúdo
+  (documento grande demais, `payload.errors` / sem `data`) relê do banco — antes o documento
+  virava "vazio" na tela. Teste `tests/run_docs_layer.js`.
+- Planner: trocar dia/semana desenha na hora com os 20 documentos que já ficam ao vivo para o
+  Resumo (`state.reportDocs` → `state.scheduleDocs` em `subscribeSchedule`).
+- `dbAll(make)` (perto de `agdClient`): lê todas as páginas de 1000. Usado onde a lista podia vir
+  pela metade sem aviso: Prontuário (`prLoadSummary`, todas as evoluções — passaria de 1000 em
+  poucos meses), `staff`, `patient_health`, `treatment_finance`, `convenio_finance`,
+  `therapy_plans`. Consulta nova que lê uma tabela inteira: usar `dbAll` com `.order` por coluna única.
+- `normText` guarda os textos já convertidos (`_normCache`, até 20 mil) e `esc` não monta texto
+  novo quando não há o que trocar.
+- Legenda e nota do Planner com espaço à direita para o controle de zoom (antes passavam por baixo).

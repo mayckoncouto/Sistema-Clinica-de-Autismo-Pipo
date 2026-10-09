@@ -1873,6 +1873,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
 /* ---------- zoom control ---------- */
 .zoom-ctrl{position:fixed;right:16px;bottom:16px;z-index:40;display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 10px 6px 12px;box-shadow:var(--shadow-md);font-size:12px;color:var(--ink-2)}
 .zoom-ctrl[hidden]{display:none}
+/* A legenda e a nota do Planner não passam por baixo do controle de zoom (fixo no canto). */
+@media (min-width:761px){#tab-planner .color-legend,#tab-planner .foot-note{padding-right:270px}}
 .zoom-ctrl svg{flex:none;color:var(--muted)}
 .zoom-ctrl select{border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font:inherit;font-size:12px;padding:4px 6px;max-width:130px}
 .zoom-ctrl select:focus{outline:none;box-shadow:var(--ring);border-color:var(--accent)}
@@ -3148,15 +3150,24 @@ function slugify(s){
   return String(s||"").normalize("NFKD").replace(/[̀-ͯ]/g,"")
     .toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
 }
+var ESC_MAP = {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}, ESC_RE = /[&<>"']/;
 function esc(s){
-  return String(s==null?"":s).replace(/[&<>"']/g, function(c){
-    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
-  });
+  var t = s==null ? "" : String(s);
+  // Quase todo texto não tem nada a trocar: devolve sem montar texto novo.
+  return ESC_RE.test(t) ? t.replace(/[&<>"']/g, function(c){ return ESC_MAP[c]; }) : t;
 }
 // Used by every search/filter/typeahead field in the app: strips accents (á->a, ç->c,
 // ã->a, ...) and lowercases, so "joao", "João" and "JOÃO" all match each other.
+// Guarda os textos já convertidos: a grade chama normText milhares de vezes com os
+// mesmos nomes (até ~15% do tempo de desenho do Planner "Todos").
+var _normCache = new Map();
 function normText(s){
-  return String(s==null?"":s).normalize("NFKD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  var k = s==null ? "" : String(s), v = _normCache.get(k);
+  if (v !== undefined) return v;
+  v = k.normalize("NFKD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  if (_normCache.size > 20000) _normCache.clear();
+  _normCache.set(k, v);
+  return v;
 }
 function uid(prefix){
   return prefix + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -4822,6 +4833,9 @@ function subscribeSchedule(){
   needed.forEach(function(docId){
     if (state.scheduleSubs[docId]) return;
     state.pendingBookingChanges[docId] = {};
+    // Os 20 dias do Planner já ficam ao vivo para o Resumo (subscribeReportDocs): trocar de
+    // dia/semana desenha na hora com esses dados, sem esperar a leitura do banco.
+    if (!state.scheduleDocs[docId] && state.reportDocs && state.reportDocs[docId]) state.scheduleDocs[docId] = state.reportDocs[docId];
     var holder = {active: true, unsub: null};
     state.scheduleSubs[docId] = holder;
     holder.unsub = db.doc("schedule/" + docId).onSnapshot(function(snap){
@@ -8919,7 +8933,7 @@ function convValor(convId, specId){
 function convLoadFinance(){
   var c = agdClient();
   if (!c || !trCanSeeVal()) return Promise.resolve();
-  return c.from("convenio_finance").select("convenio_id,spec_id,valor").then(function(r){
+  return dbAll(function(){ return c.from("convenio_finance").select("convenio_id,spec_id,valor").order("id"); }).then(function(r){
     if (r.error) return;   // tabela ainda não criada (falta o ajuste do banco) ou sem permissão
     var m = {};
     (r.data || []).forEach(function(x){ (m[x.convenio_id] = m[x.convenio_id] || {})[x.spec_id] = x.valor; });
@@ -10876,7 +10890,7 @@ function staffTodayIso(){ return agdIso(new Date()); }
 function staffLoad(){
   var c = agdClient();
   if (!c || !staffCanSee()){ STAFF.loaded = true; return Promise.resolve(STAFF.rows); }
-  return c.from("staff").select("id,professional_id,data").then(function(r){
+  return dbAll(function(){ return c.from("staff").select("id,professional_id,data").order("id"); }).then(function(r){
     if (!r.error) STAFF.rows = r.data || [];
     STAFF.loaded = true;
     if (state.tab === "colaboradores") renderStaffTab();
@@ -12629,6 +12643,20 @@ function agdResColor(r){
 }
 function agdInitials(n){ var p = String(n||"?").trim().split(/\s+/); return ((p[0]||"?")[0] + (p[1] ? p[1][0] : (p[0][1]||""))).toUpperCase(); }
 function agdClient(){ return window.pipoAuth && window.pipoAuth.client; }
+// Lê TODAS as linhas de uma consulta, em páginas de 1000 (o banco devolve no máximo 1000
+// por vez; sem isso a lista vinha pela metade sem aviso). make() monta a consulta já
+// ordenada por uma coluna única. Devolve {data} ou {error}, como o Supabase.
+function dbAll(make){
+  var all = [];
+  function page(off){
+    return make().range(off, off + 999).then(function(r){
+      if (r.error) return {error: r.error, data: null};
+      all = all.concat(r.data || []);
+      return (r.data || []).length === 1000 ? page(off + 1000) : {data: all, error: null};
+    });
+  }
+  return page(0);
+}
 
 // Índices da semana carregada: data|hora|profissional -> [linhas]; data|hora|sala -> [linhas]
 // (pode haver mais de um atendimento no mesmo horário).
@@ -15995,7 +16023,7 @@ function prLoadSummary(){
   var c = agdClient();
   if (!c){ PR.loaded = true; PR.error = "O prontuário funciona no sistema online."; renderProntuarioTab(); return Promise.resolve(); }
   PR.loading = true;
-  return c.from("clinical_records").select("id,patient_id,professional_id,author_name,appointment_date,created_at").then(function(r){
+  return dbAll(function(){ return c.from("clinical_records").select("id,patient_id,professional_id,author_name,appointment_date,created_at").order("id"); }).then(function(r){
     PR.loading = false; PR.loaded = true;
     if (r.error){ PR.error = prErrMsg(r.error); PR.summary = {}; renderProntuarioTab(); return; }
     PR.error = "";
@@ -17052,7 +17080,7 @@ function trLoadFinance(){
   var c = agdClient();
   if (!c || !(trCanSeeVal() || finCanSee())) return Promise.resolve();
   // Coluna "descontos" (antes "despesas", até a atualização 2026-10-07e do banco).
-  function sel(col){ return c.from("treatment_finance").select("treatment_id,valor," + col); }
+  function sel(col){ return dbAll(function(){ return c.from("treatment_finance").select("treatment_id,valor," + col).order("treatment_id"); }); }
   return sel("descontos").then(function(r){
     if (!r.error){ TR.finCol = "descontos"; return r; }
     return sel("despesas").then(function(r2){ if (!r2.error) TR.finCol = "despesas"; return r2; });
@@ -17143,7 +17171,7 @@ function healthLoad(){
   var c = agdClient();
   if (!c || !healthCanSee()) return Promise.resolve();
   if (HEALTH.loading) return HEALTH.loading;
-  HEALTH.loading = c.from("patient_health").select("patient_id,data").then(function(r){
+  HEALTH.loading = dbAll(function(){ return c.from("patient_health").select("patient_id,data").order("patient_id"); }).then(function(r){
     HEALTH.loading = null;
     if (r.error) return;                       // tabela ainda não criada (falta o ajuste do banco)
     var m = {};
@@ -20360,7 +20388,7 @@ function planLoadAll(force){
   var c = agdClient();
   if (!c){ PLAN.rows = PLAN.mem; return Promise.resolve(PLAN.rows); }
   if (PLAN.loading && !force) return PLAN.loading;
-  PLAN.loading = c.from("therapy_plans").select("*").order("version", {ascending: false}).then(function(r){
+  PLAN.loading = dbAll(function(){ return c.from("therapy_plans").select("*").order("version", {ascending: false}).order("id"); }).then(function(r){
     PLAN.loading = null;
     if (r.error) throw r.error;
     PLAN.rows = r.data || [];

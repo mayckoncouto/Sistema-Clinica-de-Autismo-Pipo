@@ -28,6 +28,9 @@
   var docListeners = {};   // path -> [{cb, errCb}]
   var lastData = {};       // path -> data | undefined (último valor conhecido)
   var channel = null;
+  var channelLive = false;  // canal do tempo real conectado
+  var liveFresh = {};       // path -> true: lastData lido com o canal conectado (fica em dia)
+  var rtSeq = {};           // path -> nº de mudanças recebidas pelo tempo real
 
   function snap(data) {
     return { exists: data !== undefined && data !== null, data: function () { return data; } };
@@ -39,27 +42,69 @@
     });
   }
 
-  function fetchDoc(path) {
-    return client.from("documents").select("data").eq("path", path).maybeSingle().then(function (r) {
-      if (r.error) throw r.error;
-      return r.data ? r.data.data : undefined;
-    });
+  // Leituras pedidas no mesmo instante (ex.: os ~30 documentos da abertura) vão juntas
+  // numa consulta só; o mesmo documento já sendo lido não é pedido de novo.
+  var fetchQueue = null;   // path -> {p: Promise, w: [{resolve, reject}]} (ainda não enviada)
+  var inFlight = {};       // path -> Promise (enviada ou na fila)
+  function flushFetch() {
+    var q = fetchQueue; fetchQueue = null;
+    var paths = Object.keys(q);
+    function done(path, val, err) {
+      if (inFlight[path] === q[path].p) delete inFlight[path];
+      q[path].w.forEach(function (w) { if (err) w.reject(err); else w.resolve(val); });
+    }
+    for (var i = 0; i < paths.length; i += 50) (function (part) {
+      client.from("documents").select("path,data").in("path", part).then(function (r) {
+        if (r.error) { part.forEach(function (p) { done(p, undefined, r.error); }); return; }
+        var got = {};
+        (r.data || []).forEach(function (x) { got[x.path] = x.data; });
+        part.forEach(function (p) { done(p, got[p]); });
+      }, function (e) { part.forEach(function (p) { done(p, undefined, e); }); });
+    })(paths.slice(i, i + 50));
+  }
+  // fresh = precisa do valor de AGORA (depois de um aviso do tempo real ou de um erro
+  // ao gravar): não reaproveita uma leitura que já foi enviada antes.
+  function fetchDoc(path, fresh) {
+    if (fetchQueue && fetchQueue[path]) return fetchQueue[path].p;   // ainda não saiu: serve
+    if (inFlight[path] && !fresh) return inFlight[path];
+    if (!fetchQueue) { fetchQueue = {}; setTimeout(flushFetch, 0); }
+    var e = fetchQueue[path] = { w: [] };
+    e.p = new Promise(function (resolve, reject) { e.w.push({ resolve: resolve, reject: reject }); });
+    inFlight[path] = e.p;
+    return e.p;
   }
 
+  // Relê os documentos acompanhados (numa consulta só, ver fetchDoc) e avisa só os que
+  // mudaram. Roda sempre que o tempo real conecta: o que mudou antes da conexão (ou
+  // enquanto estava fora) chega aqui; dali em diante o tempo real mantém tudo em dia.
   function refetchAll() {
     Object.keys(docListeners).forEach(function (path) {
       if (!docListeners[path].length) return;
-      fetchDoc(path).then(function (d) { lastData[path] = d; emit(path); }).catch(function () {});
+      var seq0 = rtSeq[path] || 0;
+      fetchDoc(path).then(function (d) {
+        if (!channelLive) return;
+        liveFresh[path] = true;
+        if ((rtSeq[path] || 0) !== seq0) return;        // já chegou algo mais novo
+        if (JSON.stringify(d) === JSON.stringify(lastData[path])) return;
+        lastData[path] = d; emit(path);
+      }).catch(function () {});
     });
   }
 
   function ensureChannel() {
     if (channel) return;
-    var first = true;
     channel = client.channel("pipo-documents")
       .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, function (payload) {
         var row = payload.eventType === "DELETE" ? payload.old : payload.new;
         if (!row || !row.path) return;
+        // Documento grande demais para o tempo real: o aviso chega sem o conteúdo
+        // (só os campos pequenos). Nunca tratar isso como "documento vazio": relê do banco.
+        if (payload.eventType !== "DELETE" && (!Object.prototype.hasOwnProperty.call(row, "data") || (payload.errors && payload.errors.length))) {
+          var path = row.path, seq = rtSeq[path] = (rtSeq[path] || 0) + 1;
+          fetchDoc(path, true).then(function (d) { if (rtSeq[path] !== seq) return; lastData[path] = d; emit(path); }).catch(function () {});
+          return;
+        }
+        rtSeq[row.path] = (rtSeq[row.path] || 0) + 1;
         lastData[row.path] = payload.eventType === "DELETE" ? undefined : row.data;
         emit(row.path);
       })
@@ -75,10 +120,12 @@
       .subscribe(function (status) {
         if (status === "SUBSCRIBED") {
           // Depois de uma reconexão, algo pode ter mudado enquanto estávamos fora.
-          if (!first) refetchAll();
-          first = false;
+          channelLive = true;
+          refetchAll();
           setSyncState(true);
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          // Sem tempo real, nada do que está guardado é garantido: a próxima leitura vai ao banco.
+          channelLive = false; liveFresh = {};
           setSyncState(false);
         }
       });
@@ -106,7 +153,17 @@
         var l = { cb: cb, errCb: errCb };
         (docListeners[path] = docListeners[path] || []).push(l);
         ensureChannel();
+        // Documento que outra parte da tela já acompanha ao vivo: usa o valor guardado
+        // (o tempo real o mantém em dia) em vez de ler de novo do banco.
+        if (channelLive && liveFresh[path]) {
+          Promise.resolve().then(function () { if ((docListeners[path] || []).indexOf(l) !== -1) cb(snap(lastData[path])); });
+          return function () { var arr = docListeners[path] || []; var i = arr.indexOf(l); if (i !== -1) arr.splice(i, 1); };
+        }
+        var seq0 = rtSeq[path] || 0;
         fetchDoc(path).then(function (d) {
+          // Chegou mudança pelo tempo real durante a leitura: ela é mais nova que a leitura.
+          if ((rtSeq[path] || 0) !== seq0) d = lastData[path];
+          liveFresh[path] = channelLive;
           lastData[path] = d;
           cb(snap(d));
         }).catch(function (e) { if (errCb) errCb(e); });
@@ -124,7 +181,7 @@
           if (r.error) {
             // O app já aplicou a mudança na tela; recarrega o valor real do
             // banco para desfazê-la visualmente.
-            fetchDoc(path).then(function (d) { lastData[path] = d; emit(path); }).catch(function () {});
+            fetchDoc(path, true).then(function (d) { lastData[path] = d; emit(path); }).catch(function () {});
             var e = friendlyError(r.error);
             if (e.code === "permission") toast(e.message, true);
             throw e;
@@ -139,7 +196,7 @@
           if (r.error) {
             var m = r.error.message || "";
             if (/patch_list/i.test(m) && /does not exist|not find|schema cache|could not find/i.test(m)) { var nf = new Error(m); nf.code = "nofunc"; throw nf; }
-            fetchDoc(path).then(function (d) { lastData[path] = d; emit(path); }).catch(function () {});
+            fetchDoc(path, true).then(function (d) { lastData[path] = d; emit(path); }).catch(function () {});
             var e = friendlyError(r.error);
             if (e.code === "permission") toast(e.message, true);
             throw e;
