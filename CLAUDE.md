@@ -3126,3 +3126,9 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
 - (2026-10-09, pedido do usuário) Janela do nível de permissão: os títulos das colunas (Tela, Ver, Incluir, Editar,
   Excluir) ficam presos no alto ao rolar (`.perm-grid thead th` sticky com fundo, em `injectStyles` de `js/usuarios.js`;
   vale também para as tabelas de Status e Relatórios da mesma janela).
+- (2026-10-09, pedido do usuário) **Níveis de permissão em grupos**, na ordem do menu do topo: Cadastros (na ordem de
+  `CAD_ITEMS`, com as linhas "– saúde/– campos/– valores" logo depois da tela delas), Planner (Planner, Bloqueio de
+  horário, Resumo, Disponibilidade), Agenda (Agenda, Visão geral), Prontuário (Prontuário, Plano Terapêutico, Objetivos,
+  Escalas, Habilidades), CRM (linhas do app, `pipoCrmModules`) e Menu Acesso. `MODULES` em `js/usuarios.js` nessa ordem
+  (`group` no 1º item de cada grupo); `allModules()` põe o CRM antes do Menu Acesso. Depois vêm as tabelas de Status e
+  Relatórios. Item novo de permissão: colocar no grupo do assunto.

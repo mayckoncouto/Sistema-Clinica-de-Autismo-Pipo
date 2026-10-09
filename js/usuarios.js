@@ -14,41 +14,41 @@
 
   var auth = window.pipoAuth;
   // actions: ações que fazem sentido na tela (as demais aparecem como "—").
+  // Em grupos, na mesma ordem do menu do topo: Cadastros, Planner, Agenda, Prontuário, (CRM, vindo do app), Menu Acesso.
+  // Item novo: entra no grupo do assunto, na ordem em que aparece no menu.
   var MODULES = [
-    { key: "agenda", label: "Agenda", hint: "atendimentos por data" },
-    { key: "visao_geral", label: "Visão geral", hint: "Agenda ▾ → Visão geral: todos os atendimentos do dia numa tela", actions: ["view"] },
-    { key: "planner", label: "Planner", hint: "grade de 4 semanas" },
-    { key: "bloqueio_horario", label: "Bloqueio de horário", hint: "Planner: bloquear (incluir) e liberar (excluir) horários — botões da grade e Outras opções" },
-    { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
-    { key: "disponibilidade", label: "Disponibilidade", hint: "relatório de atendidos e vagas livres do Planner por dia, horário e especialidade", actions: ["view"] },
-    { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)" },
-    { key: "plano_terapeutico", label: "Plano Terapêutico", hint: "ver: consultar; incluir: criar e revisar; editar: tudo. Profissional sem editar muda só situação/status nas especialidades dele" },
-    { key: "objetivos", label: "Objetivos", hint: "objetivos prontos para usar no plano terapêutico" },
-    { key: "escalas", label: "Escalas", hint: "escalas do plano terapêutico (níveis e cores)" },
-    { key: "habilidades", label: "Habilidades", hint: "habilidades dos objetivos do plano terapêutico" },
-    { key: "pacientes", label: "Pacientes", hint: "" },
+    { key: "pacientes", label: "Pacientes", hint: "", group: "Cadastros" },
     { key: "saude_paciente", label: "Pacientes – saúde", hint: "ver/editar médico, CID, diagnóstico, suporte, comunicação, alergias, medicações e restrições", actions: ["view", "edit"] },
     { key: "campos_paciente", label: "Pacientes – campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, descontos e valor final", actions: ["view", "edit"] },
-    // Colaboradores (Cadastros): todas as pessoas, inclusive os profissionais; valores com permissão exclusiva.
-    { key: "colaboradores", label: "Colaboradores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)" },
-    { key: "colaboradores_valores", label: "Colaboradores – valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
-    { key: "motivos_cancelamento", label: "Motivos de cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
     { key: "convenios", label: "Convênios", hint: "" },
-    { key: "servicos", label: "Serviços", hint: "" },
-    { key: "especialidades", label: "Especialidades", hint: "" },
+    { key: "motivos_cancelamento", label: "Motivos de cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
     { key: "medicos", label: "Médicos", hint: "médicos dos pacientes" },
     { key: "escolas", label: "Escolas", hint: "escolas dos pacientes" },
     { key: "diagnosticos", label: "Diagnósticos", hint: "lista de diagnósticos (CID) do paciente e do lead do CRM" },
     { key: "origens", label: "Origens", hint: "como o paciente conheceu a clínica (paciente e lead do CRM)" },
+    { key: "colaboradores", label: "Colaboradores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)" },
+    { key: "colaboradores_valores", label: "Colaboradores – valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
+    { key: "especialidades", label: "Especialidades", hint: "" },
+    { key: "servicos", label: "Serviços", hint: "" },
     { key: "cbo", label: "CBO", hint: "lista de CBO usada no cadastro dos profissionais" },
     { key: "conselhos", label: "Conselhos", hint: "conselhos profissionais (CRP, CRFa…) do cadastro dos profissionais" },
-    { key: "feriados", label: "Feriados e recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
+    { key: "feriados", label: "Feriados e recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },
     { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" },
-    // Itens do menu Acesso (Sair aparece sempre).
+    { key: "planner", label: "Planner", hint: "grade de 4 semanas", group: "Planner" },
+    { key: "bloqueio_horario", label: "Bloqueio de horário", hint: "Planner: bloquear (incluir) e liberar (excluir) horários — botões da grade e Outras opções" },
+    { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
+    { key: "disponibilidade", label: "Disponibilidade", hint: "relatório de atendidos e vagas livres do Planner por dia, horário e especialidade", actions: ["view"] },
+    { key: "agenda", label: "Agenda", hint: "atendimentos por data", group: "Agenda" },
+    { key: "visao_geral", label: "Visão geral", hint: "Agenda ▾ → Visão geral: todos os atendimentos do dia numa tela", actions: ["view"] },
+    { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)", group: "Prontuário" },
+    { key: "plano_terapeutico", label: "Plano Terapêutico", hint: "ver: consultar; incluir: criar e revisar; editar: tudo. Profissional sem editar muda só situação/status nas especialidades dele" },
+    { key: "objetivos", label: "Objetivos", hint: "objetivos prontos para usar no plano terapêutico" },
+    { key: "escalas", label: "Escalas", hint: "escalas do plano terapêutico (níveis e cores)" },
+    { key: "habilidades", label: "Habilidades", hint: "habilidades dos objetivos do plano terapêutico" },
     { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"], group: "Menu Acesso" },
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)" },
     { key: "backup", label: "Backup", hint: "baixar o backup (restaurar: só o Administrador)", actions: ["view"] },
@@ -200,7 +200,12 @@
   }
 
   // Telas fixas + uma linha por lista do CRM (cadastro das listas vem do app: window.pipoCrmModules).
-  function allModules() { return MODULES.concat(window.pipoCrmModules ? window.pipoCrmModules() : []); }
+  // As linhas do CRM (vêm do app) entram antes do grupo "Menu Acesso", como no menu do topo.
+  function allModules() {
+    var crm = window.pipoCrmModules ? window.pipoCrmModules() : [];
+    var cut = MODULES.findIndex(function (m) { return m.group === "Menu Acesso"; });
+    return cut === -1 ? MODULES.concat(crm) : MODULES.slice(0, cut).concat(crm, MODULES.slice(cut));
+  }
   // Resumo curto das permissões de um nível, para a escolha no cadastro.
   function roleSummary(role) {
     if (!role) return "";
