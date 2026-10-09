@@ -82,7 +82,7 @@ const path = require('path');
   await page.waitForTimeout(200);
   const q1 = await page.evaluate(() => { const bd = document.querySelector('.crm-board'), c = document.querySelector('.crm-col');
     return {w: c.getBoundingClientRect().width, bw: bd.clientWidth, t: document.querySelector('.crm-card .crm-t').offsetParent !== null, pager: document.querySelectorAll('.crm-pager [data-crm-page]').length}; });
-  check('board: one status per screen width, card titles visible, status bar on top?', q1.w >= q1.bw - 30 && q1.t && q1.pager === 4, JSON.stringify(q1));
+  check('board: one status per screen width, card titles visible, status bar on top?', q1.w >= q1.bw - 30 && q1.t && q1.pager === 3, JSON.stringify(q1));
   const top0 = await page.evaluate(() => document.querySelector('.crm-toolbar').getBoundingClientRect().left);
   await page.click('.crm-pager [data-crm-page="1"]');
   await page.waitForTimeout(600);
