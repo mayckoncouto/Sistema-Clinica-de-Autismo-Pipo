@@ -382,6 +382,26 @@ const path = require('path');
   await page.click('#cfCancel');
   const gcRes = await page.evaluate(() => window.__gc);
   console.log('booking a patient with a plan and no objective in common asks first?', gcTitle === 'Sem objetivos em comum' && /Duda Vermelho/.test(gcMsg) && /Ana Azul/.test(gcMsg) && gcRes === false, gcTitle, gcRes);
+  // Grupo de suporte nos Detalhes: Agendamento | Pacientes (da sala no horário) e objetivos em comum + de cada paciente.
+  await ev(`(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = "";
+    AD.rows = {g1: {id: "g1", date: "2026-10-12", time: "08:00", professional_id: "ana-terapeuta", patient: "Coordenador", group_id: "coord", room_id: "r1", status: ""},
+      r1: {id: "r1", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Ana Azul", patient_id: "ana-azul", room_id: "r1", service: "sessao", status: ""},
+      r2: {id: "r2", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Carla Laranja", patient_id: "carla-laranja", room_id: "r1", service: "sessao", status: ""},
+      r9: {id: "r9", date: "2026-10-12", time: "08:00", professional_id: "bia-terapeuta", patient: "Duda Vermelho", room_id: "outra", service: "sessao", status: ""}};
+    agdOpenDetails(AD.rows.g1); })()`);
+  await page.waitForSelector('#agdDetGoals [data-ag-box="common"]', {state: 'attached'});
+  const gTabs = await page.$$eval('#agdDetSeg [data-det]', (r) => r.map((x) => x.textContent));
+  await page.click('#agdDetSeg [data-det="pa"]');
+  const gPats = await page.$$eval('[data-det-pane="pa"] .agd-det-pat-n', (r) => r.map((x) => x.textContent));
+  const gBoxes = await page.$$eval('#agdDetGoals [data-ag-box]', (r) => r.map((b) => b.querySelector('.ag-obj-title').textContent));
+  await page.click('[data-ag-box="common"] [data-ag-toggle]');
+  const gCommon = await page.$eval('[data-ag-box="common"]', (h) => h.textContent);
+  console.log('group details: Agendamento | Pacientes (2), patients of the room at the time, common objectives (with patients) + one box per patient?',
+    gTabs.join() === 'Agendamento,Pacientes (2)' && gPats.join() === 'Ana Azul,Carla Laranja' && gBoxes[0] === 'Objetivos em comum' && gBoxes.some((x) => /Objetivos de Ana Azul/.test(x)) &&
+    /Esperar a vez/i.test(gCommon) && /Pacientes: Ana Azul, Carla Laranja/.test(gCommon), JSON.stringify({gTabs, gPats, gBoxes}));
+  await page.click('[data-det-pat="r2"]');
+  const gOpen = await page.$eval('#ovAgdDet .agd-det-name', (e) => e.textContent);
+  console.log('tapping a patient opens that patient\'s details?', /Carla Laranja/.test(gOpen), gOpen);
   await ev('(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = ""; AD.rows = {}; })()');
 
   // Relatório "Evolução por habilidade" (planos vigentes).

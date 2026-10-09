@@ -829,6 +829,13 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .agd-det-modal .agd-det-name .pcolor-dot{margin-top:6px}
 .agd-det-who{flex:1;min-width:0}
 .agd-det-age{font-size:12.5px;color:var(--muted);font-weight:600;margin:3px 0 0 18px}
+.agd-det-pane[hidden]{display:none}
+.agd-det-pats{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.agd-det-pat{display:flex;align-items:center;gap:10px;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:11px 14px;font:inherit;font-size:13.5px;text-align:left;cursor:pointer;color:var(--ink)}
+.agd-det-pat:last-child{border-bottom:0}
+.agd-det-pat:hover{background:var(--surface-2)}
+.agd-det-pat-n{flex:1;min-width:0;font-weight:700}
+.agd-det-pat-a{color:var(--muted);font-size:12.5px;white-space:nowrap}
 .agd-det-hours{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px}
 .agd-det-hours span{white-space:nowrap}
 @media (max-width:760px){
@@ -12882,6 +12889,7 @@ function agdOpenDetails(row){
   var name = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : row.patient;
   var col = pat ? patientColor(bookingPatient(pat, row)) : (grp ? swatchVar(grp.color) : null);
   var showPront = !!pat && prCan("view");
+  var grpItems = grp ? agdGroupSlotRows(row) : [];
   var curStatus = row.status || "";
   var showStatus = !kind && statusesList().length > 0;
   var stLocked = agdFinalLocked(curStatus);
@@ -12897,6 +12905,8 @@ function agdOpenDetails(row){
         (pat ? pickupRetHtml(pat) : '') +
         '<div class="agd-det-top"><div class="agd-det-who"><div class="agd-det-name">' + (col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + '<span>' + esc(name) + '</span></div>' +
           (pat && patientAgeYears(pat) != null ? '<div class="agd-det-age">' + patientAgeYears(pat) + (patientAgeYears(pat) === 1 ? ' ano' : ' anos') + '</div>' : '') + '</div>' +
+          (grp ? '<div class="seg agd-det-seg" id="agdDetSeg" role="tablist"><button type="button" data-det="ag" class="active" role="tab" aria-selected="true">Agendamento</button>' +
+            '<button type="button" data-det="pa" role="tab" aria-selected="false">Pacientes (' + grpItems.length + ')</button></div>' : '') +
           (pat ? '<div class="seg agd-det-seg" id="agdDetSeg" role="tablist">' + [["ag", "Agendamento"], ["sa", "Saúde"], ["tr", "Tratamento"]].filter(function(t){ return t[0] !== "sa" || healthCanSee(); }).map(function(t, i){
             return '<button type="button" data-det="' + t[0] + '"' + (i ? '' : ' class="active"') + ' role="tab" aria-selected="' + (i ? 'false' : 'true') + '">' + t[1] + '</button>'; }).join("") + '</div>' : '') +
           '</div>' +
@@ -12912,6 +12922,7 @@ function agdOpenDetails(row){
           line("Medicações em uso", pat.medicacoes || "") + line("Restrições alimentares", pat.restricoes || "") + '</div>' : '') +
           '<div class="agd-det" data-det-pane="tr" hidden>' +
           line("Plano", pat.plano || "") + line("ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) + lineHtml("Horários", agdDetHoursHtml(trHoursText(pat))) + '</div>' : '') +
+        (grp ? '<div class="agd-det-pane" data-det-pane="pa" hidden>' + agdGroupPatientsHtml(grpItems) + '</div>' : '') +
         (pat ? pickupProtHtml(pat, agdIsLastOfDay(row)) : '') +
         '<div id="agdDetGoals"></div>' +
         (showStatus ? '<div class="field" style="margin-top:12px"><label for="agdDetStatus">Status</label><select id="agdDetStatus"' + (canChange ? '' : ' disabled') + '>' +
@@ -12929,7 +12940,12 @@ function agdOpenDetails(row){
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("agdDetClose").addEventListener("click", close);
   document.getElementById("agdDetOk").addEventListener("click", close);
-  agdGoalsFill(document.getElementById("agdDetGoals"), row);
+  if (grp) agdGroupGoalsFill(document.getElementById("agdDetGoals"), grpItems);
+  else agdGoalsFill(document.getElementById("agdDetGoals"), row);
+  ov.addEventListener("click", function(e){
+    var pb = e.target.closest("[data-det-pat]"); if (!pb) return;
+    var r2 = AD.rows[pb.getAttribute("data-det-pat")]; if (r2) agdOpenDetails(r2);
+  });
   var detSeg = document.getElementById("agdDetSeg");
   if (detSeg) detSeg.addEventListener("click", function(e){
     var b = e.target.closest("[data-det]"); if (!b) return;
@@ -18423,6 +18439,7 @@ var HELP_TOPICS = [
       "Clique no + de um horário para marcar: paciente (ou grupo de suporte), serviço, sala, observação; ou marque Bloqueado / Reunião Clínica / Treinamento.",
       "Vários atendimentos no mesmo horário ficam lado a lado (botão + para mais um).",
       "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>. Ao lado do nome, o seletor troca o quadro de informações: <b>Agendamento</b> (serviço, sala, data/hora, observação), <b>Saúde</b> (diagnóstico, alergias, medicações e restrições alimentares do cadastro do paciente) e <b>Tratamento</b> (plano, ABA e horários). Acima do nome aparece quem <b>pode retirar</b> o paciente; abaixo do quadro, quando há medida protetiva, um quadro vermelho com quem <b>não pode retirar</b>. Depois ficam os <b>Objetivos</b> e o <b>Status</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar agendamento</b>.",
+      "Num agendamento de <b>grupo de suporte</b>, o seletor tem <b>Agendamento</b> e <b>Pacientes</b>: a lista dos pacientes agendados na mesma sala, dia e horário (cor, nome e idade; tocar no paciente abre os detalhes dele). Os <b>Objetivos</b> mostram primeiro os objetivos em comum entre esses pacientes e depois um quadro de cada paciente com os objetivos só dele, considerando o profissional com quem cada paciente está agendado.",
       "<b>Objetivos</b>: mostra o resumo; a seta ▾ abre o quadro clínico do plano terapêutico e os objetivos ativos do paciente, organizados por habilidade, que o profissional pode trabalhar (alguma especialidade marcada no objetivo é a principal ou uma área complementar dele): número e objetivo; critério e escala; status e situação; as especialidades do objetivo (e as outras que também trabalham) e a última avaliação de cada especialidade. Se outros pacientes do mesmo profissional estão no mesmo horário, esse quadro traz os objetivos em comum e os demais ficam no quadro <b>Objetivos do paciente ▾</b>, também fechado. Pacientes sem plano terapêutico vigente não entram nessa conta.",
       "Ao marcar um paciente no mesmo horário e com o mesmo profissional de outro, se os dois têm plano terapêutico vigente e nenhum objetivo em comum, aparece o aviso <b>Sem objetivos em comum</b> (dá para agendar assim mesmo). Paciente sem plano vigente não gera aviso.",
       "Copiar, mover e arrastar funcionam como no Planner. Desfazer: Ctrl+Z / Ctrl+Y.",
@@ -21003,6 +21020,33 @@ function agdGoalsData(row, records){
   var prof = row.professional_id ? findProfessional(row.professional_id) : null;
   return {pat: pat, plan: plan, mine: mine, others: others, common: common, own: own, last: planLastBySpec(records), prof: prof};
 }
+// Linha do objetivo: número, objetivo | critério, escala | status, situação | especialidades (outras
+// que também trabalham) e a última avaliação de cada especialidade. x.with = pacientes que também têm.
+function agdObjLine(x, mySpec, last){
+  var o = x.o, sc = scaleById(o.scaleId), lv = scaleLevel(o.scaleId, o.levelId);
+  var st = PLAN_STATUS.filter(function(z){ return z.id === (o.status || "ativo"); })[0];
+  var also = x.specIds.filter(function(sid){ return sid !== mySpec; });
+  return '<div class="ag-obj-line">' +
+    '<div class="ag-obj-txt"><b>' + x.n + '.</b> ' + esc(planObjLabel(o)) + '</div>' +
+    (x.pats ? '<div class="ag-obj-meta">Pacientes: ' + esc(x.pats.join(", ")) + '</div>' : '') +
+    '<div class="ag-obj-meta">Critério: ' + esc(planObjCrit(o) || "—") + ' · Escala: ' + esc(sc ? sc.name : "—") + '</div>' +
+    '<div class="ag-obj-meta">Status: ' + esc(st ? st.name : "—") + ' · Situação: ' + (lv ? '<span class="pl-lv-dot" style="background:' + esc(lv.color || "transparent") + '"></span>' + esc(lv.name) : '—') + '</div>' +
+    '<div class="ag-obj-meta">Especialidades: ' + esc(planSpecNames(x.specIds) || "—") + (also.length && mySpec && x.specIds.indexOf(mySpec) !== -1 ? ' <span class="ag-obj-with">(também ' + esc(planSpecSiglas(also)) + ')</span>' : '') + '</div>' +
+    (x.pats ? '' : planLastHtml(o, last)) +
+  '</div>';
+}
+// Agrupa por habilidade, na ordem do plano.
+function agdObjGrouped(list, mySpec, last){
+  var order = [], by = {};
+  list.forEach(function(x){ if (!by[x.areaId]){ by[x.areaId] = []; order.push(x.areaId); } by[x.areaId].push(x); });
+  return order.map(function(a){ return '<div class="ag-obj-area">' + esc(skillAreaName(a)) + '</div>' + by[a].map(function(x){ return agdObjLine(x, mySpec, last); }).join(""); }).join("");
+}
+function agdObjBox(title, sum, inner, key){
+  return '<div class="ag-obj-box" data-ag-box="' + key + '">' +
+    '<button type="button" class="ag-obj-head" data-ag-toggle aria-expanded="false"><span class="ag-obj-title">' + title + '</span><span class="ag-obj-caret" aria-hidden="true">▾</span></button>' +
+    (sum ? '<div class="ag-obj-sum">' + sum + '</div>' : '') +
+    '<div class="ag-obj-list" hidden>' + inner + '</div></div>';
+}
 function agdGoalsBoxHtml(d){
   if (!d) return '';
   // Quadro recolhível: cabeçalho com seta (data-ag-toggle) + resumo opcional + lista oculta.
@@ -21015,26 +21059,7 @@ function agdGoalsBoxHtml(d){
   function plain(title, msg){ return '<div class="ag-obj-box"><div class="ag-obj-head"><span class="ag-obj-title">' + title + '</span></div><div class="pl-hint">' + msg + '</div></div>'; }
   if (!d.plan) return plain("Objetivos", "Paciente sem plano terapêutico vigente.");
   var mySpec = d.prof ? d.prof.specialtyId : null;
-  // Linha: número, objetivo | critério, escala | status, situação | especialidades (outras que
-  // também trabalham) e a última avaliação de cada especialidade.
-  function line(x){
-    var o = x.o, sc = scaleById(o.scaleId), lv = scaleLevel(o.scaleId, o.levelId);
-    var st = PLAN_STATUS.filter(function(z){ return z.id === (o.status || "ativo"); })[0];
-    var also = x.specIds.filter(function(s){ return s !== mySpec; });
-    return '<div class="ag-obj-line">' +
-      '<div class="ag-obj-txt"><b>' + x.n + '.</b> ' + esc(planObjLabel(o)) + '</div>' +
-      '<div class="ag-obj-meta">Critério: ' + esc(planObjCrit(o) || "—") + ' · Escala: ' + esc(sc ? sc.name : "—") + '</div>' +
-      '<div class="ag-obj-meta">Status: ' + esc(st ? st.name : "—") + ' · Situação: ' + (lv ? '<span class="pl-lv-dot" style="background:' + esc(lv.color || "transparent") + '"></span>' + esc(lv.name) : '—') + '</div>' +
-      '<div class="ag-obj-meta">Especialidades: ' + esc(planSpecNames(x.specIds) || "—") + (also.length && mySpec && x.specIds.indexOf(mySpec) !== -1 ? ' <span class="ag-obj-with">(também ' + esc(planSpecSiglas(also)) + ')</span>' : '') + '</div>' +
-      planLastHtml(o, d.last) +
-    '</div>';
-  }
-  // Agrupa por habilidade, na ordem do plano.
-  function grouped(list){
-    var order = [], by = {};
-    list.forEach(function(x){ if (!by[x.areaId]){ by[x.areaId] = []; order.push(x.areaId); } by[x.areaId].push(x); });
-    return order.map(function(a){ return '<div class="ag-obj-area">' + esc(skillAreaName(a)) + '</div>' + by[a].map(line).join(""); }).join("");
-  }
+  function grouped(list){ return agdObjGrouped(list, mySpec, d.last); }
   if (!d.mine.length) return plain("Objetivos", "Nenhum objetivo ativo nas especialidades deste profissional.");
   var sum = '<b>Resumo:</b> ' + d.mine.length + (d.mine.length === 1 ? ' objetivo ativo' : ' objetivos ativos') +
     (d.others.length ? ' · ' + d.common.length + ' em comum com ' + esc(d.others.map(function(o){ return o.p.nome; }).join(", ")) : '');
@@ -21051,6 +21076,65 @@ function agdGoalsFill(host, row){
   Promise.all([planLoadAll(), planEvoLoad(pat.id)]).then(function(res){
     if (!document.body.contains(host)) return;
     host.innerHTML = agdGoalsBoxHtml(agdGoalsData(row, res[1]));
+    host.addEventListener("click", function(e){
+      var b = e.target.closest("[data-ag-toggle]"); if (!b) return;
+      var list = b.parentNode.querySelector(".ag-obj-list"), open = list.hidden;
+      list.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
+      b.querySelector(".ag-obj-caret").textContent = open ? "▴" : "▾";
+    });
+  });
+}
+/* ---- Grupo de suporte nos Detalhes: pacientes da sala no horário e objetivos ----
+ * Pacientes = atendimentos de paciente na MESMA sala, data e horário do agendamento do grupo
+ * (linhas carregadas da Agenda). Objetivos de cada paciente filtrados pelo profissional com quem
+ * ELE está agendado; primeiro os em comum (mesmo objetivo em 2 ou mais pacientes), depois um
+ * quadro recolhido por paciente com os objetivos só dele.
+ */
+function agdGroupSlotRows(row){
+  var out = [];
+  Object.keys(AD.rows || {}).forEach(function(id){
+    var r = AD.rows[id];
+    if (!r || r.id === row.id || !row.room_id || r.room_id !== row.room_id || r.date !== row.date || r.time !== row.time || bookingKind(r) || agdIsGroupRow(r)) return;
+    var p = findPatientAt(r, r.date);
+    if (p && out.every(function(x){ return x.p.id !== p.id; })) out.push({row: r, p: p});
+  });
+  return out.sort(function(a, b){ return String(a.p.nome).localeCompare(String(b.p.nome), "pt-BR"); });
+}
+function agdGroupPatientsHtml(items){
+  if (!items.length) return '<div class="pl-hint">Nenhum paciente agendado nesta sala neste horário.</div>';
+  return '<div class="agd-det-pats">' + items.map(function(it){
+    var age = patientAgeYears(it.p), col = patientColor(bookingPatient(it.p, it.row));
+    return '<button type="button" class="agd-det-pat" data-det-pat="' + esc(it.row.id) + '">' +
+      '<span class="pcolor-dot" style="background:' + (col || "var(--line)") + '"></span>' +
+      '<span class="agd-det-pat-n">' + esc(it.p.nome) + '</span>' +
+      '<span class="agd-det-pat-a">' + (age != null ? age + (age === 1 ? ' ano' : ' anos') : '') + '</span></button>';
+  }).join("") + '</div>';
+}
+function agdGroupGoalsBoxHtml(items, lasts){
+  function plain(msg){ return '<div class="ag-obj-box"><div class="ag-obj-head"><span class="ag-obj-title">Objetivos</span></div><div class="pl-hint">' + msg + '</div></div>'; }
+  if (!items.length) return plain("Nenhum paciente agendado nesta sala neste horário.");
+  var per = items.map(function(it){ return {p: it.p, objs: planActiveObjs(planVigente(it.p.id), it.row.professional_id)}; }).filter(function(x){ return x.objs.length; });
+  if (!per.length) return plain("Nenhum paciente desta sala tem objetivos ativos no plano terapêutico vigente.");
+  var cnt = {};
+  per.forEach(function(x){ var seen = {}; x.objs.forEach(function(o){ var k = planObjKey(o.o); if (k && !seen[k]){ seen[k] = 1; (cnt[k] = cnt[k] || []).push(x.p.nome); } }); });
+  var common = [], done = {};
+  per.forEach(function(x){ x.objs.forEach(function(o){ var k = planObjKey(o.o); if (k && cnt[k].length > 1 && !done[k]){ done[k] = 1; common.push(Object.assign({pats: cnt[k]}, o)); } }); });
+  var sum = '<b>Resumo:</b> ' + per.length + (per.length === 1 ? ' paciente com plano' : ' pacientes com plano') + ' · ' + common.length + ' em comum';
+  var out = agdObjBox("Objetivos em comum", sum, common.length ? agdObjGrouped(common, null, null) : '<div class="pl-hint">Nenhum objetivo em comum entre os pacientes deste horário.</div>', "common");
+  per.forEach(function(x){
+    var own = x.objs.filter(function(o){ var k = planObjKey(o.o); return !k || cnt[k].length < 2; });
+    if (own.length) out += agdObjBox("Objetivos de " + esc(x.p.nome) + " (" + own.length + ")", "", agdObjGrouped(own, null, lasts[x.p.id]), "own");
+  });
+  return out;
+}
+function agdGroupGoalsFill(host, items){
+  if (!host || !planCan("view")) return;
+  host.innerHTML = '<div class="ag-obj-box"><div class="ag-obj-head"><span class="ag-obj-title">Objetivos</span></div><div class="pl-hint">Carregando…</div></div>';
+  Promise.all([planLoadAll()].concat(items.map(function(it){ return planEvoLoad(it.p.id); }))).then(function(res){
+    if (!document.body.contains(host)) return;
+    var lasts = {};
+    items.forEach(function(it, i){ lasts[it.p.id] = planLastBySpec(res[i + 1]); });
+    host.innerHTML = agdGroupGoalsBoxHtml(items, lasts);
     host.addEventListener("click", function(e){
       var b = e.target.closest("[data-ag-toggle]"); if (!b) return;
       var list = b.parentNode.querySelector(".ag-obj-list"), open = list.hidden;

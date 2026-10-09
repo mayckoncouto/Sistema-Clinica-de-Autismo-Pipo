@@ -2831,3 +2831,10 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   `@media (max-width:760px)` `.agd-det-top` em coluna, `.agd-det-seg` com botões iguais); Horários do
   tratamento em quadrinhos, dois dias por linha (`agdDetHoursHtml`, `.agd-det-hours`). Status (`#agdDetStatus`
   e `#agdStatus`) saiu de `DP_COMBO_SEL`: é lista só de escolher (não abre teclado no celular).
+- 2026-10-09 (decisões do usuário) Detalhes de agendamento de **grupo de suporte**: seletor Agendamento | **Pacientes (N)**
+  (`agdGroupSlotRows(row)` = atendimentos de paciente na MESMA sala/data/horário em `AD.rows`; lista
+  `agdGroupPatientsHtml`: cor, nome, idade; tocar abre `agdOpenDetails` do paciente). Objetivos
+  (`agdGroupGoalsFill`/`agdGroupGoalsBoxHtml`): "Objetivos em comum" (mesmo objetivo em 2+ pacientes, com
+  "Pacientes: …") e um quadro recolhido "Objetivos de <paciente>" com os só dele; cada paciente filtrado pelo
+  profissional com quem ELE está agendado. Linhas/quadros reaproveitam `agdObjLine`/`agdObjGrouped`/`agdObjBox`
+  (extraídos de `agdGoalsBoxHtml`). Teste no `tests/run_plano.js`.
