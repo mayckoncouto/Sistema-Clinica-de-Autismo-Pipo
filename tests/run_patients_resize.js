@@ -24,12 +24,12 @@ const path = require('path');
   await page.waitForTimeout(150);
 
   // ---- TEST: colgroup + resizer handles are present, one per column (7 columns) ----
-  console.log('colgroup has 4 <col> elements?', (await page.locator('#patListHost .pat-table colgroup col').count()) === 4);
-  console.log('4 resizer handles present (one per column)?', (await page.locator('#patListHost .pat-col-resizer').count()) === 4);
+  console.log('colgroup has 8 <col> elements?', (await page.locator('#patListHost .pat-table colgroup col').count()) === 8);
+  console.log('8 resizer handles present (one per column)?', (await page.locator('#patListHost .pat-col-resizer').count()) === 8);
 
   const nomeCol = page.locator('#patListHost col[data-col="nome"]');
   const startWidth = await nomeCol.evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('Nome column starts at its default width (340px)?', startWidth === 340);
+  console.log('Nome column starts at its default width (280px)?', startWidth === 280);
 
   const tableBefore = await page.locator('#patListHost table.pat-table').evaluate(el => el.getBoundingClientRect().width);
 
@@ -43,19 +43,19 @@ const path = require('path');
   await page.waitForTimeout(80);
 
   const widthAfterDrag = await nomeCol.evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('dragging +80px widened the Nome column to ~420px?', Math.abs(widthAfterDrag - 420) <= 2);
+  console.log('dragging +80px widened the Nome column to ~360px?', Math.abs(widthAfterDrag - 360) <= 2);
 
   const tableAfter = await page.locator('#patListHost table.pat-table').evaluate(el => el.getBoundingClientRect().width);
   console.log('the table itself grew by the same amount (other columns untouched)?', Math.abs((tableAfter - tableBefore) - 80) <= 2);
 
-  const convenioColWidth = await page.locator('#patListHost col[data-col="nascimento"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('a different column (Nascimento) is unaffected by resizing Nome?', convenioColWidth === 150);
+  const convenioColWidth = await page.locator('#patListHost col[data-col="telefone"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
+  console.log('a different column (Telefone) is unaffected by resizing Nome?', convenioColWidth === 150);
 
   // ---- TEST: the resized width is persisted to localStorage ----
   const stored = await page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem('agendaPipo:patColWidths') || '{}'); } catch(e) { return null; }
   });
-  console.log('localStorage holds the new Nome width after the drag?', stored && stored.nome === 420);
+  console.log('localStorage holds the new Nome width after the drag?', stored && stored.nome === 360);
 
   // ---- TEST: the width survives a full reload (simulating the user coming back later) ----
   await page.reload();
@@ -66,14 +66,14 @@ const path = require('path');
   }, { timeout: 5000 });
   console.log('reload stays on Pacientes (#pacientes)?', await page.evaluate(() => location.hash === '#pacientes'));
   const widthAfterReload = await page.locator('#patListHost col[data-col="nome"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('after reload, Nome column keeps the saved 420px width?', widthAfterReload === 420);
+  console.log('after reload, Nome column keeps the saved 360px width?', widthAfterReload === 360);
 
   // ---- TEST: double-clicking a handle resets that column back to its default ----
   const handle2 = page.locator('#patListHost .pat-col-resizer[data-col="nome"]');
   await handle2.dblclick();
   await page.waitForTimeout(80);
   const widthAfterReset = await page.locator('#patListHost col[data-col="nome"]').evaluate(el => parseInt(getComputedStyle(el).width, 10));
-  console.log('double-click resets Nome column back to its default (340px)?', widthAfterReset === 340);
+  console.log('double-click resets Nome column back to its default (280px)?', widthAfterReset === 280);
   const storedAfterReset = await page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem('agendaPipo:patColWidths') || '{}'); } catch(e) { return null; }
   });

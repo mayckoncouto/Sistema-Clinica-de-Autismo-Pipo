@@ -2927,3 +2927,11 @@ Medido com volume real fictício (110 pacientes, 40 colunas, 75% ocupado, CPU 4�
   (`@media (min-width:1280px)` → `flex-wrap:nowrap`): falta espaço = a busca encolhe (mín. 120px)
   e depois "Profissional: Nome" ganha "…" (`flex:0 100 auto`, nome inteiro no `title` de `#agdWho`);
   o período nunca corta. Abaixo de 1280px o grupo da direita desce para a 2ª linha.
+
+## Lista de Pacientes: 8 colunas (2026-10-09, pedido do usuário; substitui "Nome, Nascimento, Idade, Tratamento")
+`SORT_COLS` / `PAT_COL_DEFAULT_WIDTH`: **Nome, Idade, Telefone** (só o primeiro, `patFirstPhone`),
+**E-mail** (só o primeiro, `patFirstEmail`), **Escola**, **Médico** (`patRegName(kind, id)`; Médico
+só aparece para quem vê "Pacientes – saúde"), **Status** (paciente Ativo `.tr-chip.st-ativo` /
+Inativo `.tr-chip.st-inativo` — saiu a etiqueta "inativo" ao lado do nome) e **Tratamento**.
+Todas ordenáveis (`patSortKey`) e com largura ajustável; textos longos com "…" (`.pt-ell`, valor
+no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).

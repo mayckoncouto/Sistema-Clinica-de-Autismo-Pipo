@@ -1026,7 +1026,8 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .rp-out{flex:1;min-width:0;overflow:auto;padding:14px 18px}
 .rp-back-bar{display:none}
 .tr-chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:800;color:#fff;background:#6b7a77}
-.tr-chip.st-ativo{background:var(--accent);color:var(--accent-ink)}.tr-chip.st-renegociado{background:#b7791f}.tr-chip.st-cancelado{background:#b6403a}
+.tr-chip.st-ativo{background:var(--accent);color:var(--accent-ink)}.tr-chip.st-renegociado{background:#b7791f}.tr-chip.st-cancelado{background:#b6403a}.tr-chip.st-inativo{background:var(--muted);color:#fff}
+.pat-table td.pt-ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tr-cancel{border:1px solid #f0c9c6;background:color-mix(in srgb,#b6403a 6%,var(--surface));border-radius:10px;padding:10px 12px 2px;margin-bottom:12px}
 .tr-cancel-note{font-size:12px;color:#9b3530;margin:0 0 8px}
 .tr-hist{list-style:none;margin:6px 0 10px;padding:0;font-size:12.5px}
@@ -2088,11 +2089,11 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   :is(#tab-pacientes,#tab-profissionais,.reg-panel,#tab-prontuario) .pat-table :is(th,td){white-space:normal;overflow-wrap:anywhere}
   /* Prontuário: só Paciente e Registros */
   #prListHost .pat-table :is(col,th,td):nth-child(n+3){display:none}
-  #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(4)){display:none}
+  #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(8)){display:none}
   /* Pacientes / Tratamentos: coluna do nome com todo o espaço que sobra; a da situação só do tamanho da etiqueta */
   #patListHost .pat-table col:first-child,#trHost .pat-table.tr-main col:first-child{width:auto!important}
-  #patListHost .pat-table col:nth-child(4),#trHost .pat-table.tr-main col:nth-child(8){width:122px!important}
-  :is(#patListHost .pat-table :is(th,td):nth-child(4),#trHost .pat-table.tr-main :is(th,td):nth-child(8)){padding-left:6px;padding-right:10px;white-space:nowrap}
+  #patListHost .pat-table col:nth-child(8),#trHost .pat-table.tr-main col:nth-child(8){width:122px!important}
+  :is(#patListHost .pat-table :is(th,td):nth-child(8),#trHost .pat-table.tr-main :is(th,td):nth-child(8)){padding-left:6px;padding-right:10px;white-space:nowrap}
   :is(#patListHost,#trHost) .pat-table .tr-chip{white-space:nowrap}
   #profList .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)){display:none}
   #staffListHost .pat-table :is(col,th,td):nth-child(n+3),#reg-tiposcolab-host .pat-table :is(col,th,td):nth-child(n+3){display:none}
@@ -8466,15 +8467,23 @@ function openPasteConfirmModal(toDocId, toKey, existing){
 // plano, sessões, ABA e especialidades ficam na tela de Tratamentos).
 var SORT_COLS = [
   {key:"nome", label:"Nome"},
-  {key:"nascimento", label:"Nascimento"},
   {key:"idade", label:"Idade"},
+  {key:"telefone", label:"Telefone"},
+  {key:"email", label:"E-mail"},
+  {key:"escola", label:"Escola"},
+  {key:"medico", label:"Médico"},
+  {key:"status", label:"Status"},
   {key:"tratamento", label:"Tratamento"}
 ];
+// Primeiro telefone / e-mail do cadastro (lista de Pacientes).
+function patFirstPhone(p){ var t = (patNormalize(p).telefones || []).filter(function(x){ return x && x.numero; })[0]; return t ? formatPhone(t.numero) : ""; }
+function patRegName(kind, id){ var it = (REG_CFG[kind] && REG_CFG[kind].list() || []).filter(function(x){ return x.id === id; })[0]; return it ? it.name : ""; }
+function patFirstEmail(p){ var e = (patNormalize(p).emails || []).filter(function(x){ return x && x.email; })[0]; return e ? e.email : ""; }
 
 // ---- patients-list column widths: user-resizable, persisted per browser ----
 var PAT_COL_KEYS = SORT_COLS.map(function(c){ return c.key; });
-var PAT_COL_DEFAULT_WIDTH = {nome:340, nascimento:150, idade:110, tratamento:200};
-var PAT_COL_MIN_WIDTH = {nome:140, nascimento:100, idade:70, tratamento:110};
+var PAT_COL_DEFAULT_WIDTH = {nome:280, idade:90, telefone:150, email:220, escola:180, medico:180, status:100, tratamento:150};
+var PAT_COL_MIN_WIDTH = {nome:140, idade:70, telefone:110, email:120, escola:100, medico:100, status:80, tratamento:110};
 var PAT_COL_WIDTHS_STORAGE_KEY = "agendaPipo:patColWidths";
 
 function loadPatColWidths(){
@@ -8673,7 +8682,11 @@ function gtRender(host, id, cols, rows, render, extraClass){
 function patSortKey(p, col){
   switch(col){
     case "nome": return p.nome || "";
-    case "nascimento": return p.nascimento || "";
+    case "telefone": return patFirstPhone(p);
+    case "email": return patFirstEmail(p);
+    case "escola": return p.escolaId ? patRegName("escolas", p.escolaId) : "";
+    case "medico": return p.medicoId ? patRegName("medicos", p.medicoId) : "";
+    case "status": return isActive(p) ? "Ativo" : "Inativo";
     case "idade": { var a = patientAgeYears(p); return (a==null) ? null : a; }
     case "tratamento": { var t = currentTreatment(p.id); return t ? trLabel(TR_STATUS, t.status) : ""; }
     default: return "";
@@ -8728,6 +8741,8 @@ function renderPatientsTab(){
     return;
   }
 
+  // Texto de uma linha com "…" e o valor inteiro no title.
+  function cellTxt(v){ return v ? '<td class="pt-muted pt-ell" title="'+esc(v)+'">'+esc(v)+'</td>' : '<td class="pt-muted">—</td>'; }
   var rows = list.map(function(p){
     var ageForDisplay = patientAgeYears(p);
     var idadeTxt = ageForDisplay != null ? ageForDisplay + " anos" :
@@ -8739,9 +8754,12 @@ function renderPatientsTab(){
     var col = (!hasTr || activeTreatment(p.id)) ? patientColor(p) : null;
     var dot = col ? '<span class="pcolor-dot" style="background:'+col+'" title="Cor por idade/ABA"></span>' : '';
     return '<tr data-id="'+esc(p.id)+'"'+(p.inativo ? ' class="is-inactive"' : '')+'>' +
-      '<td class="pt-nome">'+dot+esc(p.nome)+(patHasProtetiva(p) ? ' '+protShieldHtml() : '')+inactTag(p)+'</td>' +
-      '<td class="pt-muted">'+trBr(p.nascimento)+'</td>' +
+      '<td class="pt-nome">'+dot+esc(p.nome)+(patHasProtetiva(p) ? ' '+protShieldHtml() : '')+'</td>' +
       '<td class="pt-muted">'+idadeTxt+'</td>' +
+      cellTxt(patFirstPhone(p)) + cellTxt(patFirstEmail(p)) +
+      cellTxt(p.escolaId ? patRegName("escolas", p.escolaId) : "") +
+      cellTxt(p.medicoId ? patRegName("medicos", p.medicoId) : "") +
+      '<td>'+(isActive(p) ? '<span class="tr-chip st-ativo">Ativo</span>' : '<span class="tr-chip st-inativo">Inativo</span>')+'</td>' +
       '<td class="pt-trat">'+trTxt+'</td>' +
     '</tr>';
   }).join("");
@@ -18361,7 +18379,7 @@ var HELP_TOPICS = [
       "A data de entrada começa com a data do cadastro e pode ser alterada.",
       "O grupo <b>Saúde</b> (médico, CID, data do diagnóstico, nível de suporte, comunicação, alergias, medicações e restrições) só aparece para quem tem a permissão <b>Pacientes – saúde</b>: com \"ver\" os campos aparecem travados; com \"editar\" dá para alterar. Sem a permissão, esses dados também não aparecem nos Detalhes do Agendamento, na ficha impressa nem no quadro clínico do Plano Terapêutico.",
       "Salve. Paciente novo: em seguida o sistema abre o tratamento dele. No resumo do tratamento aparece o horário de atendimento, só com os dias e períodos em que o paciente vem.",
-      "A lista mostra nome, nascimento, idade e a situação do tratamento. Ao lado da busca, escolha onde procurar: <b>Paciente</b>, <b>Mãe</b>, <b>Pai</b> ou <b>Responsável financeiro</b> — pelo nome (sem acento/maiúscula) ou pelo CPF.",
+      "A lista mostra nome, idade, o primeiro telefone e o primeiro e-mail, escola, médico, a situação do paciente (Ativo ou Inativo) e a do tratamento. Ao lado da busca, escolha onde procurar: <b>Paciente</b>, <b>Mãe</b>, <b>Pai</b> ou <b>Responsável financeiro</b> — pelo nome (sem acento/maiúscula) ou pelo CPF.",
       "<b>Outras opções ▾</b>: <b>Campos obrigatórios</b>, <b>Imprimir ficha cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica), <b>Mesclar cadastros</b> (só Administrador) e <b>Exportar planilha</b> / <b>Importar planilha</b> (veja o tópico Planilhas)."
     ],
     rules: [
