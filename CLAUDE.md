@@ -3000,3 +3000,4 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   editar avisa "rode o SQL 2026-10-09c".
 - (2026-10-09, pedido do usuário) Linhas da lista do CRM com a altura das listas de cadastro (40px): botões das
   células com `margin-block:-7px` (continuam ocupando a célula toda).
+- Produção (2026-10-09): `2026-10-09c-crm-editar-comentario` rodada.
