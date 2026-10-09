@@ -260,6 +260,19 @@ const path = require('path');
   await page.waitForTimeout(100);
   const after = await page.evaluate(() => ({ title: document.getElementById('crmTitle').textContent, host: document.getElementById('crmHost').textContent, who: (document.querySelector('[data-dp-for="crmFWho"] .dp-txt') || {}).textContent }));
   check('permissions arriving later: "Nenhuma lista" turns into Minhas tarefas, responsável filter labelled?', /Nenhuma lista/.test(before) && after.title === 'Minhas tarefas' && !/Nenhuma lista/.test(after.host) && after.who === 'Todos os responsáveis', after);
+  // Responsáveis: só quem tem acesso ao CRM e à lista; quem já estava sem acesso aparece com "(sem acesso)"
+  const ppl = await ev(`(function(){ var old = CRM.people;
+    CRM.people = [{id:'local-me',full_name:'Você',admin:true,crm:true,lists:[]},{id:'b',full_name:'Bia',admin:false,crm:true,lists:['atendimento']},
+      {id:'c',full_name:'Caio',admin:false,crm:false,lists:['atendimento']},{id:'d',full_name:'Duda',admin:false,crm:true,lists:['agendas']}];
+    var a = document.createElement('button'); document.body.appendChild(a);
+    crmPeopleMenu(a, ['d'], {listId: 'atendimento'});
+    var names = Array.prototype.map.call(document.querySelectorAll('#crmPop [data-pick]'), function(x){ return x.textContent.trim(); });
+    var d = document.querySelector('#crmPop [data-pick="d"]'); d.click(); d.click();
+    var dOn = d.getAttribute('aria-checked');
+    var pop = document.getElementById('crmPop'); if (pop) pop.remove(); a.remove(); CRM.people = old;
+    return JSON.stringify({names: names, dOn: dOn}); })()`);
+  const pj = JSON.parse(ppl);
+  check('responsáveis: only people with access to CRM and the list (+ current without access marked)?', pj.names.join('|') === 'Eu|Bia|Duda (sem acesso)' && pj.dOn === 'false', ppl);
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

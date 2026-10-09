@@ -490,6 +490,7 @@ div.ag-obj-head{cursor:default}
 .msheet .dp-head b{font-size:17px}
 .msheet .dp-today,.msheet .dp-nav{font-size:15px;padding:8px 10px}
 .msheet .crm-pp-list{display:flex;flex-direction:column}
+.crm-pp-noacc{color:#b3261e;font-size:11.5px;font-weight:600}
 .crm-day-task .crm-day-t{flex:1;min-width:0;display:flex;flex-direction:column;text-align:left}
 .crm-day-task .crm-day-t b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
 .crm-day-task .crm-day-t small{font-size:12.5px;color:var(--muted)}
@@ -5979,17 +5980,33 @@ function crmStatusMenu(anchor, list, cur, onPick){
 var CRM_AV_COLORS = ["#5b5bd6", "#7c5cc4", "#2e7d6b", "#c2410c", "#0e7490", "#a21caf", "#4d7c0f", "#b45309", "#475569", "#be123c"];
 function crmAvColor(id){ var h = 0; String(id || "").split("").forEach(function(ch){ h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return CRM_AV_COLORS[h % CRM_AV_COLORS.length]; }
 function crmAv(id, name, cls){ return '<span class="crm-av' + (cls ? " " + cls : "") + '" style="background:' + crmAvColor(id) + ';color:#fff" title="' + esc(name) + '">' + esc(agdInitials(name)) + '</span>'; }
+// Responsável = usuário com acesso ao CRM e à lista da tarefa (crm_people devolve admin/crm/lists; sem esses
+// campos — banco sem a migração 2026-10-09e ou testes — vale todo mundo). Quem já está na tarefa e perdeu o
+// acesso continua aparecendo marcado, com "(sem acesso)", para poder ser tirado.
+function crmCanAssign(p, listId){
+  if (!p || p.lists === undefined || p.lists === null && p.admin === undefined) return true;
+  if (p.admin) return true;
+  return !!p.crm && (p.lists || []).indexOf(listId) !== -1;
+}
+function crmAssignable(listId, keep){
+  keep = keep || [];
+  return CRM.people.filter(function(p){ return crmCanAssign(p, listId) || keep.indexOf(p.id) !== -1; });
+}
+function crmNoAccessTag(p, listId){ return listId && !crmCanAssign(p, listId) ? ' <small class="crm-pp-noacc">(sem acesso)</small>' : ""; }
 function crmPeopleMenu(anchor, sel, opts){
   var me = crmMe(), cur = (sel || []).slice();
-  var ppl = CRM.people.slice().sort(function(a, b){ return (a.id === me ? -1 : b.id === me ? 1 : 0) || String(a.full_name).localeCompare(String(b.full_name), "pt-BR"); });
+  var ppl = crmAssignable(opts.listId, cur).sort(function(a, b){ return (a.id === me ? -1 : b.id === me ? 1 : 0) || String(a.full_name).localeCompare(String(b.full_name), "pt-BR"); });
   var html = '<input type="text" class="dp-filter" placeholder="Digite para buscar…" aria-label="Buscar pessoa"><div class="crm-pp-list">' +
     (ppl.length ? ppl.map(function(p){
-      return '<button type="button" role="menuitemcheckbox" data-pick="' + esc(p.id) + '" data-n="' + esc(normText(p.full_name + (p.id === me ? " eu" : ""))) + '" aria-checked="' + (cur.indexOf(p.id) !== -1) + '"><input type="checkbox" tabindex="-1"' + (cur.indexOf(p.id) !== -1 ? ' checked' : '') + '>' + '<span>' + esc(p.id === me ? "Eu" : p.full_name) + '</span></button>';
-    }).join("") : '<div class="pat-count" style="padding:6px 10px">Nenhum usuário.</div>') + '<div class="pat-count crm-pp-none" style="padding:6px 10px" hidden>Ninguém encontrado.</div></div>';
+      return '<button type="button" role="menuitemcheckbox" data-pick="' + esc(p.id) + '" data-n="' + esc(normText(p.full_name + (p.id === me ? " eu" : ""))) + '" aria-checked="' + (cur.indexOf(p.id) !== -1) + '"><input type="checkbox" tabindex="-1"' + (cur.indexOf(p.id) !== -1 ? ' checked' : '') + '>' + '<span>' + esc(p.id === me ? "Eu" : p.full_name) + crmNoAccessTag(p, opts.listId) + '</span></button>';
+    }).join("") : '<div class="pat-count" style="padding:6px 10px">Ninguém com acesso ao CRM e a esta lista.</div>') + '<div class="pat-count crm-pp-none" style="padding:6px 10px" hidden>Ninguém encontrado.</div></div>';
   var changed = false;
   var m = crmPop(anchor, "crm-pp-menu", html, {title: "Responsáveis",
     onPick: function(id, close, b){
-      var i = cur.indexOf(id); if (i === -1) cur.push(id); else cur.splice(i, 1);
+      var i = cur.indexOf(id);
+      var pp = CRM.people.filter(function(x){ return x.id === id; })[0];
+      if (i === -1 && opts.listId && !crmCanAssign(pp, opts.listId)){ showToast((pp ? pp.full_name : "Esta pessoa") + " não tem acesso ao CRM ou a esta lista.", true); return; }
+      if (i === -1) cur.push(id); else cur.splice(i, 1);
       var on = i === -1; b.setAttribute("aria-checked", on); b.querySelector("input").checked = on;
       changed = true; if (opts.onToggle) opts.onToggle(cur.slice());
     },
@@ -6135,7 +6152,7 @@ function wireCrm(){
     var pp2 = e.target.closest("[data-crm-people]");
     if (pp2){
       e.stopPropagation(); var tp = CRM.tasks[pp2.getAttribute("data-crm-people")]; if (!tp || pp2.disabled) return;
-      crmPeopleMenu(pp2, tp.assignees || [], {onClose: function(arr){
+      crmPeopleMenu(pp2, tp.assignees || [], {listId: tp.list_id, onClose: function(arr){
         crmUpdate(tp.id, {assignees: arr}).then(function(){ crmRender(); crmBadgeRender(); }, function(er){ crmRender(); showToast("Não foi possível mudar os responsáveis: " + ((er && er.message) || er), true); });
       }});
       return;
@@ -6283,8 +6300,8 @@ function crmOpenTask(task, opts){
   function opt(v, label, cur){ return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + '>' + esc(label) + '</option>'; }
   function prop(label, inner, wide, id){ return '<div class="field crm-prop' + (wide ? ' wide' : '') + '"' + (id ? ' id="' + id + '"' : '') + '><label' + (id ? '' : '') + '>' + label + '</label><div class="crm-pv">' + inner + '</div></div>'; }
   var peopleMs = '<div class="ms" id="crmPeopleMs"><button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Responsáveis"' + dis + '><span class="crm-pp-avs"></span><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
-    '<div class="ms-panel" id="crmPeople" hidden role="listbox" aria-multiselectable="true">' + (CRM.people.length ? CRM.people.map(function(p){
-      return '<label class="ms-opt"><input type="checkbox" value="' + esc(p.id) + '"' + ((x.assignees || []).indexOf(p.id) !== -1 ? ' checked' : '') + dis + '><span>' + esc(p.full_name) + '</span></label>';
+    '<div class="ms-panel" id="crmPeople" hidden role="listbox" aria-multiselectable="true">' + (crmAssignable(list && list.id, x.assignees).length ? crmAssignable(list && list.id, x.assignees).map(function(p){
+      return '<label class="ms-opt"><input type="checkbox" value="' + esc(p.id) + '"' + ((x.assignees || []).indexOf(p.id) !== -1 ? ' checked' : '') + dis + '><span>' + esc(p.full_name) + crmNoAccessTag(p, list && list.id) + '</span></label>';
     }).join("") : '<div class="ms-empty">Nenhum usuário.</div>') + '</div></div>';
   var whoVal = pat ? pat.nome : (lead.nome || "");
   var whoHtml = prop('<span>Paciente ou Lead</span>', '<div class="crm-who"><input id="crmWho" type="text" autocomplete="off" placeholder="Nome do paciente ou de quem ainda não tem cadastro…" value="' + esc(whoVal) + '"' + dis + '>' +
@@ -6359,7 +6376,7 @@ function crmOpenTask(task, opts){
     if (pBtn.disabled) return;
     var cur = Array.prototype.map.call(pPanel.querySelectorAll("input:checked"), function(c){ return c.value; });
     pBtn.setAttribute("aria-expanded", "true");
-    crmPeopleMenu(pBtn, cur, {onToggle: function(arr){
+    crmPeopleMenu(pBtn, cur, {listId: list && list.id, onToggle: function(arr){
       Array.prototype.forEach.call(pPanel.querySelectorAll("input"), function(c){ c.checked = arr.indexOf(c.value) !== -1; }); peopleSum();
     }, onClose: function(){ pBtn.setAttribute("aria-expanded", "false"); }});
   });
@@ -19100,6 +19117,7 @@ var HELP_TOPICS = [
     rules: [
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
       "Vencimento passado fica em vermelho (menos nos status que encerram a tarefa).",
+      "Só pode ser responsável por uma tarefa quem tem acesso ao CRM e à lista dela (Níveis de permissão). Quem perdeu o acesso continua na tarefa com “(sem acesso)” até alguém tirar.",
       "Ir para um status de perda (ex.: Cancelado) pede o motivo de perda. Tarefa num status finalizado não pode ser excluída.",
       "Cada lista tem a sua permissão (ver, incluir, editar, excluir) em Níveis de permissão. Em Níveis de permissão, o grupo CRM começa pela permissão <b>CRM</b>: “Ver” dá o botão CRM do topo (tela CRM e Minhas tarefas) e a janela Listas e status; “Incluir”, “Editar” e “Excluir” valem para as listas e seus status. Depois vem uma linha para cada lista (ver, incluir, editar e excluir as tarefas dela), e toda lista nova ganha a sua linha. O Administrador sempre pode tudo.",
       "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Origem, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o nome do paciente ou lead (cortado com “…” quando não cabe), Vencimento e a bandeira da Prioridade; no Quadro, cada status ocupa a tela toda: deslize para o lado ou escolha o status no campo acima dos quadros; no Calendário, toque num dia para ver as tarefas dele. Na janela da tarefa, os botões <b>Detalhes</b> (campos e descrição) e <b>Atividade</b> (alterações, comentários e o campo para comentar) trocam o que aparece. Na tarefa nova já dá para comentar: o comentário fica marcado \"enviado ao salvar\" e vai junto quando a tarefa é salva."

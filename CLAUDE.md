@@ -3074,3 +3074,12 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   janelas deles também). `SHEET_SCOPE` não existe mais. Vale para tela/janela nova sem fazer
   nada: usar `<select>`, campo de data, `.ms` ou `crmPop` (todos passam por `useSheet`). Seletor feito de outro jeito
   precisa chamar `useSheet`/`sheetWrap`. Teste em `tests/run_cad_sheets.js` (Visão geral, Agenda e Salas).
+- (2026-10-09, pedido do usuário) **Responsável no CRM só com acesso**: só pode ser responsável quem tem "ver" no CRM
+  (`crm_listas`; nível sem o item gravado vale se vê alguma lista) E "ver" na lista da tarefa (`crm_<lista>`), ou é
+  Administrador. App: `crm_people()` devolve `admin`, `crm`, `lists`; `crmCanAssign(p, listId)` /
+  `crmAssignable(listId, manter)` filtram o menu de Responsáveis (lista e janela; `crmPeopleMenu(..., {listId})`) e o
+  painel `#crmPeople`; quem já estava e perdeu o acesso aparece marcado com "(sem acesso)" (`crmNoAccessTag`) e só pode
+  ser tirado. Sem os campos novos (banco antigo/testes) vale todo mundo. Banco: migração
+  `supabase/2026-10-09e-crm-responsavel-com-acesso.sql` (`crm_user_can(usuário, lista)`, `crm_people` novo, gatilho
+  `tasks_assignees_guard`: recusa responsável NOVO sem acesso; mudar a tarefa de lista confere todos; testada no PGlite).
+  @menção continua com todos os usuários.
