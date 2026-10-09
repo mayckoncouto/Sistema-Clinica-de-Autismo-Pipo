@@ -2902,3 +2902,12 @@ Medido com volume real fictício (110 pacientes, 40 colunas, 75% ocupado, CPU 4�
 - `normText` guarda os textos já convertidos (`_normCache`, até 20 mil) e `esc` não monta texto
   novo quando não há o que trocar.
 - Legenda e nota do Planner com espaço à direita para o controle de zoom (antes passavam por baixo).
+- (2026-10-09, aprovado pelo usuário) Planner: o controle de zoom saiu do canto da tela
+  (`position:fixed`) e foi para a barra, antes da tela cheia (`#zoomCtrl` dentro de
+  `#tab-planner .controls`; opções "100%"…"50%", "Ajustar à tela"; `#zoomLabel` só aparece no
+  "Ajustar à tela", classe `.zoom-fit`). O texto longo do rodapé ("Clique numa célula…") saiu
+  (está na Ajuda). Botões liberar/bloquear/limpar da coluna de horários (`.row-lock`, Planner e
+  Agenda) invisíveis até passar o mouse na linha (`@media (hover:hover)`; no toque continuam).
+  Agenda: trocar de semana não apaga mais a grade — a semana nova aparece apagada e sem clique
+  (`#agdGrid.agd-loading`) com "Carregando…" no título (`.agd-loading-tag`) até os atendimentos
+  chegarem; "Carregando agenda…" só na 1ª carga. Teste `tests/run_planner_agenda_visual.js`.
