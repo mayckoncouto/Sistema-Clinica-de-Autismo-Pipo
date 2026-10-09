@@ -2813,3 +2813,12 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   caixas de marcar nos Responsáveis). Status SEMPRE com bolinha colorida (`crmStIcon` = `.crm-dot`; sem ícones de
   andamento, sem grupos — `crmStGroups` saiu), também no cabeçalho das colunas do Quadro. Prioridade com bandeiras (sem
   números de atalho visíveis; as teclas 1–4 continuam funcionando).
+- 2026-10-09 (pedido do usuário) CRM, janela da tarefa: na lista com `lead`, **Paciente ou Lead** fica DENTRO de
+  "Dados do lead" (`whoHtml`), em pares: Paciente ou Lead | Nascimento, Responsável | Origem, Telefone | E-mail,
+  **Diagnóstico** (`#crmLDiag` → `lead.diagnostico`, sugestões `CID_SUGGESTIONS`; vai para `cid` no "Cadastrar
+  paciente") | Convênio; **Plano saiu** (valor antigo `lead.plano` é mantido ao salvar). Com paciente cadastrado
+  só Paciente ou Lead fica (os outros `.crm-lf` somem). Etiqueta Lead/Paciente dentro do campo.
+  Comentário: caixa `.crm-compose` (texto em cima, barra branca `.crm-compose-bar` com `.crm-compose-tools` vazia
+  para funções futuras e botão enviar `.crm-send` #crmCommentSend, desativado sem texto); **Enter envia**,
+  Shift+Enter quebra linha, com a lista de @menção aberta Enter escolhe a 1ª pessoa. Comentário registrado
+  `.crm-cmt` (iniciais 28px, nome, tempo relativo `crmAgo` — "23 minutos" — com a data no `title`, texto 13,5px).

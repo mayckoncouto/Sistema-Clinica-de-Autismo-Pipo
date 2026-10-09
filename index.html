@@ -303,7 +303,7 @@ div.ag-obj-head{cursor:default}
 .crm-prio-btn{border:0;background:none;padding:3px 6px;border-radius:6px;cursor:pointer;font:inherit;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
 .crm-prio-btn:hover:not(:disabled){background:var(--surface-2)}
 .crm-prio-btn:disabled{cursor:default}
-.field .crm-prio-btn.crm-prio-field{width:100%;justify-content:flex-start;border:1px solid var(--line);background:var(--surface-2);padding:9px 12px;border-radius:10px;min-height:42px}
+.field .crm-prio-btn.crm-prio-field{width:100%;justify-content:flex-start;border:1px solid var(--line);background:var(--surface-2);padding:9px 12px;border-radius:10px;min-height:42px;font-size:13px}
 /* Seletores do CRM no padrão dos menus suspensos do sistema: linhas cinzas entre os itens,
    cor do sistema só no item escolhido. Status sempre com bolinha colorida; prioridade com bandeira. */
 .crm-pop{position:fixed;z-index:500;min-width:210px;max-width:min(300px,calc(100vw - 16px));max-height:min(420px,calc(100vh - 16px));overflow:auto}
@@ -399,6 +399,8 @@ div.ag-obj-head{cursor:default}
 .crm-who{position:relative;display:flex;align-items:center;gap:8px}
 .crm-who input{flex:1;min-width:0}
 .crm-who .autolist{left:0;right:0;top:calc(100% + 4px)}
+.crm-who input{padding-right:132px}
+.crm-who-tag:not(:empty){position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none}
 .crm-who-tag{font-size:11px;font-weight:800;white-space:nowrap;border-radius:6px;padding:2px 7px}
 .crm-who-tag.pat{background:var(--accent-weak);color:var(--accent)}
 .crm-who-tag.lead{background:color-mix(in srgb,#e8a400 20%,var(--surface));color:#9a6a00}
@@ -426,8 +428,23 @@ div.ag-obj-head{cursor:default}
 .crm-ev-h .crm-av{width:20px;height:20px;font-size:9px}
 .crm-ev-when{color:var(--muted);font-size:11px;white-space:nowrap;margin-left:auto}
 .crm-mention{color:var(--accent);font-weight:700}
-.crm-comment{position:relative;display:flex;gap:8px;align-items:flex-end;margin-top:8px}
-.crm-comment textarea{flex:1}
+.crm-comment{position:relative;margin-top:8px}
+/* Campo de comentário: caixa branca com o texto em cima e a barra neutra embaixo (espaço para funções futuras) + Enviar. */
+.crm-compose{position:relative;border:1px solid var(--line-strong,var(--line));border-radius:14px;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.crm-compose:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak)}
+.crm-compose textarea{display:block;width:100%;box-sizing:border-box;border:0!important;background:transparent!important;box-shadow:none!important;outline:none;resize:none!important;padding:12px 14px 4px;font:inherit;font-size:13.5px;line-height:1.5;color:var(--ink);min-height:64px}
+.crm-compose-bar{display:flex;align-items:center;gap:6px;padding:6px 8px 8px 10px;background:var(--surface);border-radius:0 0 14px 14px}
+.crm-compose-tools{flex:1;display:flex;align-items:center;gap:4px;min-height:30px}
+.crm-send{width:34px;height:30px;border-radius:9px;border:0;display:inline-flex;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.crm-send:disabled{background:var(--surface-2);color:var(--muted);cursor:default}
+.crm-compose.off{opacity:.7}
+/* Comentário registrado */
+.crm-cmt{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 14px 14px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.crm-cmt-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.crm-cmt-h .crm-av{width:28px;height:28px;font-size:10.5px}
+.crm-cmt-h b{font-size:13.5px;font-weight:700;color:var(--ink)}
+.crm-cmt-when{font-size:12px;color:var(--muted);white-space:nowrap}
+.crm-cmt-b{font-size:13.5px;line-height:1.55;color:var(--ink);overflow-wrap:anywhere}
 .crm-mention-pop{position:absolute;left:0;bottom:100%;margin-bottom:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);z-index:5;min-width:220px;max-height:220px;overflow:auto}
 .crm-mention-pop button{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px;text-align:left}
 .crm-mention-pop button:hover{background:var(--accent-weak)}
@@ -5717,24 +5734,31 @@ function crmOpenTask(task, opts){
       return '<label class="ms-opt"><input type="checkbox" value="' + esc(p.id) + '"' + ((x.assignees || []).indexOf(p.id) !== -1 ? ' checked' : '') + dis + '><span>' + esc(p.full_name) + '</span></label>';
     }).join("") : '<div class="ms-empty">Nenhum usuário.</div>') + '</div></div>';
   var whoVal = pat ? pat.nome : (lead.nome || "");
-  var leadHtml = list.lead ? '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-t">Dados do lead</div><div class="pat-count crm-lead-note">Sem cadastro de paciente: estes dados passam para o cadastro ao usar "Cadastrar paciente".</div>' +
+  var whoHtml = prop('<span>Paciente ou Lead</span>', '<div class="crm-who"><input id="crmWho" type="text" autocomplete="off" placeholder="Nome do paciente ou de quem ainda não tem cadastro…" value="' + esc(whoVal) + '"' + dis + '>' +
+    '<span class="crm-who-tag" id="crmWhoTag"></span><div class="autolist" id="crmWhoSug" hidden></div></div>', !list.lead);
+  // Lista de atendimento: Paciente ou Lead dentro de "Dados do lead"; os outros campos somem quando é paciente cadastrado.
+  function lf(html){ return html.replace('class="field crm-prop', 'class="field crm-prop crm-lf'); }
+  var leadHtml = list.lead ? '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-t">Dados do lead</div><div class="pat-count crm-lead-note crm-lf">Sem cadastro de paciente: estes dados passam para o cadastro ao usar "Cadastrar paciente".</div>' +
     '<div class="crm-props">' +
-      prop('<span>Nascimento</span>', '<input id="crmLNasc" type="date" value="' + esc(lead.nascimento || "") + '"' + dis + '>') +
-      prop('<span>Responsável</span>', '<input id="crmLResp" type="text" value="' + esc(lead.responsavel || "") + '"' + dis + '>') +
-      prop('<span>Telefone / WhatsApp</span>', '<input id="crmLTel" type="text" data-phone inputmode="tel" value="' + esc(lead.telefone ? formatPhone(lead.telefone) : "") + '"' + dis + '>') +
-      prop('<span>E-mail</span>', '<input id="crmLEmail" type="email" value="' + esc(lead.email || "") + '"' + dis + '>') +
-      prop('<span>Convênio</span>', '<select id="crmLConv" data-combo' + dis + '><option value="">Sem convênio / Particular</option>' +
+      whoHtml +
+      lf(prop('<span>Nascimento</span>', '<input id="crmLNasc" type="date" value="' + esc(lead.nascimento || "") + '"' + dis + '>')) +
+      lf(prop('<span>Responsável</span>', '<input id="crmLResp" type="text" value="' + esc(lead.responsavel || "") + '"' + dis + '>')) +
+      lf(prop('<span>Origem</span>', '<select id="crmLOrig"' + dis + '><option value="">Não informado</option>' + CRM_ORIGENS.concat(lead.origem && CRM_ORIGENS.indexOf(lead.origem) === -1 ? [lead.origem] : []).map(function(o){ return opt(o, o, lead.origem || ""); }).join("") + '</select>')) +
+      lf(prop('<span>Telefone / WhatsApp</span>', '<input id="crmLTel" type="text" data-phone inputmode="tel" value="' + esc(lead.telefone ? formatPhone(lead.telefone) : "") + '"' + dis + '>')) +
+      lf(prop('<span>E-mail</span>', '<input id="crmLEmail" type="email" value="' + esc(lead.email || "") + '"' + dis + '>')) +
+      lf(prop('<span>Diagnóstico</span>', '<input id="crmLDiag" type="text" list="crmLDiagList" value="' + esc(lead.diagnostico || "") + '"' + dis + '><datalist id="crmLDiagList">' + CID_SUGGESTIONS.map(function(o){ return '<option value="' + esc(o) + '">'; }).join("") + '</datalist>')) +
+      lf(prop('<span>Convênio</span>', '<select id="crmLConv" data-combo' + dis + '><option value="">Sem convênio / Particular</option>' +
         activeOnly(state.convenios || []).map(function(cv){ return opt(cv.name, cv.name, lead.convenio || ""); }).join("") +
-        (lead.convenio && !(state.convenios || []).some(function(cv){ return cv.name === lead.convenio; }) ? opt(lead.convenio, lead.convenio, lead.convenio) : "") + '</select>') +
-      prop('<span>Plano</span>', '<input id="crmLPlano" type="text" value="' + esc(lead.plano || "") + '"' + dis + '>') +
-      prop('<span>Origem</span>', '<select id="crmLOrig"' + dis + '><option value="">Não informado</option>' + CRM_ORIGENS.concat(lead.origem && CRM_ORIGENS.indexOf(lead.origem) === -1 ? [lead.origem] : []).map(function(o){ return opt(o, o, lead.origem || ""); }).join("") + '</select>') +
+        (lead.convenio && !(state.convenios || []).some(function(cv){ return cv.name === lead.convenio; }) ? opt(lead.convenio, lead.convenio, lead.convenio) : "") + '</select>')) +
     '</div></div>' : '';
   var lossHtml = list.lead ? prop('<span>Motivo de perda</span>', '<input id="crmLPerda" type="text" list="crmPerdaList" value="' + esc(lead.motivoPerda || "") + '"' + dis + '><datalist id="crmPerdaList">' + CRM_PERDAS.map(function(o){ return '<option value="' + esc(o) + '">'; }).join("") + '</datalist>', true, "crmLossBox") : '';
   var sideHtml = '<aside class="crm-side" id="crmSide"' + (side ? '' : ' hidden') + '>' +
     '<div class="crm-side-head"><b>Atividade</b><button type="button" class="btn ghost crm-icon-btn" id="crmSideClose" title="Recolher atividade" aria-label="Recolher atividade">»</button></div>' +
     '<div class="crm-side-body"><div class="crm-feed" id="crmFeed"><div class="pat-count">' + (isNew ? 'As alterações e os comentários aparecem aqui depois de salvar a tarefa.' : 'Carregando…') + '</div></div></div>' +
-    '<div class="field crm-comment"><textarea id="crmCommentIn" rows="2" placeholder="' + (isNew ? 'Salve a tarefa para comentar' : 'Escreva um comentário… use @ para mencionar alguém') + '"' + (isNew ? ' disabled' : '') + '></textarea><div class="crm-mention-pop" id="crmMentionPop" hidden></div>' +
-      '<button type="button" class="btn primary" id="crmCommentSend"' + (isNew ? ' disabled' : '') + '>Comentar</button></div></aside>';
+    '<div class="field crm-comment"><div class="crm-compose' + (isNew ? ' off' : '') + '"><textarea id="crmCommentIn" rows="3" placeholder="' + (isNew ? 'Salve a tarefa para comentar' : 'Escreva um comentário… @ para mencionar alguém') + '"' + (isNew ? ' disabled' : '') + '></textarea>' +
+      '<div class="crm-compose-bar"><div class="crm-compose-tools"></div><button type="button" class="crm-send" id="crmCommentSend" title="Enviar (Enter) · Shift+Enter quebra a linha" aria-label="Enviar comentário" disabled>' +
+      '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13.5l12-5.5L2 2.5l1.8 5.5z" fill="currentColor"/><path d="M3.8 8H9" stroke="var(--surface)" stroke-width="1.3" stroke-linecap="round"/></svg></button></div>' +
+      '<div class="crm-mention-pop" id="crmMentionPop" hidden></div></div></div></aside>';
   host.innerHTML =
     '<div class="overlay crm-ov lay-' + lay + '" id="ovCrm"><div class="modal crm-modal lay-' + lay + (side ? ' with-side' : '') + '">' +
       '<div class="modal-head"><div><h3>' + (isNew ? "Nova tarefa" : canEdit ? "Editar tarefa" : "Tarefa") + '</h3>' +
@@ -5752,8 +5776,7 @@ function crmOpenTask(task, opts){
           prop('<span>Responsáveis</span>', peopleMs) +
           prop('<span>Vencimento</span>', '<input id="crmDue" type="date" value="' + esc(x.due_date || "") + '"' + dis + '>') +
           prop('<span>Prioridade</span>', '<input type="hidden" id="crmPrio" value="' + esc(crmPrio(x.priority).id) + '"><button type="button" class="crm-prio-btn crm-prio-field" id="crmPrioBtn"' + dis + '>' + crmFlagSvg(crmPrio(x.priority)) + esc(crmPrio(x.priority).name) + '</button>') +
-          prop('<span>Paciente ou Lead</span>', '<div class="crm-who"><input id="crmWho" type="text" autocomplete="off" placeholder="Nome do paciente ou de quem ainda não tem cadastro…" value="' + esc(whoVal) + '"' + dis + '>' +
-            '<span class="crm-who-tag" id="crmWhoTag"></span><div class="autolist" id="crmWhoSug" hidden></div></div>', true) +
+          (list.lead ? '' : whoHtml) +
           lossHtml +
         '</div>' +
         leadHtml +
@@ -5791,7 +5814,7 @@ function crmOpenTask(task, opts){
     var name = whoIn.value.trim(), isLead = !pid && !!name;
     whoTag.textContent = pid ? "Paciente cadastrado" : (isLead ? "Lead (sem cadastro)" : "");
     whoTag.className = "crm-who-tag" + (pid ? " pat" : isLead ? " lead" : "");
-    var lb = document.getElementById("crmLeadBox"); if (lb) lb.hidden = !!pid;
+    Array.prototype.forEach.call(ov.querySelectorAll(".crm-lf"), function(el){ el.hidden = !!pid; });
     var rb = document.getElementById("crmRegPat"); if (rb) rb.hidden = !isLead || !canEdit;
   }
   whoIn.addEventListener("input", function(){
@@ -5827,17 +5850,28 @@ function crmOpenTask(task, opts){
   document.getElementById("crmSideOpen").addEventListener("click", function(){ sideSet(true); });
   if (!isNew){
     crmActivityLoad(task.id); crmMarkRead(task.id); crmMentionWire();
-    document.getElementById("crmCommentSend").addEventListener("click", function(){
+    var cIn = document.getElementById("crmCommentIn"), cSend = document.getElementById("crmCommentSend");
+    function sendState(){ cSend.disabled = !cIn.value.trim(); }
+    cIn.addEventListener("input", sendState);
+    // Enter envia; Shift+Enter quebra a linha; com a lista de @menção aberta, Enter escolhe a primeira pessoa.
+    cIn.addEventListener("keydown", function(e){
+      if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+      e.preventDefault();
+      var mp = document.getElementById("crmMentionPop"), first = mp && !mp.hidden && mp.querySelector("[data-mention]");
+      if (first){ first.dispatchEvent(new MouseEvent("mousedown", {bubbles: true})); return; }
+      if (!cSend.disabled) cSend.click();
+    });
+    cSend.addEventListener("click", function(){
       var ta = document.getElementById("crmCommentIn"), body = ta.value.trim(); if (!body) return;
       var mentions = CRM.people.filter(function(p){ return body.indexOf("@" + p.full_name) !== -1; }).map(function(p){ return p.id; });
       var btn = this; btn.disabled = true;
-      crmComment(task.id, body, mentions).then(function(){ ta.value = ""; btn.disabled = false; crmActivityLoad(task.id); if (!crmClient()) crmLoadComCount(); }, function(e){ btn.disabled = false; showToast("Não foi possível comentar: " + ((e && e.message) || e), true); });
+      crmComment(task.id, body, mentions).then(function(){ ta.value = ""; sendState(); ta.focus(); crmActivityLoad(task.id); if (!crmClient()) crmLoadComCount(); }, function(e){ btn.disabled = false; showToast("Não foi possível comentar: " + ((e && e.message) || e), true); });
     });
   }
   function val(id){ var e = document.getElementById(id); return e ? e.value.trim() : ""; }
   function readLead(){
     var o = {nome: pid ? "" : whoIn.value.trim()};
-    if (list.lead && !pid){ o.nascimento = val("crmLNasc"); o.responsavel = val("crmLResp"); o.telefone = digitsOnly(val("crmLTel")); o.email = val("crmLEmail"); o.convenio = val("crmLConv"); o.plano = val("crmLPlano"); o.origem = val("crmLOrig"); }
+    if (list.lead && !pid){ o.nascimento = val("crmLNasc"); o.responsavel = val("crmLResp"); o.telefone = digitsOnly(val("crmLTel")); o.email = val("crmLEmail"); o.convenio = val("crmLConv"); o.diagnostico = val("crmLDiag"); o.origem = val("crmLOrig"); if (lead.plano) o.plano = lead.plano; }
     if (list.lead) o.motivoPerda = val("crmLPerda");
     Object.keys(o).forEach(function(k){ if (!o[k]) delete o[k]; });
     return o;
@@ -5851,6 +5885,7 @@ function crmOpenTask(task, opts){
     if (ld.telefone) pre.telefones = [{numero: ld.telefone, nome: ld.responsavel || "", via: "whatsapp"}];
     if (ld.email) pre.emails = [{email: ld.email, nome: ld.responsavel || ""}];
     if (ld.origem) pre.comoConheceu = ld.origem;
+    if (ld.diagnostico) pre.cid = ld.diagnostico;
     var snapshot = {title: val("crmTitleIn"), st: stEl.value, due: val("crmDue"), prio: val("crmPrio"), desc: val("crmDesc"),
       people: Array.prototype.map.call(pPanel.querySelectorAll("input:checked"), function(c){ return c.value; }), lead: ld};
     openPatientModal(null, {prefill: pre, noTreatment: true, onSaved: function(rec){
@@ -5906,6 +5941,17 @@ function crmEventText(e, list){
   if (d.campo === "lista") return who + " moveu a tarefa de lista";
   return who + " alterou a tarefa";
 }
+// "agora há pouco", "23 minutos", "2 horas", "ontem às 14:10" ou a data.
+function crmAgo(iso){
+  if (!iso) return ""; var d = new Date(iso); if (isNaN(d)) return "";
+  var min = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (min < 1) return "agora há pouco";
+  if (min < 60) return min + (min === 1 ? " minuto" : " minutos");
+  var h = Math.floor(min / 60), hm = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+  if (h < 24 && agdIso(d) === agdIso(new Date())) return h + (h === 1 ? " hora" : " horas");
+  if (agdIso(d) === agdIso(agdAddDays(agdStartOfDay(new Date()), -1))) return "ontem às " + hm;
+  return crmWhen(iso);
+}
 function crmWhen(iso){ if (!iso) return ""; var d = new Date(iso); return isNaN(d) ? "" : agdBrDate(agdIso(d)) + " às " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); }
 function crmActivityLoad(taskId){
   var task = CRM.tasks[taskId], list = task ? crmListById(task.list_id) : null;
@@ -5918,7 +5964,7 @@ function crmActivityLoad(taskId){
       if (e.kind !== "comment") return '<div class="crm-feed-h"><span>' + crmEventText(e, list) + '</span><span class="crm-ev-when">' + esc(crmWhen(e.created_at)) + '</span></div>';
       var body = esc(e.body || "");
       CRM.people.forEach(function(p){ body = body.split("@" + esc(p.full_name)).join('<span class="crm-mention">@' + esc(p.full_name) + '</span>'); });
-      return '<div class="crm-ev crm-ev-c"><div class="crm-ev-h">' + crmAv(e.author_id || e.author_name, e.author_name || "?") + '<b>' + esc(e.author_name || "") + '</b><span class="crm-ev-when">' + esc(crmWhen(e.created_at)) + '</span></div><div class="crm-ev-b">' + body.replace(/\n/g, "<br>") + '</div></div>';
+      return '<div class="crm-cmt"><div class="crm-cmt-h">' + crmAv(e.author_id || e.author_name, e.author_name || "?") + '<b>' + esc(e.author_name || "") + '</b><span class="crm-cmt-when" title="' + esc(crmWhen(e.created_at)) + '">' + esc(crmAgo(e.created_at)) + '</span></div><div class="crm-cmt-b">' + body.replace(/\n/g, "<br>") + '</div></div>';
     }).join("") : '<div class="pat-count">Nenhuma atividade ainda.</div>';
     var sb = document.querySelector("#crmSide .crm-side-body"); if (sb) sb.scrollTop = sb.scrollHeight;
   }, function(){ var b3 = document.getElementById("crmFeed"); if (b3) b3.innerHTML = '<div class="pat-count">Não foi possível carregar a atividade.</div>'; });
@@ -18303,9 +18349,9 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>CRM ▾</b> e escolha a lista (Atendimento, Agendas, Fature, Gestão…) ou <b>Minhas tarefas</b> (tudo o que está aberto com você).",
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Tarefa (com o número de comentários), Paciente ou Lead, Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique no status, nos responsáveis ou na prioridade de uma linha para mudar ali mesmo, sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
-      "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o lead tem nascimento, responsável, telefone, e-mail, convênio, plano e origem; <b>Cadastrar paciente</b> abre o cadastro já preenchido e liga a tarefa ao paciente.",
+      "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta, Normal e Baixa.",
-      "A <b>barra lateral Atividade</b> já abre com a janela (pode ser recolhida no »): mostra as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. Numa tarefa nova, a atividade e os comentários aparecem depois de salvar."
+      "A <b>barra lateral Atividade</b> já abre com a janela (pode ser recolhida no »): mostra as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Enter</b> envia o comentário (Shift+Enter quebra a linha); o botão de enviar fica no canto da caixa. Numa tarefa nova, a atividade e os comentários aparecem depois de salvar."
     ],
     rules: [
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
