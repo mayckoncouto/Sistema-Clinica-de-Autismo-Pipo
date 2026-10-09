@@ -3123,3 +3123,6 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
     gravando o TEXTO ("F84.0 Autismo infantil"). Sem documento no banco valem as listas iniciais + o já gravado.
     Migração `supabase/2026-10-09f-diagnosticos-e-origens.sql` (caminhos, `module_for_path`, níveis copiam Pacientes,
     listas iniciais com o que já existe em pacientes, saúde e leads; testada no PGlite). Teste `tests/run_reg_add.js`.
+- (2026-10-09, pedido do usuário) Janela do nível de permissão: os títulos das colunas (Tela, Ver, Incluir, Editar,
+  Excluir) ficam presos no alto ao rolar (`.perm-grid thead th` sticky com fundo, em `injectStyles` de `js/usuarios.js`;
+  vale também para as tabelas de Status e Relatórios da mesma janela).

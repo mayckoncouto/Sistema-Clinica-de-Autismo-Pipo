@@ -121,6 +121,8 @@
       ".perm-grid th,.perm-grid td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:center}" +
       ".perm-grid th:first-child,.perm-grid td:first-child{text-align:left}" +
       ".perm-grid th{font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted)}" +
+      // Títulos das colunas (Tela, Ver, Incluir, Editar, Excluir) presos no alto da janela ao rolar.
+      ".perm-grid thead th{position:sticky;top:-4px;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--line)}" +
       ".perm-grid td small{display:block;color:var(--muted);font-size:10.5px;font-weight:500}" +
       ".perm-grid tr.perm-group td{background:var(--surface-2);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:left}" +
       ".perm-grid input{width:16px;height:16px;cursor:pointer}" +
