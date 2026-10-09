@@ -166,9 +166,10 @@ const path = require('path');
   await page.waitForSelector('#ovCrm');
   check('finalized task cannot be deleted (Excluir disabled)?', await page.$eval('#crmDel', (e) => e.disabled));
   await page.click('#crmCancel');
+  await page.waitForSelector('#ovCrm', {state: 'detached'});
 
   // Lead → Cadastrar paciente: abre o cadastro preenchido e liga a tarefa ao paciente
-  await page.click('#crmAdd'); await page.waitForSelector('#ovCrm');
+  await page.click('#crmAdd'); await page.waitForSelector('#ovCrm'); await page.waitForTimeout(400);
   await page.fill('#crmTitleIn', 'Agendar avaliação');
   await page.fill('#crmWho', 'Novo Lead Teste'); await page.dispatchEvent('#crmWho', 'input');
   await setv('#crmLNasc', '2020-05-10');
