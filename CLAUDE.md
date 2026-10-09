@@ -3133,3 +3133,8 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   (`group` no 1º item de cada grupo); `allModules()` põe o CRM antes do Menu Acesso. Depois vêm as tabelas de Status e
   Relatórios. Item novo de permissão: colocar no grupo do assunto.
 - Produção (2026-10-09): `2026-10-09f-diagnosticos-e-origens` rodada (confirmado pelo usuário: "Feito").
+- (2026-10-09, pedido do usuário, REGRA FIXA) **Altura única dos campos de uma linha** (busca, seleção e cadastro),
+  em todo o sistema: **38px no computador, 44px no celular** (variável `--field-h`, bloco "Altura única dos campos de
+  uma linha" no fim do `<style>`, com `!important`): inputs de texto/e-mail/telefone/número/senha/busca/data/hora,
+  `select` simples, `.dp-btn` (listas, datas, combos), `.ms-btn`, `.crm-pager-btn`. Exceção: a grade de objetivos do
+  Plano (`.pl-tbl`, linhas compactas pedidas antes). Campo novo herda sozinho; não definir altura própria.
