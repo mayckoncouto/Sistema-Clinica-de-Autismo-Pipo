@@ -313,7 +313,8 @@ div.ag-obj-head{cursor:default}
 .crm-prio-btn:disabled{cursor:default}
 /* Lista do CRM: botões de Status, Responsáveis, Vencimento e Prioridade ocupam a célula toda. */
 .crm-main td:has(> .crm-prio-btn:not(:disabled)){cursor:pointer}
-.crm-main td > .crm-prio-btn{width:100%;justify-content:flex-start;min-height:32px;text-align:left}
+.crm-main td > .crm-prio-btn{width:100%;justify-content:flex-start;min-height:32px;text-align:left;margin-block:-7px}
+/* a célula inteira é o botão, mas a linha fica com a mesma altura das listas de cadastro */
 .crm-main td:hover > .crm-prio-btn:not(:disabled){background:var(--surface-2)}
 .crm-main td > .crm-due-edit{display:block}
 .crm-main td > .crm-due-edit .dp-btn{width:100%;min-height:32px;padding:4px 8px}
@@ -626,6 +627,15 @@ div.ag-obj-head{cursor:default}
 .crm-cmt-h .crm-av{width:28px;height:28px;font-size:10.5px}
 .crm-cmt-h b{font-size:13.5px;font-weight:700;color:var(--ink)}
 .crm-cmt-when{font-size:12px;color:var(--muted);white-space:nowrap}
+.crm-cmt-acts{margin-left:auto;display:flex;gap:2px;opacity:0;transition:opacity .12s}
+.crm-cmt:hover .crm-cmt-acts,.crm-cmt:focus-within .crm-cmt-acts{opacity:1}
+@media (hover:none){.crm-cmt-acts{opacity:1}}
+.crm-cmt-act{border:0;background:none;font:inherit;font-size:12px;color:var(--muted);padding:2px 6px;border-radius:6px;cursor:pointer}
+.crm-cmt-act:hover{background:var(--surface-2);color:var(--ink)}
+.crm-cmt-act.del:hover{color:var(--danger,#c0392b)}
+.crm-cmt.editing .crm-cmt-acts{display:none}
+.crm-cmt-ed{width:100%;box-sizing:border-box;resize:vertical;font:inherit;font-size:13px}
+.crm-cmt-ed-bar{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
 .crm-cmt-b{font-size:13.5px;line-height:1.55;color:var(--ink);overflow-wrap:anywhere}
 .crm-mention-pop{position:absolute;left:0;bottom:100%;margin-bottom:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);z-index:5;min-width:220px;max-height:220px;overflow:auto}
 .crm-mention-pop button{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px;text-align:left}
@@ -5598,7 +5608,13 @@ function crmEnsureChannel(){
       else if (p.new) CRM.tasks[p.new.id] = p.new;
       crmLater();
     })
-    .on("postgres_changes", {event: "INSERT", schema: "public", table: "task_events"}, function(p){
+    .on("postgres_changes", {event: "*", schema: "public", table: "task_events"}, function(p){
+      // Comentário editado ou excluído: relê a atividade aberta (o DELETE só traz o id) e o contador.
+      if (p.eventType === "UPDATE" || p.eventType === "DELETE"){
+        if (CRM.openId) crmActivityLoad(CRM.openId);
+        if (p.eventType === "DELETE"){ clearTimeout(CRM.comCountT); CRM.comCountT = setTimeout(crmLoadComCount, 400); }
+        return;
+      }
       var ev = p.new; if (!ev) return;
       if (CRM.openId === ev.task_id) crmActivityLoad(ev.task_id);
       if (ev.kind === "comment"){ CRM.comCount = CRM.comCount || {}; CRM.comCount[ev.task_id] = (CRM.comCount[ev.task_id] || 0) + 1; crmLater(); }
@@ -5668,6 +5684,63 @@ function crmComment(taskId, body, mentions){
     return Promise.resolve();
   }
   return c.from("task_events").insert({task_id: taskId, kind: "comment", body: body, mentions: mentions}).then(function(r){ if (r.error) throw r.error; });
+}
+// Editar / excluir comentário: só o autor edita; o autor ou o Administrador exclui.
+function crmCommentEdit(id, body, mentions){
+  var c = crmClient();
+  if (!c){ CRM.mem.events.forEach(function(e){ if (e.id === id){ e.body = body; e.mentions = mentions; e.edited_at = new Date().toISOString(); } }); return Promise.resolve(); }
+  return c.from("task_events").update({body: body, mentions: mentions}).eq("id", id).select("id").then(function(r){
+    if (r.error) throw r.error;
+    if (!(r.data || []).length) throw new Error("o banco ainda não permite editar comentários (rode o SQL 2026-10-09c).");
+  });
+}
+function crmCommentDelete(id){
+  var c = crmClient();
+  if (!c){ CRM.mem.events = CRM.mem.events.filter(function(e){ return e.id !== id; }); return Promise.resolve(); }
+  return c.from("task_events").delete().eq("id", id).select("id").then(function(r){
+    if (r.error) throw r.error;
+    if (!(r.data || []).length) throw new Error("sem permissão para excluir este comentário.");
+  });
+}
+function crmMentionsOf(body){ return CRM.people.filter(function(p){ return body.indexOf("@" + p.full_name) !== -1; }).map(function(p){ return p.id; }); }
+// Liga os botões Editar / Excluir dos comentários do feed. `pending` = lista da tarefa nova
+// (comentários ainda não enviados: muda só na memória).
+function crmCommentActionsWire(feed, taskId, pending, rerender){
+  if (!feed || feed.__cmtWired) return; feed.__cmtWired = true;
+  feed.addEventListener("click", function(ev){
+    var b = ev.target.closest("[data-cmt-act]"); if (!b) return;
+    var card = b.closest(".crm-cmt"), id = card.getAttribute("data-cmt-id"), pi = card.getAttribute("data-pend");
+    var act = b.getAttribute("data-cmt-act");
+    if (act === "del"){
+      confirmDialog({title: "Excluir comentário", message: "Excluir este comentário?", confirmLabel: "Confirmar exclusão"}).then(function(ok){
+        if (!ok) return;
+        if (pi !== null){ pending.splice(+pi, 1); rerender(); return; }
+        crmCommentDelete(id).then(function(){ crmActivityLoad(taskId); crmLoadComCount(); }, function(e){ showToast("Não foi possível excluir: " + ((e && e.message) || e), true); });
+      });
+      return;
+    }
+    if (act === "edit"){
+      var bd = card.querySelector(".crm-cmt-b"); if (!bd || card.classList.contains("editing")) return;
+      var old = pi !== null ? pending[+pi].body : (card.__body || "");
+      card.classList.add("editing");
+      bd.innerHTML = '<textarea class="crm-cmt-ed" rows="3"></textarea><div class="crm-cmt-ed-bar"><button type="button" class="btn ghost" data-cmt-ed="cancel">Cancelar</button><button type="button" class="btn primary" data-cmt-ed="save">Salvar</button></div>';
+      var ta = bd.querySelector("textarea"); ta.value = old; ta.focus(); ta.setSelectionRange(old.length, old.length);
+      function cancel(){ if (pi !== null) rerender(); else crmActivityLoad(taskId); }
+      function save(){
+        var nb = ta.value.trim();
+        if (!nb){ showToast("O comentário não pode ficar vazio. Para tirar, use Excluir.", true); return; }
+        if (nb === old){ cancel(); return; }
+        if (pi !== null){ pending[+pi] = {body: nb, mentions: crmMentionsOf(nb)}; rerender(); return; }
+        crmCommentEdit(id, nb, crmMentionsOf(nb)).then(function(){ crmActivityLoad(taskId); }, function(e){ showToast("Não foi possível editar: " + ((e && e.message) || e), true); });
+      }
+      bd.querySelector('[data-cmt-ed="cancel"]').addEventListener("click", cancel);
+      bd.querySelector('[data-cmt-ed="save"]').addEventListener("click", save);
+      ta.addEventListener("keydown", function(e){
+        if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); cancel(); }
+        else if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); save(); }
+      });
+    }
+  });
 }
 function crmMarkRead(taskId){
   var now = new Date().toISOString();
@@ -6258,7 +6331,8 @@ function crmOpenTask(task, opts){
   function pendingRender(){
     var feed = document.getElementById("crmFeed"); if (!feed) return;
     feed.innerHTML = '<div class="pat-count">A criação e as alterações aparecem aqui depois de salvar. Comentários escritos agora são enviados junto com a tarefa.</div>' +
-      pendingCom.map(function(c){ return crmCommentHtml({body: c.body, author_id: crmMe(), author_name: crmPersonName(crmMe())}, "enviado ao salvar"); }).join("");
+      pendingCom.map(function(c, i){ return crmCommentHtml({body: c.body, author_id: crmMe(), author_name: crmPersonName(crmMe())}, "enviado ao salvar", i); }).join("");
+    crmCommentActionsWire(feed, null, pendingCom, pendingRender);
     var sb = document.querySelector("#crmSide .crm-side-body"); if (sb) sb.scrollTop = sb.scrollHeight;
   }
   if (isNew) crmMentionWire();
@@ -6277,7 +6351,7 @@ function crmOpenTask(task, opts){
     });
     cSend.addEventListener("click", function(){
       var ta = document.getElementById("crmCommentIn"), body = ta.value.trim(); if (!body) return;
-      var mentions = CRM.people.filter(function(p){ return body.indexOf("@" + p.full_name) !== -1; }).map(function(p){ return p.id; });
+      var mentions = crmMentionsOf(body);
       var btn = this;
       if (isNew){ pendingCom.push({body: body, mentions: mentions}); ta.value = ""; sendState(); ta.focus(); pendingRender(); return; }
       btn.disabled = true;
@@ -6376,10 +6450,15 @@ function crmAgo(iso){
   return crmWhen(iso);
 }
 function crmWhen(iso){ if (!iso) return ""; var d = new Date(iso); return isNaN(d) ? "" : agdBrDate(agdIso(d)) + " às " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); }
-function crmCommentHtml(e, whenText){
+function crmCommentHtml(e, whenText, pendIdx){
   var body = esc(e.body || "");
+  var mine = e.author_id === crmMe(), pend = pendIdx !== undefined && pendIdx !== null;
+  var acts = (mine ? '<button type="button" class="crm-cmt-act" data-cmt-act="edit" title="Editar comentário">Editar</button>' : '') +
+    ((mine || (crmIsAdmin() && !pend)) ? '<button type="button" class="crm-cmt-act del" data-cmt-act="del" title="Excluir comentário">Excluir</button>' : '');
   CRM.people.forEach(function(p){ body = body.split("@" + esc(p.full_name)).join('<span class="crm-mention">@' + esc(p.full_name) + '</span>'); });
-  return '<div class="crm-cmt' + (whenText ? ' pending' : '') + '"><div class="crm-cmt-h"><b>' + esc(e.author_name || "") + '</b><span class="crm-cmt-when" title="' + esc(whenText || crmWhen(e.created_at)) + '">' + esc(whenText || crmAgo(e.created_at)) + '</span></div><div class="crm-cmt-b">' + body.replace(/\n/g, "<br>") + '</div></div>';
+  return '<div class="crm-cmt' + (whenText ? ' pending' : '') + '"' + (pend ? ' data-pend="' + pendIdx + '"' : (e.id ? ' data-cmt-id="' + esc(e.id) + '"' : '')) + '><div class="crm-cmt-h"><b>' + esc(e.author_name || "") + '</b><span class="crm-cmt-when" title="' + esc(whenText || crmWhen(e.created_at)) + '">' + esc(whenText || crmAgo(e.created_at)) + '</span>' +
+    (e.edited_at ? '<span class="crm-cmt-when" title="Editado em ' + esc(crmWhen(e.edited_at)) + '">(editado)</span>' : '') +
+    (acts ? '<span class="crm-cmt-acts">' + acts + '</span>' : '') + '</div><div class="crm-cmt-b">' + body.replace(/\n/g, "<br>") + '</div></div>';
 }
 function crmActivityLoad(taskId){
   var task = CRM.tasks[taskId], list = task ? crmListById(task.list_id) : null;
@@ -6397,6 +6476,8 @@ function crmActivityLoad(taskId){
       if (e.kind !== "comment") return '<div class="crm-feed-h"><span>' + crmEventText(e, list) + '</span><span class="crm-ev-when">' + esc(crmWhen(e.created_at)) + '</span></div>';
       return crmCommentHtml(e);
     }).join("") : '<div class="pat-count">Nenhuma atividade ainda.</div>';
+    sorted.forEach(function(e){ if (e.kind === "comment" && e.id){ var cd = feed.querySelector('[data-cmt-id="' + (window.CSS && CSS.escape ? CSS.escape(e.id) : e.id) + '"]'); if (cd) cd.__body = e.body || ""; } });
+    crmCommentActionsWire(feed, taskId, null, null);
     var sb = document.querySelector("#crmSide .crm-side-body"); if (sb) sb.scrollTop = sb.scrollHeight;
   }, function(){ var b3 = document.getElementById("crmFeed"); if (b3) b3.innerHTML = '<div class="pat-count">Não foi possível carregar a atividade.</div>'; });
 }
@@ -18853,7 +18934,7 @@ var HELP_TOPICS = [
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
-      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos: mostra as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Enter</b> envia o comentário (Shift+Enter quebra a linha); o botão de enviar fica no canto da caixa. Numa tarefa nova, a atividade e os comentários aparecem depois de salvar."
+      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos: mostra as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Enter</b> envia o comentário (Shift+Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (Enter salva, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],
     rules: [
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",

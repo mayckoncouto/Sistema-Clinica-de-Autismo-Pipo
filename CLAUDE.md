@@ -2989,3 +2989,14 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   `crmFillFilters` sempre grava `.value` (o botão do filtro Responsável aparecia vazio).
   Janela da tarefa mais estreita (com a lateral 1060px; nome do campo em 96px, colunas a 14px).
 - (2026-10-09, pedido do usuário) Janela da tarefa (computador): menos espaço entre a Descrição e "Dados do lead" (`.crm-props` sem margem embaixo, `#crmDesc` em bloco, `.crm-sec` com 4px; antes ~44px, agora 16px).
+- (2026-10-09, pedidos do usuário) **Comentário do CRM: editar e excluir.** Nos cartões do feed, botões Editar /
+  Excluir (`.crm-cmt-acts`, aparecem ao passar o mouse; no toque sempre): editar só o próprio comentário (caixa
+  `.crm-cmt-ed` no lugar do texto, Enter salva, Esc cancela, "(editado)" com `edited_at`), excluir o próprio ou,
+  para o Administrador, de qualquer pessoa (confirmação). `crmCommentEdit`, `crmCommentDelete`,
+  `crmCommentActionsWire(feed, taskId, pending, rerender)` (na tarefa nova mexe só em `pendingCom`),
+  `crmMentionsOf`. Tempo real de `task_events` com UPDATE/DELETE relê a atividade aberta e o contador.
+  Migração `supabase/2026-10-09c-crm-editar-comentario.sql` (coluna `edited_at`, política `task_events_update` só
+  para o autor, gatilho `task_events_edit_guard` deixa mudar só texto/menções; testada no PGlite). Sem a migração
+  editar avisa "rode o SQL 2026-10-09c".
+- (2026-10-09, pedido do usuário) Linhas da lista do CRM com a altura das listas de cadastro (40px): botões das
+  células com `margin-block:-7px` (continuam ocupando a célula toda).

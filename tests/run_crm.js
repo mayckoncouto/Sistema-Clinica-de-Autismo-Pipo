@@ -137,6 +137,20 @@ const path = require('path');
   await page.fill('#crmCommentIn', 'Mãe confirmou');
   await page.press('#crmCommentIn', 'Enter'); await page.waitForTimeout(250);
   check('Enter sends the comment (card with name and time)?', /Mãe confirmou/.test(await page.$eval('#crmFeed > :last-child', (e) => e.textContent)) && !!(await page.$('#crmFeed .crm-cmt .crm-cmt-when')) && (await page.$eval('#crmCommentIn', (e) => e.value)) === '' && (await page.$eval('#crmCommentSend', (b) => b.disabled)));
+  // Editar e excluir o próprio comentário
+  await page.hover('#crmFeed .crm-cmt:last-child');
+  await page.click('#crmFeed .crm-cmt:last-child [data-cmt-act="edit"]');
+  await page.fill('#crmFeed .crm-cmt-ed', 'Mãe confirmou às 10h');
+  await page.press('#crmFeed .crm-cmt-ed', 'Enter'); await page.waitForTimeout(250);
+  const edited = await page.$eval('#crmFeed .crm-cmt:last-child', (e) => e.textContent);
+  check('edit own comment: new text and "(editado)"?', /Mãe confirmou às 10h/.test(edited) && /\(editado\)/.test(edited), edited);
+  const nC = await page.$$eval('#crmFeed .crm-cmt', (r) => r.length);
+  await page.hover('#crmFeed .crm-cmt:last-child');
+  await page.click('#crmFeed .crm-cmt:last-child [data-cmt-act="del"]');
+  await page.click('#cfOk'); await page.waitForTimeout(250);
+  check('delete own comment (with confirmation)?', (await page.$$eval('#crmFeed .crm-cmt', (r) => r.length)) === nC - 1 && !/Mãe confirmou/.test(await page.$eval('#crmFeed', (e) => e.textContent)));
+  await page.fill('#crmCommentIn', 'Mãe confirmou');
+  await page.press('#crmCommentIn', 'Enter'); await page.waitForTimeout(250);
   check('side panel always visible, no collapse/open buttons, no Detalhes/Atividade tabs on desktop?', !(await page.$eval('#crmSide', (e) => e.hidden)) && !(await page.$('#crmSideClose')) && !(await page.$('#crmSideOpen')) && (await page.$eval('#crmMTabs', (e) => getComputedStyle(e).display)) === 'none');
   // Cancelado pede o motivo; finalizada some da lista e não pode ser excluída
   await setv('#crmSt', 'cancelado');
