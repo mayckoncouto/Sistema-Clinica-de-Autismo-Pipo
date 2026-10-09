@@ -2826,3 +2826,8 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   dividem a altura (`grid-template-rows: repeat(semanas, minmax(0,1fr))`, antes mínimo de 104px por semana) e cada dia
   rola por dentro (`.crm-cal-day` overflow hidden, `.crm-cal-items` overflow auto). Tarefa no dia 20% mais alta
   (`.crm-cal-task` padding 5px 8px, line-height 1.35).
+- 2026-10-09 (pedido do usuário, celular) Detalhes do Agendamento: nome na 1ª linha, idade embaixo
+  (`.agd-det-age`, `patientAgeYears`), depois os botões Agendamento/Saúde/Tratamento na largura toda (no
+  `@media (max-width:760px)` `.agd-det-top` em coluna, `.agd-det-seg` com botões iguais); Horários do
+  tratamento em quadrinhos, dois dias por linha (`agdDetHoursHtml`, `.agd-det-hours`). Status (`#agdDetStatus`
+  e `#agdStatus`) saiu de `DP_COMBO_SEL`: é lista só de escolher (não abre teclado no celular).

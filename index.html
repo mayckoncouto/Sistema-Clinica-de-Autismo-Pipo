@@ -827,6 +827,15 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .agd-det[hidden]{display:none}
 .agd-det-modal .agd-det-name{flex:1;min-width:0;font-size:16px;margin:0;line-height:1.25;align-items:flex-start}
 .agd-det-modal .agd-det-name .pcolor-dot{margin-top:6px}
+.agd-det-who{flex:1;min-width:0}
+.agd-det-age{font-size:12.5px;color:var(--muted);font-weight:600;margin:3px 0 0 18px}
+.agd-det-hours{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px}
+.agd-det-hours span{white-space:nowrap}
+@media (max-width:760px){
+  .agd-det-top{flex-direction:column;align-items:stretch;gap:10px}
+  .agd-det-seg{margin-left:0;display:flex;width:100%}
+  .agd-det-seg button{flex:1;padding:8px 6px;font-size:13px}
+}
 .agd-det{display:grid;grid-template-columns:auto 1fr;column-gap:14px;row-gap:7px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;font-size:13px}
 .agd-det .k{color:var(--muted);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;padding-top:2px;white-space:nowrap}
 .agd-det .v{color:var(--ink);min-width:0;overflow-wrap:anywhere}
@@ -12859,6 +12868,11 @@ function agdDaySummary(iso){
 
 // ---- popup "Detalhes do Agendamento" (clique num atendimento; "Editar agendamento" para quem pode editar) ----
 // Mostra os dados, o botão "Registrar / Editar Atendimento" (prontuário) e o Status.
+// Horários do tratamento nos Detalhes: um dia por quadrinho, dois por linha.
+function agdDetHoursHtml(txt){
+  var parts = String(txt || "").split(" · ").filter(Boolean);
+  return parts.length ? '<div class="agd-det-hours">' + parts.map(function(t){ return '<span>' + esc(t) + '</span>'; }).join("") + '</div>' : '';
+}
 function agdOpenDetails(row){
   var kind = bookingKind(row);
   var pat = !kind ? findPatientAt(row, row.date) : null;
@@ -12873,6 +12887,7 @@ function agdOpenDetails(row){
   var stLocked = agdFinalLocked(curStatus);
   var canChange = showStatus && !stLocked && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
   function line(label, value){ return '<div class="k">' + label + '</div><div class="v">' + (value ? esc(value) : '<span class="pt-muted">—</span>') + '</div>'; }
+  function lineHtml(label, html){ return '<div class="k">' + label + '</div><div class="v">' + (html || '<span class="pt-muted">—</span>') + '</div>'; }
   var host = document.getElementById("modalHost");
   host.innerHTML =
     '<div class="overlay" id="ovAgdDet"><div class="modal agd-det-modal">' +
@@ -12880,7 +12895,8 @@ function agdOpenDetails(row){
         '<button class="modal-close" id="agdDetClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         (pat ? pickupRetHtml(pat) : '') +
-        '<div class="agd-det-top"><div class="agd-det-name">' + (col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + '<span>' + esc(name) + '</span></div>' +
+        '<div class="agd-det-top"><div class="agd-det-who"><div class="agd-det-name">' + (col ? '<span class="pcolor-dot" style="background:' + col + '"></span>' : '') + '<span>' + esc(name) + '</span></div>' +
+          (pat && patientAgeYears(pat) != null ? '<div class="agd-det-age">' + patientAgeYears(pat) + (patientAgeYears(pat) === 1 ? ' ano' : ' anos') + '</div>' : '') + '</div>' +
           (pat ? '<div class="seg agd-det-seg" id="agdDetSeg" role="tablist">' + [["ag", "Agendamento"], ["sa", "Saúde"], ["tr", "Tratamento"]].filter(function(t){ return t[0] !== "sa" || healthCanSee(); }).map(function(t, i){
             return '<button type="button" data-det="' + t[0] + '"' + (i ? '' : ' class="active"') + ' role="tab" aria-selected="' + (i ? 'false' : 'true') + '">' + t[1] + '</button>'; }).join("") + '</div>' : '') +
           '</div>' +
@@ -12895,7 +12911,7 @@ function agdOpenDetails(row){
           line("Diagnóstico (CID)", pat.cid || "") + line("Alergias", pat.alergias || "") +
           line("Medicações em uso", pat.medicacoes || "") + line("Restrições alimentares", pat.restricoes || "") + '</div>' : '') +
           '<div class="agd-det" data-det-pane="tr" hidden>' +
-          line("Plano", pat.plano || "") + line("ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) + line("Horários", trHoursText(pat)) + '</div>' : '') +
+          line("Plano", pat.plano || "") + line("ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) + lineHtml("Horários", agdDetHoursHtml(trHoursText(pat))) + '</div>' : '') +
         (pat ? pickupProtHtml(pat, agdIsLastOfDay(row)) : '') +
         '<div id="agdDetGoals"></div>' +
         (showStatus ? '<div class="field" style="margin-top:12px"><label for="agdDetStatus">Status</label><select id="agdDetStatus"' + (canChange ? '' : ' disabled') + '>' +
@@ -19740,7 +19756,7 @@ function dpEnhanceDate(el){
 // Lista de horários: <select> de horários (usa as opções dele) ou <input type="time">.
 // Listas de cadastro (paciente, profissional, especialidade, serviço, convênio,
 // sala, status, motivo): campo de digitar com a lista flutuante (dpEnhanceCombo).
-var DP_COMBO_SEL = "[data-combo], .reg-pick select, #frPat, #frSpec, #frProf, #agdPickSel, #rpProf, #rpStatus, #rpServ, #rpConv, #ctMot, #bkService, .spec-prof, #profSpecialty, .rm-prof-select, #agdDetStatus, #agdStatus, #agdServ, #agdProf, #agdSala, #fxPat, #fxNew, #swFrom, #swTo, #trPat, #trMot, .cv-spec";
+var DP_COMBO_SEL = "[data-combo], .reg-pick select, #frPat, #frSpec, #frProf, #agdPickSel, #rpProf, #rpStatus, #rpServ, #rpConv, #ctMot, #bkService, .spec-prof, #profSpecialty, .rm-prof-select, #agdServ, #agdProf, #agdSala, #fxPat, #fxNew, #swFrom, #swTo, #trPat, #trMot, .cv-spec";
 function dpEnhanceCombo(el){
   var b = document.createElement("div");
   b.className = "dp-btn dp-date dp-combo";   // sem copiar as classes do <select>: o código as usa para achar o campo
