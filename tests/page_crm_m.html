@@ -1,10 +1,111 @@
 <!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex, nofollow">
-<!-- APP-HEAD:START -->
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8">
+<script>
+// O app abre em "Início"; os testes começam no Planner (como antes).
+if (!location.hash) history.replaceState(null, "", location.pathname + location.search + "#planner");
+window.__STORE__ = {
+  "config/rooms": { list: [
+    { id:"r1", name:"Sala Teste", color:"teal", therapists:[ {id:"r1-t1", name:"Ana", professionalId:"ana-terapeuta"}, {id:"r1-t2", name:"Bia", professionalId:"bia-terapeuta"} ] },
+    { id:"r2", name:"Sala Azul", color:"#2255aa", therapists:[ {id:"r2-t1", name:"Caio"} ] },
+    { id:"coord", name:"Coordenador", color:"slate", group:true, therapists:[ {id:"coord-t1", name:"Ana", professionalId:"ana-terapeuta"} ] }
+  ]},
+  "config/specialties": { list: [ {id:"fono", name:"Fonoaudiologia", sigla:"FN"}, {id:"psico", name:"Psicologia"} ] },
+  "config/convenios": { list: [ {id:"unimed", name:"Unimed"}, {id:"bradesco-saude", name:"Bradesco Saúde"} ] },
+  "config/professionals": { list: [ {id:"ana-terapeuta", name:"Ana", specialtyId:"psico", complementares:["fono"]}, {id:"bia-terapeuta", name:"Bia", specialtyId:"fono", complementares:["psico"]}, {id:"andrelisa-terapeuta", name:"Andrelisa", specialtyId:"psico", complementares:["fono"]} ] },
+  "patients/all": { list: [
+    {id:"paciente-um", nome:"Paciente Um", idade:6, aba:"", nascimento:"", fono:4, convenio:"Unimed"},
+    {id:"ana-azul", nome:"Ana Azul", idade:3, aba:"Sim", nascimento:"", convenio:"Convênio Antigo"},
+    {id:"bruno-verde", nome:"Bruno Verde", idade:7, aba:"Sim", nascimento:"", specHours:[{specId:"psico", hours:2},{specId:"fono", hours:3}]},
+    {id:"carla-laranja", nome:"Carla Laranja", idade:12, aba:"Sim", nascimento:""},
+    {id:"duda-vermelho", nome:"Duda Vermelho", idade:8, aba:"Não", nascimento:""},
+    {id:"eva-sem-idade", nome:"Eva Sem Idade", idade:"", aba:"", nascimento:""}
+  ] },
+  "schedule/seg-1": { bookings: {
+    "07:20|r1|r1-t1": {patient:"Paciente Um", note:""},
+    "16:10|coord|coord-t1": {patient:"Fonoaudiologia ABA", note:""},
+    "08:40|r1|r1-t2": {patient:"Bloqueado", note:"", blocked:true},
+    "11:20|coord|coord-t1": {patient:"Reunião Clínica", note:""},
+    "10:40|coord|coord-t1": {patient:"Bloqueado", note:""}
+  }},
+  "schedule/ter-1": { bookings: {
+    "07:20|r1|r1-t1": {patient:"Bruno Verde", note:""}
+  }},
+  "schedule/seg-2": { bookings: {
+    "07:20|r1|r1-t1": {patient:"Carla Laranja", note:""}
+  }}
+};
+window.__LOG__ = [];
+
+// Listeners are shared per path (not per doc() call) — matching real Firestore-like
+// semantics, where onSnapshot subscriptions registered through one doc() reference
+// still hear writes made through a different doc() call for the same path (e.g. a
+// different part of the app, or a simulated "another user", writing concurrently).
+window.__LISTENERS__ = window.__LISTENERS__ || {};
+function makeDocRef(path){
+  window.__LISTENERS__[path] = window.__LISTENERS__[path] || [];
+  var listeners = window.__LISTENERS__[path];
+  function currentSnap(){
+    var data = window.__STORE__[path];
+    return {
+      exists: data !== undefined,
+      data: function(){ return data; }
+    };
+  }
+  return {
+    onSnapshot: function(cb, errCb){
+      listeners.push(cb);
+      setTimeout(function(){ cb(currentSnap()); }, 0);
+      return function(){ var i = listeners.indexOf(cb); if (i!==-1) listeners.splice(i,1); };
+    },
+    get: function(){
+      return Promise.resolve(currentSnap());
+    },
+    set: function(obj){
+      window.__LOG__.push({op:"set", path:path, obj: JSON.parse(JSON.stringify(obj))});
+      window.__STORE__[path] = obj;
+      listeners.forEach(function(cb){ cb(currentSnap()); });
+      return Promise.resolve();
+    },
+    update: function(obj){
+      window.__LOG__.push({op:"update", path:path, obj: JSON.parse(JSON.stringify(obj))});
+      var cur = window.__STORE__[path] || {};
+      var merged = Object.assign({}, cur, obj);
+      window.__STORE__[path] = merged;
+      listeners.forEach(function(cb){ cb(currentSnap()); });
+      return Promise.resolve();
+    },
+    delete: function(){
+      delete window.__STORE__[path];
+      listeners.forEach(function(cb){ cb(currentSnap()); });
+      return Promise.resolve();
+    }
+  };
+}
+
+window.claude = {
+  use: function(name){
+    if (name === "db"){
+      return Promise.resolve({
+        doc: function(path){ return makeDocRef(path); }
+      });
+    }
+    if (name === "user"){
+      return Promise.resolve({
+        isOwner: function(){ return true; },
+        canEdit: function(){ return true; },
+        can: function(){ return Promise.resolve(true); }
+      });
+    }
+    return Promise.resolve(null);
+  }
+};
+window.onerror = function(msg, src, line, col, err){
+  window.__LOG__.push({op:"error", msg: msg, line: line, col: col, stack: err && err.stack});
+};
+</script>
+</head>
+<body>
+
 <script>
 /* Cor dos botões da clínica (cadastro da Clínica → corBotoes/corTexto) aplicada
  * já na carga, antes do login: fica guardada no navegador
@@ -2190,12 +2291,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .controls{gap:8px}
 }
 </style>
-<!-- APP-HEAD:END -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="/js/pipo-supabase.js"></script>
-</head>
-<body>
-<!-- APP-BODY:START -->
+
 
 <div class="app">
 
@@ -2765,6 +2861,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
 <script>
 (function(){
 "use strict";
+window.__ev = function(x){ return eval(x); };
+
 
 /* ---------------- static structure ---------------- */
 var DAYS = [
@@ -23053,7 +23151,5 @@ var IO_KINDS = {
 
 })();
 </script>
-<!-- APP-BODY:END -->
-<script src="/js/usuarios.js"></script>
-</body>
-</html>
+
+</body></html>

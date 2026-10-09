@@ -3011,3 +3011,6 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   igual aos filtros (`.crm-pager` > `button.dp-btn.dp-plain.crm-pager-btn`, linha inteira) com o status da tela
   (bolinha, nome, quantidade); tocar abre a janela de baixo "Status" (`crmPop`, `.crm-pg-menu`) e escolher desliza
   até ele. `crmBoardPager(host, items, list)`.
+- (2026-10-09, pedido do usuário, celular) Lista do CRM no celular: **Status, Paciente (ou lead), Venc., Prio.** (a
+  Tarefa saiu). Lista esconde as colunas 3, 4, 5; Minhas tarefas esconde 2, 4, 5, 6. Paciente numa linha com "…"
+  (etiqueta "lead" oculta), Venc. com 82px (data inteira dd/mm/aa), Prio. 44px, botões das células sem padding lateral.

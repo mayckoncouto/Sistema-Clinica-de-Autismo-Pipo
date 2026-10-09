@@ -29,9 +29,11 @@ const path = require('path');
     crmRender(); return 1; })()`);
   await page.waitForTimeout(200);
   const vis = await page.$$eval('#crmHost .pat-table thead th', (r) => r.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.textContent.trim()));
-  check('list shows only Status, Tarefa, Vencimento, Prioridade?', vis.length === 4 && /Status/i.test(vis[0]) && /Tarefa/i.test(vis[1]), vis);
-  const short = await page.$eval('#crmHost .crm-t-sm', (e) => [e.textContent, getComputedStyle(e).display]);
-  check('task title cut to 4 words on the phone?', short[0] === 'Ligar para a família…' && short[1] !== 'none', short);
+  check('list shows only Status, Paciente, Vencimento, Prioridade?', vis.length === 4 && /Status/i.test(vis[0]) && /Paciente/i.test(vis[1]), vis);
+  const cellsOk = await page.evaluate(() => { const r = document.querySelector('#crmHost tbody tr'), tds = [...r.children].filter((t) => getComputedStyle(t).display !== 'none');
+    const due = tds[2].querySelector('.crm-prio-btn'), pr = tds[3].querySelector('svg');
+    return {who: tds[1].textContent.trim(), oneLine: tds[1].getBoundingClientRect().height < 50, dueFits: due.scrollWidth <= due.clientWidth + 1, due: due.textContent.trim(), flag: !!pr && pr.getBoundingClientRect().right <= tds[3].getBoundingClientRect().right + 1}; });
+  check('patient name in one line, full date and the flag visible?', /Criança Teste/.test(cellsOk.who) && cellsOk.oneLine && cellsOk.dueFits && /\d\d\/\d\d\/\d\d/.test(cellsOk.due) && cellsOk.flag, JSON.stringify(cellsOk));
   check('page has no sideways scroll?', (await ev('document.documentElement.scrollWidth')) <= 390);
   // Menu ☰: só a tela aberta marcada, grupo dela aberto e em destaque
   await page.click('#mnavBtn');
