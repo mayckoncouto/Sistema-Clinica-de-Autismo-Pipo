@@ -115,10 +115,16 @@ const path = require('path');
   await page.waitForTimeout(400);
   const r4 = await probe('#tab-agenda .agd-toolbar');
   check('Agenda: date field opens the bottom window?', r4.tested > 0 && !r4.bad.length, JSON.stringify(r4));
+  // Salas e Grupos: a janela da sala também usa a janela de baixo
   await page.evaluate(() => { document.querySelector('#mainTabs button[data-tab="salas"]').click(); });
   await page.waitForTimeout(250);
-  const salas = await page.evaluate(() => { const s = document.querySelector('#tab-salas select'); return s ? typeof useSheet === 'function' && !useSheet(s) : true; });
-  check('Salas/Grupos keep the floating list?', salas);
+  const addRoom = await page.$('#tab-salas .pat-toolbar .btn.primary');
+  if (addRoom && await addRoom.isVisible()){
+    await addRoom.click(); await page.waitForTimeout(400);
+    const r5 = await probe('#ovRoom');
+    check('Salas window: selection fields open the bottom window?', r5.tested > 0 && !r5.bad.length, JSON.stringify(r5));
+    await page.evaluate(() => { document.getElementById('modalHost').innerHTML = ''; });
+  } else console.log('salas: no add button');
   check('no JS errors?', errors.length === 0, errors);
   fs.unlinkSync(pg);
   await browser.close();

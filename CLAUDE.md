@@ -3070,7 +3070,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   profissional, especialidade, sala e status dois por linha; data + ‹ Hoje › + ? numa linha; depois a contagem do dia.
   Etiquetas por especialidade (`.vg-chip`), título e tela cheia ocultos (bloco "Visão geral no celular" no CSS).
 - (2026-10-09, pedido do usuário, REGRA FIXA) **No celular, TODO seletor do sistema abre a janela de baixo** (título
-  + ✕ + opções grandes), não só CRM e cadastros: `useSheet(el)` = celular e fora de `SHEET_SKIP` (`#tab-salas,
-  #ovRoom` — Salas/Grupos mantêm o formato deles). `SHEET_SCOPE` não existe mais. Vale para tela/janela nova sem fazer
+  + ✕ + opções grandes), não só CRM e cadastros: `useSheet(el)` = celular, sem exceção (Salas/Grupos e as
+  janelas deles também). `SHEET_SCOPE` não existe mais. Vale para tela/janela nova sem fazer
   nada: usar `<select>`, campo de data, `.ms` ou `crmPop` (todos passam por `useSheet`). Seletor feito de outro jeito
   precisa chamar `useSheet`/`sheetWrap`. Teste em `tests/run_cad_sheets.js` (Visão geral, Agenda e Salas).
