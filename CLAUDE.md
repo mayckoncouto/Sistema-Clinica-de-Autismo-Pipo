@@ -2951,3 +2951,11 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   (`dpEnhanceDate`, digitar ou calendário), grava com `crmSetDue` (vazio = sem vencimento) e volta
   ao clicar fora ou Esc. Sem bolinhas de iniciais em todo o CRM (comentários e lista de @menção
   também; `crmAv` ficou sem uso).
+- (2026-10-09, pedidos do usuário) Janela da tarefa do CRM: **Descrição ao lado** de Status /
+  Responsáveis / Vencimento / Prioridade (`.crm-top` = `.crm-props` + `.field.crm-desc`, a caixa
+  ocupa a altura dos campos; no celular fica embaixo). Lateral Atividade em cinza mais claro
+  (`color-mix` 45% `--surface-2`). Regras de 13px/40px da janela só no computador (no celular os
+  campos seguem 16px, inclusive Status e Prioridade).
+- (2026-10-09, pedido do usuário) Prioridade do CRM só **Urgente, Alta, Normal** (padrão Normal):
+  "Baixa" saiu de `CRM_PRIOS` e do filtro `#crmFPrio`; tarefa antiga gravada com "baixa" aparece,
+  filtra e ordena como Normal (`crmPrio`). Sem SQL (o banco ainda aceita "baixa").

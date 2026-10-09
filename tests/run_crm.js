@@ -50,7 +50,7 @@ const path = require('path');
   check('new task already shows the side panel (activity after saving)?', !(await page.$eval('#crmSide', (e) => e.hidden)) && /depois de salvar/.test(await page.$eval('#crmFeed', (e) => e.textContent)));
   check('no layout switch (only the window view)?', !(await page.$('#crmLayBtn')));
   await page.click('#crmPrioBtn');
-  check('Prioridade opens the flag picker (Urgente, Alta, Normal, Baixa)?', (await page.$$eval('#crmPop [data-pick]', (l) => l.map((b) => b.textContent.replace(/\d|✓/g, '').trim()))).join() === 'Urgente,Alta,Normal,Baixa');
+  check('Prioridade opens the flag picker (Urgente, Alta, Normal)?', (await page.$$eval('#crmPop [data-pick]', (l) => l.map((b) => b.textContent.replace(/\d|✓/g, '').trim()))).join() === 'Urgente,Alta,Normal');
   await page.keyboard.press('1');
   check('key 1 picks Urgente?', (await page.$eval('#crmPrio', (e) => e.value)) === 'urgente' && /Urgente/.test(await page.$eval('#crmPrioBtn', (e) => e.textContent)));
   await page.click('#crmStBtn');
