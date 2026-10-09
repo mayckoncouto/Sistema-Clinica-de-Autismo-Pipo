@@ -3146,3 +3146,5 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   03c (um só Ativo) e 08c (Visão geral nos níveis). Criada `supabase/2026-10-09g-acerto-pendentes.sql` só com o que
   faltava (a 30b inteira recriaria `handle_new_user`/`roles_guard`/`roles_before_insert` antigos — NÃO rodar ela).
   Testada no PGlite (2 vezes; travas conferidas). 09d e 09e: SIM.
+- Produção (2026-10-09): `2026-10-09g-acerto-pendentes` rodada (conferência 0 / 0 / 3). Com isso todas as migrações
+  da pasta estão aplicadas.
