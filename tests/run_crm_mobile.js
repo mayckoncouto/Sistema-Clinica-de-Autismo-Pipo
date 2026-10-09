@@ -77,6 +77,17 @@ const path = require('path');
   await page.click('#crmMTabs [data-mtab="det"]');
   await page.click('#crmClose');
   await page.waitForTimeout(200);
+  // Quadro: um status por vez na largura da tela, barra de status em cima
+  await page.click('[data-cv="quadro"]');
+  await page.waitForTimeout(200);
+  const q1 = await page.evaluate(() => { const bd = document.querySelector('.crm-board'), c = document.querySelector('.crm-col');
+    return {w: c.getBoundingClientRect().width, bw: bd.clientWidth, t: document.querySelector('.crm-card .crm-t').offsetParent !== null, pager: document.querySelectorAll('.crm-pager [data-crm-page]').length}; });
+  check('board: one status per screen width, card titles visible, status bar on top?', q1.w >= q1.bw - 30 && q1.t && q1.pager === 4, JSON.stringify(q1));
+  const top0 = await page.evaluate(() => document.querySelector('.crm-toolbar').getBoundingClientRect().left);
+  await page.click('.crm-pager [data-crm-page="1"]');
+  await page.waitForTimeout(600);
+  const q2 = await page.evaluate(() => ({sl: document.querySelector('.crm-board').scrollLeft, bw: document.querySelector('.crm-board').clientWidth, top: document.querySelector('.crm-toolbar').getBoundingClientRect().left, act: document.querySelector('.crm-pager .active').textContent}));
+  check('tapping a status slides only the boards (top stays)?', Math.abs(q2.sl - q2.bw) < 3 && q2.top === top0 && /Avaliação/.test(q2.act), JSON.stringify(q2));
   // calendário
   await page.click('[data-cv="calendario"]');
   const day = await ev('agdIso(agdAddDays(agdStartOfDay(new Date()), 3))');

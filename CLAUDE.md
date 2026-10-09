@@ -2863,3 +2863,8 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   `:hover`/`:focus` preso (fundo colorido) e todos os itens do CRM tinham a mesma aba `crm`. Agora só `.on` marca
   (item com `isOn()` — CRM compara `CRM.list` — ou mesma aba), toque mostra só `:active` cinza, foco de teclado com
   `:focus-visible`; o grupo que tem a tela aberta já abre e o título fica na cor do sistema (`.mnav-grp.has-on`).
+- 2026-10-09 (pedido do usuário, celular) CRM **Quadro**: um status por vez na largura da tela (`.crm-col` 100% −
+  24px, `scroll-snap`), só os quadros deslizam (topo parado: `.crm-host:has(.crm-board)` sem rolagem). Barra de status
+  em cima `.crm-pager` (bolinha, nome, quantidade; oculta no computador): tocar leva ao status, deslizar marca o atual
+  (`crmBoardPager`, `CRM.boardPage` mantém o status ao redesenhar). Correção: a regra do celular que esconde `.crm-t`
+  ficou só na tabela (`#crmHost .pat-table .crm-t`); antes sumia o título nos cartões do Quadro ("— —").
