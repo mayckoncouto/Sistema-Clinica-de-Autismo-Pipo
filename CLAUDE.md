@@ -3148,3 +3148,8 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   Testada no PGlite (2 vezes; travas conferidas). 09d e 09e: SIM.
 - Produção (2026-10-09): `2026-10-09g-acerto-pendentes` rodada (conferência 0 / 0 / 3). Com isso todas as migrações
   da pasta estão aplicadas.
+- (2026-10-09) `supabase/conferencia-geral.sql`: SÓ LEITURA, compara o banco com `schema.sql` (tabelas, colunas,
+  funções e a versão delas por md5 do texto, gatilhos, políticas RLS, RLS ligada, índices, tempo real, caminhos de
+  `documents_path_valid`) e lista só o que falta ou difere. Gerado a partir do schema num PGlite (script em scratchpad:
+  montar o banco com schema.sql e ler o catálogo); ao mudar o schema, gerar de novo. Conferido: o texto de cada função
+  no schema é igual ao da última migração que a define.
