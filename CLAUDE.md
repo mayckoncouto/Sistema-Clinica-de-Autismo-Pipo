@@ -3052,3 +3052,6 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   ouvinte de clique em `.ms-btn` põe `.ms-sheet` (painel fixo embaixo, sombra de fundo) e o cabeçalho
   `.ms-sheet-head` (título + ✕) sem tirar o painel do lugar. `sheetTitleFor` ignora os rótulos das opções.
   Teste `tests/run_cad_sheets.js` (percorre telas e janelas de "+ Incluir"; no `npm test`).
+- (2026-10-09, pedido do usuário) Cadastro do paciente (computador e celular): grupos na ordem Identificação, Endereço,
+  Filiação, Responsáveis pela retirada, Medida protetiva, Contato, Responsável financeiro, **Saúde, Escola, Rotina atual**,
+  Administrativo, Tratamento (`PAT_SECTIONS`; vale também para Campos obrigatórios e a ficha impressa).
