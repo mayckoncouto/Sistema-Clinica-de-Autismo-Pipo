@@ -3142,3 +3142,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   se já foi rodada no banco (SIM / NÃO / — sem marca própria), com as pendentes primeiro. Migração nova: acrescentar
   uma linha com a marca que ela deixa (função, tabela, coluna, caminho em `documents_path_valid`, nível pendente).
   Testado no PGlite. 05h NÃO deve ser rodada (desfeita pela 05i).
+- Produção (2026-10-09): a conferência mostrou NÃO em 30b (trava de excluir nível), 02m (atendimento com evolução),
+  03c (um só Ativo) e 08c (Visão geral nos níveis). Criada `supabase/2026-10-09g-acerto-pendentes.sql` só com o que
+  faltava (a 30b inteira recriaria `handle_new_user`/`roles_guard`/`roles_before_insert` antigos — NÃO rodar ela).
+  Testada no PGlite (2 vezes; travas conferidas). 09d e 09e: SIM.

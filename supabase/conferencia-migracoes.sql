@@ -11,7 +11,7 @@ mfp as (select prosrc s from fx where proname = 'module_for_path'),
 lst as (select d.path, i from public.documents d, jsonb_array_elements(coalesce(d.data -> 'list', '[]'::jsonb)) i),
 chk (ordem, migracao, aplicada, obs) as (values
  (1,  '2026-09-30-niveis-de-permissao',            exists(select 1 from fx where proname = 'has_perm'), ''),
- (2,  '2026-09-30b-niveis-editaveis',              exists(select 1 from fx where proname = 'roles_before_delete'), ''),
+ (2,  '2026-09-30b-niveis-editaveis',              exists(select 1 from fx where proname = 'roles_before_delete'), 'se NÃO: rodar a 09g, NUNCA a 30b inteira'),
  (3,  '2026-10-01-agenda-por-data',                to_regclass('public.appointments') is not null, ''),
  (4,  '2026-10-01b-servicos',                      exists(select 1 from pathdef where d like '%services%'), ''),
  (5,  '2026-10-01c-servico-no-atendimento',        exists(select 1 from col where table_name = 'appointments' and column_name = 'service'), ''),
@@ -77,7 +77,8 @@ chk (ordem, migracao, aplicada, obs) as (values
         and exists(select 1 from jsonb_each(coalesce(r.permissions, '{}'::jsonb)) e where e.key like 'crm\_%' and e.key <> 'crm_listas'
                    and jsonb_typeof(e.value) = 'object' and coalesce((e.value ->> 'view')::boolean, false))), 'SIM = nenhum nível pendente; pode rodar de novo'),
  (65, '2026-10-09e-crm-responsavel-com-acesso',    exists(select 1 from fx where proname = 'crm_user_can'), 'pode rodar de novo sem risco'),
- (66, '2026-10-09f-diagnosticos-e-origens',        exists(select 1 from pathdef where d like '%diagnoses%'), '')
+ (66, '2026-10-09f-diagnosticos-e-origens',        exists(select 1 from pathdef where d like '%diagnoses%'), ''),
+ (67, '2026-10-09g-acerto-pendentes',              exists(select 1 from fx where proname = 'roles_before_delete') and exists(select 1 from fx where proname = 'treatments_one_active'), 'repõe o que faltava da 30b, 02m, 03c e 08c')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,
