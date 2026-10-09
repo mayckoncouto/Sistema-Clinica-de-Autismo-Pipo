@@ -3095,3 +3095,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   O Planner continua fora do celular.
 - (2026-10-09, pedido do usuário, SUBSTITUI "Enter envia") Comentários do CRM e janela Editar mensagem: **Enter quebra a
   linha e Ctrl+Enter (Cmd+Enter no Mac) envia/salva**; com a lista de @menção aberta, Enter ainda escolhe a pessoa.
+- (2026-10-09, pedido do usuário, celular) Janela da tarefa do CRM: **deslizar o dedo para o lado** troca as abas
+  (esquerda = Atividade, direita = Detalhes): `touchstart`/`touchend` em `#ovCrm .crm-modal`, gesto horizontal de
+  60px+ (1,5× mais horizontal que vertical, até 800 ms); não começa em campo de texto, seletor nem área com rolagem
+  lateral. Só no celular (`isMobileView`).

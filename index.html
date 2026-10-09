@@ -6463,6 +6463,27 @@ function crmOpenTask(task, opts){
     md.classList.toggle("mt-act", act);
     if (act){ var sb = md.querySelector(".crm-side-body"); if (sb) sb.scrollTop = sb.scrollHeight; }
   });
+  // Celular: deslizar o dedo para o lado troca Detalhes ↔ Atividade (esquerda = Atividade, direita = Detalhes).
+  // Só vale gesto claramente horizontal; não começa em campo de texto nem em área que rola para o lado.
+  (function(){
+    var md = document.querySelector("#ovCrm .crm-modal"), tabs = document.getElementById("crmMTabs"), st = null;
+    if (!md || !tabs) return;
+    md.addEventListener("touchstart", function(e){
+      st = null;
+      if (!isMobileView() || e.touches.length !== 1) return;
+      var t = e.target;
+      if (t.closest("input, textarea, select, [contenteditable], .dp-btn, .crm-pv .ms, #mSheet")) return;
+      for (var el = t; el && el !== md; el = el.parentElement){ if (el.scrollWidth > el.clientWidth + 4 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return; }
+      st = {x: e.touches[0].clientX, y: e.touches[0].clientY, at: Date.now()};
+    }, {passive: true});
+    md.addEventListener("touchend", function(e){
+      if (!st) return;
+      var c = e.changedTouches[0], dx = c.clientX - st.x, dy = c.clientY - st.y, ms = Date.now() - st.at; st = null;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || ms > 800) return;
+      var want = dx < 0 ? "act" : "det", b = tabs.querySelector('[data-mtab="' + want + '"]');
+      if (b && !b.classList.contains("active")) b.click();
+    }, {passive: true});
+  })();
   // Tarefa nova: os comentários ficam guardados aqui e são enviados ao salvar.
   var pendingCom = [];
   function pendingRender(){
@@ -19158,6 +19179,7 @@ var HELP_TOPICS = [
       "Só pode ser responsável por uma tarefa quem tem acesso ao CRM e à lista dela (Níveis de permissão). Quem perdeu o acesso continua na tarefa com “(sem acesso)” até alguém tirar.",
       "Ir para um status de perda (ex.: Cancelado) pede o motivo de perda. Tarefa num status finalizado não pode ser excluída.",
       "Cada lista tem a sua permissão (ver, incluir, editar, excluir) em Níveis de permissão. Em Níveis de permissão, o grupo CRM começa pela permissão <b>CRM</b>: “Ver” dá o botão CRM do topo (tela CRM e Minhas tarefas) e a janela Listas e status; “Incluir”, “Editar” e “Excluir” valem para as listas e seus status. Depois vem uma linha para cada lista (ver, incluir, editar e excluir as tarefas dela), e toda lista nova ganha a sua linha. O Administrador sempre pode tudo.",
+      "No celular, a janela da tarefa tem as abas Detalhes e Atividade: toque nelas ou deslize o dedo para o lado (para a esquerda abre Atividade, para a direita volta a Detalhes).",
       "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Origem, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o nome do paciente ou lead (cortado com “…” quando não cabe), Vencimento e a bandeira da Prioridade; no Quadro, cada status ocupa a tela toda: deslize para o lado ou escolha o status no campo acima dos quadros; no Calendário, toque num dia para ver as tarefas dele. Na janela da tarefa, os botões <b>Detalhes</b> (campos e descrição) e <b>Atividade</b> (alterações, comentários e o campo para comentar) trocam o que aparece. Na tarefa nova já dá para comentar: o comentário fica marcado \"enviado ao salvar\" e vai junto quando a tarefa é salva."
     ],
     who: "Permissão de cada lista do CRM."},

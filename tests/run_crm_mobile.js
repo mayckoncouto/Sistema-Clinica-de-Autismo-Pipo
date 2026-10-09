@@ -77,6 +77,16 @@ const path = require('path');
   check('fields with the label above (one column)?', (await page.$eval('#ovCrm .crm-prop', (e) => getComputedStyle(e).gridTemplateColumns.split(' ').length)) === 1);
   // Detalhes | Atividade
   check('Detalhes tab shows the fields and hides the activity?', await page.$eval('#crmTitleIn', (e) => e.offsetParent !== null) && await page.$eval('#crmSide', (e) => getComputedStyle(e).display === 'none'));
+  // deslizar o dedo para o lado troca Detalhes ↔ Atividade
+  const swipe = (dx) => page.evaluate((dx) => {
+    const md = document.querySelector('#ovCrm .crm-modal'), tgt = md.querySelector('.crm-sec-t, h3') || md;
+    const mk = (x) => new Touch({identifier: 1, target: tgt, clientX: x, clientY: 400});
+    tgt.dispatchEvent(new TouchEvent('touchstart', {bubbles: true, touches: [mk(250)], changedTouches: [mk(250)]}));
+    tgt.dispatchEvent(new TouchEvent('touchend', {bubbles: true, touches: [], changedTouches: [mk(250 + dx)]}));
+    return document.querySelector('#crmMTabs .active').getAttribute('data-mtab');
+  }, dx);
+  const sw1 = await swipe(-120), sw2 = await swipe(120), sw3 = await swipe(-20);
+  check('swipe left = Atividade, right = Detalhes, short swipe does nothing?', sw1 === 'act' && sw2 === 'det' && sw3 === 'det', [sw1, sw2, sw3].join(','));
   await page.click('#crmMTabs [data-mtab="act"]');
   const act = await page.evaluate(() => ({fields: document.getElementById('crmTitleIn').offsetParent !== null, feed: document.getElementById('crmFeed').offsetParent !== null,
     box: document.getElementById('crmCommentIn').offsetParent !== null, bg: getComputedStyle(document.getElementById('crmSide')).backgroundColor, mbg: getComputedStyle(document.querySelector('#ovCrm .crm-modal')).backgroundColor}));
