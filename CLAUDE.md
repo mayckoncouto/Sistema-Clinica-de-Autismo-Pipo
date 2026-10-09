@@ -2935,3 +2935,12 @@ só aparece para quem vê "Pacientes – saúde"), **Status** (paciente Ativo `.
 Inativo `.tr-chip.st-inativo` — saiu a etiqueta "inativo" ao lado do nome) e **Tratamento**.
 Todas ordenáveis (`patSortKey`) e com largura ajustável; textos longos com "…" (`.pt-ell`, valor
 no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
+- (2026-10-09, pedidos do usuário) Janela da tarefa do CRM no computador: rótulo em cima de cada
+  campo (`.crm-prop` em coluna), todos os campos com 40px, 13px e cor `--ink` (inclusive
+  "Ninguém", "Não informado", data vazia); comentários e descrição 13px; registro das atividades
+  11,5px. Abas Detalhes/Atividade só no celular (`@media (min-width:761px)` esconde `#crmMTabs`).
+  Barra lateral Atividade sempre aberta (fundo cinza-claro): saíram o » (`#crmSideClose`) e o
+  botão de balão (`#crmSideOpen`). Feed em ordem de execução (`Date.parse` do `created_at`; no
+  mesmo instante, alteração antes do comentário). Responsáveis sem bolinhas de iniciais: lista,
+  quadro e campo mostram só os primeiros nomes (`crmAvatars` → `.crm-pp-names`, nomes completos no
+  `title`); menu de escolha só com caixa + nome.

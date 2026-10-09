@@ -373,6 +373,7 @@ div.ag-obj-head{cursor:default}
 .crm-side[hidden]{display:none}
 .crm-side-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
 .crm-side-head b{font-size:14px}
+.crm-pp-names{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:13px;color:var(--ink)}
 .crm-side-body{flex:1;min-height:0;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:10px}
 /* Atividade na lateral: alterações (linhas com bolinha) e comentários (cartões) na ordem em que aconteceram. */
 .crm-feed{display:flex;flex-direction:column;gap:8px}
@@ -389,14 +390,25 @@ div.ag-obj-head{cursor:default}
 .crm-lay-ico.lay-modal::after{content:"";position:absolute;inset:3px 4px;border:1.5px solid currentColor;border-radius:2px}
 .crm-lay-ico.lay-cheia::after{content:"";position:absolute;inset:2px;background:currentColor;opacity:.25}
 .crm-lay-ico.lay-lateral::after{content:"";position:absolute;top:2px;bottom:2px;right:2px;width:7px;background:currentColor;opacity:.35}
-.crm-props{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:4px 0 12px}
-.crm-prop{display:grid;grid-template-columns:130px 1fr;align-items:center;gap:8px;min-width:0}
+.crm-props{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin:4px 0 14px}
+/* Rótulo em cima do campo (como nas outras janelas do sistema). */
+.crm-prop{display:flex;flex-direction:column;align-items:stretch;gap:5px;min-width:0}
 .crm-prop.wide{grid-column:1 / -1}
 .crm-prop[hidden]{display:none}
 .crm-prop>label{margin:0;font-size:12.5px;font-weight:600;color:var(--muted)}
 .crm-pv{min-width:0}
 .field.crm-prop{margin:0}
 .crm-pv>input,.crm-pv>select,.crm-pv>.dp-btn,.crm-pv>.ms,.crm-who{width:100%}
+/* Todos os campos da tarefa com a mesma altura, fonte e cor do campo Status. */
+#ovCrm .crm-main :is(.crm-prio-field,.ms-btn,.crm-pv>.dp-btn,.crm-pv>input,#crmTitleIn,.crm-who>input){min-height:40px;height:40px;box-sizing:border-box;font-size:13px;color:var(--ink)}
+#ovCrm .field .crm-prio-btn.crm-prio-field{min-height:40px;padding:0 12px}
+#ovCrm .crm-who>input{width:100%}
+#ovCrm .crm-main :is(.ms-placeholder,.dp-btn.dp-empty .dp-txt,.dp-btn.dp-empty .dp-in){color:var(--ink)}
+#ovCrm .crm-main .dp-btn.dp-empty .dp-in::placeholder{color:var(--ink)}
+#ovCrm .crm-compose textarea,#ovCrm .crm-cmt-b,#ovCrm .crm-cmt-h b,#ovCrm #crmDesc{font-size:13px;color:var(--ink)}
+/* Registro das atividades um pouco menor que os campos. */
+#ovCrm .crm-feed-h,#ovCrm .crm-feed-h .crm-st-dot{font-size:11.5px}
+@media (min-width:761px){#ovCrm .crm-mtabs{display:none!important}}
 .crm-side .field.crm-comment{margin:0}
 .crm-who{position:relative;display:flex;align-items:center;gap:8px}
 .crm-who input{flex:1;min-width:0}
@@ -5729,7 +5741,7 @@ function crmPeopleMenu(anchor, sel, opts){
   var ppl = CRM.people.slice().sort(function(a, b){ return (a.id === me ? -1 : b.id === me ? 1 : 0) || String(a.full_name).localeCompare(String(b.full_name), "pt-BR"); });
   var html = '<input type="text" class="dp-filter" placeholder="Digite para buscar…" aria-label="Buscar pessoa"><div class="crm-pp-list">' +
     (ppl.length ? ppl.map(function(p){
-      return '<button type="button" role="menuitemcheckbox" data-pick="' + esc(p.id) + '" data-n="' + esc(normText(p.full_name + (p.id === me ? " eu" : ""))) + '" aria-checked="' + (cur.indexOf(p.id) !== -1) + '"><input type="checkbox" tabindex="-1"' + (cur.indexOf(p.id) !== -1 ? ' checked' : '') + '>' + crmAv(p.id, p.full_name) + '<span>' + esc(p.id === me ? "Eu" : p.full_name) + '</span></button>';
+      return '<button type="button" role="menuitemcheckbox" data-pick="' + esc(p.id) + '" data-n="' + esc(normText(p.full_name + (p.id === me ? " eu" : ""))) + '" aria-checked="' + (cur.indexOf(p.id) !== -1) + '"><input type="checkbox" tabindex="-1"' + (cur.indexOf(p.id) !== -1 ? ' checked' : '') + '>' + '<span>' + esc(p.id === me ? "Eu" : p.full_name) + '</span></button>';
     }).join("") : '<div class="pat-count" style="padding:6px 10px">Nenhum usuário.</div>') + '<div class="pat-count crm-pp-none" style="padding:6px 10px" hidden>Ninguém encontrado.</div></div>';
   var changed = false;
   var m = crmPop(anchor, "crm-pp-menu", html, {title: "Responsáveis",
@@ -5753,9 +5765,11 @@ function crmPrioFlag(p){
   var pr = CRM_PRIOS.filter(function(x){ return x.id === p; })[0] || CRM_PRIOS[2];
   return '<span class="crm-prio crm-prio-' + pr.id + '" title="Prioridade ' + esc(pr.name) + '"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 15V2h9l-1.6 3L12 8H4" fill="' + (pr.id === "normal" || pr.id === "baixa" ? "none" : pr.color) + '" stroke="' + pr.color + '" stroke-width="1.6" stroke-linejoin="round"/></svg>' + (pr.id === "urgente" || pr.id === "alta" ? '<span>' + esc(pr.name) + '</span>' : '') + '</span>';
 }
+// Responsáveis: só os nomes (primeiro nome; nome completo no title), sem bolinhas.
 function crmAvatars(ids){
   if (!ids || !ids.length) return '<span class="crm-noone" title="Sem responsável">—</span>';
-  return '<span class="crm-avs">' + ids.slice(0, 3).map(function(id){ return crmAv(id, crmPersonName(id)); }).join("") + (ids.length > 3 ? '<span class="crm-av more">+' + (ids.length - 3) + '</span>' : '') + '</span>';
+  var full = ids.map(function(id){ return crmPersonName(id); });
+  return '<span class="crm-pp-names" title="' + esc(full.join(", ")) + '">' + esc(full.map(function(n){ return firstName(n); }).join(", ")) + '</span>';
 }
 function crmDueHtml(x){
   if (!x.due_date) return '<span class="pt-muted">—</span>';
@@ -6022,7 +6036,7 @@ function crmOpenTask(task, opts){
     '</div></div>' : '';
   var lossHtml = list.lead ? prop('<span>Motivo de perda</span>', '<input id="crmLPerda" type="text" list="crmPerdaList" value="' + esc(lead.motivoPerda || "") + '"' + dis + '><datalist id="crmPerdaList">' + CRM_PERDAS.map(function(o){ return '<option value="' + esc(o) + '">'; }).join("") + '</datalist>', true, "crmLossBox") : '';
   var sideHtml = '<aside class="crm-side" id="crmSide"' + (side ? '' : ' hidden') + '>' +
-    '<div class="crm-side-head"><b>Atividade</b><button type="button" class="btn ghost crm-icon-btn" id="crmSideClose" title="Recolher atividade" aria-label="Recolher atividade">»</button></div>' +
+    '<div class="crm-side-head"><b>Atividade</b></div>' +
     '<div class="crm-side-body"><div class="crm-feed" id="crmFeed"><div class="pat-count">' + (isNew ? 'A criação e as alterações aparecem aqui depois de salvar. Comentários escritos agora são enviados junto com a tarefa.' : 'Carregando…') + '</div></div></div>' +
     '<div class="field crm-comment"><div class="crm-compose"><textarea id="crmCommentIn" rows="3" placeholder="Escreva um comentário… @ para mencionar alguém"></textarea>' +
       '<div class="crm-compose-bar"><div class="crm-compose-tools"></div><button type="button" class="crm-send" id="crmCommentSend" title="Enviar (Enter) · Shift+Enter quebra a linha" aria-label="Enviar comentário" disabled>' +
@@ -6035,7 +6049,6 @@ function crmOpenTask(task, opts){
         (task && task.created_by_name ? ' · criada por ' + esc(task.created_by_name) + (task.created_at ? ' em ' + esc(agdBrDate(String(task.created_at).slice(0, 10))) : '') : '') + '</div></div>' +
         '<div class="modal-head-acts">' +
           (can("pacientes", "create") ? '<button type="button" class="btn ghost" id="crmRegPat" hidden>Cadastrar paciente</button>' : '') +
-          ('<button type="button" class="btn ghost crm-icon-btn" id="crmSideOpen" title="Mostrar atividade" aria-label="Mostrar atividade"' + (side ? ' hidden' : '') + '><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" stroke-linejoin="round"/></svg></button>') +
         '</div>' +
         '<button class="modal-close" id="crmClose" aria-label="Fechar">✕</button></div>' +
       // Celular: Detalhes (campos) | Atividade (alterações, comentários e o campo de comentar).
@@ -6067,7 +6080,7 @@ function crmOpenTask(task, opts){
   function peopleSum(){
     var names = Array.prototype.map.call(pPanel.querySelectorAll("input:checked"), function(c){ return c.closest("label").textContent.trim(); });
     var ids = Array.prototype.map.call(pPanel.querySelectorAll("input:checked"), function(c){ return c.value; });
-    pms.querySelector(".crm-pp-avs").innerHTML = ids.length ? crmAvatars(ids) : "";
+    pms.querySelector(".crm-pp-avs").innerHTML = "";
     var sum = pms.querySelector(".ms-sum"); sum.textContent = names.length ? names.join(", ") : "Ninguém"; sum.classList.toggle("ms-placeholder", !names.length); pBtn.title = names.join(", ");
   }
   pBtn.addEventListener("click", function(){
@@ -6113,12 +6126,11 @@ function crmOpenTask(task, opts){
   });
   function lossShow(){ var box = document.getElementById("crmLossBox"); if (box){ var s = crmStatus(list, stEl.value); box.hidden = !(s && s.lost); } }
   stEl.addEventListener("change", lossShow); lossShow();
-  // Barra lateral (atividade) recolhível
+  // Barra lateral (atividade): sempre aberta no computador
   function sideSet(open){
     var s = document.getElementById("crmSide"), ob = document.getElementById("crmSideOpen"); if (!s) return;
     s.hidden = !open; if (ob) ob.hidden = open; modal.classList.toggle("with-side", open);
   }
-  document.getElementById("crmSideClose").addEventListener("click", function(){ sideSet(false); });
   document.getElementById("crmMTabs").addEventListener("click", function(e){
     var b = e.target.closest("[data-mtab]"); if (!b) return;
     var act = b.getAttribute("data-mtab") === "act", md = document.querySelector("#ovCrm .crm-modal");
@@ -6126,7 +6138,6 @@ function crmOpenTask(task, opts){
     md.classList.toggle("mt-act", act);
     if (act){ var sb = md.querySelector(".crm-side-body"); if (sb) sb.scrollTop = sb.scrollHeight; }
   });
-  document.getElementById("crmSideOpen").addEventListener("click", function(){ sideSet(true); });
   // Tarefa nova: os comentários ficam guardados aqui e são enviados ao salvar.
   var pendingCom = [];
   function pendingRender(){
@@ -6261,7 +6272,12 @@ function crmActivityLoad(taskId){
     if (CRM.openId !== taskId) return;
     // Alterações e comentários juntos, do mais antigo ao mais novo (como numa conversa).
     var feed = document.getElementById("crmFeed"); if (!feed) return;
-    var sorted = evs.slice().sort(function(a, b){ return String(a.created_at || "").localeCompare(String(b.created_at || "")); });
+    // Ordem de execução: pela data/hora real (o banco pode mandar frações de segundo com
+    // tamanhos diferentes); no mesmo instante, a alteração antes do comentário.
+    function tms(e){ var t = Date.parse(e.created_at || ""); return isNaN(t) ? 0 : t; }
+    var sorted = evs.map(function(e, i){ return {e: e, i: i}; }).sort(function(a, b){
+      return (tms(a.e) - tms(b.e)) || ((a.e.kind === "comment") - (b.e.kind === "comment")) || (a.i - b.i);
+    }).map(function(x){ return x.e; });
     feed.innerHTML = sorted.length ? sorted.map(function(e){
       if (e.kind !== "comment") return '<div class="crm-feed-h"><span>' + crmEventText(e, list) + '</span><span class="crm-ev-when">' + esc(crmWhen(e.created_at)) + '</span></div>';
       return crmCommentHtml(e);
@@ -18722,7 +18738,7 @@ var HELP_TOPICS = [
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Tarefa (com o número de comentários), Paciente ou Lead, Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique no status, nos responsáveis ou na prioridade de uma linha para mudar ali mesmo, sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta, Normal e Baixa.",
-      "A <b>barra lateral Atividade</b> já abre com a janela (pode ser recolhida no »): mostra as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Enter</b> envia o comentário (Shift+Enter quebra a linha); o botão de enviar fica no canto da caixa. Numa tarefa nova, a atividade e os comentários aparecem depois de salvar."
+      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos: mostra as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Enter</b> envia o comentário (Shift+Enter quebra a linha); o botão de enviar fica no canto da caixa. Numa tarefa nova, a atividade e os comentários aparecem depois de salvar."
     ],
     rules: [
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
