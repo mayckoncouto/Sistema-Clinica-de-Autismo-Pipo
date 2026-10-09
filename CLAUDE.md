@@ -2879,3 +2879,4 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   apelido" do PACIENTE saiu** (campo, busca, ficha impressa, planilha; `nomeSocial` em `PAT_LEGACY_KEYS` → apagado
   ao salvar). O nome social do colaborador continua. Migração `supabase/2026-10-09b-paciente-sem-nome-social.sql`
   (apaga dos pacientes e de `config/patient_fields`; testada no PGlite).
+- Produção (2026-10-09): `2026-10-09b-paciente-sem-nome-social` rodada.
