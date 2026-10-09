@@ -440,6 +440,7 @@ div.ag-obj-head{cursor:default}
 .crm-day-task.late .crm-day-t b{color:#b3261e}
 .cad-menu.crm-pop button.crm-day-new{color:var(--accent);font-weight:700;justify-content:center}
 .crm-t-sm{display:none}
+.crm-mtabs{display:none}
 @media (max-width:760px){
   /* CRM: barra */
   #tab-crm .crm-toolbar{column-gap:8px;row-gap:8px}
@@ -499,8 +500,19 @@ div.ag-obj-head{cursor:default}
   .crm-board{padding:10px}
   .crm-col{flex-basis:82vw}
   /* Janela da tarefa: rótulo em cima do campo; tudo rola junto (atividade embaixo do formulário) */
-  #ovCrm .modal.crm-modal{height:auto;max-height:calc(100dvh - 16px)}
-  #ovCrm .crm-split{display:block;overflow:auto;flex:1 1 auto;min-height:0}
+  #ovCrm .modal.crm-modal{height:calc(100dvh - 16px);max-height:calc(100dvh - 16px);background:var(--surface)}
+  #ovCrm .crm-split{display:block;overflow:auto;flex:1 1 auto;min-height:0;background:var(--surface)}
+  /* Detalhes | Atividade (fundo branco nas duas) */
+  #ovCrm .crm-mtabs{display:flex;margin:0 16px 8px;flex:none}
+  #ovCrm .crm-mtabs button{flex:1 1 0}
+  .crm-mtab-n{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--accent-weak);color:var(--accent);font-size:11px;font-weight:800}
+  #ovCrm .crm-modal:not(.mt-act) #crmSide{display:none}
+  #ovCrm .crm-modal.mt-act .crm-main{display:none}
+  #ovCrm .crm-modal.mt-act .crm-split{display:flex;flex-direction:column;overflow:hidden}
+  #ovCrm .crm-modal.mt-act #crmSide,#ovCrm .crm-modal.mt-act #crmSide[hidden]{display:flex;flex:1 1 auto;min-height:0;border-top:0;background:var(--surface)}
+  #ovCrm .crm-modal.mt-act .crm-side-body{overflow:auto;flex:1 1 auto;min-height:0}
+  #ovCrm .crm-side-head,#ovCrm #crmSideOpen{display:none!important}
+  #ovCrm .crm-side .crm-comment{background:var(--surface);border-top:1px solid var(--line)}
   #ovCrm .crm-main{overflow:visible}
   #ovCrm .crm-props{gap:10px;margin:6px 0 10px}
   #ovCrm .crm-prop{grid-template-columns:1fr;gap:4px;align-items:stretch;margin:0}
@@ -511,7 +523,6 @@ div.ag-obj-head{cursor:default}
   #ovCrm .crm-prop :is(.crm-prio-field,.ms-btn,.dp-btn,input,.crm-who){width:100%;box-sizing:border-box}
   #ovCrm .crm-sec{margin-top:14px}
   #ovCrm .crm-side{border-top:1px solid var(--line)}
-  #ovCrm .crm-side-body{overflow:visible;max-height:none}
   #ovCrm .crm-compose textarea{height:44px}
   #ovCrm .modal-head-acts #crmRegPat{padding-inline:10px;font-size:13px}
   /* Listas e status: nome na largura toda, opções na linha de baixo */
@@ -1904,8 +1915,14 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .mnav-items[hidden]{display:none}
   .mnav-panel button{border:0;background:transparent;text-align:left;padding:12px 14px;border-radius:8px;font:inherit;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer}
   .mnav-panel button.sub{padding-left:24px}
-  .mnav-panel button:hover,.mnav-panel button:focus{background:var(--accent-weak);outline:none}
+  /* Toque no celular: sem "seleção" que fica presa depois do toque (hover/foco do iPhone);
+     só a tela aberta fica marcada (.on) e o título do grupo dela em destaque (.has-on). */
+  .mnav-panel button{-webkit-tap-highlight-color:transparent}
+  .mnav-panel button:focus{outline:none}
+  .mnav-panel button:focus-visible{box-shadow:inset 0 0 0 2px var(--ring)}
+  .mnav-panel button:active{background:var(--surface-2)}
   .mnav-panel button.on{background:var(--accent-weak);color:var(--accent);font-weight:800}
+  .mnav-panel .mnav-grp.has-on{color:var(--accent)}
   .mnav-sep{height:1px;background:var(--line);margin:6px 0}
   /* Agenda no celular: só a visão Dia. */
   #agdViewSeg{display:none!important}
@@ -5372,9 +5389,9 @@ function subscribeTaskLists(){
 function crmRebuildNav(){
   CRM_ITEMS.length = 0;
   var vis = crmVisibleLists();
-  if (vis.length) CRM_ITEMS.push({key: "crm-mine", label: "Minhas tarefas", tab: "crm", ok: function(){ return crmVisibleLists().length > 0; }, open: function(){ crmGo("__mine"); }});
+  if (vis.length) CRM_ITEMS.push({key: "crm-mine", label: "Minhas tarefas", tab: "crm", isOn: function(){ return state.tab === "crm" && CRM.list === "__mine"; }, ok: function(){ return crmVisibleLists().length > 0; }, open: function(){ crmGo("__mine"); }});
   (CRM.lists || []).forEach(function(l, i){
-    CRM_ITEMS.push({key: "crm-" + l.id, label: l.name, tab: "crm", sep: i === 0, ok: function(){ return crmCan(l.id, "view"); }, open: function(){ crmGo(l.id); }});
+    CRM_ITEMS.push({key: "crm-" + l.id, label: l.name, tab: "crm", sep: i === 0, isOn: function(){ return state.tab === "crm" && CRM.list === l.id; }, ok: function(){ return crmCan(l.id, "view"); }, open: function(){ crmGo(l.id); }});
   });
   CRM_ITEMS.push({key: "crm-listas", label: "Listas e status", sep: true, ok: crmIsAdmin, open: function(){ crmOpenListsModal(); }});
   if (typeof renderNavMenus === "function") renderNavMenus();
@@ -5930,6 +5947,9 @@ function crmOpenTask(task, opts){
           ('<button type="button" class="btn ghost crm-icon-btn" id="crmSideOpen" title="Mostrar atividade" aria-label="Mostrar atividade"' + (side ? ' hidden' : '') + '><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" stroke-linejoin="round"/></svg></button>') +
         '</div>' +
         '<button class="modal-close" id="crmClose" aria-label="Fechar">✕</button></div>' +
+      // Celular: Detalhes (campos) | Atividade (alterações, comentários e o campo de comentar).
+      '<div class="seg crm-mtabs" id="crmMTabs" role="tablist"><button type="button" class="active" data-mtab="det" role="tab" aria-selected="true">Detalhes</button>' +
+        '<button type="button" data-mtab="act" role="tab" aria-selected="false">Atividade' + (!isNew && CRM.comCount && CRM.comCount[x.id] ? ' <span class="crm-mtab-n">' + CRM.comCount[x.id] + '</span>' : '') + '</button></div>' +
       '<div class="crm-split"><div class="modal-body crm-main">' +
         '<div class="field"><label for="crmTitleIn">Tarefa</label><input id="crmTitleIn" type="text" maxlength="200" placeholder="Ex.: Ligar para agendar avaliação" value="' + esc(x.title) + '"' + dis + '></div>' +
         '<div class="crm-props">' +
@@ -6008,6 +6028,13 @@ function crmOpenTask(task, opts){
     s.hidden = !open; if (ob) ob.hidden = open; modal.classList.toggle("with-side", open);
   }
   document.getElementById("crmSideClose").addEventListener("click", function(){ sideSet(false); });
+  document.getElementById("crmMTabs").addEventListener("click", function(e){
+    var b = e.target.closest("[data-mtab]"); if (!b) return;
+    var act = b.getAttribute("data-mtab") === "act", md = document.querySelector("#ovCrm .crm-modal");
+    Array.prototype.forEach.call(this.querySelectorAll("[data-mtab]"), function(x){ var on = x === b; x.classList.toggle("active", on); x.setAttribute("aria-selected", on ? "true" : "false"); });
+    md.classList.toggle("mt-act", act);
+    if (act){ var sb = md.querySelector(".crm-side-body"); if (sb) sb.scrollTop = sb.scrollHeight; }
+  });
   document.getElementById("crmSideOpen").addEventListener("click", function(){ sideSet(true); });
   if (!isNew){
     crmActivityLoad(task.id); crmMarkRead(task.id); crmMentionWire();
@@ -18547,7 +18574,7 @@ var HELP_TOPICS = [
       "Vencimento passado fica em vermelho (menos nos status que encerram a tarefa).",
       "Ir para um status de perda (ex.: Cancelado) pede o motivo de perda. Tarefa num status finalizado não pode ser excluída.",
       "Cada lista tem a sua permissão (ver, incluir, editar, excluir) em Níveis de permissão. Listas e status: só o Administrador (CRM ▾ → Listas e status).",
-      "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Origem, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o começo da Tarefa, Vencimento e a bandeira da Prioridade; no Calendário, toque num dia para ver as tarefas dele."
+      "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Origem, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o começo da Tarefa, Vencimento e a bandeira da Prioridade; no Calendário, toque num dia para ver as tarefas dele. Na janela da tarefa, os botões <b>Detalhes</b> (campos e descrição) e <b>Atividade</b> (alterações, comentários e o campo para comentar) trocam o que aparece."
     ],
     who: "Permissão de cada lista do CRM."},
   {id: "visaogeral", group: "Agenda", title: "Visão geral do dia", mod: "visao_geral", tab: "visaogeral",
@@ -19625,7 +19652,7 @@ function mnavRender(){
   var name = document.querySelector("#userPill .user-name"), role = document.querySelector("#userPill .user-role");
   if (name) h += '<div class="mnav-user"><b>' + esc(name.textContent) + '</b>' + (role ? esc(role.textContent) : "") + '</div>';
   function navBtn(it, sub){
-    var on = state.tab === it.tab && (!it.view || state.salasView === it.view);
+    var on = it.isOn ? it.isOn() : (!!it.tab && state.tab === it.tab && (!it.view || state.salasView === it.view));
     return '<button type="button" role="menuitem" class="' + (sub ? "sub" : "") + (on ? " on" : "") + '" data-mnav="' + it.key + '">' + esc(it.label) + '</button>';
   }
   function group(title, items){
@@ -19636,10 +19663,12 @@ function mnavRender(){
     return mnavGroup(title, items.map(function(i, n){ return (i.sep && n ? '<div class="mnav-sep"></div>' : "") + navBtn(i, true); }).join(""));
   }
   // Grupo recolhido (Cadastros, Acesso): as opções só aparecem ao tocar no título.
+  // O grupo da tela aberta já vem aberto, com o título em destaque.
   function mnavGroup(title, inner){
-    return '<button type="button" class="mnav-grp" data-mnav-grp aria-expanded="false">' + title +
+    var has = / on"/.test(inner);
+    return '<button type="button" class="mnav-grp' + (has ? ' has-on' : '') + '" data-mnav-grp aria-expanded="' + has + '">' + title +
       '<svg viewBox="0 0 10 10" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
-      '<div class="mnav-items" hidden>' + inner + '</div>';
+      '<div class="mnav-items"' + (has ? '' : ' hidden') + '>' + inner + '</div>';
   }
   // Mesma ordem do topo: Cadastros, Planner e depois as abas visíveis.
   // No celular Planner e Resumo ficam de fora (MOBILE_HIDDEN_TABS).

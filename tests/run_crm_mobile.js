@@ -33,6 +33,12 @@ const path = require('path');
   const short = await page.$eval('#crmHost .crm-t-sm', (e) => [e.textContent, getComputedStyle(e).display]);
   check('task title cut to 4 words on the phone?', short[0] === 'Ligar para a família…' && short[1] !== 'none', short);
   check('page has no sideways scroll?', (await ev('document.documentElement.scrollWidth')) <= 390);
+  // Menu ☰: só a tela aberta marcada, grupo dela aberto e em destaque
+  await page.click('#mnavBtn');
+  const mn = await page.evaluate(() => ({on: [...document.querySelectorAll('#mnavPanel button.on')].map((b) => b.textContent.trim()),
+    grp: [...document.querySelectorAll('#mnavPanel .mnav-grp.has-on')].map((b) => b.textContent.trim() + ':' + b.getAttribute('aria-expanded'))}));
+  check('mobile menu marks only the open list (CRM group open)?', mn.on.join() === 'Atendimento' && mn.grp.join() === 'CRM:true', JSON.stringify(mn));
+  await page.click('#mnavBtn');
   // filtro
   await page.click('[data-dp-for="crmFPrio"]');
   check('filter opens the bottom window with its title?', !!(await page.$('#mSheet')) && /Prioridade/.test(await page.$eval('#mSheet .msheet-head', (e) => e.textContent)));
@@ -62,6 +68,13 @@ const path = require('path');
   await page.mouse.click(195, 40);
   check('tapping outside closes the window and keeps the task open?', !(await page.$('#mSheet')) && !!(await page.$('#ovCrm')));
   check('fields with the label above (one column)?', (await page.$eval('#ovCrm .crm-prop', (e) => getComputedStyle(e).gridTemplateColumns.split(' ').length)) === 1);
+  // Detalhes | Atividade
+  check('Detalhes tab shows the fields and hides the activity?', await page.$eval('#crmTitleIn', (e) => e.offsetParent !== null) && await page.$eval('#crmSide', (e) => getComputedStyle(e).display === 'none'));
+  await page.click('#crmMTabs [data-mtab="act"]');
+  const act = await page.evaluate(() => ({fields: document.getElementById('crmTitleIn').offsetParent !== null, feed: document.getElementById('crmFeed').offsetParent !== null,
+    box: document.getElementById('crmCommentIn').offsetParent !== null, bg: getComputedStyle(document.getElementById('crmSide')).backgroundColor, mbg: getComputedStyle(document.querySelector('#ovCrm .crm-modal')).backgroundColor}));
+  check('Atividade tab shows updates + comment box on white, without the fields?', !act.fields && act.feed && act.box && act.bg === act.mbg, JSON.stringify(act));
+  await page.click('#crmMTabs [data-mtab="det"]');
   await page.click('#crmClose');
   await page.waitForTimeout(200);
   // calendário

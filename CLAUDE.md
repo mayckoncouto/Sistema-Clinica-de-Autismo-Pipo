@@ -2855,3 +2855,11 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   `crmCalDaySheet` (tarefas do dia + "+ Nova tarefa neste dia"). Janela da tarefa: rótulo em cima, uma coluna, tudo
   rola junto (atividade e comentário no fim). Listas e status: nome na linha toda, opções embaixo. Barra: busca na
   linha toda, os 3 filtros lado a lado. Teste `tests/run_crm_mobile.js`.
+- 2026-10-09 (pedido do usuário, celular) Janela da tarefa do CRM com **Detalhes | Atividade** no topo (`#crmMTabs`,
+  `.seg`, `[data-mtab]`; oculto no computador): Detalhes = campos + descrição; Atividade (`.crm-modal.mt-act`) =
+  `#crmSide` na janela toda (alterações e comentários, rola até o fim ao abrir) com o campo de comentar embaixo;
+  número de comentários ao lado (`.crm-mtab-n`). As duas com fundo branco; o » de recolher some no celular.
+- 2026-10-09 (pedido do usuário, celular) Menu ☰: parecia ter vários botões selecionados. Causas: o toque deixava o
+  `:hover`/`:focus` preso (fundo colorido) e todos os itens do CRM tinham a mesma aba `crm`. Agora só `.on` marca
+  (item com `isOn()` — CRM compara `CRM.list` — ou mesma aba), toque mostra só `:active` cinza, foco de teclado com
+  `:focus-visible`; o grupo que tem a tela aberta já abre e o título fica na cor do sistema (`.mnav-grp.has-on`).
