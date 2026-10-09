@@ -2822,3 +2822,7 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   para funções futuras e botão enviar `.crm-send` #crmCommentSend, desativado sem texto); **Enter envia**,
   Shift+Enter quebra linha, com a lista de @menção aberta Enter escolhe a 1ª pessoa. Comentário registrado
   `.crm-cmt` (iniciais 28px, nome, tempo relativo `crmAgo` — "23 minutos" — com a data no `title`, texto 13,5px).
+- 2026-10-09 (pedido do usuário) CRM Calendário cabe na tela: `.crm-host:has(.crm-cal)` em coluna sem rolagem, semanas
+  dividem a altura (`grid-template-rows: repeat(semanas, minmax(0,1fr))`, antes mínimo de 104px por semana) e cada dia
+  rola por dentro (`.crm-cal-day` overflow hidden, `.crm-cal-items` overflow auto). Tarefa no dia 20% mais alta
+  (`.crm-cal-task` padding 5px 8px, line-height 1.35).
