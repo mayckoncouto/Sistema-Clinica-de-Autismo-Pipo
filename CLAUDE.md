@@ -2923,3 +2923,7 @@ Medido com volume real fictício (110 pacientes, 40 colunas, 75% ocupado, CPU 4�
   `display:contents`; `helpAddQButtons` põe o "?" dentro de `.tb-right` quando existe).
   Visão geral: ‹ Hoje › agrupados como na Agenda (`.agd-nav`); de 1100px para cima a barra fica
   numa linha e os filtros encolhem com "…".
+- (2026-10-09, pedido do usuário) Barra da Agenda numa linha só de 1280px para cima
+  (`@media (min-width:1280px)` → `flex-wrap:nowrap`): falta espaço = a busca encolhe (mín. 120px)
+  e depois "Profissional: Nome" ganha "…" (`flex:0 100 auto`, nome inteiro no `title` de `#agdWho`);
+  o período nunca corta. Abaixo de 1280px o grupo da direita desce para a 2ª linha.

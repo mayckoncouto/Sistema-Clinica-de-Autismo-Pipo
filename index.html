@@ -882,13 +882,21 @@ tr.is-inactive td{color:var(--muted)}
    período · profissional/sala | busca · tela cheia · Outras opções · + Incluir · ?.
    Título e profissional nunca cortam: quando não cabe, a barra quebra em duas linhas. */
 @media (min-width:761px){
-  #tab-agenda .agd-toolbar{flex-wrap:wrap;overflow:visible;row-gap:8px}
+  /* Tudo numa linha só: quando falta espaço, primeiro a busca encolhe, depois o nome do
+     profissional ganha "…" (nome inteiro no title); o período nunca corta. */
+  #tab-agenda .agd-toolbar{flex-wrap:wrap;row-gap:8px;overflow:visible}
   #tab-agenda .agd-title{flex:none;overflow:visible}
-  #tab-agenda .agd-who{flex:none;overflow:visible;padding-left:10px;border-left:1px solid var(--line)}
+  #tab-agenda .agd-who{flex:0 100 auto;min-width:70px;padding-left:10px;border-left:1px solid var(--line)}
   #tab-agenda .agd-who:empty{display:none}
+  #tab-agenda .agd-toolbar .spacer{flex:1 1 0;min-width:4px}
   .agd-tb-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex:0 1 auto;min-width:0}
   .agd-tb-right > *{flex:none}
-  .agd-tb-right .agd-search{flex:0 1 240px;min-width:150px}
+  .agd-tb-right .agd-search{flex:0 1 240px;min-width:120px}
+}
+/* De 1280px para cima (computador comum) a barra não quebra linha; abaixo disso o lado direito
+   desce inteiro para a 2ª linha. */
+@media (min-width:1280px){
+  #tab-agenda .agd-toolbar{flex-wrap:nowrap}
 }
 @media (max-width:760px){.agd-tb-right{display:contents}#tab-agenda .agd-who{display:none}}
 .agd-toolbar .spacer{flex:1 1 0;min-width:0}
@@ -13002,7 +13010,7 @@ function agdRender(){
   if (AD.view === "semana"){
     var res = agdFindRes(AD.sel) || resources[0];
     AD.sel = res.id;
-    whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(res.name)+"</b>";
+    whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(res.name)+"</b>"; whoEl.title = whoEl.textContent;
     html += '<thead><tr><th class="agd-tcol"></th>' + days.map(function(d){
       var hs = holidaysOn(agdIso(d));
       return '<th class="'+(agdSameDay(d, today) ? "today" : "")+(hs.length ? " agd-hol-th" : "")+'"'+(hs.length ? ' title="'+esc(hs.map(function(h){ return h.name; }).join(", "))+'"' : '')+'>'+agdDayObj(d).name.slice(0,3).toLowerCase()+' <span class="agd-dnum">'+d.getDate()+'/'+(d.getMonth()+1)+'</span>' +
@@ -13028,6 +13036,7 @@ function agdRender(){
     var dHols = holidaysOn(dIso);
     whoEl.innerHTML = (AD.mode === "prof" ? "Profissional: " : "Sala: ") + "<b>"+esc(selRes.name)+"</b>" +
       (dHols.length ? ' <span class="agd-hol-tag">'+esc(dHols.map(function(h){ return h.name + (h.periodo === "manha" ? " (manhã)" : h.periodo === "tarde" ? " (tarde)" : ""); }).join(", "))+'</span>' : '');
+    whoEl.title = whoEl.textContent;
     html += '<thead><tr><th class="agd-tcol"></th>' + cols.map(function(r){
       var sub = AD.mode === "prof" ? (r.specialtyId ? specialtyName(r.specialtyId) : "") : "Sala";
       if (r._split === "grupos") return '<th class="agd-grp-col" title="Agendamentos dos grupos de suporte nesta sala">'+esc(r._label)+'<span class="agd-hsub">em '+esc(r.name)+'</span></th>';
