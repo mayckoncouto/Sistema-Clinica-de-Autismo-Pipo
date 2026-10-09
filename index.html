@@ -418,6 +418,11 @@ div.ag-obj-head{cursor:default}
 /* Computador: nome do campo à esquerda (coluna fixa) e o campo ao lado, todos alinhados. */
 @media (min-width:761px){
   #ovCrm .crm-props{column-gap:14px}
+  /* lateral Atividade: campo de comentar em cima (logo abaixo do título), 3 linhas */
+  #ovCrm .crm-side-head{order:0}
+  #ovCrm .crm-side .crm-comment{order:1;border-top:0;border-bottom:1px solid var(--line)}
+  #ovCrm .crm-side-body{order:2}
+  #ovCrm #crmCommentIn{min-height:0;height:calc(3 * 1.5em + 16px)}
   #ovCrm .crm-prop{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:8px}
   #ovCrm .crm-prop.wide{grid-template-columns:96px minmax(0,1fr)}
   #ovCrm .crm-prop>label{margin:0!important;align-self:center;line-height:1.3}
@@ -545,12 +550,11 @@ div.ag-obj-head{cursor:default}
   .crm-cal-more{font-size:9.5px;text-align:center}
   /* Quadro: um status por vez na largura da tela; só os quadros deslizam para o lado (o topo fica parado) */
   .crm-host:has(.crm-board){display:flex;flex-direction:column;overflow:hidden}
-  .crm-pager{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;flex:none;border-bottom:1px solid var(--line);scrollbar-width:none}
-  .crm-pager::-webkit-scrollbar{display:none}
-  .crm-pager button{flex:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:600;white-space:nowrap;-webkit-tap-highlight-color:transparent}
-  .crm-pager button b{font-size:11.5px;color:var(--muted)}
-  .crm-pager button.active{border-color:var(--accent);background:var(--accent-weak);color:var(--ink)}
-  .crm-pager button.active b{color:var(--accent)}
+  .crm-pager{display:flex;padding:8px 12px;flex:none;border-bottom:1px solid var(--line)}
+  .crm-pager .crm-pager-btn{flex:1;width:100%;min-width:0}
+  .crm-pager-btn .dp-txt,.crm-pg-menu [data-pick]{display:flex;align-items:center;gap:8px;min-width:0}
+  .crm-pg-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crm-pg-n{font-size:12px;color:var(--muted);font-weight:600}
   .crm-board{flex:1 1 auto;min-height:0;height:auto;gap:0;padding:10px 0;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none}
   .crm-board::-webkit-scrollbar{display:none}
   .crm-col{flex:0 0 calc(100% - 24px);margin:0 12px;scroll-snap-align:center;scroll-snap-stop:always}
@@ -633,9 +637,7 @@ div.ag-obj-head{cursor:default}
 .crm-cmt-act{border:0;background:none;font:inherit;font-size:12px;color:var(--muted);padding:2px 6px;border-radius:6px;cursor:pointer}
 .crm-cmt-act:hover{background:var(--surface-2);color:var(--ink)}
 .crm-cmt-act.del:hover{color:var(--danger,#c0392b)}
-.crm-cmt.editing .crm-cmt-acts{display:none}
-.crm-cmt-ed{width:100%;box-sizing:border-box;resize:vertical;font:inherit;font-size:13px}
-.crm-cmt-ed-bar{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+#ovCmtEdit .crm-compose textarea{font-size:13px;min-height:96px}
 .crm-cmt-b{font-size:13.5px;line-height:1.55;color:var(--ink);overflow-wrap:anywhere}
 .crm-mention-pop{position:absolute;left:0;bottom:100%;margin-bottom:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);z-index:5;min-width:220px;max-height:220px;overflow:auto}
 .crm-mention-pop button{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px;text-align:left}
@@ -5702,6 +5704,34 @@ function crmCommentDelete(id){
     if (!(r.data || []).length) throw new Error("sem permissão para excluir este comentário.");
   });
 }
+// Janela "Editar mensagem": a mesma caixa do comentário (texto + botão de enviar).
+// Enter salva, Shift+Enter quebra a linha, Esc/✕/clique fora cancela. Devolve o texto novo ou null.
+function crmEditDialog(old){
+  return new Promise(function(resolve){
+    var host = document.getElementById("confirmHost");
+    if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
+    host.innerHTML = '<div class="overlay confirm-overlay" id="ovCmtEdit" role="dialog" aria-modal="true" aria-labelledby="ceTitle">' +
+      '<div class="modal" style="max-width:520px">' +
+        '<div class="modal-head"><div><h3 id="ceTitle">Editar mensagem</h3></div><button class="modal-close" id="ceClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-body"><div class="crm-compose"><textarea id="ceText" rows="4" aria-label="Mensagem"></textarea>' +
+          '<div class="crm-compose-bar"><div class="crm-compose-tools"></div><button type="button" class="crm-send" id="ceSend" title="Salvar (Enter) · Shift+Enter quebra a linha" aria-label="Salvar mensagem">' +
+          '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13.5l12-5.5L2 2.5l1.8 5.5z" fill="currentColor"/><path d="M3.8 8H9" stroke="var(--surface)" stroke-width="1.3" stroke-linecap="round"/></svg></button></div></div></div>' +
+      '</div></div>';
+    var ov = document.getElementById("ovCmtEdit"), ta = document.getElementById("ceText"), send = document.getElementById("ceSend");
+    ta.value = old || "";
+    function state(){ send.disabled = !ta.value.trim(); }
+    function done(v){ document.removeEventListener("keydown", onKey, true); host.innerHTML = ""; resolve(v); }
+    function save(){ var v = ta.value.trim(); if (v) done(v); }
+    function onKey(e){ if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); done(null); } }
+    document.addEventListener("keydown", onKey, true);
+    ov.addEventListener("mousedown", function(e){ if (e.target === ov) done(null); });
+    document.getElementById("ceClose").addEventListener("click", function(){ done(null); });
+    send.addEventListener("click", save);
+    ta.addEventListener("input", state);
+    ta.addEventListener("keydown", function(e){ if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); save(); } });
+    state(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  });
+}
 function crmMentionsOf(body){ return CRM.people.filter(function(p){ return body.indexOf("@" + p.full_name) !== -1; }).map(function(p){ return p.id; }); }
 // Liga os botões Editar / Excluir dos comentários do feed. `pending` = lista da tarefa nova
 // (comentários ainda não enviados: muda só na memória).
@@ -5720,24 +5750,11 @@ function crmCommentActionsWire(feed, taskId, pending, rerender){
       return;
     }
     if (act === "edit"){
-      var bd = card.querySelector(".crm-cmt-b"); if (!bd || card.classList.contains("editing")) return;
       var old = pi !== null ? pending[+pi].body : (card.__body || "");
-      card.classList.add("editing");
-      bd.innerHTML = '<textarea class="crm-cmt-ed" rows="3"></textarea><div class="crm-cmt-ed-bar"><button type="button" class="btn ghost" data-cmt-ed="cancel">Cancelar</button><button type="button" class="btn primary" data-cmt-ed="save">Salvar</button></div>';
-      var ta = bd.querySelector("textarea"); ta.value = old; ta.focus(); ta.setSelectionRange(old.length, old.length);
-      function cancel(){ if (pi !== null) rerender(); else crmActivityLoad(taskId); }
-      function save(){
-        var nb = ta.value.trim();
-        if (!nb){ showToast("O comentário não pode ficar vazio. Para tirar, use Excluir.", true); return; }
-        if (nb === old){ cancel(); return; }
+      crmEditDialog(old).then(function(nb){
+        if (nb === null || nb === old) return;
         if (pi !== null){ pending[+pi] = {body: nb, mentions: crmMentionsOf(nb)}; rerender(); return; }
         crmCommentEdit(id, nb, crmMentionsOf(nb)).then(function(){ crmActivityLoad(taskId); }, function(e){ showToast("Não foi possível editar: " + ((e && e.message) || e), true); });
-      }
-      bd.querySelector('[data-cmt-ed="cancel"]').addEventListener("click", cancel);
-      bd.querySelector('[data-cmt-ed="save"]').addEventListener("click", save);
-      ta.addEventListener("keydown", function(e){
-        if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); cancel(); }
-        else if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); save(); }
       });
     }
   });
@@ -5966,9 +5983,8 @@ function crmRender(){
   if (!mine && CRM.view === "quadro"){
     var bsts = list.statuses.filter(function(s){ return showDone || !s.done; });
     // Celular: um status por vez na largura da tela; a barra de status em cima mostra onde está e leva até ele.
-    var pager = '<div class="crm-pager" role="tablist">' + bsts.map(function(s, i){
-      return '<button type="button" role="tab" data-crm-page="' + i + '">' + crmStIcon(list, s) + '<span>' + esc(s.name) + '</span><b>' + tasks.filter(function(x){ return x.status === s.id; }).length + '</b></button>';
-    }).join("") + '</div>';
+    // Celular: um campo de escolha (igual aos filtros) com o status que está na tela; tocar abre a lista dos status.
+    var pager = '<div class="crm-pager"><button type="button" class="dp-btn dp-plain crm-pager-btn" aria-label="Status do quadro"><span class="dp-txt"></span><span class="dp-chev">' + DP_CHEV + '</span></button></div>';
     host.innerHTML = pager + '<div class="crm-board">' + bsts.map(function(s){
       var xs = tasks.filter(function(x){ return x.status === s.id; });
       return '<div class="crm-col" data-crm-drop="' + esc(s.id) + '"><div class="crm-col-head">' + crmStDot(s) + '<span class="crm-count">' + xs.length + '</span>' +
@@ -5979,7 +5995,7 @@ function crmRender(){
             '<div class="crm-card-f">' + crmAvatars(x.assignees) + crmDueHtml(x) + crmComHtml(x.id) + crmPrioFlag(x.priority) + '</div></div>';
         }).join("") + '</div></div>';
     }).join("") + '</div>';
-    crmBoardPager(host, bsts.length);
+    crmBoardPager(host, bsts.map(function(s){ return {st: s, n: tasks.filter(function(x){ return x.status === s.id; }).length}; }), list);
     return;
   }
   if (!base.length){ host.innerHTML = '<div class="empty-state"><b>' + (mine ? "Nenhuma tarefa com você." : "Nenhuma tarefa nesta lista") + '</b>' + (mine ? "" : 'Use "+ Tarefa".') + '</div>'; return; }
@@ -6115,12 +6131,11 @@ function crmCalHtml(tasks, base, list){
     '<div class="crm-cal-head">' + CRM_WEEKDAYS.map(function(w){ return '<div data-s="' + w.slice(0, 3) + '"><span>' + w + '</span></div>'; }).join("") + '</div>' +
     '<div class="crm-cal-grid" style="grid-template-rows:repeat(' + weeks + ',minmax(0,1fr))">' + cells + '</div></div>';
 }
-function crmBoardPager(host, n){
-  var board = host.querySelector(".crm-board"), pg = host.querySelector(".crm-pager"); if (!board || !pg) return;
-  var page = Math.min(CRM.boardPage || 0, Math.max(0, n - 1));
-  function mark(i){
-    Array.prototype.forEach.call(pg.querySelectorAll("[data-crm-page]"), function(b, k){ b.classList.toggle("active", k === i); b.setAttribute("aria-selected", k === i ? "true" : "false"); if (k === i && b.scrollIntoView && pg.scrollWidth > pg.clientWidth) pg.scrollLeft = b.offsetLeft - (pg.clientWidth - b.offsetWidth) / 2; });
-  }
+function crmBoardPager(host, items, list){
+  var board = host.querySelector(".crm-board"), btn = host.querySelector(".crm-pager-btn"); if (!board || !btn) return;
+  var n = items.length, page = Math.min(CRM.boardPage || 0, Math.max(0, n - 1));
+  function label(it){ return crmStIcon(list, it.st) + '<span class="crm-pg-name">' + esc(it.st.name) + '</span><b class="crm-pg-n">' + it.n + '</b>'; }
+  function mark(i){ var it = items[i]; btn.querySelector(".dp-txt").innerHTML = it ? label(it) : ""; }
   mark(page);
   if (isMobileView() && page) board.scrollLeft = page * board.clientWidth;
   var t = null;
@@ -6128,10 +6143,12 @@ function crmBoardPager(host, n){
     if (!isMobileView()) return;
     clearTimeout(t); t = setTimeout(function(){ var i = Math.round(board.scrollLeft / Math.max(1, board.clientWidth)); if (i !== CRM.boardPage){ CRM.boardPage = i; mark(i); } }, 60);
   });
-  pg.addEventListener("click", function(e){
-    var b = e.target.closest("[data-crm-page]"); if (!b) return;
-    var i = +b.getAttribute("data-crm-page"); CRM.boardPage = i; mark(i);
-    board.scrollTo({left: i * board.clientWidth, behavior: "smooth"});
+  btn.addEventListener("click", function(){
+    var cur = CRM.boardPage || 0;
+    var html = items.map(function(it, i){ return '<button type="button" role="menuitemradio" aria-checked="' + (i === cur) + '" data-pick="' + i + '" class="' + (i === cur ? 'sel' : '') + '">' + label(it) + '</button>'; }).join("");
+    crmPop(btn, "crm-st-menu crm-pg-menu", html, {title: "Status", start: cur, onPick: function(v, close){
+      close(); var i = +v; CRM.boardPage = i; mark(i); board.scrollTo({left: i * board.clientWidth, behavior: "smooth"});
+    }});
   });
 }
 function crmCalDaySheet(anchor, iso){
@@ -18934,14 +18951,14 @@ var HELP_TOPICS = [
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
-      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos: mostra as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Enter</b> envia o comentário (Shift+Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (Enter salva, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
+      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com o campo de comentário (3 linhas) logo no alto; embaixo dele aparecem as alterações e os comentários na ordem em que aconteceram; escreva @ para mencionar alguém. <b>Enter</b> envia o comentário (Shift+Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Enter salva, Shift+Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],
     rules: [
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
       "Vencimento passado fica em vermelho (menos nos status que encerram a tarefa).",
       "Ir para um status de perda (ex.: Cancelado) pede o motivo de perda. Tarefa num status finalizado não pode ser excluída.",
       "Cada lista tem a sua permissão (ver, incluir, editar, excluir) em Níveis de permissão. Listas e status: só o Administrador (CRM ▾ → Listas e status).",
-      "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Origem, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o começo da Tarefa, Vencimento e a bandeira da Prioridade; no Quadro, cada status ocupa a tela toda: deslize para o lado ou toque no status na barra de cima; no Calendário, toque num dia para ver as tarefas dele. Na janela da tarefa, os botões <b>Detalhes</b> (campos e descrição) e <b>Atividade</b> (alterações, comentários e o campo para comentar) trocam o que aparece. Na tarefa nova já dá para comentar: o comentário fica marcado \"enviado ao salvar\" e vai junto quando a tarefa é salva."
+      "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Origem, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o começo da Tarefa, Vencimento e a bandeira da Prioridade; no Quadro, cada status ocupa a tela toda: deslize para o lado ou escolha o status no campo acima dos quadros; no Calendário, toque num dia para ver as tarefas dele. Na janela da tarefa, os botões <b>Detalhes</b> (campos e descrição) e <b>Atividade</b> (alterações, comentários e o campo para comentar) trocam o que aparece. Na tarefa nova já dá para comentar: o comentário fica marcado \"enviado ao salvar\" e vai junto quando a tarefa é salva."
     ],
     who: "Permissão de cada lista do CRM."},
   {id: "visaogeral", group: "Agenda", title: "Visão geral do dia", mod: "visao_geral", tab: "visaogeral",

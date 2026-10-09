@@ -3001,3 +3001,13 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
 - (2026-10-09, pedido do usuário) Linhas da lista do CRM com a altura das listas de cadastro (40px): botões das
   células com `margin-block:-7px` (continuam ocupando a célula toda).
 - Produção (2026-10-09): `2026-10-09c-crm-editar-comentario` rodada.
+- (2026-10-09, pedido do usuário) Editar comentário do CRM abre a janela **Editar mensagem** (`crmEditDialog(old)` →
+  texto ou null; mesma caixa `.crm-compose` com botão de enviar; Enter salva, Shift+Enter quebra linha, Esc/✕/clique
+  fora cancela; no `#confirmHost`). Saiu a edição dentro do cartão (`.crm-cmt-ed`).
+- (2026-10-09, pedido do usuário) Computador: na lateral Atividade o campo de comentar fica EM CIMA (logo abaixo do
+  título, `order` no CSS do `@media (min-width:761px)`), com 3 linhas (`#crmCommentIn` height = 3 × 1,5em + 16px).
+  No celular continua embaixo, na aba Atividade.
+- (2026-10-09, pedido do usuário, celular) Quadro do CRM: a fileira de botões de status virou UM campo de escolha
+  igual aos filtros (`.crm-pager` > `button.dp-btn.dp-plain.crm-pager-btn`, linha inteira) com o status da tela
+  (bolinha, nome, quantidade); tocar abre a janela de baixo "Status" (`crmPop`, `.crm-pg-menu`) e escolher desliza
+  até ele. `crmBoardPager(host, items, list)`.

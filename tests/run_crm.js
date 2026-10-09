@@ -140,8 +140,10 @@ const path = require('path');
   // Editar e excluir o próprio comentário
   await page.hover('#crmFeed .crm-cmt:last-child');
   await page.click('#crmFeed .crm-cmt:last-child [data-cmt-act="edit"]');
-  await page.fill('#crmFeed .crm-cmt-ed', 'Mãe confirmou às 10h');
-  await page.press('#crmFeed .crm-cmt-ed', 'Enter'); await page.waitForTimeout(250);
+  check('edit opens the "Editar mensagem" window with the text?', (await page.$eval('#ceTitle', (e) => e.textContent)) === 'Editar mensagem' && (await page.$eval('#ceText', (e) => e.value)) === 'Mãe confirmou');
+  await page.fill('#ceText', 'Mãe confirmou às 10h');
+  await page.press('#ceText', 'Enter'); await page.waitForTimeout(250);
+  check('edit window closed, task window still open?', !(await page.$('#ovCmtEdit')) && !!(await page.$('#ovCrm')));
   const edited = await page.$eval('#crmFeed .crm-cmt:last-child', (e) => e.textContent);
   check('edit own comment: new text and "(editado)"?', /Mãe confirmou às 10h/.test(edited) && /\(editado\)/.test(edited), edited);
   const nC = await page.$$eval('#crmFeed .crm-cmt', (r) => r.length);
