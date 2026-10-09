@@ -2979,3 +2979,5 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   `crmLoad` só redesenha com a tela aberta e atualiza o contador. Medido com 2000 tarefas fictícias
   (CPU 4× mais lenta): Lista ~1,1 s, Quadro ~0,8 s, Calendário ~0,1 s, janela ~20 ms — o tempo é do
   navegador montando as linhas. Teste no fim de `tests/run_crm.js`.
+- (2026-10-09, pedido do usuário) CRM abre em **Minhas tarefas**: sem lista escolhida (endereço `#crm`, F5,
+  primeira abertura) ou com lista sem permissão, `crmOnShow` usa `CRM.list = "__mine"` (antes a 1ª lista).
