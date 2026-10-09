@@ -2844,3 +2844,14 @@ contador no topo, @menções, vencidas em vermelho. Botão do topo = **CRM**; a 
   `agenda.view` e que a pessoa vê o agendamento do grupo; devolve atendimentos da mesma sala/data/hora,
   sem bloqueio e sem `group_id`) e redesenha "Pacientes (N)", a lista e os objetivos; sem a função, fica o
   da semana carregada. Migração `supabase/2026-10-09-pacientes-do-grupo.sql` (testada no PGlite).
+- 2026-10-09 (pedido do usuário, celular) **CRM: campo de escolha abre janela de baixo**. `useSheet(el)` (celular e
+  dentro de `SHEET_SCOPE` = `#tab-crm, #ovCrm, #ovCrmL`) → `sheetWrap(título, aoFechar)` cria `#mSheetBg` + `#mSheet`
+  (título = rótulo do campo via `sheetTitleFor`, ✕, toque fora fecha; `sheetRemove`, `inSheet`). `dpOpenPop` põe o
+  `#dpPop` dentro da janela (`pop.__sheet`, sem `dpPlace`); a data fica só leitura no celular (sem teclado) e ganha
+  **Limpar** (`.dp-clear`); a busca das listas não abre o teclado sozinha. `crmPop` faz o mesmo (`o.title`; Status com
+  busca `o.search` → `.crm-pop-q`). `#crmLConv` sem `data-combo` no celular. Lista no celular: Status, Tarefa (4
+  primeiras palavras, `.crm-t-sm`), Venc., Prio. (só a bandeira, `.crm-prio-name` oculto); Minhas tarefas = tabela
+  `.crm-mine-t`. Calendário: dias "Dom/Seg…" (`data-s`), tarefas viram marcas coloridas e tocar no dia abre
+  `crmCalDaySheet` (tarefas do dia + "+ Nova tarefa neste dia"). Janela da tarefa: rótulo em cima, uma coluna, tudo
+  rola junto (atividade e comentário no fim). Listas e status: nome na linha toda, opções embaixo. Barra: busca na
+  linha toda, os 3 filtros lado a lado. Teste `tests/run_crm_mobile.js`.
