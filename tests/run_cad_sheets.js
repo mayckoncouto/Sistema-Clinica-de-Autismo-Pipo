@@ -93,6 +93,32 @@ const path = require('path');
   const msT = await page.evaluate(() => { const p = document.querySelector('#sfTypes'); const r = p.getBoundingClientRect(); return {t: (p.querySelector('.ms-sheet-head b') || {}).textContent, bottom: Math.round(r.bottom), vh: innerHeight}; });
   check('multi-choice (Tipos) opens as a bottom window titled "Tipos"?', msT.t === 'Tipos' && Math.abs(msT.bottom - msT.vh) <= 2, JSON.stringify(msT));
   await page.evaluate(() => { document.getElementById('modalHost').innerHTML = ''; });
+  // Visão geral no celular: busca na linha toda; filtros 2 por linha; data + Hoje + ?; contagem; sem etiquetas
+  await page.evaluate(() => { document.querySelector('#mainTabs button[data-tab="visaogeral"]').click(); });
+  await page.waitForTimeout(400);
+  const vg = await page.evaluate(() => {
+    const R = (e) => e ? e.getBoundingClientRect() : null;
+    const q = R(document.querySelector('#tab-visaogeral .vg-q'));
+    const f = [...document.querySelectorAll('#tab-visaogeral .vg-toolbar > .dp-btn')].map(R).filter((r) => r && r.width);
+    const d = R(document.querySelector('#tab-visaogeral .vg-nav')), h = R(document.querySelector('#tab-visaogeral .help-q'));
+    const c = R(document.getElementById('vgCounts'));
+    return {qW: Math.round(q.width), fN: f.length, fRows: [...new Set(f.map((r) => Math.round(r.top)))].length,
+      fBelowQ: f.every((r) => r.top >= q.bottom - 1), navBelowF: f.every((r) => d.top >= r.bottom - 1), helpSameRow: Math.abs(h.top - d.top) < 12,
+      countBelow: c.top >= d.bottom - 1, sw: document.documentElement.scrollWidth,
+      title: getComputedStyle(document.querySelector('.vg-title')).display};
+  });
+  check('Visão geral (celular): search, filters 2 per row, date+Hoje+?, count?', vg.qW > 320 && vg.fN === 4 && vg.fRows === 2 && vg.fBelowQ && vg.navBelowF && vg.helpSameRow && vg.countBelow && vg.sw <= 390 && vg.title === 'none', JSON.stringify(vg));
+  const r3 = await probe('#tab-visaogeral');
+  check('Visão geral: filters and date open the bottom window?', r3.tested >= 5 && !r3.bad.length, JSON.stringify(r3));
+  // fora dos cadastros também (Agenda) e Salas continua com a lista flutuante
+  await page.evaluate(() => { document.querySelector('#mainTabs button[data-tab="agenda"]').click(); });
+  await page.waitForTimeout(400);
+  const r4 = await probe('#tab-agenda .agd-toolbar');
+  check('Agenda: date field opens the bottom window?', r4.tested > 0 && !r4.bad.length, JSON.stringify(r4));
+  await page.evaluate(() => { document.querySelector('#mainTabs button[data-tab="salas"]').click(); });
+  await page.waitForTimeout(250);
+  const salas = await page.evaluate(() => { const s = document.querySelector('#tab-salas select'); return s ? typeof useSheet === 'function' && !useSheet(s) : true; });
+  check('Salas/Grupos keep the floating list?', salas);
   check('no JS errors?', errors.length === 0, errors);
   fs.unlinkSync(pg);
   await browser.close();
