@@ -2911,3 +2911,15 @@ Medido com volume real fictício (110 pacientes, 40 colunas, 75% ocupado, CPU 4�
   Agenda: trocar de semana não apaga mais a grade — a semana nova aparece apagada e sem clique
   (`#agdGrid.agd-loading`) com "Carregando…" no título (`.agd-loading-tag`) até os atendimentos
   chegarem; "Carregando agenda…" só na 1ª carga. Teste `tests/run_planner_agenda_visual.js`.
+- (2026-10-09, pedido do usuário) Planner: na janela do agendamento, a amostra de "Bloqueado" é o
+  cinza do horário bloqueado (`slotKindPickerHtml(atual, desativado, planner=true)` →
+  `--off-bg` tracejado); legenda do Planner junta "Bloqueado ou fora do horário do profissional".
+  A Agenda continua com o Bloqueado escuro (`BLOCKED_COLOR`).
+- (2026-10-09, pedido do usuário) Barras com largura pelo conteúdo: campo de data das barras
+  (`.pat-toolbar`/`.agd-toolbar`/`.crm-toolbar`/`.controls`, computador) com a largura de
+  dd/mm/aaaa. Agenda (computador): ordem data · ‹ Hoje › · Dia/Semana · período · "Profissional:
+  X" (não cortam mais); o lado direito (busca, tela cheia, Outras opções, + Incluir, ?) fica no
+  grupo `.tb-right.agd-tb-right` (quebra de linha leva o grupo inteiro; no celular
+  `display:contents`; `helpAddQButtons` põe o "?" dentro de `.tb-right` quando existe).
+  Visão geral: ‹ Hoje › agrupados como na Agenda (`.agd-nav`); de 1100px para cima a barra fica
+  numa linha e os filtros encolhem com "…".
