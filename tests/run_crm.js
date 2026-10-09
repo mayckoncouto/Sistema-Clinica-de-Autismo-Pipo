@@ -26,7 +26,7 @@ const path = require('path');
   // Menu CRM ▾
   await page.click('#crmBtn');
   const items = await page.$$eval('#crmMenu [data-nav]', (r) => r.map((x) => x.textContent));
-  check('CRM menu: Minhas tarefas, the 4 lists and Listas e status?', items.join('|') === 'Minhas tarefas|Atendimento|Agendas|Fature|Gestão|Listas e status', items);
+  check('CRM menu: Minhas tarefas, the 4 lists and Listas e status?', items.join('|') === 'CRM|Minhas tarefas|Atendimento|Agendas|Fature|Gestão|Listas e status', items);
   await page.click('#crmMenu [data-nav="crm-atendimento"]');
   await page.waitForTimeout(200);
 
@@ -227,6 +227,20 @@ const path = require('path');
     return {afterOpens: afterOpens, afterReconnect: afterReconnect};
   })()`);
   check('CRM: opening again uses the live data (1 read); reconnecting reads once more?', cache.afterOpens === 1 && cache.afterReconnect === 2, JSON.stringify(cache));
+  // CRM ▾ → CRM: cartões das listas; clicar abre a lista.
+  await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-home"]'); await page.waitForTimeout(150);
+  const home = await page.evaluate(() => ({ cards: [...document.querySelectorAll('#crmHost [data-crm-home]')].map((b) => b.querySelector('b').textContent), seg: getComputedStyle(document.getElementById('crmViewSeg')).display, title: document.getElementById('crmTitle').textContent }));
+  check('CRM home: one card per list (Minhas tarefas first), view buttons hidden?', home.cards.join('|').indexOf('Minhas tarefas|Atendimento|Agendas|Fature|Gestão') === 0 && home.seg === 'none' && home.title === 'CRM', home);
+  await page.click('#crmHost [data-crm-home="agendas"]'); await page.waitForTimeout(100);
+  const opened = await page.evaluate(() => ({ title: document.getElementById('crmTitle').textContent, seg: getComputedStyle(document.getElementById('crmViewSeg')).display }));
+  check('clicking a card opens that list?', opened.title === 'Agendas' && opened.seg !== 'none', opened);
+  // Tela aberta (#crm, F5) antes de as permissões chegarem: quando chegam, abre Minhas tarefas.
+  await ev('(function(){ window.__vis = crmVisibleLists; crmVisibleLists = function(){ return []; }; CRM.list = ""; crmOnShow(); return true; })()');
+  const before = await page.$eval('#crmHost', (e) => e.textContent);
+  await ev('(function(){ crmVisibleLists = window.__vis; crmRender(); return true; })()');
+  await page.waitForTimeout(100);
+  const after = await page.evaluate(() => ({ title: document.getElementById('crmTitle').textContent, host: document.getElementById('crmHost').textContent, who: (document.querySelector('[data-dp-for="crmFWho"] .dp-txt') || {}).textContent }));
+  check('permissions arriving later: "Nenhuma lista" turns into Minhas tarefas, responsável filter labelled?', /Nenhuma lista/.test(before) && after.title === 'Minhas tarefas' && !/Nenhuma lista/.test(after.host) && after.who === 'Todos os responsáveis', after);
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

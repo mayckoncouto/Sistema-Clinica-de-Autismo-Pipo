@@ -260,6 +260,14 @@ div.ag-obj-head{cursor:default}
 .crm-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d64545;color:#fff;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;pointer-events:none}
 .crm-badge[hidden]{display:none}
 #tab-crm{flex:1;display:flex;flex-direction:column;min-height:0}
+/* CRM ▾ → CRM: cartões com as listas disponíveis */
+#tab-crm.crm-home :is(#crmViewSeg,.crm-q,[data-dp-for="crmFWho"],[data-dp-for="crmFPrio"],[data-dp-for="crmFDue"],#crmCount,.inact-toggle,#crmAdd){display:none!important}
+.crm-home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:16px}
+.crm-home-card{display:flex;flex-direction:column;gap:8px;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--lc,var(--accent));border-radius:10px;padding:14px 16px;cursor:pointer;font:inherit;color:var(--ink)}
+.crm-home-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.08);border-color:var(--lc,var(--accent))}
+.crm-home-card b{font-size:15px}
+.crm-home-nums{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--ink-2,var(--muted))}
+.crm-home-nums .late{color:var(--danger,#c0392b);font-weight:600}
 #tab-crm[hidden]{display:none}
 .crm-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .crm-title{font-size:14px;margin-right:4px}
@@ -369,7 +377,7 @@ div.ag-obj-head{cursor:default}
 .crm-cal-more:hover{color:var(--accent)}
 @media (max-width:760px){.crm-cal-head div{font-size:10px;padding:5px 3px}.crm-cal-day{padding:3px}.crm-cal-task{font-size:10.5px;padding:2px 4px}}
 .modal.crm-modal{max-width:min(760px,calc(100vw - 32px));width:100%}
-.modal.crm-modal.with-side{max-width:min(1180px,calc(100vw - 32px))}
+.modal.crm-modal.with-side{max-width:min(1060px,calc(100vw - 32px))}
 .modal.crm-modal.lay-cheia{max-width:none;width:calc(100vw - 24px);height:calc(100dvh - 24px);max-height:none}
 .overlay.crm-ov.lay-lateral{justify-content:flex-end;align-items:stretch;padding:0}
 .modal.crm-modal.lay-lateral{max-width:min(760px,100vw);height:100dvh;max-height:none;border-radius:0}
@@ -408,8 +416,9 @@ div.ag-obj-head{cursor:default}
 .crm-pv>input,.crm-pv>select,.crm-pv>.dp-btn,.crm-pv>.ms,.crm-who{width:100%}
 /* Computador: nome do campo à esquerda (coluna fixa) e o campo ao lado, todos alinhados. */
 @media (min-width:761px){
-  #ovCrm .crm-prop{display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:10px}
-  #ovCrm .crm-prop.wide{grid-template-columns:120px minmax(0,1fr)}
+  #ovCrm .crm-props{column-gap:14px}
+  #ovCrm .crm-prop{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:8px}
+  #ovCrm .crm-prop.wide{grid-template-columns:96px minmax(0,1fr)}
   #ovCrm .crm-prop>label{margin:0!important;align-self:center;line-height:1.3}
   #ovCrm #crmDescBox{align-items:start}
   #ovCrm #crmDescBox>label{align-self:start}
@@ -4035,7 +4044,7 @@ function boot(){
   renderSalasTab();
   renderRelatorioTab();
   // staffLoad: depois do fim do script (o bloco do RH vem mais abaixo).
-  if (window.pipoAuth) window.pipoAuth.onProfile(function(){ applyPermissionsUI(); setTimeout(staffLoad, 0); crmPreload(); });
+  if (window.pipoAuth) window.pipoAuth.onProfile(function(){ applyPermissionsUI(); setTimeout(staffLoad, 0); crmPreload(); if (state.tab === "crm") crmRender(); });
   else setTimeout(staffLoad, 0);
   connectDb();
   document.addEventListener("keydown", function(e){
@@ -5488,9 +5497,32 @@ function subscribeTaskLists(){
     if (state.tab === "crm") crmRender();
   }, function(){ CRM.listsLoaded = true; crmRebuildNav(); });
 }
+// CRM ▾ → CRM: um cartão por lista que a pessoa vê (abertas, vencidas, minhas); clicar abre a lista.
+function crmHomeRender(host){
+  if (!CRM.loaded){ host.innerHTML = '<div class="empty-state"><b>Carregando…</b></div>'; return; }
+  var vis = crmVisibleLists();
+  if (!vis.length){ host.innerHTML = '<div class="empty-state"><b>Nenhuma lista disponível</b>Peça ao Administrador acesso a uma lista do CRM.</div>'; return; }
+  var all = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; }), today = crmToday(), me = crmMe();
+  function card(id, name, color, tasks){
+    var open = tasks.filter(function(x){ return !crmIsDone(x); });
+    var late = open.filter(function(x){ return x.due_date && x.due_date < today; }).length;
+    var mine = open.filter(function(x){ return (x.assignees || []).indexOf(me) !== -1; }).length;
+    return '<button type="button" class="crm-home-card" data-crm-home="' + esc(id) + '"' + (color ? ' style="--lc:' + esc(swatchVar(color)) + '"' : '') + '><b>' + esc(name) + '</b>' +
+      '<span class="crm-home-nums"><span>' + open.length + ' aberta' + (open.length === 1 ? '' : 's') + '</span>' +
+      (late ? '<span class="late">' + late + ' vencida' + (late === 1 ? '' : 's') + '</span>' : '') +
+      (id === "__mine" ? '' : '<span>' + mine + ' comigo</span>') + '</span></button>';
+  }
+  var mineTasks = all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(me) !== -1; });
+  host.innerHTML = '<div class="crm-home-grid">' + card("__mine", "Minhas tarefas", "", mineTasks) +
+    vis.map(function(l){ return card(l.id, l.name, l.color, all.filter(function(x){ return x.list_id === l.id; })); }).join("") + '</div>';
+  Array.prototype.forEach.call(host.querySelectorAll("[data-crm-home]"), function(b){
+    b.addEventListener("click", function(){ CRM.list = b.getAttribute("data-crm-home"); crmFillFilters(); crmRender(); if (typeof renderNavMenus === "function") renderNavMenus(); });
+  });
+}
 function crmRebuildNav(){
   CRM_ITEMS.length = 0;
   var vis = crmVisibleLists();
+  if (vis.length) CRM_ITEMS.push({key: "crm-home", label: "CRM", tab: "crm", isOn: function(){ return state.tab === "crm" && CRM.list === "__home"; }, ok: function(){ return crmVisibleLists().length > 0; }, open: function(){ crmGo("__home"); }});
   if (vis.length) CRM_ITEMS.push({key: "crm-mine", label: "Minhas tarefas", tab: "crm", isOn: function(){ return state.tab === "crm" && CRM.list === "__mine"; }, ok: function(){ return crmVisibleLists().length > 0; }, open: function(){ crmGo("__mine"); }});
   (CRM.lists || []).forEach(function(l, i){
     CRM_ITEMS.push({key: "crm-" + l.id, label: l.name, tab: "crm", sep: i === 0, isOn: function(){ return state.tab === "crm" && CRM.list === l.id; }, ok: function(){ return crmCan(l.id, "view"); }, open: function(){ crmGo(l.id); }});
@@ -5513,10 +5545,16 @@ function crmGo(listId){
   if (tb) tb.click(); else crmOnShow();
 }
 
+// Lista aberta: sem lista (ou sem permissão) = Minhas tarefas. Refeito a cada desenho, porque a
+// tela pode abrir (endereço #crm, F5) antes de o nível/permissões chegarem.
+function crmResolveList(){
+  var vis = crmVisibleLists(), old = CRM.list;
+  if (!CRM.list || (CRM.list !== "__mine" && CRM.list !== "__home" && !vis.some(function(l){ return l.id === CRM.list; }))) CRM.list = vis.length ? "__mine" : "";
+  return CRM.list !== old;
+}
 // ----- dados (online = Supabase; sem sistema online = memória) -----
 function crmOnShow(){
-  var vis = crmVisibleLists();
-  if (!CRM.list || (CRM.list !== "__mine" && !vis.some(function(l){ return l.id === CRM.list; }))) CRM.list = vis.length ? "__mine" : "";
+  crmResolveList();
   crmFillFilters();
   // Já carregado e o tempo real conectado: mostra na hora, sem ler tudo de novo.
   if (CRM.loaded && !CRM.error && CRM.live){ crmRender(); return; }
@@ -5544,7 +5582,7 @@ function crmLoad(){
     CRM.loading = null;
     CRM.tasks = {}; res[0].forEach(function(x){ CRM.tasks[x.id] = x; });
     CRM.loaded = true; CRM.error = "";
-    if (state.tab === "crm") crmRender();
+    if (state.tab === "crm"){ crmFillFilters(); crmRender(); }
     crmBadgeRender(); crmLoadUnread(); crmLoadComCount();
   }, function(e){ CRM.loading = null; CRM.loaded = true; CRM.error = (e && e.message) || "erro"; if (state.tab === "crm") crmRender(); });
   return CRM.loading;
@@ -5690,7 +5728,8 @@ function crmFillFilters(){
   var cur = el.value;
   el.innerHTML = '<option value="">Todos os responsáveis</option><option value="__me">Eu</option><option value="__none">Sem responsável</option>' +
     CRM.people.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.full_name) + '</option>'; }).join("");
-  if (Array.prototype.some.call(el.options, function(o){ return o.value === cur; })) el.value = cur;
+  // sempre atribui (mesmo vazio): o botão visual da lista só se atualiza quando .value é gravado
+  el.value = Array.prototype.some.call(el.options, function(o){ return o.value === cur; }) ? cur : "";
 }
 function crmFilters(){
   function v(id){ var e = document.getElementById(id); return e ? e.value : ""; }
@@ -5827,6 +5866,10 @@ function crmTitleHtml(x){
 }
 function crmRender(){
   var host = document.getElementById("crmHost"); if (!host) return;
+  if (crmResolveList()){ crmFillFilters(); if (CRM.list && !CRM.loaded && !CRM.loading){ crmLoad(); return; } }
+  var home = CRM.list === "__home";
+  var sec = document.getElementById("tab-crm"); if (sec) sec.classList.toggle("crm-home", home);
+  if (home){ var tt = document.getElementById("crmTitle"); if (tt) tt.textContent = "CRM"; crmHomeRender(host); return; }
   var mine = CRM.list === "__mine", list = mine ? null : crmListById(CRM.list);
   var title = document.getElementById("crmTitle"); if (title) title.textContent = mine ? "Minhas tarefas" : (list ? list.name : "CRM");
   var seg = document.getElementById("crmViewSeg");
@@ -18803,7 +18846,7 @@ var HELP_TOPICS = [
   {id: "crm", group: "CRM", title: "CRM: listas e tarefas", mod: null, tab: "crm",
     purpose: "Acompanhar contatos (funil de atendimento) e tarefas da equipe por lista, com responsáveis, vencimento, prioridade, comentários e histórico.",
     steps: [
-      "Abra <b>CRM ▾</b> e escolha a lista (Atendimento, Agendas, Fature, Gestão…) ou <b>Minhas tarefas</b> (tudo o que está aberto com você). Ao entrar no CRM sem escolher uma lista (endereço #crm, atualizar a página), abre <b>Minhas tarefas</b>.",
+      "Abra <b>CRM ▾</b> e escolha a lista (Atendimento, Agendas, Fature, Gestão…) ou <b>Minhas tarefas</b> (tudo o que está aberto com você). O primeiro item, <b>CRM</b>, mostra um cartão por lista que você pode ver (abertas, vencidas, comigo); clique no cartão para abrir a lista. Ao entrar no CRM sem escolher uma lista (endereço #crm, atualizar a página), abre <b>Minhas tarefas</b>.",
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",

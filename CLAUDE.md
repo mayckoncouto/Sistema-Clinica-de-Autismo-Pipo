@@ -2981,3 +2981,10 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   navegador montando as linhas. Teste no fim de `tests/run_crm.js`.
 - (2026-10-09, pedido do usuário) CRM abre em **Minhas tarefas**: sem lista escolhida (endereço `#crm`, F5,
   primeira abertura) ou com lista sem permissão, `crmOnShow` usa `CRM.list = "__mine"` (antes a 1ª lista).
+- (2026-10-09, pedidos do usuário) **CRM ▾ → CRM** (1º item, `crm-home`, `CRM.list = "__home"`): cartões das listas
+  visíveis (`crmHomeRender`, `.crm-home-grid`/`.crm-home-card` com a cor da lista; Minhas tarefas primeiro;
+  abertas, vencidas, "comigo"); clicar abre a lista; a barra esconde visualização/filtros/+ Tarefa
+  (`#tab-crm.crm-home`). A tela não fica mais presa em "Nenhuma lista disponível" quando abre antes das
+  permissões: `crmResolveList()` roda em todo `crmRender` (e o `onProfile` redesenha o CRM);
+  `crmFillFilters` sempre grava `.value` (o botão do filtro Responsável aparecia vazio).
+  Janela da tarefa mais estreita (com a lateral 1060px; nome do campo em 96px, colunas a 14px).
