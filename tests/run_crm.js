@@ -209,6 +209,24 @@ const path = require('path');
   const mods = await ev('window.pipoCrmModules().map(function(m){ return m.key; })');
   check('permission modules per list?', mods.indexOf('crm_atendimento') === 0 && mods.indexOf('crm_compras') !== -1, mods);
 
+  // Velocidade: com o tempo real conectado, abrir o CRM de novo não relê tudo do banco
+  const cache = await ev(`(async function(){
+    var calls = 0, subCb = null;
+    function q(t){ var o = {}; ["select","order","eq","contains","limit","in"].forEach(function(m){ o[m] = function(){ return o; }; });
+      o.range = function(){ if (t === "tasks") calls++; return Promise.resolve({data: []}); };
+      o.then = function(a, b){ return Promise.resolve({data: []}).then(a, b); }; return o; }
+    var fake = {from: q, rpc: function(){ return Promise.resolve({data: []}); }, channel: function(){ var ch = {on: function(){ return ch; }, subscribe: function(cb){ subCb = cb; return ch; }}; return ch; }};
+    var old = crmClient; crmClient = function(){ return fake; };
+    CRM.loaded = false; CRM.loading = null; CRM.channel = null; CRM.live = false; CRM.wasLive = undefined;
+    await crmLoad(); subCb("SUBSCRIBED");
+    crmOnShow(); crmOnShow();
+    var afterOpens = calls;
+    subCb("CLOSED"); subCb("SUBSCRIBED"); await new Promise(function(r){ setTimeout(r, 50); });
+    var afterReconnect = calls;
+    crmClient = old; CRM.channel = null; CRM.live = false;
+    return {afterOpens: afterOpens, afterReconnect: afterReconnect};
+  })()`);
+  check('CRM: opening again uses the live data (1 read); reconnecting reads once more?', cache.afterOpens === 1 && cache.afterReconnect === 2, JSON.stringify(cache));
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

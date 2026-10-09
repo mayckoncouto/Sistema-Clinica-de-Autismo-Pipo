@@ -2969,3 +2969,13 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   tarefas), **Paciente ou Lead, Tarefa**, Convênio, Responsáveis, Vencimento, Prioridade. Celular
   continua Status, Tarefa, Venc., Prio. (`:nth-child` ajustados: lista esconde 2,4,5; Minhas
   tarefas esconde 2,3,5,6).
+- (2026-10-09, pedido do usuário: "CRM demora a carregar, o botão demora a aparecer") Velocidade
+  do CRM: o menu CRM é montado já na abertura com as listas padrão (`crmRebuildNav()` no início de
+  `subscribeTaskLists`), sem esperar o documento `config/task_lists`. As tarefas são lidas em
+  segundo plano 1,5 s depois que o perfil chega (`crmPreload`, uma vez; também deixa o contador do
+  topo certo sem abrir o CRM). Abrir o CRM de novo com o tempo real conectado (`CRM.live`, pelo
+  `subscribe` do canal `pipo-tasks`) mostra na hora sem reler tarefas/pessoas/comentários
+  (`crmOnShow`); a conexão que cai e volta relê uma vez. `CRM.loading` evita leituras em dobro;
+  `crmLoad` só redesenha com a tela aberta e atualiza o contador. Medido com 2000 tarefas fictícias
+  (CPU 4× mais lenta): Lista ~1,1 s, Quadro ~0,8 s, Calendário ~0,1 s, janela ~20 ms — o tempo é do
+  navegador montando as linhas. Teste no fim de `tests/run_crm.js`.

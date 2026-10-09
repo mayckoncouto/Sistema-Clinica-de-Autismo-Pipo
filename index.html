@@ -4035,7 +4035,7 @@ function boot(){
   renderSalasTab();
   renderRelatorioTab();
   // staffLoad: depois do fim do script (o bloco do RH vem mais abaixo).
-  if (window.pipoAuth) window.pipoAuth.onProfile(function(){ applyPermissionsUI(); setTimeout(staffLoad, 0); });
+  if (window.pipoAuth) window.pipoAuth.onProfile(function(){ applyPermissionsUI(); setTimeout(staffLoad, 0); crmPreload(); });
   else setTimeout(staffLoad, 0);
   connectDb();
   document.addEventListener("keydown", function(e){
@@ -5477,6 +5477,8 @@ window.pipoCrmModules = function(){
 
 // ----- cadastro das listas -----
 function subscribeTaskLists(){
+  // Monta o menu CRM já com as listas padrão (o botão aparece sem esperar o banco).
+  crmRebuildNav();
   if (!db) return;
   db.doc("config/task_lists").onSnapshot(function(snap){
     var d = (snap.exists && snap.data()) || {};
@@ -5496,6 +5498,14 @@ function crmRebuildNav(){
   CRM_ITEMS.push({key: "crm-listas", label: "Listas e status", sep: true, ok: crmIsAdmin, open: function(){ crmOpenListsModal(); }});
   if (typeof renderNavMenus === "function") renderNavMenus();
   crmBadgeRender();
+  crmPreload();
+}
+// Lê as tarefas em segundo plano logo depois da abertura do sistema (contador do topo certo e a
+// tela do CRM abre na hora). Só quem vê alguma lista; uma vez só (depois o tempo real mantém).
+function crmPreload(){
+  if (CRM.loaded || CRM.loading || CRM.preloadT || !crmClient() || !window.pipoAuth || !window.pipoAuth.profile || !window.pipoAuth.profile()) return;
+  if (!crmVisibleLists().length) return;
+  CRM.preloadT = setTimeout(function(){ CRM.preloadT = null; if (!CRM.loaded && !CRM.loading) crmLoad(); }, 1500);
 }
 function crmGo(listId){
   CRM.list = listId;
@@ -5508,6 +5518,9 @@ function crmOnShow(){
   var vis = crmVisibleLists();
   if (!CRM.list || (CRM.list !== "__mine" && !vis.some(function(l){ return l.id === CRM.list; }))) CRM.list = vis.length ? vis[0].id : "";
   crmFillFilters();
+  // Já carregado e o tempo real conectado: mostra na hora, sem ler tudo de novo.
+  if (CRM.loaded && !CRM.error && CRM.live){ crmRender(); return; }
+  if (CRM.loading){ crmRender(); return; }
   crmLoad();
 }
 function crmLoad(){
@@ -5527,11 +5540,14 @@ function crmLoad(){
     });
   }
   var ppl = CRM.people.length ? Promise.resolve() : c.rpc("crm_people").then(function(r){ if (!r.error) CRM.people = r.data || []; });
-  return Promise.all([page(0), ppl]).then(function(res){
+  CRM.loading = Promise.all([page(0), ppl]).then(function(res){
+    CRM.loading = null;
     CRM.tasks = {}; res[0].forEach(function(x){ CRM.tasks[x.id] = x; });
     CRM.loaded = true; CRM.error = "";
-    crmRender(); crmLoadUnread(); crmLoadComCount();
-  }, function(e){ CRM.loaded = true; CRM.error = (e && e.message) || "erro"; crmRender(); });
+    if (state.tab === "crm") crmRender();
+    crmBadgeRender(); crmLoadUnread(); crmLoadComCount();
+  }, function(e){ CRM.loading = null; CRM.loaded = true; CRM.error = (e && e.message) || "erro"; if (state.tab === "crm") crmRender(); });
+  return CRM.loading;
 }
 function crmEnsureChannel(){
   var c = crmClient(); if (CRM.channel || !c) return;
@@ -5547,7 +5563,13 @@ function crmEnsureChannel(){
       if (ev.kind === "comment"){ CRM.comCount = CRM.comCount || {}; CRM.comCount[ev.task_id] = (CRM.comCount[ev.task_id] || 0) + 1; crmLater(); }
       if ((ev.mentions || []).indexOf(crmMe()) !== -1) crmLoadUnread();
     })
-    .subscribe();
+    .subscribe(function(st){
+      if (st === "SUBSCRIBED"){
+        // Reconectou depois de cair: o que mudou enquanto estava fora chega relendo uma vez.
+        if (CRM.wasLive === false && CRM.loaded && !CRM.loading) crmLoad();
+        CRM.live = true; CRM.wasLive = true;
+      } else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT" || st === "CLOSED"){ CRM.live = false; if (CRM.wasLive) CRM.wasLive = false; }
+    });
 }
 var crmTimer = null;
 function crmLater(){
