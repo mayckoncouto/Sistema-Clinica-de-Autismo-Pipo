@@ -3089,3 +3089,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   `_itálico_`, `__sublinhado__`; `crmFmtApply` envolve a seleção ou põe as marcas com o cursor no meio) e o feed
   mostra formatado (`crmFmt` em `crmCommentHtml`; marca só vale encostada no texto e separada por espaço, então
   `nome_sobrenome` e `2*3` não mudam). Sem SQL.
+- (2026-10-09, pedido do usuário) **Ordem do menu principal** (computador e celular): Cadastros, Planner, Agenda,
+  Prontuário, CRM, Relatórios (o CRM saiu de antes do Prontuário: `.crm-wrap` vem depois do bloco do Prontuário em
+  `#mainTabs`; no ☰ `mnavRender` monta Cadastros, Agenda, Prontuário, CRM, abas soltas como Relatórios, e Acesso).
+  O Planner continua fora do celular.
