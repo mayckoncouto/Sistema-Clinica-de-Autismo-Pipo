@@ -155,6 +155,7 @@ exp_fn(n, h) as (values
   ('crm_my_name', '0736c6ff4a326fefdcb40afb933825db'),
   ('crm_people', '1713575f093216b3555b2c8b7111d9c4'),
   ('crm_user_can', '02bcf9652cd0e0ac29c4dd6fae96f976'),
+  ('delete_patient_health', 'e0dcb580637e2599804525eb2ee40894'),
   ('documents_enforce', '2a4d855c9d06c76f7f7d91b4edbbee09'),
   ('group_slot_appointments', 'f66cd9e53713a9d54ac0080aad946e5d'),
   ('handle_new_user', 'c34d65e62ad2cc56665add2d6b0638d1'),

@@ -3169,7 +3169,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
   (`agdDeleteRow` só confere evolução p/ não-admin) e mover/editar (`agdPlace`, janela) mudam data/paciente/profissional;
   a evolução guarda data própria e fica divergente; contagens de realizado/sessões usadas mudam.
 - ~~ALTA 3~~ FEITO (2026-10-10, ver "Excluir ou editar evolução" abaixo).
-- ALTA 4. Excluir paciente (`USAGE.pacientes`): não conta evoluções, planos, tarefas do CRM; `patient_health` fica órfã.
+- ~~ALTA 4~~ FEITO (2026-10-10, ver "Excluir paciente" abaixo).
 - ALTA 5. Mesclar (`merge_patient_records` + `openPatientMergeModal`): não move `therapy_plans`, `tasks.patient_id`;
   `patient_health` do excluído fica órfã.
 - ALTA 6. Status: qualquer um pode ser excluído (inclusive finalizado/nao-compareceu/falta-justificada usados pelas
@@ -3233,3 +3233,14 @@ evolução; quem exclui continua igual (autor com permissão ou Administrador).
   se a situação do objetivo no plano vigente ainda é a que a evolução gravou (`levelId` + `levelEm` = data dela), volta
   à da última evolução que sobrou (ou fica sem `levelId`/`levelEm`); Atingido/Ativo acompanha o nível final da escala.
   Testada no PGlite. Teste no fim de `tests/run_agd_done.js`.
+- Produção (2026-10-10): `2026-10-10d-excluir-evolucao` rodada (funções criadas = 2).
+
+## Excluir paciente (2026-10-10, item 4 da auditoria)
+Decisões do usuário: paciente com evolução, Plano Terapêutico ou tarefa do CRM vira Inativar; dados de saúde apagados
+junto ao excluir de verdade.
+- `USAGE.pacientes` conta também `clinical_records`, `therapy_plans` e `tasks` pelo `patient_id` (`rowUseCount(tabela,
+  coluna, valor, mem)`; sem sistema online lê `PLAN.evoMem`, `PLAN.mem`, `CRM.mem.tasks`).
+- Excluir: depois de `writePatients` gravar, `healthDelete(id)` → RPC `delete_patient_health(p_id)` (security definer:
+  Administrador ou `pacientes.delete`, e só se o paciente já saiu de `patients/all`). Migração
+  `supabase/2026-10-10e-excluir-paciente.sql` (também apaga uma vez a saúde de pacientes que já não existem). Testada no
+  PGlite. Teste no fim de `tests/run_agd_done.js`.

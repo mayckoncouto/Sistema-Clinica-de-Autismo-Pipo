@@ -4319,6 +4319,14 @@ function apptSelectPatient(c, p, more){
     return r.error ? more(c.from("appointments").select("*").eq("patient", p.nome)) : r;
   });
 }
+// Quantas linhas de uma tabela apontam para o valor (sem sistema online: mem()).
+function rowUseCount(table, col, val, mem){
+  var c = agdClient();
+  if (!c) return Promise.resolve(mem ? mem() : 0);
+  if (!val) return Promise.resolve(0);
+  return c.from(table).select(col, {count: "exact", head: true}).eq(col, val)
+    .then(function(r){ return r.error ? 0 : (r.count || 0); }, function(){ return 0; });
+}
 function useTxt(n, one, many){ return n ? n + " " + (n === 1 ? one : many) : null; }
 // Onde cada cadastro está em uso (lista de textos; vazia = livre para excluir).
 var USAGE = {
@@ -4335,9 +4343,13 @@ var USAGE = {
   pacientes: function(p){
     return Promise.all([
       plannerUseCount(function(k, r){ return recIsPatient(r, p); }),
-      apptPatientCount(p)
+      apptPatientCount(p),
+      rowUseCount("clinical_records", "patient_id", p.id, function(){ return (PLAN.evoMem || []).filter(function(r){ return r.patient_id === p.id; }).length; }),
+      rowUseCount("therapy_plans", "patient_id", p.id, function(){ return (PLAN.mem || []).filter(function(r){ return r.patient_id === p.id; }).length; }),
+      rowUseCount("tasks", "patient_id", p.id, function(){ return ((CRM.mem || {}).tasks || []).filter(function(t){ return t.patient_id === p.id; }).length; })
     ]).then(function(n){
-      return [useTxt(treatmentsOf(p.id).length, "tratamento", "tratamentos"), useTxt(n[0], "agendamento no Planner", "agendamentos no Planner"), useTxt(n[1], "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean);
+      return [useTxt(treatmentsOf(p.id).length, "tratamento", "tratamentos"), useTxt(n[0], "agendamento no Planner", "agendamentos no Planner"), useTxt(n[1], "atendimento na Agenda", "atendimentos na Agenda"),
+        useTxt(n[2], "evolução no Prontuário", "evoluções no Prontuário"), useTxt(n[3], "plano terapêutico", "planos terapêuticos"), useTxt(n[4], "tarefa no CRM", "tarefas no CRM")].filter(Boolean);
     });
   },
   profissionais: function(p){
@@ -10624,7 +10636,10 @@ function openPatientModal(p, opts){
         confirmLabel: "Confirmar exclusão"
       }).then(function(ok){
         if (!ok) return;
-        writePatients(state.patients.filter(function(x){ return x.id !== v.id; })).then(close);
+        writePatients(state.patients.filter(function(x){ return x.id !== v.id; })).then(function(ok){
+          if (ok) healthDelete(v.id);
+          close();
+        });
       });
     });
   }
@@ -18016,6 +18031,13 @@ function healthSave(id, data){
     return true;
   });
 }
+// Paciente excluído: os dados de saúde saem junto (função do banco; confere a permissão).
+function healthDelete(id){
+  var c = agdClient();
+  if (HEALTH.map) delete HEALTH.map[id];
+  if (!c) return Promise.resolve();
+  return c.rpc("delete_patient_health", {p_id: id}).then(function(){}, function(){});
+}
 function rebuildPatients(){
   var byPat = {};
   (state.treatments || []).forEach(function(t){ (byPat[t.patientId] = byPat[t.patientId] || []).push(t); });
@@ -19153,7 +19175,7 @@ var HELP_TOPICS = [
       "CPFs são conferidos pelos dígitos; e-mail precisa ser válido.",
       "A idade é calculada pela data de nascimento. Sem a data, aparece o campo Idade para digitar; ao preencher o nascimento, vale a idade calculada.",
       "A cor do paciente vem do tratamento ativo: Não faz ABA = vermelho; senão pela idade (0–4 azul, 5–9 verde, 10+ laranja).",
-      "Excluir pede confirmação. Paciente com tratamento ou atendimento não é excluído: é <b>Inativado</b>.",
+      "Excluir pede confirmação. Paciente com tratamento, agendamento no Planner, atendimento na Agenda, evolução no Prontuário, Plano Terapêutico ou tarefa no CRM não é excluído: é <b>Inativado</b>. Ao excluir de verdade, os dados de saúde dele são apagados junto.",
       "Ao inativar um paciente com tratamento Ativo, o sistema pergunta se cancela também o tratamento (com motivo). \"Manter ativo\" deixa o tratamento como está."
     ],
     who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir). Campos obrigatórios: permissão <b>Pacientes – campos</b>. Mesclar cadastros: só Administrador."},

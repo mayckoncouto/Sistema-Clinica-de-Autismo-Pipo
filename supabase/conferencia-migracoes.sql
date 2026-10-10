@@ -82,7 +82,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (68, '2026-10-10-reinstala-funcoes',              null::boolean, 'conferir com a conferência geral'),
  (69, '2026-10-10b-gravar-so-o-item',              exists(select 1 from fx where proname = 'patch_list2'), ''),
  (70, '2026-10-10c-atendimento-realizado-protegido', exists(select 1 from fx where proname = 'appointments_done_guard'), ''),
- (71, '2026-10-10d-excluir-evolucao',              exists(select 1 from fx where proname = 'clinical_records_plan_goals_undo'), '')
+ (71, '2026-10-10d-excluir-evolucao',              exists(select 1 from fx where proname = 'clinical_records_plan_goals_undo'), ''),
+ (72, '2026-10-10e-excluir-paciente',              exists(select 1 from fx where proname = 'delete_patient_health'), '')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

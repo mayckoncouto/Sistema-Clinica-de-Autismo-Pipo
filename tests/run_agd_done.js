@@ -68,6 +68,15 @@ const path = require('path');
   check('outra evolução no mesmo atendimento: exclui?', dc.duas === '', dc.duas);
   check('evolução sem atendimento: exclui?', dc.solta === '', dc.solta);
 
+  // Item 4: paciente com evolução, plano ou tarefa do CRM está "em uso" (vira Inativar).
+  const pu = await ev(`(function(){
+    var p = state.patients.filter(function(x){ return !treatmentsOf(x.id).length; })[0] || state.patients[0];
+    PLAN.evoMem = [{id: "r1", patient_id: p.id}]; PLAN.mem = [{id: "pl1", patient_id: p.id}];
+    CRM.mem.tasks = [{id: "t1", patient_id: p.id}];
+    return USAGE.pacientes(p).then(function(u){ PLAN.evoMem = []; PLAN.mem = []; CRM.mem.tasks = []; return u.join(" | "); });
+  })()`);
+  check('paciente em uso por evolução, plano e tarefa?', /evolução no Prontuário/.test(pu) && /plano terapêutico/.test(pu) && /tarefa no CRM/.test(pu), pu);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}
