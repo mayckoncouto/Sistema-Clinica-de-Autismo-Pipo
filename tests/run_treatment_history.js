@@ -77,8 +77,11 @@ const path = require('path');
   await ev(`openTreatmentModal(state.treatments.filter(function(t){ return t.id === "t1"; })[0])`);
   await page.waitForSelector('#ovTreat');
   console.log('treatment with done sessions: no Excluir, lock note shown?', !(await page.isVisible('#trDel')) && await page.isVisible('#trLockNote'));
-  console.log('package and specialty quantities locked?', await page.$eval('#pPac', (i) => i.disabled) && await page.$eval('#specRowsHost .spec-hours-val', (i) => i.disabled) && await page.$eval('#specRowAdd', (b) => b.disabled));
-  console.log('therapist per specialty still editable?', !(await page.$eval('#specRowsHost .spec-prof', (s) => s.disabled)));
+  console.log('Sessão/Mês locked, existing cards show the lock, new cards still allowed?', await page.$eval('#pPac', (i) => i.disabled) && !!(await page.$('#specRowsHost .tl-row .tl-lock')) && !(await page.$eval('#specRowAdd', (b) => b.disabled)));
+  await page.click('[data-tl-edit="0"]'); await page.waitForSelector('#ovTLine');
+  console.log('existing card: specialty, sessions and service locked; therapist still editable; no Excluir?', await page.$eval('#tlSpec', (s) => s.disabled) && await page.$eval('#tlHours', (s) => s.disabled) && await page.$eval('#tlSvc', (s) => s.disabled) && !(await page.$eval('#tlProf', (s) => s.disabled)) && !(await page.$('#tlDel')));
+  await page.click('#tlCancel');
+  console.log('a new card can be added to a locked treatment?', await require('./tl-helper').addLine(page, {spec: 'Fonoaudiologia', hours: 1}) && (await require('./tl-helper').lines(page)).length >= 2);
   await page.$eval('#pPac', (i) => { i.disabled = false; i.value = '99'; });
   await page.click('#trSave'); await page.waitForTimeout(200);
   console.log('saving with a changed quantity is refused?', !!(await page.$('#ovTreat')) && (await ev(`state.treatments.filter(function(t){ return t.id === "t1"; })[0].sessoesMes`)) === undefined);
@@ -157,7 +160,7 @@ const path = require('path');
     var prof = state.professionals.filter(function(p){ return p.specialtyId; })[0];
     var pat = state.patientsRaw[1];
     state.treatments = [{id: "m1", patientId: pat.id, inicio: ini, status: "ativo", tipo: "novo",
-      specHours: [{specId: prof.specialtyId, hours: 8}, {specId: "svc:avaliacao", hours: 1}]}];
+      specHours: [{id: "a", specId: prof.specialtyId, hours: 8}, {id: "b", specId: prof.specialtyId, service: "avaliacao", hours: 1}]}];
     rebuildPatients();
     var k = pat.id, A = [];
     function add(dt, st, svc){ A.push({d: dt, prof: prof.id, svc: svc || "sessao", st: st || ""}); }
@@ -170,9 +173,9 @@ const path = require('path');
     TR.appts = {}; TR.appts[k] = A;
     var r = trMonthly(state.treatments[0]);
     var f = r.months[0], last = r.months[1], cur = r.months[2];
-    function row(mo, id){ return mo.rows.filter(function(x){ return x.specId === id; })[0] || {}; }
+    function row(mo, id){ if (id === prof.specialtyId) id = "a"; return mo.rows.filter(function(x){ return x.specId === id; })[0] || {}; }
     return {n: r.months.length, firstContr: row(f, prof.specialtyId).contr, expFirst: Math.round(8 * (dimFirst - 19) / dimFirst), firstReal: row(f, prof.specialtyId).real,
-      lastSess: row(last, prof.specialtyId).real + "/" + row(last, prof.specialtyId).contr, lastAval: row(last, "svc:avaliacao").real + "/" + row(last, "svc:avaliacao").contr,
+      lastSess: row(last, prof.specialtyId).real + "/" + row(last, prof.specialtyId).contr, lastAval: row(last, "b").real + "/" + row(last, "b").contr,
       lastFalta: last.falta, curReal: row(cur, prof.specialtyId).real, curSched: row(cur, prof.specialtyId).sched, curFalta: cur.falta, curHasFuture: d0.getDate() < fut,
       below: trMonthSummary(state.treatments[0]).below};
   })()`);

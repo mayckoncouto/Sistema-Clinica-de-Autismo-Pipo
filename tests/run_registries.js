@@ -34,7 +34,7 @@ const path = require('path');
   await page.waitForSelector('#ovTreat');
   console.log('label "Sessão/Mês"?', (await page.locator('label[for="pPac"]').innerText()) === 'Sessão/Mês');
   console.log('label "ABA" (not "Faz ABA?")?', (await page.locator('label[for="pAba"]').innerText()) === 'ABA');
-  console.log('label "Especialidades/serviços e sessão (mês)"?', (await page.locator('#ovTreat .field', { has: page.locator('#specRowsHost') }).locator('label').first().innerText()).includes('Especialidades/serviços e sessão (mês)'));
+  console.log('label "Especialidades e serviços"?', (await page.locator('#ovTreat .field', { has: page.locator('#specRowsHost') }).locator('label').first().innerText()).includes('Especialidades e serviços'));
 
   // ---- TEST: legacy convenio text resolved against catalog (Unimed matches) ----
   const convVal = await page.locator('#pConv').inputValue();
@@ -66,35 +66,21 @@ const path = require('path');
   const convValAfterCreate = await page.locator('#pConv').inputValue();
   console.log('newly created convênio auto-selected in field?', convValAfterCreate === 'Amil Saúde');
 
-  // ---- TEST: specialty row exclusion — already-added specialty shouldn't reappear ----
-  // Ana Azul has no specHours yet; add "Fonoaudiologia" in row 1, then check row 2's
-  // suggestions no longer offer Fonoaudiologia.
-  await page.click('#specRowAdd');
-  await page.waitForTimeout(50);
-  let rows = page.locator('#specRowsHost .hours-row');
-  await rows.nth(0).locator('.spec-name').click();
-  await page.waitForSelector('#specRowsHost .hours-row:nth-child(1) .autolist button', { timeout: 3000 });
-  await rows.nth(0).locator('.autolist button', { hasText: 'Fonoaudiologia' }).click();
-  await rows.nth(0).locator('.spec-hours-val').fill('4');
-
-  await page.click('#specRowAdd');
-  await page.waitForTimeout(50);
-  rows = page.locator('#specRowsHost .hours-row');
-  const n2 = await rows.count();
-  await rows.nth(n2-1).locator('.spec-name').click();
-  await page.waitForTimeout(100);
-  const row2SuggestHtml = await rows.nth(n2-1).locator('.autolist').innerHTML();
-  console.log('row 2 suggestions EXCLUDE already-picked Fonoaudiologia?', !row2SuggestHtml.includes('Fonoaudiologia'));
-  console.log('row 2 suggestions still include unused Psicologia?', row2SuggestHtml.includes('Psicologia'));
-
-  // Create a brand-new specialty inline from row 2, verify it's usable and won't
-  // reappear as an option for a subsequent row.
-  await rows.nth(n2-1).locator('.spec-name').fill('Terapia Ocupacional');
-  await rows.nth(n2-1).locator('.autolist button.autolist-new').waitFor({ timeout: 3000 });
-  await rows.nth(n2-1).locator('.autolist button.autolist-new').click();
-  await rows.nth(n2-1).locator('.spec-hours-val').fill('2');
-  const row2Val = await rows.nth(n2-1).locator('.spec-name').inputValue();
-  console.log('inline-created specialty auto-selected in row 2?', row2Val === 'Terapia Ocupacional');
+  // ---- TEST: quadros do tratamento — inclui Fonoaudiologia e cria "Terapia Ocupacional" pelo "+ Incluir" da lista ----
+  const TL = require('./tl-helper');
+  console.log('added a Fonoaudiologia card?', await TL.addLine(page, {spec: 'Fonoaudiologia', hours: 4}));
+  await page.click('#specRowAdd'); await page.waitForSelector('#ovTLine');
+  await page.evaluate(() => { const b = document.querySelector('[data-dp-for="tlSpec"]'); (b.querySelector('.dp-in') || b).click(); });
+  await page.waitForSelector('#dpPop');
+  await page.type('[data-dp-for="tlSpec"] .dp-in', 'Terapia Ocupacional'); await page.waitForTimeout(150);
+  await page.click('#dpPop .dp-add'); await page.waitForSelector('#qkName');
+  console.log('"+ Incluir" opens the quick window with the typed name?', (await page.inputValue('#qkName')) === 'Terapia Ocupacional');
+  await page.click('#qkSave'); await page.waitForTimeout(250);
+  console.log('inline-created specialty auto-selected in the card window?', await page.evaluate(() => { const s = document.getElementById('tlSpec'); return s.options[s.selectedIndex].textContent; }) === 'Terapia Ocupacional');
+  await page.fill('#tlHours', '2'); await page.click('#tlSave'); await page.waitForTimeout(150);
+  if (await page.$('#cfOk')) { await page.click('#cfOk'); await page.waitForTimeout(150); }
+  const cards = await TL.lines(page);
+  console.log('two cards, the same visual of the room cards?', cards.length === 2 && cards[1].name === 'Terapia Ocupacional' && await page.$$eval('#specRowsHost .room-row [data-tl-edit]', (a) => a.length) === 2, JSON.stringify(cards));
 
   await page.click('#trSave');
   await page.waitForTimeout(200);

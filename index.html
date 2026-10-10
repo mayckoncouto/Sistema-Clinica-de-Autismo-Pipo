@@ -2020,6 +2020,15 @@ body.pat-col-resizing *{user-select:none}
 .hours-row .rm{flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--danger);cursor:pointer;font-size:13px;line-height:1}
 .hours-row .rm:hover{background:var(--danger-weak)}
 .hours-empty{font-size:12px;color:var(--muted)}
+/* Quadros do tratamento (mesmo visual dos cartões de Salas) */
+.room-list.tl-list{display:flex;flex-direction:column;gap:6px;margin:0 0 6px;padding:0;max-height:none;overflow:visible}
+.tl-row .room-info .rn{white-space:normal}
+.tl-row .rs.tl-obs{color:var(--ink-2)}
+.tl-row.cover-none{border-color:#e3a19c}
+.tl-row .rs.tl-cover{color:#b23b32;font-weight:600}
+.tl-row.cover-via .rs.tl-cover{color:var(--muted);font-weight:400}
+.tl-lock{font-size:11px}
+.tl-lock-note{margin-bottom:8px}
 .spec-head{display:flex;gap:8px;font-size:11.5px;font-weight:600;color:var(--muted);margin:2px 0 3px}
 .spec-head[hidden]{display:none}
 .spec-head>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:2px;min-width:0}
@@ -3573,16 +3582,10 @@ function patientIsNaoABA(p){
 // tratamento, ou linha sem ABA, vale o ABA do tratamento (cadastro).
 function bookingAbaOf(p, profId, service){
   if (!p) return "";
-  var rows = Array.isArray(p.specHours) ? p.specHours : [];
-  if (!rows.some(function(r){ return r && r.aba; })) return p.aba || "";
-  var svc = service || DEFAULT_SERVICE_ID, keys = [];
-  if (svc !== DEFAULT_SERVICE_ID) keys = [SVC_PREFIX + svc];
-  else { var prof = profId ? findProfessional(profId) : null; if (prof) keys = profAreas(prof); }
-  for (var i = 0; i < keys.length; i++){
-    var line = rows.filter(function(r){ return r && r.specId === keys[i]; })[0];
-    if (line) return line.aba || p.aba || "";
-  }
-  return p.aba || "";
+  var rows = treatLines(p.specHours);
+  if (!rows.some(function(r){ return r.aba; })) return p.aba || "";
+  var line = treatLineFor(rows, profId, service);
+  return line ? (line.aba || p.aba || "") : (p.aba || "");
 }
 // Paciente com o ABA do atendimento (para a cor e as regras "não ABA").
 function bookingPatient(p, b, profId){
@@ -3875,12 +3878,56 @@ function clearValueFor(dayKey, time){
 // record still uses the old flat fields (fono/psico/...) or the newer specHours array.
 function patientSpecRows(p){
   if (!p) return [];
-  if (Array.isArray(p.specHours)) return p.specHours.map(function(row){ return {specId: row.specId, hours: row.hours, profId: row.profId || "", aba: row.aba || ""}; });
+  if (Array.isArray(p.specHours)) return treatLines(p.specHours);
   var rows = [];
   state.specialties.forEach(function(s){
     if (p[s.id] !== "" && p[s.id] != null) rows.push({specId: s.id, hours: p[s.id]});
   });
   return rows;
+}
+/* ---- Linhas (quadros) do tratamento (2026-10-10) ----
+ * specHours = [{id, specId, hours, profId, aba, service, dia, hora, semanas, roomId, seguidas, obs}].
+ * Cada quadro é uma especialidade com um serviço (padrão Sessão); a mesma especialidade pode
+ * repetir com outro profissional ou serviço. Linhas antigas "svc:<id>" (serviço no lugar da
+ * especialidade) continuam sendo lidas como serviço.
+ */
+var TL_WEEKS = [["", "Todas"], ["1,3", "1ª e 3ª"], ["2,4", "2ª e 4ª"], ["1", "1ª"], ["2", "2ª"], ["3", "3ª"], ["4", "4ª"]];
+function lineSvc(r){
+  if (r && isSvcItem(r.specId)) return String(r.specId).slice(SVC_PREFIX.length);
+  return (r && r.service) || DEFAULT_SERVICE_ID;
+}
+function treatLines(rows){
+  return (Array.isArray(rows) ? rows : []).filter(function(r){ return r && r.specId; }).map(function(r, i){
+    return Object.assign({}, r, {id: r.id || ("l" + (i + 1)), hours: r.hours == null ? "" : r.hours, profId: r.profId || "", aba: r.aba || ""});
+  });
+}
+// Quadro do tratamento que corresponde a um atendimento (profissional + serviço), ou null.
+// Na especialidade principal do profissional (depois nas complementares, na ordem), com o mesmo
+// serviço: 1) o quadro do MESMO profissional; 2) o de "Todos"; 3) o de outro profissional.
+// Serviço diferente de Sessão sem quadro na área dele: o quadro com esse serviço.
+function treatLineFor(lines, profId, service){
+  var svc = service || DEFAULT_SERVICE_ID, prof = profId ? findProfessional(profId) : null, areas = prof ? profAreas(prof) : [];
+  var same = lines.filter(function(r){ return lineSvc(r) === svc; });
+  if (!same.length) return null;
+  // Especialidade principal do profissional primeiro; depois as áreas complementares, na ordem.
+  for (var ai = 0; ai < areas.length; ai++){
+    var spec = same.filter(function(r){ return r.specId === areas[ai]; });
+    var hit = spec.filter(function(r){ return profId && r.profId === profId; })[0] || spec.filter(function(r){ return !r.profId; })[0] || spec[0];
+    if (hit) return hit;
+  }
+  if (svc !== DEFAULT_SERVICE_ID){
+    var any = same.filter(function(r){ return profId && r.profId === profId; })[0] || same.filter(function(r){ return !r.profId; })[0] || same[0];
+    return any || null;
+  }
+  return null;
+}
+function lineSvcName(r){ var sid = lineSvc(r), sv = servicesList().filter(function(x){ return x.id === sid; })[0]; return sv ? sv.name : sid; }
+// Nome curto do quadro: "Psicologia · Acolhimento familiar · Tiago".
+function lineLabel(r, withProf){
+  if (!r) return "";
+  var out = isSvcItem(r.specId) ? specialtyName(r.specId) : specialtyName(r.specId) + (lineSvc(r) !== DEFAULT_SERVICE_ID ? " · " + lineSvcName(r) : "");
+  if (withProf !== false && r.profId){ var pr = findProfessional(r.profId); if (pr) out += " · " + (profShortName(pr) || profNome(pr)); }
+  return out;
 }
 // Linha do paciente pode ser uma especialidade (id normal) ou um SERVIÇO ("svc:<id>").
 var SVC_PREFIX = "svc:";
@@ -3919,7 +3966,8 @@ function patientSpecRowsOrdered(p){
 }
 function patientSpecSummary(p){
   return patientSpecRowsOrdered(p).map(function(row){
-    return esc(specialtySigla(row.specId)) + " " + esc(row.hours);
+    var sv = lineSvc(row);
+    return esc(specialtySigla(row.specId)) + (sv !== DEFAULT_SERVICE_ID && !isSvcItem(row.specId) ? "/" + esc(specialtySigla(SVC_PREFIX + sv)) : "") + " " + esc(row.hours);
   }).join(" - ");
 }
 function findProfessional(id){
@@ -4527,7 +4575,8 @@ var USAGE = {
   // pelo nome) — a sala marcada fica em room_id, então room_id não conta para o grupo.
   salas: function(r){
     var n = isGroup(r) ? apptGroupCount(r) : apptUseCount("room_id", r.id);
-    return n.then(function(n){ return [useTxt(n, "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean); });
+    var trs = isGroup(r) ? 0 : state.treatments.filter(function(t){ return (t.specHours || []).some(function(h){ return h && h.roomId === r.id; }); }).length;
+    return n.then(function(n){ return [useTxt(n, "atendimento na Agenda", "atendimentos na Agenda"), useTxt(trs, "tratamento", "tratamentos")].filter(Boolean); });
   },
   convenios: function(c){
     var hit = function(x){ return x.convenioId === c.id || (!x.convenioId && normText(x.convenio || "") === normText(c.name)); };
@@ -4535,7 +4584,7 @@ var USAGE = {
   },
   servicos: function(sv){
     var profs = state.professionals.filter(function(p){ return Array.isArray(p.servicos) && p.servicos.indexOf(sv.id) !== -1; }).length;
-    var trs = state.treatments.filter(function(t){ return (t.specHours || []).some(function(h){ return h.specId === SVC_PREFIX + sv.id; }); }).length;
+    var trs = state.treatments.filter(function(t){ return (t.specHours || []).some(function(h){ return h && h.specId && lineSvc(h) === sv.id && sv.id !== DEFAULT_SERVICE_ID; }); }).length;
     var convs = state.convenios.filter(function(c){ return convSpecList(c).indexOf(SVC_PREFIX + sv.id) !== -1; }).length;
     return Promise.all([plannerUseCount(function(k, r){ return r.service === sv.id; }), apptUseCount("service", sv.id)]).then(function(n){
       return [useTxt(profs, "profissional", "profissionais"), useTxt(trs, "tratamento", "tratamentos"), useTxt(convs, "convênio", "convênios"), useTxt(n[0], "agendamento no Planner", "agendamentos no Planner"), useTxt(n[1], "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean);
@@ -9938,13 +9987,17 @@ function therapistMismatchMsg(patientName, profId, serviceId, iso){
   if (!patientName || !profId) return null;
   var p = findPatientAt(patientName, iso); if (!p) return null;
   var prof = findProfessional(profId); if (!prof) return null;
-  var svc = serviceId || DEFAULT_SERVICE_ID;
-  var key = svc === DEFAULT_SERVICE_ID ? prof.specialtyId : SVC_PREFIX + svc;
-  if (!key) return null;
-  var row = patientSpecRows(p).filter(function(x){ return x.specId === key; })[0];
-  if (!row || !row.profId || row.profId === profId) return null;
-  var exp = findProfessional(row.profId);
-  return "<b>" + esc(p.nome) + "</b> — " + esc(specialtyName(key)) + ": o tratamento indica <b>" + esc(exp ? exp.name : "outro terapeuta") +
+  var svc = serviceId || DEFAULT_SERVICE_ID, areas = profAreas(prof), lines = patientSpecRows(p);
+  // Quadros com esse serviço na especialidade do profissional (serviço ≠ Sessão: qualquer especialidade).
+  // A especialidade principal vem primeiro; só sem quadro nela olha as áreas complementares.
+  var cand = [];
+  for (var ai = 0; ai < areas.length && !cand.length; ai++) cand = lines.filter(function(r){ return lineSvc(r) === svc && r.specId === areas[ai]; });
+  if (!cand.length) cand = lines.filter(function(r){ return lineSvc(r) === svc && isSvcItem(r.specId); });
+  if (!cand.length && svc !== DEFAULT_SERVICE_ID) cand = lines.filter(function(r){ return lineSvc(r) === svc; });
+  if (!cand.length || cand.some(function(r){ return !r.profId || r.profId === profId; })) return null;
+  var names = cand.map(function(r){ var x = findProfessional(r.profId); return x ? profNome(x) : "outro terapeuta"; })
+    .filter(function(n, i, a){ return a.indexOf(n) === i; });
+  return "<b>" + esc(p.nome) + "</b> — " + esc(lineLabel(cand[0], false)) + ": o tratamento indica <b>" + esc(names.join(", ")) +
     "</b>, mas o agendamento está com <b>" + esc(profNome(prof)) + "</b>";
 }
 // Área do profissional × tratamento (2026-10-06): agendamento de Sessão com profissional
@@ -10038,7 +10091,7 @@ function specSumRead(){
   var pac = document.getElementById("pPac"), rows = document.getElementById("specRowsHost");
   if (!pac || !rows) return null;
   var sum = 0, any = false;
-  rows.querySelectorAll(".spec-hours-val").forEach(function(i){ var n = specSumNum(i.value); if (n != null){ sum += n; any = true; } });
+  rows.querySelectorAll("[data-hours]").forEach(function(i){ var n = specSumNum(i.getAttribute("data-hours")); if (n != null){ sum += n; any = true; } });
   return {total: specSumNum(pac.value), sum: Math.round(sum * 100) / 100, any: any};
 }
 function specSumRender(){
@@ -10058,15 +10111,141 @@ function specSumRender(){
 }
 // ABA do tratamento e das linhas: só "Sim" ou "Não"; vazio (cadastros antigos) = Sim.
 function abaYesNo(v){ return v === "Não" ? "Não" : "Sim"; }
-function treatFieldsEditor(v, opts){
-  // Per-patient specialty rows, editable independently of the global catalog.
-  var draftSpecRows = patientSpecRows(v).map(function(row){
-    return {specId: row.specId, name: specialtyName(row.specId), hours: row.hours == null ? "" : String(row.hours), profId: row.profId || "", aba: abaYesNo(row.aba || v.aba)};
+function tlDayName(k){ var d = ALL_WEEKDAYS.filter(function(x){ return x.key === k; })[0]; return d ? d.name : k; }
+function tlWeeksText(v){ var w = TL_WEEKS.filter(function(x){ return x[0] === (v || ""); })[0]; return w ? w[1] : v; }
+// Resumo do quadro (linha de baixo do cartão).
+function tlSummary(r){
+  var n = specSumNum(r.hours), out = [n == null ? "sem sessões/mês" : String(r.hours).replace(".", ",") + (n === 1 ? " sessão/mês" : " sessões/mês")];
+  var pr = r.profId ? findProfessional(r.profId) : null;
+  out.push(pr ? profNome(pr) : "Todos os terapeutas");
+  out.push("ABA " + abaYesNo(r.aba));
+  if (r.dia || r.hora) out.push((r.dia ? tlDayName(r.dia) : "Qualquer dia") + (r.hora ? " " + r.hora : ""));
+  if (r.semanas) out.push(tlWeeksText(r.semanas) + (String(r.semanas).indexOf(",") !== -1 ? " semanas" : " semana"));
+  if (r.roomId){ var rm = findRoom(r.roomId); out.push(rm ? rm.name : "Sala removida"); }
+  if (+r.seguidas > 1) out.push(r.seguidas + " seguidas");
+  return out.join(" · ");
+}
+// Janela de um quadro do tratamento (todos os campos). ctx: {line, isNew, locked, aba, horarios(), others, patient,
+// onSave(line), onDelete()}. Fica numa camada própria (#tlHost) logo acima da janela do tratamento.
+function openTreatLineModal(ctx){
+  var r = Object.assign({id: "", specId: "", hours: "", profId: "", aba: ctx.aba || "Sim", service: DEFAULT_SERVICE_ID, dia: "", hora: "",
+    semanas: "", roomId: "", seguidas: "1", obs: ""}, ctx.line || {});
+  if (!r.service || isSvcItem(r.specId)) r.service = lineSvc(r);
+  var host = document.getElementById("tlHost");
+  if (!host){ host = document.createElement("div"); host.id = "tlHost"; var mh = document.getElementById("modalHost"); if (mh) mh.insertAdjacentElement("afterend", host); else document.body.appendChild(host); }
+  var lk = !!ctx.locked, dis = lk ? " disabled" : "";
+  var specs = state.specialties.filter(function(s){ return isActive(s) || s.id === r.specId; });
+  var svcs = servicesList().filter(function(s){ return isActive(s) || s.id === r.service; });
+  svcs.sort(function(a, b){ return (a.id === DEFAULT_SERVICE_ID ? 0 : 1) - (b.id === DEFAULT_SERVICE_ID ? 0 : 1); });
+  var rooms = physicalRooms(true).filter(function(x){ return isActive(x) || x.id === r.roomId; });
+  function opt(v, label, cur){ return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(label) + '</option>'; }
+  function timesFor(day){ var d = DAYS.filter(function(x){ return x.key === day; })[0]; return d ? d.morning.concat(d.afternoon) : clinicAllTimes(); }
+  function timeOpts(day, cur){
+    var list = timesFor(day); if (cur && list.indexOf(cur) === -1) list = list.concat([cur]).sort();
+    return opt("", "Qualquer horário", cur) + list.map(function(t){ return opt(t, t, cur); }).join("");
+  }
+  host.innerHTML =
+    '<div class="overlay" id="ovTLine" role="dialog" aria-modal="true" aria-labelledby="tlTitle"><div class="modal" style="max-width:640px">' +
+      '<div class="modal-head"><div><h3 id="tlTitle">' + (ctx.isNew ? "Incluir especialidade" : "Editar especialidade") + '</h3>' +
+        (ctx.patient ? '<div class="sub">' + esc(ctx.patient) + '</div>' : '') + '</div>' +
+        '<button class="modal-close" id="tlX" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        (lk ? '<div class="pat-count tl-lock-note">Este tratamento já tem atendimentos realizados: especialidade, sessões/mês e serviço deste quadro não mudam (use Renegociar). Os outros campos podem ser alterados.</div>' : '') +
+        '<div class="field-row">' +
+          '<div class="field"><label for="tlSpec">Especialidade</label><select id="tlSpec" data-combo data-reg-add="especialidades"' + dis + '>' + opt("", "Escolha…", r.specId) +
+            specs.map(function(s){ return opt(s.id, s.name, r.specId); }).join("") + '</select></div>' +
+          '<div class="field"><label for="tlHours">Sessões/mês</label><input id="tlHours" type="text" inputmode="decimal" value="' + esc(r.hours) + '"' + dis + '></div>' +
+        '</div><div class="field-row">' +
+          '<div class="field"><label for="tlSvc">Serviço</label><select id="tlSvc"' + dis + '>' + svcs.map(function(s){ return opt(s.id, s.name, r.service); }).join("") + '</select></div>' +
+          '<div class="field"><label for="tlProf">Profissional</label><select id="tlProf" data-combo>' + specProfOptions(r.specId, r.profId) + '</select></div>' +
+        '</div><div class="field-row">' +
+          '<div class="field"><label for="tlAba">ABA</label><select id="tlAba">' + ["Sim", "Não"].map(function(o){ return opt(o, o, abaYesNo(r.aba)); }).join("") + '</select></div>' +
+          '<div class="field"><label for="tlRoom">Sala</label><select id="tlRoom" data-combo>' + opt("", "Qualquer sala", r.roomId) + rooms.map(function(x){ return opt(x.id, x.name, r.roomId); }).join("") + '</select></div>' +
+        '</div><div class="field-row">' +
+          '<div class="field"><label for="tlDia">Dia</label><select id="tlDia">' + opt("", "Qualquer dia", r.dia) +
+            DAYS.map(function(d){ return opt(d.key, d.full, r.dia); }).join("") + (r.dia && !dayEnabled(r.dia) ? opt(r.dia, tlDayName(r.dia) + " (clínica fechada)", r.dia) : "") + '</select></div>' +
+          '<div class="field"><label for="tlHora">Horário de início</label><select id="tlHora">' + timeOpts(r.dia, r.hora) + '</select></div>' +
+        '</div><div class="field-row">' +
+          '<div class="field"><label for="tlSem">Semanas</label><select id="tlSem">' + TL_WEEKS.map(function(w){ return opt(w[0], w[1], r.semanas || ""); }).join("") + '</select></div>' +
+          '<div class="field"><label for="tlSeg">Sessões seguidas</label><select id="tlSeg">' + opt("1", "1", String(r.seguidas || "1")) + opt("2", "2", String(r.seguidas || "1")) + '</select></div>' +
+        '</div>' +
+        '<div class="field" id="tlObsBox"><label for="tlObs">Observação</label><textarea id="tlObs" rows="2" placeholder="Ex.: acolhimento dos pais">' + esc(r.obs || "") + '</textarea></div>' +
+      '</div>' +
+      '<div class="modal-foot">' + (!ctx.isNew && !lk ? '<button class="btn danger" id="tlDel">Excluir</button>' : '') + '<span class="spacer"></span>' +
+        '<button class="btn ghost" id="tlCancel">Cancelar</button><button class="btn primary" id="tlSave">Salvar</button></div>' +
+    '</div></div>';
+  function $(id){ return document.getElementById(id); }
+  function close(){ host.innerHTML = ""; document.removeEventListener("keydown", onKey, true); }
+  function onKey(e){
+    if (e.key !== "Escape" || !$("ovTLine")) return;
+    if (document.getElementById("dpPop") || document.querySelector("#confirmHost .overlay, #quickHost .overlay")) return;
+    e.preventDefault(); e.stopImmediatePropagation(); close();
+  }
+  document.addEventListener("keydown", onKey, true);
+  function syncObs(){ $("tlObsBox").hidden = $("tlSvc").value === DEFAULT_SERVICE_ID; }
+  syncObs();
+  $("tlSvc").addEventListener("change", syncObs);
+  $("tlSpec").addEventListener("change", function(){
+    var cur = $("tlProf").value; $("tlProf").innerHTML = specProfOptions($("tlSpec").value, cur);
+    $("tlProf").value = specProfessionals($("tlSpec").value).some(function(p){ return p.id === cur; }) ? cur : "";
+    $("tlProf").dispatchEvent(new Event("change", {bubbles: true}));
   });
-  // Local shadow copies of the shared catalogs: any specialty/convênio created inline
-  // while this modal is open lands here first (so filtering/suggestions see it right
-  // away) and is only persisted to config/specialties or config/convenios on Salvar.
-  var localSpecialties = state.specialties.slice();
+  $("tlDia").addEventListener("change", function(){
+    var cur = $("tlHora").value, list = timesFor($("tlDia").value);
+    $("tlHora").innerHTML = timeOpts($("tlDia").value, list.indexOf(cur) !== -1 ? cur : "");
+    $("tlHora").dispatchEvent(new Event("change", {bubbles: true}));
+  });
+  $("tlX").addEventListener("click", close);
+  $("tlCancel").addEventListener("click", close);
+  if ($("tlDel")) $("tlDel").addEventListener("click", function(){
+    confirmDialog({title: "Confirmar exclusão", message: "Tirar o quadro <b>" + esc(lineLabel(r)) + "</b> do tratamento?<br>A exclusão vale quando o tratamento for salvo.", confirmLabel: "Confirmar exclusão"})
+      .then(function(ok){ if (ok){ close(); ctx.onDelete(); } });
+  });
+  function read(){
+    var o = {id: r.id || uid("tl"), specId: $("tlSpec").value, hours: $("tlHours").value.trim(), profId: $("tlProf").value, aba: $("tlAba").value,
+      service: $("tlSvc").value || DEFAULT_SERVICE_ID, dia: $("tlDia").value, hora: $("tlHora").value, semanas: $("tlSem").value,
+      roomId: $("tlRoom").value, seguidas: $("tlSeg").value, obs: $("tlSvc").value === DEFAULT_SERVICE_ID ? "" : $("tlObs").value.trim()};
+    if (lk){ o.specId = r.specId; o.hours = r.hours; o.service = r.service; }
+    return o;
+  }
+  // Avisos (não bloqueiam): horário do paciente e do profissional, semanas × sessões/mês, seguidas, quadro repetido.
+  function warnings(o){
+    var w = [], n = specSumNum(o.hours), seg = +o.seguidas || 1, pr = o.profId ? findProfessional(o.profId) : null;
+    var times = o.hora ? [o.hora].concat(seg > 1 ? [addMinutes(o.hora, CLINIC_SLOT_MIN)] : []) : [];
+    if (o.dia && times.length){
+      var hp = ctx.horarios ? ctx.horarios() : null;
+      if (hp && times.some(function(t){ return !patientSlotOk({horarios: hp}, o.dia, t); })) w.push("Fora do horário disponível do paciente (" + tlDayName(o.dia) + " " + o.hora + ").");
+      if (pr && times.some(function(t){ return !profSlotOk(pr, o.dia, t); })) w.push("Fora do horário de trabalho de " + profNome(pr) + " (" + tlDayName(o.dia) + " " + o.hora + ").");
+      if (seg > 1 && timesFor(o.dia).indexOf(times[1]) === -1) w.push("A 2ª sessão seguida (" + times[1] + ") não existe na grade da clínica.");
+    }
+    if (o.dia && !dayEnabled(o.dia)) w.push("A clínica não abre neste dia.");
+    if (n != null && seg > 1 && n % seg) w.push(String(o.hours).replace(".", ",") + " sessões/mês não fecha com " + seg + " sessões seguidas.");
+    if (o.dia && n != null){
+      var nw = o.semanas ? String(o.semanas).split(",").length : 4, exp = nw * seg;
+      if (exp !== n) w.push("Dia fixo " + (o.semanas ? "nas semanas " + tlWeeksText(o.semanas) : "em todas as semanas") + " com " + (seg > 1 ? seg + " sessões seguidas" : "1 sessão") +
+        " dá " + exp + " sessões/mês, mas o quadro tem " + String(o.hours).replace(".", ",") + ".");
+    }
+    var key = function(x){ return [x.specId, lineSvc(x), x.profId || "", x.dia || "", x.hora || ""].join("|"); };
+    if ((ctx.others || []).some(function(x){ return key(x) === key(o); })) w.push("Já existe um quadro igual (mesma especialidade, serviço, profissional, dia e horário).");
+    return w;
+  }
+  $("tlSave").addEventListener("click", function(){
+    var o = read();
+    if (!o.specId){ showToast("Escolha a especialidade.", true); return; }
+    var n = specSumNum(o.hours);
+    if (n == null || n <= 0){ showToast("Informe as sessões/mês.", true); $("tlHours").focus(); return; }
+    var w = warnings(o);
+    var go = function(){ close(); ctx.onSave(o); };
+    if (!w.length){ go(); return; }
+    confirmDialog({title: "Conferir o quadro", message: w.map(esc).join("<br>") + "<br>Salvar assim mesmo?", confirmLabel: "Salvar assim mesmo"})
+      .then(function(ok){ if (ok) go(); });
+  });
+  setTimeout(function(){ var f = lk ? $("tlProf") : $("tlSpec"); var b = f && f.closest(".field") && f.closest(".field").querySelector(".dp-in, .dp-btn"); if (b) b.focus(); }, 0);
+}
+function treatFieldsEditor(v, opts){
+  // Quadros do tratamento (uma linha = um quadro; a mesma especialidade pode repetir).
+  var draftLines = patientSpecRows(v).map(function(row){ return Object.assign({}, row, {aba: abaYesNo(row.aba || v.aba)}); });
+  var lockedIds = null;   // ids dos quadros travados (tratamento com atendimentos realizados)
   var newSpecialties = [];
   var localConvenios = state.convenios.slice();
   var newConvenios = [];
@@ -10100,190 +10279,65 @@ function treatFieldsEditor(v, opts){
             '<option value="Não"'+(abaYesNo(v.aba)==="Não"?" selected":"")+'>Não</option>' +
           '</select></div>' +
         '</div>' +
-        '<div class="field"><label class="spec-sum-label">Especialidades/serviços e sessão (mês) <span class="spec-sum" id="specSum" hidden></span></label>' +
-          '<div class="spec-head" id="specHead" aria-hidden="true" hidden>' +
-          '<span class="sh-name">Especialidade ou serviço</span><span class="sh-hours">Sessões/mês</span>' +
-          '<span class="sh-prof">Terapeuta</span><span class="sh-aba">ABA</span><span class="sh-rm"></span></div>' +
-          '<div class="hours-list" id="specRowsHost"></div>' +
-          '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ especialidade ou serviço</button>' +
+        '<div class="field"><label class="spec-sum-label">Especialidades e serviços <span class="spec-sum" id="specSum" hidden></span></label>' +
+          '<div class="room-list tl-list" id="specRowsHost"></div>' +
+          '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ Incluir especialidade</button>' +
         '</div>' +
         (opts && opts.beforeHours || "") +
         patHoursSectionHtml(v);
   // wire() define estas duas (dependem dos campos já na tela); read() usa.
-  var syncRef = function(){}, resolveRef = function(){ return draftConvenioId; };
+  var syncRef = function(){}, resolveRef = function(){ return draftConvenioId; }, renderRef = function(){};
   function wire(ovId){
     wirePatHours();
-    // Conta ao lado do título: Sessão/Mês × soma das especialidades/serviços.
-    var pacEl = document.getElementById("pPac"), rowsEl = document.getElementById("specRowsHost");
+    var pacEl = document.getElementById("pPac"), host = document.getElementById("specRowsHost");
     if (pacEl) pacEl.addEventListener("input", specSumRender);
-    // Cobertura do convênio em cada linha (só aviso): coberta, liberada por outra ou não coberta.
-    function coverRender(){
-      if (!rowsEl) return;
-      // Não usar resolveRef(): ela CRIA o convênio digitado. Aqui só procura.
-      var convId = draftConvenioId;
-      if (!convId){ var ci = document.getElementById("pConv"), cm = ci && state.convenios.filter(function(x){ return normText(x.name) === normText(ci.value.trim()); })[0]; convId = cm && cm.id; }
-      rowsEl.querySelectorAll(".hours-row[data-i]").forEach(function(rowEl){
-        var d = draftSpecRows[+rowEl.getAttribute("data-i")] || {}, sid = d.specId;
-        if (!sid && d.name){ var m = state.specialties.filter(function(x){ return normText(x.name) === normText(d.name); })[0]; sid = m && m.id; }
-        var cov = convCoverage(convId, sid), txt = "", cls = "";
-        if (cov && cov.none){ txt = "Não coberta pelo convênio"; cls = "cover-none"; }
-        else if (cov && cov.via){ txt = "Coberta pelo convênio via " + specialtyName(cov.via); cls = "cover-via"; }
-        if (rowEl.getAttribute("data-cover") !== txt){ if (txt) rowEl.setAttribute("data-cover", txt); else rowEl.removeAttribute("data-cover"); }
-        rowEl.classList.toggle("cover-none", cls === "cover-none"); rowEl.classList.toggle("cover-via", cls === "cover-via");
-      });
+    // Convênio escolhido agora (só procura; não cria).
+    function convNow(){
+      if (draftConvenioId) return draftConvenioId;
+      var ci = document.getElementById("pConv"), cm = ci && state.convenios.filter(function(x){ return normText(x.name) === normText(ci.value.trim()); })[0];
+      return cm ? cm.id : null;
     }
-    var specAll = function(){ specSumRender(); coverRender(); };
-    if (rowsEl){ rowsEl.addEventListener("input", specAll); new MutationObserver(specAll).observe(rowsEl, {childList: true, subtree: true}); }
-    var ovEl = document.getElementById(ovId);
-    if (ovEl){ ["input", "change", "click"].forEach(function(ev){ ovEl.addEventListener(ev, function(){ setTimeout(coverRender, 0); }); }); }
-    setTimeout(specAll, 0);
-    // Per-patient specialty rows (add/remove independently of the global catalog).
-    var specRowsHost = document.getElementById("specRowsHost");
-    function syncSpecRowsFromDom(){
-      specRowsHost.querySelectorAll(".hours-row").forEach(function(row, i){
-        if (!draftSpecRows[i]) return;
-        var nameInp = row.querySelector(".spec-name");
-        var hoursInp = row.querySelector(".spec-hours-val");
-        draftSpecRows[i].name = nameInp ? nameInp.value : draftSpecRows[i].name;
-        draftSpecRows[i].hours = hoursInp ? hoursInp.value : draftSpecRows[i].hours;
-        var profSel = row.querySelector(".spec-prof");
-        draftSpecRows[i].profId = profSel ? profSel.value : (draftSpecRows[i].profId || "");
-        var abaSel = row.querySelector("select.spec-aba");
-        if (abaSel) draftSpecRows[i].aba = abaSel.value;
-      });
+    // Cobertura do convênio (só aviso): especialidade e, com serviço diferente de Sessão, o serviço.
+    function coverOf(r){
+      var cid = convNow(); if (!cid) return null;
+      var a = convCoverage(cid, r.specId), sv = lineSvc(r), b = sv !== DEFAULT_SERVICE_ID && !isSvcItem(r.specId) ? convCoverage(cid, SVC_PREFIX + sv) : null;
+      if ((a && a.none) || (b && b.none)) return {cls: "cover-none", txt: a && a.none ? "Especialidade não coberta pelo convênio" : "Serviço não coberto pelo convênio"};
+      if (a && a.via) return {cls: "cover-via", txt: "Coberta pelo convênio via " + specialtyName(a.via)};
+      return null;
     }
-    // Specialties already used by another row shouldn't be offered again — only the
-    // ones this patient doesn't have yet should appear in a row's suggestion list.
-    function usedByOtherRows(excludeIndex){
-      var used = [];
-      draftSpecRows.forEach(function(row, i){
-        if (i === excludeIndex) return;
-        if (row.specId) used.push(row.specId);
-        else if ((row.name||"").trim()) used.push("name:"+row.name.trim().toLowerCase());
-      });
-      return used;
-    }
-    function wireSpecRowPickers(){
-      specRowsHost.querySelectorAll(".hours-row").forEach(function(rowEl){
-        var i = parseInt(rowEl.getAttribute("data-i"),10);
-        var inp = rowEl.querySelector(".spec-name");
-        var sugg = rowEl.querySelector(".autolist");
-        function renderSugg(){
-          var q = inp.value.trim();
-          var used = usedByOtherRows(i);
-          var opts = localSpecialties.filter(function(s){
-            if (!isActive(s)) return false;
-            if (used.indexOf(s.id) !== -1) return false;
-            if (used.indexOf("name:"+s.name.trim().toLowerCase()) !== -1) return false;
-            return !q || normText(s.name).indexOf(normText(q)) !== -1;
-          }).slice(0,8);
-          // Serviços do cadastro, menos "Sessão" (sessão = escolher a especialidade).
-          var svcOpts = servicesList().filter(function(s){
-            if (s.id === DEFAULT_SERVICE_ID || !isActive(s)) return false;
-            if (used.indexOf(SVC_PREFIX + s.id) !== -1) return false;
-            return !q || normText(s.name).indexOf(normText(q)) !== -1;
-          }).slice(0,8);
-          var exact = localSpecialties.filter(function(s){ return normText(s.name.trim()) === normText(q); })[0];
-          var html = opts.map(function(s){
-            return '<button type="button" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'"><span class="autolist-name">'+esc(s.name)+'</span></button>';
-          }).join("");
-          html += svcOpts.map(function(s){
-            return '<button type="button" data-id="'+esc(SVC_PREFIX + s.id)+'" data-name="'+esc(s.name)+'"><span class="autolist-name">'+esc(s.name)+'</span><span class="autolist-kind">Serviço</span></button>';
-          }).join("");
-          if (!exact) exact = servicesList().filter(function(s){ return s.id !== DEFAULT_SERVICE_ID && normText(s.name.trim()) === normText(q); })[0];
-          // "+ Incluir" no fim (só quem pode incluir Especialidades): com texto digitado cria com esse nome;
-          // sem texto abre a janela de cadastro.
-          if (can("especialidades", "create") && !exact){
-            html += '<button type="button" class="autolist-new" data-new="'+esc(q)+'">'+(q ? '+ Incluir “'+esc(q)+'”' : '+ Incluir')+'</button>';
-          }
-          if (!html){ html = '<div class="none">'+(q?'Nenhuma especialidade ou serviço encontrado.':'Todas as especialidades e serviços já foram adicionados.')+'</div>'; }
-          sugg.innerHTML = html;
-          sugg.hidden = false;
-        }
-        inp.addEventListener("focus", renderSugg);
-        inp.addEventListener("input", function(){
-          draftSpecRows[i].specId = null;
-          draftSpecRows[i].name = inp.value;
-          renderSugg();
-        });
-        // Close on blur too (not just an outside click) — focus can also move away
-        // programmatically (e.g. filling the next field), and a floating box left open
-        // can visually sit on top of whatever comes after it. The short delay lets a
-        // genuine click on one of its own option buttons register first.
-        inp.addEventListener("blur", function(){ setTimeout(function(){ sugg.hidden = true; }, 130); });
-        sugg.addEventListener("click", function(e){
-          var newBtn = e.target.closest("button[data-new]");
-          if (newBtn && !newBtn.getAttribute("data-new")){
-            sugg.hidden = true;
-            quickAddRegistry("especialidades").then(function(rec){
-              if (!rec) return;
-              if (!localSpecialties.some(function(x){ return x.id === rec.id; })) localSpecialties.push(rec);
-              syncSpecRowsFromDom(); draftSpecRows[i].specId = rec.id; draftSpecRows[i].name = rec.name; draftSpecRows[i].profId = ""; renderSpecRows();
-            });
-            return;
-          }
-          if (newBtn){
-            var name = newBtn.getAttribute("data-new");
-            var created = {id: uid(slugify(name) || "esp"), name: name, sigla: defaultSigla(name)};
-            localSpecialties.push(created);
-            newSpecialties.push(created);
-            draftSpecRows[i].specId = created.id;
-            draftSpecRows[i].name = created.name;
-            inp.value = created.name;
-            sugg.hidden = true;
-            syncSpecRowsFromDom(); draftSpecRows[i].profId = ""; renderSpecRows();
-            return;
-          }
-          var b = e.target.closest("button[data-id]"); if (!b) return;
-          draftSpecRows[i].specId = b.getAttribute("data-id");
-          draftSpecRows[i].name = b.getAttribute("data-name");
-          inp.value = draftSpecRows[i].name;
-          sugg.hidden = true;
-          // Lista de terapeutas passa a ser a da especialidade escolhida.
-          syncSpecRowsFromDom(); draftSpecRows[i].profId = ""; renderSpecRows();
-        });
-      });
-    }
-    function renderSpecRows(){
-      var head = document.getElementById("specHead"); if (head) head.hidden = !draftSpecRows.length;
-      specRowsHost.innerHTML = draftSpecRows.length ? draftSpecRows.map(function(row, i){
-        return '<div class="hours-row" data-i="'+i+'">' +
-          '<div class="spec-name-wrap">' +
-            '<input type="text" class="spec-name" autocomplete="off" placeholder="Especialidade ou serviço" value="'+esc(row.name)+'">' +
-            '<div class="autolist floating" hidden></div>' +
-          '</div>' +
-          '<input type="text" class="spec-hours-val" placeholder="0" value="'+esc(row.hours)+'">' +
-          '<div class="spec-prof-wrap"><select class="spec-prof" aria-label="Terapeuta">' + specProfOptions(row.specId, row.profId) + '</select></div>' +
-          '<div class="spec-aba-wrap"><select class="spec-aba" aria-label="ABA nesta especialidade" title="ABA nesta especialidade">' +
-            ["Sim", "Não"].map(function(o){ return '<option value="' + o + '"' + (abaYesNo(row.aba) === o ? ' selected' : '') + '>' + o + '</option>'; }).join("") + '</select></div>' +
-          '<button type="button" class="rm" data-rm="'+i+'" aria-label="Remover especialidade">✕</button>' +
+    function render(){
+      host.innerHTML = draftLines.length ? draftLines.map(function(r, i){
+        var sp = state.specialties.filter(function(x){ return x.id === r.specId; })[0], cov = coverOf(r);
+        var locked = lockedIds && lockedIds.indexOf(r.id) !== -1;
+        return '<div class="room-row tl-row' + (cov ? " " + cov.cls : "") + '" data-i="' + i + '" data-hours="' + esc(r.hours) + '">' +
+          '<span class="room-dot" style="background:' + swatchVar(sp ? (sp.color || "teal") : "slate") + '"></span>' +
+          '<div class="room-info"><div class="rn">' + esc(lineLabel(r, false)) + (locked ? ' <span class="tl-lock" title="Atendimentos realizados: especialidade, sessões e serviço travados">🔒</span>' : '') + '</div>' +
+            '<div class="rs">' + esc(tlSummary(r)) + '</div>' +
+            (r.obs && lineSvc(r) !== DEFAULT_SERVICE_ID ? '<div class="rs tl-obs">Obs.: ' + esc(r.obs) + '</div>' : '') +
+            (cov ? '<div class="rs tl-cover">' + esc(cov.txt) + '</div>' : '') + '</div>' +
+          '<button type="button" class="btn ghost" data-tl-edit="' + i + '">Editar</button>' +
         '</div>';
-      }).join("") : '<div class="hours-empty">Nenhuma especialidade ou serviço nesta ficha — clique em "+ especialidade ou serviço" para adicionar.</div>';
-      specRowsHost.querySelectorAll(".rm").forEach(function(b){
-        b.addEventListener("click", function(){
-          syncSpecRowsFromDom();
-          draftSpecRows.splice(parseInt(b.getAttribute("data-rm"),10), 1);
-          renderSpecRows();
-        });
-      });
-      wireSpecRowPickers();
+      }).join("") : '<div class="hours-empty">Nenhuma especialidade neste tratamento — clique em "+ Incluir especialidade".</div>';
+      specSumRender();
     }
-    renderSpecRows();
-    document.getElementById("specRowAdd").addEventListener("click", function(){
-      syncSpecRowsFromDom();
-      draftSpecRows.push({specId:null, name:"", hours:"", profId:"", aba: document.getElementById("pAba").value});
-      renderSpecRows();
-    });
-    // ABA do tratamento: trocar aqui troca o ABA de todas as linhas; cada linha pode
-    // ser mudada depois sem mexer nas outras.
+    function edit(i){
+      var isNew = i == null, line = isNew ? null : draftLines[i];
+      var nm = document.getElementById("trPat"), pName = nm && nm.selectedOptions && nm.selectedOptions[0] ? nm.selectedOptions[0].textContent : (v.nome || "");
+      openTreatLineModal({line: line, isNew: isNew, locked: !isNew && lockedIds && lockedIds.indexOf(line.id) !== -1,
+        aba: document.getElementById("pAba").value, horarios: function(){ try { return readPatHours(); } catch (e){ return null; } },
+        others: draftLines.filter(function(x, j){ return j !== i; }), patient: pName,
+        onSave: function(o){ if (isNew) draftLines.push(o); else draftLines[i] = o; render(); },
+        onDelete: function(){ draftLines.splice(i, 1); render(); }});
+    }
+    host.addEventListener("click", function(e){ var b = e.target.closest("[data-tl-edit]"); if (b) edit(+b.getAttribute("data-tl-edit")); });
+    document.getElementById("specRowAdd").addEventListener("click", function(){ edit(null); });
+    // ABA do tratamento: trocar aqui troca o ABA de todos os quadros; cada quadro pode ser mudado depois.
     document.getElementById("pAba").addEventListener("change", function(){
-      syncSpecRowsFromDom();
-      var val = this.value;
-      draftSpecRows.forEach(function(r){ r.aba = val; });
-      renderSpecRows();
+      var val = this.value; draftLines.forEach(function(r){ r.aba = val; }); render();
     });
+    render();
 
-    // Convênio picker: same search+select+"cadastrar novo" pattern as the specialty rows.
+    // Convênio picker: search+select+"cadastrar novo".
     var convInput = document.getElementById("pConv");
     var convSuggest = document.getElementById("pConvSuggest");
     function renderConvSuggest(){
@@ -10303,8 +10357,8 @@ function treatFieldsEditor(v, opts){
       convSuggest.hidden = false;
     }
     convInput.addEventListener("focus", renderConvSuggest);
-    convInput.addEventListener("input", function(){ draftConvenioId = null; renderConvSuggest(); });
-    convInput.addEventListener("blur", function(){ setTimeout(function(){ convSuggest.hidden = true; }, 130); });
+    convInput.addEventListener("input", function(){ draftConvenioId = null; renderConvSuggest(); render(); });
+    convInput.addEventListener("blur", function(){ setTimeout(function(){ convSuggest.hidden = true; render(); }, 130); });
     convSuggest.addEventListener("click", function(e){
       var newBtn = e.target.closest("button[data-new]");
       if (newBtn && !newBtn.getAttribute("data-new")){
@@ -10312,7 +10366,7 @@ function treatFieldsEditor(v, opts){
         quickAddRegistry("convenios").then(function(rec){
           if (!rec) return;
           if (!localConvenios.some(function(x){ return x.id === rec.id; })) localConvenios.push(rec);
-          draftConvenioId = rec.id; convInput.value = rec.name; convInput.dispatchEvent(new Event("change", {bubbles: true}));
+          draftConvenioId = rec.id; convInput.value = rec.name; convInput.dispatchEvent(new Event("change", {bubbles: true})); render();
         });
         return;
       }
@@ -10324,12 +10378,14 @@ function treatFieldsEditor(v, opts){
         draftConvenioId = created.id;
         convInput.value = created.name;
         convSuggest.hidden = true;
+        render();
         return;
       }
       var b = e.target.closest("button[data-id]"); if (!b) return;
       draftConvenioId = b.getAttribute("data-id");
       convInput.value = b.getAttribute("data-name");
       convSuggest.hidden = true;
+      render();
     });
     function resolveConvenioId(){
       var text = convInput.value.trim();
@@ -10345,59 +10401,28 @@ function treatFieldsEditor(v, opts){
       newConvenios.push(created);
       return created.id;
     }
-
-    // One outside-click handler closes whichever floating suggestion list is open,
-    // whether it's a specialty row's or the convênio field's.
-    // A floating suggestion box can visually sit on top of whatever follows it (the
-    // hours field, the remove button, "+ especialidade"...). Only keep it open when the
-    // click is on its own input or on one of its own option buttons — any other mousedown,
-    // including one that lands on the box's empty padding, closes it instead of trapping it.
+    // Clique fora fecha a lista de sugestões do convênio.
     document.addEventListener("mousedown", function outsidePickers(e){
       if (!document.getElementById(ovId)){ document.removeEventListener("mousedown", outsidePickers); return; }
-      document.querySelectorAll("#" + ovId + " .autolist.floating").forEach(function(box){
-        if (box.hidden) return;
-        var wrap = box.closest(".spec-name-wrap, .field-picker");
-        var input = wrap ? wrap.querySelector("input") : null;
-        var onInput = input && e.target === input;
-        var onOption = box.contains(e.target) && !!e.target.closest("button[data-id], button[data-new]");
-        if (!onInput && !onOption) box.hidden = true;
-      });
+      if (convSuggest.hidden) return;
+      var onOption = convSuggest.contains(e.target) && !!e.target.closest("button[data-id], button[data-new]");
+      if (e.target !== convInput && !onOption) convSuggest.hidden = true;
     });
-
-    syncRef = syncSpecRowsFromDom; resolveRef = resolveConvenioId;
+    resolveRef = resolveConvenioId; renderRef = render;
   }
   function read(){
     syncRef();
-    // Most rows already have a specId (picked from the list, or created inline via
-    // "+ Cadastrar nova especialidade"). A row the user typed into but never picked
-    // from still resolves here: match by name, or create it, same as before.
-    var specHoursOut = [];
-    draftSpecRows.forEach(function(row){
-      var name = (row.name||"").trim();
-      if (!name) return;
-      var hours = (row.hours||"").trim();
-      var specId = row.specId;
-      var svcMatch = !specId && servicesList().filter(function(s){ return s.id !== DEFAULT_SERVICE_ID && normText(s.name.trim()) === normText(name); })[0];
-      if (!specId && svcMatch && !localSpecialties.some(function(s){ return normText(s.name.trim()) === normText(name); })) specId = SVC_PREFIX + svcMatch.id;
-      if (!specId){
-        var existing = localSpecialties.filter(function(s){ return s.name.trim().toLowerCase() === name.toLowerCase(); })[0];
-        if (existing){
-          specId = existing.id;
-        } else {
-          var created = {id: uid(slugify(name) || "esp"), name: name, sigla: defaultSigla(name)};
-          localSpecialties.push(created);
-          newSpecialties.push(created);
-          specId = created.id;
-        }
-      }
-      var outRow = {specId: specId, hours: hours};
-    if (row.profId) outRow.profId = row.profId;
-    if (row.aba) outRow.aba = row.aba;
-    specHoursOut.push(outRow);
+    var keep = ["id", "specId", "hours", "profId", "aba", "service", "dia", "hora", "semanas", "roomId", "seguidas", "obs"];
+    var specHoursOut = draftLines.filter(function(r){ return r.specId; }).map(function(r){
+      var o = {id: r.id || uid("tl")};
+      keep.forEach(function(k){ if (k !== "id" && r[k] != null && String(r[k]).trim() !== "") o[k] = typeof r[k] === "string" ? r[k].trim() : r[k]; });
+      if (!o.service) o.service = DEFAULT_SERVICE_ID;
+      if (!o.hours) o.hours = "";
+      if (String(o.seguidas) === "1") delete o.seguidas;
+      if (o.service === DEFAULT_SERVICE_ID) delete o.obs;
+      return o;
     });
-
     var convenioId = resolveRef();
-
     return {
       fields: {
         convenioId: convenioId,
@@ -10412,7 +10437,10 @@ function treatFieldsEditor(v, opts){
       newConvenios: newConvenios
     };
   }
-  return {html: html, wire: wire, read: read};
+  // Tratamento com atendimentos realizados: os quadros que já existem ficam com especialidade,
+  // sessões/mês e serviço travados; quadros novos continuam permitidos.
+  function lock(){ lockedIds = draftLines.map(function(r){ return r.id; }); renderRef(); }
+  return {html: html, wire: wire, read: read, lock: lock};
 }
 
 /* ---------------- Cadastro do paciente: grupos e campos configuráveis ----------------
@@ -15724,7 +15752,7 @@ function openFixPatientModal(back){
         var dO = DAYS.filter(function(d){ return d.key === parts[0]; })[0];
         out.push({docId: docId, key: k, week: +parts[1], dayKey: parts[0], time: kp[0],
           room: room ? room.name : "", prof: prof ? (profShortName(prof) || profNome(prof)) : (ther ? therapistDisplayName(ther) : ""), dayName: dO ? dO.full : parts[0], rec: b,
-          specId: prof && prof.specialtyId ? prof.specialtyId : "",
+          specId: prof && prof.specialtyId ? prof.specialtyId : "", profId: prof ? prof.id : "",
           spec: prof && prof.specialtyId ? specialtyName(prof.specialtyId) : "Sem especialidade"});
       });
     });
@@ -15732,14 +15760,14 @@ function openFixPatientModal(back){
   }
   // Pacote do paciente × agendamentos no Planner (4 semanas = 1 mês).
   function pkCompare(p, list){
-    var pk = patientSpecRows(p).map(function(r){ return {id: r.specId, hours: Number(String(r.hours).replace(",", ".")) || 0}; }).filter(function(r){ return r.hours > 0; });
+    var lines = patientSpecRows(p);
+    var pk = lines.map(function(r){ return {id: r.id, line: r, hours: Number(String(r.hours).replace(",", ".")) || 0}; }).filter(function(r){ return r.hours > 0; });
     var planned = {};
     list.forEach(function(x){
-      var svc = (x.rec && x.rec.service) || DEFAULT_SERVICE_ID;
-      var key = svc !== DEFAULT_SERVICE_ID ? SVC_PREFIX + svc : (x.specId || "");
-      planned[key] = (planned[key] || 0) + 1;
+      var ln = treatLineFor(lines, x.profId, (x.rec && x.rec.service) || DEFAULT_SERVICE_ID);
+      if (ln) planned[ln.id] = (planned[ln.id] || 0) + 1;
     });
-    return pk.map(function(r){ var got = planned[r.id] || 0; return {id: r.id, name: specialtyName(r.id), hours: r.hours, got: got, diff: got - r.hours}; });
+    return pk.map(function(r){ var got = planned[r.id] || 0; return {id: r.id, name: lineLabel(r.line), hours: r.hours, got: got, diff: got - r.hours}; });
   }
   function selected(){ var id = document.getElementById("fxPat").value; return state.patients.filter(function(p){ return p.id === id; })[0] || null; }
   function inScope(list){
@@ -18068,16 +18096,14 @@ var RP_BUILDERS = {
   "pacote": function(rows, o){
     function dayNum(iso){ return agdParse(iso).getTime() / 86400000; }
     function prevDay(iso){ var d = agdParse(iso); d.setDate(d.getDate() - 1); return agdIso(d); }
-    var done = {}; // tratamento|especialidade -> sessões finalizadas
+    var done = {}; // tratamento|quadro -> sessões finalizadas
     rpPatientRows(rows).forEach(function(a){
       if (a.status !== "finalizado") return;
       var p0 = findPatientByName(a); if (!p0) return;
       var t = treatmentAt(p0.id, a.date), tk = p0.id + "|" + (t ? t.id : "");
-      var pr = findProfessional(a.professional_id);
-      var k = tk + "|" + ((pr && pr.specialtyId) || "");
-      done[k] = (done[k] || 0) + 1;
-      var ks = tk + "|" + SVC_PREFIX + (a.service || DEFAULT_SERVICE_ID);
-      done[ks] = (done[ks] || 0) + 1;
+      var ln = treatLineFor(patientSpecRows(t || p0), a.professional_id, a.service);
+      if (!ln) return;
+      done[tk + "|" + ln.id] = (done[tk + "|" + ln.id] || 0) + 1;
     });
     var out = [];
     state.patients.slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); }).forEach(function(p){
@@ -18096,13 +18122,13 @@ var RP_BUILDERS = {
         var label = sg.t ? trBr(sg.t.inicio) + " (" + trLabel(TR_STATUS, sg.t.status) + ")" : "—";
         patientSpecRows(sg.src).forEach(function(s){
           var hours = Number(s.hours) || 0; if (hours <= 0) return;
-          var real = done[tk + "|" + s.specId] || 0, esperado = Math.round(hours * months);
-          out.push([p.nome, label, specialtyName(s.specId), hours, esperado, real, real - esperado]);
+          var real = done[tk + "|" + s.id] || 0, esperado = Math.round(hours * months);
+          out.push([p.nome, label, lineLabel(s), hours, esperado, real, real - esperado]);
         });
       });
     });
     return {note: "Contratado/mês vem de cada tratamento do paciente. Cada tratamento conta só a parte do período em que valeu (do início até o tratamento seguinte ou o encerramento). " +
-      "Esperado = contratado × meses desse trecho. Realizado = atendimentos Finalizados naquele tratamento com profissional da especialidade (ou com o serviço).",
+      "Esperado = contratado × meses desse trecho. Realizado = atendimentos Finalizados naquele tratamento ligados a cada quadro (especialidade do profissional, serviço e profissional indicado).",
       sections: [{title: "Por paciente, tratamento e especialidade", head: ["Paciente", "Tratamento (início)", "Especialidade", "Contratado/mês", "Esperado no período", "Realizado", "Diferença"], rows: out}]};
   },
   "pendentes": function(rows, o, recIds){
@@ -18728,10 +18754,8 @@ function trLoadLast(force){
 // especialidade principal do profissional (Sessão) ou do serviço ("svc:").
 function trMonthEnd(iso){ var d = agdParse(iso); return agdIso(new Date(d.getFullYear(), d.getMonth() + 1, 0)); }
 var TR_MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-function trSpecKey(a){
-  if (a.svc && a.svc !== DEFAULT_SERVICE_ID) return SVC_PREFIX + a.svc;
-  var pr = findProfessional(a.prof); return (pr && pr.specialtyId) || "";
-}
+// Quadro do tratamento ao qual o atendimento pertence (id da linha; "" = fora do tratamento).
+function trLineKey(lines, a){ var r = treatLineFor(lines, a.prof, a.svc); return r ? r.id : ""; }
 // Fim do período do tratamento: véspera do início do seguinte, ou o encerramento.
 function trPeriodEnd(t){
   var r = trPeriodEndAuto(t);
@@ -18749,17 +18773,18 @@ var TR_JUST_STATUS = "falta-justificada";
 // Planner (modelo de 4 semanas que se repete) do paciente, por linha do tratamento
 // (especialidade principal do profissional da coluna na Sessão, ou "svc:<serviço>").
 // TR.plan = {docId: bookings}; null = ainda não lido.
-function trPlannerCounts(p){
+function trPlannerCounts(p, lines){
   if (!TR.plan || !p) return null;
   var out = {};
+  lines = lines || patientSpecRows(p);
   Object.keys(TR.plan).forEach(function(docId){
     var bk = TR.plan[docId] || {};
     Object.keys(bk).forEach(function(k){
       var b = bkRec(bk[k]);
       if (!b || !b.patient || bookingKind(b) || !recIsPatient(b, p)) return;
       var kp = k.split("|"), room = findRoom(kp[1]), ther = room ? findTherapist(room, kp[2]) : null;
-      var key = trSpecKey({prof: ther ? ther.professionalId : "", svc: b.service || DEFAULT_SERVICE_ID});
-      if (key) out[key] = (out[key] || 0) + 1;
+      var key = trLineKey(lines, {prof: ther ? ther.professionalId : "", svc: b.service || DEFAULT_SERVICE_ID});
+      out[key] = (out[key] || 0) + 1;
     });
   });
   return out;
@@ -18775,12 +18800,12 @@ function trMonthly(t){
   var end = trPeriodEnd(t) || trMonthEnd(today);
   if (end > trMonthEnd(today)) end = trMonthEnd(today);
   if (end < t.inicio) return {months: []};
-  var specs = (Array.isArray(t.specHours) ? t.specHours : []).filter(function(r){ return Number(r.hours) > 0; });
+  var lines = treatLines(t.specHours), specs = lines.filter(function(r){ return Number(r.hours) > 0; });
   var mine = (TR.appts[p.id] || []).filter(function(a){
     if (a.d < t.inicio || a.d > end) return false;
     var x = treatmentAt(t.patientId, a.d); return x && x.id === t.id;
   });
-  var plan = trPlannerCounts(p);   // modelo de 4 semanas (null = ainda não lido)
+  var plan = trPlannerCounts(p, lines);   // modelo de 4 semanas (null = ainda não lido)
   var months = [], y = +t.inicio.slice(0, 4), m = +t.inicio.slice(5, 7) - 1;
   while (true){
     var first = agdIso(new Date(y, m, 1)), last = agdIso(new Date(y, m + 1, 0));
@@ -18790,12 +18815,11 @@ function trMonthly(t){
     var frac = (+to.slice(8, 10) - +from.slice(8, 10) + 1) / dim;
     var cur = ym === curYm, rows = {};
     function rowFor(k){ return rows[k] || (rows[k] = {specId: k, contr: 0, plan: plan ? 0 : null, ag: 0, real: 0, sched: 0, just: 0, semSt: 0}); }
-    specs.forEach(function(r){ rowFor(r.specId).contr = Math.round(Number(r.hours) * frac); });
-    if (plan) Object.keys(plan).forEach(function(k){ rowFor(k).plan = Math.round(plan[k] * frac); });
+    specs.forEach(function(r){ rowFor(r.id).contr = Math.round(Number(r.hours) * frac); });
+    if (plan) Object.keys(plan).forEach(function(k){ rowFor(k || "__fora").plan = Math.round(plan[k] * frac); });
     mine.forEach(function(a){
       if (a.d.slice(0, 7) !== ym) return;
-      var k = trSpecKey(a); if (!k) return;
-      var row = rowFor(k);
+      var row = rowFor(trLineKey(lines, a) || "__fora");
       row.ag++;
       if (TR_USED_STATUS.indexOf(a.st) !== -1) row.real++;
       else if (a.st === TR_JUST_STATUS) row.just++;
@@ -18848,18 +18872,17 @@ function trMonthRange(t){
 }
 function trMonthView(t, ym){
   var p = t && rawPatient(t.patientId); if (!p) return null;
-  var today = trTodayIso(), plan = trPlannerCounts(p), rows = [], by = {};
-  (Array.isArray(t.specHours) ? t.specHours : []).forEach(function(r){
-    if (!r.specId || by[r.specId]) return;
-    var row = by[r.specId] = {specId: r.specId, contr: Number(String(r.hours == null ? "" : r.hours).replace(",", ".")) || 0,
-      plan: plan ? (plan[r.specId] || 0) : null, ag: 0, real: 0, just: 0, semSt: 0};
+  var lines = treatLines(t.specHours), today = trTodayIso(), plan = trPlannerCounts(p, lines), rows = [], by = {};
+  lines.forEach(function(r){
+    var row = by[r.id] = {specId: r.specId, line: r, contr: Number(String(r.hours == null ? "" : r.hours).replace(",", ".")) || 0,
+      plan: plan ? (plan[r.id] || 0) : null, ag: 0, real: 0, just: 0, semSt: 0};
     rows.push(row);
   });
   var other = 0, loaded = !!TR.appts;
   (TR.appts && TR.appts[p.id] || []).forEach(function(a){
     if (a.d.slice(0, 7) !== ym || (t.inicio && a.d < t.inicio)) return;
     var x = treatmentAt(t.patientId, a.d); if (!x || x.id !== t.id) return;
-    var row = by[trSpecKey(a)]; if (!row){ other++; return; }
+    var row = by[trLineKey(lines, a)]; if (!row){ other++; return; }
     row.ag++;
     if (TR_USED_STATUS.indexOf(a.st) !== -1) row.real++;
     else if (a.st === TR_JUST_STATUS) row.just++;
@@ -18896,7 +18919,7 @@ function trMonthViewHtml(t, ym){
     '<th title="Contratado − Planner">Dif. Planner</th><th>Agenda</th><th>Realizado</th><th title="Falta justificada">Justificado</th>' +
     '<th title="Contratado − Agenda + Justificado">Dif. Agenda</th></tr></thead><tbody>';
   v.rows.forEach(function(r){
-    html += '<tr><td>' + esc(specialtyName(r.specId)) +
+    html += '<tr><td>' + esc(lineLabel(r.line)) +
       (r.semSt ? '<div class="tr-warns"><span class="tr-warn" title="Atendimentos que já passaram e ainda não têm status">' + r.semSt + ' sem status</span></div>' : '') +
       '</td>' + cells(r) + '</tr>';
   });
@@ -18972,8 +18995,16 @@ function trUsedCount(t){ return trCountIn(TR.used, t); }
 // Quantidade total de sessões contratadas (pacote + especialidades/serviços).
 function trQtyKey(o){
   return JSON.stringify([String(o.sessoesMes == null ? "" : o.sessoesMes).trim(),
-    (Array.isArray(o.specHours) ? o.specHours : []).map(function(r){ return [r.specId, String(r.hours == null ? "" : r.hours).trim()]; }),
     o.vencPor === "sessoes" ? String(o.totalSessoes || "") : ""]);
+}
+// Quadros que já existiam continuam com a mesma especialidade, sessões/mês e serviço
+// (tratamento com atendimentos realizados). Quadro novo é sempre permitido.
+function trLinesLockOk(oldRows, newRows){
+  var nw = {}; treatLines(newRows).forEach(function(r){ nw[r.id] = r; });
+  return treatLines(oldRows).every(function(r){
+    var n = nw[r.id];
+    return n && n.specId === r.specId && String(n.hours).trim() === String(r.hours).trim() && lineSvc(n) === lineSvc(r);
+  });
 }
 // Término = o digitado na janela do tratamento; sem ele, o último atendimento entre o início
 // deste tratamento e o início do seguinte (automático).
@@ -19325,9 +19356,10 @@ function openTreatmentModal(t, opts){
     var note = document.getElementById("trLockNote");
     note.hidden = false;
     document.getElementById("trLockText").textContent = "Este tratamento já tem " + doneN + (doneN === 1 ? " atendimento realizado (Finalizado)" : " atendimentos realizados (Finalizados)") +
-      ": não pode ser excluído e a quantidade de sessões (Sessão/Mês e especialidades/serviços) não pode ser alterada. Para mudar, use Renegociar (ou Cancelar).";
+      ": não pode ser excluído; Sessão/Mês e a especialidade, as sessões/mês e o serviço dos quadros que já existem não podem ser alterados (quadros novos podem ser incluídos). Para mudar, use Renegociar (ou Cancelar).";
     var d0 = document.getElementById("trDel"); if (d0) d0.hidden = true;
-    var lockSel = "#trTotal, #trVencPor, #pPac, #specRowsHost .spec-name, #specRowsHost .spec-hours-val, #specRowsHost .rm, #specRowAdd";
+    var lockSel = "#trTotal, #trVencPor, #pPac";
+    ed.lock();
     Array.prototype.forEach.call(document.querySelectorAll(lockSel), function(el){ el.disabled = true; el.title = "Já há atendimentos realizados: use Renegociar."; });
   }
   if (!isNew){
@@ -19381,8 +19413,8 @@ function openTreatmentModal(t, opts){
     if (vencV && vencV < ini){ showToast("A data de vencimento não pode ser antes do início.", true); return; }
     var r = ed.read();
     var qtyNew = Object.assign({}, r.fields, {vencPor: document.getElementById("trVencPor").value, totalSessoes: parseInt(document.getElementById("trTotal").value, 10) || ""});
-    if (!isNew && trDoneCount(t) && trQtyKey(qtyNew) !== trQtyKey(Object.assign({vencPor: "data"}, t)) &&
-        !sysSaveGate(sv, "tr_realizados", "Tratamento com atendimentos realizados", "Já há atendimentos realizados neste tratamento: a quantidade de sessões não pode ser alterada. Use Renegociar.")) return;
+    if (!isNew && trDoneCount(t) && (trQtyKey(qtyNew) !== trQtyKey(Object.assign({vencPor: "data"}, t)) || !trLinesLockOk(t.specHours, r.fields.specHours)) &&
+        !sysSaveGate(sv, "tr_realizados", "Tratamento com atendimentos realizados", "Já há atendimentos realizados neste tratamento: Sessão/Mês e a especialidade, as sessões/mês e o serviço dos quadros que já existem não podem ser alterados (quadros novos podem ser incluídos). Use Renegociar.")) return;
     var sm = specSumRead();
     if (!sv._sumOk && sm && sm.total != null && sm.any && sm.total !== sm.sum && sysOn("tr_soma")){
       if (sysMode("tr_soma") === "block"){ showToast("A soma das especialidades/serviços (" + String(sm.sum).replace(".", ",") + ") é diferente de Sessão/Mês (" + String(sm.total).replace(".", ",") + ").", true); return; }
@@ -19716,11 +19748,14 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir). Campos obrigatórios: permissão <b>Pacientes – campos</b>. Mesclar cadastros: só Administrador."},
   {id: "tratamentos", group: "Cadastros", title: "Tratamentos", mod: "tratamentos", tab: "tratamentos",
-    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, ABA, especialidades/serviços com o terapeuta e o ABA de cada uma, horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
+    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, ABA, as especialidades em quadros (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "Valor, Descontos e Valor final ficam em <b>Convênio, pacote e horário</b>, logo depois de Convênio e Plano. Ao sair do campo, o valor aparece no formato R$ 1.234,56.",
+      "Em <b>Especialidades e serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>).",
+      "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de início</b> (vazios = qualquer um), <b>Semanas</b> (Todas, 1ª e 3ª, 2ª e 4ª ou uma só) e <b>Sessões seguidas</b> (1 ou 2). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
+      "A mesma especialidade pode ter vários quadros: por exemplo, Psicologia com o Tiago no serviço Acolhimento familiar às quintas 08:00 e mais um quadro de Psicologia em Sessão com qualquer terapeuta.",
       "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: abre um novo tratamento copiando o atual. Ao clicar em Salvar, o atual vira Renegociado e o novo fica Ativo; cancelando a janela, nada muda.",
       "Para encerrar, mude o Status para <b>Cancelado</b> e escolha o motivo.",
       "<b>Outras opções ▾</b>, no topo da janela: <b>Cadastro do paciente</b> abre o cadastro do paciente do tratamento; <b>Abrir plano terapêutico</b> abre o plano dele.",
@@ -19730,14 +19765,17 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Cada paciente tem <b>só um tratamento Ativo</b>. Salvar outro como Ativo passa o anterior para Renegociado (o banco também confere).",
-      "Ao lado de \"Especialidades/serviços e sessão (mês)\" aparece a conta: <b>Sessão/Mês</b> (o total) × a soma das especialidades/serviços. Verde = confere, âmbar = faltam sessões para distribuir, vermelho = passou do total. Salvar com diferença pede confirmação.",
+      "Ao lado de \"Especialidades e serviços\" aparece a conta: <b>Sessão/Mês</b> (o total) × a soma das sessões dos quadros. Verde = confere, âmbar = faltam sessões para distribuir, vermelho = passou do total. Salvar com diferença pede confirmação.",
       "O <b>Tipo</b> é automático: <b>Novo</b> se não há anterior ou o anterior foi Cancelado; <b>Renegociado</b> se o anterior foi Renegociado.",
       "<b>Cancelado é definitivo</b> e exige motivo. A observação é obrigatória quando o motivo é \"Outro\". Para retomar, crie um novo tratamento.",
       "Cancelado que veio da importação de planilha sem motivo aparece com a etiqueta <b>sem motivo</b> (filtro \"Cancelados sem motivo\"): abra o tratamento, escolha o motivo e salve.",
       "Cancelar um tratamento <b>inativa o paciente</b>, se ele não tiver outro tratamento Ativo (precisa da permissão de editar Pacientes).",
       "Ao <b>cancelar ou renegociar</b> um tratamento, o sistema pergunta se remove os agendamentos do paciente: do <b>Planner</b> (as 4 semanas) e/ou da <b>Agenda</b> a partir de uma data que você escolhe. Atendimentos com evolução no prontuário ficam. As remoções entram no desfazer do Planner e da Agenda.",
       "No tratamento novo, a lista de pacientes mostra também os inativos, com \"(inativo)\" ao lado do nome. Salvar o tratamento novo <b>reativa o paciente</b> (menos quando ele já é salvo como Cancelado).",
-      "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b> e a quantidade de sessões fica travada. Para mudar, use Renegociar.",
+      "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b>; Sessão/Mês e a especialidade, as sessões/mês e o serviço dos quadros que já existem ficam travados (🔒). Os outros campos do quadro continuam editáveis e <b>quadros novos podem ser incluídos</b>. Para mudar o que está travado, use Renegociar.",
+      "Cada atendimento conta para um quadro: o da especialidade do profissional (principal primeiro, depois as complementares) com o mesmo serviço; entre eles, o quadro do próprio profissional, depois o de \u201cTodos os terapeutas\u201d. Isso vale para o contratado × realizado, o ABA do atendimento, o aviso de terapeuta diferente, o Pacote e o \u201cEditar agendamento\u201d do Planner.",
+      "Ao salvar um quadro, o sistema avisa (sem bloquear) quando: o dia/horário está fora do horário disponível do paciente ou do horário de trabalho do profissional; a clínica não abre no dia; as semanas e as sessões seguidas não batem com as sessões/mês; as sessões/mês não fecham com as sessões seguidas; ou já existe um quadro igual.",
+      "A cobertura do convênio aparece no quadro: especialidade (ou serviço) não coberta em vermelho; coberta por outra especialidade que a libera, em cinza.",
       "A <b>Data de término</b> pode ser digitada (não pode ser antes do início); o tratamento vale até ela nos relatórios e no contratado × realizado. Vazia, é automática: o último atendimento da Agenda no período do tratamento.",
       "Atendimentos de datas passadas usam o tratamento que valia <b>na data</b> deles (cor, regras e relatórios).",
       "O <b>Histórico</b> na janela fica recolhido: clique no título (com a seta) para ver cada troca de status: quem, quando e o motivo."
@@ -22031,7 +22069,7 @@ function planReviewChip(r){
 function planTreatSpecs(pid){
   // state.patients já traz o paciente somado ao tratamento atual (rebuildPatients).
   var p = state.patients.filter(function(x){ return x.id === pid; })[0];
-  return ((p && p.specHours) || []).map(function(h){ return h.specId; }).filter(function(id){ return id && !isSvcItem(id); });
+  return ((p && p.specHours) || []).map(function(h){ return h && h.specId; }).filter(function(id, i, a){ return id && !isSvcItem(id) && a.indexOf(id) === i; });
 }
 // Quadros = Habilidades (sections = [{areaId, objectives}]); cada objetivo tem specIds
 // (especialidades que podem trabalhá-lo). Os planos do formato antigo (um quadro por

@@ -98,7 +98,7 @@ const path = require('path');
   // Paciente "somado" ao tratamento: Bruno com ABA "Não" no tratamento fica vermelho no Planner.
   await openNew('bruno-verde');
   await page.$eval('#pAba', (s) => { s.value = 'Não'; s.dispatchEvent(new Event('change', {bubbles: true})); });
-  await page.$eval('#specRowsHost .hours-row:nth-child(1) .spec-prof', (s) => { s.value = 'andrelisa-terapeuta'; s.dispatchEvent(new Event('change', {bubbles: true})); });
+  await require('./tl-helper').addLine(page, {prof: 'andrelisa-terapeuta'}, 0);
   await save();
   await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); await page.waitForTimeout(200);
   const brunoRow = await page.$$eval('#patListHost tbody tr', (trs) => { const r = trs.find((t) => t.textContent.includes('Bruno Verde')); const d = r && r.querySelector('.pcolor-dot'); return r ? {st: r.querySelector('.pt-trat').textContent.trim(), dot: d ? d.getAttribute('style') : ''} : null; });

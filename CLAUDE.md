@@ -3411,12 +3411,33 @@ Toda tela, lista, janela ou campo novo segue isto (e o que já existe foi corrig
 9. **Ajuda**: toda função nova entra no `HELP_TOPICS` (aspas curvas no texto).
 - (2026-10-10, pedidos do usuário) Janela da tarefa do CRM: etiqueta "Paciente cadastrado"/"Lead (sem cadastro)" (`#crmWhoTag`) ao lado do título "Dados do Paciente/Lead" (`.crm-sec-tw`), fora do campo. Janela com a altura da tela (`calc(100dvh - 32px)`, acompanha F11); a **Descrição ocupa o espaço livre** da coluna (`fitDesc` em `crmOpenTask`, refeito no `resize`; mínimo 4 linhas, só então a coluna rola) — o espaço entre os campos não muda.
 
-## Tratamento: especialidades em quadros (2026-10-10, EM ANDAMENTO)
+## Tratamento: especialidades em quadros (2026-10-10)
 Decisões do usuário: cada linha de especialidade vira um QUADRO (mesmo visual dos cartões de Salas/Grupos:
-resumo + botão Editar; a janela de edição tem todos os campos): Especialidade, Sessões/mês, Profissional (Todos),
-ABA (Sim/Não), Serviço (Sessão), Dia (vazio), Horário de início (vazio), Semanas (Todas), Sala (Qualquer),
-Seguidas (1/2), Observação (só com serviço ≠ Sessão). Mesma especialidade pode repetir (outro profissional ou
-serviço). Acaba o "svc:" no lugar da especialidade. Quadros novos sempre permitidos, mesmo com atendimento
-realizado. Base para, no futuro, o Planner se montar sozinho.
+`.room-row.tl-row` com resumo + botão Editar; `#specRowsHost.room-list.tl-list`, `#specRowAdd` "+ Incluir especialidade").
+A janela do quadro (`openTreatLineModal(ctx)`, camada própria `#tlHost` logo depois de `#modalHost`, ids `tlSpec`,
+`tlHours`, `tlSvc`, `tlProf`, `tlAba`, `tlRoom`, `tlDia`, `tlHora`, `tlSem`, `tlSeg`, `tlObs`) tem: Especialidade, Sessões/mês,
+Serviço (padrão Sessão), Profissional (Todos), ABA, Sala (Qualquer), Dia, Horário de início (vazios = qualquer),
+Semanas (`TL_WEEKS`: Todas, 1ª e 3ª, 2ª e 4ª, 1ª…4ª), Sessões seguidas (1/2), Observação (só com serviço ≠ Sessão).
+Mesma especialidade pode repetir. Base para o Planner se montar sozinho no futuro.
+- Formato: `specHours = [{id, specId, hours, profId, aba, service, dia, hora, semanas, roomId, seguidas, obs}]`
+  (`treatLines` normaliza e dá id às linhas antigas; `lineSvc`; "svc:<id>" antigo ainda é lido como serviço).
+- **Atendimento → quadro**: `treatLineFor(lines, profId, service)` — mesmo serviço, especialidade principal do
+  profissional primeiro (depois as complementares, na ordem): o quadro do próprio profissional, depois "Todos", depois
+  outro; serviço ≠ Sessão sem quadro na área = o quadro com esse serviço. Usado em `bookingAbaOf`, `trMonthly`/
+  `trMonthView`/`trPlannerCounts` (chave = id do quadro, `trLineKey`; `trSpecKey` saiu), relatório Pacote, `pkCompare`
+  (Editar agendamento). `therapistMismatchMsg`: quadros da especialidade principal (ou da 1ª complementar com quadro)
+  com o serviço; avisa só se nenhum é "Todos" nem do profissional. `lineLabel(r)` = "Psicologia · Acolhimento · Tiago".
+- Avisos ao salvar o quadro (não bloqueiam): horário disponível do paciente (lê a tabela de horário da própria janela),
+  horário de trabalho do profissional, clínica fechada no dia, semanas × sessões/mês × seguidas, sessões/mês ÷ seguidas,
+  quadro repetido. Cobertura do convênio no cartão (especialidade e, fora de Sessão, o serviço).
+- Trava (tratamento com Finalizados): `trQtyKey` só com Sessão/Mês e vencimento por sessões; `trLinesLockOk(antigos,
+  novos)` exige que os quadros que existiam mantenham especialidade, sessões/mês e serviço. Na tela `ed.lock()` marca
+  esses quadros (🔒) e a janela deles abre com esses 3 campos travados e sem Excluir; quadro novo sempre permitido.
+- Também: `USAGE.salas` conta tratamentos com o quadro na sala; `USAGE.servicos` conta quadros com o serviço;
+  `planTreatSpecs` sem repetir; `patientSpecSummary` mostra a sigla do serviço ("PS/AF 1").
+- Testes: `tests/tl-helper.js` (`addLine(page, {spec, hours, svc, prof, aba, dia, hora, semanas, room, seguidas, obs}, editIndex)`,
+  `lines(page)`) usado em run_registries, run_newfeatures, run_reg_add, run_convenios, run_aba_linha, run_treatments,
+  run_treatment_history; teste próprio `tests/run_tr_quadros.js` (no `npm test`).
 - Passo 1: migração só de dados `supabase/2026-10-10n-tratamentos-limpar-especialidades.sql` (limpa `specHours` de
-  TODOS os tratamentos e as sobras em `patients/all`; resto do tratamento intacto). Testada no PGlite.
+  TODOS os tratamentos e as sobras em `patients/all`). Testada no PGlite.
+- Produção (2026-10-10): `2026-10-10n` rodada (0 | 0 | 247 tratamentos).

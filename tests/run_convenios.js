@@ -69,13 +69,11 @@ const path = require('path');
   await page.click('#trAdd'); await page.waitForTimeout(400);
   await page.fill('#pConv', 'Unimed'); await page.dispatchEvent('#pConv', 'input'); await page.waitForTimeout(200);
   await page.click('#pConvSuggest button[data-id="unimed"]'); await page.waitForTimeout(200);
-  for (const [n, q, id] of [[0, 'Fonoaudiologia', 'fono'], [1, 'Musico', 'musico']]) {
-    await page.click('#specRowAdd'); await page.waitForTimeout(100);
-    await page.fill(`#specRowsHost .hours-row[data-i="${n}"] .spec-name`, q); await page.waitForTimeout(200);
-    await page.click(`#specRowsHost .hours-row[data-i="${n}"] .autolist button[data-id="${id}"]`); await page.waitForTimeout(250);
-  }
-  const covers = await page.$$eval('#specRowsHost .hours-row', (a) => a.map((r) => r.getAttribute('data-cover') || ''));
-  console.log('treatment rows warn "not covered" and "covered via Psicologia"?', covers[0] === 'Não coberta pelo convênio' && covers[1] === 'Coberta pelo convênio via Psicologia', JSON.stringify(covers));
+  const TL = require('./tl-helper');
+  await TL.addLine(page, {spec: 'Fonoaudiologia', hours: 2});
+  await TL.addLine(page, {spec: 'Musicoterapia', hours: 2});
+  const covers = (await TL.lines(page)).map((r) => r.cover);
+  console.log('treatment cards warn "not covered" and "covered via Psicologia"?', covers[0] === 'Especialidade não coberta pelo convênio' && covers[1] === 'Coberta pelo convênio via Psicologia', JSON.stringify(covers));
   await page.click('#trCancel');
 
   console.log('no JS errors?', errors.length === 0, errors);

@@ -72,12 +72,11 @@ const path = require('path');
   check('treatment: new reason chosen?', await page.$eval('#trMot', (s) => s.options[s.selectedIndex].textContent === 'Fim do convênio'));
   await page.click('#pConv'); await page.waitForTimeout(150);
   check('treatment: Convênio suggestions end with "+ Incluir"?', await page.evaluate(() => { const b = document.querySelector('#pConvSuggest .autolist-new'); return !!b && /\+ Incluir/.test(b.textContent) && b === b.parentNode.lastElementChild; }));
-  if (await page.$('#specRowAdd')){ await page.click('#specRowAdd'); await page.waitForTimeout(150); }
-  const specIn = await page.$('#ovTreat .spec-name');
-  if (specIn){
-    await specIn.click(); await page.waitForTimeout(150);
-    check('treatment: Especialidade suggestions end with "+ Incluir"?', await page.evaluate(() => [...document.querySelectorAll('#ovTreat .autolist')].some((a) => !a.hidden && /\+ Incluir/.test((a.lastElementChild || {}).textContent || ''))));
-  } else console.log('no specialty row');
+  await page.click('#specRowAdd'); await page.waitForSelector('#ovTLine');
+  await openList('tlSpec');
+  check('treatment card: Especialidade list ends with "+ Incluir"?', await hasAdd());
+  await closePop();
+  await page.click('#tlCancel');
   await ev('document.getElementById("modalHost").innerHTML = ""');
 
   // 4. Colaborador: Especialidade principal, Tipos (painel de várias opções), CBO, Conselho
