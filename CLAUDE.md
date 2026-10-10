@@ -3623,3 +3623,6 @@ conferiu a lista (`supabase/conferencia-aba.sql`, só leitura) e escolheu **mant
   pacientes). Testes: `run_aba_linha.js` (regra automática, padrão do quadro), `run_treatments.js`, `run_newfeatures.js`,
   `run_registries.js`, `run_planilhas.js`, `run_treatment_history.js`.
 - Produção (2026-10-10): `2026-10-10u-aba-so-nos-quadros` rodada (0 | 0 | 162 Sim | 85 Não).
+- (2026-10-10, pedido do usuário) **CRM: pesquisa na lista de Status** (janela da tarefa e lista): `crmStatusMenu` sempre com o
+  campo `.crm-pop-q` "Pesquisar status…" (antes só no celular); no computador o campo já vem com o foco (`crmPop`), sem
+  resultado mostra "Nenhum status encontrado" (`.crm-pop-none`), Enter escolhe o 1º. Teste em `run_crm.js`.
