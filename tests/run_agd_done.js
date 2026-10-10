@@ -1,0 +1,61 @@
+// Atendimento com status ou evolução fica protegido na Agenda (2026-10-10):
+// excluir e mudar data/horário/profissional só o Administrador; trocar o paciente, ninguém.
+// Cria tests/page_ad.html com um "eval" para chamar as regras do app direto.
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+
+(async () => {
+  const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
+  const i = src.indexOf('"use strict";');
+  const pg = path.join(__dirname, 'page_ad.html');
+  fs.writeFileSync(pg, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
+  const browser = await chromium.launch(require('./launch-opts'));
+  const page = await browser.newPage({ viewport: { width: 1300, height: 850 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + pg);
+  await page.waitForTimeout(700);
+  const ev = (code) => page.evaluate((c) => window.__ev(c), code);
+  let ok = true;
+  const check = (label, cond, info) => { console.log(label, !!cond, info === undefined ? '' : JSON.stringify(info)); if (!cond) ok = false; };
+
+  const r = await ev(`(function(){
+    var row = {id: "a1", date: "2026-10-01", time: "08:00", professional_id: "p1", room_id: "r1", patient: "Ana Azul", patient_id: "ana", status: "finalizado", note: ""};
+    var free = Object.assign({}, row, {status: null});
+    var out = {};
+    out.same = agdDoneLockMsg(row, Object.assign({}, row, {note: "obs", room_id: "r2"}), false);
+    out.moved = agdDoneLockMsg(row, Object.assign({}, row, {time: "08:40"}), false);
+    out.prof = agdDoneLockMsg(row, Object.assign({}, row, {professional_id: "p2"}), false);
+    out.pat = agdDoneLockMsg(row, Object.assign({}, row, {patient: "Bruno Verde", patient_id: "bruno"}), false);
+    out.blk = agdDoneLockMsg(row, Object.assign({}, row, {blocked: true, patient: ""}), false);
+    out.legacyId = agdDoneLockMsg(Object.assign({}, row, {patient_id: null}), Object.assign({}, row), false);
+    out.free = agdDoneLockMsg(free, Object.assign({}, free, {time: "09:00", patient: "Outro"}), false);
+    out.evo = agdDoneLockMsg(free, Object.assign({}, free, {time: "09:00"}), true);
+    window.pipoAuth = {isAdmin: function(){ return true; }, can: function(){ return true; }};
+    out.adminMoved = agdDoneLockMsg(row, Object.assign({}, row, {time: "08:40"}), false);
+    out.adminPat = agdDoneLockMsg(row, Object.assign({}, row, {patient: "Bruno Verde"}), false);
+    delete window.pipoAuth;
+    return out;
+  })()`);
+  check('observação e sala mudam livremente?', r.same === '', r.same);
+  check('horário: só o Administrador?', /só o Administrador/.test(r.moved), r.moved);
+  check('profissional: só o Administrador?', /só o Administrador/.test(r.prof), r.prof);
+  check('paciente não troca?', /paciente não pode ser trocado/.test(r.pat), r.pat);
+  check('virar bloqueio = trocar paciente?', /paciente não pode ser trocado/.test(r.blk), r.blk);
+  check('atendimento antigo sem código não acusa troca?', r.legacyId === '', r.legacyId);
+  check('sem status nem evolução: livre?', r.free === '', r.free);
+  check('com evolução (sem status): protegido?', /evolução/.test(r.evo), r.evo);
+  check('Administrador move?', r.adminMoved === '', r.adminMoved);
+  check('Administrador também não troca paciente?', /paciente não pode ser trocado/.test(r.adminPat), r.adminPat);
+
+  const sp = await ev(`agdSplitByRecords([{id: "x1", status: "finalizado"}, {id: "x2", status: "nao-compareceu"}]).then(function(s){ return {del: s.del.length, kept: s.kept.length}; })`);
+  check('excluir com status (não Administrador): ficam?', sp.del === 0 && sp.kept === 2, sp);
+  check('mensagem fala de status?', /status/.test(await ev('AGD_KEPT_MSG')));
+
+  check('no JS errors?', errors.length === 0, errors);
+  await browser.close();
+  try { fs.unlinkSync(pg); } catch (e) {}
+  console.log(ok ? 'ALL PASS' : 'SOME FAILED');
+  process.exit(ok ? 0 : 1);
+})();

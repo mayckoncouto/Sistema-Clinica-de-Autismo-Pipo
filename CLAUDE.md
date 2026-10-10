@@ -3165,7 +3165,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
 ## Auditoria de integridade dos dados (2026-10-10) — PENDÊNCIAS (nada corrigido ainda)
 Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A resolver:
 - ~~ALTA 1~~ FEITO (2026-10-10, ver "Cadastros em lista gravam só o item" abaixo).
-- ALTA 2. Atendimento com status (Finalizado/Não compareceu/Falta justificada) ou com evolução: lixeira/Desmarcar
+- ~~ALTA 2~~ FEITO (2026-10-10). Era: Atendimento com status (Finalizado/Não compareceu/Falta justificada) ou com evolução: lixeira/Desmarcar
   (`agdDeleteRow` só confere evolução p/ não-admin) e mover/editar (`agdPlace`, janela) mudam data/paciente/profissional;
   a evolução guarda data própria e fica divergente; contagens de realizado/sessões usadas mudam.
 - ALTA 3. Excluir evolução: o atendimento continua Finalizado sem evolução; o nível do objetivo do plano não volta.
@@ -3205,3 +3205,18 @@ Decisões do usuário: mesmo item alterado por duas pessoas = AVISAR e deixar es
 - Ajuda: regra no tópico "Visão geral do sistema". Teste `tests/run_list_patch.js` (cria `tests/page_lp.html` com
   banco simulado que tem `patchList2`/`reload`).
 - Produção (2026-10-10): `2026-10-10b-gravar-so-o-item` rodada (função criada = 1).
+
+## Atendimento com status ou evolução protegido (2026-10-10, item 2 da auditoria)
+Decisões do usuário (QUALQUER status conta): excluir = só Administrador; data/horário/profissional = só Administrador
+(a evolução acompanha); trocar o paciente = ninguém.
+- App: `agdDoneLockMsg(row, rec, temEvolução)` / `agdDoneCheck([{row, rec}])` (perto de `agdSplitByRecords`), usados
+  no Salvar da janela (`agdOpenModal`, `doneOk`) e em `agdPlace` (mover, arrastar, trocar; 5º parâmetro = já conferido;
+  colar cópia não é afetado). `agdSplitByRecords`: não-Administrador mantém os com status (sem consultar) e os com
+  evolução; `AGD_KEPT_MSG` fala de status. Aviso `.agd-done-note` na janela quando há status. Atendimento antigo sem
+  `patient_id` não conta como troca quando o código é preenchido. Regras travadas do Sistema `ag_evolucao_apagar`
+  (texto novo) e `ag_realizado_fixo`.
+- Banco: `supabase/2026-10-10c-atendimento-realizado-protegido.sql` — `appointments_delete_guard` (status também),
+  `appointments_done_guard` (BEFORE UPDATE: paciente nunca; data/horário/profissional só admin; `pipo.merging` libera
+  renomear/mesclar), `appointments_sync_record` (AFTER UPDATE: evolução recebe data/horário/profissional novos) e
+  `rename_group` com `pipo.merging`. Testada no PGlite com usuário comum e Administrador.
+- Teste `tests/run_agd_done.js` (cria `tests/page_ad.html`).

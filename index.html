@@ -4546,7 +4546,8 @@ var SYS_RULES = [
   {id: "ag_objetivos", g: "agenda", label: "Sem objetivos em comum", desc: "Pacientes do mesmo profissional e horário sem nenhum objetivo em comum no plano terapêutico.", def: "warn", modes: BWO},
   {id: "ag_final_evolucao", g: "agenda", label: "Finalizado exige evolução", desc: "Para marcar Finalizado é preciso registrar a evolução no prontuário. Avisar = pergunta e deixa finalizar sem evolução.", def: "block", modes: BWO, db: true},
   {id: "ag_final_terapeuta", g: "agenda", label: "Finalizado travado para o terapeuta", desc: "O terapeuta não altera o status de um atendimento já finalizado.", def: "block", modes: ["block", "off"], db: true},
-  {id: "ag_evolucao_apagar", g: "agenda", label: "Atendimento com evolução não é apagado", desc: "Só o Administrador exclui atendimento que tem evolução no prontuário.", def: "block", locked: true},
+  {id: "ag_evolucao_apagar", g: "agenda", label: "Atendimento com status ou evolução não é apagado", desc: "Só o Administrador exclui atendimento que tem status (qualquer um) ou evolução no prontuário.", def: "block", locked: true},
+  {id: "ag_realizado_fixo", g: "agenda", label: "Atendimento com status ou evolução não muda", desc: "O paciente não pode ser trocado (por ninguém); data, horário e profissional só o Administrador muda, e a evolução acompanha.", def: "block", locked: true},
   {id: "pac_cpf_unico", g: "pacientes", label: "CPF do paciente válido e único", desc: "Dois pacientes não podem ter o mesmo CPF.", def: "block", locked: true},
   {id: "pac_cpf_pais", g: "pacientes", label: "CPF de mãe ou pai igual ao de outro paciente", desc: "Aviso ao salvar quando o CPF da mãe ou do pai já está em outro paciente (irmãos, por exemplo).", def: "warn", modes: ["warn", "off"]},
   {id: "pac_entrada", g: "pacientes", label: "Data de entrada × início do tratamento", desc: "A data de entrada não passa do início do 1º tratamento, e o tratamento não começa antes dela.", def: "block", modes: BWO},
@@ -13529,10 +13530,43 @@ function agdChangeStatus(row, v){
 // pode excluí-lo (a evolução fica no prontuário, sem a ligação). Os demais
 // precisam apagar a evolução antes. O banco confere a mesma regra
 // (migração 2026-10-02m). Separa {del: podem ser apagados, kept: têm evolução}.
-var AGD_KEPT_MSG = "tem evolução no prontuário: para excluir, apague a evolução antes (ou peça ao Administrador).";
+// ---- Atendimento realizado (com status ou evolução) fica protegido (2026-10-10) ----
+// Excluir: só o Administrador. Data, horário e profissional: só o Administrador (a evolução
+// acompanha, no banco). Paciente: ninguém troca. O banco confere de novo (appointments_done_guard).
+var AGD_KEPT_MSG = "tem status ou evolução no prontuário: só o Administrador pode excluir (ou tire o status e apague a evolução antes).";
+function agdIsAdmin(){ return !!(window.pipoAuth && window.pipoAuth.isAdmin()); }
+function agdHasRecord(row){
+  if (!row || !row.id || !agdClient()) return Promise.resolve(false);
+  return agdRecordsMap([row]).then(function(m){ return !!m[row.id]; }, function(){ return false; });
+}
+function agdDoneLockMsg(row, rec, hasRec){
+  if (!row || !(row.status || hasRec)) return "";
+  var what = row.status ? "já tem status" : "tem evolução no prontuário";
+  var samePat = normText(rec.patient || "") === normText(row.patient || "") && !!rec.blocked === !!row.blocked &&
+    bookingKind(rec) === bookingKind(row) &&
+    (!row.patient_id || rec.patient_id === undefined || rec.patient_id === row.patient_id) &&
+    (!row.group_id || rec.group_id === undefined || rec.group_id === row.group_id);
+  if (!samePat) return "Este atendimento " + what + ": o paciente não pode ser trocado. Para corrigir, tire o status" + (hasRec ? " e apague a evolução" : "") + " antes.";
+  var moved = rec.date !== row.date || rec.time !== row.time || rec.professional_id !== row.professional_id;
+  if (moved && !agdIsAdmin()) return "Este atendimento " + what + ": só o Administrador muda a data, o horário ou o profissional.";
+  return "";
+}
+// pairs = [{row (como está), rec (como vai ficar)}] → Promise<mensagem de recusa ou "">
+function agdDoneCheck(pairs){
+  return (pairs || []).reduce(function(p, x){
+    return p.then(function(msg){
+      if (msg || !x || !x.row) return msg;
+      if (x.row.status) return agdDoneLockMsg(x.row, x.rec, false);
+      return agdHasRecord(x.row).then(function(h){ return agdDoneLockMsg(x.row, x.rec, h); });
+    });
+  }, Promise.resolve(""));
+}
 function agdSplitByRecords(rows){
   rows = rows || [];
-  if (!rows.length || (window.pipoAuth && window.pipoAuth.isAdmin())) return Promise.resolve({del: rows, kept: []});
+  if (!rows.length || agdIsAdmin()) return Promise.resolve({del: rows, kept: []});
+  var withSt = rows.filter(function(r){ return r.status; });
+  rows = rows.filter(function(r){ return !r.status; });
+  if (!rows.length) return Promise.resolve({del: [], kept: withSt});
   var ids = rows.map(function(r){ return r.id; });
   return agdChunks(ids, 100).reduce(function(p, part){
     return p.then(function(acc){
@@ -13543,7 +13577,7 @@ function agdSplitByRecords(rows){
       });
     });
   }, Promise.resolve({})).then(function(has){
-    return {del: rows.filter(function(r){ return !has[r.id]; }), kept: rows.filter(function(r){ return has[r.id]; })};
+    return {del: rows.filter(function(r){ return !has[r.id]; }), kept: withSt.concat(rows.filter(function(r){ return has[r.id]; }))};
   });
 }
 // Exclui um atendimento da Agenda (com desfazer). Promise<boolean>.
@@ -14075,7 +14109,12 @@ function agdOpenModal(opts){
     else { pacEl.disabled = false; pacEl.value = typedPac; pacEl.focus(); }
   });
 
-  var saveBtn = document.getElementById("agdSave");
+  if (row && row.status){
+    var agdMb = document.querySelector("#ovAgd .modal-body");
+    if (agdMb) agdMb.insertAdjacentHTML("afterbegin", '<div class="field-hint agd-done-note" style="margin:0 0 10px">Atendimento com status: o paciente não pode ser trocado' +
+      (agdIsAdmin() ? '.' : '; data, horário e profissional só o Administrador muda.') + '</div>');
+  }
+  var saveBtn = document.getElementById("agdSave"), doneOk = false;
   if (saveBtn) saveBtn.addEventListener("click", function(){
     var kind = selectedSlotKind(kindField);
     var blocked = kind === "bloqueado";
@@ -14114,6 +14153,14 @@ function agdOpenModal(opts){
       if (AD.hasPid){ rec.patient_id = pick.id || null; rec.group_id = grpHit ? grpHit.id : null; }
     } else if (AD.hasPid){ rec.patient_id = null; rec.group_id = null; }
     if (!isNew && !can("agenda","edit")){ showToast(permDeniedMsg("agenda","edit"), true); return; }
+    // Atendimento com status ou evolução: paciente não troca; data/horário/profissional só o Administrador.
+    if (!isNew && !doneOk){
+      agdDoneCheck([{row: row, rec: rec}]).then(function(msg){
+        if (msg){ showToast(msg, true); return; }
+        doneOk = true; saveBtn.click(); doneOk = false;
+      });
+      return;
+    }
 
     function doSave(){
       saveBtn.disabled = true;
@@ -14883,7 +14930,7 @@ function agdPasteTo(td){ agdPlace(AD.clipboard.row, td, AD.clipboard.mode); }
 // mode: "copy" (cola uma cópia), "move" (muda de lugar) ou "drag" (move; com
 // swapWith = atendimento onde foi solto, troca os dois). Se o horário já tiver
 // atendimentos, o novo fica ao lado deles.
-function agdPlace(row, td, mode, swapWith){
+function agdPlace(row, td, mode, swapWith, opts_doneOk){
   var c = agdClient(); if (!c) return;
   var target = agdTargetFor(row, td.getAttribute("data-d"), td.getAttribute("data-t"), td.getAttribute("data-r"));
   var prof = findProfessional(target.professional_id);
@@ -14898,6 +14945,20 @@ function agdPlace(row, td, mode, swapWith){
   function done(msg){ if (mode === "move") AD.clipboard = null; agdRenderClipboardBar(); showToast(msg); agdLoadWeek(); }
   var payload = {patient: row.patient, note: row.note || "", blocked: !!row.blocked, service: row.service || (bookingKind(row) ? null : DEFAULT_SERVICE_ID),
     professional_id: target.professional_id, room_id: target.room_id, date: target.date, time: target.time};
+
+  // Atendimento com status ou evolução não muda de lugar (só o Administrador; paciente nunca).
+  if (!isCopy && !opts_doneOk){
+    var pairs = [{row: row, rec: Object.assign({}, row, payload)}];
+    if (occupant && mode === "drag"){
+      var bk = agdTargetFor(occupant, row.date, row.time, AD.mode === "prof" ? row.professional_id : (row.room_id || ""));
+      pairs.push({row: occupant, rec: Object.assign({}, occupant, {professional_id: bk.professional_id, room_id: bk.room_id, date: bk.date, time: bk.time})});
+    }
+    agdDoneCheck(pairs).then(function(msg){
+      if (msg){ showToast(msg, true); return; }
+      agdPlace(row, td, mode, swapWith, true);
+    });
+    return;
+  }
 
   // Destino ocupado ao arrastar: troca os dois (o outro vai para o lugar de origem).
   if (occupant && mode === "drag"){
@@ -18830,7 +18891,7 @@ function trOfferRemoveBookings(patId){
         (cli ? '<label class="rb-opt"><input type="checkbox" id="rbAg"' + (canAg ? '' : ' disabled') + '> <span>Remover da <b>Agenda</b>' + (canAg ? '' : ' — sem permissão') + '</span></label>' +
           '<div class="rb-date" id="rbAgBox" hidden><div class="field"><label for="rbFrom">Remover os atendimentos a partir de</label><input type="date" id="rbFrom" value="' + trTodayIso() + '"></div>' +
           '<div class="pat-count" id="rbAgCount">Contando…</div></div>' : '<div class="pat-count">Agenda indisponível neste momento.</div>') +
-        '<div class="pat-count">Atendimentos com evolução no prontuário não são removidos.</div>' +
+        '<div class="pat-count">Atendimentos com status ou evolução no prontuário não são removidos.</div>' +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="rbNo">Manter agendamentos</button><button class="btn danger" id="rbYes" disabled>Remover</button></div>' +
     '</div></div>';
@@ -18867,11 +18928,11 @@ function trOfferRemoveBookings(patId){
       pl.then(function(){
         if (!rows.length) return;
         return agdSplitByRecords(rows).then(function(sp){
-          if (!sp.del.length){ msgs.push("nenhum da Agenda (todos têm evolução)"); return; }
+          if (!sp.del.length){ msgs.push("nenhum da Agenda (todos têm status ou evolução)"); return; }
           return agdDeleteByIds(sp.del.map(function(x){ return x.id; })).then(function(d){
             if (d && d.error){ showToast("Não foi possível remover da Agenda: " + (d.error.message || ""), true); return; }
             agdRecord("Remover atendimentos de " + p.nome + " a partir de " + trBr(from), sp.del, []);
-            msgs.push(sp.del.length + " da Agenda" + (sp.kept.length ? " (" + sp.kept.length + " com evolução ficaram)" : ""));
+            msgs.push(sp.del.length + " da Agenda" + (sp.kept.length ? " (" + sp.kept.length + " com status ou evolução ficaram)" : ""));
             if (typeof agdLoadWeek === "function" && state.tab === "agenda") agdLoadWeek();
           });
         });
@@ -19437,7 +19498,7 @@ var HELP_TOPICS = [
       "Os horários seguem o horário da clínica e a duração padrão (Acesso → Clínica): cabem só sessões inteiras na manhã e na tarde. A linha do almoço mostra a saída da última sessão da manhã e a última linha a saída da última sessão da tarde (na Semana, o dia com saída diferente mostra a dele).",
       "Fora do horário de trabalho do profissional (cadastrado em Cadastros → Colaboradores) a célula é hachurada e não aceita marcação. A janela do atendimento também recusa profissional, data ou horário fora desse horário (atendimento antigo pode ser editado se continuar no mesmo profissional, data e horário).",
       "<b>Limpar semana</b> apaga tudo da semana aberta (dupla confirmação); atendimentos com evolução ficam.",
-      "Atendimento com evolução no prontuário <b>só o Administrador</b> exclui.",
+      "Atendimento com <b>status</b> (qualquer um: Finalizado, Não compareceu, Falta justificada…) ou com <b>evolução no prontuário</b> só o <b>Administrador</b> exclui ou muda de data, horário ou profissional (a evolução acompanha a mudança). O <b>paciente</b> desse atendimento não pode ser trocado por ninguém: para corrigir, tire o status e apague a evolução antes.",
       "Atendimento <b>Finalizado</b>: o terapeuta (usuário ligado a um profissional) não altera o status; a evolução é corrigida no Prontuário.",
       "Datas passadas mostram a cor do tratamento que valia na época.",
       "Feriados e recessos (Cadastros → Feriados e recessos): os horários ficam cinza com o nome do feriado; marcar neles pede confirmação.",
