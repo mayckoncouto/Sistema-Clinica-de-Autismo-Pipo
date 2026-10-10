@@ -11413,11 +11413,20 @@ function statusRuleText(id){
     id === "nao-compareceu" ? "Conta como sessão usada (realizado)" :
     id === "falta-justificada" ? "Fica à parte no contratado × realizado" : "";
 }
+// Status do sistema: as regras dependem deles; só a cor muda (o banco confere também).
+var STATUS_LOCKED = ["finalizado", "nao-compareceu", "falta-justificada"];
+function statusLocked(id){ return STATUS_LOCKED.indexOf(id) !== -1; }
+// Atendimentos da Agenda com o status (sem sistema online: os carregados).
+function statusUseCount(id){
+  return rowUseCount("appointments", "status", id, function(){
+    return Object.keys(AD.rows || {}).filter(function(k){ var r = AD.rows[k]; return r && r.status === id; }).length;
+  });
+}
 // Cadastros → Status: janela de um status (nome e cor), no padrão dos outros cadastros.
 function openStatusItem(item){
-  var isNew = !item;
+  var isNew = !item, locked = !!(item && statusLocked(item.id));
   if (isNew && !can("cadastro_status", "create")){ showToast(permDeniedMsg("cadastro_status", "create"), true); return; }
-  var canSave = isNew || can("cadastro_status", "edit"), canDel = !isNew && can("cadastro_status", "delete");
+  var canSave = isNew || can("cadastro_status", "edit"), canDel = !isNew && !locked && can("cadastro_status", "delete");
   var color = item && item.color ? item.color : "#5b6b68";
   var host = document.getElementById("modalHost");
   host.innerHTML =
@@ -11428,8 +11437,9 @@ function openStatusItem(item){
       '<div class="modal-body">' +
         '<div class="field"><label for="stiName">Nome</label><div class="therapist-row" style="margin:0">' +
           '<button type="button" class="spec-color-btn" id="stiColor" style="background:' + esc(color) + '" title="Cor do status" aria-label="Cor do status"' + (canSave ? '' : ' disabled') + '></button>' +
-          '<input id="stiName" type="text" value="' + esc(item ? item.name : "") + '" placeholder="Nome do status"' + (canSave ? '' : ' disabled') + '></div></div>' +
+          '<input id="stiName" type="text" value="' + esc(item ? item.name : "") + '" placeholder="Nome do status"' + (canSave && !locked ? '' : ' disabled') + '></div></div>' +
         (item && statusRuleText(item.id) ? '<div class="field-hint">' + esc(statusRuleText(item.id)) + '.</div>' : '') +
+        (locked ? '<div class="field-hint">Status do sistema: só a cor pode mudar (não é renomeado nem excluído).</div>' : '') +
       '</div>' +
       '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="stiDel">Excluir</button>' : '<span></span>') +
         '<div class="spacer"></div><button class="btn ghost" id="stiCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
@@ -11447,22 +11457,25 @@ function openStatusItem(item){
     var prep = listPrepare(state.statuses, list);
     return listCommit("config/statuses", prep).then(function(){
       state.statuses = prep.list; close(); showToast(msg); renderRegistryTab("status"); if (state.tab === "agenda") agdRender();
-    }, function(){ showToast("Não foi possível salvar os status.", true); });
+    }, function(e){ showToast("Não foi possível salvar os status" + (e && e.message ? ": " + e.message : "."), true); });
   }
   var sv = document.getElementById("stiSave");
   if (sv) sv.addEventListener("click", function(){
-    var name = document.getElementById("stiName").value.trim();
+    var name = locked ? item.name : document.getElementById("stiName").value.trim();
     if (!name){ showToast("Preencha o nome do status.", true); document.getElementById("stiName").focus(); return; }
     var all = statusesList();
     if (all.some(function(s){ return (!item || s.id !== item.id) && normText(s.name) === normText(name); })){ showToast('Já existe o status "' + name + '".', true); return; }
     var list = isNew ? all.concat([{id: uid(slugify(name) || "status"), name: name, color: color}])
-      : all.map(function(s){ return s.id === item.id ? {id: s.id, name: name, color: color} : s; });
+      : all.map(function(s){ return s.id === item.id ? Object.assign({}, s, {name: name, color: color}) : s; });
     var denied = listPermDenied("cadastro_status", all, list); if (denied){ showToast(denied, true); return; }
     write(list, isNew ? "Status incluído." : "Status alterado.");
   });
   var del = document.getElementById("stiDel");
   if (del) del.addEventListener("click", function(){
-    confirmDialog({title: "Confirmar exclusão", message: 'Excluir o status <b>' + esc(item.name) + '</b>? Atendimentos que já estão com ele ficam sem status na tela.', confirmLabel: "Confirmar exclusão"}).then(function(ok){
+    statusUseCount(item.id).then(function(n){
+      if (n){ showToast('O status "' + item.name + '" está em ' + n + (n === 1 ? " atendimento" : " atendimentos") + " da Agenda: troque o status deles antes de excluir.", true); return false; }
+      return confirmDialog({title: "Confirmar exclusão", message: 'Excluir o status <b>' + esc(item.name) + '</b>?', confirmLabel: "Confirmar exclusão"});
+    }).then(function(ok){
       if (!ok) return;
       write(statusesList().filter(function(s){ return s.id !== item.id; }), "Status excluído.");
     });
@@ -17045,7 +17058,7 @@ function prDelFinalCheck(rec){
   var c = agdClient();
   if (!rec || !rec.appointment_id || sysMode("ag_final_evolucao") !== "block") return Promise.resolve("");
   if (!c){
-    var a = (AD.rows || []).filter(function(x){ return x.id === rec.appointment_id; })[0];
+    var a = (AD.rows || {})[rec.appointment_id];
     var others = (PR.records || []).some(function(x){ return x.id !== rec.id && x.appointment_id === rec.appointment_id; });
     return Promise.resolve(a && a.status === FINAL_STATUS && !others ? PR_DEL_FINAL_MSG : "");
   }
@@ -19709,7 +19722,11 @@ var HELP_TOPICS = [
   {id: "status-cadastro", group: "Cadastros", title: "Cadastro de status", mod: "cadastro_status",
     purpose: "Lista de status dos atendimentos (nome e cor).",
     steps: ["Cadastros ▾ → <b>Status</b>: inclua, renomeie, mude a cor ou exclua."],
-    rules: ["Quem pode usar cada status é definido em Níveis de permissão."],
+    rules: [
+      "Quem pode usar cada status é definido em Níveis de permissão.",
+      "<b>Finalizado</b>, <b>Não compareceu</b> e <b>Falta justificada</b> são status do sistema (as regras dependem deles): só a cor pode mudar; não são renomeados nem excluídos.",
+      "Status que está em atendimentos da Agenda não pode ser excluído: troque o status desses atendimentos antes."
+    ],
     who: "Permissão <b>Status</b>."},
   {id: "clinica", group: "Acesso", title: "Cadastro da Clínica", mod: "clinica",
     purpose: "Dados da clínica, dias e horários de funcionamento, duração do atendimento, cores, nome e logo.",

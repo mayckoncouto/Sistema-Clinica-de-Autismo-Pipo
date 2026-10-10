@@ -3171,8 +3171,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~ALTA 3~~ FEITO (2026-10-10, ver "Excluir ou editar evolução" abaixo).
 - ~~ALTA 4~~ FEITO (2026-10-10, ver "Excluir paciente" abaixo).
 - ~~ALTA 5~~ FEITO (2026-10-10, ver "Mesclar cadastros completo" abaixo).
-- ALTA 6. Status: qualquer um pode ser excluído (inclusive finalizado/nao-compareceu/falta-justificada usados pelas
-  regras), sem conferir uso; atendimentos ficam com status inexistente.
+- ~~ALTA 6~~ FEITO (2026-10-10, ver "Status protegidos" abaixo).
 - ALTA 7. Excluir plano terapêutico: evoluções com `plan_goals` perdem a ligação; excluir o vigente não reabre a anterior.
 - MÉDIA 8. Grupo de suporte: `USAGE.salas` conta só `room_id`; atendimentos do grupo (`group_id`) não contam.
 - MÉDIA 9. Colaborador: não conta evoluções (`clinical_records.professional_id`), bloqueios do Planner, usuário ligado
@@ -3253,3 +3252,14 @@ Decisões do usuário: os dois com Plano Terapêutico vigente = NÃO mescla; sa�
 - App (`openPatientMergeModal`): prévia conta também planos e tarefas do CRM do 2º e, com dois vigentes, mostra o aviso e
   deixa Mesclar desativado. `patientMerge`: com `saude` na resposta só atualiza `HEALTH.map`; sem (banco antigo) junta
   a saúde no app (`healthSave` + `healthDelete`). Depois, `planLoadAll(true)`. Teste no fim de `tests/run_agd_done.js`.
+- Produção (2026-10-10): `2026-10-10f-mesclar-completo` rodada.
+
+## Status protegidos (2026-10-10, item 6 da auditoria)
+Decisões do usuário: Finalizado / Não compareceu / Falta justificada só mudam a cor; status em uso na Agenda NÃO é
+excluído (troque o status dos atendimentos antes).
+- App: `STATUS_LOCKED`, `statusLocked(id)`, `statusUseCount(id)` (count em `appointments.status`; sem sistema online,
+  `AD.rows`). `openStatusItem`: travado = nome desativado, sem Excluir, aviso; Excluir confere uso antes da confirmação;
+  salvar mantém os outros campos do item (`Object.assign`) e mostra o motivo do banco.
+- Banco: `statuses_guard` (BEFORE UPDATE em `documents`, `config/statuses`; migração
+  `supabase/2026-10-10g-status-protegidos.sql`). Testada no PGlite. Teste no fim de `tests/run_agd_done.js`.
+- Correção junto: `prDelFinalCheck` (sem sistema online) lia `AD.rows` como lista; é objeto por id.

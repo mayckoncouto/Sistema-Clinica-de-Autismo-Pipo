@@ -55,7 +55,7 @@ const path = require('path');
 
   // Item 3: evolução do atendimento Finalizado não é excluída (sem sistema online lê AD.rows / PR.records).
   const dc = await ev(`(function(){
-    AD.rows = [{id: "f1", status: "finalizado"}, {id: "f2", status: null}];
+    AD.rows = {f1: {id: "f1", status: "finalizado"}, f2: {id: "f2", status: null}};
     PR.records = [{id: "e1", appointment_id: "f1"}, {id: "e2", appointment_id: "f2"}];
     var out = {};
     return prDelFinalCheck(PR.records[0]).then(function(m){ out.final = m; return prDelFinalCheck(PR.records[1]); })
@@ -99,6 +99,17 @@ const path = require('path');
   })()`);
   check('mesclar com dois planos vigentes: recusa?', /Plano Terapêutico vigente/.test(mg.both) && mg.bothDis, mg);
   check('mesclar: conta planos e tarefas do 2º?', /1 plano\(s\) terapêutico\(s\) e 1 tarefa\(s\) no CRM/.test(mg.one) && !mg.oneDis, mg.one);
+
+  // Item 6: status do sistema só muda a cor; status em uso na Agenda não sai.
+  const st = await ev(`(function(){
+    openStatusItem({id: "finalizado", name: "Finalizado", color: "#2a7"});
+    var out = {nameOff: document.getElementById("stiName").disabled, noDel: !document.getElementById("stiDel")};
+    document.getElementById("modalHost").innerHTML = "";
+    AD.rows = {a1: {id: "a1", status: "meu-status"}};
+    return statusUseCount("meu-status").then(function(n){ out.used = n; AD.rows = {}; return out; });
+  })()`);
+  check('status do sistema: nome travado e sem Excluir?', st.nameOff && st.noDel, st);
+  check('status em uso: conta os atendimentos?', st.used === 1, st);
 
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
