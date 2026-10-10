@@ -203,6 +203,20 @@ const path = require('path');
   })()`);
   check('delete CRM task: confirmation says how many comments go?', /3 comentários/.test(td), String(td).slice(0, 200));
 
+  // Item 16: fechar dia / tirar horário da clínica lista os agendamentos do Planner que somem.
+  const ch = await ev(`(function(){
+    var h = {}; ALL_WEEKDAYS.forEach(function(d){ h[d.key] = clinicDefaultDay(d.key); });
+    h.sex = Object.assign({}, h.sex, {ativo: false});
+    h.seg = Object.assign({}, h.seg, {tarde: {inicio: "", fim: ""}});
+    return clinicHiddenBookings(h, clinicDuration()).then(function(r){ return {n: r.n, lines: r.lines, any: Object.keys(r.changes).length}; });
+  })()`);
+  check('clinic: hidden Planner bookings counted by day?', ch.n > 0 && ch.lines.length > 0 && ch.any > 0, ch);
+  const ch0 = await ev(`(function(){
+    var h = {}; ALL_WEEKDAYS.forEach(function(d){ h[d.key] = clinicDayCfg(d.key); });
+    return clinicHiddenBookings(h, clinicDuration()).then(function(r){ return r.n; });
+  })()`);
+  check('clinic: same hours = nothing hidden?', ch0 === 0, ch0);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

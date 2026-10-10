@@ -1393,6 +1393,8 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 #profHours td.ph-count,#profHours th.ph-count-h{text-align:center}
 #profHours td.ph-total-label{text-align:right;white-space:normal}
 .cl-cards{display:flex;flex-direction:column;gap:12px;margin:2px 0 4px}
+.cl-hidden-list{margin:8px 0 8px 18px;padding:0}
+.cl-hidden-list li{margin:2px 0}
 .fx-report{margin:4px 0 12px}
 .fx-top-row{margin:-4px 0 10px}
 .pl-tools-menu{min-width:210px}
@@ -3230,7 +3232,25 @@ function openClinicModal(){
     });
     if (bad){ showToast("Confira o horário de " + bad + ".", true); return; }
     if (!ALL_WEEKDAYS.some(function(d){ return horarios[d.key].ativo; })){ showToast("Deixe pelo menos um dia com atendimento.", true); return; }
-    var go = dur !== clinicDuration() ? confirmDialog({title: "Mudar a duração dos atendimentos", message: "A grade do Planner e da Agenda passa a ter horários de <b>" + dur + " minutos</b>.<br>Agendamentos em horários que deixarem de existir ficam guardados, mas não aparecem na grade enquanto o horário não voltar.", confirmLabel: "Mudar duração"}) : Promise.resolve(true);
+    var durChanged = dur !== clinicDuration(), delHidden = null;
+    // Agendamentos do Planner em dias/horários que deixam de existir: avisa quantos e onde,
+    // e oferece apagar (decisão do usuário); mantidos, ficam guardados e voltam se reabrir.
+    var go = clinicHiddenBookings(horarios, dur).then(function(h){
+      if (!h.n) return durChanged ? confirmDialog({title: "Mudar a duração dos atendimentos", message: "A grade do Planner e da Agenda passa a ter horários de <b>" + dur + " minutos</b>.<br>Agendamentos em horários que deixarem de existir ficam guardados, mas não aparecem na grade enquanto o horário não voltar.", confirmLabel: "Mudar duração"}) : true;
+      var canDel = can("planner", "delete");
+      var p = confirmDialog({title: "Agendamentos do Planner fora do horário",
+        message: (durChanged ? "A grade passa a ter horários de <b>" + dur + " minutos</b>. " : "") +
+          "<b>" + h.n + (h.n === 1 ? " agendamento" : " agendamentos") + "</b> do Planner ficam em dias ou horários que deixam de existir:" +
+          '<ul class="cl-hidden-list">' + h.lines.map(function(l){ return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>" +
+          "Se mantidos, ficam guardados e voltam a aparecer se o dia ou horário reabrir." +
+          (canDel ? '<label class="kind-opt" style="margin-top:10px"><input type="checkbox" id="clHiddenDel"> Apagar esses agendamentos do Planner</label>' : ""),
+        confirmLabel: "Salvar"});
+      setTimeout(function(){ var cb = document.getElementById("clHiddenDel"); if (cb) cb.addEventListener("change", function(){ delHidden = cb.checked ? h.changes : null; cb.closest(".kind-opt").classList.toggle("on", cb.checked); }); }, 0);
+      return p;
+    }, function(){ return true; }).then(function(ok){
+      if (!ok || !delHidden) return ok;
+      return Promise.resolve(applyBookingChanges(delHidden, {noHistory: true})).then(function(r){ return r !== false; });
+    });
     go.then(function(ok){ if (!ok) return;
     var rec = {
       nome: document.getElementById("clNome").value.trim(), subtitulo: document.getElementById("clSub").value.trim(), cnpj: document.getElementById("clCnpj").value.trim(),
@@ -3250,6 +3270,33 @@ function openClinicModal(){
       showToast(/check|path|violat/i.test(m) ? "Falta rodar a atualização do banco (cadastro da clínica)." : "Não foi possível salvar o cadastro da clínica.", true);
     });
     });
+  });
+}
+// Agendamentos do Planner (dias abertos hoje × 4 semanas) que deixam de aparecer com o
+// horário novo da clínica: dia fechado ou horário que não existe mais.
+function clinicHiddenBookings(horarios, dur){
+  if (!db) return Promise.resolve({n: 0, changes: {}, lines: []});
+  return plannerLoadDocs().then(function(all){
+    var changes = {}, n = 0, byDay = {};
+    Object.keys(all || {}).forEach(function(docId){
+      var dk = docId.split("-")[0], h = horarios[dk];
+      var ok = {}; if (h && h.ativo) clinicSlots(h.manha, dur).concat(clinicSlots(h.tarde, dur)).forEach(function(t){ ok[t] = 1; });
+      Object.keys(all[docId] || {}).forEach(function(k){
+        var b = all[docId][k];
+        if (!b || !(b.patient || b.lock || b.blocked || b.training)) return;
+        if (ok[k.split("|")[0]]) return;
+        (changes[docId] = changes[docId] || {})[k] = null; n++;
+        var key = dk + (h && h.ativo ? "" : "-fechado");
+        byDay[key] = (byDay[key] || 0) + 1;
+      });
+    });
+    var lines = ALL_WEEKDAYS.map(function(d){
+      var out = [];
+      if (byDay[d.key + "-fechado"]) out.push(d.full + " (dia fechado): " + byDay[d.key + "-fechado"]);
+      if (byDay[d.key]) out.push(d.full + " (horários que deixam de existir): " + byDay[d.key]);
+      return out;
+    }).reduce(function(a, b){ return a.concat(b); }, []);
+    return {n: n, changes: changes, lines: lines};
   });
 }
 var WEEKS = [1,2,3,4];
@@ -20153,7 +20200,7 @@ var HELP_TOPICS = [
     steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve."],
     rules: [
       "Os dias e horários abertos definem as linhas do Planner e da Agenda.",
-      "Mudar a duração pede confirmação: horários que deixam de existir somem da grade (os agendamentos ficam guardados).",
+      "Fechar um dia ou mudar horários e duração: se houver agendamentos do Planner em dias ou horários que deixam de existir, o Salvar mostra quantos e onde, e oferece apagá-los. Mantidos, ficam guardados e voltam a aparecer se o dia ou horário reabrir.",
       "A <b>cor do botão</b> vale para todos os botões, caixas de marcar e destaques do sistema, inclusive a tela de login. <b>Restaurar padrão</b> volta ao verde do sistema."
     ],
     who: "Permissão <b>Clínica</b> (ver/editar)."},

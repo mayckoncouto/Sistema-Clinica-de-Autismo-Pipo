@@ -3185,7 +3185,8 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~BAIXA 14~~ FEITO (2026-10-10, ver "Excluir usuário: sai das tarefas do CRM" abaixo).
 - ~~BAIXA 15~~ FEITO (2026-10-10): decisão do usuário = avisar. A confirmação de Excluir da tarefa do CRM diz quantos
   comentários (`CRM.comCount`) e o histórico serão apagados junto. Sem SQL. Ajuda (CRM).
-- BAIXA 16: fechar dia da clínica esconde agendamentos do Planner.
+- ~~BAIXA 16~~ FEITO (2026-10-10, ver "Clínica: agendamentos do Planner que deixam de aparecer" abaixo).
+  **Auditoria concluída (16 de 16).**
 
 ## Cadastros em lista gravam só o item; aviso de alteração simultânea (2026-10-10, item 1 da auditoria)
 Decisões do usuário: mesmo item alterado por duas pessoas = AVISAR e deixar escolher; vale para TODOS os cadastros em lista.
@@ -3352,5 +3353,13 @@ cai junto com `auth.users`): `array_remove` do id em `tasks.assignees` (a ativid
 (`crm_status_done`) com ele como responsável. `js/usuarios.js`: a confirmação de Excluir mostra quantas. Migração
 `supabase/2026-10-10l-excluir-usuario-tarefas.sql` (testada no PGlite). Ajuda (Usuários).
 - Produção (2026-10-10): `2026-10-10l-excluir-usuario-tarefas` rodada (conferência 1 | 1).
-- Produção: 2026-10-10l AINDA NÃO rodada.
 - (2026-10-10, pedido do usuário) **CRM: exportar e importar tarefas** (Outras opções ▾ na barra do CRM, `IO_KINDS.tarefas`, bloco "CRM: tarefas" nas Planilhas). Exporta a tela aberta (`crmScreenTasks()`, mesma conta do `crmRender`: lista/Minhas tarefas/tela CRM com busca, filtros e Finalizados); nome do arquivo pela tela. Importa pela coluna Código (com código = atualiza; sem = nova; sem Lista = lista aberta; mudar de lista = problema). Paciente pelo nome (`ioFindPatient`), senão lead. Responsáveis pelo nome (`ioTaskPerson`, só com acesso `crmCanAssign`). Lead só em lista `lead`. Comentários fora. `ioCanImport` aceita `K.canImport`. Teste `tests/run_crm_planilha.js` (no `npm test`).
+
+## Clínica: agendamentos do Planner que deixam de aparecer (2026-10-10, item 16 da auditoria)
+Decisão do usuário: avisar e oferecer apagar. No Salvar de `openClinicModal`, `clinicHiddenBookings(horarios, dur)`
+(lê os documentos dos dias abertos hoje × 4 semanas com `plannerLoadDocs`) conta os agendamentos (paciente, sala,
+bloqueio, reunião, treinamento) em dia que fecha ou horário que deixa de existir com a duração nova e lista por dia.
+Com algum, a confirmação "Agendamentos do Planner fora do horário" mostra quantos/onde e (com `planner.delete`) a
+caixa `#clHiddenDel` "Apagar esses agendamentos do Planner" (`applyBookingChanges(..., {noHistory: true})` antes de
+gravar a clínica); sem marcar, ficam guardados e voltam se reabrir. Sem nenhum, vale a confirmação antiga de mudar a
+duração. Sem SQL. Ajuda (Clínica) e teste no fim de `tests/run_agd_done.js`.
