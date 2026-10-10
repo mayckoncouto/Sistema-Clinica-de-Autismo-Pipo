@@ -136,6 +136,9 @@ const path = require('path');
   // Listas e status
   await ev('crmOpenListsModal()');
   await page.waitForSelector('#ovCrmL');
+  const rowOver = await page.$$eval('#crmLBody .crm-lrow', (l) => l.filter((r) => r.getBoundingClientRect().right > 390).length);
+  check('Listas e status rows fit the screen?', rowOver === 0, rowOver);
+  await page.click('#crmLBody .crm-lrow:first-child [data-ledit]'); await page.waitForTimeout(150);
   const over = await page.$$eval('#ovCrmL .therapist-row .rm', (l) => l.filter((b) => b.getBoundingClientRect().right > 390).length);
   check('Listas e status: nothing past the screen edge?', over === 0, over);
   check('no JS errors?', errors.length === 0, errors);

@@ -264,17 +264,28 @@ const path = require('path');
 
   const mods = await ev('window.pipoCrmModules().map(function(m){ return m.key + "|" + (m.group || ""); }).join(",")');
   check('Níveis de permissão: CRM group starts with Listas e status, then one row per list?', /^crm_listas\|CRM,crm_atendimento\|,crm_agendas\|/.test(mods), mods);
-  // Listas e status: "Finalizado" e nova lista
+  // Listas e status: visual de Cadastros → Grupos (linhas com setas, bolinha, resumo e Editar; janela própria por lista)
   await ev('crmOpenListsModal()');
   await page.waitForSelector('#ovCrmL');
-  check('status option is called "Finalizado"?', /Finalizado/.test(await page.$eval('#ovCrmL', (e) => e.textContent)) && !/Encerra/.test(await page.$eval('#ovCrmL', (e) => e.textContent)));
-  await page.click('#crmLAdd');
-  const last = await page.$$('#crmLBody .crm-lcard');
-  await last[last.length - 1].$eval('input[data-lf="name"]', (e) => { e.value = 'Compras'; e.dispatchEvent(new Event('input', {bubbles: true})); });
-  const recBox = await last[last.length - 1].$('input[data-lf="recorrencia"]');
+  const lrows = await page.evaluate(() => [...document.querySelectorAll('#crmLBody .crm-lrow')].map((r) => ({n: r.querySelector('.rn').textContent, s: r.querySelector('.rs').textContent, ed: !!r.querySelector('[data-ledit]'), mv: !!r.querySelector('.move-col')})));
+  check('Listas e status: one row per list (name, summary of statuses, arrows, Editar)?', lrows.length === (await ev('CRM.lists.length')) && lrows.every((r) => r.ed && r.mv) && /status ·/.test(lrows[0].s), JSON.stringify(lrows.slice(0, 2)));
+  const firstId = await ev('CRM.lists[0].id');
+  await page.click('#crmLBody .crm-lrow:first-child [data-lmv="1"]'); await page.waitForTimeout(200);
+  check('arrow ▼ moves the list down (saved right away)?', (await ev('CRM.lists[1].id')) === firstId && (await page.$eval('#crmLBody .crm-lrow:nth-child(2)', (e) => e.getAttribute('data-lid'))) === firstId);
+  await page.click('#crmLBody .crm-lrow:nth-child(2) [data-lmv="-1"]'); await page.waitForTimeout(200);
+  await page.click('#crmLBody .crm-lrow:first-child [data-ledit]'); await page.waitForTimeout(150);
+  const ed = await page.evaluate(() => ({t: document.querySelector('#ovCrmL h3').textContent, name: document.getElementById('crmLName').value, color: !!document.getElementById('crmLColor'),
+    sts: document.querySelectorAll('#crmLSts .therapist-row').length, txt: document.getElementById('ovCrmL').textContent, del: !!document.getElementById('crmLDel')}));
+  check('Editar opens the list window (name, color, options, statuses with "Finalizado", Excluir)?', ed.t === 'Editar lista' && ed.name && ed.color && ed.sts >= 2 && /Finalizado/.test(ed.txt) && !/Encerra/.test(ed.txt) && /Recorrência/.test(ed.txt) && ed.del, JSON.stringify({t: ed.t, name: ed.name, sts: ed.sts}));
+  await page.click('#crmLCancel'); await page.waitForTimeout(100);
+  check('Cancelar goes back to Listas e status?', !!(await page.$('#crmLBody .crm-lrow')));
+  await page.click('#crmLAdd'); await page.waitForTimeout(150);
+  await page.fill('#crmLName', 'Compras');
+  const recBox = await page.$('#ovCrmL input[data-lf="recorrencia"]');
   if (recBox) await recBox.click();
   await page.click('#crmLSave'); await page.waitForTimeout(250);
-  check('Listas e status: "Recorrência" option per list is saved (on for Compras, off for Agendas)?', !!recBox && (await ev('crmListById("compras").recorrencia === true && !("recorrencia" in crmListById("agendas"))')));
+  check('Listas e status: new list saved with "Recorrência" (on for Compras, off for Agendas) and back to the rows?', !!recBox && (await ev('!!crmListById("compras") && crmListById("compras").recorrencia === true && !("recorrencia" in crmListById("agendas"))')) && !!(await page.$('#crmLBody .crm-lrow[data-lid="compras"]')));
+  await page.click('#crmLCancel');
   await page.click('#crmBtn');
   const items2 = await page.$$eval('#crmMenu [data-nav]', (r) => r.map((x) => x.textContent));
   check('new list "Compras" in the menu?', items2.indexOf('Compras') !== -1 && !!(await ev('crmListById("compras")')), items2);

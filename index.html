@@ -311,6 +311,14 @@ div.ag-obj-head{cursor:default}
 .crm-av.more{background:var(--surface-2);color:var(--ink-2)}
 .crm-noone{color:var(--muted)}
 .crm-due.late{color:#d64545;font-weight:700}
+/* Listas e status (visual de Cadastros → Grupos) */
+.modal.crm-lmodal{max-width:720px}
+.modal.crm-ledit{max-width:620px}
+.crm-lbar{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.crm-lhint{font-size:12.5px;color:var(--muted);font-weight:600;margin:4px 0 12px}
+.crm-lrows{display:flex;flex-direction:column;gap:10px}
+.crm-lrow .room-info .rs{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crm-lopts{display:flex;flex-wrap:wrap;gap:8px}
 /* Vencimento: janela com atalhos / recorrência à esquerda e calendário à direita */
 .crm-due-pop{position:fixed;z-index:460;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-md);color:var(--ink);width:560px;max-width:calc(100vw - 16px);overflow:hidden}
 .crm-dp-top{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
@@ -663,9 +671,7 @@ div.ag-obj-head{cursor:default}
   #ovCrmL .therapist-row > .rm{order:4}
   #ovCrmL .therapist-row::after{content:"";order:4;flex:1 1 100%;height:0}
   #ovCrmL .therapist-row > .kind-opt:first-of-type{margin-left:58px}
-  #ovCrmL .crm-sts{margin-left:6px}
   #ovCrmL .crm-sts .therapist-row{padding-bottom:10px;margin-bottom:4px;border-bottom:1px dashed var(--line)}
-  #ovCrmL .crm-lcard{padding:10px}
 }
 .crm-row{display:flex;gap:10px;flex-wrap:wrap}.crm-row>.field{flex:1 1 160px}
 .crm-people{display:flex;flex-wrap:wrap;gap:6px}
@@ -724,10 +730,7 @@ div.ag-obj-head{cursor:default}
 .crm-mention-pop{position:absolute;left:0;bottom:100%;margin-bottom:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);z-index:5;min-width:220px;max-height:220px;overflow:auto}
 .crm-mention-pop button{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px;text-align:left}
 .crm-mention-pop button:hover{background:var(--accent-weak)}
-.crm-lcard{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;background:var(--surface)}
-.crm-lhead input[type=text]{font-weight:700;font-size:13px}
-.crm-lcard .kind-opt{padding:4px 9px;font-size:12px}
-.crm-sts{margin:8px 0 0 28px}
+.crm-sts{margin:0}
 .crm-sts .add-row-btn{align-self:flex-start;margin-top:2px}
 @media (max-width:760px){.crm-c-prio,.crm-c-st{display:none}.crm-c-who{width:64px}.crm-c-due{width:78px}}
 /* Agenda ▾ → Visão geral */
@@ -5807,6 +5810,7 @@ function subscribeTaskLists(){
     CRM.listsLoaded = true;
     crmRebuildNav();
     if (state.tab === "crm") crmRender();
+    var lo = document.getElementById("ovCrmL"); if (lo && lo.__render) lo.__render();   // Listas e status aberta
   }, function(){ CRM.listsLoaded = true; crmRebuildNav(); });
 }
 // CRM ▾ → CRM: um cartão por lista que a pessoa vê (abertas, vencidas, minhas); clicar abre a lista.
@@ -7104,104 +7108,155 @@ function crmMentionWire(){
 }
 
 // ----- Listas e status (só Administrador) -----
+// Listas e status: mesmo visual de Cadastros → Grupos. A janela mostra uma linha por lista (setas, bolinha,
+// nome, resumo, "Editar"); "Editar"/"+ Incluir" abre a janela da lista (nome, cor, opções, status) e
+// cada uma grava sozinha. Setas gravam na hora.
+function crmListsWrite(next, msg){
+  var orig = CRM.lists || [];
+  if (!db){ CRM.lists = next; crmRebuildNav(); crmRender(); if (msg) showToast(msg); return Promise.resolve(true); }
+  return listCommit("config/task_lists", listPrepare(orig, next)).then(function(ok){ if (ok && msg) showToast(msg); return ok; },
+    function(e){ showToast("Não foi possível salvar: " + ((e && e.message) || e), true); return false; });
+}
+function crmListUsed(listId, stId){ return Object.keys(CRM.tasks).some(function(k){ var x = CRM.tasks[k]; return x.list_id === listId && (!stId || x.status === stId); }); }
 function crmOpenListsModal(){
   if (!crmListsCan("view")){ showToast("Seu nível não tem acesso a Listas e status do CRM.", true); return; }
-  var canC = crmListsCan("create"), canE = crmListsCan("edit"), canD = crmListsCan("delete");
-  var draft = JSON.parse(JSON.stringify(CRM.lists || []));
+  var canC = crmListsCan("create"), canE = crmListsCan("edit");
   var host = document.getElementById("modalHost");
-  function used(listId, stId){ return Object.keys(CRM.tasks).some(function(k){ var x = CRM.tasks[k]; return x.list_id === listId && (!stId || x.status === stId); }); }
-  // Mesmo visual das janelas de Status e de Sala: bolinha de cor, campo, ▲▼ em pé, ✕ vermelho,
-  // opções como as de "Ou marque o horário como".
-  function opt(attr, on, label, title){ return '<label class="kind-opt' + (on ? ' on' : '') + '"' + (title ? ' title="' + esc(title) + '"' : '') + '><input type="checkbox" ' + attr + (on ? ' checked' : '') + '>' + esc(label) + '</label>'; }
-  function moves(kind, i, n){ return '<div class="col-move"><button type="button" ' + kind + '="-1"' + (i === 0 ? ' disabled' : '') + ' title="Subir" aria-label="Subir">▲</button><button type="button" ' + kind + '="1"' + (i === n - 1 ? ' disabled' : '') + ' title="Descer" aria-label="Descer">▼</button></div>'; }
-  function render(){
-    var body = document.getElementById("crmLBody");
-    body.innerHTML = draft.map(function(l, li){
-      var sts = l.statuses || [];
-      return '<div class="field crm-lcard" data-li="' + li + '">' +
-        '<div class="therapist-row crm-lhead">' + moves("data-lmv", li, draft.length) +
-          '<button type="button" class="spec-color-btn" data-lcolor style="background:' + esc(l.color || "#64748b") + '" title="Cor da lista" aria-label="Cor da lista"></button>' +
-          '<input type="text" data-lf="name" value="' + esc(l.name) + '" placeholder="Nome da lista">' +
-          opt('data-lf="lead"', !!l.lead, "Funil de contatos", "Tarefas com os dados do contato e o motivo de perda") +
-          opt('data-lf="recorrencia"', !!l.recorrencia, "Recorrência", "Tarefas desta lista podem repetir (Vencimento → Configurar recorrência). Desligado: o Vencimento abre o calendário normal") +
-          '<button type="button" class="rm" data-ldel title="Excluir lista" aria-label="Excluir lista">✕</button></div>' +
-        '<div class="therapist-rows crm-sts">' + sts.map(function(st, si){
-          return '<div class="therapist-row" data-si="' + si + '">' + moves("data-smv", si, sts.length) +
-            '<button type="button" class="spec-color-btn" data-scolor style="background:' + esc(st.color || "#64748b") + '" title="Cor do status" aria-label="Cor do status"></button>' +
-            '<input type="text" data-sf="name" value="' + esc(st.name) + '" placeholder="Nome do status">' +
-            opt('data-sf="done"', !!st.done, "Finalizado", "Tarefa neste status está finalizada: sai de Minhas tarefas, não fica vencida, só aparece com \"Finalizados\" marcado e não pode ser excluída") +
-            (l.lead ? opt('data-sf="lost"', !!st.lost, "Perda", "Contato perdido: pede o motivo de perda") : '') +
-            '<button type="button" class="rm" data-sdel title="Excluir status" aria-label="Excluir status"' + (sts.length <= 1 ? ' disabled' : '') + '>✕</button></div>';
-        }).join("") + '<button type="button" class="btn ghost add-row-btn" data-sadd>+ status</button></div></div>';
-    }).join("") + '<button type="button" class="btn ghost add-row-btn" id="crmLAdd">+ lista</button>';
-  }
-  host.innerHTML = '<div class="overlay" id="ovCrmL"><div class="modal" style="max-width:640px"><div class="modal-head"><div><h3>Listas e status do CRM</h3>' +
+  host.innerHTML = '<div class="overlay" id="ovCrmL"><div class="modal crm-lmodal"><div class="modal-head"><div><h3>Listas e status do CRM</h3>' +
     '<div class="modal-sub">Cada lista aparece no menu CRM. Depois de criar uma lista, marque quem pode usá-la em Acesso → Usuários → Níveis de permissão.</div></div>' +
-    '<button class="modal-close" id="crmLClose" aria-label="Fechar">✕</button></div><div class="modal-body" id="crmLBody"></div>' +
-    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="crmLCancel">Cancelar</button>' + ((canC || canE || canD) ? '<button class="btn primary" id="crmLSave">Salvar</button>' : '') + '</div></div></div>';
-  render();
+    '<button class="modal-close" id="crmLClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="crm-lbar"><span class="pat-count" id="crmLCount"></span><div class="spacer"></div>' +
+      (canC ? '<button type="button" class="btn primary" id="crmLAdd">+ Incluir</button>' : '') + '</div>' +
+      '<div class="crm-lhint">Setas mudam a ordem no menu; "Editar" altera nome, cor, opções e status.</div><div class="crm-lrows" id="crmLBody"></div></div>' +
+    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="crmLCancel">Fechar</button></div></div></div>';
   var ov = document.getElementById("ovCrmL");
   function close(){ host.innerHTML = ""; }
+  function render(){
+    var body = document.getElementById("crmLBody"); if (!body) return;
+    var ls = CRM.lists || [], n = ls.length;
+    document.getElementById("crmLCount").textContent = n + (n === 1 ? " lista" : " listas");
+    body.innerHTML = n ? ls.map(function(l, i){
+      var sts = l.statuses || [], tags = [];
+      if (l.lead) tags.push("Funil de contatos");
+      if (l.recorrencia) tags.push("Recorrência");
+      return '<div class="room-row crm-lrow" data-lid="' + esc(l.id) + '">' +
+        (canE ? '<div class="move-col"><button type="button" data-lmv="-1"' + (i === 0 ? ' disabled' : '') + ' aria-label="Mover para cima">▲</button><button type="button" data-lmv="1"' + (i === n - 1 ? ' disabled' : '') + ' aria-label="Mover para baixo">▼</button></div>' : '') +
+        '<span class="room-dot" style="background:' + esc(swatchVar(l.color || "#64748b")) + '"></span>' +
+        '<div class="room-info"><div class="rn">' + esc(l.name) + '</div><div class="rs">' + sts.length + (sts.length === 1 ? " status" : " status") + ' · ' +
+          sts.map(function(s){ return esc(s.name) + (s.done ? " (finalizado)" : ""); }).join(", ") + (tags.length ? ' · ' + tags.join(" · ") : '') + '</div></div>' +
+        '<button type="button" class="btn ghost" data-ledit="' + esc(l.id) + '">' + (canE ? "Editar" : "Ver") + '</button></div>';
+    }).join("") : '<div class="empty-state"><b>Nenhuma lista</b>Use "+ Incluir".</div>';
+  }
+  render();
   document.getElementById("crmLClose").addEventListener("click", close);
   document.getElementById("crmLCancel").addEventListener("click", close);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  var add = document.getElementById("crmLAdd"); if (add) add.addEventListener("click", function(){ crmOpenListEdit(null); });
+  ov.addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b || b.disabled) return;
+    if (b.hasAttribute("data-ledit")){ crmOpenListEdit(crmListById(b.getAttribute("data-ledit"))); return; }
+    if (b.hasAttribute("data-lmv")){
+      var id = b.closest("[data-lid]").getAttribute("data-lid"), ls = (CRM.lists || []).slice(), i = ls.findIndex(function(x){ return x.id === id; }), to = i + (+b.getAttribute("data-lmv"));
+      if (i < 0 || to < 0 || to >= ls.length) return;
+      ls.splice(to, 0, ls.splice(i, 1)[0]);
+      crmListsWrite(JSON.parse(JSON.stringify(ls))).then(function(){ render(); });
+    }
+  });
+  ov.__render = render;
+}
+// Janela de uma lista (nova ou existente). Fechar/Salvar volta para Listas e status.
+function crmOpenListEdit(list){
+  var isNew = !list, canE = isNew ? crmListsCan("create") : crmListsCan("edit"), canD = !isNew && crmListsCan("delete");
+  var d = list ? JSON.parse(JSON.stringify(list)) : {id: "", name: "", color: "#64748b", statuses: crmBasicStatuses()};
+  var host = document.getElementById("modalHost");
+  function opt(attr, on, label, title){ return '<label class="kind-opt' + (on ? ' on' : '') + '"' + (title ? ' title="' + esc(title) + '"' : '') + '><input type="checkbox" ' + attr + (on ? ' checked' : '') + (canE ? '' : ' disabled') + '>' + esc(label) + '</label>'; }
+  function moves(i, n){ return '<div class="col-move"><button type="button" data-smv="-1"' + (i === 0 || !canE ? ' disabled' : '') + ' title="Subir" aria-label="Subir">▲</button><button type="button" data-smv="1"' + (i === n - 1 || !canE ? ' disabled' : '') + ' title="Descer" aria-label="Descer">▼</button></div>'; }
+  host.innerHTML = '<div class="overlay" id="ovCrmL"><div class="modal crm-ledit"><div class="modal-head"><div><h3>' + (isNew ? "Nova lista" : canE ? "Editar lista" : "Lista") + '</h3></div>' +
+    '<button class="modal-close" id="crmLClose" aria-label="Fechar">✕</button></div><div class="modal-body">' +
+    '<div class="field"><label for="crmLName">Nome da lista</label><input id="crmLName" type="text" placeholder="ex: Atendimento" value="' + esc(d.name) + '"' + (canE ? '' : ' disabled') + '></div>' +
+    '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="crmLColor" title="Escolher cor" aria-label="Escolher cor"' + (canE ? '' : ' disabled') + '></button><span class="color-pick-code mono" id="crmLColorCode"></span><span class="color-hex-label">clique na bolinha para escolher</span></div></div>' +
+    '<div class="field"><label>Opções</label><div class="crm-lopts">' +
+      opt('data-lf="lead"', !!d.lead, "Funil de contatos", "Tarefas com os dados do contato e o motivo de perda") +
+      opt('data-lf="recorrencia"', !!d.recorrencia, "Recorrência", "Tarefas desta lista podem repetir (Vencimento → Configurar recorrência). Desligado: o Vencimento abre o calendário normal") + '</div></div>' +
+    '<div class="field"><label>Status (na ordem do quadro)</label><div class="therapist-rows crm-sts" id="crmLSts"></div>' +
+      (canE ? '<button type="button" class="btn ghost add-row-btn" id="crmLStAdd">+ status</button>' : '') +
+      '<div class="color-hex-label" style="margin-top:6px">Finalizado: a tarefa sai de Minhas tarefas e não fica vencida. Perda (funil de contatos): pede o motivo de perda.</div></div>' +
+    '</div><div class="modal-foot">' + (canD ? '<button class="btn danger" id="crmLDel">Excluir</button>' : '<span></span>') + '<div class="spacer"></div>' +
+    '<button class="btn ghost" id="crmLCancel">' + (canE ? "Cancelar" : "Fechar") + '</button>' + (canE ? '<button class="btn primary" id="crmLSave">Salvar</button>' : '') + '</div></div></div>';
+  var ov = document.getElementById("ovCrmL");
+  function back(){ crmOpenListsModal(); }
+  function syncColor(){ var b = document.getElementById("crmLColor"); b.style.background = swatchVar(d.color || "#64748b"); document.getElementById("crmLColorCode").textContent = cpToHex(d.color || "#64748b").toUpperCase(); }
+  function renderSts(){
+    var sts = d.statuses, n = sts.length;
+    document.getElementById("crmLSts").innerHTML = sts.map(function(st, si){
+      return '<div class="therapist-row" data-si="' + si + '">' + moves(si, n) +
+        '<button type="button" class="spec-color-btn" data-scolor style="background:' + esc(st.color || "#64748b") + '" title="Cor do status" aria-label="Cor do status"' + (canE ? '' : ' disabled') + '></button>' +
+        '<input type="text" data-sf="name" value="' + esc(st.name) + '" placeholder="Nome do status"' + (canE ? '' : ' disabled') + '>' +
+        opt('data-sf="done"', !!st.done, "Finalizado", "Tarefa neste status está finalizada: sai de Minhas tarefas, não fica vencida, só aparece com \"Finalizados\" marcado e não pode ser excluída") +
+        (d.lead ? opt('data-sf="lost"', !!st.lost, "Perda", "Contato perdido: pede o motivo de perda") : '') +
+        (canE ? '<button type="button" class="rm" data-sdel title="Excluir status" aria-label="Excluir status"' + (n <= 1 ? ' disabled' : '') + '>✕</button>' : '') + '</div>';
+    }).join("");
+  }
+  syncColor(); renderSts();
+  document.getElementById("crmLClose").addEventListener("click", back);
+  document.getElementById("crmLCancel").addEventListener("click", back);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) back(); });
+  document.getElementById("crmLName").addEventListener("input", function(e){ d.name = e.target.value; });
   ov.addEventListener("input", function(e){
-    var c = e.target.closest("[data-li]"); if (!c) return; var l = draft[+c.getAttribute("data-li")];
-    var lf = e.target.getAttribute("data-lf"), sf = e.target.getAttribute("data-sf");
-    if (lf) l[lf] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-    if (sf){ var s = l.statuses[+e.target.closest("[data-si]").getAttribute("data-si")]; s[sf] = e.target.type === "checkbox" ? e.target.checked : e.target.value; }
+    var sf = e.target.getAttribute("data-sf"); if (!sf || e.target.type === "checkbox") return;
+    d.statuses[+e.target.closest("[data-si]").getAttribute("data-si")][sf] = e.target.value;
   });
   ov.addEventListener("change", function(e){
+    if (e.target.type !== "checkbox") return;
     var lab = e.target.closest(".kind-opt"); if (lab) lab.classList.toggle("on", e.target.checked);
-    if (e.target.getAttribute("data-lf") === "lead") render();
+    var lf = e.target.getAttribute("data-lf"), sf = e.target.getAttribute("data-sf");
+    if (lf){ d[lf] = e.target.checked; if (lf === "lead") renderSts(); }
+    if (sf) d.statuses[+e.target.closest("[data-si]").getAttribute("data-si")][sf] = e.target.checked;
   });
   ov.addEventListener("click", function(e){
-    if (e.target.id === "crmLAdd"){ draft.push({id: "", name: "Nova lista", color: "#64748b", statuses: crmBasicStatuses()}); render(); return; }
-    var c = e.target.closest("[data-li]"); if (!c) return; var li = +c.getAttribute("data-li"), l = draft[li];
-    var b = e.target.closest("button"); if (!b || b.disabled) return;
-    if (b.hasAttribute("data-lcolor")){ openColorPicker(b, l.color || "#64748b", function(hex){ l.color = hex; b.style.background = hex; }); return; }
-    if (b.hasAttribute("data-scolor")){ var s0 = l.statuses[+b.closest("[data-si]").getAttribute("data-si")]; openColorPicker(b, s0.color || "#64748b", function(hex){ s0.color = hex; b.style.background = hex; }); return; }
-    if (b.hasAttribute("data-lmv")){ var to = li + (+b.getAttribute("data-lmv")); if (to >= 0 && to < draft.length){ draft.splice(to, 0, draft.splice(li, 1)[0]); render(); } return; }
-    if (b.hasAttribute("data-ldel")){ if (l.id && used(l.id)){ showToast("A lista tem tarefas: exclua ou mova as tarefas antes.", true); return; } draft.splice(li, 1); render(); return; }
-    if (b.hasAttribute("data-sadd")){ l.statuses.push({id: "", name: "Novo status", color: "#64748b"}); render(); return; }
-    var row = e.target.closest("[data-si]"); if (!row) return; var si = +row.getAttribute("data-si"), s = l.statuses[si];
-    if (b.hasAttribute("data-smv")){ var t2 = si + (+b.getAttribute("data-smv")); if (t2 >= 0 && t2 < l.statuses.length){ l.statuses.splice(t2, 0, l.statuses.splice(si, 1)[0]); render(); } return; }
-    if (b.hasAttribute("data-sdel")){ if (l.statuses.length <= 1){ showToast("A lista precisa de pelo menos um status.", true); return; } if (s.id && l.id && used(l.id, s.id)){ showToast("Há tarefas neste status: mude o status delas antes.", true); return; } l.statuses.splice(si, 1); render(); }
-  });
-  var saveBtn = document.getElementById("crmLSave");
-  if (!(canC || canE || canD)){ var cb = document.getElementById("crmLCancel"); if (cb) cb.textContent = "Fechar"; }
-  if (saveBtn) saveBtn.addEventListener("click", function(){
-    var ids = {};
-    for (var i = 0; i < draft.length; i++){
-      var l = draft[i]; l.name = String(l.name || "").trim();
-      if (!l.name){ showToast("Toda lista precisa de nome.", true); return; }
-      if (!l.id){ var base = slugify(l.name) || "lista", id = base, n = 2; while (ids[id] || draft.some(function(o){ return o !== l && o.id === id; })) id = base + "-" + (n++); l.id = id; }
-      ids[l.id] = 1;
-      var sids = {};
-      for (var j = 0; j < l.statuses.length; j++){
-        var s = l.statuses[j]; s.name = String(s.name || "").trim();
-        if (!s.name){ showToast("Todo status precisa de nome (lista " + l.name + ").", true); return; }
-        if (!s.id){ var sb = slugify(s.name) || "status", sid = sb, k = 2; while (sids[sid] || l.statuses.some(function(o){ return o !== s && o.id === sid; })) sid = sb + "-" + (k++); s.id = sid; }
-        sids[s.id] = 1;
-        if (!s.done) delete s.done; if (!s.lost || !l.lead) delete s.lost;
-      }
-      if (!l.lead) delete l.lead;
-      if (!l.recorrencia) delete l.recorrencia;
+    var b = e.target.closest("button"); if (!b || b.disabled || !canE) return;
+    if (b.id === "crmLColor"){ openColorPicker(b, d.color || "#64748b", function(hex){ d.color = hex; syncColor(); }); return; }
+    if (b.id === "crmLStAdd"){ d.statuses.push({id: "", name: "Novo status", color: "#64748b"}); renderSts(); var ins = document.querySelectorAll('#crmLSts input[data-sf="name"]'); if (ins.length){ ins[ins.length - 1].focus(); ins[ins.length - 1].select(); } return; }
+    var row = b.closest("[data-si]"); if (!row) return; var si = +row.getAttribute("data-si"), s = d.statuses[si];
+    if (b.hasAttribute("data-scolor")){ openColorPicker(b, s.color || "#64748b", function(hex){ s.color = hex; b.style.background = hex; }); return; }
+    if (b.hasAttribute("data-smv")){ var to = si + (+b.getAttribute("data-smv")); if (to >= 0 && to < d.statuses.length){ d.statuses.splice(to, 0, d.statuses.splice(si, 1)[0]); renderSts(); } return; }
+    if (b.hasAttribute("data-sdel")){
+      if (d.statuses.length <= 1){ showToast("A lista precisa de pelo menos um status.", true); return; }
+      if (s.id && d.id && crmListUsed(d.id, s.id)){ showToast("Há tarefas neste status: mude o status delas antes.", true); return; }
+      d.statuses.splice(si, 1); renderSts();
     }
-    // Mesma conta do banco: lista nova = incluir, tirada = excluir, mudada (nome, cor, status, ordem) = editar.
-    var orig = CRM.lists || [], byId = {};
-    orig.forEach(function(o){ byId[o.id] = o; });
-    var added = draft.filter(function(l){ return !byId[l.id]; }), removed = orig.filter(function(o){ return !draft.some(function(l){ return l.id === o.id; }); });
-    var keptOrig = orig.filter(function(o){ return !removed.includes(o); }), keptNew = draft.filter(function(l){ return byId[l.id]; });
-    function norm(l){ return JSON.stringify({id: l.id, name: l.name, color: l.color || "", lead: !!l.lead, rec: !!l.recorrencia, st: (l.statuses || []).map(function(x){ return [x.id, String(x.name || "").trim(), x.color || "", !!x.done, !!(x.lost && l.lead)]; })}); }
-    var changed = keptNew.some(function(l, i){ return norm(l) !== norm(byId[l.id]) || (keptOrig[i] && keptOrig[i].id !== l.id); });
-    var miss = [];
-    if (added.length && !canC) miss.push("incluir listas");
-    if (removed.length && !canD) miss.push("excluir listas");
-    if (changed && !canE) miss.push("editar listas");
-    if (miss.length){ showToast("Seu nível não pode " + miss.join(", ") + " (Níveis de permissão → CRM – Listas e status).", true); return; }
-    if (!db){ CRM.lists = draft; crmRebuildNav(); close(); crmRender(); return; }
-    listCommit("config/task_lists", listPrepare(orig, draft)).then(function(ok){ close(); if (ok) showToast("Listas salvas."); }, function(e){ showToast("Não foi possível salvar: " + ((e && e.message) || e), true); });
   });
+  var del = document.getElementById("crmLDel");
+  if (del) del.addEventListener("click", function(){
+    if (crmListUsed(d.id)){ showToast("A lista tem tarefas: exclua ou mova as tarefas antes.", true); return; }
+    confirmDialog({title: "Confirmar exclusão", message: "Excluir a lista <b>" + esc(d.name) + "</b>?", confirmLabel: "Confirmar exclusão"}).then(function(ok){
+      if (!ok) return;
+      crmListsWrite((CRM.lists || []).filter(function(x){ return x.id !== d.id; }).map(function(x){ return JSON.parse(JSON.stringify(x)); }), "Lista excluída.").then(function(done){ if (done) back(); });
+    });
+  });
+  var save = document.getElementById("crmLSave");
+  if (save) save.addEventListener("click", function(){
+    var ls = (CRM.lists || []).map(function(x){ return JSON.parse(JSON.stringify(x)); });
+    d.name = String(d.name || "").trim();
+    if (!d.name){ showToast("Escreva o nome da lista.", true); document.getElementById("crmLName").focus(); return; }
+    if (ls.some(function(o){ return o.id !== d.id && normText(o.name) === normText(d.name); })){ showToast("Já existe uma lista com esse nome.", true); return; }
+    if (!d.id){ var base = slugify(d.name) || "lista", id = base, n = 2; while (ls.some(function(o){ return o.id === id; })) id = base + "-" + (n++); d.id = id; }
+    var sids = {};
+    for (var j = 0; j < d.statuses.length; j++){
+      var s = d.statuses[j]; s.name = String(s.name || "").trim();
+      if (!s.name){ showToast("Todo status precisa de nome.", true); return; }
+      if (!s.id){ var sb = slugify(s.name) || "status", sid = sb, k = 2; while (sids[sid] || d.statuses.some(function(o){ return o !== s && o.id === sid; })) sid = sb + "-" + (k++); s.id = sid; }
+      sids[s.id] = 1;
+      if (!s.done) delete s.done; if (!s.lost || !d.lead) delete s.lost;
+    }
+    if (!d.lead) delete d.lead;
+    if (!d.recorrencia) delete d.recorrencia;
+    var i = ls.findIndex(function(o){ return o.id === d.id; });
+    if (i === -1) ls.push(d); else ls[i] = d;
+    save.disabled = true;
+    crmListsWrite(ls, isNew ? "Lista incluída." : "Lista salva.").then(function(ok){ if (ok) back(); else save.disabled = false; });
+  });
+  if (isNew) setTimeout(function(){ var n0 = document.getElementById("crmLName"); if (n0) n0.focus(); }, 30);
 }
 
 /* ---------------- tabs & controls ---------------- */
@@ -19862,6 +19917,7 @@ var HELP_TOPICS = [
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
       "<b>Vencimento</b> (na janela da tarefa ou clicando na data da lista): nas listas com <b>Recorrência</b> ligada abre uma janela com atalhos à esquerda (Hoje, Amanhã, Este final de semana, Semana que vem, Próximo final de semana, 2 semanas, 4 semanas) e o calendário à direita; o ✕ ao lado da data tira o vencimento; nas outras listas abre o calendário normal. Também dá para digitar a data no campo. A opção <b>Recorrência</b> de cada lista fica em <b>CRM ▾ → Listas e status</b> (ao lado de Funil de contatos).",
+      "<b>CRM ▾ → Listas e status</b>: uma linha por lista com as setas (ordem no menu), a bolinha da cor, os status e as opções; as setas gravam na hora. <b>Editar</b> abre a janela da lista: nome, cor, opções (<b>Funil de contatos</b>, <b>Recorrência</b>) e os status (setas, cor, nome, Finalizado, Perda, ✕ e + status); <b>Salvar</b> grava e volta para as listas. <b>+ Incluir</b> cria uma lista; <b>Excluir</b> só funciona se a lista não tem tarefas.",
       "<b>Configurar recorrência</b> (no pé dos atalhos): escolha Diariamente, Semanalmente (marque os dias da semana), Mensalmente ou Anualmente, se cria uma <b>nova tarefa</b> ou reabre a mesma, <b>Repetir para sempre</b> ou até uma data, e o status da próxima. O calendário pinta as próximas datas. Tarefa recorrente mostra ↻ ao lado da data; <b>Remover</b> tira a recorrência.",
       "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],
