@@ -141,12 +141,15 @@ const path = require('path');
   await page.click('#crmLBody .crm-lrow:first-child [data-ledit]'); await page.waitForTimeout(150);
   const over = await page.$$eval('#ovCrmL .therapist-row .rm', (l) => l.filter((b) => b.getBoundingClientRect().right > 390).length);
   check('Listas e status: nothing past the screen edge?', over === 0, over);
-  // Tela CRM: um cartão por vez na largura da tela (desliza para o lado), uma informação por linha (3 linhas).
+  // Tela CRM: um cartão por vez na largura da tela (desliza para o lado), números em duas colunas, faixa de status.
   await ev('crmGo("__home")'); await page.waitForTimeout(300);
   const hc = await page.evaluate(() => { const g = document.getElementById('crmHomeGrid'), cs = g && g.querySelectorAll('.crm-home-card'); if (!cs || cs.length < 2) return null;
     const gs = getComputedStyle(g), inner = g.clientWidth - parseFloat(gs.paddingLeft) - parseFloat(gs.paddingRight), n = cs[1].querySelector('.crm-home-nums');
-    return {w: Math.round(cs[0].getBoundingClientRect().width), inner: Math.round(inner), dir: getComputedStyle(n).flexDirection, h: Math.round(n.getBoundingClientRect().height), scroll: g.scrollWidth > g.clientWidth}; });
-  check('CRM home (phone): one full-width card at a time, swipe, one info per line (3 lines)?', hc && Math.abs(hc.w - hc.inner) <= 2 && hc.dir === 'column' && hc.h >= 60 && hc.scroll, JSON.stringify(hc));
+    const sp = Array.from(n.children).map((x) => x.getBoundingClientRect());
+    return {w: Math.round(cs[0].getBoundingClientRect().width), inner: Math.round(inner), items: n.children.length, twoCols: Math.abs(sp[0].top - sp[1].top) < 2 && sp[1].left > sp[0].left,
+      strip: !!cs[1].querySelector('.crm-home-strip'), extra: !!cs[1].querySelector('.crm-home-extra'), mineMent: /menç/.test(cs[0].textContent), scroll: g.scrollWidth > g.clientWidth,
+      over: Array.from(n.children).filter((x) => x.scrollWidth > x.clientWidth + 1).map((x) => x.textContent)}; });
+  check('CRM home (phone): full-width swipe cards, 5 numbers in two columns, status strip, funnel line on Atendimento?', hc && Math.abs(hc.w - hc.inner) <= 2 && hc.items === 5 && hc.twoCols && hc.strip && hc.extra && hc.mineMent && hc.scroll && !hc.over.length, JSON.stringify(hc));
   const hv = await page.$$eval('#crmHost .pat-table thead th', (r) => r.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.textContent.trim()));
   check('CRM home list (phone): Status, Tarefa, Venc., Prio.?', hv.length === 4 && /Status/i.test(hv[0]) && /Tarefa/i.test(hv[1]), hv);
   check('no JS errors?', errors.length === 0, errors);

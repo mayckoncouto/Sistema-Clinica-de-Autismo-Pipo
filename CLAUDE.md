@@ -3697,3 +3697,10 @@ Pontos encontrados e decisões do usuário (todas as correções aprovadas):
   vencidas / comigo), com altura fixa de três linhas (`.crm-home-nums` em coluna, `min-height:64px`) para todos os
   cartões terem a mesma altura. (Os "três cartões por linha" foram testados e desfeitos.) Teste em `run_crm_mobile.js`.
 - Produção (2026-10-10): `drop table planner_backups` rodado pelo usuário (copia_antiga = 0). Migração 10v completa.
+- (2026-10-10, escolha do usuário: opção C da prévia) Cartões da tela CRM (computador e celular): números em DUAS
+  colunas (`.crm-home-nums` grid 2): abertas | vencidas (vermelho), vencem hoje | urgentes (laranja `.urg`), comigo
+  (em Minhas tarefas: menções não lidas, `CRM.unread`); zero apagado (`.zero`). Embaixo, faixa com as tarefas ABERTAS
+  por status na cor do status (`.crm-home-strip`, mesmo nome = um pedaço) + legenda (`.crm-home-leg`). Só na lista com
+  funil (`lead`): linha `.crm-home-extra` com leads sem cadastro (abertas sem `patient_id`), contratos no mês (status
+  `done` sem `lost`, `closed_at` no mês) e perdidos no mês (`lost`). Celular continua um cartão por vez deslizando.
+  Teste em `run_crm_mobile.js`.
