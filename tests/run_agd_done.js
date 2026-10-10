@@ -111,6 +111,19 @@ const path = require('path');
   check('status do sistema: nome travado e sem Excluir?', st.nameOff && st.noDel, st);
   check('status em uso: conta os atendimentos?', st.used === 1, st);
 
+  // Item 7: plano com evolução não é excluído; excluir a vigente reabre a anterior.
+  const pl = await ev(`(function(){
+    PLAN.mem = [{id: "v1", patient_id: "pa", version: 1, status: "encerrado"}, {id: "v2", patient_id: "pa", version: 2, status: "vigente", prev_id: "v1"},
+                {id: "w1", patient_id: "pb", version: 1, status: "vigente"}];
+    PLAN.rows = PLAN.mem; PLAN.evoMem = [{id: "e1", patient_id: "pb", plan_goals: [{planId: "w1", objId: "o1"}]}];
+    var out = {};
+    return planEvoUseCount("w1").then(function(n){ out.used = n; return planEvoUseCount("v2"); })
+      .then(function(n){ out.free = n; return planDelete("v2"); })
+      .then(function(){ out.reopened = (PLAN.mem.filter(function(r){ return r.id === "v1"; })[0] || {}).status; PLAN.mem = []; PLAN.rows = null; PLAN.evoMem = []; return out; });
+  })()`);
+  check('plano com evolução: em uso?', pl.used === 1 && pl.free === 0, pl);
+  check('excluir a vigente: a anterior volta a valer?', pl.reopened === 'vigente', pl);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

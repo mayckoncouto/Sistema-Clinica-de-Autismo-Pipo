@@ -19702,7 +19702,9 @@ var HELP_TOPICS = [
       "Objetivo cujas especialidades não estão mais no tratamento mostra o aviso \"Fora do tratamento atual\".",
       "Validade de 6 meses a partir da data do plano.",
       "Quem tem <b>editar</b> (ex.: Coordenador) altera tudo. O profissional inclui objetivos (a especialidade principal dele já vem marcada e não sai; pode marcar outras como apoio) e altera tudo nos objetivos que têm a especialidade principal dele; nos que têm só uma área complementar dele, a situação e o status. Objetivos já gravados não são excluídos pelo profissional.",
-      "É dado de saúde: só vê quem tem a permissão do Plano terapêutico."
+      "É dado de saúde: só vê quem tem a permissão do Plano terapêutico.",
+      "Plano (qualquer versão) com evoluções que avaliaram objetivos dele não pode ser excluído: para mudar, use <b>Revisar (nova versão)</b>.",
+      "Ao excluir a versão vigente, a versão anterior volta a ser a vigente."
     ],
     who: "Permissão <b>Plano Terapêutico</b> (ver, incluir, editar, excluir)."},
 
@@ -21426,9 +21428,27 @@ function planProfUpdate(id, sections){
   if (!c) return planUpdate(id, {sections: sections});
   return c.rpc("plan_prof_update", {p_id: id, p_sections: sections}).then(function(r){ if (r.error) throw r.error; return null; });
 }
+// Plano com evoluções que avaliaram objetivos dele não é excluído (o banco confere de novo).
+var PLAN_DEL_EVO_MSG = "Este plano tem evoluções com objetivos avaliados e não pode ser excluído. Para mudar, use Revisar (nova versão).";
+function planEvoUseCount(id){
+  var c = agdClient();
+  if (!c) return Promise.resolve((PLAN.evoMem || []).filter(function(r){ return (r.plan_goals || []).some(function(g){ return g.planId === id; }); }).length);
+  return c.from("clinical_records").select("id", {count: "exact", head: true}).contains("plan_goals", [{planId: id}])
+    .then(function(r){ return r.error ? 0 : (r.count || 0); }, function(){ return 0; });
+}
 function planDelete(id){
   var c = agdClient();
-  if (!c){ PLAN.mem = PLAN.mem.filter(function(r){ return r.id !== id; }); PLAN.rows = PLAN.mem; return Promise.resolve(); }
+  if (!c){
+    // Sem sistema online: mesma regra do banco — excluir a vigente reabre a anterior.
+    var old = PLAN.mem.filter(function(r){ return r.id === id; })[0];
+    PLAN.mem = PLAN.mem.filter(function(r){ return r.id !== id; });
+    if (old && old.status === "vigente" && !PLAN.mem.some(function(r){ return r.patient_id === old.patient_id && r.status === "vigente"; })){
+      var prev = PLAN.mem.filter(function(r){ return r.patient_id === old.patient_id && r.status === "encerrado"; })
+        .sort(function(a, b){ return (b.id === old.prev_id) - (a.id === old.prev_id) || (b.version || 0) - (a.version || 0); })[0];
+      if (prev) prev.status = "vigente";
+    }
+    PLAN.rows = PLAN.mem; return Promise.resolve();
+  }
   return c.from("therapy_plans").delete().eq("id", id).then(function(r){ if (r.error) throw r.error; });
 }
 // Objetivos (de todos os planos) que usam uma escala / habilidade — para "em uso".
@@ -22050,7 +22070,12 @@ function openPlanModal(plan, opts){
   });
   var del = $("plDel");
   if (del) del.addEventListener("click", function(){
-    confirmDialog({title: "Confirmar exclusão", message: "Excluir o plano terapêutico (versão " + plan.version + ") de <b>" + esc(p ? p.nome : plan.patient_name) + "</b>?<br>As versões anteriores continuam guardadas. Essa ação não pode ser desfeita.", confirmLabel: "Confirmar exclusão"}).then(function(ok){
+    planEvoUseCount(plan.id).then(function(n){
+      if (n){ showToast(PLAN_DEL_EVO_MSG, true); return false; }
+      var prev = plan.status === "vigente" && planVersions(plan.patient_id).some(function(x){ return x.id !== plan.id && x.status === "encerrado"; });
+      return confirmDialog({title: "Confirmar exclusão", message: "Excluir o plano terapêutico (versão " + plan.version + ") de <b>" + esc(p ? p.nome : plan.patient_name) + "</b>?<br>" +
+        (prev ? "A versão anterior volta a ser a vigente." : "As versões anteriores continuam guardadas.") + " Essa ação não pode ser desfeita.", confirmLabel: "Confirmar exclusão"});
+    }).then(function(ok){
       if (!ok) return;
       planDelete(plan.id).then(function(){ return planLoadAll(true); }).then(function(){ close(); showToast("Plano excluído."); if (state.tab === "planos") renderPlansTab(); })
         .catch(function(e){ showToast("Não foi possível excluir: " + planErr(e), true); });

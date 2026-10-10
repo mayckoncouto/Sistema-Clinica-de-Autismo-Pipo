@@ -190,6 +190,8 @@ exp_fn(n, h) as (values
   ('tasks_delete_guard', '48324f93d29d1659cfa0a78088337864'),
   ('tasks_history', 'bd8d15d3861a2f7039838e760de7225a'),
   ('tasks_stamp', '17e281a8fe419f8fe6c9f6b1ebd921b3'),
+  ('therapy_plans_delete_guard', 'ec6fe7063556c5d43a6f921a8502c65f'),
+  ('therapy_plans_reopen_prev', 'aa27df2267129f1667e884d531372c89'),
   ('therapy_plans_stamp', '753a171dee055d4550e16e39ef7abab2'),
   ('treatment_appt_summary', '1963700905228880585338bd1df1721d'),
   ('treatment_finance_stamp', 'ca17694625e84511c0f4e3934edbb770'),
@@ -229,6 +231,8 @@ exp_trg(t, n) as (values
   ('tasks', 'tasks_delete_guard'),
   ('tasks', 'tasks_history'),
   ('tasks', 'tasks_stamp'),
+  ('therapy_plans', 'therapy_plans_delete_guard'),
+  ('therapy_plans', 'therapy_plans_reopen_prev'),
   ('therapy_plans', 'therapy_plans_stamp'),
   ('treatment_finance', 'treatment_finance_stamp')),
 exp_pol(t, n) as (values

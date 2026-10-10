@@ -3172,7 +3172,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~ALTA 4~~ FEITO (2026-10-10, ver "Excluir paciente" abaixo).
 - ~~ALTA 5~~ FEITO (2026-10-10, ver "Mesclar cadastros completo" abaixo).
 - ~~ALTA 6~~ FEITO (2026-10-10, ver "Status protegidos" abaixo).
-- ALTA 7. Excluir plano terapêutico: evoluções com `plan_goals` perdem a ligação; excluir o vigente não reabre a anterior.
+- ~~ALTA 7~~ FEITO (2026-10-10, ver "Excluir Plano Terapêutico" abaixo).
 - MÉDIA 8. Grupo de suporte: `USAGE.salas` conta só `room_id`; atendimentos do grupo (`group_id`) não contam.
 - MÉDIA 9. Colaborador: não conta evoluções (`clinical_records.professional_id`), bloqueios do Planner, usuário ligado
   por `professional_id` sem cadastro de RH.
@@ -3264,3 +3264,13 @@ excluído (troque o status dos atendimentos antes).
   `supabase/2026-10-10g-status-protegidos.sql`). Testada no PGlite. Teste no fim de `tests/run_agd_done.js`.
 - Correção junto: `prDelFinalCheck` (sem sistema online) lia `AD.rows` como lista; é objeto por id.
 - Produção (2026-10-10): `2026-10-10g-status-protegidos` rodada (trava criada = 1).
+
+## Excluir Plano Terapêutico (2026-10-10, item 7 da auditoria)
+Decisões do usuário: plano com evoluções que avaliaram objetivos NÃO é excluído (usar Revisar); excluir a versão
+vigente faz a anterior voltar a ser a vigente.
+- App: `planEvoUseCount(id)` (count em `clinical_records` com `plan_goals @> [{planId}]`; sem sistema online,
+  `PLAN.evoMem`) antes da confirmação do `#plDel` (`PLAN_DEL_EVO_MSG`); a confirmação avisa quando a anterior volta.
+  `planDelete` sem sistema online repete a regra de reabrir.
+- Banco: `therapy_plans_delete_guard` (BEFORE DELETE) e `therapy_plans_reopen_prev` (AFTER DELETE: vigente excluída →
+  `prev_id`, senão a encerrada de versão mais alta, vira vigente). Migração `supabase/2026-10-10h-excluir-plano.sql`.
+  Testada no PGlite. Teste no fim de `tests/run_agd_done.js`.
