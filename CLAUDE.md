@@ -3709,7 +3709,7 @@ Pontos encontrados e decisões do usuário (todas as correções aprovadas):
   `.crm-home-grid{align-items:flex-start}`). Legenda de status no máximo 2 linhas (`max-height:34px`); linha do funil
   numa linha só ("N leads sem cadastro · N contratos · N perdidos no mês", texto completo no `title`).
 
-## Conector Claude — servidor MCP remoto (2026-10-10, AGUARDANDO publicação)
+## Conector Claude — servidor MCP remoto (2026-10-10)
 Pedido do usuário: o Claude (claude.ai/desktop) usa o sistema como conector personalizado, com as regras
 e o histórico do sistema. Decisões: Edge Function (plano B Vercel); login OAuth do Supabase Auth com
 registro dinâmico (novas conexões futuras), barrado pela página de autorização + permissão; só testes
@@ -3725,3 +3725,6 @@ locais; permissão própria **Conector Claude** (`conector_claude`, ver; grupo M
   confere `mcp_permitido`, Autorizar/Negar.
 - App: “· via Claude” na atividade do CRM (`crmViaHtml`), tópico de Ajuda `conector-claude`.
 - Teste local: `deno run -A --no-lock --config supabase/functions/pipo-mcp/deno.json supabase/functions/pipo-mcp/teste_local.ts` (30 checagens).
+- Produção (2026-10-10): `2026-10-10w-conector-claude` rodada pelo conector em partes (1 | 1 | 15; 2 políticas;
+  0 funções abertas sem login; closed_at coerente). `drop policy` no conector trava (pede confirmação): como a
+  tabela era nova, as políticas foram criadas sem o drop. FALTA: painel OAuth (usuário) e publicar a função.
