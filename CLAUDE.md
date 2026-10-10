@@ -3263,3 +3263,4 @@ excluído (troque o status dos atendimentos antes).
 - Banco: `statuses_guard` (BEFORE UPDATE em `documents`, `config/statuses`; migração
   `supabase/2026-10-10g-status-protegidos.sql`). Testada no PGlite. Teste no fim de `tests/run_agd_done.js`.
 - Correção junto: `prDelFinalCheck` (sem sistema online) lia `AD.rows` como lista; é objeto por id.
+- Produção (2026-10-10): `2026-10-10g-status-protegidos` rodada (trava criada = 1).
