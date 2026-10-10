@@ -3626,3 +3626,13 @@ conferiu a lista (`supabase/conferencia-aba.sql`, só leitura) e escolheu **mant
 - (2026-10-10, pedido do usuário) **CRM: pesquisa na lista de Status** (janela da tarefa e lista): `crmStatusMenu` sempre com o
   campo `.crm-pop-q` "Pesquisar status…" (antes só no celular); no computador o campo já vem com o foco (`crmPop`), sem
   resultado mostra "Nenhum status encontrado" (`.crm-pop-none`), Enter escolhe o 1º. Teste em `run_crm.js`.
+
+## Conector do Supabase (2026-10-10)
+O usuário ligou um conector do Supabase: a sessão pode rodar SQL direto (`mcp__Supabase__execute_sql`, projeto
+`gnieydlriercezqowpqe` = "clinicadeautismopipo", produção; `msnzsfwuxhjsmllqfiho` = "agenda-pipo-teste", inativo).
+Consultas SÓ DE LEITURA (conferências) podem ser rodadas direto e o resultado relatado. Qualquer SQL que ALTERA dados ou
+estrutura continua exigindo a confirmação do usuário antes (mostrar o script e perguntar) — é o banco de produção, com
+dados de saúde. Nunca copiar dados reais de pacientes para arquivos do repositório.
+- Primeira conferência pelo conector (2026-10-10): 10u confirmada (0 | 0 | 162 | 85); conferência de migrações 79 SIM e
+  1 NÃO = 10m, porque 15 tarefas importadas do ClickUp (`created_by_name = 'ClickUp'`, chave `lead.clickup`) chegaram
+  depois da 10m com nascimento/email/origem/responsavel no lead. Aguardando decisão do usuário.
