@@ -77,6 +77,29 @@ const path = require('path');
   })()`);
   check('paciente em uso por evolução, plano e tarefa?', /evolução no Prontuário/.test(pu) && /plano terapêutico/.test(pu) && /tarefa no CRM/.test(pu), pu);
 
+  // Item 5: mesclar com Plano Terapêutico vigente nos dois = não deixa; com um só, mostra o que passa.
+  const mg = await ev(`(function(){
+    window.pipoAuth = {isAdmin: function(){ return true; }, can: function(){ return true; }, canDefault: function(){ return true; }, profile: {}};
+    var a = state.patients[0], b = state.patients[1];
+    PLAN.rows = null; PLAN.mem = [{id: "v1", patient_id: a.id, status: "vigente"}, {id: "v2", patient_id: b.id, status: "vigente"}];
+    CRM.mem.tasks = [{id: "t9", patient_id: b.id}];
+    openPatientMergeModal();
+    var k = document.getElementById("mgKeep"), d = document.getElementById("mgDrop");
+    k.value = a.id; k.dispatchEvent(new Event("change")); d.value = b.id; d.dispatchEvent(new Event("change"));
+    return new Promise(function(res){ setTimeout(function(){
+      var out = {both: document.getElementById("mgPreview").textContent, bothDis: document.getElementById("mgGo").disabled};
+      PLAN.rows = null; PLAN.mem = [{id: "v2", patient_id: b.id, status: "vigente"}];
+      d.dispatchEvent(new Event("change"));
+      setTimeout(function(){
+        out.one = document.getElementById("mgPreview").textContent; out.oneDis = document.getElementById("mgGo").disabled;
+        document.getElementById("modalHost").innerHTML = ""; PLAN.mem = []; PLAN.rows = null; CRM.mem.tasks = []; delete window.pipoAuth;
+        res(out);
+      }, 300);
+    }, 300); });
+  })()`);
+  check('mesclar com dois planos vigentes: recusa?', /Plano Terapêutico vigente/.test(mg.both) && mg.bothDis, mg);
+  check('mesclar: conta planos e tarefas do 2º?', /1 plano\(s\) terapêutico\(s\) e 1 tarefa\(s\) no CRM/.test(mg.one) && !mg.oneDis, mg.one);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

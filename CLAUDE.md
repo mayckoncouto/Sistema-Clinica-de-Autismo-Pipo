@@ -3170,8 +3170,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
   a evolução guarda data própria e fica divergente; contagens de realizado/sessões usadas mudam.
 - ~~ALTA 3~~ FEITO (2026-10-10, ver "Excluir ou editar evolução" abaixo).
 - ~~ALTA 4~~ FEITO (2026-10-10, ver "Excluir paciente" abaixo).
-- ALTA 5. Mesclar (`merge_patient_records` + `openPatientMergeModal`): não move `therapy_plans`, `tasks.patient_id`;
-  `patient_health` do excluído fica órfã.
+- ~~ALTA 5~~ FEITO (2026-10-10, ver "Mesclar cadastros completo" abaixo).
 - ALTA 6. Status: qualquer um pode ser excluído (inclusive finalizado/nao-compareceu/falta-justificada usados pelas
   regras), sem conferir uso; atendimentos ficam com status inexistente.
 - ALTA 7. Excluir plano terapêutico: evoluções com `plan_goals` perdem a ligação; excluir o vigente não reabre a anterior.
@@ -3245,3 +3244,12 @@ junto ao excluir de verdade.
   `supabase/2026-10-10e-excluir-paciente.sql` (também apaga uma vez a saúde de pacientes que já não existem). Testada no
   PGlite. Teste no fim de `tests/run_agd_done.js`.
 - Produção (2026-10-10): `2026-10-10e-excluir-paciente` rodada (função criada = 1, saúde solta = 0).
+
+## Mesclar cadastros completo (2026-10-10, item 5 da auditoria)
+Decisões do usuário: os dois com Plano Terapêutico vigente = NÃO mescla; saúde do 1º completada com a do 2º.
+- Banco: `merge_patient_records` (migração `supabase/2026-10-10f-mesclar-completo.sql`) recusa com dois vigentes, move
+  `therapy_plans` (patient_id/patient_name) e `tasks.patient_id`, junta `patient_health` (preenchido do 1º vence, vazio
+  vem do 2º) e apaga a do 2º; devolve `{agenda, prontuario, planos, tarefas, saude: true}`. Testada no PGlite.
+- App (`openPatientMergeModal`): prévia conta também planos e tarefas do CRM do 2º e, com dois vigentes, mostra o aviso e
+  deixa Mesclar desativado. `patientMerge`: com `saude` na resposta só atualiza `HEALTH.map`; sem (banco antigo) junta
+  a saúde no app (`healthSave` + `healthDelete`). Depois, `planLoadAll(true)`. Teste no fim de `tests/run_agd_done.js`.

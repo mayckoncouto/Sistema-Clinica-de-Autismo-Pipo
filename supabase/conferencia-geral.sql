@@ -163,7 +163,7 @@ exp_fn(n, h) as (values
   ('has_report', '4b518326fe21f6de9c4ad8786a4c51fc'),
   ('is_active_user', '90f6bb0a886bff18323bba87246ea185'),
   ('is_admin', 'fb5e9b633e70f9594f176359718da808'),
-  ('merge_patient_records', 'c1cc34769043c781107d9fc1c79fbf15'),
+  ('merge_patient_records', '529332c0499ec15baf150a522d088db2'),
   ('module_for_path', '56edcb5b7be1ab645cbcc573a23c86f6'),
   ('patch_bookings', 'f1048c245f7da4e753ff3873bde48331'),
   ('patch_list', '544e1fc702d007da62da6425ce3d7f6f'),

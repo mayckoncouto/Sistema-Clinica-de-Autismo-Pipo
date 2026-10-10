@@ -10870,13 +10870,23 @@ function openPatientMergeModal(){
     Promise.all([
       plannerUseCount(function(key, r){ return recIsPatient(r, d); }),
       apptPatientCount(d),
-      c ? c.from("clinical_records").select("id", {count: "exact", head: true}).eq("patient_id", d.id).then(function(r){ return r.error ? 0 : (r.count || 0); }, function(){ return 0; }) : Promise.resolve(0)
+      c ? c.from("clinical_records").select("id", {count: "exact", head: true}).eq("patient_id", d.id).then(function(r){ return r.error ? 0 : (r.count || 0); }, function(){ return 0; }) : Promise.resolve(0),
+      planLoadAll(true),
+      rowUseCount("tasks", "patient_id", d.id, function(){ return ((CRM.mem || {}).tasks || []).filter(function(t){ return t.patient_id === d.id; }).length; })
     ]).then(function(n){
       if (my !== seq || !document.getElementById("ovMg")) return;
+      var plans = n[3] || [];
+      var vig = function(id){ return plans.some(function(r){ return r.patient_id === id && r.status === "vigente"; }); };
+      if (vig(k.id) && vig(d.id)){
+        pv.innerHTML = "Os dois pacientes têm <b>Plano Terapêutico vigente</b>: encerre ou exclua um deles antes de mesclar.";
+        return;
+      }
+      var nPlan = plans.filter(function(r){ return r.patient_id === d.id; }).length;
       var trs = treatmentsOf(d.id).length, bothActive = activeTreatment(k.id) && activeTreatment(d.id);
       info = {keep: k, drop: d, planner: n[0], agenda: n[1], pront: n[2], trs: trs, bothActive: !!bothActive};
       pv.innerHTML = "Vai passar de <b>" + esc(d.nome) + "</b> para <b>" + esc(k.nome) + "</b>:<br>" +
-        trs + " tratamento(s), " + n[0] + " agendamento(s) no Planner, " + n[1] + " atendimento(s) na Agenda e " + n[2] + " evolução(ões) no Prontuário." +
+        trs + " tratamento(s), " + n[0] + " agendamento(s) no Planner, " + n[1] + " atendimento(s) na Agenda, " + n[2] + " evolução(ões) no Prontuário, " +
+        nPlan + " plano(s) terapêutico(s) e " + n[4] + " tarefa(s) no CRM." +
         (bothActive ? "<br>Os dois têm tratamento Ativo: o de " + esc(d.nome) + " vira <b>Renegociado</b>." : "") +
         "<br>Campos vazios de " + esc(k.nome) + " são completados com os de " + esc(d.nome) + ". Depois, <b>" + esc(d.nome) + "</b> é excluído.";
       go.disabled = false;
@@ -10894,9 +10904,10 @@ function openPatientMergeModal(){
 }
 function patientMerge(I){
   var keep = rawPatient(I.keep.id) || I.keep, drop = rawPatient(I.drop.id) || I.drop;
-  var c = agdClient();
+  var c = agdClient(), dbHealth = false;
   var step1 = c ? c.rpc("merge_patient_records", {p_drop_id: drop.id, p_drop_name: drop.nome, p_keep_id: keep.id, p_keep_name: keep.nome}).then(function(r){
       if (r.error){ throw new Error(/merge_patient_records/.test(r.error.message || "") ? "Falta rodar a atualização do banco (mesclar cadastros)." : (r.error.message || "Erro ao mesclar.")); }
+      dbHealth = !!(r.data && r.data.saude);   // o banco já juntou a saúde (2026-10-10f)
     }) : Promise.resolve();
   return step1.then(function(){
     // Planner: os agendamentos com o nome do 2º passam a ter o nome do 1º.
@@ -10939,9 +10950,16 @@ function patientMerge(I){
     ["mae", "pai", "financeiro", "telefones", "emails", "rotina", "protetiva"].forEach(function(key){ if (out[key] == null) out[key] = k[key]; });
     PAT_LEGACY_KEYS.forEach(function(x){ delete out[x]; });
     var list = state.patients.filter(function(p){ return p.id !== drop.id; }).map(function(p){ return p.id === keep.id ? Object.assign({}, p, out) : p; });
-    // Saúde (tabela protegida): o 1º fica com os dados completados com os do 2º.
-    return writePatients(list).then(function(){ return HEALTH.map && healthCanEdit() ? healthSave(keep.id, Object.assign({}, HEALTH.map[keep.id] || {}, healthPick(out))) : null; });
+    // Saúde (tabela protegida): o 1º fica com os dados completados com os do 2º; a do 2º sai.
+    return writePatients(list).then(function(){
+      if (!HEALTH.map) return null;
+      var hk = HEALTH.map[keep.id] || {}, hd = HEALTH.map[drop.id] || {}, hm = Object.assign({}, hk);
+      HEALTH_KEYS.forEach(function(x){ var a = hk[x]; if ((a == null || a === "" || (Array.isArray(a) && !a.length)) && hd[x] != null && hd[x] !== "") hm[x] = hd[x]; });
+      if (dbHealth){ HEALTH.map[keep.id] = hm; delete HEALTH.map[drop.id]; rebuildPatients(); return null; }
+      return (healthCanEdit() ? healthSave(keep.id, hm) : Promise.resolve()).then(function(){ return healthDelete(drop.id); });
+    });
   }).then(function(){
+    if (PLAN.rows) planLoadAll(true);
     showToast("Cadastros mesclados: " + drop.nome + " foi incorporado a " + keep.nome + ".");
     return true;
   }).catch(function(e){ showToast((e && e.message) || "Não foi possível mesclar.", true); return false; });
@@ -19171,7 +19189,7 @@ var HELP_TOPICS = [
       "CPF da mãe ou do pai igual ao de outro paciente mostra só um aviso (irmãos em tratamento são permitidos).",
       "A data de entrada não pode ser depois do início do primeiro tratamento do paciente, e o tratamento não pode começar antes da data de entrada.",
       "<b>Campos obrigatórios</b> define quais campos aparecem e quais precisam ser preenchidos (marcados com *). O Nome é sempre obrigatório. O Administrador decide todos os outros campos; os demais níveis não mudam CPF, Filiação e Responsável financeiro. Esconder um campo não apaga o que já estava gravado.",
-      "<b>Mesclar cadastros</b> junta dois cadastros do mesmo paciente: o 1º fica e o 2º é excluído. Tratamentos, agendamentos do Planner, atendimentos da Agenda e evoluções do Prontuário do 2º passam para o 1º; campos vazios do 1º são completados com os do 2º. Se os dois têm tratamento Ativo, o do 2º vira Renegociado. Pede confirmação dupla e não pode ser desfeito.",
+      "<b>Mesclar cadastros</b> junta dois cadastros do mesmo paciente: o 1º fica e o 2º é excluído. Tratamentos, agendamentos do Planner, atendimentos da Agenda, evoluções do Prontuário, Planos Terapêuticos e tarefas do CRM do 2º passam para o 1º; campos vazios do 1º (inclusive os de saúde) são completados com os do 2º. Se os dois têm tratamento Ativo, o do 2º vira Renegociado. Se os dois têm Plano Terapêutico vigente, não mescla: encerre ou exclua um deles antes. Pede confirmação dupla e não pode ser desfeito.",
       "CPFs são conferidos pelos dígitos; e-mail precisa ser válido.",
       "A idade é calculada pela data de nascimento. Sem a data, aparece o campo Idade para digitar; ao preencher o nascimento, vale a idade calculada.",
       "A cor do paciente vem do tratamento ativo: Não faz ABA = vermelho; senão pela idade (0–4 azul, 5–9 verde, 10+ laranja).",
