@@ -3708,3 +3708,20 @@ Pontos encontrados e decisões do usuário (todas as correções aprovadas):
   cartão de conteúdo mais alto (`crmHomeRender` mede `scrollHeight` e grava `--crm-card-h` no `#crmHomeGrid`;
   `.crm-home-grid{align-items:flex-start}`). Legenda de status no máximo 2 linhas (`max-height:34px`); linha do funil
   numa linha só ("N leads sem cadastro · N contratos · N perdidos no mês", texto completo no `title`).
+
+## Conector Claude — servidor MCP remoto (2026-10-10, AGUARDANDO publicação)
+Pedido do usuário: o Claude (claude.ai/desktop) usa o sistema como conector personalizado, com as regras
+e o histórico do sistema. Decisões: Edge Function (plano B Vercel); login OAuth do Supabase Auth com
+registro dinâmico (novas conexões futuras), barrado pela página de autorização + permissão; só testes
+locais; permissão própria **Conector Claude** (`conector_claude`, ver; grupo Menu Acesso).
+- Função `supabase/functions/pipo-mcp/` (`app.ts` = servidor MCP SDK 1.25.3 sem estado, `index.ts` =
+  entrada com supabase-js e o token DA PESSOA — nunca service role). Detalhes, publicação, roteiro de
+  teste e como acrescentar ferramenta: `supabase/functions/pipo-mcp/README.md`.
+- Migração `supabase/2026-10-10w-conector-claude.sql` (funções `security invoker`, `pipo_origem()`
+  marca `{origem:"conector", app}` na atividade da tarefa e no `_upd` do paciente; `tasks_stamp` acerta
+  `closed_at`; `mcp_calls` = registro; `mcp_permitido()` = permissão + 60 chamadas/min). Nada exclui;
+  lotes até 50; toda alteração devolve antes/depois. Escrita só com `PIPO_MCP_ESCRITA=1`.
+- Página `oauth-consent.html` (`/oauth/consent`, rewrite no `vercel.json`): login do sistema,
+  confere `mcp_permitido`, Autorizar/Negar.
+- App: “· via Claude” na atividade do CRM (`crmViaHtml`), tópico de Ajuda `conector-claude`.
+- Teste local: `deno run -A --no-lock --config supabase/functions/pipo-mcp/deno.json supabase/functions/pipo-mcp/teste_local.ts` (30 checagens).

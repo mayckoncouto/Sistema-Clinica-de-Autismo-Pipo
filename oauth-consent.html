@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Autorizar conector</title>
+<link rel="icon" href="/favicon.png">
+<!--
+  Página de autorização do login OAuth do Supabase (Authentication → OAuth Server →
+  Authorization Path = /oauth/consent). Um aplicativo conectado (ex.: Claude) manda a
+  pessoa para cá com ?authorization_id=…; ela entra com o login do sistema e autoriza.
+  Só autoriza quem tem a permissão "Conector Claude" no nível (ou é Administrador).
+-->
+<style>
+:root{
+  --bg:#f4f6f8; --surface:#fff; --surface-2:#eef1f4; --ink:#1d2733; --muted:#5f6b78; --line:#d8dee5;
+  --accent:#2e7d6b; --accent-ink:#fff; --danger:#c62828;
+  --ring:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#11161c; --surface:#1a2129; --surface-2:#222b35; --ink:#e7edf3; --muted:#9aa7b4; --line:#2f3a46; --danger:#ef6b6b; color-scheme:dark }
+}
+:root[data-theme="dark"]{ --bg:#11161c; --surface:#1a2129; --surface-2:#222b35; --ink:#e7edf3; --muted:#9aa7b4; --line:#2f3a46; --danger:#ef6b6b; color-scheme:dark }
+*{box-sizing:border-box}
+html{accent-color:var(--accent)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:520px;margin:0 auto;padding:28px 16px 48px}
+.head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.head img{width:44px;height:44px;object-fit:contain}
+.head h1{margin:0;font-size:18px;line-height:1.2}
+.head .sub{color:var(--muted);font-size:13px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+h2{margin:0 0 6px;font-size:18px;text-wrap:balance}
+p{margin:0 0 12px}
+.muted{color:var(--muted);font-size:13.5px}
+.app{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);margin:12px 0}
+.app b{font-size:15px}
+ul{margin:6px 0 14px;padding-left:20px}
+li{margin:3px 0}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+input{width:100%;height:44px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
+input:focus{outline:0;border-color:var(--accent);box-shadow:var(--ring)}
+.row{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.btn{height:42px;padding:0 18px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:focus-visible{outline:0;box-shadow:var(--ring)}
+.btn[disabled]{opacity:.6;cursor:default}
+.err{color:var(--danger);font-size:14px;margin-top:10px}
+.who{font-size:13.5px;color:var(--muted);margin-top:14px}
+.who a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><img src="/favicon.png" alt=""><div><h1>Clínica de Autismo Pipo</h1><div class="sub">Autorizar acesso de aplicativo</div></div></div>
+  <div class="card" id="box"><p class="muted">Carregando…</p></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+(function(){
+  var box = document.getElementById("box");
+  var authId = new URLSearchParams(location.search).get("authorization_id");
+  var client = null;
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+  function show(html){ box.innerHTML = html; }
+  function fail(msg){ show('<h2>Não foi possível continuar</h2><p class="err">' + esc(msg) + '</p><p class="muted">Feche esta página e tente conectar de novo pelo aplicativo.</p>'); }
+
+  if (!authId){ fail("Endereço sem o código da autorização (authorization_id)."); return; }
+
+  fetch("/api/config").then(function(r){ if (!r.ok) throw new Error("configuração indisponível"); return r.json(); }).then(function(cfg){
+    if (!window.supabase || !window.supabase.createClient) throw new Error("biblioteca do Supabase não carregou");
+    client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true } });
+    if (!client.auth.oauth || !client.auth.oauth.getAuthorizationDetails) throw new Error("a biblioteca do Supabase não tem o login OAuth");
+    return client.auth.getSession();
+  }).then(function(r){
+    if (r && r.data && r.data.session) return proceed();
+    loginForm();
+  }).catch(function(e){ fail(e.message || String(e)); });
+
+  function loginForm(msg){
+    show('<h2>Entre com o seu login do sistema</h2><p class="muted">Um aplicativo quer acessar o sistema da clínica em seu nome. Primeiro, entre com o mesmo e-mail e senha que você usa no sistema.</p>' +
+      '<form id="lf"><label for="em">E-mail</label><input id="em" type="email" autocomplete="username" required>' +
+      '<label for="pw">Senha</label><input id="pw" type="password" autocomplete="current-password" required>' +
+      (msg ? '<p class="err">' + esc(msg) + '</p>' : '') +
+      '<div class="row"><button class="btn primary" type="submit" id="lb">Entrar</button></div></form>');
+    document.getElementById("em").focus();
+    document.getElementById("lf").addEventListener("submit", function(ev){
+      ev.preventDefault();
+      var b = document.getElementById("lb"); b.disabled = true; b.textContent = "Entrando…";
+      client.auth.signInWithPassword({ email: document.getElementById("em").value.trim(), password: document.getElementById("pw").value })
+        .then(function(r){ if (r.error) throw r.error; proceed(); })
+        .catch(function(e){ loginForm(/invalid/i.test(e.message || "") ? "E-mail ou senha incorretos." : (e.message || String(e))); });
+    });
+  }
+
+  function proceed(){
+    show('<p class="muted">Conferindo…</p>');
+    var me = null;
+    client.auth.getUser().then(function(u){
+      me = u.data && u.data.user;
+      return client.rpc("mcp_permitido");
+    }).then(function(p){
+      if (p.error) throw new Error("O banco ainda não está preparado para o conector (" + p.error.message + ").");
+      var perm = p.data || {};
+      return client.auth.oauth.getAuthorizationDetails(authId).then(function(d){
+        if (d.error) throw d.error;
+        var det = d.data || {};
+        if (!det.authorization_id && det.redirect_url){ location.href = det.redirect_url; return; }   // já autorizado antes
+        render(det, perm, me);
+      });
+    }).catch(function(e){ fail(e.message || String(e)); });
+  }
+
+  function render(det, perm, me){
+    var app = (det.client && (det.client.name || det.client.client_name)) || "Aplicativo";
+    var host = ""; try { host = new URL(det.redirect_uri).host; } catch (e) {}
+    var who = '<div class="who">Você está entrando como <b>' + esc((me && me.email) || "") + '</b>. <a href="#" id="outra">Usar outra conta</a></div>';
+    if (!perm.ok){
+      show('<h2>Acesso não liberado</h2><p class="err">' + esc(perm.motivo || "Seu nível de permissão não tem acesso ao conector.") + '</p>' +
+        '<p class="muted">Peça ao Administrador para marcar <b>Conector Claude</b> no seu nível de permissão.</p>' + who +
+        '<div class="row"><button class="btn" id="deny">Voltar ao aplicativo</button></div>');
+    } else {
+      show('<h2>Autorizar ' + esc(app) + '?</h2>' +
+        '<div class="app"><div><b>' + esc(app) + '</b><div class="muted">' + (host ? 'volta para ' + esc(host) : '') + '</div></div></div>' +
+        '<p>Ele poderá, <b>em seu nome</b> e só com as permissões do seu nível:</p>' +
+        '<ul><li>ver e buscar tarefas do CRM e pacientes;</li><li>criar e comentar tarefas;</li><li>mudar status, vencimento, prioridade e responsáveis;</li><li>ligar tarefa a paciente e ativar ou inativar paciente.</li></ul>' +
+        '<p class="muted">Nada é excluído. Tudo fica na atividade com o seu nome e “via ' + esc(app) + '”. Para desconectar, remova o conector no aplicativo.</p>' + who +
+        '<div class="row"><button class="btn" id="deny">Negar</button><button class="btn primary" id="ok">Autorizar</button></div>');
+      document.getElementById("ok").addEventListener("click", function(){ decide(true, this); });
+    }
+    document.getElementById("deny").addEventListener("click", function(){ decide(false, this); });
+    document.getElementById("outra").addEventListener("click", function(ev){ ev.preventDefault(); client.auth.signOut().then(function(){ loginForm(); }); });
+  }
+
+  function decide(approve, btn){
+    btn.disabled = true;
+    var f = approve ? client.auth.oauth.approveAuthorization(authId) : client.auth.oauth.denyAuthorization(authId);
+    f.then(function(r){
+      if (r.error) throw r.error;
+      if (r.data && r.data.redirect_url) location.href = r.data.redirect_url;
+      else fail("O servidor de login não devolveu o endereço de retorno.");
+    }).catch(function(e){ btn.disabled = false; fail(e.message || String(e)); });
+  }
+})();
+</script>
+</body>
+</html>

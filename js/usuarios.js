@@ -52,6 +52,7 @@
     { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"], group: "Menu Acesso" },
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)" },
     { key: "backup", label: "Backup", hint: "baixar o backup (restaurar: só o Administrador)", actions: ["view"] },
+    { key: "conector_claude", label: "Conector Claude", hint: "usar o sistema pelo Claude (conector MCP); lá vale o mesmo que o nível já pode no sistema", actions: ["view"] },
     { key: "senha", label: "Senha", hint: "trocar a própria senha", actions: ["view"], dflt: true },
     { key: "ajuda", label: "Ajuda", hint: "guia do sistema", actions: ["view"], dflt: true }
   ];

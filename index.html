@@ -745,6 +745,7 @@ div.ag-obj-head{cursor:default}
 /* Comentário registrado */
 .crm-cmt{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 14px 14px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
 .crm-cmt-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.crm-via{font-size:11.5px;color:var(--muted);font-weight:400;white-space:nowrap}
 .crm-cmt-h .crm-av{width:28px;height:28px;font-size:10.5px}
 .crm-cmt-h b{font-size:13.5px;font-weight:700;color:var(--ink)}
 .crm-cmt-when{font-size:12px;color:var(--muted);white-space:nowrap}
@@ -4279,7 +4280,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {diagnosticos:"Diagnósticos", origens:"Origens", planner:"Planner", bloqueio_horario:"Bloqueio de horário", agenda:"Agenda", visao_geral:"Visão geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – valores"};
+var PERM_MODULE_LABELS = {diagnosticos:"Diagnósticos", origens:"Origens", planner:"Planner", bloqueio_horario:"Bloqueio de horário", agenda:"Agenda", visao_geral:"Visão geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – valores", motivos_cancelamento:"Motivos de cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e recessos", campos_paciente:"Campos do paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -7435,7 +7436,10 @@ function crmLeadTreatment(patId, convName){
   rec.tipo = trTipoFor(Object.assign({}, rec, {isNew: true}), list);
   return writeTreatments(list).then(function(ok){ return ok !== false; }, function(){ return false; });
 }
-function crmEventText(e, list){
+// Alteração feita por um aplicativo conectado (ex.: Claude) ganha "· via Claude" (data.app, gravado pelo banco).
+function crmViaHtml(e){ var a = e && e.data && e.data.app; return a ? ' <span class="crm-via" title="Feito pelo conector ' + esc(a) + ', em nome desta pessoa">· via ' + esc(a) + '</span>' : ""; }
+function crmEventText(e, list){ return crmEventTextBase(e, list) + crmViaHtml(e); }
+function crmEventTextBase(e, list){
   var who = '<b>' + esc(e.author_name || "Sistema") + '</b>', d = e.data || {};
   function stName(id){ var s = crmStatus(list, id); return s ? crmStDot(s) : esc(id || "—"); }
   function names(arr){ return (arr || []).length ? (arr || []).map(crmPersonName).map(esc).join(", ") : "ninguém"; }
@@ -7470,7 +7474,7 @@ function crmCommentHtml(e, whenText, pendIdx){
   var acts = (mine ? '<button type="button" class="crm-cmt-act" data-cmt-act="edit" title="Editar comentário">Editar</button>' : '') +
     ((mine || (crmIsAdmin() && !pend)) ? '<button type="button" class="crm-cmt-act del" data-cmt-act="del" title="Excluir comentário">Excluir</button>' : '');
   CRM.people.forEach(function(p){ body = body.split("@" + esc(p.full_name)).join('<span class="crm-mention">@' + esc(p.full_name) + '</span>'); });
-  return '<div class="crm-cmt' + (whenText ? ' pending' : '') + '"' + (pend ? ' data-pend="' + pendIdx + '"' : (e.id ? ' data-cmt-id="' + esc(e.id) + '"' : '')) + '><div class="crm-cmt-h"><b>' + esc(e.author_name || "") + '</b>' +
+  return '<div class="crm-cmt' + (whenText ? ' pending' : '') + '"' + (pend ? ' data-pend="' + pendIdx + '"' : (e.id ? ' data-cmt-id="' + esc(e.id) + '"' : '')) + '><div class="crm-cmt-h"><b>' + esc(e.author_name || "") + '</b>' + crmViaHtml(e) +
     (acts ? '<span class="crm-cmt-acts">' + acts + '</span>' : '') + '</div><div class="crm-cmt-b">' + crmFmt(body).replace(/\n/g, "<br>") +
     // hora e "(editado)" no fim da mensagem, na última linha (à direita; desce se não couber)
     '<span class="crm-cmt-meta"><span class="crm-cmt-when" title="' + esc(whenText || crmWhen(e.created_at)) + '">' + esc(whenText || crmAgo(e.created_at)) + '</span>' +
@@ -20773,7 +20777,23 @@ var HELP_TOPICS = [
       "O arquivo tem dados de saúde: não envie por WhatsApp ou e-mail.",
       "Baixe um backup antes de qualquer atualização do banco."
     ],
-    who: "Permissão <b>Backup</b> para baixar; restaurar, só o <b>Administrador</b>."}
+    who: "Permissão <b>Backup</b> para baixar; restaurar, só o <b>Administrador</b>."},
+  {id: "conector-claude", group: "Acesso", title: "Conector Claude", mod: "conector_claude",
+    purpose: "Usar o CRM e a busca de pacientes conversando com o Claude (claude.ai ou aplicativo), com o seu próprio login.",
+    steps: [
+      "No Claude: Configurações → Conectores → <b>Adicionar conector personalizado</b> e cole o endereço do conector da clínica.",
+      "Clique em <b>Conectar</b>: abre a página da clínica; entre com o seu e-mail e senha do sistema e clique em <b>Autorizar</b>.",
+      "Peça em português, por exemplo: “quais tarefas minhas estão atrasadas?”, “passe o vencimento destas tarefas para segunda”, “comente na tarefa X que liguei para a família”."
+    ],
+    rules: [
+      "O Claude só faz o que o seu nível já pode no sistema (mesmas listas, mesmas permissões).",
+      "Tudo o que ele muda aparece na atividade da tarefa com o seu nome e “· via Claude”. Cada alteração mostra o valor anterior e o novo, para desfazer se precisar.",
+      "Ele lista, busca, cria e comenta tarefas, muda status, vencimento, prioridade e responsáveis (até 50 por vez), liga tarefa a paciente e ativa ou inativa paciente. Não exclui nada.",
+      "Inativar paciente pelo Claude não cancela o tratamento: se houver tratamento ativo, ele avisa para resolver no sistema.",
+      "Status de perda (ex.: Cancelado no Atendimento) exige o motivo.",
+      "Para desconectar, remova o conector no Claude. O Administrador pode tirar a permissão do nível a qualquer momento."
+    ],
+    who: "Quem tem a permissão <b>Conector Claude</b> no nível (Acesso → Usuários → Níveis de permissão) e o <b>Administrador</b>."}
 ];
 // Novidades: desligadas a pedido do usuário (2026-10-04) — o guia explica só a
 // função de cada tela, não as mudanças. A seção "Novidades" só aparece no menu
