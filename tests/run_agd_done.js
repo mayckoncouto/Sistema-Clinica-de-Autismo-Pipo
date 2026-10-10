@@ -124,6 +124,14 @@ const path = require('path');
   check('plano com evolução: em uso?', pl.used === 1 && pl.free === 0, pl);
   check('excluir a vigente: a anterior volta a valer?', pl.reopened === 'vigente', pl);
 
+  // Item 8: grupo de suporte com atendimentos na Agenda (pelo código ou pelo nome) = em uso.
+  const gr = await ev(`(function(){
+    AD.rows = {a1: {id: "a1", group_id: "g1", patient: "Grupo X", room_id: "s1"}, a2: {id: "a2", patient: "grupo x", room_id: "s2"}, a3: {id: "a3", patient: "Outro", room_id: "g1"}};
+    return Promise.all([USAGE.salas({id: "g1", name: "Grupo X", group: true}), apptGroupCount({id: "g2", name: "Nada"})])
+      .then(function(r){ AD.rows = {}; return {uses: r[0], none: r[1]}; });
+  })()`);
+  check('grupo com atendimentos na Agenda: em uso (2)?', gr.uses.length === 1 && /^2 atendimentos/.test(gr.uses[0]) && gr.none === 0, gr);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

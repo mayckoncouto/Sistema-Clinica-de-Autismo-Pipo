@@ -3176,7 +3176,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~ALTA 5~~ FEITO (2026-10-10, ver "Mesclar cadastros completo" abaixo).
 - ~~ALTA 6~~ FEITO (2026-10-10, ver "Status protegidos" abaixo).
 - ~~ALTA 7~~ FEITO (2026-10-10, ver "Excluir Plano Terapêutico" abaixo).
-- MÉDIA 8. Grupo de suporte: `USAGE.salas` conta só `room_id`; atendimentos do grupo (`group_id`) não contam.
+- ~~MÉDIA 8~~ FEITO (2026-10-10, ver "Grupo de suporte em uso na Agenda" abaixo).
 - MÉDIA 9. Colaborador: não conta evoluções (`clinical_records.professional_id`), bloqueios do Planner, usuário ligado
   por `professional_id` sem cadastro de RH.
 - MÉDIA 10. Especialidade não conta Banco de objetivos/planos/habilidades/áreas complementares; Escala e Habilidade não
@@ -3278,3 +3278,10 @@ vigente faz a anterior voltar a ser a vigente.
   `prev_id`, senão a encerrada de versão mais alta, vira vigente). Migração `supabase/2026-10-10h-excluir-plano.sql`.
   Testada no PGlite. Teste no fim de `tests/run_agd_done.js`.
 - Produção (2026-10-10): `2026-10-10h-excluir-plano` rodada (travas criadas = 2).
+
+## Grupo de suporte em uso na Agenda (2026-10-10, item 8 da auditoria)
+Decisão do usuário: grupo com atendimentos na Agenda vira Inativar (não exclui). `USAGE.salas` com grupo
+(`isGroup`) conta `apptGroupCount(g)`: `appointments.group_id` = id do grupo + os sem `group_id` com
+`patient` = nome do grupo (sem a coluna, só pelo nome; sem sistema online, `AD.rows`). `room_id` não conta
+para o grupo (é a sala que ele marca). Só no app, igual às salas; sem SQL. Ajuda (grupos) e teste no fim de
+`tests/run_agd_done.js`.

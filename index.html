@@ -4321,6 +4321,16 @@ function apptPatientCount(p){
   return c.from("appointments").select("id", {count: "exact", head: true}).eq("patient_id", p.id)
     .then(function(r){ return r.error ? apptUseCount("patient", p.nome) : (r.count || 0); }, function(){ return apptUseCount("patient", p.nome); });
 }
+function apptGroupCount(g){
+  var c = agdClient();
+  if (!c) return Promise.resolve(Object.keys(AD.rows || {}).filter(function(k){
+    var x = AD.rows[k]; return x && (x.group_id ? x.group_id === g.id : normText(x.patient || "") === normText(g.name || ""));
+  }).length);
+  var q = function(){ return c.from("appointments").select("id", {count: "exact", head: true}); };
+  return Promise.all([q().eq("group_id", g.id), g.name ? q().is("group_id", null).eq("patient", g.name) : Promise.resolve({count: 0})])
+    .then(function(r){ return r[0].error ? apptUseCount("patient", g.name) : (r[0].count || 0) + (r[1].error ? 0 : (r[1].count || 0)); },
+      function(){ return apptUseCount("patient", g.name); });
+}
 function apptSelectPatient(c, p, more){
   return more(c.from("appointments").select("*").eq("patient_id", p.id)).then(function(r){
     return r.error ? more(c.from("appointments").select("*").eq("patient", p.nome)) : r;
@@ -4368,8 +4378,11 @@ var USAGE = {
   },
   // Só a Agenda: os agendamentos do Planner são apagados junto ao excluir/inativar
   // (roomPlannerUse + plannerRoomDeleteFlow), nunca ficam escondidos.
+  // Grupo de suporte: atendimentos com o grupo no lugar do paciente (group_id; sem a coluna,
+  // pelo nome) — a sala marcada fica em room_id, então room_id não conta para o grupo.
   salas: function(r){
-    return apptUseCount("room_id", r.id).then(function(n){ return [useTxt(n, "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean); });
+    var n = isGroup(r) ? apptGroupCount(r) : apptUseCount("room_id", r.id);
+    return n.then(function(n){ return [useTxt(n, "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean); });
   },
   convenios: function(c){
     var hit = function(x){ return x.convenioId === c.id || (!x.convenioId && normText(x.convenio || "") === normText(c.name)); };
@@ -19492,7 +19505,8 @@ var HELP_TOPICS = [
       "Trocar o nome do grupo troca também o nome nos atendimentos da Agenda em que o grupo está no lugar do paciente.",
       "Na célula de grupo só se agenda o nome de uma sala; na célula de sala, só paciente.",
       "Profissional com agendamento num grupo fica bloqueado em todas as salas no mesmo horário, inclusive a sala que o grupo marca.",
-      "Um grupo agendado para a sala não muda a regra de quem não faz ABA: o profissional continua sem poder ter dois pacientes que não fazem ABA juntos."
+      "Um grupo agendado para a sala não muda a regra de quem não faz ABA: o profissional continua sem poder ter dois pacientes que não fazem ABA juntos.",
+      "Grupo com atendimentos na Agenda (com o nome dele no lugar do paciente) não é excluído: o botão vira <b>Inativar</b>. Os agendamentos dele no Planner são apagados antes de excluir ou inativar, com confirmação."
     ],
     who: "Permissão <b>Grupos de Suporte</b>."},
 
