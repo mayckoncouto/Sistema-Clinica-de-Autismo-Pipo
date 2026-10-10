@@ -53,6 +53,21 @@ const path = require('path');
   check('excluir com status (não Administrador): ficam?', sp.del === 0 && sp.kept === 2, sp);
   check('mensagem fala de status?', /status/.test(await ev('AGD_KEPT_MSG')));
 
+  // Item 3: evolução do atendimento Finalizado não é excluída (sem sistema online lê AD.rows / PR.records).
+  const dc = await ev(`(function(){
+    AD.rows = [{id: "f1", status: "finalizado"}, {id: "f2", status: null}];
+    PR.records = [{id: "e1", appointment_id: "f1"}, {id: "e2", appointment_id: "f2"}];
+    var out = {};
+    return prDelFinalCheck(PR.records[0]).then(function(m){ out.final = m; return prDelFinalCheck(PR.records[1]); })
+      .then(function(m){ out.semStatus = m; PR.records.push({id: "e3", appointment_id: "f1"}); return prDelFinalCheck(PR.records[0]); })
+      .then(function(m){ out.duas = m; return prDelFinalCheck({id: "e9"}); })
+      .then(function(m){ out.solta = m; return out; });
+  })()`);
+  check('evolução do Finalizado: recusa?', /tire o status Finalizado/.test(dc.final), dc.final);
+  check('atendimento sem status: exclui?', dc.semStatus === '', dc.semStatus);
+  check('outra evolução no mesmo atendimento: exclui?', dc.duas === '', dc.duas);
+  check('evolução sem atendimento: exclui?', dc.solta === '', dc.solta);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

@@ -27,7 +27,7 @@ const path = require('path');
       {id: "t3", patientId: "carla-laranja", inicio: "2026-01-01", tipo: "novo", status: "ativo"}
     ];
     var calls = [], realDoc = db.doc.bind(db);
-    db.doc = function(p){ var r = realDoc(p); if (p === "treatments/all") r.patchList = function(u, d){ calls.push({u: u.map(function(x){ return x.id; }), d: d}); return Promise.resolve(); }; return r; };
+    db.doc = function(p){ var r = realDoc(p); if (p === "treatments/all") r.patchList2 = function(u, d){ calls.push({u: u.map(function(x){ return x.id; }), d: d}); return Promise.resolve(); }; return r; };
     var list = state.treatments.map(function(t){ return t.id === "t2" ? Object.assign({}, t, {obs: "mudou"}) : t; }).filter(function(t){ return t.id !== "t3"; })
       .concat([{id: "t4", patientId: "duda-vermelho", inicio: "2026-02-01", tipo: "novo", status: "ativo"}]);
     return writeTreatments(list).then(function(ok){ db.doc = realDoc; return {ok: ok, calls: calls}; });

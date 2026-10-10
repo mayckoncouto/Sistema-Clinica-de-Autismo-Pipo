@@ -4544,7 +4544,7 @@ var SYS_RULES = [
   {id: "ag_terapeuta", g: "agenda", label: "Terapeuta diferente do tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
   {id: "ag_area", g: "agenda", label: "Profissional fora das especialidades do tratamento", desc: "Sessão com profissional cuja especialidade não está no tratamento.", def: "warn", modes: BWO},
   {id: "ag_objetivos", g: "agenda", label: "Sem objetivos em comum", desc: "Pacientes do mesmo profissional e horário sem nenhum objetivo em comum no plano terapêutico.", def: "warn", modes: BWO},
-  {id: "ag_final_evolucao", g: "agenda", label: "Finalizado exige evolução", desc: "Para marcar Finalizado é preciso registrar a evolução no prontuário. Avisar = pergunta e deixa finalizar sem evolução.", def: "block", modes: BWO, db: true},
+  {id: "ag_final_evolucao", g: "agenda", label: "Finalizado exige evolução", desc: "Para marcar Finalizado é preciso registrar a evolução no prontuário, e a evolução do atendimento Finalizado só é excluída depois de tirar o status. Avisar = pergunta e deixa finalizar sem evolução.", def: "block", modes: BWO, db: true},
   {id: "ag_final_terapeuta", g: "agenda", label: "Finalizado travado para o terapeuta", desc: "O terapeuta não altera o status de um atendimento já finalizado.", def: "block", modes: ["block", "off"], db: true},
   {id: "ag_evolucao_apagar", g: "agenda", label: "Atendimento com status ou evolução não é apagado", desc: "Só o Administrador exclui atendimento que tem status (qualquer um) ou evolução no prontuário.", def: "block", locked: true},
   {id: "ag_realizado_fixo", g: "agenda", label: "Atendimento com status ou evolução não muda", desc: "O paciente não pode ser trocado (por ninguém); data, horário e profissional só o Administrador muda, e a evolução acompanha.", def: "block", locked: true},
@@ -16986,6 +16986,8 @@ function prRenderDetail(){
     b.addEventListener("click", function(){
       var rec = PR.records.filter(function(x){ return x.id === b.getAttribute("data-pr-del"); })[0];
       if (!rec) return;
+      prDelFinalCheck(rec).then(function(msg){
+      if (msg){ showToast(msg, true); return; }
       confirmDialog({
         title: "Confirmar exclusão",
         message: "Excluir a evolução de <b>" + esc(prWhenText(rec)) + "</b>" + (prRecordProfName(rec) ? " (" + esc(prRecordProfName(rec)) + ")" : "") + "?<br>Essa ação não pode ser desfeita.",
@@ -16995,11 +16997,33 @@ function prRenderDetail(){
         agdClient().from("clinical_records").delete().eq("id", rec.id).then(function(r){
           if (r.error){ showToast("Não foi possível excluir: " + prErrMsg(r.error), true); return; }
           showToast("Evolução excluída.");
+          if (rec.plan_goals && rec.plan_goals.length) planLoadAll(true);
           prOpenPatient(PR.patientId);
         });
       });
+      });
     });
   });
+}
+// Evolução que é a única do atendimento Finalizado não sai (tire o Finalizado antes).
+// Segue a regra "Finalizado exige evolução" (Acesso → Sistema). O banco confere de novo.
+var PR_DEL_FINAL_MSG = "Esta evolução é a do atendimento Finalizado: tire o status Finalizado do atendimento antes de excluir.";
+function prDelFinalCheck(rec){
+  var c = agdClient();
+  if (!rec || !rec.appointment_id || sysMode("ag_final_evolucao") !== "block") return Promise.resolve("");
+  if (!c){
+    var a = (AD.rows || []).filter(function(x){ return x.id === rec.appointment_id; })[0];
+    var others = (PR.records || []).some(function(x){ return x.id !== rec.id && x.appointment_id === rec.appointment_id; });
+    return Promise.resolve(a && a.status === FINAL_STATUS && !others ? PR_DEL_FINAL_MSG : "");
+  }
+  return Promise.all([
+    c.from("appointments").select("status").eq("id", rec.appointment_id).maybeSingle(),
+    c.from("clinical_records").select("id").eq("appointment_id", rec.appointment_id).neq("id", rec.id).limit(1)
+  ]).then(function(res){
+    var st = res[0].data && res[0].data.status;
+    var others = (res[1].data || []).length > 0;
+    return st === FINAL_STATUS && !others ? PR_DEL_FINAL_MSG : "";
+  }).catch(function(){ return ""; });
 }
 
 // Editor: opts {patient, record?, appointment?}
@@ -19570,7 +19594,9 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Só o autor edita a própria evolução; excluir: autor com permissão ou Administrador.",
-      "Evolução ligada a um atendimento impede que ele seja excluído (só o Administrador)."
+      "Evolução ligada a um atendimento impede que ele seja excluído (só o Administrador).",
+      "A evolução de um atendimento <b>Finalizado</b> não pode ser excluída: tire o status Finalizado do atendimento antes (se houver outra evolução ligada ao mesmo atendimento, pode excluir).",
+      "Ao excluir uma evolução, ou desmarcar um objetivo ao editá-la, a situação do objetivo no Plano Terapêutico volta à da última evolução que sobrou (sem nenhuma, fica sem situação). Se a situação já tinha sido mudada depois, à mão ou por outra evolução, ela fica como está."
     ],
     who: "Permissão <b>Prontuário</b>."},
   {id: "plano-terapeutico", group: "Prontuário", title: "Plano Terapêutico", mod: "plano_terapeutico", tab: "planos",

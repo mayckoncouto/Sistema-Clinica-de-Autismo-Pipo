@@ -3168,7 +3168,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~ALTA 2~~ FEITO (2026-10-10). Era: Atendimento com status (Finalizado/Não compareceu/Falta justificada) ou com evolução: lixeira/Desmarcar
   (`agdDeleteRow` só confere evolução p/ não-admin) e mover/editar (`agdPlace`, janela) mudam data/paciente/profissional;
   a evolução guarda data própria e fica divergente; contagens de realizado/sessões usadas mudam.
-- ALTA 3. Excluir evolução: o atendimento continua Finalizado sem evolução; o nível do objetivo do plano não volta.
+- ~~ALTA 3~~ FEITO (2026-10-10, ver "Excluir ou editar evolução" abaixo).
 - ALTA 4. Excluir paciente (`USAGE.pacientes`): não conta evoluções, planos, tarefas do CRM; `patient_health` fica órfã.
 - ALTA 5. Mesclar (`merge_patient_records` + `openPatientMergeModal`): não move `therapy_plans`, `tasks.patient_id`;
   `patient_health` do excluído fica órfã.
@@ -3221,3 +3221,15 @@ Decisões do usuário (QUALQUER status conta): excluir = só Administrador; data
   `rename_group` com `pipo.merging`. Testada no PGlite com usuário comum e Administrador.
 - Teste `tests/run_agd_done.js` (cria `tests/page_ad.html`).
 - Produção (2026-10-10): `2026-10-10c-atendimento-realizado-protegido` rodada (travas = 3).
+
+## Excluir ou editar evolução (2026-10-10, item 3 da auditoria)
+Decisões do usuário: evolução do atendimento Finalizado não é excluída; objetivos recalculados pela última
+evolução; quem exclui continua igual (autor com permissão ou Administrador).
+- App: `prDelFinalCheck(rec)` antes do `confirmDialog` do `[data-pr-del]` (`PR_DEL_FINAL_MSG`): recusa quando a
+  evolução é a ÚNICA ligada a um atendimento com status `finalizado` e a regra `ag_final_evolucao` está em Bloquear
+  (vale também para o Administrador). Depois de excluir evolução com objetivos, `planLoadAll(true)`.
+- Banco: migração `supabase/2026-10-10d-excluir-evolucao.sql` — `clinical_records_delete_guard` (BEFORE DELETE, mesma
+  regra) e `clinical_records_plan_goals_undo` (AFTER DELETE e AFTER UPDATE de `plan_goals`, só os objetivos que saíram):
+  se a situação do objetivo no plano vigente ainda é a que a evolução gravou (`levelId` + `levelEm` = data dela), volta
+  à da última evolução que sobrou (ou fica sem `levelId`/`levelEm`); Atingido/Ativo acompanha o nível final da escala.
+  Testada no PGlite. Teste no fim de `tests/run_agd_done.js`.
