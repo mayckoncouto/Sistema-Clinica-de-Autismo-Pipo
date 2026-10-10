@@ -3448,3 +3448,14 @@ Mesma especialidade pode repetir. Base para o Planner se montar sozinho no futur
   redistribuição, confirmação "Redistribuir sessões" avisando que o contratado × realizado e o Pacote dos meses
   anteriores passam a usar a nova distribuição (o tratamento guarda só a quantidade atual). `#tlHours` não trava mais.
   Testes em `run_tr_quadros.js` e `run_treatment_history.js`.
+- (2026-10-10, pedido do usuário) **Janelas de cadastro em grupos, no padrão do cadastro do paciente** (título azul em
+  maiúsculas + linha entre os grupos). `.tr-sec` passou a ter esse visual (cor `--accent`, 13px); o 1º título da janela
+  usa `.tr-sec.tr-sec-top` (sem linha). Grupos: **Tratamento** (Tratamento · Cancelamento `.tr-cancel-title` vermelho ·
+  Convênio e valores · Pacote · Especialidades e serviços · Observações · Horário de atendimento · Contratado × realizado ·
+  Histórico), **Plano Terapêutico** (Plano · Quadro clínico · Objetivos por habilidade · Evolução · Versões), **Evolução**
+  (Objetivos trabalhados · Observações), **Clínica** (Dados da clínica · Aparência · Atendimento · Horário de atendimento;
+  os cartões `#ovClinic .cl-card` viraram grupos sem caixa), **Salas/Grupos** (Sala/Grupo · Terapeutas), **Convênios**
+  (Convênio · Especialidades e serviços cobertos), **Escalas** (Escala · Níveis), **CRM → Listas e status** (Lista ·
+  Status), **Níveis de permissão** (Nível · Permissões, em `js/usuarios.js`). `.prof-section-head .prof-access-title` (títulos
+  "Horário de atendimento", seções do Editar agendamento) no mesmo azul. Janela nova de cadastro com vários campos: usar
+  `.tr-sec` (ou `.pm-sec`) nos grupos. Pacientes, Colaboradores e a tarefa do CRM já seguiam o padrão.

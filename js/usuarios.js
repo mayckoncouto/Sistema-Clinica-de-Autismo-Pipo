@@ -593,7 +593,9 @@
             : "Marque o que este nível pode fazer em cada tela. Incluir, editar ou excluir marcam \"Ver\" junto.") + "</div></div>" +
           '<button class="modal-close" id="rClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
+          '<div class="tr-sec tr-sec-top">Nível</div>' +
           '<div class="field"><label for="rName">Nome do nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
+          '<div class="tr-sec">Permissões</div>' +
           roleGridHtml(role ? (role.permissions || {}) : { agenda: { view: true }, planner: { view: true }, resumo: { view: true }, pacientes: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
           statusPermsHtml(role ? (role.permissions || {}) : {}, locked) +
           reportPermsHtml(role ? (role.permissions || {}) : {}, locked) +
