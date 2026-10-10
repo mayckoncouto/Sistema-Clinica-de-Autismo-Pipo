@@ -3180,7 +3180,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~MÉDIA 9~~ FEITO (2026-10-10, ver "Colaborador em uso" abaixo).
 - ~~MÉDIA 10~~ FEITO (2026-10-10, ver "Especialidade, Escala e Habilidade em uso" abaixo).
 - ~~MÉDIA 11~~ FEITO (2026-10-10, ver "CRM: lista ou status com tarefas" abaixo).
-- MÉDIA 12. Importação de Tratamentos apaga os "tr-…" sem apagar `treatment_finance`.
+- ~~MÉDIA 12~~ FEITO (2026-10-10, ver "Importação de Tratamentos: valores do tratamento da migração" abaixo).
 - BAIXA 13–16: renomear Diagnóstico/Origem/Convênio não propaga (texto guardado); excluir usuário deixa o código nos
   responsáveis das tarefas; excluir tarefa apaga comentários; fechar dia da clínica esconde agendamentos do Planner.
 
@@ -3322,3 +3322,11 @@ lista ou status com tarefas. Migração `supabase/2026-10-10j-crm-lista-com-tare
 teste no fim de `tests/run_agd_done.js`. `conferencia-migracoes.sql` ganhou as linhas 76 (10i) e 77 (10j).
 - Produção (2026-10-10): `2026-10-10j-crm-lista-com-tarefas` rodada (conferência 1 | 1).
 - (2026-10-10, pedido do usuário) Tabela da tela CRM e de Minhas tarefas: **Lista, Status, Tarefa, Paciente ou Lead**, Convênio, Responsáveis, Vencimento, Prioridade (`order` em `crmRender`; células montadas por chave). Listas continuam Status, Paciente ou Lead, Tarefa… Celular (`.crm-mine-t`): esconde 1, 3, 5, 6 (fica Status, Paciente, Venc., Prio.).
+
+
+## Importação de Tratamentos: valores do tratamento da migração (2026-10-10, item 12 da auditoria)
+Decisão do usuário: passar para o tratamento novo. `ioTrApply`: o tratamento da migração (`tr-<paciente>`) que é
+apagado passa Valor/Descontos (`trMoney`) ao tratamento que recebe as especialidades quando a linha da planilha não
+traz valor (com valor na planilha, vale o da planilha). A linha antiga de `treatment_finance` só é apagada depois de
+gravar a nova e só por quem edita valores (`trCanEditVal`); sem essa permissão fica como estava. Sem SQL. Ajuda
+(Planilhas) e teste em `tests/run_planilhas.js`.

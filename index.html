@@ -19648,7 +19648,7 @@ var HELP_TOPICS = [
     rules: [
       "Célula vazia nunca apaga o que já está no sistema. Linhas com problema não são importadas: corrija na planilha e importe de novo (o que já entrou aparece como Igual).",
       "Os nomes das colunas são reconhecidos sem acento e sem maiúsculas (ex.: \"Data Início\", \"Pacote\", \"Despesas\"). Colunas que o sistema calcula (Tipo, Valor final, Idade, Retenção, Agenda) são ignoradas.",
-      "<b>Tratamentos</b>: o paciente precisa estar cadastrado (quem não está aparece na lista e fica de fora). Mesmo paciente e mesma data de início = atualiza o tratamento (especialidades, terapeutas e horários do sistema ficam); outro início = tratamento novo. O tratamento criado automaticamente na implantação é substituído pelo histórico da planilha e passa as especialidades e horários para o tratamento Ativo. Tipo é calculado; Cancelado sem motivo fica com o motivo pendente. Suporte 1, 2 ou 3 vai para o Nível de suporte; texto vai para o Diagnóstico (só se estiverem vazios).",
+      "<b>Tratamentos</b>: o paciente precisa estar cadastrado (quem não está aparece na lista e fica de fora). Mesmo paciente e mesma data de início = atualiza o tratamento (especialidades, terapeutas e horários do sistema ficam); outro início = tratamento novo. O tratamento criado automaticamente na implantação é substituído pelo histórico da planilha e passa as especialidades e horários para o tratamento Ativo (e também o Valor e os Descontos, quando a planilha não traz valor). Tipo é calculado; Cancelado sem motivo fica com o motivo pendente. Suporte 1, 2 ou 3 vai para o Nível de suporte; texto vai para o Diagnóstico (só se estiverem vazios).",
       "<b>Pacientes</b>: o mesmo paciente (mesmo CPF; sem CPF, mesmo nome e nascimento) só tem os campos vazios completados. Paciente novo entra sem exigir o CPF (ele é pedido ao editar o cadastro).",
       "<b>Objetivos</b>: mesmo texto na mesma habilidade = atualiza. <b>Habilidades</b> e <b>Escalas</b>: mesmo nome = atualiza. Escalas: uma linha por nível, do primeiro ao final; nível que já existe não sai pela importação.",
       "Valores e dados de saúde só entram e saem para quem tem <b>Tratamentos – valores</b> e <b>Pacientes – saúde</b>."
@@ -23668,7 +23668,7 @@ function ioTrPlan(recs){
     });
     var keep = ok.filter(function(o){ return !o.msgs.length; });
     if (mig && keep.length && target && keep.indexOf(target) !== -1)
-      target.warn.push("Substitui o tratamento criado na migração (início " + trBr(mig.inicio) + "); especialidades, terapeutas e horários dele passam para este.");
+      target.warn.push("Substitui o tratamento criado na migração (início " + trBr(mig.inicio) + "); especialidades, terapeutas, horários e valor (se a planilha não trouxer) dele passam para este.");
     else mig = null;
     // Outro Ativo do sistema (não está na planilha) vira Renegociado quando a planilha traz um Ativo.
     var otherAct = sheetActive && keep.indexOf(sheetActive) !== -1 ? existing.filter(function(t){ return t.status === "ativo" && t !== (mig || {}) && starts.indexOf(t.inicio) === -1; }) : [];
@@ -23740,6 +23740,8 @@ function ioTrApply(plan){
       if (o === op.target && inherit){
         ["specHours", "horarios"].forEach(function(k){ if (inherit[k] && !(Array.isArray(rec[k]) ? rec[k].length : rec[k])) rec[k] = JSON.parse(JSON.stringify(inherit[k])); });
         if (!o.fields.aba && inherit.aba) rec.aba = inherit.aba;
+        // Valor/Descontos do tratamento da migração passam para este quando a planilha não traz.
+        if (!o.money){ var im = trMoney(inherit); if (im.valor || im.descontos) o = Object.assign({}, o, {money: {valor: im.valor, descontos: im.descontos}}); }
       }
       if (o.money){
         if (agdClient()) money.push({treatment_id: rec.id, valor: o.money.valor, descontos: o.money.descontos});
@@ -23778,7 +23780,11 @@ function ioTrApply(plan){
       if (r.error) showToast("Os tratamentos foram importados, mas os valores não: " + (r.error.message || "erro"), true);
       else { TR.fin = TR.fin || {}; money.forEach(function(m){ TR.fin[m.treatment_id] = {valor: m.valor, descontos: m.descontos}; }); }
     }));
-    if (c && finDel.length) jobs.push(c.from("treatment_finance").delete().in("treatment_id", finDel).then(function(){}));
+    // Valores do tratamento da migração apagado: já passaram ao tratamento que recebeu os dados
+    // (acima); só quem edita valores apaga (sem isso, ficam como estavam).
+    if (c && finDel.length && trCanEditVal()) jobs.push(Promise.all(jobs.slice()).then(function(){
+      return c.from("treatment_finance").delete().in("treatment_id", finDel).then(function(r){ if (!r.error && TR.fin) finDel.forEach(function(id){ delete TR.fin[id]; }); });
+    }));
     if (patList) jobs.push(writePatients(patList));
     if (health.length && healthCanEdit()) health.forEach(function(h){ jobs.push(healthSave(h.id, h.data)); });
     return Promise.all(jobs).then(function(){

@@ -103,6 +103,19 @@ const path = require('path');
   check('Suporte as text goes to the diagnosis (CID)?', tr.p1cid === 'TDAH', tr.p1cid);
   check('cancelled without motivo = pendente, with end date and observation?', tr.p2.join('|') === 'cancelado|true|2026-10-01|Cobrado no plano de outro', tr.p2);
   check('importing the same sheet again changes nothing?', tr.again.filter((s) => s === 'novo' || s === 'atualizar').length === 0, tr.again);
+  // Valor/Descontos do tratamento da migração passam para o Ativo quando a planilha não traz valor.
+  const mv = await ev(`(function(){
+    var P = state.patientsRaw.slice(4, 5);
+    state.treatments = state.treatments.concat([{id: "tr-" + P[0].id, patientId: P[0].id, inicio: "2026-01-10", status: "ativo", tipo: "novo", valor: 900, descontos: 50, specHours: []}]);
+    rebuildPatients();
+    var txt = ["Nome\\tConvenio\\tData Início\\tData Fim\\tPacote\\tStatus", P[0].nome + "\\tUnimed\\t01/06/2026\\t-\\t8\\tAtivo"].join("\\n");
+    var plan = ioTrPlan(ioRecords("tratamentos", xlParseText(txt)).recs);
+    return Promise.resolve(ioTrApply(plan)).then(function(){
+      var L = treatmentsOf(P[0].id);
+      return {n: L.length, mig: L.some(function(t){ return t.id === "tr-" + P[0].id; }), m: trMoney(L[0])};
+    });
+  })()`);
+  check('migration treatment values move to the imported Ativo when the sheet has none?', mv.n === 1 && !mv.mig && mv.m.valor === 900 && mv.m.descontos === 50, mv);
 
   // 3) Pacientes: existente só completa vazios; novo entra; CPF repetido = problema.
   const pa = await ev(`(function(){
