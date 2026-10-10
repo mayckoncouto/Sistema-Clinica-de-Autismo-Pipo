@@ -3568,6 +3568,11 @@ sobre nosso trabalho em nossas redes sociais:" e as logos.
 - Ideias futuras com as redes (aguardando o usuário): assinatura de e-mail, rodapé de documentos novos, Início,
   mensagens automáticas do CRM.
 - Teste `tests/run_redes.js` (no `npm test`) e checagens em `tests/run_intake.js`.
+- (2026-10-10, pedido do usuário) **CRM: a 2ª coluna é sempre Tarefa.** Listas: Status, Tarefa, Paciente ou Lead,
+  Convênio, Responsáveis, Vencimento, Prioridade; tela CRM e Minhas tarefas: Status, Tarefa, Lista, Paciente ou Lead…
+  (`order` em `crmRender`). Celular: Status, Tarefa (título inteiro numa linha com "…"), Venc., Prio. — paciente/lead,
+  lista, convênio e responsáveis ocultos. Na tela CRM do celular cada cartão de lista ocupa a largura da tela e desliza
+  para o lado (`.crm-home-grid` com `scroll-snap` mandatory, cartão `flex:0 0 100%`).
 - (2026-10-10, revisão de campos e listas) Listas de sugestões ao digitar (`.autolist`: Paciente ou Lead do
   CRM, paciente do agendamento no Planner/Agenda, convênio e especialidade do tratamento) flutuam por cima da
   janela (`autoAnchor`, `autoPlace`, `autoReplaceAll`; z-index 90): antes ficavam dentro da janela e aumentavam
