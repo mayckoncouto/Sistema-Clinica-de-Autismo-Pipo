@@ -3161,3 +3161,27 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
 - Produção (2026-10-10): `2026-10-10-reinstala-funcoes` rodada (confirmado pelo usuário: "Feito").
 - Produção (2026-10-10): conferência geral LIMPA ("No rows returned") — banco igual ao `schema.sql`. REGRA: toda
   migração nova que mudar estrutura ou função também atualiza `schema.sql` e regera `supabase/conferencia-geral.sql`.
+
+## Auditoria de integridade dos dados (2026-10-10) — PENDÊNCIAS (nada corrigido ainda)
+Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A resolver:
+- ALTA 1. Documentos-lista gravados inteiros (`writePatients`, `writeRooms`, `writeProfessionals`, `writeSimpleList`…
+  `.set({list})`): duas pessoas salvando juntas = a última apaga a mudança da outra. Só Tratamentos usa `patch_list`.
+- ALTA 2. Atendimento com status (Finalizado/Não compareceu/Falta justificada) ou com evolução: lixeira/Desmarcar
+  (`agdDeleteRow` só confere evolução p/ não-admin) e mover/editar (`agdPlace`, janela) mudam data/paciente/profissional;
+  a evolução guarda data própria e fica divergente; contagens de realizado/sessões usadas mudam.
+- ALTA 3. Excluir evolução: o atendimento continua Finalizado sem evolução; o nível do objetivo do plano não volta.
+- ALTA 4. Excluir paciente (`USAGE.pacientes`): não conta evoluções, planos, tarefas do CRM; `patient_health` fica órfã.
+- ALTA 5. Mesclar (`merge_patient_records` + `openPatientMergeModal`): não move `therapy_plans`, `tasks.patient_id`;
+  `patient_health` do excluído fica órfã.
+- ALTA 6. Status: qualquer um pode ser excluído (inclusive finalizado/nao-compareceu/falta-justificada usados pelas
+  regras), sem conferir uso; atendimentos ficam com status inexistente.
+- ALTA 7. Excluir plano terapêutico: evoluções com `plan_goals` perdem a ligação; excluir o vigente não reabre a anterior.
+- MÉDIA 8. Grupo de suporte: `USAGE.salas` conta só `room_id`; atendimentos do grupo (`group_id`) não contam.
+- MÉDIA 9. Colaborador: não conta evoluções (`clinical_records.professional_id`), bloqueios do Planner, usuário ligado
+  por `professional_id` sem cadastro de RH.
+- MÉDIA 10. Especialidade não conta Banco de objetivos/planos/habilidades/áreas complementares; Escala e Habilidade não
+  contam o Banco de objetivos (`planUseCount` só lê planos).
+- MÉDIA 11. CRM Listas e status: "lista/status com tarefas" conferido só nas tarefas que a pessoa vê; banco não confere.
+- MÉDIA 12. Importação de Tratamentos apaga os "tr-…" sem apagar `treatment_finance`.
+- BAIXA 13–16: renomear Diagnóstico/Origem/Convênio não propaga (texto guardado); excluir usuário deixa o código nos
+  responsáveis das tarefas; excluir tarefa apaga comentários; fechar dia da clínica esconde agendamentos do Planner.
