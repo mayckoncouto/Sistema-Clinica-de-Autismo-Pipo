@@ -3555,3 +3555,7 @@ Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead �
   (`fmtDate`, `brToIso`: inválida ou futura = recusada) + botão de calendário (`openCalendar`, « ‹ › » ano/mês).
   Campos com 38px no computador e 44px no celular (16px). `pkOpen`, `enhanceSelect`, `pkClose`. Testes em
   `tests/run_intake.js`.
+- (2026-10-10, pedido do usuário) `cadastro.html` no celular: TODO item de escolha abre a janela de seleção — a data
+  fica só leitura (sem teclado, `inputmode=none`) e tocar abre o calendário na janela de baixo (o botão de calendário
+  some); calendário com "Limpar" e lista de anos (tocar no "mês de ano ▾" → `.pk-cal-y`, 100 anos). No computador a
+  data continua digitável + botão de calendário.
