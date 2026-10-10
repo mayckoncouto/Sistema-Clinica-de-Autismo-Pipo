@@ -3350,3 +3350,5 @@ cai junto com `auth.users`): `array_remove` do id em `tasks.assignees` (a ativid
 (`crm_status_done`) com ele como responsável. `js/usuarios.js`: a confirmação de Excluir mostra quantas. Migração
 `supabase/2026-10-10l-excluir-usuario-tarefas.sql` (testada no PGlite). Ajuda (Usuários).
 - Produção (2026-10-10): `2026-10-10l-excluir-usuario-tarefas` rodada (conferência 1 | 1).
+- Produção: 2026-10-10l AINDA NÃO rodada.
+- (2026-10-10, pedido do usuário) **CRM: exportar e importar tarefas** (Outras opções ▾ na barra do CRM, `IO_KINDS.tarefas`, bloco "CRM: tarefas" nas Planilhas). Exporta a tela aberta (`crmScreenTasks()`, mesma conta do `crmRender`: lista/Minhas tarefas/tela CRM com busca, filtros e Finalizados); nome do arquivo pela tela. Importa pela coluna Código (com código = atualiza; sem = nova; sem Lista = lista aberta; mudar de lista = problema). Paciente pelo nome (`ioFindPatient`), senão lead. Responsáveis pelo nome (`ioTaskPerson`, só com acesso `crmCanAssign`). Lead só em lista `lead`. Comentários fora. `ioCanImport` aceita `K.canImport`. Teste `tests/run_crm_planilha.js` (no `npm test`).

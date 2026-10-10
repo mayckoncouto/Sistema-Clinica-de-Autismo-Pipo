@@ -6316,6 +6316,16 @@ function crmTitleHtml(x){
   return '<span class="crm-t">' + esc(x.title) + '</span>' + crmTagsHtml(x) + (p ? '<span class="crm-pat">' + esc(p.nome) + '</span>' : '') +
     (CRM.unread[x.id] ? '<span class="crm-unread" title="Menção não lida">@' + CRM.unread[x.id] + '</span>' : '');
 }
+// Tarefas da tela aberta (lista, Minhas tarefas ou a tela CRM), com busca, filtros e "Finalizados".
+function crmScreenTasks(){
+  var home = CRM.list === "__home", mine = CRM.list === "__mine", list = home || mine ? null : crmListById(CRM.list);
+  var f = crmFilters(), all = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; });
+  var showDone = !!(document.getElementById("crmShowDone") || {}).checked;
+  var base = home ? all.filter(function(x){ return crmCan(x.list_id, "view"); }) :
+    mine ? all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1; }) :
+    list ? all.filter(function(x){ return x.list_id === list.id; }) : [];
+  return {home: home, mine: mine, list: list, base: base, tasks: base.filter(function(x){ return (showDone || !crmIsDone(x)) && crmPass(x, f); }).sort(crmSort)};
+}
 function crmRender(){
   var host = document.getElementById("crmHost"); if (!host) return;
   if (crmResolveList()){ crmFillFilters(); if (CRM.list && !CRM.loaded && !CRM.loading){ crmLoad(); return; } }
@@ -6334,12 +6344,9 @@ function crmRender(){
   if (!CRM.loaded){ host.innerHTML = '<div class="empty-state"><b>Carregando…</b></div>'; return; }
   if (CRM.error){ host.innerHTML = '<div class="empty-state"><b>Não foi possível carregar o CRM.</b>' + esc(CRM.error) + '</div>'; return; }
   if (!multi && !list){ host.innerHTML = '<div class="empty-state"><b>Nenhuma lista disponível</b>Peça ao Administrador acesso a uma lista do CRM.</div>'; return; }
-  var f = crmFilters(), all = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; });
   var showDone = !!(document.getElementById("crmShowDone") || {}).checked;
   var cnt = document.getElementById("crmCount");
-  var base = home ? all.filter(function(x){ return crmCan(x.list_id, "view"); }) :
-    mine ? all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1; }) : all.filter(function(x){ return x.list_id === list.id; });
-  var tasks = base.filter(function(x){ return (showDone || !crmIsDone(x)) && crmPass(x, f); }).sort(crmSort);
+  var scr = crmScreenTasks(), base = scr.base, tasks = scr.tasks;
   if (cnt) cnt.textContent = tasks.length + " de " + base.length + " tarefa" + (base.length === 1 ? "" : "s");
   if (CRM.view === "calendario"){ host.innerHTML = crmCalHtml(tasks, base, multi ? null : list); return; }
   if (!multi && CRM.view === "quadro"){
@@ -19943,6 +19950,7 @@ var HELP_TOPICS = [
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> (à direita, na linha do título Dados do lead) abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
       "<b>Vencimento</b> (na janela da tarefa ou clicando na data da lista): nas listas com <b>Recorrência</b> ligada abre uma janela com atalhos à esquerda (Hoje, Amanhã, Este final de semana, Semana que vem, Próximo final de semana, 2 semanas, 4 semanas) e o calendário à direita; o ✕ ao lado da data tira o vencimento; nas outras listas abre o calendário normal. Também dá para digitar a data no campo. A opção <b>Recorrência</b> de cada lista fica em <b>CRM ▾ → Listas e status</b> (ao lado de Funil de contatos).",
+      "<b>Outras opções ▾</b> na barra do CRM: <b>Exportar planilha</b> baixa um Excel com as tarefas da tela aberta (a lista, Minhas tarefas ou a tela CRM, com a busca, os filtros e “Finalizados”), com a coluna <b>Código</b> de cada tarefa. <b>Importar planilha</b>: linha com Código atualiza aquela tarefa; sem Código vira tarefa nova (sem Lista, vai para a lista aberta). Status pelo nome do status da lista; Prioridade Urgente, Alta ou Normal; Responsáveis pelos nomes (só quem tem acesso ao CRM e à lista); nome que não é paciente cadastrado vira lead. Dados do lead só nas listas com Funil de contatos. A prévia mostra Novo, Atualizar, Igual e Com problema antes de gravar, e o sistema baixa uma cópia antes de importar. Célula vazia não apaga; comentários e histórico não entram; não dá para mudar a tarefa de lista pela planilha.",
       "<b>CRM ▾ → Listas e status</b>: uma linha por lista com as setas (ordem no menu), a bolinha da cor, os status e as opções; as setas gravam na hora. <b>Editar</b> abre a janela da lista: nome, cor, opções (<b>Funil de contatos</b>, <b>Recorrência</b>) e os status (setas, cor, nome, Finalizado, Perda, ✕ e + status); <b>Salvar</b> grava e volta para as listas. <b>+ Incluir</b> cria uma lista; <b>Excluir</b> só funciona se a lista não tem tarefas.",
       "<b>Configurar recorrência</b> (no pé dos atalhos): escolha Diariamente, Semanalmente (marque os dias da semana), Mensalmente ou Anualmente, se cria uma <b>nova tarefa</b> ou reabre a mesma, <b>Repetir para sempre</b> ou até uma data, e o status da próxima. O calendário pinta as próximas datas. Tarefa recorrente mostra ↻ ao lado da data; <b>Remover</b> tira a recorrência.",
       "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
@@ -23528,7 +23536,7 @@ function ioExport(kind, empty){
     {name: "Instruções", rows: help, widths: [110], noFreeze: true, wrap: true}
   ]);
 }
-function ioCanImport(kind){ var K = IO_KINDS[kind]; return can(K.mod, "create") || can(K.mod, "edit"); }
+function ioCanImport(kind){ var K = IO_KINDS[kind]; return K.canImport ? K.canImport() : (can(K.mod, "create") || can(K.mod, "edit")); }
 function ioOpenImport(kind){
   var K = IO_KINDS[kind];
   if (!ioCanImport(kind)){ showToast("Seu nível de permissão não permite incluir nem alterar " + K.label.toLowerCase() + ".", true); return; }
@@ -24230,6 +24238,173 @@ var IO_KINDS = {
     document.getElementById("patExportBtn").addEventListener("click", function(){ ioExport("pacientes", false); });
     document.getElementById("patImportBtn").addEventListener("click", function(){ ioOpenImport("pacientes"); });
   }
+})();
+
+/* ---- CRM: tarefas (2026-10-10) ----
+   Exporta o que está na tela aberta do CRM (lista, Minhas tarefas ou a tela CRM, com busca, filtros e
+   "Finalizados"). Importa pela coluna Código: com código = atualiza aquela tarefa; sem código = tarefa nova.
+   Nome em "Paciente ou Lead" que não é paciente vira lead. Comentários e histórico não entram. */
+var IO_TASK_PRIOS = {urgente: "urgente", alta: "alta", normal: "normal", baixa: "normal"};
+function ioTaskScreen(){
+  var r = crmScreenTasks();
+  IO_KINDS.tarefas.file = "tarefas-" + (r.home ? "crm" : r.mine ? "minhas" : (slugify(r.list ? r.list.name : "") || "lista"));
+  return r.tasks;
+}
+function ioTaskExportRows(){
+  return ioTaskScreen().map(function(x){
+    var l = crmListById(x.list_id), st = crmStatus(l, x.status), ld = x.lead || {};
+    return {codigo: x.id, lista: l ? l.name : "", status: st ? st.name : x.status, tarefa: x.title, quem: crmWhoName(x),
+      resp: (x.assignees || []).map(crmPersonName).join(", "), venc: x.due_date ? trBr(x.due_date) : "", prio: crmPrio(x.priority).name,
+      desc: x.description || "", nasc: ld.nascimento ? trBr(ld.nascimento) : "", lresp: ld.responsavel || "", tel: ld.telefone ? formatPhone(ld.telefone) : "",
+      email: ld.email || "", origem: ld.origem || "", diag: ld.diagnostico || "", conv: ld.convenio || "", perda: ld.motivoPerda || "",
+      criada: x.created_at ? trBr(String(x.created_at).slice(0, 10)) : "", por: x.created_by_name || ""};
+  });
+}
+function ioTaskCanImport(){ return crmVisibleLists().some(function(l){ return crmCan(l.id, "create") || crmCan(l.id, "edit"); }); }
+function ioTaskPerson(name){
+  var k = ioKey(name); if (!k) return null;
+  var L = CRM.people.filter(function(p){ return ioKey(p.full_name) === k; });
+  if (!L.length) L = CRM.people.filter(function(p){ return ioKey(firstName(p.full_name)) === k; });
+  return L.length === 1 ? L[0] : null;
+}
+function ioTaskPlan(recs){
+  var items = [], notes = [], seen = {};
+  var openList = CRM.list && CRM.list !== "__home" && CRM.list !== "__mine" ? crmListById(CRM.list) : null;
+  recs.forEach(function(r){
+    var msgs = [], warn = [], prob = [], code = ioText(r.codigo), cur = code ? CRM.tasks[code] : null;
+    if (code && !cur) prob.push("Código não encontrado: <b>" + esc(code) + "</b> (a tarefa não existe ou você não tem acesso à lista)");
+    if (code && seen[code]) prob.push("Código repetido na planilha");
+    if (code) seen[code] = 1;
+    var lname = ioText(r.lista), list = null;
+    if (lname){
+      list = crmVisibleLists().filter(function(l){ return ioKey(l.name) === ioKey(lname); })[0] || null;
+      if (!list) prob.push("Lista não encontrada (ou sem acesso): <b>" + esc(lname) + "</b>");
+    } else list = cur ? crmListById(cur.list_id) : openList;
+    if (!list && !lname) prob.push("Informe a Lista");
+    if (cur && list && list.id !== cur.list_id) prob.push("Mudar a tarefa de lista pela planilha não é permitido (atual: " + esc((crmListById(cur.list_id) || {}).name || cur.list_id) + ")");
+    if (list && !prob.length){
+      if (!cur && !crmCan(list.id, "create")) prob.push("Sem permissão para incluir tarefas em " + esc(list.name));
+      if (cur && !crmCan(list.id, "edit")) prob.push("Sem permissão para editar tarefas em " + esc(list.name));
+    }
+    var vals = {}, lead = cur ? JSON.parse(JSON.stringify(cur.lead || {})) : {}, diffs = [];
+    function set(k, v, label, shown, old){ if (!cur || JSON.stringify(cur[k] == null ? null : cur[k]) !== JSON.stringify(v == null ? null : v)){ vals[k] = v; if (cur) diffs.push(ioDiff(label, old, shown)); } }
+    if (list && !prob.length){
+      // Tarefa
+      var title = ioText(r.tarefa);
+      if (title) set("title", title, "Tarefa", title, cur ? cur.title : "");
+      else if (!cur) prob.push("Informe a Tarefa");
+      // Status
+      var stTxt = ioText(r.status), st = null;
+      if (stTxt){ st = (list.statuses || []).filter(function(s){ return ioKey(s.name) === ioKey(stTxt); })[0] || null; if (!st) prob.push("Status não existe na lista " + esc(list.name) + ": <b>" + esc(stTxt) + "</b>"); }
+      else if (!cur) st = (list.statuses || [])[0] || null;
+      if (st) set("status", st.id, "Status", st.name, cur ? ((crmStatus(list, cur.status) || {}).name || cur.status) : "");
+      // Paciente ou Lead
+      var who = ioText(r.quem);
+      if (who && (!cur || ioKey(who) !== ioKey(crmWhoName(cur)))){
+        var p = ioFindPatient(who, list.lead ? ioDate(r.nasc) || "" : "");
+        if (p && p.ambiguous) prob.push("Há mais de um paciente com o nome <b>" + esc(who) + "</b> (preencha o Nascimento para separar)");
+        else if (p){ set("patient_id", p.id, "Paciente ou Lead", p.nome, cur ? crmWhoName(cur) : ""); delete lead.nome; }
+        else { if (cur && cur.patient_id) vals.patient_id = null; lead.nome = who; if (cur) diffs.push(ioDiff("Paciente ou Lead", crmWhoName(cur), who + " (lead)")); else warn.push("<b>" + esc(who) + "</b> não está no cadastro de pacientes: entra como lead"); }
+      }
+      // Responsáveis
+      if (!ioBlank(r.resp)){
+        var ids = [];
+        ioList(r.resp).forEach(function(n){
+          var pp = ioTaskPerson(n);
+          if (!pp){ warn.push("Responsável não encontrado (ignorado): <b>" + esc(n) + "</b>"); return; }
+          var had = cur && (cur.assignees || []).indexOf(pp.id) !== -1;
+          if (!had && !crmCanAssign(pp, list.id)){ warn.push(esc(pp.full_name) + " não tem acesso ao CRM ou a esta lista (ignorado)"); return; }
+          if (ids.indexOf(pp.id) === -1) ids.push(pp.id);
+        });
+        var a0 = cur ? (cur.assignees || []).slice().sort() : [];
+        if (JSON.stringify(ids.slice().sort()) !== JSON.stringify(a0)) set("assignees", ids, "Responsáveis", ids.map(crmPersonName).join(", "), cur ? (cur.assignees || []).map(crmPersonName).join(", ") : "");
+      }
+      // Vencimento, prioridade, descrição
+      var dv = ioDate(r.venc);
+      if (dv === null) prob.push("Vencimento inválido: <b>" + esc(ioText(r.venc)) + "</b> (use dd/mm/aaaa)");
+      else if (dv) set("due_date", dv, "Vencimento", trBr(dv), cur && cur.due_date ? trBr(cur.due_date) : "");
+      var pk = ioKey(r.prio);
+      if (pk){ var pv = IO_TASK_PRIOS[pk]; if (!pv) prob.push("Prioridade inválida: <b>" + esc(ioText(r.prio)) + "</b> (Urgente, Alta ou Normal)"); else set("priority", pv, "Prioridade", crmPrio(pv).name, cur ? crmPrio(cur.priority).name : ""); }
+      var desc = ioText(r.desc); if (desc) set("description", desc, "Descrição", desc.length > 40 ? desc.slice(0, 40) + "…" : desc, cur ? (cur.description || "").slice(0, 40) : "");
+      // Dados do lead (só em listas com funil de contatos)
+      var LF = [["nasc", "nascimento", "Nascimento"], ["lresp", "responsavel", "Responsável"], ["tel", "telefone", "Telefone"], ["email", "email", "E-mail"],
+        ["origem", "origem", "Origem"], ["diag", "diagnostico", "Diagnóstico"], ["conv", "convenio", "Convênio"], ["perda", "motivoPerda", "Motivo de perda"]];
+      var isPat = vals.patient_id || (cur && cur.patient_id && vals.patient_id !== null);
+      LF.forEach(function(f){
+        if (ioBlank(r[f[0]])) return;
+        if (!list.lead){ warn.push(f[2] + " ignorado: a lista " + esc(list.name) + " não é funil de contatos"); return; }
+        if (isPat && f[1] !== "motivoPerda"){ warn.push(f[2] + " ignorado: a tarefa é de paciente cadastrado"); return; }
+        var v = f[1] === "nascimento" ? ioDate(r[f[0]]) : f[1] === "telefone" ? digitsOnly(ioText(r[f[0]])) : ioText(r[f[0]]);
+        if (v === null){ prob.push(f[2] + " inválido: <b>" + esc(ioText(r[f[0]])) + "</b>"); return; }
+        if ((lead[f[1]] || "") !== v){ if (cur) diffs.push(ioDiff(f[2], lead[f[1]] || "", f[1] === "nascimento" ? trBr(v) : ioText(r[f[0]]))); lead[f[1]] = v; }
+      });
+      if (JSON.stringify(lead) !== JSON.stringify(cur ? (cur.lead || {}) : {})) vals.lead = lead;
+      // Perda pede motivo
+      var stFinal = crmStatus(list, vals.status || (cur ? cur.status : ""));
+      if (list.lead && stFinal && stFinal.lost && !lead.motivoPerda) prob.push("O status " + esc(stFinal.name) + " pede o Motivo de perda");
+      if (stFinal && vals.status) vals.closed_at = stFinal.done ? new Date().toISOString() : null;
+    }
+    var label = esc(ioText(r.tarefa) || (cur ? cur.title : "") || "(sem tarefa)") + (list ? ' <span class="pt-muted">· ' + esc(list.name) + '</span>' : '');
+    var it = {line: r._line, label: label, cur: cur, list: list, vals: vals, warn: warn};
+    if (prob.length){ it.st = "problema"; it.msgs = prob; }
+    else if (!cur){ it.st = "novo"; it.msgs = []; }
+    else if (!diffs.length && !Object.keys(vals).filter(function(k){ return k !== "closed_at"; }).length){ it.st = "igual"; it.msgs = []; }
+    else { it.st = "atualizar"; it.msgs = diffs; }
+    items.push(it);
+  });
+  if (!openList && recs.some(function(r){ return ioBlank(r.lista); })) notes.push("Linhas sem Lista só funcionam com uma lista aberta no CRM (ou com o Código de uma tarefa existente).");
+  notes.push("Comentários e histórico não entram na planilha. Célula vazia não apaga o que está na tarefa.");
+  return {items: items, notes: notes, itemLabel: "Tarefa"};
+}
+function ioTaskApply(plan){
+  var ok = 0, fail = [], chain = Promise.resolve();
+  plan.items.forEach(function(it){
+    if (it.st !== "novo" && it.st !== "atualizar") return;
+    chain = chain.then(function(){
+      var p;
+      if (it.st === "novo"){
+        var rec = Object.assign({list_id: it.list.id, status: (it.list.statuses[0] || {}).id, title: "", description: "", priority: "normal", assignees: [], lead: {}, due_date: null, patient_id: null}, it.vals);
+        var same = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; }).filter(function(y){ return y.list_id === rec.list_id && y.status === rec.status; });
+        rec.position = same.length ? Math.max.apply(null, same.map(function(y){ return y.position || 0; })) + 1 : 1;
+        p = crmInsert(rec);
+      } else p = crmUpdate(it.cur.id, it.vals);
+      return p.then(function(){ ok++; }, function(e){ fail.push("Linha " + it.line + ": " + ((e && e.message) || e)); });
+    });
+  });
+  return chain.then(function(){
+    crmRender(); crmBadgeRender();
+    if (fail.length) showToast(fail.length + (fail.length === 1 ? " linha não foi gravada. " : " linhas não foram gravadas. ") + fail.slice(0, 3).join(" · "), true);
+    return ok + (ok === 1 ? " tarefa gravada." : " tarefas gravadas.");
+  });
+}
+IO_KINDS.tarefas = {label: "Tarefas do CRM", file: "tarefas", mod: "crm_listas", canImport: ioTaskCanImport,
+  sub: "Com Código = atualiza a tarefa; sem Código = tarefa nova. A exportação traz o que está na tela aberta.",
+  ignoredNote: "o sistema preenche Criada em e Criada por",
+  help: ["Uma linha por tarefa. Lista e Tarefa são obrigatórias numa tarefa nova (sem Lista, vale a lista aberta no CRM).",
+    "Código: vem na exportação. Linha com Código atualiza aquela tarefa; sem Código vira tarefa nova. Não dá para mudar a tarefa de lista pela planilha.",
+    "Status: o nome de um status da lista (vazio numa tarefa nova = o primeiro status). Prioridade: Urgente, Alta ou Normal.",
+    "Paciente ou Lead: nome de um paciente cadastrado (comparado sem acento e sem maiúsculas); nome que não é paciente vira lead.",
+    "Responsáveis: nomes separados por vírgula; só entra quem tem acesso ao CRM e à lista.",
+    "Nascimento, Responsável, Telefone, E-mail, Origem, Diagnóstico, Convênio e Motivo de perda: só nas listas com Funil de contatos.",
+    "Datas no formato dd/mm/aaaa. Comentários e histórico não entram na planilha."],
+  cols: [
+    {k: "codigo", h: "Código", alias: ["id", "codigo da tarefa"], w: 38, note: "vem na exportação; vazio = tarefa nova"},
+    {k: "lista", h: "Lista", w: 16}, {k: "status", h: "Status", w: 16}, {k: "tarefa", h: "Tarefa", alias: ["titulo"], w: 40},
+    {k: "quem", h: "Paciente ou Lead", alias: ["paciente", "lead", "contato"], w: 30},
+    {k: "resp", h: "Responsáveis", alias: ["responsaveis"], w: 26, note: "nomes separados por vírgula"},
+    {k: "venc", h: "Vencimento", alias: ["data de vencimento"], w: 12}, {k: "prio", h: "Prioridade", w: 11, note: "Urgente, Alta ou Normal"},
+    {k: "desc", h: "Descrição", alias: ["descricao"], w: 40},
+    {k: "nasc", h: "Nascimento", alias: ["data de nascimento"], w: 12, note: "lead"}, {k: "lresp", h: "Responsável", alias: ["responsavel do lead"], w: 24, note: "lead"},
+    {k: "tel", h: "Telefone", alias: ["telefone / whatsapp", "whatsapp"], w: 16, note: "lead"}, {k: "email", h: "E-mail", alias: ["email"], w: 24, note: "lead"},
+    {k: "origem", h: "Origem", w: 18, note: "lead"}, {k: "diag", h: "Diagnóstico", alias: ["diagnostico"], w: 24, note: "lead"},
+    {k: "conv", h: "Convênio", alias: ["convenio"], w: 18, note: "lead"}, {k: "perda", h: "Motivo de perda", w: 22, note: "lead"},
+    {k: "criada", h: "Criada em", w: 12, note: "só na exportação"}, {k: "por", h: "Criada por", w: 20, note: "só na exportação"}
+  ],
+  exportRows: ioTaskExportRows, plan: ioTaskPlan, apply: ioTaskApply};
+(function(){
+  var add = document.getElementById("crmAdd"); if (!add) return;
+  add.insertAdjacentHTML("beforebegin", ioToolsMenuHtml("tarefas"));
+  ioWireMenu(add.parentNode.querySelector('[data-io-wrap="tarefas"]'));
 })();
 
 (function(){
