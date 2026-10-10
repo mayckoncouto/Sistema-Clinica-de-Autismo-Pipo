@@ -3159,3 +3159,5 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   `supabase/2026-10-10-reinstala-funcoes.sql` = essas 11 copiadas do schema.sql (só `create or replace function`;
   testado no PGlite, 2 vezes e com CRLF). Ao mudar funções no schema, gerar a conferência geral de novo.
 - Produção (2026-10-10): `2026-10-10-reinstala-funcoes` rodada (confirmado pelo usuário: "Feito").
+- Produção (2026-10-10): conferência geral LIMPA ("No rows returned") — banco igual ao `schema.sql`. REGRA: toda
+  migração nova que mudar estrutura ou função também atualiza `schema.sql` e regera `supabase/conferencia-geral.sql`.
