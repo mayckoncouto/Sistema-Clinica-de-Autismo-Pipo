@@ -52,7 +52,8 @@ const path = require('path');
   await page.click('#mSheet .dp-opt[data-v="urgente"]');
   check('choosing in the window filters and closes it?', (await ev('document.getElementById("crmFPrio").value')) === 'urgente' && !(await page.$('#mSheet')));
   await ev('(function(){ var e = document.getElementById("crmFPrio"); e.value = ""; e.dispatchEvent(new Event("change")); })()');
-  // janela da tarefa
+  // janela da tarefa (lista com Recorrência ligada: o Vencimento abre a janela de atalhos)
+  await ev('(CRM.lists.forEach(function(l){ l.recorrencia = true; }), true)');
   await page.click('#crmHost tbody tr');
   await page.waitForSelector('#ovCrm');
   await page.click('#crmStBtn');

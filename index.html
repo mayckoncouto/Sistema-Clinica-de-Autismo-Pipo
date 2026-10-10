@@ -6549,6 +6549,8 @@ function crmRecNext(iso, r){
   for (var k = 1; k <= 7; k++){ var n = crmAddDays(iso, k); if (ds.indexOf(dpParse(n).getDay()) !== -1) return n; }
   return crmAddDays(iso, 7);
 }
+// A lista permite recorrência? (CRM ▾ → Listas e status → "Recorrência"). Sem isso o Vencimento abre o calendário normal.
+function crmRecAllowed(listId){ var l = crmListById(listId); return !!(l && l.recorrencia); }
 function crmRecLabel(r){
   if (!r || !r.freq) return "";
   var f = CRM_FREQS.filter(function(x){ return x.id === r.freq; })[0], t = f ? f.name : "Repete";
@@ -6693,7 +6695,7 @@ function crmDueEdit(btn, x){
   var td = btn.parentNode, box = document.createElement("span"); box.className = "crm-due-edit";
   var inp = document.createElement("input"); inp.type = "date"; inp.value = x.due_date || ""; inp.setAttribute("aria-label", "Vencimento");
   box.appendChild(inp); td.replaceChild(box, btn);
-  inp.__picker = function(b){ crmDuePicker(b, {due: x.due_date || null, rec: x.recurrence || null, list: crmListById(x.list_id), canRecur: crmCan(x.list_id, "edit"),
+  if (crmRecAllowed(x.list_id)) inp.__picker = function(b){ crmDuePicker(b, {due: x.due_date || null, rec: x.recurrence || null, list: crmListById(x.list_id), canRecur: crmCan(x.list_id, "edit"),
     onDue: function(v){ done = true; document.removeEventListener("mousedown", outside, true); crmSetDue(x, v); },
     onRec: function(r, d){ done = true; document.removeEventListener("mousedown", outside, true); crmSetRec(x, r, d); },
     onClose: function(){ finish(); }}); };
@@ -6852,7 +6854,7 @@ function crmOpenTask(task, opts){
   // Vencimento: janela com atalhos, calendário e recorrência (o ↻ ao lado da data reabre a recorrência)
   var recCur = x.recurrence || null, dueEl = document.getElementById("crmDue");
   function recTag(){ var tg = document.getElementById("crmRecTag"); if (tg){ tg.hidden = !(recCur && recCur.freq); tg.title = recCur ? "Recorrente: " + crmRecLabel(recCur) : ""; tg.setAttribute("aria-label", tg.title || "Recorrência"); } }
-  if (dueEl){
+  if (dueEl && crmRecAllowed(list.id)){
     dueEl.__picker = function(b, startRec){
       if (!canEdit) return;
       crmDuePicker(b, {due: dueEl.value || null, rec: recCur, list: list, canRecur: canEdit, startRec: !!startRec,
@@ -7121,6 +7123,7 @@ function crmOpenListsModal(){
           '<button type="button" class="spec-color-btn" data-lcolor style="background:' + esc(l.color || "#64748b") + '" title="Cor da lista" aria-label="Cor da lista"></button>' +
           '<input type="text" data-lf="name" value="' + esc(l.name) + '" placeholder="Nome da lista">' +
           opt('data-lf="lead"', !!l.lead, "Funil de contatos", "Tarefas com os dados do contato e o motivo de perda") +
+          opt('data-lf="recorrencia"', !!l.recorrencia, "Recorrência", "Tarefas desta lista podem repetir (Vencimento → Configurar recorrência). Desligado: o Vencimento abre o calendário normal") +
           '<button type="button" class="rm" data-ldel title="Excluir lista" aria-label="Excluir lista">✕</button></div>' +
         '<div class="therapist-rows crm-sts">' + sts.map(function(st, si){
           return '<div class="therapist-row" data-si="' + si + '">' + moves("data-smv", si, sts.length) +
@@ -7182,13 +7185,14 @@ function crmOpenListsModal(){
         if (!s.done) delete s.done; if (!s.lost || !l.lead) delete s.lost;
       }
       if (!l.lead) delete l.lead;
+      if (!l.recorrencia) delete l.recorrencia;
     }
     // Mesma conta do banco: lista nova = incluir, tirada = excluir, mudada (nome, cor, status, ordem) = editar.
     var orig = CRM.lists || [], byId = {};
     orig.forEach(function(o){ byId[o.id] = o; });
     var added = draft.filter(function(l){ return !byId[l.id]; }), removed = orig.filter(function(o){ return !draft.some(function(l){ return l.id === o.id; }); });
     var keptOrig = orig.filter(function(o){ return !removed.includes(o); }), keptNew = draft.filter(function(l){ return byId[l.id]; });
-    function norm(l){ return JSON.stringify({id: l.id, name: l.name, color: l.color || "", lead: !!l.lead, st: (l.statuses || []).map(function(x){ return [x.id, String(x.name || "").trim(), x.color || "", !!x.done, !!(x.lost && l.lead)]; })}); }
+    function norm(l){ return JSON.stringify({id: l.id, name: l.name, color: l.color || "", lead: !!l.lead, rec: !!l.recorrencia, st: (l.statuses || []).map(function(x){ return [x.id, String(x.name || "").trim(), x.color || "", !!x.done, !!(x.lost && l.lead)]; })}); }
     var changed = keptNew.some(function(l, i){ return norm(l) !== norm(byId[l.id]) || (keptOrig[i] && keptOrig[i].id !== l.id); });
     var miss = [];
     if (added.length && !canC) miss.push("incluir listas");
@@ -19857,7 +19861,7 @@ var HELP_TOPICS = [
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
-      "<b>Vencimento</b> (na janela da tarefa ou clicando na data da lista) abre uma janela com atalhos à esquerda (Hoje, Amanhã, Este final de semana, Semana que vem, Próximo final de semana, 2 semanas, 4 semanas) e o calendário à direita; o ✕ ao lado da data tira o vencimento. Também dá para digitar a data no campo.",
+      "<b>Vencimento</b> (na janela da tarefa ou clicando na data da lista): nas listas com <b>Recorrência</b> ligada abre uma janela com atalhos à esquerda (Hoje, Amanhã, Este final de semana, Semana que vem, Próximo final de semana, 2 semanas, 4 semanas) e o calendário à direita; o ✕ ao lado da data tira o vencimento; nas outras listas abre o calendário normal. Também dá para digitar a data no campo. A opção <b>Recorrência</b> de cada lista fica em <b>CRM ▾ → Listas e status</b> (ao lado de Funil de contatos).",
       "<b>Configurar recorrência</b> (no pé dos atalhos): escolha Diariamente, Semanalmente (marque os dias da semana), Mensalmente ou Anualmente, se cria uma <b>nova tarefa</b> ou reabre a mesma, <b>Repetir para sempre</b> ou até uma data, e o status da próxima. O calendário pinta as próximas datas. Tarefa recorrente mostra ↻ ao lado da data; <b>Remover</b> tira a recorrência.",
       "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],

@@ -3301,6 +3301,8 @@ do Planner do profissional (`PLB.list`, `alvo "prof"`). A janela do colaborador 
   volta ao status com a próxima data; nova=true: insere cópia (a recorrência passa para ela). Evento
   `field/recorrencia`. Conta igual nos dois lados (`crm_rec_next` / `crmRecNext`; mês sem o dia = último dia).
 - Produção (2026-10-10): 2026-10-10i rodada (conferência 1 | 1).
+- Só nas listas com "Recorrência" ligada (config/task_lists: `recorrencia: true`, CRM ▾ → Listas e status; padrão
+  desligado). Nas outras o Vencimento abre o calendário normal (sem `__picker`); `crmRecAllowed(listId)`.
 
 
 ## Especialidade, Escala e Habilidade em uso (2026-10-10, item 10 da auditoria)
