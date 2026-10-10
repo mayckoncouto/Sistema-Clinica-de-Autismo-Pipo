@@ -187,6 +187,22 @@ const path = require('path');
   })()`);
   check('rename registry text: patients, leads and treatments updated?', rn.join('|') === 'Redes sociais|F84.0 Autismo|Redes sociais|F84.0 Autismo|Unimed|Unimed', rn);
 
+  // Item 15: excluir tarefa avisa quantos comentários saem junto.
+  const td = await ev(`(function(){
+    var l = (CRM.lists || [])[0]; var st = l.statuses.filter(function(x){ return !x.done; })[0];
+    var t = {id: "tq1", list_id: l.id, status: st.id, title: "Tarefa X", priority: "normal", assignees: [], lead: {}};
+    CRM.comCount = Object.assign({}, CRM.comCount || {}, {tq1: 3});
+    crmOpenTask(t, {listId: l.id});
+    var b = document.getElementById("crmDel"); if (!b) return "sem botão";
+    b.click();
+    return new Promise(function(res){ setTimeout(function(){
+      var m = (document.getElementById("confirmHost") || document.body).textContent;
+      document.getElementById("confirmHost").innerHTML = ""; document.getElementById("modalHost").innerHTML = "";
+      res(m);
+    }, 200); });
+  })()`);
+  check('delete CRM task: confirmation says how many comments go?', /3 comentários/.test(td), String(td).slice(0, 200));
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

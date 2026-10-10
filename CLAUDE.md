@@ -3183,7 +3183,9 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~MÉDIA 12~~ FEITO (2026-10-10, ver "Importação de Tratamentos: valores do tratamento da migração" abaixo).
 - ~~BAIXA 13~~ FEITO (2026-10-10, ver "Renomear Diagnóstico, Origem ou Convênio" abaixo).
 - ~~BAIXA 14~~ FEITO (2026-10-10, ver "Excluir usuário: sai das tarefas do CRM" abaixo).
-- BAIXA 15–16: excluir tarefa apaga comentários; fechar dia da clínica esconde agendamentos do Planner.
+- ~~BAIXA 15~~ FEITO (2026-10-10): decisão do usuário = avisar. A confirmação de Excluir da tarefa do CRM diz quantos
+  comentários (`CRM.comCount`) e o histórico serão apagados junto. Sem SQL. Ajuda (CRM).
+- BAIXA 16: fechar dia da clínica esconde agendamentos do Planner.
 
 ## Cadastros em lista gravam só o item; aviso de alteração simultânea (2026-10-10, item 1 da auditoria)
 Decisões do usuário: mesmo item alterado por duas pessoas = AVISAR e deixar escolher; vale para TODOS os cadastros em lista.
