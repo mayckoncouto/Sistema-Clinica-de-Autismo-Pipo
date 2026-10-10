@@ -3388,3 +3388,4 @@ Testada no PGlite (também com CRLF). Correções só depois do resultado, em mi
   listas do sistema (`#dpPop`: combos de cadastro, listas com busca, calendário), nos seletores do CRM (`crmPop`) e na
   lista de objetivos do Plano (`.pl-goal-pop`). Lista flutuante nova: posicionar com `popPlaceV` + `popWatchSize`.
   Teste no fim de `tests/run_combo.js`.
+- (2026-10-10, pedido do usuário) **CRM: "Dados do Paciente/Lead" em TODAS as listas** (título novo; antes só na lista com funil de contatos): Paciente ou Lead | Telefone; Diagnóstico | Convênio. Com paciente cadastrado os campos NÃO somem: mostram o cadastro dele (`patFirstPhone`, `cid` da saúde, convênio do tratamento), desativados (`leadFill`, `#crmPatNote`); lead = editáveis e gravados em `lead` (`readLead` em todas as listas). "Cadastrar paciente" sempre na linha do título. Motivo de perda continua só no funil. Planilha de tarefas aceita telefone/diagnóstico/convênio em todas as listas. Testes em `run_crm.js`.

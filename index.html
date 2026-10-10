@@ -6825,20 +6825,22 @@ function crmOpenTask(task, opts){
     }).join("") : '<div class="ms-empty">Nenhum usuário.</div>') + '</div></div>';
   var whoVal = pat ? pat.nome : (lead.nome || "");
   var whoHtml = prop('<span>Paciente ou Lead</span>', '<div class="crm-who"><input id="crmWho" type="text" autocomplete="off" placeholder="Nome do paciente ou de quem ainda não tem cadastro…" value="' + esc(whoVal) + '"' + dis + '>' +
-    '<span class="crm-who-tag" id="crmWhoTag"></span><div class="autolist" id="crmWhoSug" hidden></div></div>', !list.lead);
-  // Lista de atendimento: Paciente ou Lead dentro de "Dados do lead"; os outros campos somem quando é paciente cadastrado.
-  function lf(html){ return html.replace('class="field crm-prop', 'class="field crm-prop crm-lf'); }
-  // "Cadastrar paciente": na linha do título Dados do lead (à direita); listas sem o grupo, no cabeçalho da janela.
+    '<span class="crm-who-tag" id="crmWhoTag"></span><div class="autolist" id="crmWhoSug" hidden></div></div>');
+  // "Dados do Paciente/Lead" em todas as listas: Paciente ou Lead | Telefone; Diagnóstico | Convênio.
+  // Paciente cadastrado: os campos mostram o cadastro dele (só leitura); lead: os dados digitados na tarefa.
+  // "Cadastrar paciente" (só para lead) fica na linha do título, à direita.
   var regPatBtn = can("pacientes", "create") ? '<button type="button" class="btn ghost" id="crmRegPat" hidden>Cadastrar paciente</button>' : '';
-  var leadHtml = list.lead ? '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-h"><div class="crm-sec-t">Dados do lead</div>' + regPatBtn + '</div><div class="pat-count crm-lead-note crm-lf">Sem cadastro de paciente: estes dados passam para o cadastro ao usar "Cadastrar paciente".</div>' +
+  var leadHtml = '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-h"><div class="crm-sec-t">Dados do Paciente/Lead</div>' + regPatBtn + '</div>' +
+    '<div class="pat-count crm-lead-note" id="crmLeadNote">Sem cadastro de paciente: estes dados passam para o cadastro ao usar "Cadastrar paciente".</div>' +
+    '<div class="pat-count crm-lead-note" id="crmPatNote" hidden>Dados do cadastro do paciente (para mudar, abra o cadastro do paciente).</div>' +
     '<div class="crm-props">' +
       whoHtml +
-      lf(prop('<span>Telefone / WhatsApp</span>', '<input id="crmLTel" type="text" data-phone inputmode="tel" value="' + esc(lead.telefone ? formatPhone(lead.telefone) : "") + '"' + dis + '>')) +
-      lf(prop('<span>Diagnóstico</span>', '<select id="crmLDiag" data-reg-add="diagnosticos"' + (isMobileView() ? '' : ' data-combo') + dis + '>' + diagOptionsHtml(lead.diagnostico || "") + '</select>')) +
-      lf(prop('<span>Convênio</span>', '<select id="crmLConv" data-reg-add="convenios" data-reg-val="name"' + (isMobileView() ? '' : ' data-combo') + dis + '><option value="">Sem convênio / Particular</option>' +
+      prop('<span>Telefone</span>', '<input id="crmLTel" type="text" data-phone inputmode="tel" value="' + esc(lead.telefone ? formatPhone(lead.telefone) : "") + '"' + dis + '>') +
+      prop('<span>Diagnóstico</span>', '<select id="crmLDiag" data-reg-add="diagnosticos"' + (isMobileView() ? '' : ' data-combo') + dis + '>' + diagOptionsHtml(lead.diagnostico || "") + '</select>') +
+      prop('<span>Convênio</span>', '<select id="crmLConv" data-reg-add="convenios" data-reg-val="name"' + (isMobileView() ? '' : ' data-combo') + dis + '><option value="">Sem convênio / Particular</option>' +
         activeOnly(state.convenios || []).map(function(cv){ return opt(cv.name, cv.name, lead.convenio || ""); }).join("") +
-        (lead.convenio && !(state.convenios || []).some(function(cv){ return cv.name === lead.convenio; }) ? opt(lead.convenio, lead.convenio, lead.convenio) : "") + '</select>')) +
-    '</div></div>' : '';
+        (lead.convenio && !(state.convenios || []).some(function(cv){ return cv.name === lead.convenio; }) ? opt(lead.convenio, lead.convenio, lead.convenio) : "") + '</select>') +
+    '</div></div>';
   var lossHtml = list.lead ? prop('<span>Motivo de perda</span>', '<input id="crmLPerda" type="text" list="crmPerdaList" value="' + esc(lead.motivoPerda || "") + '"' + dis + '><datalist id="crmPerdaList">' + CRM_PERDAS.map(function(o){ return '<option value="' + esc(o) + '">'; }).join("") + '</datalist>', true, "crmLossBox") : '';
   var sideHtml = '<aside class="crm-side" id="crmSide"' + (side ? '' : ' hidden') + '>' +
     '<div class="crm-side-head"><b>Atividade</b></div>' +
@@ -6853,7 +6855,6 @@ function crmOpenTask(task, opts){
         '<div class="modal-sub"><span class="crm-chip sm" style="--st:' + esc(list.color || "#64748b") + '">' + esc(list.name) + '</span>' +
         (task && task.created_by_name ? ' · criada por ' + esc(task.created_by_name) + (task.created_at ? ' em ' + esc(agdBrDate(String(task.created_at).slice(0, 10))) : '') : '') + '</div></div>' +
         '<div class="modal-head-acts">' +
-          (list.lead ? '' : regPatBtn) +
         '</div>' +
         '<button class="modal-close" id="crmClose" aria-label="Fechar">✕</button></div>' +
       // Celular: Detalhes (campos) | Atividade (alterações, comentários e o campo de comentar).
@@ -6861,14 +6862,13 @@ function crmOpenTask(task, opts){
         '<button type="button" data-mtab="act" role="tab" aria-selected="false">Atividade' + (!isNew && CRM.comCount && CRM.comCount[x.id] ? ' <span class="crm-mtab-n">' + CRM.comCount[x.id] + '</span>' : '') + '</button></div>' +
       '<div class="crm-split"><div class="modal-body crm-main">' +
         // Nome do campo à esquerda e o campo ao lado (no celular, nome em cima). Ordem: Tarefa;
-        // Status, Responsáveis; Vencimento, Prioridade; Descrição (8 linhas); depois Dados do lead.
+        // Status, Responsáveis; Vencimento, Prioridade; Descrição (8 linhas); depois Dados do Paciente/Lead.
         '<div class="crm-props">' +
           prop('<span>Tarefa</span>', '<input id="crmTitleIn" type="text" maxlength="200" placeholder="Ex.: Ligar para agendar avaliação" value="' + esc(x.title) + '"' + dis + '>', true) +
           prop('<span>Status</span>', '<input type="hidden" id="crmSt" value="' + esc(x.status) + '"><button type="button" class="crm-prio-btn crm-prio-field" id="crmStBtn"' + dis + '></button>') +
           prop('<span>Responsáveis</span>', peopleMs) +
           prop('<span>Vencimento</span>', '<input id="crmDue" type="date" value="' + esc(x.due_date || "") + '"' + dis + '><button type="button" class="crm-rec-tag" id="crmRecTag" hidden>' + CRM_REC_SVG + '</button>', false, "crmDueBox") +
           prop('<span>Prioridade</span>', '<input type="hidden" id="crmPrio" value="' + esc(crmPrio(x.priority).id) + '"><button type="button" class="crm-prio-btn crm-prio-field" id="crmPrioBtn"' + dis + '>' + crmFlagSvg(crmPrio(x.priority)) + esc(crmPrio(x.priority).name) + '</button>') +
-          (list.lead ? '' : whoHtml) +
           lossHtml +
           prop('<span>Descrição</span>', '<textarea id="crmDesc" rows="8"' + dis + '>' + esc(x.description || "") + '</textarea>', true, "crmDescBox") +
         '</div>' +
@@ -6902,11 +6902,34 @@ function crmOpenTask(task, opts){
   // Paciente ou Lead: escolher um paciente do cadastro; nome que não é paciente = lead.
   var whoIn = document.getElementById("crmWho"), whoSug = document.getElementById("crmWhoSug"), whoTag = document.getElementById("crmWhoTag");
   var pid = x.patient_id || "";
+  // Telefone, Diagnóstico e Convênio: do cadastro do paciente (só leitura) ou do lead (editáveis).
+  var leadMode = null;
+  function selSet(el, v){
+    if (!el) return;
+    if (v && !Array.prototype.some.call(el.options, function(o){ return o.value === v; })){ var o = document.createElement("option"); o.value = v; o.textContent = v; el.appendChild(o); }
+    el.value = v || "";
+  }
+  function leadFill(){
+    var p = pid ? findPatientById(pid) : null, mode = p ? "pat:" + pid : "lead";
+    var tel = document.getElementById("crmLTel"), dg = document.getElementById("crmLDiag"), cv = document.getElementById("crmLConv");
+    var n1 = document.getElementById("crmLeadNote"), n2 = document.getElementById("crmPatNote");
+    if (n1) n1.hidden = !!p; if (n2) n2.hidden = !p;
+    if (mode === leadMode) return;
+    var wasPat = leadMode && leadMode !== "lead"; leadMode = mode;
+    if (p){
+      if (tel) tel.value = patFirstPhone(p);
+      selSet(dg, String(p.cid || "").trim()); selSet(cv, String(p.convenio || "").trim());
+    } else if (wasPat){
+      if (tel) tel.value = lead.telefone ? formatPhone(lead.telefone) : "";
+      selSet(dg, lead.diagnostico || ""); selSet(cv, lead.convenio || "");
+    }
+    [tel, dg, cv].forEach(function(el){ if (!el) return; el.disabled = !canEdit || !!p; el.title = p ? "Do cadastro do paciente" : ""; });
+  }
   function whoRefresh(){
     var name = whoIn.value.trim(), isLead = !pid && !!name;
     whoTag.textContent = pid ? "Paciente cadastrado" : (isLead ? "Lead (sem cadastro)" : "");
     whoTag.className = "crm-who-tag" + (pid ? " pat" : isLead ? " lead" : "");
-    Array.prototype.forEach.call(ov.querySelectorAll(".crm-lf"), function(el){ el.hidden = !!pid; });
+    leadFill();
     var rb = document.getElementById("crmRegPat"); if (rb) rb.hidden = !isLead || !canEdit;
   }
   whoIn.addEventListener("input", function(){
@@ -7016,7 +7039,7 @@ function crmOpenTask(task, opts){
   function val(id){ var e = document.getElementById(id); return e ? e.value.trim() : ""; }
   function readLead(){
     var o = {nome: pid ? "" : whoIn.value.trim()};
-    if (list.lead && !pid){ o.telefone = digitsOnly(val("crmLTel")); o.diagnostico = val("crmLDiag"); o.convenio = val("crmLConv"); }
+    if (!pid){ o.telefone = digitsOnly(val("crmLTel")); o.diagnostico = val("crmLDiag"); o.convenio = val("crmLConv"); }
     if (list.lead) o.motivoPerda = val("crmLPerda");
     Object.keys(o).forEach(function(k){ if (!o[k]) delete o[k]; });
     return o;
@@ -20000,7 +20023,7 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>CRM ▾</b> e escolha a lista (Atendimento, Agendas, Fature, Gestão…) ou <b>Minhas tarefas</b> (tudo o que está aberto com você). O primeiro item, <b>CRM</b>, mostra em cima um cartão por lista que você pode ver (abertas, vencidas, comigo; clique no cartão para abrir a lista) e embaixo a barra de busca e filtros com todas as tarefas dessas listas (coluna <b>Lista</b>; Lista ou Calendário). Ao entrar no CRM sem escolher uma lista (endereço #crm, atualizar a página), abre <b>Minhas tarefas</b>.",
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
-      "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz, em duas linhas, Paciente ou Lead e Telefone / WhatsApp, Diagnóstico e Convênio; <b>Cadastrar paciente</b> (à direita, na linha do título Dados do lead) abre o cadastro já preenchido com nome, telefone e diagnóstico (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
+      "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Em todas as listas, o grupo <b>Dados do Paciente/Lead</b> traz, em duas linhas, Paciente ou Lead e Telefone, Diagnóstico e Convênio. Com paciente cadastrado, esses campos mostram o cadastro dele (telefone, diagnóstico e convênio do tratamento) e só mudam no cadastro do paciente; com lead, são preenchidos na tarefa. <b>Cadastrar paciente</b> (à direita, na linha do título, só para lead) abre o cadastro já preenchido com nome, telefone e diagnóstico (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
       "<b>Vencimento</b> (na janela da tarefa ou clicando na data da lista): nas listas com <b>Recorrência</b> ligada abre uma janela com atalhos à esquerda (Hoje, Amanhã, Este final de semana, Semana que vem, Próximo final de semana, 2 semanas, 4 semanas) e o calendário à direita; o ✕ ao lado da data tira o vencimento; nas outras listas abre o calendário normal. Também dá para digitar a data no campo. A opção <b>Recorrência</b> de cada lista fica em <b>CRM ▾ → Listas e status</b> (ao lado de Funil de contatos).",
       "<b>Outras opções ▾</b> na barra do CRM: <b>Exportar planilha</b> baixa um Excel com as tarefas da tela aberta (a lista, Minhas tarefas ou a tela CRM, com a busca, os filtros e “Finalizados”), com a coluna <b>Código</b> de cada tarefa. <b>Importar planilha</b>: linha com Código atualiza aquela tarefa; sem Código vira tarefa nova (sem Lista, vai para a lista aberta). Status pelo nome do status da lista; Prioridade Urgente, Alta ou Normal; Responsáveis pelos nomes (só quem tem acesso ao CRM e à lista); nome que não é paciente cadastrado vira lead. Dados do lead só nas listas com Funil de contatos. A prévia mostra Novo, Atualizar, Igual e Com problema antes de gravar, e o sistema baixa uma cópia antes de importar. Célula vazia não apaga; comentários e histórico não entram; não dá para mudar a tarefa de lista pela planilha.",
@@ -24389,12 +24412,12 @@ function ioTaskPlan(recs){
       var pk = ioKey(r.prio);
       if (pk){ var pv = IO_TASK_PRIOS[pk]; if (!pv) prob.push("Prioridade inválida: <b>" + esc(ioText(r.prio)) + "</b> (Urgente, Alta ou Normal)"); else set("priority", pv, "Prioridade", crmPrio(pv).name, cur ? crmPrio(cur.priority).name : ""); }
       var desc = ioText(r.desc); if (desc) set("description", desc, "Descrição", desc.length > 40 ? desc.slice(0, 40) + "…" : desc, cur ? (cur.description || "").slice(0, 40) : "");
-      // Dados do lead (só em listas com funil de contatos)
+      // Dados do Paciente/Lead (todas as listas; motivo de perda só no funil de contatos)
       var LF = [["tel", "telefone", "Telefone"], ["diag", "diagnostico", "Diagnóstico"], ["conv", "convenio", "Convênio"], ["perda", "motivoPerda", "Motivo de perda"]];
       var isPat = vals.patient_id || (cur && cur.patient_id && vals.patient_id !== null);
       LF.forEach(function(f){
         if (ioBlank(r[f[0]])) return;
-        if (!list.lead){ warn.push(f[2] + " ignorado: a lista " + esc(list.name) + " não é funil de contatos"); return; }
+        if (!list.lead && f[1] === "motivoPerda"){ warn.push(f[2] + " ignorado: a lista " + esc(list.name) + " não é funil de contatos"); return; }
         if (isPat && f[1] !== "motivoPerda"){ warn.push(f[2] + " ignorado: a tarefa é de paciente cadastrado"); return; }
         var v = f[1] === "nascimento" ? ioDate(r[f[0]]) : f[1] === "telefone" ? digitsOnly(ioText(r[f[0]])) : ioText(r[f[0]]);
         if (v === null){ prob.push(f[2] + " inválido: <b>" + esc(ioText(r[f[0]])) + "</b>"); return; }

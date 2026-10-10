@@ -40,7 +40,22 @@ const path = require('path');
   await page.dispatchEvent('#crmWho', 'input');
   check('a name without registration is a lead: tag + "Cadastrar paciente" + lead data?', /Lead/.test(await page.$eval('#crmWhoTag', (e) => e.textContent)) && !(await page.$eval('#crmRegPat', (e) => e.hidden)) && !(await page.$eval('#crmLeadBox', (e) => e.hidden)));
   const leadOrder = await page.$$eval('#crmLeadBox .crm-prop > label', (r) => r.map((x) => x.textContent.trim()));
-  check('Dados do lead: Paciente ou Lead, Telefone, Diagnóstico, Convênio (only two lines)?', leadOrder.join('|') === 'Paciente ou Lead|Telefone / WhatsApp|Diagnóstico|Convênio', leadOrder);
+  check('Dados do Paciente/Lead: Paciente ou Lead, Telefone, Diagnóstico, Convênio (only two lines)?', leadOrder.join('|') === 'Paciente ou Lead|Telefone|Diagnóstico|Convênio', leadOrder);
+  // Paciente cadastrado: Telefone, Diagnóstico e Convênio vêm do cadastro (só leitura) e continuam visíveis
+  const pInfo = JSON.parse(await ev(`(function(){ var p = state.patients.filter(function(x){ return isActive(x); })[0]; return JSON.stringify({nome: p.nome, tel: patFirstPhone(p), cid: String(p.cid || ""), conv: String(p.convenio || "")}); })()`));
+  await page.fill('#crmWho', pInfo.nome.slice(0, 6));
+  await page.dispatchEvent('#crmWho', 'input');
+  await page.waitForSelector('#crmWhoSug [data-pid]');
+  await page.dispatchEvent('#crmWhoSug [data-pid]', 'mousedown');
+  const patF = await page.evaluate(() => { const g = (id) => document.getElementById(id);
+    return {tel: g('crmLTel').value, telDis: g('crmLTel').disabled, diag: g('crmLDiag').value, diagDis: g('crmLDiag').disabled, conv: g('crmLConv').value, convDis: g('crmLConv').disabled,
+      shown: [...document.querySelectorAll('#crmLeadBox .crm-prop')].every((x) => !x.hidden && x.offsetParent), note: !g('crmPatNote').hidden && g('crmLeadNote').hidden,
+      title: document.querySelector('#crmLeadBox .crm-sec-t').textContent}; });
+  check('registered patient: fields show the patient data (read-only) and stay visible; title "Dados do Paciente/Lead"?', patF.tel === pInfo.tel && patF.diag === pInfo.cid && patF.conv === pInfo.conv && patF.telDis && patF.diagDis && patF.convDis && patF.shown && patF.note && patF.title === 'Dados do Paciente/Lead', JSON.stringify({patF, pInfo}));
+  await page.fill('#crmWho', 'Criança Teste');
+  await page.dispatchEvent('#crmWho', 'input');
+  const backF = await page.evaluate(() => ({tel: document.getElementById('crmLTel').value, dis: document.getElementById('crmLTel').disabled || document.getElementById('crmLDiag').disabled}));
+  check('back to a lead: fields editable again and empty (lead data)?', !backF.dis && backF.tel === '', JSON.stringify(backF));
   const leadRows = await page.$$eval('#crmLeadBox .crm-prop', (r) => new Set(r.filter((x) => x.offsetParent).map((x) => Math.round(x.getBoundingClientRect().top))).size);
   check('Dados do lead in two lines?', leadRows === 2, leadRows);
   check('Descrição with 8 lines?', (await page.$eval('#crmDesc', (e) => e.rows)) === 8);
@@ -368,6 +383,8 @@ const path = require('path');
     return JSON.stringify({n: n, v1: v1, v2: v2, h: h.split('crm-cmt-b">')[1]}); })()`));
   check('comment B/I/U: 3 buttons wrap selection and the feed shows bold/italic/underline?', fmt.n === 3 && fmt.v1 === 'oi *mundo*' && fmt.v2 === 'a __b__' &&
     fmt.h.indexOf('<b>forte</b>') !== -1 && fmt.h.indexOf('<i>leve</i>') !== -1 && fmt.h.indexOf('<u>linha</u>') !== -1 && fmt.h.indexOf('nome_sobrenome') !== -1 && fmt.h.indexOf('2*3*4') !== -1, JSON.stringify(fmt));
+  const agSec = JSON.parse(await ev('(function(){ var host = document.getElementById("modalHost"); crmOpenTask(null, {listId: "agendas"}); var r = {box: !!document.getElementById("crmLeadBox"), who: !!document.querySelector("#crmLeadBox #crmWho"), tel: !!document.getElementById("crmLTel"), loss: !!document.getElementById("crmLossBox")}; host.innerHTML = ""; return JSON.stringify(r); })()'));
+  check('any list (Agendas) also has Dados do Paciente/Lead (no Motivo de perda)?', agSec.box && agSec.who && agSec.tel && !agSec.loss, JSON.stringify(agSec));
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
