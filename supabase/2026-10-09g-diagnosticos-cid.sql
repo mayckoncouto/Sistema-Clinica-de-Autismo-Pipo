@@ -1,4 +1,4 @@
--- 2026-10-09g — Cadastros → Diagnósticos: lista CID-10 da clínica (22 códigos).
+-- 2026-10-09g — Cadastros → Diagnósticos: lista CID-10 da clínica (41 códigos).
 --   * Código que já existe: a descrição passa a ser a da lista (e o item volta a ficar ativo).
 --   * Código que não existe: é incluído no fim.
 --   * Os outros diagnósticos do cadastro ficam como estão (nada é excluído).
@@ -16,22 +16,41 @@ insert into cid_novos values
   ( 4, 'F84.8', 'Outros transtornos globais do desenvolvimento'),
   ( 5, 'F84.9', 'Transtorno global do desenvolvimento não especificado'),
   ( 6, 'F70',   'Deficiência intelectual leve'),
-  ( 7, 'F90.0', 'Transtorno do déficit de atenção e hiperatividade (TDAH)'),
-  ( 8, 'F80.1', 'Transtorno expressivo de linguagem'),
-  ( 9, 'F80.2', 'Transtorno receptivo de linguagem'),
-  (10, 'F80.9', 'Transtorno do desenvolvimento da fala e da linguagem não especificado'),
-  (11, 'F81.9', 'Transtorno do desenvolvimento das habilidades escolares não especificado'),
-  (12, 'F82',   'Transtorno específico do desenvolvimento motor'),
-  (13, 'R62.0', 'Retardo de etapas do desenvolvimento'),
-  (14, 'R62.9', 'Retardo do desenvolvimento fisiológico não especificado'),
-  (15, 'R63.3', 'Dificuldades de alimentação'),
-  (16, 'F98.2', 'Transtorno de alimentação na infância'),
-  (17, 'R63.8', 'Outros sintomas e sinais relativos à ingestão de alimentos e líquidos'),
-  (18, 'F88',   'Outros transtornos do desenvolvimento psicológico'),
-  (19, 'F89',   'Transtorno do desenvolvimento psicológico não especificado'),
-  (20, 'F91.9', 'Transtorno de conduta não especificado'),
-  (21, 'F93.9', 'Transtorno emocional da infância não especificado'),
-  (22, 'F98.9', 'Transtorno comportamental e emocional com início habitualmente ocorrido na infância ou adolescência, não especificado');
+  ( 7, 'F90.0', 'Distúrbio da atividade e da atenção (TDAH)'),
+  ( 8, 'F80.0', 'Transtorno específico da articulação da fala'),
+  ( 9, 'F80.1', 'Transtorno expressivo de linguagem'),
+  (10, 'F80.2', 'Transtorno receptivo de linguagem'),
+  (11, 'F80.8', 'Outros transtornos do desenvolvimento da fala e da linguagem'),
+  (12, 'F80.9', 'Transtorno do desenvolvimento da fala e da linguagem não especificado'),
+  (13, 'F81.0', 'Transtorno específico de leitura'),
+  (14, 'F81.2', 'Transtorno específico da habilidade em aritmética'),
+  (15, 'F81.3', 'Transtorno misto de habilidades escolares'),
+  (16, 'F81.9', 'Transtorno do desenvolvimento das habilidades escolares não especificado'),
+  (17, 'F82',   'Transtorno específico do desenvolvimento motor'),
+  (18, 'F83',   'Transtornos específicos mistos do desenvolvimento'),
+  (19, 'F88',   'Outros transtornos do desenvolvimento psicológico'),
+  (20, 'F89',   'Transtorno do desenvolvimento psicológico não especificado'),
+  (21, 'F93.0', 'Transtorno ligado à angústia de separação'),
+  (22, 'F93.1', 'Transtorno fóbico-ansioso da infância'),
+  (23, 'F94.0', 'Mutismo eletivo (seletivo)'),
+  (24, 'F98.2', 'Transtorno de alimentação na infância'),
+  (25, 'F98.3', 'Pica do lactente ou da criança'),
+  (26, 'F98.4', 'Estereotipias motoras'),
+  (27, 'F98.5', 'Gagueira (tartamudez)'),
+  (28, 'F98.9', 'Transtorno comportamental e emocional com início habitualmente ocorrido na infância ou adolescência, não especificado'),
+  (29, 'F50.0', 'Anorexia nervosa'),
+  (30, 'F50.1', 'Anorexia nervosa atípica'),
+  (31, 'F50.2', 'Bulimia nervosa'),
+  (32, 'F50.3', 'Bulimia nervosa atípica'),
+  (33, 'F50.4', 'Hiperfagia associada a outros distúrbios psicológicos'),
+  (34, 'F50.5', 'Vômitos associados a outros distúrbios psicológicos'),
+  (35, 'F50.8', 'Outros transtornos da alimentação'),
+  (36, 'F50.9', 'Transtorno da alimentação não especificado'),
+  (37, 'R62.0', 'Retardo de etapas do desenvolvimento'),
+  (38, 'R62.5', 'Retardo do desenvolvimento fisiológico normal, não especificado em outra parte'),
+  (39, 'R62.9', 'Retardo do desenvolvimento fisiológico não especificado'),
+  (40, 'R63.3', 'Dificuldades de alimentação'),
+  (41, 'R63.8', 'Outros sintomas e sinais relativos à ingestão de alimentos e líquidos');
 
 -- Itens atuais (com a posição) e, para cada código da lista, o 1º item do cadastro com esse código
 create temp table cid_atual on commit drop as
@@ -93,9 +112,11 @@ select antigo as nome_antigo, para as nome_novo from cid_troca order by para;
 
 commit;
 
--- Conferência: deve mostrar 22 (todos os códigos da lista estão no cadastro e ativos)
+-- Conferência: deve mostrar 41 (todos os códigos da lista estão no cadastro e ativos)
 select count(distinct upper(e ->> 'code')) as codigos_da_lista_no_cadastro
   from public.documents d, jsonb_array_elements(d.data -> 'list') e
  where d.path = 'config/diagnoses' and not (e ? 'inativo')
-   and upper(e ->> 'code') in ('F84.0','F84.1','F84.5','F84.8','F84.9','F70','F90.0','F80.1','F80.2','F80.9','F81.9',
-                               'F82','R62.0','R62.9','R63.3','F98.2','R63.8','F88','F89','F91.9','F93.9','F98.9');
+   and upper(e ->> 'code') in ('F84.0','F84.1','F84.5','F84.8','F84.9','F70','F90.0','F80.0','F80.1','F80.2','F80.8',
+                               'F80.9','F81.0','F81.2','F81.3','F81.9','F82','F83','F88','F89','F93.0','F93.1',
+                               'F94.0','F98.2','F98.3','F98.4','F98.5','F98.9','F50.0','F50.1','F50.2','F50.3','F50.4',
+                               'F50.5','F50.8','F50.9','R62.0','R62.5','R62.9','R63.3','R63.8');
