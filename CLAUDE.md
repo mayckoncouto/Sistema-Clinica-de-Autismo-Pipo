@@ -3153,3 +3153,8 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
   `documents_path_valid`) e lista só o que falta ou difere. Gerado a partir do schema num PGlite (script em scratchpad:
   montar o banco com schema.sql e ler o catálogo); ao mudar o schema, gerar de novo. Conferido: o texto de cada função
   no schema é igual ao da última migração que a define.
+- Produção (2026-10-10): a conferência geral (comparando sem espaços) acusou 11 funções com conteúdo diferente do
+  schema (appointments_stamp, clinical_records_stamp, convenio_finance_stamp, documents_enforce, handle_new_user,
+  patch_list, patient_health_stamp, profiles_nonadmin_guard, roles_guard, therapy_plans_stamp, treatment_finance_stamp).
+  `supabase/2026-10-10-reinstala-funcoes.sql` = essas 11 copiadas do schema.sql (só `create or replace function`;
+  testado no PGlite, 2 vezes e com CRLF). Ao mudar funções no schema, gerar a conferência geral de novo.
