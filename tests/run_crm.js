@@ -83,7 +83,10 @@ const path = require('path');
   await page.keyboard.press('Escape'); await page.waitForTimeout(100);
   // Vencimento na lista: abre o calendário e grava
   const prevDue = await ev(`CRM.tasks["${tid}"].due_date || null`);
+  const rowH0 = await page.$eval(`#crmHost tr[data-crm-id="${tid}"]`, (e) => Math.round(e.getBoundingClientRect().height));
   await page.click(`#crmHost [data-crm-due="${tid}"]`); await page.waitForTimeout(150);
+  const rowH1 = await page.$eval(`#crmHost tr[data-crm-id="${tid}"]`, (e) => { const b = e.querySelector('.crm-due-edit .dp-btn'); const cs = b ? getComputedStyle(b) : {}; return {h: Math.round(e.getBoundingClientRect().height), bh: b ? Math.round(b.getBoundingClientRect().height) : 0, pad: cs.padding, mh: cs.minHeight, fs: cs.fontSize}; });
+  check('list: editing Vencimento does not make the row taller?', rowH1.h <= rowH0, JSON.stringify({rowH0, rowH1}));
   const dueIso = await ev('(function(){ var d = new Date(); d.setDate(15); return dpIso(d); })()');
   const calOk = !!(await page.$('#dpPop .dp-day'));
   await page.click(`#dpPop .dp-day[data-iso="${dueIso}"]`); await page.waitForTimeout(200);
