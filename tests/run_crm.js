@@ -43,7 +43,7 @@ const path = require('path');
   check('Dados do lead: Paciente ou Lead, Telefone, Diagnóstico, Convênio (only two lines)?', leadOrder.join('|') === 'Paciente ou Lead|Telefone / WhatsApp|Diagnóstico|Convênio', leadOrder);
   const leadRows = await page.$$eval('#crmLeadBox .crm-prop', (r) => new Set(r.filter((x) => x.offsetParent).map((x) => Math.round(x.getBoundingClientRect().top))).size);
   check('Dados do lead in two lines?', leadRows === 2, leadRows);
-  check('Descrição with 9 lines?', (await page.$eval('#crmDesc', (e) => e.rows)) === 9);
+  check('Descrição with 8 lines?', (await page.$eval('#crmDesc', (e) => e.rows)) === 8);
   await page.fill('#crmLTel', '47999990000');
   await setv('#crmLConv', 'Unimed');
   const yesterday = await ev('agdIso(agdAddDays(agdStartOfDay(new Date()), -1))');

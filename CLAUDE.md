@@ -3376,8 +3376,8 @@ Testada no PGlite (também com CRLF). Correções só depois do resultado, em mi
 - (2026-10-10, pedido do usuário) Barra do CRM numa linha só no computador a partir de 1260px (busca e filtros encolhem com "…"; até 1700px "Outras opções" vira "Opções"); abaixo de 1260px quebra linha.
 - (2026-10-10, pedido do usuário) **CRM: "Dados do lead" só com Paciente ou Lead | Telefone / WhatsApp; Diagnóstico |
   Convênio** (duas linhas). Saíram Nascimento, Responsável, Origem e E-mail (e o Plano antigo) da janela, da busca, da
-  planilha de tarefas e do "Cadastrar paciente" (leva nome, telefone e diagnóstico). Descrição da tarefa com 9 linhas
-  (`rows="9"`). Migração só de dados `supabase/2026-10-10m-crm-dados-do-lead.sql`: tira `nascimento`, `responsavel`,
+  planilha de tarefas e do "Cadastrar paciente" (leva nome, telefone e diagnóstico). Descrição da tarefa com 8 linhas
+  (`rows="8"`). Migração só de dados `supabase/2026-10-10m-crm-dados-do-lead.sql`: tira `nascimento`, `responsavel`,
   `origem`, `email` e `plano` de `tasks.lead`; o que estava preenchido e ainda não aparece na Descrição vai para o fim
   dela ("Dados do lead (campos retirados): …"). Testada no PGlite (também com CRLF e rodando 2 vezes).
 - Produção (2026-10-10): `2026-10-10m-crm-dados-do-lead` rodada (tarefas_com_campos_antigos = 0).
