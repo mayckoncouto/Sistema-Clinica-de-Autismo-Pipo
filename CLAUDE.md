@@ -3204,3 +3204,4 @@ Decisões do usuário: mesmo item alterado por duas pessoas = AVISAR e deixar es
   continuam; recusa com `PIPO_CONFLITO:`; `p_order` põe no fim os itens que a pessoa não via). Testada no PGlite.
 - Ajuda: regra no tópico "Visão geral do sistema". Teste `tests/run_list_patch.js` (cria `tests/page_lp.html` com
   banco simulado que tem `patchList2`/`reload`).
+- Produção (2026-10-10): `2026-10-10b-gravar-so-o-item` rodada (função criada = 1).
