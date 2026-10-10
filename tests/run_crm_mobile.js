@@ -74,7 +74,7 @@ const path = require('path');
   await page.click('#mSheet [data-pick="u2"]');
   await page.click('#mSheet .msheet-x');
   check('Responsáveis marked in the window and kept after ✕?', (await ev('Array.prototype.some.call(document.querySelectorAll("#crmPeople input"), function(i){ return i.value === "u2" && i.checked; })')) && !(await page.$('#mSheet')));
-  await page.click('[data-dp-for="crmLOrig"]');
+  await page.click('[data-dp-for="crmLDiag"]');
   await page.mouse.click(195, 40);
   check('tapping outside closes the window and keeps the task open?', !(await page.$('#mSheet')) && !!(await page.$('#ovCrm')));
   check('fields with the label above (one column)?', (await page.$eval('#ovCrm .crm-prop', (e) => getComputedStyle(e).gridTemplateColumns.split(' ').length)) === 1);

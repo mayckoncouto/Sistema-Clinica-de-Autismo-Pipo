@@ -90,7 +90,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (76, '2026-10-10i-crm-recorrencia',               exists(select 1 from fx where proname = 'tasks_recur'), ''),
  (77, '2026-10-10j-crm-lista-com-tarefas',          exists(select 1 from fx where proname = 'task_lists_guard'), ''),
  (78, '2026-10-10k-renomear-cadastros-de-texto',   exists(select 1 from fx where proname = 'rename_registry_text'), ''),
- (79, '2026-10-10l-excluir-usuario-tarefas',       exists(select 1 from fx where proname = 'profiles_tasks_cleanup'), '')
+ (79, '2026-10-10l-excluir-usuario-tarefas',       exists(select 1 from fx where proname = 'profiles_tasks_cleanup'), ''),
+ (80, '2026-10-10m-crm-dados-do-lead',             not exists(select 1 from public.tasks where lead ?| array['nascimento', 'responsavel', 'origem', 'email', 'plano']), 'só dados: SIM = nenhuma tarefa com os campos retirados')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

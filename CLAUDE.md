@@ -3374,3 +3374,9 @@ usuário/colaborador/profissional desligados, id repetido nas listas. Complement
 Testada no PGlite (também com CRLF). Correções só depois do resultado, em migração própria.
 - Produção (2026-10-10): conferência de integridade rodada — as 25 verificações deram 0 (nenhuma sobra).
 - (2026-10-10, pedido do usuário) Barra do CRM numa linha só no computador a partir de 1260px (busca e filtros encolhem com "…"; até 1700px "Outras opções" vira "Opções"); abaixo de 1260px quebra linha.
+- (2026-10-10, pedido do usuário) **CRM: "Dados do lead" só com Paciente ou Lead | Telefone / WhatsApp; Diagnóstico |
+  Convênio** (duas linhas). Saíram Nascimento, Responsável, Origem e E-mail (e o Plano antigo) da janela, da busca, da
+  planilha de tarefas e do "Cadastrar paciente" (leva nome, telefone e diagnóstico). Descrição da tarefa com 9 linhas
+  (`rows="9"`). Migração só de dados `supabase/2026-10-10m-crm-dados-do-lead.sql`: tira `nascimento`, `responsavel`,
+  `origem`, `email` e `plano` de `tasks.lead`; o que estava preenchido e ainda não aparece na Descrição vai para o fim
+  dela ("Dados do lead (campos retirados): …"). Testada no PGlite (também com CRLF e rodando 2 vezes).

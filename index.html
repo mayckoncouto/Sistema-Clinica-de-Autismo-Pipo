@@ -5854,7 +5854,7 @@ function crmConvName(x){ var p = x.patient_id ? findPatientById(x.patient_id) : 
 function crmTaskTags(task){
   var out = (task.tags || []).slice();
   var lead = task.lead || {};
-  if (lead.convenio) out.unshift(lead.convenio + (lead.plano ? " " + lead.plano : ""));
+  if (lead.convenio) out.unshift(lead.convenio);
   return out.filter(function(x, i, a){ return x && a.indexOf(x) === i; });
 }
 // Permissões das listas para a tela Níveis de permissão (js/usuarios.js).
@@ -6229,7 +6229,7 @@ function crmFilters(){
   return {q: normText(v("crmQ")), who: v("crmFWho"), prio: v("crmFPrio"), due: v("crmFDue")};
 }
 function crmPass(x, f){
-  if (f.q){ var hay = normText([x.title, x.description, (x.tags || []).join(" "), (x.lead || {}).nome, (x.lead || {}).responsavel, (x.lead || {}).convenio, x.patient_id ? (findPatientById(x.patient_id) || {}).nome : ""].join(" ")); if (hay.indexOf(f.q) === -1) return false; }
+  if (f.q){ var hay = normText([x.title, x.description, (x.tags || []).join(" "), (x.lead || {}).nome, (x.lead || {}).convenio, x.patient_id ? (findPatientById(x.patient_id) || {}).nome : ""].join(" ")); if (hay.indexOf(f.q) === -1) return false; }
   var as = x.assignees || [];
   if (f.who === "__me" && as.indexOf(crmMe()) === -1) return false;
   if (f.who === "__none" && as.length) return false;
@@ -6833,11 +6833,7 @@ function crmOpenTask(task, opts){
   var leadHtml = list.lead ? '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-h"><div class="crm-sec-t">Dados do lead</div>' + regPatBtn + '</div><div class="pat-count crm-lead-note crm-lf">Sem cadastro de paciente: estes dados passam para o cadastro ao usar "Cadastrar paciente".</div>' +
     '<div class="crm-props">' +
       whoHtml +
-      lf(prop('<span>Nascimento</span>', '<input id="crmLNasc" type="date" value="' + esc(lead.nascimento || "") + '"' + dis + '>')) +
-      lf(prop('<span>Responsável</span>', '<input id="crmLResp" type="text" value="' + esc(lead.responsavel || "") + '"' + dis + '>')) +
-      lf(prop('<span>Origem</span>', '<select id="crmLOrig" data-reg-add="origens"' + (isMobileView() ? '' : ' data-combo') + dis + '>' + originOptionsHtml(lead.origem || "") + '</select>')) +
       lf(prop('<span>Telefone / WhatsApp</span>', '<input id="crmLTel" type="text" data-phone inputmode="tel" value="' + esc(lead.telefone ? formatPhone(lead.telefone) : "") + '"' + dis + '>')) +
-      lf(prop('<span>E-mail</span>', '<input id="crmLEmail" type="email" value="' + esc(lead.email || "") + '"' + dis + '>')) +
       lf(prop('<span>Diagnóstico</span>', '<select id="crmLDiag" data-reg-add="diagnosticos"' + (isMobileView() ? '' : ' data-combo') + dis + '>' + diagOptionsHtml(lead.diagnostico || "") + '</select>')) +
       lf(prop('<span>Convênio</span>', '<select id="crmLConv" data-reg-add="convenios" data-reg-val="name"' + (isMobileView() ? '' : ' data-combo') + dis + '><option value="">Sem convênio / Particular</option>' +
         activeOnly(state.convenios || []).map(function(cv){ return opt(cv.name, cv.name, lead.convenio || ""); }).join("") +
@@ -6865,7 +6861,7 @@ function crmOpenTask(task, opts){
         '<button type="button" data-mtab="act" role="tab" aria-selected="false">Atividade' + (!isNew && CRM.comCount && CRM.comCount[x.id] ? ' <span class="crm-mtab-n">' + CRM.comCount[x.id] + '</span>' : '') + '</button></div>' +
       '<div class="crm-split"><div class="modal-body crm-main">' +
         // Nome do campo à esquerda e o campo ao lado (no celular, nome em cima). Ordem: Tarefa;
-        // Status, Responsáveis; Vencimento, Prioridade; Descrição (3 linhas); depois Dados do lead.
+        // Status, Responsáveis; Vencimento, Prioridade; Descrição (9 linhas); depois Dados do lead.
         '<div class="crm-props">' +
           prop('<span>Tarefa</span>', '<input id="crmTitleIn" type="text" maxlength="200" placeholder="Ex.: Ligar para agendar avaliação" value="' + esc(x.title) + '"' + dis + '>', true) +
           prop('<span>Status</span>', '<input type="hidden" id="crmSt" value="' + esc(x.status) + '"><button type="button" class="crm-prio-btn crm-prio-field" id="crmStBtn"' + dis + '></button>') +
@@ -6874,7 +6870,7 @@ function crmOpenTask(task, opts){
           prop('<span>Prioridade</span>', '<input type="hidden" id="crmPrio" value="' + esc(crmPrio(x.priority).id) + '"><button type="button" class="crm-prio-btn crm-prio-field" id="crmPrioBtn"' + dis + '>' + crmFlagSvg(crmPrio(x.priority)) + esc(crmPrio(x.priority).name) + '</button>') +
           (list.lead ? '' : whoHtml) +
           lossHtml +
-          prop('<span>Descrição</span>', '<textarea id="crmDesc" rows="3"' + dis + '>' + esc(x.description || "") + '</textarea>', true, "crmDescBox") +
+          prop('<span>Descrição</span>', '<textarea id="crmDesc" rows="9"' + dis + '>' + esc(x.description || "") + '</textarea>', true, "crmDescBox") +
         '</div>' +
         leadHtml +
       '</div>' + sideHtml + '</div>' +
@@ -7020,7 +7016,7 @@ function crmOpenTask(task, opts){
   function val(id){ var e = document.getElementById(id); return e ? e.value.trim() : ""; }
   function readLead(){
     var o = {nome: pid ? "" : whoIn.value.trim()};
-    if (list.lead && !pid){ o.nascimento = val("crmLNasc"); o.responsavel = val("crmLResp"); o.telefone = digitsOnly(val("crmLTel")); o.email = val("crmLEmail"); o.convenio = val("crmLConv"); o.diagnostico = val("crmLDiag"); o.origem = val("crmLOrig"); if (lead.plano) o.plano = lead.plano; }
+    if (list.lead && !pid){ o.telefone = digitsOnly(val("crmLTel")); o.diagnostico = val("crmLDiag"); o.convenio = val("crmLConv"); }
     if (list.lead) o.motivoPerda = val("crmLPerda");
     Object.keys(o).forEach(function(k){ if (!o[k]) delete o[k]; });
     return o;
@@ -7029,11 +7025,7 @@ function crmOpenTask(task, opts){
   var rp = document.getElementById("crmRegPat");
   if (rp) rp.addEventListener("click", function(){
     var ld = readLead(), pre = {nome: ld.nome || ""};
-    if (ld.nascimento) pre.nascimento = ld.nascimento;
-    if (ld.responsavel) pre.financeiro = {nome: ld.responsavel, telefone: ld.telefone || "", email: ld.email || ""};
-    if (ld.telefone) pre.telefones = [{numero: ld.telefone, nome: ld.responsavel || "", via: "whatsapp"}];
-    if (ld.email) pre.emails = [{email: ld.email, nome: ld.responsavel || ""}];
-    if (ld.origem) pre.comoConheceu = ld.origem;
+    if (ld.telefone) pre.telefones = [{numero: ld.telefone, nome: "", via: "whatsapp"}];
     if (ld.diagnostico) pre.cid = ld.diagnostico;
     var snapshot = {title: val("crmTitleIn"), st: stEl.value, due: val("crmDue"), prio: val("crmPrio"), desc: val("crmDesc"),
       people: Array.prototype.map.call(pPanel.querySelectorAll("input:checked"), function(c){ return c.value; }), lead: ld};
@@ -19857,12 +19849,12 @@ var HELP_TOPICS = [
   {id: "diagnosticos", group: "Cadastros", title: "Diagnósticos", mod: "diagnosticos", tab: "diagnosticos",
     purpose: "Lista de diagnósticos (código CID e descrição) escolhida no cadastro do paciente (grupo Saúde) e nos dados do lead do CRM.",
     steps: ["Cadastros → <b>Diagnósticos</b> → <b>+ Incluir</b>: código CID (opcional) e descrição.", "No paciente e no lead do CRM, o campo <b>Diagnóstico</b> lista este cadastro; no fim da lista, <b>+ Incluir</b> cadastra um diagnóstico novo sem sair da janela."],
-    rules: ["A lista mostra quantos pacientes têm cada diagnóstico.", "Diagnóstico usado por paciente não é excluído: é <b>Inativado</b>.", "Corrigir o nome (ou o código) troca o texto também nos pacientes e nos leads do CRM que usavam o nome anterior."],
+    rules: ["A lista mostra quantos pacientes têm cada diagnóstico.", "Diagnóstico usado por paciente não é excluído: é <b>Inativado</b>.", "Corrigir o nome (ou o código) troca o texto também nos pacientes que usavam o nome anterior."],
     who: "Permissão <b>Diagnósticos</b>."},
   {id: "origens", group: "Cadastros", title: "Origens", mod: "origens", tab: "origens",
-    purpose: "Como o paciente conheceu a clínica (Indicação médica, Escola, Internet…). Usada no cadastro do paciente e na Origem do lead do CRM.",
-    steps: ["Cadastros → <b>Origens</b> → <b>+ Incluir</b>: nome da origem.", "No paciente (Como conheceu a clínica) e no lead do CRM (Origem), o <b>+ Incluir</b> no fim da lista cadastra uma origem nova sem sair da janela."],
-    rules: ["A lista mostra quantos pacientes vieram de cada origem.", "Origem usada por paciente não é excluída: é <b>Inativada</b>.", "Corrigir o nome troca o texto também nos pacientes e nos leads do CRM que usavam o nome anterior."],
+    purpose: "Como o paciente conheceu a clínica (Indicação médica, Escola, Internet…). Usada no cadastro do paciente.",
+    steps: ["Cadastros → <b>Origens</b> → <b>+ Incluir</b>: nome da origem.", "No paciente (Como conheceu a clínica), o <b>+ Incluir</b> no fim da lista cadastra uma origem nova sem sair da janela."],
+    rules: ["A lista mostra quantos pacientes vieram de cada origem.", "Origem usada por paciente não é excluída: é <b>Inativada</b>.", "Corrigir o nome troca o texto também nos pacientes que usavam o nome anterior."],
     who: "Permissão <b>Origens</b>."},
   {id: "feriados", group: "Cadastros", title: "Feriados e recessos", mod: "feriados", tab: "feriados",
     purpose: "Datas em que a clínica não atende (ou atende só meio período): feriados nacionais, municipais e recessos.",
@@ -20008,7 +20000,7 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>CRM ▾</b> e escolha a lista (Atendimento, Agendas, Fature, Gestão…) ou <b>Minhas tarefas</b> (tudo o que está aberto com você). O primeiro item, <b>CRM</b>, mostra em cima um cartão por lista que você pode ver (abertas, vencidas, comigo; clique no cartão para abrir a lista) e embaixo a barra de busca e filtros com todas as tarefas dessas listas (coluna <b>Lista</b>; Lista ou Calendário). Ao entrar no CRM sem escolher uma lista (endereço #crm, atualizar a página), abre <b>Minhas tarefas</b>.",
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
-      "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz Paciente ou Lead, Nascimento, Responsável, Origem, Telefone / WhatsApp, E-mail, Diagnóstico e Convênio; <b>Cadastrar paciente</b> (à direita, na linha do título Dados do lead) abre o cadastro já preenchido (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
+      "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Na lista Atendimento, o grupo <b>Dados do lead</b> traz, em duas linhas, Paciente ou Lead e Telefone / WhatsApp, Diagnóstico e Convênio; <b>Cadastrar paciente</b> (à direita, na linha do título Dados do lead) abre o cadastro já preenchido com nome, telefone e diagnóstico (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
       "<b>Vencimento</b> (na janela da tarefa ou clicando na data da lista): nas listas com <b>Recorrência</b> ligada abre uma janela com atalhos à esquerda (Hoje, Amanhã, Este final de semana, Semana que vem, Próximo final de semana, 2 semanas, 4 semanas) e o calendário à direita; o ✕ ao lado da data tira o vencimento; nas outras listas abre o calendário normal. Também dá para digitar a data no campo. A opção <b>Recorrência</b> de cada lista fica em <b>CRM ▾ → Listas e status</b> (ao lado de Funil de contatos).",
       "<b>Outras opções ▾</b> na barra do CRM: <b>Exportar planilha</b> baixa um Excel com as tarefas da tela aberta (a lista, Minhas tarefas ou a tela CRM, com a busca, os filtros e “Finalizados”), com a coluna <b>Código</b> de cada tarefa. <b>Importar planilha</b>: linha com Código atualiza aquela tarefa; sem Código vira tarefa nova (sem Lista, vai para a lista aberta). Status pelo nome do status da lista; Prioridade Urgente, Alta ou Normal; Responsáveis pelos nomes (só quem tem acesso ao CRM e à lista); nome que não é paciente cadastrado vira lead. Dados do lead só nas listas com Funil de contatos. A prévia mostra Novo, Atualizar, Igual e Com problema antes de gravar, e o sistema baixa uma cópia antes de importar. Célula vazia não apaga; comentários e histórico não entram; não dá para mudar a tarefa de lista pela planilha.",
@@ -20026,7 +20018,7 @@ var HELP_TOPICS = [
       "Em <b>Listas e status</b>, lista ou status que tem tarefas não é excluído (contando todas as tarefas, também as que você não vê): mova as tarefas ou mude o status delas antes.",
       "Cada lista tem a sua permissão (ver, incluir, editar, excluir) em Níveis de permissão. Em Níveis de permissão, o grupo CRM começa pela permissão <b>CRM</b>: “Ver” dá o botão CRM do topo (tela CRM e Minhas tarefas) e a janela Listas e status; “Incluir”, “Editar” e “Excluir” valem para as listas e seus status. Depois vem uma linha para cada lista (ver, incluir, editar e excluir as tarefas dela), e toda lista nova ganha a sua linha. O Administrador sempre pode tudo.",
       "No celular, a janela da tarefa tem as abas Detalhes e Atividade: toque nelas ou deslize o dedo para o lado (para a esquerda abre Atividade, para a direita volta a Detalhes).",
-      "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Origem, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o nome do paciente ou lead (cortado com “…” quando não cabe), Vencimento e a bandeira da Prioridade; no Quadro, cada status ocupa a tela toda: deslize para o lado ou escolha o status no campo acima dos quadros; no Calendário, toque num dia para ver as tarefas dele. Na janela da tarefa, os botões <b>Detalhes</b> (campos e descrição) e <b>Atividade</b> (alterações, comentários e o campo para comentar) trocam o que aparece. Na tarefa nova já dá para comentar: o comentário fica marcado \"enviado ao salvar\" e vai junto quando a tarefa é salva."
+      "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Diagnóstico, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o nome do paciente ou lead (cortado com “…” quando não cabe), Vencimento e a bandeira da Prioridade; no Quadro, cada status ocupa a tela toda: deslize para o lado ou escolha o status no campo acima dos quadros; no Calendário, toque num dia para ver as tarefas dele. Na janela da tarefa, os botões <b>Detalhes</b> (campos e descrição) e <b>Atividade</b> (alterações, comentários e o campo para comentar) trocam o que aparece. Na tarefa nova já dá para comentar: o comentário fica marcado \"enviado ao salvar\" e vai junto quando a tarefa é salva."
     ],
     who: "Permissão de cada lista do CRM."},
   {id: "visaogeral", group: "Agenda", title: "Visão geral do dia", mod: "visao_geral", tab: "visaogeral",
@@ -24316,8 +24308,8 @@ function ioTaskExportRows(){
     var l = crmListById(x.list_id), st = crmStatus(l, x.status), ld = x.lead || {};
     return {codigo: x.id, lista: l ? l.name : "", status: st ? st.name : x.status, tarefa: x.title, quem: crmWhoName(x),
       resp: (x.assignees || []).map(crmPersonName).join(", "), venc: x.due_date ? trBr(x.due_date) : "", prio: crmPrio(x.priority).name,
-      desc: x.description || "", nasc: ld.nascimento ? trBr(ld.nascimento) : "", lresp: ld.responsavel || "", tel: ld.telefone ? formatPhone(ld.telefone) : "",
-      email: ld.email || "", origem: ld.origem || "", diag: ld.diagnostico || "", conv: ld.convenio || "", perda: ld.motivoPerda || "",
+      desc: x.description || "", tel: ld.telefone ? formatPhone(ld.telefone) : "",
+      diag: ld.diagnostico || "", conv: ld.convenio || "", perda: ld.motivoPerda || "",
       criada: x.created_at ? trBr(String(x.created_at).slice(0, 10)) : "", por: x.created_by_name || ""};
   });
 }
@@ -24388,8 +24380,7 @@ function ioTaskPlan(recs){
       if (pk){ var pv = IO_TASK_PRIOS[pk]; if (!pv) prob.push("Prioridade inválida: <b>" + esc(ioText(r.prio)) + "</b> (Urgente, Alta ou Normal)"); else set("priority", pv, "Prioridade", crmPrio(pv).name, cur ? crmPrio(cur.priority).name : ""); }
       var desc = ioText(r.desc); if (desc) set("description", desc, "Descrição", desc.length > 40 ? desc.slice(0, 40) + "…" : desc, cur ? (cur.description || "").slice(0, 40) : "");
       // Dados do lead (só em listas com funil de contatos)
-      var LF = [["nasc", "nascimento", "Nascimento"], ["lresp", "responsavel", "Responsável"], ["tel", "telefone", "Telefone"], ["email", "email", "E-mail"],
-        ["origem", "origem", "Origem"], ["diag", "diagnostico", "Diagnóstico"], ["conv", "convenio", "Convênio"], ["perda", "motivoPerda", "Motivo de perda"]];
+      var LF = [["tel", "telefone", "Telefone"], ["diag", "diagnostico", "Diagnóstico"], ["conv", "convenio", "Convênio"], ["perda", "motivoPerda", "Motivo de perda"]];
       var isPat = vals.patient_id || (cur && cur.patient_id && vals.patient_id !== null);
       LF.forEach(function(f){
         if (ioBlank(r[f[0]])) return;
@@ -24455,9 +24446,7 @@ IO_KINDS.tarefas = {label: "Tarefas do CRM", file: "tarefas", mod: "crm_listas",
     {k: "resp", h: "Responsáveis", alias: ["responsaveis"], w: 26, note: "nomes separados por vírgula"},
     {k: "venc", h: "Vencimento", alias: ["data de vencimento"], w: 12}, {k: "prio", h: "Prioridade", w: 11, note: "Urgente, Alta ou Normal"},
     {k: "desc", h: "Descrição", alias: ["descricao"], w: 40},
-    {k: "nasc", h: "Nascimento", alias: ["data de nascimento"], w: 12, note: "lead"}, {k: "lresp", h: "Responsável", alias: ["responsavel do lead"], w: 24, note: "lead"},
-    {k: "tel", h: "Telefone", alias: ["telefone / whatsapp", "whatsapp"], w: 16, note: "lead"}, {k: "email", h: "E-mail", alias: ["email"], w: 24, note: "lead"},
-    {k: "origem", h: "Origem", w: 18, note: "lead"}, {k: "diag", h: "Diagnóstico", alias: ["diagnostico"], w: 24, note: "lead"},
+    {k: "tel", h: "Telefone", alias: ["telefone / whatsapp", "whatsapp"], w: 16, note: "lead"}, {k: "diag", h: "Diagnóstico", alias: ["diagnostico"], w: 24, note: "lead"},
     {k: "conv", h: "Convênio", alias: ["convenio"], w: 18, note: "lead"}, {k: "perda", h: "Motivo de perda", w: 22, note: "lead"},
     {k: "criada", h: "Criada em", w: 12, note: "só na exportação"}, {k: "por", h: "Criada por", w: 20, note: "só na exportação"}
   ],

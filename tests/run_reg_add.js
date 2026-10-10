@@ -121,7 +121,7 @@ const path = require('path');
   await ev('crmGo("atendimento")'); await page.waitForTimeout(300);
   await ev('crmOpenTask(null, {listId: "atendimento"})'); await page.waitForTimeout(400);
   await page.fill('#crmWho', 'Lead Fictício'); await page.dispatchEvent('#crmWho', 'input'); await page.waitForTimeout(150);
-  for (const id of ['crmLDiag', 'crmLOrig', 'crmLConv']){
+  for (const id of ['crmLDiag', 'crmLConv']){
     await page.evaluate((id) => { const b = document.querySelector('[data-dp-for="' + id + '"]'); b.scrollIntoView({block: 'center'}); (b.querySelector('.dp-in') || b).click(); }, id);
     await page.waitForSelector('#dpPop'); const ok = await hasAdd(); await closePop();
     check('CRM lead: ' + id + ' has "+ Incluir"?', ok);
