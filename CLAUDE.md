@@ -3380,3 +3380,4 @@ Testada no PGlite (também com CRLF). Correções só depois do resultado, em mi
   (`rows="9"`). Migração só de dados `supabase/2026-10-10m-crm-dados-do-lead.sql`: tira `nascimento`, `responsavel`,
   `origem`, `email` e `plano` de `tasks.lead`; o que estava preenchido e ainda não aparece na Descrição vai para o fim
   dela ("Dados do lead (campos retirados): …"). Testada no PGlite (também com CRLF e rodando 2 vezes).
+- Produção (2026-10-10): `2026-10-10m-crm-dados-do-lead` rodada (tarefas_com_campos_antigos = 0).
