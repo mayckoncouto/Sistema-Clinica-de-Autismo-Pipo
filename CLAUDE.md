@@ -3622,3 +3622,4 @@ conferiu a lista (`supabase/conferencia-aba.sql`, só leitura) e escolheu **mant
   (testada no PGlite, 2 vezes e com CRLF; linha 88 em `conferencia-migracoes.sql`). Ajuda (tratamentos-terapeuta,
   pacientes). Testes: `run_aba_linha.js` (regra automática, padrão do quadro), `run_treatments.js`, `run_newfeatures.js`,
   `run_registries.js`, `run_planilhas.js`, `run_treatment_history.js`.
+- Produção (2026-10-10): `2026-10-10u-aba-so-nos-quadros` rodada (0 | 0 | 162 Sim | 85 Não).
