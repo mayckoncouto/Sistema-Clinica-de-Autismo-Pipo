@@ -85,6 +85,16 @@ const path = require('path');
   await page.waitForTimeout(150);
   check('patient list of the treatment: bottom window with a search field?', !!(await page.$('#mSheet .dp-filter')));
   await page.evaluate(() => { ['mSheet', 'mSheetBg', 'dpPop'].forEach((id) => { const e = document.getElementById(id); if (e) e.remove(); }); document.getElementById('modalHost').innerHTML = ''; });
+  // celular: cada opção da lista ocupa uma linha só (texto comprido termina em "…"), ex.: Diagnóstico (CID)
+  await page.evaluate(() => { document.querySelector('#mainTabs button[data-tab="pacientes"]').click(); });
+  await page.waitForTimeout(200); await page.click('#addPatientBtn'); await page.waitForTimeout(400);
+  await page.evaluate(() => { const b = document.querySelector('#modalHost [data-dp-for="pf-cid"]'); b.scrollIntoView({block: 'center'}); b.click(); });
+  await page.waitForTimeout(150);
+  const one = await page.evaluate(() => { const o = [...document.querySelectorAll('#mSheet .dp-opt')]; const hs = o.map((x) => Math.round(x.getBoundingClientRect().height));
+    const long = o.find((x) => /F98.9/.test(x.textContent)); const lr = long ? long.getBoundingClientRect() : null;
+    return {n: o.length, maxH: Math.max.apply(null, hs), minH: Math.min.apply(null, hs), cut: long ? long.scrollWidth > long.clientWidth && getComputedStyle(long).textOverflow === 'ellipsis' : null, inside: lr ? lr.right <= window.innerWidth + 1 : null}; });
+  check('mobile list options: one line each (long text ends in "…", no overlap)?', one.n > 10 && one.maxH === one.minH && one.maxH <= 54 && one.cut === true && one.inside, JSON.stringify(one));
+  await page.evaluate(() => { ['mSheet', 'mSheetBg', 'dpPop'].forEach((id) => { const e = document.getElementById(id); if (e) e.remove(); }); document.getElementById('modalHost').innerHTML = ''; });
   // várias opções (Tipos do colaborador): painel na parte de baixo com o título do campo
   await page.evaluate(() => { document.querySelector('#mainTabs button[data-tab="colaboradores"]').click(); });
   await page.waitForTimeout(200); await page.click('#staffAddBtn'); await page.waitForTimeout(400);
