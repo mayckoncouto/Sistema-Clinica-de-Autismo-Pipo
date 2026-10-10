@@ -3320,4 +3320,4 @@ tarefas, também as que a pessoa não vê; `crmLoadUsage` ao abrir a lista, em `
 com a quantidade. Banco: gatilho `task_lists_guard` (BEFORE UPDATE em `documents`, `config/task_lists`) recusa tirar
 lista ou status com tarefas. Migração `supabase/2026-10-10j-crm-lista-com-tarefas.sql` (testada no PGlite). Ajuda (CRM) e
 teste no fim de `tests/run_agd_done.js`. `conferencia-migracoes.sql` ganhou as linhas 76 (10i) e 77 (10j).
-- Produção: 2026-10-10j AINDA NÃO rodada.
+- Produção (2026-10-10): `2026-10-10j-crm-lista-com-tarefas` rodada (conferência 1 | 1).
