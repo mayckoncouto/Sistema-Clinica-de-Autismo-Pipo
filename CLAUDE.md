@@ -3511,3 +3511,5 @@ Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead �
   de cadastro, `#crmSendLink`). Sem sistema online, tudo em `INTAKE.mem`. Migração
   `supabase/2026-10-10r-link-de-cadastro.sql`. Teste `tests/run_intake.js` (inclui a página pública
   com o Supabase simulado). Ajuda: tópico "link-cadastro".
+- Produção (2026-10-10): `2026-10-10o` (0), `2026-10-10p` (0 | 0 | 0), `2026-10-10q` (0 | 1) e
+  `2026-10-10r` (2 tabelas | 3 funções) rodadas.
