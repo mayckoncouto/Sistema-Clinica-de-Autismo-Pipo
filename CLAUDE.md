@@ -3220,3 +3220,4 @@ Decisões do usuário (QUALQUER status conta): excluir = só Administrador; data
   renomear/mesclar), `appointments_sync_record` (AFTER UPDATE: evolução recebe data/horário/profissional novos) e
   `rename_group` com `pipo.merging`. Testada no PGlite com usuário comum e Administrador.
 - Teste `tests/run_agd_done.js` (cria `tests/page_ad.html`).
+- Produção (2026-10-10): `2026-10-10c-atendimento-realizado-protegido` rodada (travas = 3).
