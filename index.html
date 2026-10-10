@@ -418,10 +418,7 @@ div.ag-obj-head{cursor:default}
 /* Computador: nome do campo à esquerda (coluna fixa) e o campo ao lado, todos alinhados. */
 @media (min-width:761px){
   #ovCrm .crm-props{column-gap:14px}
-  /* lateral Atividade: campo de comentar em cima (logo abaixo do título), 3 linhas */
-  #ovCrm .crm-side-head{order:0}
-  #ovCrm .crm-side .crm-comment{order:1;border-top:0;border-bottom:1px solid var(--line)}
-  #ovCrm .crm-side-body{order:2}
+  /* lateral Atividade: campo de comentar embaixo, 3 linhas */
   #ovCrm #crmCommentIn{min-height:0;height:calc(3 * 1.5em + 16px)}
   #ovCrm .crm-prop{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:8px}
   #ovCrm .crm-prop.wide{grid-template-columns:96px minmax(0,1fr)}
@@ -617,6 +614,12 @@ div.ag-obj-head{cursor:default}
 .crm-ev-h{display:flex;align-items:center;gap:6px;margin-bottom:3px}
 .crm-ev-h .crm-av{width:20px;height:20px;font-size:9px}
 .crm-ev-when{color:var(--muted);font-size:11px;white-space:nowrap;margin-left:auto}
+/* Várias alterações seguidas ficam recolhidas em "Visualizar alterações" (mesma letra das linhas). */
+.crm-feed-more{border:0;background:none;padding:0 0 0 12px;margin:0;width:100%;text-align:left;cursor:pointer;font:inherit}
+.crm-feed-more>span:first-child{text-decoration:underline;text-underline-offset:2px;text-decoration-color:color-mix(in srgb, var(--ink-2) 45%, transparent)}
+.crm-feed-more:hover>span:first-child{color:var(--ink);text-decoration-color:currentColor}
+.crm-feed-grp{display:flex;flex-direction:column;gap:8px}
+.crm-feed-grp[hidden]{display:none}
 .crm-mention{color:var(--accent);font-weight:700}
 .crm-comment{position:relative;margin-top:8px}
 /* Campo de comentário: caixa branca com o texto em cima e a barra neutra embaixo (espaço para funções futuras) + Enviar. */
@@ -6759,10 +6762,26 @@ function crmActivityLoad(taskId){
     var sorted = evs.map(function(e, i){ return {e: e, i: i}; }).sort(function(a, b){
       return (tms(a.e) - tms(b.e)) || ((a.e.kind === "comment") - (b.e.kind === "comment")) || (a.i - b.i);
     }).map(function(x){ return x.e; });
-    feed.innerHTML = sorted.length ? sorted.map(function(e){
-      if (e.kind !== "comment") return '<div class="crm-feed-h"><span>' + crmEventText(e, list) + '</span><span class="crm-ev-when">' + esc(crmWhen(e.created_at)) + '</span></div>';
-      return crmCommentHtml(e);
-    }).join("") : '<div class="pat-count">Nenhuma atividade ainda.</div>';
+    // Duas ou mais alterações seguidas (sem comentário no meio) ficam recolhidas num
+    // "Visualizar alterações", que abre e fecha a lista ao clicar.
+    function lineHtml(e){ return '<div class="crm-feed-h"><span>' + crmEventText(e, list) + '</span><span class="crm-ev-when">' + esc(crmWhen(e.created_at)) + '</span></div>'; }
+    var parts = [], run = [];
+    function flush(){
+      if (run.length === 1) parts.push(lineHtml(run[0]));
+      else if (run.length > 1) parts.push('<button type="button" class="crm-feed-h crm-feed-more" data-feed-more aria-expanded="false"><span>Visualizar alterações</span>' +
+        '<span class="crm-ev-when">' + esc(crmWhen(run[run.length - 1].created_at)) + '</span></button><div class="crm-feed-grp" hidden>' + run.map(lineHtml).join("") + '</div>');
+      run = [];
+    }
+    sorted.forEach(function(e){ if (e.kind !== "comment"){ run.push(e); return; } flush(); parts.push(crmCommentHtml(e)); });
+    flush();
+    feed.innerHTML = parts.length ? parts.join("") : '<div class="pat-count">Nenhuma atividade ainda.</div>';
+    feed.querySelectorAll("[data-feed-more]").forEach(function(b){
+      b.addEventListener("click", function(){
+        var g = b.nextElementSibling, open = g.hidden;
+        g.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
+        b.firstChild.textContent = open ? "Ocultar alterações" : "Visualizar alterações";
+      });
+    });
     sorted.forEach(function(e){ if (e.kind === "comment" && e.id){ var cd = feed.querySelector('[data-cmt-id="' + (window.CSS && CSS.escape ? CSS.escape(e.id) : e.id) + '"]'); if (cd) cd.__body = e.body || ""; } });
     crmCommentActionsWire(feed, taskId, null, null);
     var sb = document.querySelector("#crmSide .crm-side-body"); if (sb) sb.scrollTop = sb.scrollHeight;
