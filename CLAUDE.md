@@ -3635,7 +3635,14 @@ estrutura continua exigindo a confirmação do usuário antes (mostrar o script 
 dados de saúde. Nunca copiar dados reais de pacientes para arquivos do repositório.
 - Primeira conferência pelo conector (2026-10-10): 10u confirmada (0 | 0 | 162 | 85); conferência de migrações 79 SIM e
   1 NÃO = 10m, porque 15 tarefas importadas do ClickUp (`created_by_name = 'ClickUp'`, chave `lead.clickup`) chegaram
-  depois da 10m com nascimento/email/origem/responsavel no lead. Aguardando decisão do usuário.
+  depois da 10m com nascimento/email/origem/responsavel no lead.
+- (2026-10-10, pedido do usuário "leve os dados para descrição") 10m rodada de novo pelo conector nessas 15
+  tarefas: os campos antigos saíram do lead; nada foi acrescentado porque os valores já estavam nas descrições.
+  Conferência: 0 tarefas com campos antigos.
+- (2026-10-10, pedido do usuário "quero permitir sempre") `.claude/settings.json` libera sem perguntar as ferramentas
+  do conector Supabase (`execute_sql`, `list_tables`, `list_projects`, `get_project`, `list_migrations`,
+  `list_extensions`, `get_advisors`, `query_logs`, `search_docs`). A regra acima continua: SQL que ALTERA dados ou
+  estrutura só depois da confirmação do usuário no chat.
 
 ## Barras das telas: uma linha no computador, até 3 no celular (2026-10-10, REGRA FIXA do usuário para todo o sistema)
 Busca, filtros e botões de cada tela: **computador numa linha só** (a partir de 1280px; entre 761 e 1279px no máximo 2
