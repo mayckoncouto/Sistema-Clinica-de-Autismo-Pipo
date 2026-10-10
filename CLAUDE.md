@@ -3301,4 +3301,4 @@ do Planner do profissional (`PLB.list`, `alvo "prof"`). A janela do colaborador 
   `supabase/2026-10-10i-crm-recorrencia.sql`; sem sistema online `crmMemRecur` faz igual. nova=false: mesma tarefa
   volta ao status com a próxima data; nova=true: insere cópia (a recorrência passa para ela). Evento
   `field/recorrencia`. Conta igual nos dois lados (`crm_rec_next` / `crmRecNext`; mês sem o dia = último dia).
-- Produção: 2026-10-10i AINDA NÃO rodada (até rodar, salvar recorrência dá erro de coluna).
+- Produção (2026-10-10): 2026-10-10i rodada (conferência 1 | 1).
