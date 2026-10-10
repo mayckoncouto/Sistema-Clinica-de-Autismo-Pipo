@@ -20732,6 +20732,7 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Restaurar é só com o Administrador. Repõe o que estava no backup e não apaga o que foi criado depois.",
+      "O arquivo leva cadastros, Planner, Agenda, Prontuário, planos terapêuticos, tarefas e comentários do CRM e links de cadastro. A lista de usuários e os níveis vão só para consulta: usuários apagados precisam ser criados de novo.",
       "Quem não é Administrador baixa só o que o seu nível pode ver.",
       "O arquivo tem dados de saúde: não envie por WhatsApp ou e-mail.",
       "Baixe um backup antes de qualquer atualização do banco."
@@ -20854,8 +20855,9 @@ function helpAddQButtons(){
 
 /* ---------------- Cópia de segurança (menu Acesso, só Administrador) ----------------
  * Baixar: lê no navegador (o Administrador enxerga tudo) os documentos (cadastros,
- * Planner, clínica), a Agenda (appointments), o Prontuário (clinical_records) e os
- * níveis de permissão (roles, só para consulta) e baixa um arquivo .json.
+ * Planner, clínica), a Agenda (appointments), o Prontuário (clinical_records), planos,
+ * CRM (tasks, task_events), links de cadastro (intake_links/intake_submissions) e, só
+ * para consulta, níveis (roles) e usuários (profiles); baixa um arquivo .json.
  * Restaurar: lê o arquivo e manda em lotes para /api/admin-backup (service role),
  * que faz upsert — repõe o que estava na cópia, sem apagar o que veio depois.
  * O arquivo tem dados de saúde: nunca versionar nem mandar por canais abertos.
@@ -20870,7 +20872,12 @@ var BACKUP_TABLES = [
   {name: "staff", order: "id", label: "Colaboradores", restore: true, optional: true},
   {name: "staff_pay", order: "staff_id", label: "Remuneração dos colaboradores", restore: true, optional: true},
   {name: "therapy_plans", order: "id", label: "Planos terapêuticos", restore: true, optional: true},
-  {name: "roles", order: "id", label: "Níveis de permissão (só consulta)", restore: false}
+  {name: "tasks", order: "id", label: "Tarefas do CRM", restore: true, optional: true},
+  {name: "task_events", order: "id", label: "Comentários e histórico do CRM", restore: true, optional: true},
+  {name: "intake_links", order: "token", label: "Links de cadastro", restore: true, optional: true},
+  {name: "intake_submissions", order: "id", label: "Respostas dos links de cadastro", restore: true, optional: true},
+  {name: "roles", order: "id", label: "Níveis de permissão (só consulta)", restore: false},
+  {name: "profiles", order: "id", label: "Usuários (só consulta)", restore: false, optional: true}
 ];
 var BACKUP_LAST_KEY = "agendaPipo:lastBackup";
 function backupFetchAll(c, t){
@@ -20961,7 +20968,7 @@ function openBackupModal(){
       '</div><button class="modal-close" id="closeBackup" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="bk-card"><b>Baixar backup</b>' +
-          '<div class="bk-txt">Pacientes, profissionais, salas, grupos, convênios, serviços, especialidades, status, clínica, Planner, Agenda, tratamentos (com valores) e evoluções do Prontuário.</div>' +
+          '<div class="bk-txt">Pacientes, colaboradores, salas, grupos, convênios, serviços, especialidades, status, clínica, Planner, Agenda, tratamentos (com valores), evoluções do Prontuário, planos terapêuticos, tarefas e comentários do CRM, links de cadastro e a lista de usuários (só para consulta).</div>' +
           '<div class="bk-txt bk-warn">O arquivo tem dados de saúde dos pacientes: guarde numa pasta protegida (ex.: Google Drive da clínica com acesso restrito). Não envie por WhatsApp ou e-mail.</div>' +
           '<div class="bk-row"><button class="btn primary" id="bkDownload">Baixar backup</button>' +
           '<span class="bk-txt" id="bkLast">' + (last ? "Último backup baixado neste aparelho: " + esc(prStamp(last)) : "Nenhum backup baixado neste aparelho ainda.") + '</span></div>' +
@@ -20991,7 +20998,7 @@ function openBackupModal(){
     setBusy(true); status("Preparando o backup…");
     backupDownload(status).then(function(data){
       var n = BACKUP_TABLES.map(function(t){ return (data[t.name] || []).length; });
-      status("Backup baixado: " + n[0] + " cadastros, " + n[1] + " atendimentos, " + n[2] + " evoluções. Confira a pasta de downloads.");
+      status("Backup baixado: " + n[0] + " cadastros, " + n[1] + " atendimentos, " + n[2] + " evoluções, " + (data.tasks || []).length + " tarefas do CRM. Confira a pasta de downloads.");
       var l = document.getElementById("bkLast"); if (l) l.textContent = "Último backup baixado neste aparelho: " + prStamp(new Date().toISOString());
     }).catch(function(e){ status("Não foi possível baixar: " + (e.message || e), true); })
       .then(function(){ setBusy(false); });
@@ -21010,7 +21017,8 @@ function openBackupModal(){
       loaded = obj;
       var T = obj.tabelas;
       info.innerHTML = 'Backup de <b>' + esc(prStamp(obj.criado_em)) + '</b>' + (obj.clinica ? ' — ' + esc(obj.clinica) : '') + ': ' +
-        (T.documents || []).length + ' cadastros, ' + (T.appointments || []).length + ' atendimentos, ' + (T.clinical_records || []).length + ' evoluções.';
+        (T.documents || []).length + ' cadastros, ' + (T.appointments || []).length + ' atendimentos, ' + (T.clinical_records || []).length + ' evoluções' +
+        (T.tasks ? ', ' + T.tasks.length + ' tarefas do CRM' : ' (backup antigo, sem o CRM)') + '.';
       btn.hidden = false;
     };
     rd.onerror = function(){ info.textContent = "Não foi possível ler o arquivo."; };

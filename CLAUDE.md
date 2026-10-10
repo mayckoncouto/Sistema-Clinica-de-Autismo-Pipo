@@ -3658,3 +3658,33 @@ título**. Bloco "Barras das telas" no fim do `<style>` (`index.html`). Teste fi
   Responsável, Prioridade, Vencimento — `vgFillFilters`, `crmFillFilters`; trocar a largura refaz).
 - Planner: entre 761 e 1100px a barra quebra em 2 linhas (antes a 1024px o "?" saía da tela).
 - (2026-10-10, pedido do usuário) Janela da tarefa do CRM: **Enviar link de cadastro** (`#crmSendLink`) e **Cadastrar paciente** (`#crmRegPat`) ficam no menu **Outras opções ▾** na linha do título "Dados do Paciente/Lead", à direita (`#crmMoreBtn`/`#crmMoreMenu`, `.crm-more-wrap`, mesmo padrão do menu do Tratamento, posição por `placeToolsMenu`); saíram da linha do título "Dados do Paciente/Lead". O menu some quando nenhuma opção vale (paciente cadastrado ou sem permissão; `crmMoreSync` em `whoRefresh`). Teste em `run_crm.js`.
+
+## Revisão geral do sistema (2026-10-10)
+Pedido do usuário: "verificação completa de todo o sistema… sempre pergunte tudo antes de fazer alterações".
+Resultado (só leitura, pelo conector): banco igual ao `schema.sql`, todas as migrações aplicadas, 25 conferências de
+integridade zeradas, 1.313 checagens dos testes OK, sem erros nos registros do banco, quem não fez login não lê dados.
+Pontos encontrados e decisões do usuário (todas as correções aprovadas):
+- **Backup não levava o CRM** (839 tarefas, 2.177 comentários/históricos), links de cadastro nem usuários. Agora
+  `BACKUP_TABLES` inclui `tasks`, `task_events`, `intake_links`, `intake_submissions` (restaurar) e `profiles` (só
+  consulta; `task_reads` fica de fora). `api/admin-backup.js` restaura essas 4 pela RPC `backup_restore_crm(p_table,
+  p_rows)` (só service_role): marca `pipo.restore` na transação e os gatilhos `tasks_stamp`, `task_events_stamp`,
+  `tasks_history`, `tasks_assignees_guard`, `tasks_recur`, `task_events_edit_guard`, `intake_links_stamp`,
+  `intake_submissions_stamp` deixam passar o que veio (datas e autores originais, sem histórico novo). Usuário que não
+  existe mais vira null (e sai de `assignees`/`mentions`); comentário de tarefa que não existe é pulado; link geral
+  antigo volta cancelado se já há um ativo. Teste `tests/run_backup_api.js` (no `npm test`).
+- `planner_backups` (cópia de 02/10, 40 linhas, sem uso) apagada.
+- Segurança: EXECUTE das funções do `public` tirado de `public`/`anon` (ficam `intake_form`, `intake_send`,
+  `intake_link_state` para a página do link); padrão novo: função criada pelo postgres NÃO nasce aberta para anon —
+  função nova para a página pública precisa de `grant execute ... to anon` explícito. `search_path` fixo em
+  `treatments_one_active`, `treatments_cancel_rules`, `module_for_path`, `crm_rec_next`, `intake_link_state`.
+  A opção "senhas vazadas" do Supabase Auth é ligada pelo usuário no painel.
+- Velocidade: 6 políticas com `(select auth.uid())` (clinical_records update/delete, profiles_select, task_events
+  update/delete, task_reads_own).
+- Tudo na migração `supabase/2026-10-10v-revisao-geral.sql` (testada no PGlite 2× com CRLF; linha 89 da conferência
+  de migrações; `schema.sql` e `conferencia-geral.sql` atualizados).
+- `conferencia-dos-dados.sql` atualizada (profissional `nome`, bloqueio `lock`, paciente pelo código).
+- CPF do paciente: em produção já NÃO é obrigatório (`config/patient_fields.fields.cpf.req = false`).
+- Dados a completar (planilha entregue ao usuário FORA do repositório): 96 pacientes ativos sem CPF; 11 tratamentos
+  ativos incompletos (valor, Sessão/Mês, convênio, horário); 113 tratamentos ativos sem quadros (limpos em 10/10, a
+  recadastrar); 341 atendimentos passados sem status (Agenda → Outras opções → Pendências / Status em lote; Finalizado
+  não entra no lote, exige evolução).

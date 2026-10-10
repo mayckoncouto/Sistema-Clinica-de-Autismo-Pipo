@@ -2,6 +2,7 @@
 -- Agenda Pipo — CONFERÊNCIA DOS DADOS (só lê, não altera nada)
 -- Cada linha é uma verificação: quantidade encontrada e até 15 exemplos.
 -- Quantidade 0 = tudo certo naquele ponto.
+-- (Atualizada em 2026-10-10: nomes novos — profissional "nome", bloqueio "lock" — e paciente pelo código.)
 -- =====================================================================
 with
 pac as (
@@ -14,7 +15,7 @@ tra as (
   from public.documents d, jsonb_array_elements(coalesce(d.data -> 'list', '[]')) e
   where d.path = 'treatments/all'),
 prof as (
-  select e ->> 'id' as id, btrim(e ->> 'name') as nome, coalesce((e ->> 'inativo')::boolean, false) as inativo
+  select e ->> 'id' as id, btrim(coalesce(e ->> 'nome', e ->> 'name')) as nome, coalesce((e ->> 'inativo')::boolean, false) as inativo
   from public.documents d, jsonb_array_elements(coalesce(d.data -> 'list', '[]')) e
   where d.path = 'config/professionals'),
 sala as (
@@ -28,7 +29,9 @@ coluna as (
 plan as (   -- agendamentos do Planner: chave "hora|sala|coluna"
   select d.path as doc, k.key as chave, split_part(k.key, '|', 2) as sala_id, split_part(k.key, '|', 3) as col_id,
          btrim(coalesce(k.value ->> 'patient', k.value #>> '{}', '')) as nome,
-         coalesce((k.value ->> 'blocked')::boolean, false) as bloqueado
+         nullif(k.value ->> 'patientId', '') as pid,
+         (coalesce((k.value ->> 'blocked')::boolean, false) or coalesce((k.value ->> 'lock')::boolean, false)
+          or coalesce((k.value ->> 'training')::boolean, false)) as bloqueado
   from public.documents d, jsonb_each(coalesce(d.data -> 'bookings', '{}')) k
   where d.path like 'schedule/%'),
 especial(nome) as (values ('bloqueado'), ('reunião clínica'), ('treinamento'), ('virtual'), (''))
@@ -42,11 +45,12 @@ select * from (
          string_agg(distinct nome, '; ') filter (where rn <= 15)
   from (select p.*, row_number() over (order by nome) rn from plan p
         where not p.bloqueado and lower(p.nome) not in (select nome from especial)
-          and not exists (select 1 from pac where lower(pac.nome) = lower(p.nome))
+          and not exists (select 1 from pac where pac.id = p.pid or lower(pac.nome) = lower(p.nome))
           and not exists (select 1 from sala where lower(sala.nome) = lower(p.nome))) x
   union all
   select 3, 'Planner: paciente INATIVO ainda agendado', count(*), string_agg(distinct nome, '; ') filter (where rn <= 15)
-  from (select p.*, row_number() over (order by p.nome) rn from plan p join pac on lower(pac.nome) = lower(p.nome) where pac.inativo) x
+  from (select p.*, row_number() over (order by p.nome) rn from plan p
+          join pac on pac.id = p.pid or (p.pid is null and lower(pac.nome) = lower(p.nome)) where pac.inativo) x
   union all
   select 4, 'Salas/grupos: coluna com profissional inexistente ou inativo', count(*),
          string_agg(sala || ' → ' || coalesce(prof_id, '(vazio)'), '; ') filter (where rn <= 15)
@@ -79,24 +83,27 @@ select * from (
          string_agg(distinct patient, '; ') filter (where rn <= 15)
   from (select a.*, row_number() over (order by patient) rn from public.appointments a
         where a.date >= current_date and not a.blocked and lower(btrim(a.patient)) not in (select nome from especial)
-          and not exists (select 1 from pac where lower(pac.nome) = lower(btrim(a.patient)))
+          and a.group_id is null
+          and not exists (select 1 from pac where pac.id = a.patient_id or lower(pac.nome) = lower(btrim(a.patient)))
           and not exists (select 1 from sala where sala.grupo and lower(sala.nome) = lower(btrim(a.patient)))) x
   union all
   select 12, 'Agenda (de hoje em diante): paciente INATIVO agendado', count(*),
          string_agg(to_char(date, 'DD/MM') || ' ' || patient, '; ') filter (where rn <= 15)
-  from (select a.*, row_number() over (order by date) rn from public.appointments a join pac on lower(pac.nome) = lower(btrim(a.patient))
+  from (select a.*, row_number() over (order by date) rn from public.appointments a
+          join pac on pac.id = a.patient_id or (a.patient_id is null and lower(pac.nome) = lower(btrim(a.patient)))
         where a.date >= current_date and pac.inativo) x
   union all
   select 13, 'Agenda: atendimentos de PACIENTES que já passaram e continuam sem status', count(*),
          string_agg(to_char(date, 'DD/MM') || ' ' || patient, '; ') filter (where rn <= 15)
   from (select a.*, row_number() over (order by date desc) rn from public.appointments a
-        where a.date < current_date and a.status is null and not a.blocked and lower(btrim(a.patient)) not in (select nome from especial)
+        where a.date < current_date and a.status is null and not a.blocked and a.group_id is null
+          and lower(btrim(a.patient)) not in (select nome from especial)
           and not exists (select 1 from sala where sala.grupo and lower(sala.nome) = lower(btrim(a.patient)))) x
   union all
   select 14, 'Agenda: "Finalizado" sem evolução no prontuário', count(*),
          string_agg(to_char(date, 'DD/MM') || ' ' || patient, '; ') filter (where rn <= 15)
   from (select a.*, row_number() over (order by date desc) rn from public.appointments a
-        where a.status = 'finalizado' and exists (select 1 from pac where lower(pac.nome) = lower(btrim(a.patient)))
+        where a.status = 'finalizado' and (a.patient_id is not null or exists (select 1 from pac where lower(pac.nome) = lower(btrim(a.patient))))
           and not exists (select 1 from public.clinical_records c where c.appointment_id = a.id)) x
   union all
   select 15, 'Usuários ATIVOS ligados a profissional inexistente ou inativo', count(*),

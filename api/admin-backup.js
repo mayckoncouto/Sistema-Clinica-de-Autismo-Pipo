@@ -7,7 +7,7 @@
 // usuário logado — ver supabase/2026-10-03-copia-de-seguranca.sql).
 //
 // POST /api/admin-backup   Authorization: Bearer <access_token do usuário>
-//   { action: "restore", table: "documents" | "appointments" | "clinical_records" | "patient_health" | "treatment_finance" | "convenio_finance" | "staff" | "staff_pay" | "therapy_plans", rows: [...] }
+//   { action: "restore", table: "documents" | "appointments" | "clinical_records" | "patient_health" | "treatment_finance" | "convenio_finance" | "staff" | "staff_pay" | "therapy_plans" | "tasks" | "task_events" | "intake_links" | "intake_submissions", rows: [...] }
 //
 // Só acrescenta ou sobrescreve (upsert): nada que foi criado depois da cópia
 // é apagado. O app manda as linhas em lotes pequenos (limite de 4,5 MB da Vercel).
@@ -108,6 +108,31 @@ var TABLES = {
     cols: ["id", "patient_id", "patient_name", "appointment_id", "appointment_date", "appointment_time",
            "professional_id", "author_id", "author_name", "content", "plan_goals", "created_at", "updated_at"],
     users: ["author_id"]
+  },
+  // CRM e links de cadastro: gravados pela função backup_restore_crm (supabase/2026-10-10v),
+  // que mantém datas e autores originais e não refaz o histórico das tarefas.
+  tasks: {
+    key: "id", rpc: true,
+    cols: ["id", "list_id", "status", "title", "description", "priority", "due_date", "assignees", "tags", "patient_id",
+           "lead", "position", "created_by", "created_by_name", "created_at", "updated_at", "closed_at", "recurrence"],
+    users: ["created_by"], userLists: ["assignees"]
+  },
+  task_events: {
+    key: "id", rpc: true,
+    cols: ["id", "task_id", "kind", "body", "data", "mentions", "author_id", "author_name", "created_at", "edited_at"],
+    users: ["author_id"], userLists: ["mentions"]
+  },
+  intake_links: {
+    key: "token", rpc: true,
+    cols: ["token", "kind", "patient_id", "task_id", "nome", "telefone", "prefill", "created_by", "created_by_name",
+           "created_at", "expires_at", "used_at", "canceled_at", "reminded_at"],
+    users: ["created_by"]
+  },
+  intake_submissions: {
+    key: "id", rpc: true,
+    cols: ["id", "token", "kind", "patient_id", "task_id", "data", "status", "created_at", "reviewed_by",
+           "reviewed_by_name", "reviewed_at", "result_patient_id"],
+    users: ["reviewed_by"]
   }
 };
 
@@ -148,8 +173,22 @@ module.exports = async function handler(req, res) {
       var o = {};
       cfg.cols.forEach(function (c) { if (Object.prototype.hasOwnProperty.call(r, c)) o[c] = r[c]; });
       cfg.users.forEach(function (c) { if (o[c] && !known[o[c]]) o[c] = null; });
+      (cfg.userLists || []).forEach(function (c) { if (Array.isArray(o[c])) o[c] = o[c].filter(function (u) { return known[u]; }); });
       clean.push(o);
     });
+    if (cfg.rpc) {
+      var rp = await call("/rest/v1/rpc/backup_restore_crm", {
+        method: "POST", headers: adminHeaders(),
+        body: JSON.stringify({ p_table: body.table, p_rows: clean })
+      });
+      if (!rp.ok) {
+        var m = errMsg(rp, "Não foi possível gravar.");
+        if (/backup_restore_crm/.test(String(m))) m = "Falta rodar no banco o SQL 2026-10-10v (restaurar o CRM).";
+        res.status(400).json({ error: m }); return;
+      }
+      res.status(200).json({ ok: true, count: typeof rp.body === "number" ? rp.body : clean.length });
+      return;
+    }
     // PostgREST exige as mesmas colunas em todas as linhas de um upsert em lote:
     // linhas com conjuntos de colunas diferentes vão em envios separados (sem
     // inventar null, que quebraria colunas obrigatórias).
