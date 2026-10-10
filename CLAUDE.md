@@ -3302,7 +3302,6 @@ do Planner do profissional (`PLB.list`, `alvo "prof"`). A janela do colaborador 
   `field/recorrencia`. Conta igual nos dois lados (`crm_rec_next` / `crmRecNext`; mês sem o dia = último dia).
 - Produção (2026-10-10): 2026-10-10i rodada (conferência 1 | 1).
 
-- Produção: 2026-10-10i AINDA NÃO rodada (até rodar, salvar recorrência dá erro de coluna).
 
 ## Especialidade, Escala e Habilidade em uso (2026-10-10, item 10 da auditoria)
 Decisão do usuário: contar tudo; em uso = Inativar. `USAGE.especialidades` conta também áreas complementares dos
