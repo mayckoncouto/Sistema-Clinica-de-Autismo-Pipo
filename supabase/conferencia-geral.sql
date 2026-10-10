@@ -162,6 +162,7 @@ exp_fn(n, h) as (values
   ('module_for_path', '56edcb5b7be1ab645cbcc573a23c86f6'),
   ('patch_bookings', 'f1048c245f7da4e753ff3873bde48331'),
   ('patch_list', '544e1fc702d007da62da6425ce3d7f6f'),
+  ('patch_list2', '9b462c54eaeb736a12a1e16a5860f964'),
   ('patient_health_stamp', 'ca17694625e84511c0f4e3934edbb770'),
   ('plan_prof_update', 'e4a3d9a49af6abdfde1f9b49f919c159'),
   ('profiles_guard', 'b6db53ddb4e4126bbf0b2033188a99a4'),

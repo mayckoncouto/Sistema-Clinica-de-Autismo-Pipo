@@ -4482,7 +4482,7 @@ function confirmDialog(opts){
           '<div class="modal-head"><div><h3 id="cfTitle">'+esc(opts.title || "Confirmar exclusão")+'</h3></div></div>' +
           '<div class="modal-body"><div class="confirm-msg">'+(opts.message || "")+'</div></div>' +
           '<div class="modal-foot"><div class="spacer"></div>' +
-            '<button class="btn ghost" id="cfCancel">Cancelar</button>' +
+            '<button class="btn ghost" id="cfCancel">'+esc(opts.cancelLabel || "Cancelar")+'</button>' +
             '<button class="btn danger-solid" id="cfOk">'+esc(opts.confirmLabel || "Excluir")+'</button>' +
           '</div>' +
         '</div>' +
@@ -4903,14 +4903,75 @@ function subscribeSimpleLists(){
     state.patientFields = (snap.exists && snap.data() && snap.data().fields) || {};
   }, function(){});
 }
+// ---- Cadastros em lista: grava só o que mudou e confere quem mexeu antes (2026-10-10) ----
+// Cada item novo/alterado ganha o carimbo _upd {por, em}. O banco (patch_list2) troca só esses
+// itens e tira os excluídos, numa transação com trava: duas pessoas mexendo em itens diferentes
+// não se apagam mais. Se o item mudou depois que a pessoa o abriu (carimbo diferente do que ela
+// tinha), o banco recusa e o app pergunta: "Salvar assim mesmo" ou "Recarregar".
+function listCanon(x){
+  return JSON.stringify(x, function(k, v){
+    if (v && typeof v === "object" && !Array.isArray(v)){ var o = {}; Object.keys(v).sort().forEach(function(kk){ if (v[kk] !== undefined) o[kk] = v[kk]; }); return o; }
+    return v;
+  });
+}
+function listPrepare(oldList, newList){
+  var oldById = {}, oldIds = [];
+  (oldList || []).forEach(function(x){ if (x && x.id != null){ oldById[x.id] = x; oldIds.push(String(x.id)); } });
+  var now = new Date().toISOString(), who = (typeof trWho === "function" ? trWho() : "") || "";
+  var ups = [], expect = {}, seen = {}, upIds = {};
+  var list = (newList || []).map(function(x){
+    if (!x || x.id == null) return x;
+    seen[x.id] = true;
+    var o = oldById[x.id];
+    if (o && listCanon(o) === listCanon(x)) return x;
+    if (o) expect[x.id] = (x._upd && x._upd.em) || "";
+    var st = Object.assign({}, x, {_upd: {por: who, em: now}});
+    ups.push(st); upIds[x.id] = true;
+    return st;
+  });
+  var dels = oldIds.filter(function(id){ return !seen[id]; });
+  // Ordem que o banco teria sozinho (mantidos no lugar, novos no fim); diferente = manda a ordem.
+  var auto = oldIds.filter(function(id){ return seen[id]; });
+  list.forEach(function(x){ if (x && x.id != null && !oldById[x.id]) auto.push(String(x.id)); });
+  var mine = list.filter(function(x){ return x && x.id != null; }).map(function(x){ return String(x.id); });
+  return {list: list, ups: ups, dels: dels, expect: expect, order: auto.join("\u0001") === mine.join("\u0001") ? null : mine, empty: !ups.length && !dels.length && auto.join("\u0001") === mine.join("\u0001")};
+}
+// Grava a lista preparada. Resolve true (gravou) ou false (a pessoa escolheu Recarregar);
+// outros erros seguem para o catch de quem chamou. Sem patch_list2 no banco (falta o SQL)
+// ou nos testes, grava a lista inteira como antes.
+function listCommit(path, prep, force){
+  var ref = db.doc(path);
+  if (prep.empty) return Promise.resolve(true);
+  if (!ref.patchList2) return ref.set({list: prep.list}).then(function(){ return true; });
+  return ref.patchList2(prep.ups, prep.dels, {expect: prep.expect, order: prep.order, force: !!force}).then(function(){ return true; }, function(e){
+    if (e && e.code === "nofunc") return ref.set({list: prep.list}).then(function(){ return true; });
+    if (!e || e.code !== "conflict") throw e;
+    var items = (e.conflicts || []).map(function(c){
+      var nm = c.nome || "um item";
+      if (c.excluido) return "<b>" + esc(nm) + "</b> foi excluído por outra pessoa";
+      var hora = c.em ? new Date(c.em) : null;
+      return "<b>" + esc(nm) + "</b> foi alterado" + (c.por ? " por " + esc(c.por) : " por outra pessoa") +
+        (hora && !isNaN(hora) ? " às " + String(hora.getHours()).padStart(2, "0") + ":" + String(hora.getMinutes()).padStart(2, "0") : "");
+    });
+    return confirmDialog({title: "Alterado enquanto você editava",
+      message: items.join("<br>") + ".<br><br><b>Salvar assim mesmo</b>: a sua versão substitui a dela.<br><b>Recarregar</b>: a sua alteração não é salva e a tela mostra a versão atual.",
+      confirmLabel: "Salvar assim mesmo", cancelLabel: "Recarregar"}).then(function(ok){
+      if (ok) return listCommit(path, prep, true);
+      if (ref.reload) ref.reload();
+      showToast("Sua alteração não foi salva. A tela mostra a versão atual.");
+      return false;
+    });
+  });
+}
 function writeSimpleList(k, list){
   var c = SIMPLE_LISTS[k];
   var denied = listPermDenied(c.module, state[c.key], list);
   if (denied){ showToast(denied, true); return Promise.resolve(false); }
-  state[c.key] = list;
+  var prep = listPrepare(state[c.key], list);
+  state[c.key] = prep.list;
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(false); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(false); }
-  return db.doc(c.path).set({list: list}).then(function(){ return true; }).catch(function(e){
+  return listCommit(c.path, prep).catch(function(e){
     var m = (e && e.message) || "";
     showToast(/check constraint|documents_path_valid/i.test(m) ? "Falta rodar a atualização do banco (" + c.label + ")." : "Não foi possível salvar " + c.label + ".", true);
     return false;
@@ -4919,10 +4980,11 @@ function writeSimpleList(k, list){
 function writeCancelReasons(list){
   var denied = listPermDenied("motivos_cancelamento", state.cancelReasons, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
-  state.cancelReasons = list;
+  var prep = listPrepare(state.cancelReasons, list);
+  state.cancelReasons = prep.list;
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
-  return db.doc("config/cancel_reasons").set({list: list}).catch(function(e){
+  return listCommit("config/cancel_reasons", prep).catch(function(e){
     var m = (e && e.message) || "";
     showToast(/check constraint|documents_path_valid/i.test(m) ? "Falta rodar a atualização do banco (motivos de cancelamento)." : "Não foi possível salvar os motivos.", true);
   });
@@ -6809,7 +6871,7 @@ function crmOpenListsModal(){
     if (changed && !canE) miss.push("editar listas");
     if (miss.length){ showToast("Seu nível não pode " + miss.join(", ") + " (Níveis de permissão → CRM – Listas e status).", true); return; }
     if (!db){ CRM.lists = draft; crmRebuildNav(); close(); crmRender(); return; }
-    db.doc("config/task_lists").set({list: draft}).then(function(){ close(); showToast("Listas salvas."); }, function(e){ showToast("Não foi possível salvar: " + ((e && e.message) || e), true); });
+    listCommit("config/task_lists", listPrepare(orig, draft)).then(function(ok){ close(); if (ok) showToast("Listas salvas."); }, function(e){ showToast("Não foi possível salvar: " + ((e && e.message) || e), true); });
   });
 }
 
@@ -7629,9 +7691,9 @@ function plbSame(b, alvo, id, roomId){
 }
 function plbWrite(list){
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(false); }
-  var prev = PLB.list;
-  PLB.list = list; PLB.idx = null; queueGridUpdate();
-  return db.doc("config/planner_blocks").set({list: list}).then(function(){ return true; }).catch(function(e){
+  var prev = PLB.list, prep = listPrepare(prev, list);
+  PLB.list = prep.list; PLB.idx = null; queueGridUpdate();
+  return listCommit("config/planner_blocks", prep).catch(function(e){
     PLB.list = prev; PLB.idx = null; queueGridUpdate();
     showToast("Não foi possível gravar o bloqueio" + (e && e.message ? ": " + e.message : "."), true);
     return false;
@@ -10889,12 +10951,13 @@ function writePatients(list){
   });
   var denied = listPermDenied("pacientes", state.patientsRaw, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
-  state.patientsRaw = list;
+  var prep = listPrepare(state.patientsRaw, list);
+  state.patientsRaw = list = prep.list;
   rebuildPatients();
   renderPatientsTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
-  return db.doc("patients/all").set({list:list}).then(function(){ return true; }).catch(function(){
+  return listCommit("patients/all", prep).catch(function(){
     showToast("Não foi possível salvar as alterações do paciente.", true);
     return false;
   });
@@ -11002,11 +11065,12 @@ function openSpecialtiesModal(){
 function writeSpecialties(list){
   var denied = listPermDenied("especialidades", state.specialties, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
-  state.specialties = list;
+  var prep = listPrepare(state.specialties, list);
+  state.specialties = prep.list;
   renderPatientsTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
-  return db.doc("config/specialties").set({list:list}).catch(function(){
+  return listCommit("config/specialties", prep).catch(function(){
     showToast("Não foi possível salvar as especialidades.", true);
   });
 }
@@ -11262,7 +11326,7 @@ function openStatusesModal(){
     }) : Promise.resolve(true)).then(function(ok){
       if (!ok) return;
       if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return; }
-      db.doc("config/statuses").set({list: clean}).then(function(){
+      listCommit("config/statuses", listPrepare(state.statuses, clean)).then(function(){
         state.statuses = clean; close(); showToast("Status salvos."); if (state.tab === "agenda") agdRender();
       }).catch(function(){ showToast("Não foi possível salvar os status.", true); });
     });
@@ -11306,8 +11370,9 @@ function openStatusItem(item){
   cb.addEventListener("click", function(){ if (cb.disabled) return; openColorPicker(cb, color, function(hex){ color = hex; cb.style.background = hex; }); });
   function write(list, msg){
     if (!db){ state.statuses = list; close(); renderRegistryTab("status"); showToast(msg); return Promise.resolve(); }
-    return db.doc("config/statuses").set({list: list}).then(function(){
-      state.statuses = list; close(); showToast(msg); renderRegistryTab("status"); if (state.tab === "agenda") agdRender();
+    var prep = listPrepare(state.statuses, list);
+    return listCommit("config/statuses", prep).then(function(){
+      state.statuses = prep.list; close(); showToast(msg); renderRegistryTab("status"); if (state.tab === "agenda") agdRender();
     }, function(){ showToast("Não foi possível salvar os status.", true); });
   }
   var sv = document.getElementById("stiSave");
@@ -11334,10 +11399,11 @@ function openStatusItem(item){
 function writeServices(list){
   var denied = listPermDenied("servicos", state.services, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
-  state.services = list;
+  var prep = listPrepare(state.services, list);
+  state.services = prep.list;
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
-  return db.doc("config/services").set({list:list}).catch(function(){
+  return listCommit("config/services", prep).catch(function(){
     showToast("Não foi possível salvar os serviços.", true);
   });
 }
@@ -11345,11 +11411,12 @@ function writeServices(list){
 function writeConvenios(list){
   var denied = listPermDenied("convenios", state.convenios, list);
   if (denied){ showToast(denied, true); return Promise.resolve(); }
-  state.convenios = list;
+  var prep = listPrepare(state.convenios, list);
+  state.convenios = prep.list;
   renderPatientsTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
-  return db.doc("config/convenios").set({list:list}).catch(function(){
+  return listCommit("config/convenios", prep).catch(function(){
     showToast("Não foi possível salvar os convênios.", true);
   });
 }
@@ -12381,14 +12448,15 @@ function writeProfessionals(list, strict){
   list = (list || []).map(profNorm);
   var denied = listPermDenied("colaboradores", state.professionals, list); // profissional = colaborador
   if (denied) return fail(denied);
-  state.professionals = list;
+  var prep = listPrepare(state.professionals, list);
+  state.professionals = list = prep.list;
   renderProfissionaisTab();
   if (state.tab === "colaboradores") renderStaffTab();
   renderAgendaShell();
   renderRelatorioTab();
   if (!db) return fail("Não salvo: sem conexão com o servidor.");
   if (state.writable === false) return fail("Modo somente leitura — alteração não salva.");
-  return db.doc("config/professionals").set({list:list}).catch(function(e){
+  return listCommit("config/professionals", prep).catch(function(e){
     return fail("Não foi possível salvar os dados de atendimento (horário, especialidade…) do profissional" + (e && e.message ? ": " + e.message : "."));
   });
 }
@@ -12629,13 +12697,14 @@ function writeRooms(list){
   var denied = listPermDenied("salas", state.rooms.filter(function(r){ return !isGroup(r); }), list.filter(function(r){ return !isGroup(r); })) ||
     listPermDenied("grupos", state.rooms.filter(isGroup), list.filter(isGroup));
   if (denied){ showToast(denied, true); return Promise.resolve(); }
-  state.rooms = list;
+  var prep = listPrepare(state.rooms, list);
+  state.rooms = list = prep.list;
   renderAgendaShell();
   renderSalasTab();
   renderRelatorioTab();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
-  return db.doc("config/rooms").set({list:list}).then(function(){ return true; }).catch(function(){
+  return listCommit("config/rooms", prep).catch(function(){
     showToast("Não foi possível salvar a sala.", true);
   });
 }
@@ -17885,20 +17954,13 @@ function writeTreatments(list){
   if (denied){ showToast(denied, true); return Promise.resolve(false); }
   // Grava só os tratamentos alterados/novos e tira os excluídos (patch_list):
   // duas pessoas salvando tratamentos diferentes ao mesmo tempo não se apagam.
-  var before = {}, ups = [], dels = [];
-  (state.treatments || []).forEach(function(t){ before[t.id] = JSON.stringify(t); });
-  list.forEach(function(t){ if (before[t.id] !== JSON.stringify(t)) ups.push(t); delete before[t.id]; });
-  dels = Object.keys(before);
-  state.treatments = list;
+  var prep = listPrepare(state.treatments, list);
+  state.treatments = list = prep.list;
   rebuildPatients();
   afterTreatmentsChange();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(false); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(false); }
-  var ref = db.doc("treatments/all");
-  var save = ref.patchList
-    ? ref.patchList(ups, dels).catch(function(e){ if (e && e.code === "nofunc") return ref.set({list: list}); throw e; })
-    : ref.set({list: list});
-  return save.then(function(){ return true; }).catch(function(e){
+  return listCommit("treatments/all", prep).catch(function(e){
     var m = (e && e.message) || "";
     // A permissão já é avisada pelo adaptador; a regra "um só ativo" vem do banco com o motivo.
     if (!(e && e.code === "permission")) showToast(/tratamento ativo|cancelad|motivo/i.test(m) ? m : "Não foi possível salvar o tratamento.", true);
@@ -18895,6 +18957,7 @@ var HELP_TOPICS = [
     rules: [
       "Você só vê as telas e os botões que o seu nível de permissão libera. Se faltar algo, fale com o Administrador.",
       "Toda exclusão pede confirmação.",
+      "Duas pessoas podem mexer nos cadastros ao mesmo tempo: cada uma grava só o que alterou. Se outra pessoa alterou o mesmo cadastro depois que você o abriu, ao salvar aparece o aviso “Alterado enquanto você editava”, com quem alterou e a hora: <b>Salvar assim mesmo</b> grava a sua versão por cima; <b>Recarregar</b> descarta a sua e mostra a versão atual.",
       "No celular, o menu fica no botão ☰ do canto superior. Planner e Resumo não aparecem no celular."
     ],
     who: "Todos os usuários."},

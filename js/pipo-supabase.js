@@ -203,6 +203,34 @@
           }
         });
       },
+      // Cadastros em lista (2026-10-10): grava só os itens alterados/novos, tira os excluídos e,
+      // se veio, aplica a ordem; recusa (code "conflict", e.conflicts) quando um item mudou depois
+      // que a pessoa o abriu (carimbo _upd diferente de opts.expect). Sem a função no banco
+      // (falta o SQL 2026-10-10b), code "nofunc" e o app grava a lista inteira como antes.
+      patchList2: function (upserts, deletes, opts) {
+        opts = opts || {};
+        return client.rpc("patch_list2", { p_path: path, p_upserts: upserts || [], p_deletes: deletes || [],
+          p_expect: opts.expect || {}, p_order: opts.order || null, p_force: !!opts.force }).then(function (r) {
+          if (r.error) {
+            var m = r.error.message || "";
+            if (/patch_list2/i.test(m) && /does not exist|not find|schema cache|could not find/i.test(m)) { var nf = new Error(m); nf.code = "nofunc"; throw nf; }
+            var cm = m.match(/PIPO_CONFLITO:(\[.*\])/);
+            if (cm) {
+              var ce = new Error("Alterado por outra pessoa"); ce.code = "conflict";
+              try { ce.conflicts = JSON.parse(cm[1]); } catch (x) { ce.conflicts = []; }
+              throw ce;
+            }
+            fetchDoc(path, true).then(function (d) { lastData[path] = d; emit(path); }).catch(function () {});
+            var e = friendlyError(r.error);
+            if (e.code === "permission") toast(e.message, true);
+            throw e;
+          }
+        });
+      },
+      // Relê o documento do banco e avisa a tela (usado em "Recarregar" após conflito).
+      reload: function () {
+        return fetchDoc(path, true).then(function (d) { lastData[path] = d; emit(path); });
+      },
       // Gravação atômica só das chaves alteradas (ver patch_bookings no schema.sql).
       patchBookings: function (changes) {
         return client.rpc("patch_bookings", { p_path: path, p_changes: changes }).then(function (r) {

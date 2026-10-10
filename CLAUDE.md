@@ -3164,8 +3164,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
 
 ## Auditoria de integridade dos dados (2026-10-10) — PENDÊNCIAS (nada corrigido ainda)
 Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A resolver:
-- ALTA 1. Documentos-lista gravados inteiros (`writePatients`, `writeRooms`, `writeProfessionals`, `writeSimpleList`…
-  `.set({list})`): duas pessoas salvando juntas = a última apaga a mudança da outra. Só Tratamentos usa `patch_list`.
+- ~~ALTA 1~~ FEITO (2026-10-10, ver "Cadastros em lista gravam só o item" abaixo).
 - ALTA 2. Atendimento com status (Finalizado/Não compareceu/Falta justificada) ou com evolução: lixeira/Desmarcar
   (`agdDeleteRow` só confere evolução p/ não-admin) e mover/editar (`agdPlace`, janela) mudam data/paciente/profissional;
   a evolução guarda data própria e fica divergente; contagens de realizado/sessões usadas mudam.
@@ -3185,3 +3184,23 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - MÉDIA 12. Importação de Tratamentos apaga os "tr-…" sem apagar `treatment_finance`.
 - BAIXA 13–16: renomear Diagnóstico/Origem/Convênio não propaga (texto guardado); excluir usuário deixa o código nos
   responsáveis das tarefas; excluir tarefa apaga comentários; fechar dia da clínica esconde agendamentos do Planner.
+
+## Cadastros em lista gravam só o item; aviso de alteração simultânea (2026-10-10, item 1 da auditoria)
+Decisões do usuário: mesmo item alterado por duas pessoas = AVISAR e deixar escolher; vale para TODOS os cadastros em lista.
+- `listPrepare(antiga, nova)` (perto de `writeSimpleList`): compara item a item (`listCanon`, JSON com chaves em
+  ordem), carimba os novos/alterados com `_upd {por: trWho(), em: ISO}`, separa `ups`/`dels`, guarda em `expect[id]`
+  o carimbo que o item alterado tinha quando foi aberto e só manda `order` quando a ordem mudou. `listCommit(path,
+  prep, force)`: `ref.patchList2` (RPC `patch_list2`); conflito (`code "conflict"`, `e.conflicts`) → `confirmDialog`
+  "Alterado enquanto você editava" (quem e a hora; "excluído por outra pessoa") com **Salvar assim mesmo** (força) /
+  **Recarregar** (`ref.reload()` relê e avisa a tela; resolve false). Sem a função no banco (`nofunc`) ou nos testes
+  (sem `patchList2`), grava a lista inteira como antes. `confirmDialog` aceita `cancelLabel`.
+- Usado em: `writeSimpleList` (Médicos, Escolas, CBO, Conselhos, Feriados, Tipos, Diagnósticos, Origens, Escalas,
+  Habilidades, Objetivos…), `writeCancelReasons`, Listas do CRM, `plbWrite`, `writePatients`, `writeSpecialties`,
+  Status (janela), `writeServices`, `writeConvenios`, `writeProfessionals`, `writeRooms`, `writeTreatments`.
+  O estado da tela recebe a lista JÁ carimbada (`prep.list`), senão a 2ª gravação seguida daria conflito falso.
+  Edição sempre a partir do item ABERTO (`Object.assign({}, itemAberto, form)`) — é o carimbo dele que vale.
+- `js/pipo-supabase.js`: `patchList2(ups, dels, {expect, order, force})` (reconhece `PIPO_CONFLITO:[…]`) e `reload()`.
+- Banco: `supabase/2026-10-10b-gravar-so-o-item.sql` (`patch_list2`, security invoker: RLS e `documents_enforce`
+  continuam; recusa com `PIPO_CONFLITO:`; `p_order` põe no fim os itens que a pessoa não via). Testada no PGlite.
+- Ajuda: regra no tópico "Visão geral do sistema". Teste `tests/run_list_patch.js` (cria `tests/page_lp.html` com
+  banco simulado que tem `patchList2`/`reload`).

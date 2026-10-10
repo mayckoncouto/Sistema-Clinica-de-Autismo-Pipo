@@ -78,7 +78,9 @@ chk (ordem, migracao, aplicada, obs) as (values
                    and jsonb_typeof(e.value) = 'object' and coalesce((e.value ->> 'view')::boolean, false))), 'SIM = nenhum nível pendente; pode rodar de novo'),
  (65, '2026-10-09e-crm-responsavel-com-acesso',    exists(select 1 from fx where proname = 'crm_user_can'), 'pode rodar de novo sem risco'),
  (66, '2026-10-09f-diagnosticos-e-origens',        exists(select 1 from pathdef where d like '%diagnoses%'), ''),
- (67, '2026-10-09g-acerto-pendentes',              exists(select 1 from fx where proname = 'roles_before_delete') and exists(select 1 from fx where proname = 'treatments_one_active'), 'repõe o que faltava da 30b, 02m, 03c e 08c')
+ (67, '2026-10-09g-acerto-pendentes',              exists(select 1 from fx where proname = 'roles_before_delete') and exists(select 1 from fx where proname = 'treatments_one_active'), 'repõe o que faltava da 30b, 02m, 03c e 08c'),
+ (68, '2026-10-10-reinstala-funcoes',              null::boolean, 'conferir com a conferência geral'),
+ (69, '2026-10-10b-gravar-so-o-item',              exists(select 1 from fx where proname = 'patch_list2'), '')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,
