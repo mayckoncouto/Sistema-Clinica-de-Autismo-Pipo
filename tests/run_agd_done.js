@@ -140,6 +140,21 @@ const path = require('path');
   })()`);
   check('colaborador com evolução e bloqueio: em uso?', cb.indexOf('1 evolução no Prontuário') !== -1 && cb.indexOf('1 bloqueio de horário no Planner') !== -1, cb);
 
+  // Item 10: especialidade, escala e habilidade contam o Banco de objetivos e os planos.
+  const sp10 = await ev(`(function(){
+    var gb = state.goalBank, profs = state.professionals, areas = state.skillAreas;
+    state.goalBank = [{id: "g1", name: "Obj", areaId: "hab1", scaleId: "esc1", specIds: ["spx"]}];
+    state.professionals = profs.concat([{id: "pz", nome: "Prof Z", specialtyId: "outra", complementares: ["spx"]}]);
+    state.skillAreas = [{id: "hab1", name: "Hab", specIds: ["spx"]}];
+    PLAN.mem = [{id: "p1", patient_id: "pa", version: 1, status: "vigente", sections: [{areaId: "hab1", objectives: [{id: "o1", specIds: ["spx"], scaleId: "esc1"}]}]}];
+    PLAN.rows = null;
+    return Promise.all([USAGE.especialidades({id: "spx"}), USAGE.escalas({id: "esc1"}), USAGE.habilidades({id: "hab1"})]).then(function(r){
+      state.goalBank = gb; state.professionals = profs; state.skillAreas = areas; PLAN.mem = []; PLAN.rows = null; return r;
+    });
+  })()`);
+  check('especialidade: complementar, habilidade, banco e plano?', sp10[0].join('|') === '1 profissional com ela como área complementar|1 habilidade (especialidade sugerida)|1 objetivo no Banco de objetivos|1 objetivo de plano terapêutico', sp10[0]);
+  check('escala e habilidade: plano e banco?', sp10[1].length === 2 && sp10[2].length === 2 && /Banco/.test(sp10[1][1]) && /Banco/.test(sp10[2][1]), sp10);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

@@ -3178,8 +3178,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~ALTA 7~~ FEITO (2026-10-10, ver "Excluir Plano Terapêutico" abaixo).
 - ~~MÉDIA 8~~ FEITO (2026-10-10, ver "Grupo de suporte em uso na Agenda" abaixo).
 - ~~MÉDIA 9~~ FEITO (2026-10-10, ver "Colaborador em uso" abaixo).
-- MÉDIA 10. Especialidade não conta Banco de objetivos/planos/habilidades/áreas complementares; Escala e Habilidade não
-  contam o Banco de objetivos (`planUseCount` só lê planos).
+- ~~MÉDIA 10~~ FEITO (2026-10-10, ver "Especialidade, Escala e Habilidade em uso" abaixo).
 - MÉDIA 11. CRM Listas e status: "lista/status com tarefas" conferido só nas tarefas que a pessoa vê; banco não confere.
 - MÉDIA 12. Importação de Tratamentos apaga os "tr-…" sem apagar `treatment_finance`.
 - BAIXA 13–16: renomear Diagnóstico/Origem/Convênio não propaga (texto guardado); excluir usuário deixa o código nos
@@ -3302,3 +3301,13 @@ do Planner do profissional (`PLB.list`, `alvo "prof"`). A janela do colaborador 
   volta ao status com a próxima data; nova=true: insere cópia (a recorrência passa para ela). Evento
   `field/recorrencia`. Conta igual nos dois lados (`crm_rec_next` / `crmRecNext`; mês sem o dia = último dia).
 - Produção (2026-10-10): 2026-10-10i rodada (conferência 1 | 1).
+
+- Produção: 2026-10-10i AINDA NÃO rodada (até rodar, salvar recorrência dá erro de coluna).
+
+## Especialidade, Escala e Habilidade em uso (2026-10-10, item 10 da auditoria)
+Decisão do usuário: contar tudo; em uso = Inativar. `USAGE.especialidades` conta também áreas complementares dos
+profissionais (`complementares`, sem contar quem já a tem como principal), habilidades com ela nas especialidades
+sugeridas (`skillAreasList()[].specIds`), Banco de objetivos (`goalBankUseCount("specIds", id)` — objetivo sem
+especialidade = todas, não conta) e objetivos de planos (`planSpecUseCount`). `USAGE.escalas` / `USAGE.habilidades`
+somam `goalBankUseCount("scaleId"|"areaId", id)`. Só no app; sem SQL. Ajuda (especialidades, escalas, habilidades) e
+teste no fim de `tests/run_agd_done.js`.

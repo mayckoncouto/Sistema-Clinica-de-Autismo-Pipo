@@ -4415,9 +4415,9 @@ function rowUseCount(table, col, val, mem){
 function useTxt(n, one, many){ return n ? n + " " + (n === 1 ? one : many) : null; }
 // Onde cada cadastro está em uso (lista de textos; vazia = livre para excluir).
 var USAGE = {
-  escalas: function(sc){ return planUseCount("scaleId", sc.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos")].filter(Boolean); }); },
+  escalas: function(sc){ return planUseCount("scaleId", sc.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos"), useTxt(goalBankUseCount("scaleId", sc.id), "objetivo no Banco de objetivos", "objetivos no Banco de objetivos")].filter(Boolean); }); },
   objetivos: function(g){ return planUseCount("goalId", g.id).then(function(n){ return n ? [n + (n === 1 ? " objetivo em plano terapêutico" : " objetivos em planos terapêuticos")] : []; }); },
-  habilidades: function(a){ return planUseCount("areaId", a.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos")].filter(Boolean); }); },
+  habilidades: function(a){ return planUseCount("areaId", a.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos"), useTxt(goalBankUseCount("areaId", a.id), "objetivo no Banco de objetivos", "objetivos no Banco de objetivos")].filter(Boolean); }); },
   tiposcolab: function(t){ return Promise.resolve([useTxt(staffTypeUseCount(t.id), "pessoa", "pessoas")].filter(Boolean)); },
   medicos: function(m){ return Promise.resolve([useTxt(patientsUsing("medicoId", m.id), "paciente", "pacientes")].filter(Boolean)); },
   escolas: function(e){ return Promise.resolve([useTxt(patientsUsing("escolaId", e.id), "paciente", "pacientes")].filter(Boolean)); },
@@ -4473,8 +4473,14 @@ var USAGE = {
     var trs = state.treatments.filter(function(t){ return (t.specHours || []).some(function(h){ return h.specId === sp.id; }); }).length;
     var convs = state.convenios.filter(function(c){ return convSpecList(c).indexOf(sp.id) !== -1; }).length;
     var libs = state.specialties.filter(function(x){ return x.id !== sp.id && specLibera(x.id).indexOf(sp.id) !== -1; }).length;
-    return Promise.resolve([useTxt(profs, "profissional", "profissionais"), useTxt(trs, "tratamento", "tratamentos"), useTxt(convs, "convênio", "convênios"),
-      useTxt(libs, "especialidade que a libera", "especialidades que a liberam")].filter(Boolean));
+    var compl = state.professionals.filter(function(p){ return p.specialtyId !== sp.id && Array.isArray(p.complementares) && p.complementares.indexOf(sp.id) !== -1; }).length;
+    var habs = skillAreasList().filter(function(a){ return Array.isArray(a.specIds) && a.specIds.indexOf(sp.id) !== -1; }).length;
+    return planSpecUseCount(sp.id).catch(function(){ return 0; }).then(function(nPlan){
+      return [useTxt(profs, "profissional", "profissionais"), useTxt(compl, "profissional com ela como área complementar", "profissionais com ela como área complementar"),
+        useTxt(trs, "tratamento", "tratamentos"), useTxt(convs, "convênio", "convênios"),
+        useTxt(libs, "especialidade que a libera", "especialidades que a liberam"), useTxt(habs, "habilidade (especialidade sugerida)", "habilidades (especialidade sugerida)"),
+        useTxt(goalBankUseCount("specIds", sp.id), "objetivo no Banco de objetivos", "objetivos no Banco de objetivos"), useTxt(nPlan, "objetivo de plano terapêutico", "objetivos de planos terapêuticos")].filter(Boolean);
+    });
   },
   motivos: function(m){
     return Promise.resolve([useTxt(state.treatments.filter(function(t){ return t.motivoCancel === m.id; }).length, "tratamento cancelado", "tratamentos cancelados")].filter(Boolean));
@@ -19681,7 +19687,8 @@ var HELP_TOPICS = [
     rules: ["No tratamento (especialidades/serviços), no convênio (especialidades cobertas) e no colaborador (especialidade principal), <b>+ Incluir</b> no fim da lista cadastra uma especialidade nova sem sair da janela.", 
       "A cor da especialidade aparece nos agendamentos e nos cabeçalhos.",
       "As sessões do tratamento são contadas por especialidade.",
-      "A liberação vale para todos os convênios: o convênio que cobre esta especialidade passa a cobrir também as liberadas, com o mesmo valor por sessão."
+      "A liberação vale para todos os convênios: o convênio que cobre esta especialidade passa a cobrir também as liberadas, com o mesmo valor por sessão.",
+      "Especialidade em uso (profissionais, áreas complementares, tratamentos, convênios, liberações, habilidades, Banco de objetivos ou objetivos de planos) não é excluída: é <b>Inativada</b>."
     ],
     who: "Permissão <b>Especialidades</b>."},
   {id: "medicos", group: "Cadastros", title: "Médicos", mod: "medicos", tab: "medicos",
@@ -19734,12 +19741,12 @@ var HELP_TOPICS = [
   {id: "escalas", group: "Prontuário", title: "Escalas", mod: "escalas", tab: "escalas",
     purpose: "Escalas usadas na Situação dos objetivos do Plano terapêutico (ex.: Likert de 0 a 5, ABA).",
     steps: ["Prontuário ▾ → <b>Escalas</b> → <b>+ Incluir</b>: nome e os níveis, do primeiro ao final.", "Cada nível tem nome e cor (clique no círculo para escolher). Use ▲▼ para mudar a ordem e <b>+ nível</b> para acrescentar.", "<b>Outras opções ▾</b>: <b>Exportar planilha</b> e <b>Importar planilha</b> (uma linha por nível; veja o tópico Planilhas)."],
-    rules: ["No Banco de objetivos e no Plano Terapêutico, <b>+ Incluir</b> no fim da lista de Escala abre a janela da escala por cima (nome e níveis); salva, ela já fica escolhida.", "O <b>último nível</b> é o nível final: no plano, escolher esse nível deixa o objetivo como <b>Atingido</b>.", "A escala precisa de pelo menos 2 níveis.", "Escala usada em algum plano não é excluída: é <b>Inativada</b>.", "As escalas são as mesmas para toda a clínica."],
+    rules: ["No Banco de objetivos e no Plano Terapêutico, <b>+ Incluir</b> no fim da lista de Escala abre a janela da escala por cima (nome e níveis); salva, ela já fica escolhida.", "O <b>último nível</b> é o nível final: no plano, escolher esse nível deixa o objetivo como <b>Atingido</b>.", "A escala precisa de pelo menos 2 níveis.", "Escala usada em algum plano ou no Banco de objetivos não é excluída: é <b>Inativada</b>.", "As escalas são as mesmas para toda a clínica."],
     who: "Permissão <b>Escalas</b>."},
   {id: "habilidades", group: "Prontuário", title: "Habilidades", mod: "habilidades", tab: "habilidades",
     purpose: "Habilidades dos objetivos do Plano terapêutico (Comunicação, Socialização, Autonomia…).",
     steps: ["Prontuário ▾ → <b>Habilidades</b> → <b>+ Incluir</b>: <b>Habilidade</b> (nome), <b>Escopo</b> (o que ela abrange), <b>Faixas etárias</b> e <b>Especialidades sugeridas</b>.", "No Plano terapêutico, cada habilidade é um quadro, e o objetivo novo já vem com as especialidades sugeridas que estão no tratamento do paciente.", "Em \"Incluir habilidade…\" do plano, as habilidades da faixa etária do paciente aparecem primeiro; as outras vêm depois, com \"(fora da faixa)\".", "<b>Outras opções ▾</b>: <b>Exportar planilha</b> e <b>Importar planilha</b> (veja o tópico Planilhas)."],
-    rules: ["No Banco de objetivos e no Plano Terapêutico, <b>+ Incluir</b> no fim da lista de Habilidade cadastra uma habilidade nova sem sair da janela.", "As faixas etárias são as mesmas da cor do paciente (" + AGE_BANDS.map(function(b){ return b.label; }).join(", ") + "). Nenhuma marcada = todas as idades.", "Faixa etária não bloqueia nada: só muda a ordem das sugestões no plano.", "Habilidade usada em algum plano não é excluída: é <b>Inativada</b>."],
+    rules: ["No Banco de objetivos e no Plano Terapêutico, <b>+ Incluir</b> no fim da lista de Habilidade cadastra uma habilidade nova sem sair da janela.", "As faixas etárias são as mesmas da cor do paciente (" + AGE_BANDS.map(function(b){ return b.label; }).join(", ") + "). Nenhuma marcada = todas as idades.", "Faixa etária não bloqueia nada: só muda a ordem das sugestões no plano.", "Habilidade usada em algum plano ou no Banco de objetivos não é excluída: é <b>Inativada</b>."],
     who: "Permissão <b>Habilidades</b>."},
   {id: "cbo", group: "Cadastros", title: "CBO", mod: "cbo", tab: "cbo",
     purpose: "Lista de CBO (Classificação Brasileira de Ocupações) usada no cadastro dos profissionais.",
@@ -21746,6 +21753,18 @@ function planUseCount(key, val){
     (rows || []).forEach(function(r){ (r.sections || []).forEach(function(s){ (s.objectives || []).forEach(function(o){ if ((key === "areaId" ? s.areaId : o[key]) === val) n++; }); }); });
     return n;
   });
+}
+// Objetivos de planos que têm a especialidade marcada.
+function planSpecUseCount(specId){
+  return planLoadAll().then(function(rows){
+    var n = 0;
+    (rows || []).forEach(function(r){ (r.sections || []).forEach(function(s){ (s.objectives || []).forEach(function(o){ if (planObjSpecs(o).indexOf(specId) !== -1) n++; }); }); });
+    return n;
+  });
+}
+// Objetivos do Banco de objetivos que usam o item (habilidade, escala ou especialidade marcada).
+function goalBankUseCount(key, val){
+  return goalBankList().filter(function(g){ return key === "specIds" ? goalSpecIds(g).indexOf(val) !== -1 : g[key] === val; }).length;
 }
 
 /* ---- regras ---- */
