@@ -3244,3 +3244,4 @@ junto ao excluir de verdade.
   Administrador ou `pacientes.delete`, e só se o paciente já saiu de `patients/all`). Migração
   `supabase/2026-10-10e-excluir-paciente.sql` (também apaga uma vez a saúde de pacientes que já não existem). Testada no
   PGlite. Teste no fim de `tests/run_agd_done.js`.
+- Produção (2026-10-10): `2026-10-10e-excluir-paciente` rodada (função criada = 1, saúde solta = 0).
