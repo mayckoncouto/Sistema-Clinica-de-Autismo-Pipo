@@ -13,7 +13,10 @@ function region(name) {
   if (!m) throw new Error('marker ' + name + ' not found in index.html');
   return m[1];
 }
-const app = region('APP-HEAD') + region('APP-BODY');
+// Scripts próprios do app dentro dos marcadores (ex.: /js/redes.js) entram embutidos,
+// porque a página de teste fica em tests/ e não serve a pasta js/.
+const app = (region('APP-HEAD') + region('APP-BODY')).replace(/<script src="\/js\/([\w.-]+\.js)"><\/script>/g, (m, f) =>
+  '<script>\n' + fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8').replace(/<\/script/gi, '<\\/script') + '\n</script>');
 const test = fs.readFileSync(path.join(__dirname, 'test.html'), 'utf8');
 const out = test.replace('__PAGE_BODY__', () => app);
 fs.writeFileSync(path.join(__dirname, 'page.html'), out);

@@ -332,6 +332,7 @@
       ".pipo-login .err{min-height:18px;font-size:13px;color:var(--danger,#b6403a)}" +
       ".pipo-login .brand{display:flex;align-items:center;gap:10px;margin-bottom:4px}" +
       ".pipo-login .brand img{width:40px;height:40px}" +
+      ".pipo-login-soc:empty{display:none}.pipo-login-soc{margin-top:6px;padding-top:12px;border-top:1px solid var(--line,#dde3e1)}" +
       ".user-pill{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2,#465350)}" +
       ".user-pill[hidden]{display:none}" +
       ".user-pill .user-name{font-weight:700;color:var(--ink,#182523);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
@@ -351,6 +352,7 @@
     document.head.appendChild(st);
   }
 
+  var loginRedes = [];
   function showLogin(message) {
     if (!loginEl) {
       var logo = document.querySelector(".brand-mark");
@@ -365,6 +367,7 @@
           '<label>Senha<input type="password" name="password" autocomplete="current-password" required></label>' +
           '<div class="err" role="alert"></div>' +
           '<button type="submit">Entrar</button>' +
+          '<div class="pipo-login-soc"></div>' +
         "</form>";
       document.body.appendChild(loginEl);
       var form = loginEl.querySelector("form");
@@ -394,6 +397,9 @@
         });
       });
     }
+    // Redes sociais da clínica (cadastro da Clínica, entregues por /api/config).
+    var socEl = loginEl.querySelector(".pipo-login-soc");
+    if (socEl) socEl.innerHTML = (window.PIPO_REDES && loginRedes.length) ? window.PIPO_REDES.rowHtml(loginRedes, {size: 30}) : "";
     loginEl.querySelector(".err").textContent = message || "";
     loginEl.hidden = false;
     var em = loginEl.querySelector('input[name="email"]');
@@ -565,6 +571,7 @@
     }).then(function (cfg) {
       // Cor dos botões da clínica já na tela de login (null = padrão; ausente = não leu).
       if (cfg.theme !== undefined && window.pipoTheme) window.pipoTheme(cfg.theme && cfg.theme.corBotoes, cfg.theme && cfg.theme.corTexto);
+      if (Array.isArray(cfg.redes)) loginRedes = cfg.redes;
       if (!window.supabase || !window.supabase.createClient) throw new Error("biblioteca do Supabase não carregou");
       client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
         auth: { persistSession: true, autoRefreshToken: true }

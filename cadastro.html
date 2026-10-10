@@ -110,11 +110,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .done h2{margin:0 0 8px;color:var(--ok)}
 .muted{color:var(--muted)}
 @media (max-width:560px){.grid{grid-template-columns:1fr}.head h1{font-size:17px}}
+.topsoc{margin:-4px 0 14px}
+.done .soc-t{margin:22px 0 10px;font-size:14px;color:var(--muted)}
 </style>
+<script src="/js/redes.js"></script>
 </head>
 <body>
 <div class="wrap">
   <div class="head"><img id="logo" src="/favicon.png" alt=""><div><h1 id="cName">Cadastro do paciente</h1><div class="sub" id="cSub"></div></div></div>
+  <div class="topsoc" id="cSoc" hidden></div>
   <div class="card" id="box"><p class="muted">Carregando…</p></div>
 </div>
 <script>
@@ -371,7 +375,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       data.cpf = digits(val("cpf")); data.telefone = digits(val("telefone")); data.cep = digits(val("cep"));
       var btn = document.getElementById("send"); btn.disabled = true; btn.textContent = "Enviando…"; err.innerHTML = "";
       rpc("intake_send", {p_token: token, p_data: data}).then(function(r){
-        if (r && r.ok){ box.innerHTML = '<div class="done"><h2>Cadastro enviado!</h2><p class="muted">Obrigado. A clínica vai conferir os dados e entrar em contato, se precisar.</p></div>'; window.scrollTo(0, 0); return; }
+        if (r && r.ok){ box.innerHTML = '<div class="done"><h2>Cadastro enviado!</h2><p class="muted">Obrigado. Nossa equipe irá continuar seu atendimento pelo WhatsApp.</p>' + (socHtml() ? '<p class="soc-t">Conheça mais sobre nosso trabalho em nossas redes sociais:</p>' + socHtml() : '') + '</div>'; window.scrollTo(0, 0); return; }
         var m = r && r.motivo;
         if (STOP[m]) { stop(STOP[m]); return; }
         btn.disabled = false; btn.textContent = "Enviar cadastro";
@@ -380,10 +384,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       }, function(){ btn.disabled = false; btn.textContent = "Enviar cadastro"; err.innerHTML = '<div class="msg err">Sem conexão com a clínica agora. Tente de novo em instantes.</div>'; });
     });
   }
+  // Redes sociais da clínica (cadastro da Clínica, via /api/config): no topo e no agradecimento.
+  function socHtml(){ return (window.PIPO_REDES && CFG && Array.isArray(CFG.redes)) ? window.PIPO_REDES.rowHtml(CFG.redes, {size: 34}) : ""; }
   if (!token){ stop(STOP.invalido); return; }
   fetch("/api/config").then(function(r){ return r.json(); }).then(function(cfg){
     CFG = cfg;
     if (cfg.theme) theme(cfg.theme.corBotoes, cfg.theme.corTexto);
+    var top = document.getElementById("cSoc"), sh = socHtml(); if (sh){ top.innerHTML = sh; top.hidden = false; }
     return rpc("intake_form", {p_token: token});
   }).then(function(j){
     if (!j || !j.ok){ stop(STOP[j && j.motivo] || STOP.invalido); return; }

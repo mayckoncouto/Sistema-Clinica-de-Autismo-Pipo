@@ -3541,6 +3541,33 @@ Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead �
   curto que isso só com domínio próprio). Mensagem: "Olá! Para que possamos realizar seu agendamento, preencha por este
   link (vale 1 dia): …". Lembrete do CRM (`intake_remind`) sai quando o link VENCE sem resposta. Migração
   `supabase/2026-10-10t-link-vale-1-dia.sql` (links já enviados mantêm a validade).
+- Produção (2026-10-10): `2026-10-10t-link-vale-1-dia` rodada (1 | 1).
+
+## Redes sociais da clínica (2026-10-10)
+Decisões do usuário: cadastro em Acesso → Clínica, grupo **Redes sociais** (rede + link, "+ Inserir", ▲▼, ✕;
+"Outro" com nome e ícone de link); logos coloridas na cor de cada rede; aparecem na página do link de cadastro
+(topo e agradecimento), na tela de login, no fim da mensagem do link (WhatsApp/e-mail) e no rodapé das impressões
+(Relatórios, ficha do paciente, Plano Terapêutico). Sem rede cadastrada, nada aparece. Agradecimento do link (todos
+os tipos): "Cadastro enviado! Obrigado. Nossa equipe irá continuar seu atendimento pelo WhatsApp." + "Conheça mais
+sobre nosso trabalho em nossas redes sociais:" e as logos.
+- **Banco de logos `js/redes.js`** (`window.PIPO_REDES`: `list` [{id, name, color, ph, g}], `icon(id, tam)` = SVG
+  círculo na cor da rede + símbolo branco desenhado no arquivo, `url(item)` = endereço que abre — só http/https/mailto;
+  WhatsApp aceita só o número → `wa.me/55…`; e-mail → `mailto:`, `label`, `clean(lista)`, `rowHtml(lista, {size,
+  names})` (`.soc-row`/`.soc-link`, CSS injetado pelo próprio arquivo), `text(lista)` "Instagram: https://…"). Redes:
+  instagram, facebook, youtube, tiktok, whatsapp, maps, site, linkedin, email, outro. Rede nova: só acrescentar na lista
+  (e em `REDES` de `api/config.js`).
+- Carregado por `index.html` (`<script src="/js/redes.js">` dentro do APP-HEAD; `tests/build.js` embute os scripts
+  `/js/*.js` dos marcadores, porque a página de teste não serve a pasta js/), `cadastro.html` e a tela de login.
+- Dados: `config/clinic.redes = [{rede, url, nome?}]` (sem SQL). `api/config.js` (`clinicInfo`) devolve `redes`
+  (limpas, até 20) junto com `theme`, para o login e a página pública (que não têm acesso ao banco).
+- App: janela `openClinicModal` (`#clSocs`, `.cl-soc`, `data-sk="rede|nome|url"`, `[data-socmv]`, `[data-socdel]`,
+  `#clSocAdd` — a linha nova já vem com a próxima rede ainda não usada); salvar recusa link inválido.
+  `clinicSocialText()` + `intakeMessage` ("\n\nConheça mais sobre nosso trabalho:\n…"); `printSocialHtml()` +
+  `PRINT_SOC_CSS` no fim de `patientPrint`, `rpPrint` e `planPrint`. Login: `.pipo-login-soc` (`loginRedes` de
+  `/api/config`). `cadastro.html`: `#cSoc` (topo) e o agradecimento (`socHtml()`).
+- Ideias futuras com as redes (aguardando o usuário): assinatura de e-mail, rodapé de documentos novos, Início,
+  mensagens automáticas do CRM.
+- Teste `tests/run_redes.js` (no `npm test`) e checagens em `tests/run_intake.js`.
 - (2026-10-10, revisão de campos e listas) Listas de sugestões ao digitar (`.autolist`: Paciente ou Lead do
   CRM, paciente do agendamento no Planner/Agenda, convênio e especialidade do tratamento) flutuam por cima da
   janela (`autoAnchor`, `autoPlace`, `autoReplaceAll`; z-index 90): antes ficavam dentro da janela e aumentavam

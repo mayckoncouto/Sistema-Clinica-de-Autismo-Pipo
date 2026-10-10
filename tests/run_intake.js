@@ -93,7 +93,8 @@ const path = require('path');
     const u = route.request().url();
     if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
     if (/\/favicon\.png/.test(u)) return route.fulfill({status: 404, body: ''});
-    if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
+    if (/\/js\/redes\.js/.test(u)) return route.fulfill({contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, '..', 'js', 'redes.js'), 'utf8')});
+    if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste', redes: [{rede: 'instagram', url: 'instagram.com/clinica'}, {rede: 'whatsapp', url: '(47) 99999-0000'}, {rede: 'outro', nome: 'Ruim', url: 'javascript:alert(1)'}]})});
     if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'novo', nome: 'Duda', prefill: {}, clinica: {nome: 'Clínica Fictícia'}, convenios: ['Unimed'], origens: ['Instagram']})});
     if (/rpc\/intake_send/.test(u)) { sent = JSON.parse(route.request().postData()); return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true})}); }
     return route.fulfill({status: 404, body: ''});
@@ -101,6 +102,8 @@ const path = require('path');
   await pub.route('https://viacep.com.br/**', (route) => route.fulfill({contentType: 'application/json', body: JSON.stringify({logradouro: 'Rua do CEP', bairro: 'Velha', localidade: 'Blumenau', uf: 'SC'})}));
   await pub.goto('http://pipo.test/c/abc');
   await pub.waitForSelector('#frm');
+  const topSoc = await pub.$$eval('#cSoc a.soc-link', (a) => a.map((x) => x.href));
+  check('public form: clinic social networks on top (valid links only, WhatsApp by number)?', JSON.stringify(topSoc) === '["https://instagram.com/clinica","https://wa.me/5547999990000"]', topSoc);
   check('public form opens with the clinic name and the patient name?', (await pub.textContent('#cName')) === 'Clínica Fictícia' && (await pub.inputValue('#nome')) === 'Duda');
   await pub.click('#send'); await pub.waitForTimeout(100);
   check('public form: required fields and consent are checked before sending?', sent === null && (await pub.$$('.bad')).length >= 4 && /autorização/.test(await pub.textContent('#err')));
@@ -141,12 +144,15 @@ const path = require('path');
   check('CEP fills the street?', (await pub.inputValue('#rua')) === 'Rua do CEP');
   await pub.click('#send'); await pub.waitForTimeout(300);
   check('public form sent (digits only, consent) and thank-you shown?', sent && sent.p_token === 'abc' && sent.p_data.cpf === '52998224725' && sent.p_data.telefone === '47966665555' && sent.p_data.consentimento === true && sent.p_data.nascimento === '2019-05-07' && sent.p_data.respParentesco === 'Mãe' && /Cadastro enviado/.test(await pub.textContent('#box')), sent);
+  const ty = await pub.textContent('#box');
+  check('thank-you: new text + "Conheça mais…" with the network logos?', /Nossa equipe irá continuar seu atendimento pelo WhatsApp/.test(ty) && /Conheça mais sobre nosso trabalho em nossas redes sociais/.test(ty) && (await pub.$$('#box .done a.soc-link')).length === 2, ty);
   const noH = await pub.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   check('public form fits the phone screen (no sideways scroll)?', noH);
   await pub.unroute('http://pipo.test/**');
   await pub.route('http://pipo.test/**', (route) => {
     const u = route.request().url();
     if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
+    if (/\/js\/redes\.js/.test(u)) return route.fulfill({contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, '..', 'js', 'redes.js'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
     if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: false, motivo: 'usado'})});
     return route.fulfill({status: 404, body: ''});
@@ -158,6 +164,7 @@ const path = require('path');
   await pub.route('http://pipo.test/**', (route) => {
     const u = route.request().url();
     if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
+    if (/\/js\/redes\.js/.test(u)) return route.fulfill({contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, '..', 'js', 'redes.js'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
     if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'geral', nome: '', prefill: {}, clinica: {nome: 'C'}, convenios: [], origens: [],
       campos: {cpf: {show: false, req: false}, nascimento: {show: true, req: false}, responsavel: {show: false, req: false}, escola: {show: true, req: true}, endereco: {show: false, req: false}}})});
@@ -181,10 +188,12 @@ const path = require('path');
   check('configured required field (escola) blocks sending?', sent === null && await pub.$eval('#escola', (e) => e.classList.contains('bad')));
   await pub.fill('#escola', 'Escola Y'); await pub.click('#send'); await pub.waitForTimeout(300);
   check('sends with only the configured fields?', sent && sent.p_data.escola === 'Escola Y' && /Cadastro enviado/.test(await pub.textContent('#box')), sent && sent.p_data);
+  check('without networks registered, no "Conheça mais…" and no top row?', !/Conheça mais/.test(await pub.textContent('#box')) && await pub.$eval('#cSoc', (e) => e.hidden));
   await pub.unroute('http://pipo.test/**');
   await pub.route('http://pipo.test/**', (route) => {
     const u = route.request().url();
     if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
+    if (/\/js\/redes\.js/.test(u)) return route.fulfill({contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, '..', 'js', 'redes.js'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
     if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: false, motivo: 'usado'})});
     return route.fulfill({status: 404, body: ''});

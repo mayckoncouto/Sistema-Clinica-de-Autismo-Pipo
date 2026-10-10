@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- APP-HEAD:START -->
+<script src="/js/redes.js"></script>
 <script>
 /* Cor dos botões da clínica (cadastro da Clínica → corBotoes/corTexto) aplicada
  * já na carga, antes do login: fica guardada no navegador
@@ -1486,6 +1487,17 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 /* primeira etiqueta de cada linha com a mesma largura: cor, prévia e logo alinhadas */
 .cl-row > .cl-color-label:first-child{width:104px;flex:none}
 .cl-sep{width:1px;height:22px;background:var(--line);margin:0 2px}
+.cl-soc-ico{display:inline-flex;flex:none}
+.cl-socs .cl-soc > select{flex:none;width:170px}
+.cl-socs .cl-soc .dp-btn{flex:none;width:170px}
+.cl-socs .cl-soc .cl-soc-nome{flex:0 1 160px;min-width:0}
+.cl-socs .cl-soc .cl-soc-url{flex:1 1 auto;min-width:0}
+@media (max-width:760px){
+  .cl-soc{flex-wrap:wrap;row-gap:6px}
+  .cl-socs .cl-soc > select,.cl-socs .cl-soc .dp-btn{flex:1 1 0;width:auto;min-width:0}
+  .cl-socs .cl-soc .cl-soc-url{flex:1 1 100%;order:9}
+  .cl-socs .cl-soc .cl-soc-nome{flex:1 1 100%;order:8}
+}
 .cl-grow{flex:1}
 .cl-row .cl-reset{grid-column:auto}
 .cl-row .color-pick-code{white-space:nowrap}
@@ -3174,6 +3186,10 @@ function openClinicModal(){
         '<div class="field-row">' + f("clNome", "Nome da clínica", c.nome || "Clínica de Autismo Pipo", "", true) + f("clSub", "Subtítulo", c.subtitulo || "Clínica Multidisciplinar", "Aparece embaixo do nome", true) + f("clCnpj", "CNPJ", c.cnpj, "00.000.000/0000-00") + '</div>' +
         '<div class="field-row">' + f("clFone", "Telefone", c.telefone ? formatPhone(c.telefone) : "", "(47) 0000-0000") + f("clEmail", "E-mail", c.email, "contato@...", true) + '</div>' +
         '<div class="field-row">' + f("clEnd", "Endereço", c.endereco, "Rua, número, bairro", true) + f("clCidade", "Cidade / UF", c.cidade, "Blumenau / SC") + '</div>' +
+        '<div class="tr-sec">Redes sociais</div>' +
+        '<div class="field"><div class="therapist-rows cl-socs" id="clSocs"></div>' +
+          (clCanEdit ? '<button type="button" class="btn ghost add-row-btn" id="clSocAdd">+ Inserir</button>' : '') +
+          '<div class="color-hex-label" style="margin-top:6px">Aparecem na página do link de cadastro (no topo e depois do envio), na tela de entrada do sistema, nas mensagens com o link de cadastro e nas impressões. Linha sem link não aparece.</div></div>' +
         // Aparência e Atendimento em linhas (um cartão embaixo do outro).
         '<div class="cl-cards">' +
           '<div class="cl-card"><div class="cl-card-title">Aparência</div>' +
@@ -3234,6 +3250,44 @@ function openClinicModal(){
     e.target.value = "";
   });
   document.getElementById("clLogoReset").addEventListener("click", function(){ logo = ""; logoUI(); });
+  // Redes sociais: rede (banco de logos em js/redes.js) + link; "Outro" pede um nome.
+  var socs = (Array.isArray(c.redes) ? c.redes : []).map(function(r){ return {rede: r.rede || "outro", nome: r.nome || "", url: r.url || ""}; });
+  var socHost = document.getElementById("clSocs");
+  function socSync(){
+    socHost.querySelectorAll("[data-soc]").forEach(function(row){
+      var i = +row.getAttribute("data-soc"), it = socs[i]; if (!it) return;
+      var rd = row.querySelector('select[data-sk="rede"]'), nm = row.querySelector('[data-sk="nome"]'), u = row.querySelector('[data-sk="url"]');
+      if (rd) it.rede = rd.value; if (nm) it.nome = nm.value; if (u) it.url = u.value;
+    });
+  }
+  function socRender(){
+    var R = window.PIPO_REDES, n = socs.length, dis = clCanEdit ? '' : ' disabled';
+    socHost.innerHTML = n ? socs.map(function(it, i){
+      var r = R.get(it.rede);
+      return '<div class="therapist-row cl-soc" data-soc="' + i + '">' +
+        '<div class="col-move"><button type="button" data-socmv="-1"' + (i === 0 || !clCanEdit ? ' disabled' : '') + ' title="Subir" aria-label="Subir">▲</button><button type="button" data-socmv="1"' + (i === n - 1 || !clCanEdit ? ' disabled' : '') + ' title="Descer" aria-label="Descer">▼</button></div>' +
+        '<span class="cl-soc-ico">' + R.icon(it.rede, 26) + '</span>' +
+        '<select data-sk="rede" aria-label="Rede"' + dis + '>' + R.list.map(function(x){ return '<option value="' + x.id + '"' + (x.id === r.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join("") + '</select>' +
+        (r.id === "outro" ? '<input type="text" data-sk="nome" class="cl-soc-nome" maxlength="40" placeholder="Nome (ex.: Blog)" aria-label="Nome da rede" value="' + esc(it.nome) + '"' + dis + '>' : '') +
+        '<input type="text" data-sk="url" class="cl-soc-url" maxlength="300" placeholder="' + esc(r.ph) + '" aria-label="Link de ' + esc(r.name) + '" value="' + esc(it.url) + '"' + dis + '>' +
+        (clCanEdit ? '<button type="button" class="rm" data-socdel title="Tirar" aria-label="Tirar">✕</button>' : '') + '</div>';
+    }).join("") : '<div class="color-hex-label">Nenhuma rede cadastrada.</div>';
+  }
+  socRender();
+  socHost.addEventListener("change", function(e){ if (e.target.matches('select[data-sk="rede"]')){ socSync(); socRender(); var u = socHost.querySelector('[data-soc="' + e.target.closest("[data-soc]").getAttribute("data-soc") + '"] [data-sk="url"]'); if (u) u.focus(); } });
+  socHost.addEventListener("click", function(e){
+    var row = e.target.closest("[data-soc]"); if (!row) return;
+    var i = +row.getAttribute("data-soc"), mv = e.target.closest("[data-socmv]");
+    if (mv){ socSync(); var j = i + (+mv.getAttribute("data-socmv")); if (j < 0 || j >= socs.length) return; var t = socs[i]; socs[i] = socs[j]; socs[j] = t; socRender(); return; }
+    if (e.target.closest("[data-socdel]")){ socSync(); socs.splice(i, 1); socRender(); }
+  });
+  if (clCanEdit) document.getElementById("clSocAdd").addEventListener("click", function(){
+    socSync();
+    var used = {}; socs.forEach(function(x){ used[x.rede] = 1; });
+    var next = window.PIPO_REDES.list.filter(function(x){ return !used[x.id] && x.id !== "outro"; })[0];
+    socs.push({rede: next ? next.id : "outro", nome: "", url: ""}); socRender();
+    var u = socHost.querySelector('[data-soc="' + (socs.length - 1) + '"] [data-sk="url"]'); if (u) u.focus();
+  });
   // Cores dos botões (vazio = verde padrão; texto vazio = automático).
   var corBtn = (c.corBotoes && isHexColor(c.corBotoes)) ? c.corBotoes : "";
   var corTxt = (c.corTexto && isHexColor(c.corTexto)) ? c.corTexto : "";
@@ -3285,6 +3339,15 @@ function openClinicModal(){
   });
   counts();
   if (clCanEdit) document.getElementById("clSave").addEventListener("click", function(){
+    socSync();
+    var redes = [], badSoc = null;
+    socs.forEach(function(it){
+      if (!String(it.url || "").trim()) return;
+      var x = {rede: it.rede, url: String(it.url).trim()}; if (it.rede === "outro") x.nome = String(it.nome || "").trim();
+      if (!window.PIPO_REDES.url(x)) badSoc = badSoc || window.PIPO_REDES.label(x);
+      redes.push(x);
+    });
+    if (badSoc){ showToast("Confira o link de " + badSoc + " (Redes sociais).", true); return; }
     var horarios = {}, bad = null;
     var dur = +document.getElementById("clDur").value;
     ALL_WEEKDAYS.forEach(function(d){
@@ -3327,7 +3390,8 @@ function openClinicModal(){
       duracao: dur,
       corBotoes: corBtn,
       corTexto: corTxt,
-      logo: logo
+      logo: logo,
+      redes: redes
     };
     if (!db){ showToast("Sem conexão com o servidor.", true); return; }
     db.doc("config/clinic").set(rec).then(function(){
@@ -11564,17 +11628,28 @@ function patientFichaHtml(p){
     row("Plano", t.plano) + row("Sessões/mês", t.sessoesMes ? String(t.sessoesMes) : "") + row("Horário de atendimento", trHoursText(t))]);
   return secs.filter(function(s){ return s[1]; }).map(function(s){ return '<h3>' + esc(s[0]) + '</h3><table>' + s[1] + '</table>'; }).join("");
 }
+// Rodapé das impressões com as redes sociais da clínica (vazio sem redes cadastradas).
+var PRINT_SOC_CSS = ".psoc{margin-top:16px;padding-top:8px;border-top:1px solid #d9e0de;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:9.5px;color:#3d4a47;page-break-inside:avoid}" +
+  ".psoc-t{font-weight:700;color:#5b6b68}.psoc-i{display:inline-flex;align-items:center;gap:4px}.psoc-i svg{display:block}";
+function printSocialHtml(){
+  var R = window.PIPO_REDES, list = R ? R.clean((state.clinic || {}).redes) : [];
+  if (!list.length) return "";
+  return '<div class="psoc"><span class="psoc-t">Conheça mais sobre nosso trabalho:</span>' + list.map(function(it){
+    var u = R.url(it).replace(/^mailto:/, "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+    return '<span class="psoc-i">' + R.icon(it.rede, 14) + '<b>' + esc(R.label(it)) + '</b> ' + esc(u) + '</span>';
+  }).join("") + '</div>';
+}
 function patientPrint(p){
   var logo = (document.querySelector(".brand-mark") || {}).src || "";
   var body = '<header><div class="brand">' + (logo ? '<img src="' + logo + '" alt="">' : "") +
-    '<div><div class="clinic">' + esc(clinicName()) + '</div><div class="rname">Ficha cadastral</div></div></div><div class="sub">Impresso em ' + esc(trBr(dpIso(new Date()))) + '</div></header>' + patientFichaHtml(p);
+    '<div><div class="clinic">' + esc(clinicName()) + '</div><div class="rname">Ficha cadastral</div></div></div><div class="sub">Impresso em ' + esc(trBr(dpIso(new Date()))) + '</div></header>' + patientFichaHtml(p) + printSocialHtml();
   var css = "@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
     "body{font-family:Inter,'Segoe UI',Arial,sans-serif;color:#1f2b29;margin:0;font-size:11px}" +
     "header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:2px solid #2f7a6d;padding-bottom:8px;margin-bottom:10px}" +
     ".brand{display:flex;align-items:center;gap:10px}.brand img{width:38px;height:38px}.clinic{font-size:16px;font-weight:800}.rname{font-size:13px;font-weight:700;color:#2f7a6d;margin-top:2px}" +
     ".sub{font-size:10px;color:#5b6b68}h3{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#3d4a47;margin:12px 0 4px}" +
     "table{border-collapse:collapse;width:100%}tr{page-break-inside:avoid}th{width:30%;text-align:left;font-weight:600;color:#5b6b68;padding:4px 8px;border-bottom:1px solid #e3e8e6;vertical-align:top}" +
-    "td{padding:4px 8px;border-bottom:1px solid #e3e8e6;vertical-align:top}";
+    "td{padding:4px 8px;border-bottom:1px solid #e3e8e6;vertical-align:top}" + PRINT_SOC_CSS;
   var f = document.createElement("iframe");
   f.setAttribute("aria-hidden", "true");
   f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
@@ -18524,6 +18599,7 @@ function rpPrint(){
       rpRows(s).map(function(r){ return "<tr>" + cells(r, "td") + "</tr>"; }).join("") + "</tbody>" +
       (s.foot ? "<tfoot><tr>" + cells(s.foot, "td") + "</tr></tfoot>" : "") + "</table>";
   });
+  body += printSocialHtml();
   var css = "@page{size:A4 " + (wide ? "landscape" : "portrait") + ";margin:12mm}" +
     "*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
     "body{font-family:Inter,'Segoe UI',Arial,sans-serif;color:#1f2b29;margin:0;font-size:11px}" +
@@ -18537,7 +18613,7 @@ function rpPrint(){
     "table{border-collapse:collapse;width:100%}thead{display:table-header-group}tr{page-break-inside:avoid}" +
     "th{background:#eef1f0;text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;color:#5b6b68;padding:6px 8px;border-bottom:1px solid #c9d1cf}" +
     "td{padding:5px 8px;border-bottom:1px solid #e3e8e6;vertical-align:top}td.n{text-align:right}" +
-    "tbody tr:nth-child(even) td{background:#f7f9f8}tfoot td{font-weight:800;background:#eef1f0;border-top:2px solid #c9d1cf}";
+    "tbody tr:nth-child(even) td{background:#f7f9f8}tfoot td{font-weight:800;background:#eef1f0;border-top:2px solid #c9d1cf}" + PRINT_SOC_CSS;
   var f = document.createElement("iframe");
   f.setAttribute("aria-hidden", "true");
   f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
@@ -19960,7 +20036,8 @@ var HELP_TOPICS = [
       "Ao salvar um paciente novo vindo do link, nasce um tratamento <b>Ativo</b> só com o convênio informado (o resto do tratamento é preenchido depois). Se veio do CRM, a tarefa fica ligada ao paciente e os dados do lead saem da tarefa.",
       "CPF enviado igual ao de um paciente já cadastrado: o sistema pergunta se é uma atualização do cadastro dele.",
       "Laudo, escola não cadastrada, convênio e observações da família vão para as Observações do cadastro novo.",
-      "Link que venceu sem resposta (1 dia) vira uma tarefa no CRM (lista Atendimento) para a recepção cobrar a família e mandar um novo link."
+      "Link que venceu sem resposta (1 dia) vira uma tarefa no CRM (lista Atendimento) para a recepção cobrar a família e mandar um novo link.",
+      "Depois do envio a família vê: “Cadastro enviado! Obrigado. Nossa equipe irá continuar seu atendimento pelo WhatsApp.” e, se a clínica tiver redes sociais cadastradas (Acesso → Clínica), as logos delas. As redes também aparecem no topo do formulário e no fim da mensagem com o link."
     ],
     who: "Quem pode incluir Pacientes gera os links, vê o número no botão Cadastros e revisa os envios."},
   {id: "pacientes", group: "Cadastros", title: "Pacientes", mod: "pacientes", tab: "pacientes",
@@ -20537,9 +20614,12 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Status</b>."},
   {id: "clinica", group: "Acesso", title: "Cadastro da Clínica", mod: "clinica",
-    purpose: "Dados da clínica, dias e horários de funcionamento, duração do atendimento, cores, nome e logo.",
-    steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve."],
+    purpose: "Dados da clínica, redes sociais, dias e horários de funcionamento, duração do atendimento, cores, nome e logo.",
+    steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve.",
+      "<b>Redes sociais</b>: clique em <b>+ Inserir</b>, escolha a rede (Instagram, Facebook, YouTube, TikTok, WhatsApp, Google Maps, Site, LinkedIn, E-mail ou Outro) e cole o link. ▲▼ mudam a ordem e ✕ tira a linha. Em “Outro”, escreva também o nome (ex.: Blog)."],
     rules: [
+      "As redes sociais aparecem, com a logo colorida de cada uma, na página do link de cadastro (no topo e depois do envio), na tela de entrada do sistema, no fim das mensagens com o link de cadastro e no rodapé das impressões (relatórios, ficha do paciente e Plano Terapêutico). Sem redes cadastradas, nada disso aparece.",
+      "No WhatsApp basta o número com DDD; no E-mail, o endereço. Os outros aceitam o endereço com ou sem “https://”. Link inválido não deixa salvar.",
       "Os dias e horários abertos definem as linhas do Planner e da Agenda.",
       "Fechar um dia ou mudar horários e duração: se houver agendamentos do Planner em dias ou horários que deixam de existir, o Salvar mostra quantos e onde, e oferece apagá-los. Mantidos, ficam guardados e voltam a aparecer se o dia ou horário reabrir.",
       "A <b>cor do botão</b> vale para todos os botões, caixas de marcar e destaques do sistema, inclusive a tela de login. <b>Restaurar padrão</b> volta ao verde do sistema."
@@ -23428,7 +23508,7 @@ function planPrint(plan){
             '<td>' + (lv ? '<span class="dot" style="background:' + esc(lv.color || "#999") + '"></span>' + esc(lv.name) : "—") + '</td><td>' + esc(trLabel(PLAN_STATUS, o.status || "ativo")) + '</td></tr>';
         }).join("") + '</tbody></table>';
     }).join("") +
-    '<div class="sign"><div>Responsável pelo paciente</div><div>Coordenação / terapeuta responsável</div></div>';
+    '<div class="sign"><div>Responsável pelo paciente</div><div>Coordenação / terapeuta responsável</div></div>' + printSocialHtml();
   var css = "@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
     "body{font-family:Inter,'Segoe UI',Arial,sans-serif;color:#1f2b29;margin:0;font-size:10.5px}" +
     "header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:2px solid #2f7a6d;padding-bottom:8px;margin-bottom:8px}" +
@@ -23438,7 +23518,7 @@ function planPrint(plan){
     ".sum{margin:6px 0;white-space:normal;line-height:1.4}table{border-collapse:collapse;width:100%}tr{page-break-inside:avoid}" +
     "th{text-align:left;font-weight:700;color:#3d4a47;background:#eef2f1;padding:4px 6px;border:1px solid #d9e0de}td{padding:4px 6px;border:1px solid #d9e0de;vertical-align:top}" +
     ".dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}" +
-    ".sign{display:flex;gap:40px;margin-top:36px}.sign div{flex:1;border-top:1px solid #1f2b29;padding-top:4px;text-align:center;font-size:10px}";
+    ".sign{display:flex;gap:40px;margin-top:36px}.sign div{flex:1;border-top:1px solid #1f2b29;padding-top:4px;text-align:center;font-size:10px}" + PRINT_SOC_CSS;
   var f = document.createElement("iframe");
   f.setAttribute("aria-hidden", "true");
   f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
@@ -24927,11 +25007,14 @@ function intakePrefillFrom(p){
   Object.keys(o).forEach(function(k){ if (!o[k]) delete o[k]; });
   return o;
 }
+// Redes sociais da clínica (cadastro da Clínica) como texto: "Instagram: https://…" por linha.
+function clinicSocialText(){ return window.PIPO_REDES ? window.PIPO_REDES.text((state.clinic || {}).redes) : ""; }
 function intakeMessage(kind, nome, url){
-  var cl = clinicName();
-  if (kind === "geral") return "Olá! Para fazer o cadastro na " + cl + ", preencha por este link: " + url;
-  if (kind === "atualizacao") return "Olá! Para atualizarmos o seu cadastro, confira e corrija por este link (vale 1 dia): " + url;
-  return "Olá! Para que possamos realizar seu agendamento, preencha por este link (vale 1 dia): " + url;
+  var cl = clinicName(), soc = clinicSocialText(), m;
+  if (kind === "geral") m = "Olá! Para fazer o cadastro na " + cl + ", preencha por este link: " + url;
+  else if (kind === "atualizacao") m = "Olá! Para atualizarmos o seu cadastro, confira e corrija por este link (vale 1 dia): " + url;
+  else m = "Olá! Para que possamos realizar seu agendamento, preencha por este link (vale 1 dia): " + url;
+  return soc ? m + "\n\nConheça mais sobre nosso trabalho:\n" + soc : m;
 }
 // Janela do link: opts {kind: "novo"|"atualizacao"|"crm"|"geral", patient, task}
 function openIntakeLinkModal(opts){
