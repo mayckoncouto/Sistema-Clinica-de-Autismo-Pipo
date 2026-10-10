@@ -3296,8 +3296,8 @@ do Planner do profissional (`PLB.list`, `alvo "prof"`). A janela do colaborador 
 (colaboradores) e teste no fim de `tests/run_agd_done.js`.
 
 ## CRM: vencimento com atalhos e recorrência (2026-10-10)
-- Janela própria `crmDuePicker` (#crmDuePop; celular = janela de baixo): atalhos à esquerda (Hoje, Amanhã, Este final
-  de semana, Semana que vem, Próximo final de semana, 2 e 4 semanas), calendário à direita, ✕ tira a data. Abre pelo
+- Janela própria `crmDuePicker` (#crmDuePop; celular = janela de baixo): atalhos à esquerda (Hoje, Amanhã, Próxima Segunda,
+  Semana que vem = hoje + 7, 2 e 4 semanas — pedido do usuário 2026-10-10), calendário à direita, ✕ tira a data. Abre pelo
   campo Vencimento da janela da tarefa e pela data na lista (`el.__picker` no input faz o `dpEnhanceDate` abrir ela).
 - Só data final (sem hora). `tasks.recurrence` jsonb {freq diaria|semanal|mensal|anual, dias[0..6], nova, sempre, ate,
   status}. Gera a próxima SÓ ao finalizar: gatilho `tasks_recur` (before update of status) em
@@ -3389,3 +3389,23 @@ Testada no PGlite (também com CRLF). Correções só depois do resultado, em mi
   lista de objetivos do Plano (`.pl-goal-pop`). Lista flutuante nova: posicionar com `popPlaceV` + `popWatchSize`.
   Teste no fim de `tests/run_combo.js`.
 - (2026-10-10, pedido do usuário) **CRM: "Dados do Paciente/Lead" em TODAS as listas** (título novo; antes só na lista com funil de contatos): Paciente ou Lead | Telefone; Diagnóstico | Convênio. Com paciente cadastrado os campos NÃO somem: mostram o cadastro dele (`patFirstPhone`, `cid` da saúde, convênio do tratamento), desativados (`leadFill`, `#crmPatNote`); lead = editáveis e gravados em `lead` (`readLead` em todas as listas). "Cadastrar paciente" sempre na linha do título. Motivo de perda continua só no funil. Planilha de tarefas aceita telefone/diagnóstico/convênio em todas as listas. Testes em `run_crm.js`.
+
+## PADRÕES OBRIGATÓRIOS PARA ELEMENTOS NOVOS (pedido do usuário, 2026-10-10)
+"Essas correções de campos, listas, janelas, títulos de coluna devem se tornar um padrão para novos elementos."
+Toda tela, lista, janela ou campo novo segue isto (e o que já existe foi corrigido para seguir):
+1. **Visual**: reaproveitar componentes/classes que já existem (`.pat-toolbar`, `.pat-table` via `gtRender`,
+   `.field`, `.dp-btn`, `.ms`, `.kind-opt`, `.therapist-row`, `.room-row`, `confirmDialog`…); nada de estilo próprio.
+2. **Listas em tela**: `gtRender` dentro de uma seção `.panel.reg-panel` (coluna flex de altura fixa: barra parada,
+   só a lista rola) → o **título das colunas fica preso no alto ao rolar** (computador e celular). Tabela em outro
+   lugar (relatório, janela) precisa de um contêiner com altura limitada e `overflow:auto` com `thead th` sticky
+   (ex.: `.rp-table-wrap{max-height:72vh}`). Teste fixo `tests/run_sticky_headers.js` (no `npm test`) — tela nova
+   de lista: acrescentar a aba em `TABS`.
+3. **Campos de uma linha**: altura única `--field-h` (38px computador / 44px celular), sem altura própria.
+4. **Celular**: todo seletor abre a janela de baixo (`useSheet`/`sheetWrap`); opções numa linha só com "…";
+   campos com 16px; listas de cadastro com 1 linha por item e 2–3 colunas.
+5. **Listas que consultam um cadastro**: `data-reg-add` ("+ Incluir" no fim, para quem pode incluir).
+6. **Barras**: numa linha só no computador quando couber (busca e filtros encolhem com "…"); "?" sempre o último.
+7. **Listas flutuantes**: posicionar com `popPlaceV` + `popWatchSize` (abrindo para cima fica colada no campo).
+8. **Janelas**: rodapé Excluir à esquerda, Cancelar, Salvar; sem permissão = só leitura (`modalApplyPerms`);
+   item em uso = Inativar; toda exclusão com `confirmDialog`.
+9. **Ajuda**: toda função nova entra no `HELP_TOPICS` (aspas curvas no texto).

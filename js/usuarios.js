@@ -106,7 +106,8 @@
   function injectStyles() {
     var css =
       ".adm-wrap{padding:0 14px 14px;overflow:auto;flex:1}" +
-      ".adm-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}" +
+      ".adm-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:clip}" +
+      ".adm-table thead th{position:sticky;top:0;z-index:1}" +
       ".adm-table th{text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surface)}" +
       ".adm-table td{padding:9px 12px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:middle}" +
       ".adm-table tbody tr{cursor:pointer}" +

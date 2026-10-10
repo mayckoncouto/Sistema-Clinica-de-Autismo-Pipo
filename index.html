@@ -440,6 +440,9 @@ div.ag-obj-head{cursor:default}
 .crm-card-f .crm-prio{margin-left:auto}
 /* Calendário cabe inteiro na tela: as semanas dividem a altura (minmax(0,1fr)) e cada dia rola por dentro. */
 .crm-host:has(.crm-cal){display:flex;flex-direction:column;overflow:hidden}
+/* Lista do CRM: só a tabela rola, o título das colunas fica preso no alto */
+.crm-host:has(> .pat-table-wrap){display:flex;flex-direction:column;overflow:hidden}
+.crm-host > .pat-table-wrap{border-top:0;min-height:0}
 .crm-cal{display:flex;flex-direction:column;flex:1;min-height:360px;box-sizing:border-box;padding:8px 14px 12px}
 .crm-cal-bar{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .crm-cal-title{font-size:15px;margin-left:6px;text-transform:capitalize}
@@ -912,7 +915,7 @@ div.ag-obj-head{cursor:default}
 .cad-menu .cad-sep{flex:none;height:5px;background:var(--surface-2);border-bottom:1px solid var(--line)}
 .cad-menu button{border:0;background:transparent;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 .cad-menu button:hover,.cad-menu button:focus{background:var(--accent-weak);outline:none}
-#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-diagnosticos,#tab-origens,#tab-cbo,#tab-conselhos,#tab-feriados,#tab-status{flex:1;min-height:0;display:flex;flex-direction:column}
+.panel.reg-panel,#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-diagnosticos,#tab-origens,#tab-cbo,#tab-conselhos,#tab-feriados,#tab-status{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-host{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-table tbody tr{cursor:pointer}
 .reg-table tbody tr:hover td{background:var(--accent-weak)}
@@ -1264,7 +1267,7 @@ button.tr-sec-toggle[aria-expanded="false"] .tr-sec-arrow{transform:rotate(-90de
 .rp-note{font-size:12px;color:var(--ink-2);background:var(--surface-2);border-radius:8px;padding:7px 10px;margin:6px 0 10px}
 .rp-sec{font-size:13px;margin:14px 0 6px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.03em}
 .rp-empty{font-size:12.5px;color:var(--muted);padding:6px 0}
-.rp-table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
+.rp-table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;max-height:72vh}  /* rola por dentro: o título das colunas fica preso no alto */
 table.rp-table{border-collapse:collapse;width:100%;font-size:12.5px}
 .rp-table th{position:sticky;top:0;background:var(--surface-2);text-align:left;padding:7px 10px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--line);white-space:nowrap}
 .rp-table td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -6675,9 +6678,10 @@ function crmDuePicker(anchor, o){
   if (mode === "rec") draft = newDraft();
   function lbl(iso){ var d = dpParse(iso), diff = Math.round((d - dpParse(today)) / 864e5); return diff >= 0 && diff < 7 ? CRM_WD3[d.getDay()] : d.getDate() + " " + CRM_MES3[d.getMonth()]; }
   function quick(){
-    var dow = dpParse(today).getDay(), sat = crmAddDays(today, (6 - dow + 7) % 7), mon = crmAddDays(today, ((1 - dow + 7) % 7) || 7);
-    return [["Hoje", today], ["Amanhã", crmAddDays(today, 1)], ["Este final de semana", sat], ["Semana que vem", mon],
-      ["Próximo final de semana", crmAddDays(sat, 7)], ["2 semanas", crmAddDays(today, 14)], ["4 semanas", crmAddDays(today, 28)]];
+    // Próxima Segunda = a próxima segunda-feira; Semana que vem = o mesmo dia da semana que vem (hoje + 7)
+    var dow = dpParse(today).getDay(), mon = crmAddDays(today, ((1 - dow + 7) % 7) || 7);
+    return [["Hoje", today], ["Amanhã", crmAddDays(today, 1)], ["Próxima Segunda", mon], ["Semana que vem", crmAddDays(today, 7)],
+      ["2 semanas", crmAddDays(today, 14)], ["4 semanas", crmAddDays(today, 28)]];
   }
   function calHtml(){
     var y = view.getFullYear(), mm = view.getMonth(), first = new Date(y, mm, 1), start = new Date(y, mm, 1 - first.getDay());
@@ -20025,7 +20029,7 @@ var HELP_TOPICS = [
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Em todas as listas, o grupo <b>Dados do Paciente/Lead</b> traz, em duas linhas, Paciente ou Lead e Telefone, Diagnóstico e Convênio. Com paciente cadastrado, esses campos mostram o cadastro dele (telefone, diagnóstico e convênio do tratamento) e só mudam no cadastro do paciente; com lead, são preenchidos na tarefa. <b>Cadastrar paciente</b> (à direita, na linha do título, só para lead) abre o cadastro já preenchido com nome, telefone e diagnóstico (o diagnóstico vai para o campo Diagnóstico do paciente) e liga a tarefa ao paciente.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
-      "<b>Vencimento</b> (na janela da tarefa ou clicando na data da lista): nas listas com <b>Recorrência</b> ligada abre uma janela com atalhos à esquerda (Hoje, Amanhã, Este final de semana, Semana que vem, Próximo final de semana, 2 semanas, 4 semanas) e o calendário à direita; o ✕ ao lado da data tira o vencimento; nas outras listas abre o calendário normal. Também dá para digitar a data no campo. A opção <b>Recorrência</b> de cada lista fica em <b>CRM ▾ → Listas e status</b> (ao lado de Funil de contatos).",
+      "<b>Vencimento</b> (na janela da tarefa ou clicando na data da lista): nas listas com <b>Recorrência</b> ligada abre uma janela com atalhos à esquerda (Hoje, Amanhã, Próxima Segunda, Semana que vem — o mesmo dia da semana que vem —, 2 semanas, 4 semanas) e o calendário à direita; o ✕ ao lado da data tira o vencimento; nas outras listas abre o calendário normal. Também dá para digitar a data no campo. A opção <b>Recorrência</b> de cada lista fica em <b>CRM ▾ → Listas e status</b> (ao lado de Funil de contatos).",
       "<b>Outras opções ▾</b> na barra do CRM: <b>Exportar planilha</b> baixa um Excel com as tarefas da tela aberta (a lista, Minhas tarefas ou a tela CRM, com a busca, os filtros e “Finalizados”), com a coluna <b>Código</b> de cada tarefa. <b>Importar planilha</b>: linha com Código atualiza aquela tarefa; sem Código vira tarefa nova (sem Lista, vai para a lista aberta). Status pelo nome do status da lista; Prioridade Urgente, Alta ou Normal; Responsáveis pelos nomes (só quem tem acesso ao CRM e à lista); nome que não é paciente cadastrado vira lead. Dados do lead só nas listas com Funil de contatos. A prévia mostra Novo, Atualizar, Igual e Com problema antes de gravar, e o sistema baixa uma cópia antes de importar. Célula vazia não apaga; comentários e histórico não entram; não dá para mudar a tarefa de lista pela planilha.",
       "<b>CRM ▾ → Listas e status</b>: uma linha por lista com as setas (ordem no menu), a bolinha da cor, os status e as opções; as setas gravam na hora. <b>Editar</b> abre a janela da lista: nome, cor, opções (<b>Funil de contatos</b>, <b>Recorrência</b>) e os status (setas, cor, nome, Finalizado, Perda, ✕ e + status); <b>Salvar</b> grava e volta para as listas. <b>+ Incluir</b> cria uma lista; <b>Excluir</b> só funciona se a lista não tem tarefas.",
       "<b>Configurar recorrência</b> (no pé dos atalhos): escolha Diariamente, Semanalmente (marque os dias da semana), Mensalmente ou Anualmente, se cria uma <b>nova tarefa</b> ou reabre a mesma, <b>Repetir para sempre</b> ou até uma data, e o status da próxima. O calendário pinta as próximas datas. Tarefa recorrente mostra ↻ ao lado da data; <b>Remover</b> tira a recorrência.",

@@ -38,7 +38,8 @@ const path = require('path');
   await page.fill('#crmTitleIn', 'Ligar para a família');
   await page.fill('#crmWho', 'Criança Teste');
   await page.dispatchEvent('#crmWho', 'input');
-  check('a name without registration is a lead: tag + "Cadastrar paciente" + lead data?', /Lead/.test(await page.$eval('#crmWhoTag', (e) => e.textContent)) && !(await page.$eval('#crmRegPat', (e) => e.hidden)) && !(await page.$eval('#crmLeadBox', (e) => e.hidden)));
+  await page.waitForFunction(() => /Lead/.test((document.getElementById('crmWhoTag') || {}).textContent || '') && !document.getElementById('crmRegPat').hidden, null, {timeout: 3000}).catch(() => {});
+  check('a name without registration is a lead: tag + "Cadastrar paciente" + lead data?', /Lead/.test(await page.$eval('#crmWhoTag', (e) => e.textContent)) && !(await page.$eval('#crmRegPat', (e) => e.hidden)) && !(await page.$eval('#crmLeadBox', (e) => e.hidden)), await page.evaluate(() => JSON.stringify({tag: (document.getElementById('crmWhoTag') || {}).textContent, rp: document.getElementById('crmRegPat') && document.getElementById('crmRegPat').hidden, who: document.getElementById('crmWho').value, n: document.querySelectorAll('#ovCrm').length})));
   const leadOrder = await page.$$eval('#crmLeadBox .crm-prop > label', (r) => r.map((x) => x.textContent.trim()));
   check('Dados do Paciente/Lead: Paciente ou Lead, Telefone, Diagnóstico, Convênio (only two lines)?', leadOrder.join('|') === 'Paciente ou Lead|Telefone|Diagnóstico|Convênio', leadOrder);
   // Paciente cadastrado: Telefone, Diagnóstico e Convênio vêm do cadastro (só leitura) e continuam visíveis
@@ -114,7 +115,7 @@ const path = require('path');
   const qk = await page.evaluate(() => [...document.querySelectorAll('#crmDuePop .crm-dq-opt span')].map((e) => e.textContent));
   const tomorrow = await ev('crmAddDays(crmToday(), 1)');
   await page.click(`#crmDuePop [data-q="${tomorrow}"]`); await page.waitForTimeout(200);
-  check('due picker: quick options and "Amanhã" sets tomorrow?', qk.join('|') === 'Hoje|Amanhã|Este final de semana|Semana que vem|Próximo final de semana|2 semanas|4 semanas' && (await ev(`CRM.tasks["${tid}"].due_date`)) === tomorrow, JSON.stringify(qk));
+  check('due picker: quick options and "Amanhã" sets tomorrow?', qk.join('|') === 'Hoje|Amanhã|Próxima Segunda|Semana que vem|2 semanas|4 semanas' && (await ev(`CRM.tasks["${tid}"].due_date`)) === tomorrow, JSON.stringify(qk));
   await page.click(`#crmHost [data-crm-due="${tid}"]`); await page.waitForTimeout(150);
   await page.click('#crmDuePop [data-act="rec"]'); await page.waitForTimeout(100);
   const recUi = await page.evaluate(() => ({ freq: [...document.querySelectorAll('#crmDuePop [data-freq]')].map((b) => b.textContent), wdOn: document.querySelectorAll('#crmDuePop [data-wd].on').length,
