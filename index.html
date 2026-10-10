@@ -565,9 +565,10 @@ div.ag-obj-head{cursor:default}
 .msheet-head b{font-size:17px;font-weight:700;text-align:center}
 /* Listas de várias opções (.ms) no celular, dentro do CRM/cadastros: o painel vira janela de baixo */
 .ms-sheet-head{display:none}
-.ms-panel.ms-sheet:not([hidden]){position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:auto!important;max-width:none!important;max-height:72dvh;overflow:auto;z-index:901;border-radius:18px 18px 0 0;box-shadow:0 0 0 100vmax rgba(10,16,15,.45),0 -10px 30px rgba(0,0,0,.2);padding:0 0 env(safe-area-inset-bottom);background:var(--surface)}
+.ms-panel.ms-sheet:not([hidden]){position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:auto!important;max-width:none!important;max-height:82dvh;overflow:auto;z-index:901;border:0!important;border-radius:18px 18px 0 0;box-shadow:0 0 0 100vmax rgba(10,16,15,.45),0 -10px 30px rgba(0,0,0,.2);padding:0 0 env(safe-area-inset-bottom);background:var(--surface);animation:msheetUp .18s ease-out}
 .ms-panel.ms-sheet .ms-sheet-head{display:flex;position:sticky;top:0;z-index:1;background:var(--surface)}
-.ms-panel.ms-sheet .ms-opt{min-height:48px;padding:10px 16px;font-size:16px;flex:none;white-space:nowrap;overflow:hidden}
+.ms-panel.ms-sheet .ms-opt{min-height:52px;padding:12px 20px;font-size:16px;gap:14px;flex:none;white-space:nowrap;overflow:hidden;border-bottom:1px solid var(--line)}
+.ms-panel.ms-sheet .ms-opt input[type=checkbox]{width:20px;height:20px;flex:none}
 .msheet-x{position:absolute;right:12px;top:50%;margin-top:-16px;width:36px;height:36px;border:0;border-radius:50%;background:var(--surface-2);color:var(--ink-2);font-size:15px;cursor:pointer}
 .msheet > :is(#dpPop,#crmPop){position:static!important;left:auto!important;top:auto!important;visibility:visible!important;flex:1 1 auto;min-height:0;overflow:auto;width:auto!important;min-width:0!important;max-width:none!important;max-height:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:var(--surface)}
 .msheet .dp-pop-list{display:flex;flex-direction:column}
@@ -1788,6 +1789,7 @@ body.pat-col-resizing *{user-select:none}
 .autolist-sub{margin-left:auto;padding-left:8px;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
 .autolist button.autolist-new{color:var(--accent)}
 .autolist.floating{}
+.autolist.auto-fixed{position:fixed;right:auto;z-index:90}
 .field-picker{position:relative}
 .modal-foot{display:flex;gap:8px;padding:12px 18px 16px;border-top:1px solid var(--line)}
 .modal-foot .spacer{flex:1}
@@ -21715,6 +21717,41 @@ function dpReplace(e){
 document.addEventListener("scroll", dpReplace, true);
 window.addEventListener("resize", dpReplace);
 if (window.visualViewport){ window.visualViewport.addEventListener("resize", dpReplace); window.visualViewport.addEventListener("scroll", dpReplace); }
+// Listas de sugestões ao digitar (.autolist: Paciente ou Lead do CRM, paciente do agendamento, convênio
+// e especialidade do tratamento…): flutuam por cima da janela, coladas no campo (popPlaceV), em vez de
+// aumentar a rolagem da janela. Seguem o campo ao rolar e somem se o campo sai da área visível.
+function autoAnchor(list){
+  var p = list.previousElementSibling; if (p && /^(INPUT|TEXTAREA)$/.test(p.tagName)) return p;
+  return list.parentNode ? list.parentNode.querySelector("input, textarea") : null;
+}
+function autoPlace(list){
+  if (list.hidden || list.classList.contains("pl-goal-pop") || !list.isConnected) return;
+  var a = autoAnchor(list); if (!a) return;
+  var r = a.getBoundingClientRect(), w = Math.max(r.width, 180);
+  list.classList.add("auto-fixed");
+  list.style.width = w + "px";
+  list.style.left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8) + "px";
+  popPlaceV(list, r, 4);
+  var box = a.closest(".modal-body") || a.closest(".panel"), b = box ? box.getBoundingClientRect() : null;
+  list.style.visibility = (b && (r.bottom < b.top || r.top > b.bottom)) ? "hidden" : "";
+}
+function autoReplaceAll(e){
+  Array.prototype.forEach.call(document.querySelectorAll(".autolist.auto-fixed:not([hidden])"), function(l){
+    if (e && e.type === "scroll" && e.target instanceof Node && l.contains(e.target)) return; // rolar a própria lista
+    autoPlace(l);
+  });
+}
+document.addEventListener("scroll", autoReplaceAll, true);
+window.addEventListener("resize", autoReplaceAll);
+if (window.visualViewport){ window.visualViewport.addEventListener("resize", autoReplaceAll); window.visualViewport.addEventListener("scroll", autoReplaceAll); }
+new MutationObserver(function(muts){
+  muts.forEach(function(m){
+    var t = m.target; if (!t.classList || !t.classList.contains("autolist") || t.classList.contains("pl-goal-pop")) return;
+    if (t.hidden){ t.__dir = null; return; }
+    if (!t.__autoWatch){ t.__autoWatch = true; popWatchSize(t, function(){ autoPlace(t); }); }
+    autoPlace(t);
+  });
+}).observe(document.body, {attributes: true, attributeFilter: ["hidden"], subtree: true});
 function dpClose(){
   var p = document.getElementById("dpPop"); if (p){ if (p.__sheet) sheetRemove(); p.remove(); }
   document.removeEventListener("mousedown", dpOutside, true);

@@ -3406,6 +3406,9 @@ Toda tela, lista, janela ou campo novo segue isto (e o que já existe foi corrig
 5. **Listas que consultam um cadastro**: `data-reg-add` ("+ Incluir" no fim, para quem pode incluir).
 6. **Barras**: numa linha só no computador quando couber (busca e filtros encolhem com "…"); "?" sempre o último.
 7. **Listas flutuantes**: posicionar com `popPlaceV` + `popWatchSize` (abrindo para cima fica colada no campo).
+   Lista de sugestões ao digitar: usar `<div class="autolist" hidden>` logo depois do campo — ao perder o
+   `hidden`, ela vira flutuante sozinha (`autoPlace`, `.autolist.auto-fixed`, observador de `hidden`), colada
+   no campo e sem aumentar a rolagem da janela.
 8. **Janelas**: rodapé Excluir à esquerda, Cancelar, Salvar; sem permissão = só leitura (`modalApplyPerms`);
    item em uso = Inativar; toda exclusão com `confirmDialog`.
 9. **Ajuda**: toda função nova entra no `HELP_TOPICS` (aspas curvas no texto).
@@ -3528,3 +3531,9 @@ Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead �
   Migração `supabase/2026-10-10s-campos-do-link.sql`. Mudou a lista de campos do formulário? Ajustar
   `LINK_FIELDS` no index.html, `cadastro.html` e as chaves de `intake_send`.
 - Produção (2026-10-10): `2026-10-10s-campos-do-link` rodada (1 | 1).
+- (2026-10-10, revisão de campos e listas) Listas de sugestões ao digitar (`.autolist`: Paciente ou Lead do
+  CRM, paciente do agendamento no Planner/Agenda, convênio e especialidade do tratamento) flutuam por cima da
+  janela (`autoAnchor`, `autoPlace`, `autoReplaceAll`; z-index 90): antes ficavam dentro da janela e aumentavam
+  a rolagem. Teste `tests/run_autolist.js`. No celular, o painel de várias opções (`.ms-panel.ms-sheet`: Tipos e
+  Serviços do colaborador) ficou igual às outras janelas de baixo (82% da tela, opções de 52px com linha,
+  animação de subida).
