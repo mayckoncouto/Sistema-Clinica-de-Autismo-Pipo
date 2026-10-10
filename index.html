@@ -4381,8 +4381,12 @@ var USAGE = {
   profissionais: function(p){
     var cols = state.rooms.filter(function(r){ return (r.therapists || []).some(function(t){ return t.professionalId === p.id; }); }).length;
     var trs = state.treatments.filter(function(t){ return (t.specHours || []).some(function(h){ return h.profId === p.id; }); }).length;
-    return apptUseCount("professional_id", p.id).then(function(n){
-      return [useTxt(cols, "sala/grupo do Planner", "salas/grupos do Planner"), useTxt(trs, "tratamento", "tratamentos"), useTxt(n, "atendimento na Agenda", "atendimentos na Agenda")].filter(Boolean);
+    var blocks = (PLB.list || []).filter(function(b){ return b.alvo === "prof" && b.profId === p.id; }).length;
+    return Promise.all([apptUseCount("professional_id", p.id),
+      rowUseCount("clinical_records", "professional_id", p.id, function(){ return (PLAN.evoMem || []).filter(function(r){ return r.professional_id === p.id; }).length; })
+    ]).then(function(n){
+      return [useTxt(cols, "sala/grupo do Planner", "salas/grupos do Planner"), useTxt(trs, "tratamento", "tratamentos"), useTxt(n[0], "atendimento na Agenda", "atendimentos na Agenda"),
+        useTxt(n[1], "evolução no Prontuário", "evoluções no Prontuário"), useTxt(blocks, "bloqueio de horário no Planner", "bloqueios de horário no Planner")].filter(Boolean);
     });
   },
   // Só a Agenda: os agendamentos do Planner são apagados junto ao excluir/inativar
@@ -12248,7 +12252,9 @@ function openStaffModal(entry, opts){
     var stItem = prof ? Object.assign({}, prof, {inativo: row ? !!d.inativo : !!prof.inativo}) : {id: row.id, inativo: !!d.inativo};
     setupInactivate({btn: "profDelete", mod: "colaboradores", item: stItem, name: d.nome || "", close: close,
       usage: function(){
-        var u = window.pipoAuth && row ? window.pipoAuth.userForStaff(row.id) : Promise.resolve(null);
+        // Usuário ligado pelo colaborador (staff_id) ou pelo profissional (professional_id).
+        var u = !window.pipoAuth ? Promise.resolve(null) : (row ? window.pipoAuth.userForStaff(row.id) : Promise.resolve(null))
+          .then(function(x){ return x || (prof ? window.pipoAuth.userForProfessional(prof.id) : null); }, function(){ return null; });
         return Promise.all([prof ? USAGE.profissionais(prof) : [], u]).then(function(x){ return x[0].concat(x[1] ? ["usuário de acesso ao sistema"] : []); });
       },
       save: function(it){
@@ -19378,7 +19384,7 @@ var HELP_TOPICS = [
       "Quem atende tem uma situação só: inativar ou reativar o colaborador vale também para o Planner e a Agenda. Tirar o tipo Profissional tira a pessoa da grade, sem inativar o colaborador.",
       "A soma das formas de pagamento é comparada com o valor contratado (aviso quando não confere).",
       "Com data de desligamento até hoje, a pessoa fica inativa, o acesso ao sistema é desativado e, se for profissional, ela sai das listas do Planner e da Agenda (aviso se ainda há atendimentos marcados depois do desligamento).",
-      "Quem está em uso (atendimentos, colunas de sala, tratamentos ou usuário de acesso) não é excluído: o botão vira <b>Inativar</b>. Inativo some das listas e das opções; <b>Reativar</b> volta ao normal.",
+      "Quem está em uso (atendimentos, colunas de sala, tratamentos, evoluções no Prontuário, bloqueios de horário no Planner ou usuário de acesso) não é excluído: o botão vira <b>Inativar</b>. Inativo some das listas e das opções; <b>Reativar</b> volta ao normal.",
       "Sem permissão de editar, a janela abre só para leitura.",
       "O horário de trabalho do profissional é o horário de atendimento: fora dele a célula fica hachurada e não aceita agendamento. O Planner e a Agenda mostram só os dias em que a clínica abre.",
       "O nome do usuário ligado a um profissional é sempre o nome do cadastro; o nome social (ou o primeiro nome) aparece no cabeçalho das colunas do Planner.",

@@ -132,6 +132,14 @@ const path = require('path');
   })()`);
   check('grupo com atendimentos na Agenda: em uso (2)?', gr.uses.length === 1 && /^2 atendimentos/.test(gr.uses[0]) && gr.none === 0, gr);
 
+  // Item 9: colaborador com evolução ou bloqueio de horário = em uso.
+  const cb = await ev(`(function(){
+    var saved = PLB.list; PLB.list = [{id: "b1", alvo: "prof", profId: "px"}];
+    PLAN.evoMem = [{id: "e1", patient_id: "pa", professional_id: "px"}];
+    return USAGE.profissionais({id: "px", nome: "Prof X"}).then(function(r){ PLB.list = saved; PLAN.evoMem = []; return r; });
+  })()`);
+  check('colaborador com evolução e bloqueio: em uso?', cb.indexOf('1 evolução no Prontuário') !== -1 && cb.indexOf('1 bloqueio de horário no Planner') !== -1, cb);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

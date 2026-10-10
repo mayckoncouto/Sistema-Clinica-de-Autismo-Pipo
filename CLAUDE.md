@@ -3177,8 +3177,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~ALTA 6~~ FEITO (2026-10-10, ver "Status protegidos" abaixo).
 - ~~ALTA 7~~ FEITO (2026-10-10, ver "Excluir Plano Terapêutico" abaixo).
 - ~~MÉDIA 8~~ FEITO (2026-10-10, ver "Grupo de suporte em uso na Agenda" abaixo).
-- MÉDIA 9. Colaborador: não conta evoluções (`clinical_records.professional_id`), bloqueios do Planner, usuário ligado
-  por `professional_id` sem cadastro de RH.
+- ~~MÉDIA 9~~ FEITO (2026-10-10, ver "Colaborador em uso" abaixo).
 - MÉDIA 10. Especialidade não conta Banco de objetivos/planos/habilidades/áreas complementares; Escala e Habilidade não
   contam o Banco de objetivos (`planUseCount` só lê planos).
 - MÉDIA 11. CRM Listas e status: "lista/status com tarefas" conferido só nas tarefas que a pessoa vê; banco não confere.
@@ -3285,3 +3284,10 @@ Decisão do usuário: grupo com atendimentos na Agenda vira Inativar (não exclu
 `patient` = nome do grupo (sem a coluna, só pelo nome; sem sistema online, `AD.rows`). `room_id` não conta
 para o grupo (é a sala que ele marca). Só no app, igual às salas; sem SQL. Ajuda (grupos) e teste no fim de
 `tests/run_agd_done.js`.
+
+## Colaborador em uso (2026-10-10, item 9 da auditoria)
+Decisão do usuário: contar tudo; em uso = Inativar. `USAGE.profissionais` conta também evoluções
+(`clinical_records.professional_id`, via `rowUseCount`; sem sistema online `PLAN.evoMem`) e bloqueios de horário
+do Planner do profissional (`PLB.list`, `alvo "prof"`). A janela do colaborador procura o usuário ligado pelo
+`staff_id` e, sem ele, pelo `professional_id` (`pipoAuth.userForProfessional`). Só no app; sem SQL. Ajuda
+(colaboradores) e teste no fim de `tests/run_agd_done.js`.
