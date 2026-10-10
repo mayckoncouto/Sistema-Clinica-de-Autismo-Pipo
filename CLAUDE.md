@@ -420,6 +420,9 @@ importação da migração ficam fora do repositório (`.gitignore` bloqueia `ex
 6. **SQL para o usuário rodar (pedido dele, 2026-10-06):** sempre mostrar o script
    inteiro no chat, num bloco ```sql, pronto para copiar e colar no SQL Editor do
    Supabase (não basta dar o link do arquivo; não há como pôr na área de transferência).
+   **Depois de mandar um SQL, ESPERAR o usuário confirmar o resultado antes de prosseguir**
+   (pedido dele, 2026-10-10): não começar o próximo item nem fazer outra pergunta até ele
+   mandar o resultado da conferência.
 
 ## Nunca usar prefixo `ad` / `ad-` em classes, ids ou atributos
 Bloqueadores de anúncio (AdBlock, uBlock etc.) escondem elementos chamados
@@ -3274,3 +3277,4 @@ vigente faz a anterior voltar a ser a vigente.
 - Banco: `therapy_plans_delete_guard` (BEFORE DELETE) e `therapy_plans_reopen_prev` (AFTER DELETE: vigente excluída →
   `prev_id`, senão a encerrada de versão mais alta, vira vigente). Migração `supabase/2026-10-10h-excluir-plano.sql`.
   Testada no PGlite. Teste no fim de `tests/run_agd_done.js`.
+- Produção (2026-10-10): `2026-10-10h-excluir-plano` rodada (travas criadas = 2).
