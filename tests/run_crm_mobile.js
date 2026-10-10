@@ -64,8 +64,10 @@ const path = require('path');
   await page.click('#mSheet [data-pick="alta"]');
   check('priority picked in the window?', (await ev('document.getElementById("crmPrio").value')) === 'alta');
   await page.click('#ovCrm [data-dp-for="crmDue"]');
-  check('date field opens the calendar window (no keyboard: read-only text)?', !!(await page.$('#mSheet .dp-grid')) && (await page.$eval('#ovCrm [data-dp-for="crmDue"] .dp-in', (e) => e.readOnly)));
-  await page.click('#mSheet .dp-clear');
+  check('date field opens the calendar window (no keyboard: read-only text)?', !!(await page.$('#mSheet .dp-grid')) && !!(await page.$('#mSheet .crm-dq-opt')) && !!(await page.$('#mSheet [data-act="rec"]')) && (await page.$eval('#ovCrm [data-dp-for="crmDue"] .dp-in', (e) => e.readOnly)));
+  if (!(await page.$('#mSheet [data-act="clear"]'))) { await page.click('#mSheet .crm-dq-opt'); await page.click('#ovCrm [data-dp-for="crmDue"]'); }
+  if (process.env.SHOT){ await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOT }); }
+  await page.click('#mSheet [data-act="clear"]');
   check('Limpar clears the date?', (await ev('document.getElementById("crmDue").value')) === '' && !(await page.$('#mSheet')));
   await page.click('#crmPeopleMs .ms-btn');
   await page.click('#mSheet [data-pick="u2"]');

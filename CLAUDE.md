@@ -3291,3 +3291,14 @@ Decisão do usuário: contar tudo; em uso = Inativar. `USAGE.profissionais` cont
 do Planner do profissional (`PLB.list`, `alvo "prof"`). A janela do colaborador procura o usuário ligado pelo
 `staff_id` e, sem ele, pelo `professional_id` (`pipoAuth.userForProfessional`). Só no app; sem SQL. Ajuda
 (colaboradores) e teste no fim de `tests/run_agd_done.js`.
+
+## CRM: vencimento com atalhos e recorrência (2026-10-10)
+- Janela própria `crmDuePicker` (#crmDuePop; celular = janela de baixo): atalhos à esquerda (Hoje, Amanhã, Este final
+  de semana, Semana que vem, Próximo final de semana, 2 e 4 semanas), calendário à direita, ✕ tira a data. Abre pelo
+  campo Vencimento da janela da tarefa e pela data na lista (`el.__picker` no input faz o `dpEnhanceDate` abrir ela).
+- Só data final (sem hora). `tasks.recurrence` jsonb {freq diaria|semanal|mensal|anual, dias[0..6], nova, sempre, ate,
+  status}. Gera a próxima SÓ ao finalizar: gatilho `tasks_recur` (before update of status) em
+  `supabase/2026-10-10i-crm-recorrencia.sql`; sem sistema online `crmMemRecur` faz igual. nova=false: mesma tarefa
+  volta ao status com a próxima data; nova=true: insere cópia (a recorrência passa para ela). Evento
+  `field/recorrencia`. Conta igual nos dois lados (`crm_rec_next` / `crmRecNext`; mês sem o dia = último dia).
+- Produção: 2026-10-10i AINDA NÃO rodada (até rodar, salvar recorrência dá erro de coluna).
