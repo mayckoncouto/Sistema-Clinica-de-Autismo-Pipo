@@ -3373,3 +3373,4 @@ só com planos encerrados, Planner (paciente inexistente, dia fechado na Clínic
 usuário/colaborador/profissional desligados, id repetido nas listas. Complementa `conferencia-dos-dados.sql`.
 Testada no PGlite (também com CRLF). Correções só depois do resultado, em migração própria.
 - Produção (2026-10-10): conferência de integridade rodada — as 25 verificações deram 0 (nenhuma sobra).
+- (2026-10-10, pedido do usuário) Barra do CRM numa linha só no computador a partir de 1260px (busca e filtros encolhem com "…"; até 1700px "Outras opções" vira "Opções"); abaixo de 1260px quebra linha.
