@@ -86,20 +86,20 @@ const path = require('path');
       var t1 = treatmentsOf(P[1].id)[0], t2 = treatmentsOf(P[2].id)[0];
       var again = ioTrPlan(ioRecords("tratamentos", xlParseText(txt)).recs).items.map(function(it){ return it.st; });
       return {unknown: R.unknown, st: st, notes: plan.notes.join(" | "), msg: msg,
-        p0: L.map(function(t){ return [t.inicio, t.status, t.tipo, t.statusEm || "", (t.specHours || []).length, t.aba, t.id === "tr-" + P[0].id ? "mig" : ""].join("/"); }),
+        p0: L.map(function(t){ return [t.inicio, t.status, t.tipo, t.statusEm || "", (t.specHours || []).length, t.abaAntigo || "", t.id === "tr-" + P[0].id ? "mig" : ""].join("/"); }),
         p0val: trMoney(L[2]), p0sup: rawPatient(P[0].id).suporte,
         p1: [t1.id, t1.plano, t1.sessoesMes, t1.aba, t1.convenioId, trFinal(t1), (t1.historico || []).slice(-1)[0].acao], p1cid: rawPatient(P[1].id).cid,
         p2: [t2.status, !!t2.motivoPendente, t2.statusEm, t2.obs],
         again: again};
     });
   })()`);
-  check('extra columns of the sheet are reported as ignored?', ['Agenda', 'Valor Final', 'Tipo', 'Retenção', 'Idade'].every((c) => tr.unknown.indexOf(c) !== -1), tr.unknown);
+  check('extra columns of the sheet are reported as ignored?', ['Agenda', 'Valor Final', 'Tipo', 'Retenção', 'Idade', 'ABA'].every((c) => tr.unknown.indexOf(c) !== -1), tr.unknown);
   check('preview: 3 new + update + new cancelled, wrong dates and unknown patient are problems?', tr.st.join(',') === '2:novo,3:novo,4:novo,5:atualizar,6:novo,7:problema,8:problema', tr.st);
   check('unknown patient listed in the notes?', /fora do cadastro.*Fulano Que Não Existe/.test(tr.notes), tr.notes);
-  check('migration treatment replaced, specialties/hours move to the Ativo, automatic type, end dates?',
-    tr.p0.join(' ') === '2025-07-14/renegociado/novo/2025-11-01/0/Sim/ 2025-11-01/renegociado/renegociado/2026-06-01/0/Sim/ 2026-06-01/ativo/renegociado/2026-06-01/1/Sim/', tr.p0);
+  check('migration treatment replaced, specialties/hours/old ABA move to the Ativo (sheet ABA ignored), automatic type, end dates?',
+    tr.p0.join(' ') === '2025-07-14/renegociado/novo/2025-11-01/0// 2025-11-01/renegociado/renegociado/2026-06-01/0// 2026-06-01/ativo/renegociado/2026-06-01/1/Não/', tr.p0);
   check('values (monthly) saved and Suporte 2 goes to the patient level?', tr.p0val.valor === 2250 && tr.p0sup === 'Nível 2', [tr.p0val, tr.p0sup]);
-  check('same patient + same start updates the existing treatment (history entry)?', tr.p1.join('|') === 'tx-1|Psicologia|10|Não|bradesco-saude|900|importado', tr.p1);
+  check('same patient + same start updates the existing treatment (history entry)?', tr.p1.join('|') === 'tx-1|Psicologia|10|Sim|bradesco-saude|900|importado', tr.p1);
   check('Suporte as text goes to the diagnosis (CID)?', tr.p1cid === 'TDAH', tr.p1cid);
   check('cancelled without motivo = pendente, with end date and observation?', tr.p2.join('|') === 'cancelado|true|2026-10-01|Cobrado no plano de outro', tr.p2);
   check('importing the same sheet again changes nothing?', tr.again.filter((s) => s === 'novo' || s === 'atualizar').length === 0, tr.again);

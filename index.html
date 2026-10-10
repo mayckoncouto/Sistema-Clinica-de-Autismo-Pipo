@@ -3185,7 +3185,7 @@ function openClinicModal(){
         '<div class="tr-sec">Redes sociais</div>' +
         '<div class="field"><div class="therapist-rows cl-socs" id="clSocs"></div>' +
           (clCanEdit ? '<button type="button" class="btn ghost add-row-btn" id="clSocAdd">+ Inserir</button>' : '') +
-          '<div class="color-hex-label" style="margin-top:6px">Aparecem na página do link de cadastro (no topo e depois do envio), na tela de entrada do sistema, nas mensagens com o link de cadastro e nas impressões. Linha sem link não aparece.</div></div>' +
+          '<div class="color-hex-label" style="margin-top:6px">Aparecem na página do link de cadastro (só depois do envio, no agradecimento), na tela de entrada do sistema, nas mensagens com o link de cadastro e nas impressões. Linha sem link não aparece.</div></div>' +
         // Aparência e Atendimento em linhas (um cartão embaixo do outro).
         '<div class="cl-cards">' +
           '<div class="cl-card"><div class="cl-card-title">Aparência</div>' +
@@ -3673,26 +3673,45 @@ function patientAgeYears(p){
   if (p.idade !== "" && p.idade != null && !isNaN(Number(p.idade))) return Number(p.idade);
   return null;
 }
-function patientIsNaoABA(p){
-  var aba = String((p && p.aba) || "").trim().toLowerCase();
-  return aba === "não" || aba === "nao";
+// ABA (2026-10-10): fica só nos quadros do tratamento (especialidades). Sem quadro, vale a regra
+// automática: Sim para todos, Não com nível de suporte 3 ou 17 anos ou mais.
+function abaAuto(p){
+  if (!p) return "Sim";
+  if (/3/.test(String(p.suporte || ""))) return "Não";
+  var age = patientAgeYears(p);
+  return age != null && age >= 17 ? "Não" : "Sim";
 }
-// ABA do paciente num atendimento: a linha do tratamento da especialidade do
-// atendimento (principal do profissional ou complementar dele que esteja no tratamento;
-// serviço diferente de Sessão = a linha do serviço) manda; fora das especialidades do
-// tratamento, ou linha sem ABA, vale o ABA do tratamento (cadastro).
+// ABA antigo (o campo único do tratamento que saiu da tela, guardado em abaAntigo; "aba" = dado antigo
+// ainda não convertido). Vale só enquanto o tratamento não tem quadros e é o padrão do 1º quadro.
+function abaLegacy(t){
+  var v = t && (t.abaAntigo != null && t.abaAntigo !== "" ? t.abaAntigo : t.aba);
+  return v ? abaYesNo(v) : "";
+}
+function abaFallback(p){ return abaLegacy(p) || abaAuto(p); }
+// ABA do paciente fora de um atendimento (bolinha das listas): com quadros, Não só se todos são Não.
+function patientAba(p){
+  if (!p) return "";
+  if (p._aba) return p._aba;
+  var rows = treatLines(p.specHours);
+  if (!rows.length) return abaFallback(p);
+  return rows.every(function(r){ return abaYesNo(r.aba || abaFallback(p)) === "Não"; }) ? "Não" : "Sim";
+}
+function patientIsNaoABA(p){ return !!p && patientAba(p) === "Não"; }
+// ABA do paciente num atendimento: o quadro do tratamento do atendimento (principal do profissional
+// ou complementar; serviço diferente de Sessão = o quadro do serviço) manda; sem quadro para o
+// atendimento, a regra automática; tratamento ainda sem nenhum quadro, o ABA antigo (ou a automática).
 function bookingAbaOf(p, profId, service){
   if (!p) return "";
   var rows = treatLines(p.specHours);
-  if (!rows.some(function(r){ return r.aba; })) return p.aba || "";
+  if (!rows.length) return abaFallback(p);
   var line = treatLineFor(rows, profId, service);
-  return line ? (line.aba || p.aba || "") : (p.aba || "");
+  return line ? abaYesNo(line.aba || abaFallback(p)) : abaAuto(p);
 }
 // Paciente com o ABA do atendimento (para a cor e as regras "não ABA").
 function bookingPatient(p, b, profId){
   if (!p) return p;
   var aba = bookingAbaOf(p, profId || (b && b.professional_id), b && b.service);
-  return aba === (p.aba || "") ? p : Object.assign({}, p, {aba: aba});
+  return p._aba === aba ? p : Object.assign({}, p, {_aba: aba});
 }
 function patientColor(p){
   if (!p) return null;
@@ -7313,7 +7332,7 @@ function crmLeadTreatment(patId, convName){
   var nm = String(convName || "").trim(), cv = nm ? (state.convenios || []).filter(function(c){ return normText(c.name) === normText(nm); })[0] : null;
   var now = new Date().toISOString(), today = trTodayIso();
   var rec = {id: uid("tr"), patientId: patId, inicio: today, status: "ativo", statusEm: today, obs: "", criadoEm: now, atualizadoEm: now,
-    convenioId: cv ? cv.id : "", convenio: cv ? cv.name : nm, plano: "", sessoesMes: "", aba: "", specHours: [],
+    convenioId: cv ? cv.id : "", convenio: cv ? cv.name : nm, plano: "", sessoesMes: "", specHours: [],
     vencPor: "sem", totalSessoes: "", duracaoMeses: "", validoAte: ""};
   trHistAdd(rec, {acao: "criado", para: "ativo"});
   var list = (state.treatments || []).concat([rec]);
@@ -10178,7 +10197,7 @@ function areaConfirm(msgs){
   return confirmDialog({title: "Profissional fora das especialidades do tratamento",
     message: msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : "") + "<br>Agendar mesmo assim?", confirmLabel: "Agendar assim mesmo"});
 }
-var TREAT_FIELDS = ["convenioId", "convenio", "plano", "sessoesMes", "aba", "specHours", "horarios"];
+var TREAT_FIELDS = ["convenioId", "convenio", "plano", "sessoesMes", "aba", "abaAntigo", "specHours", "horarios"];
 // ---- Convênios: especialidades cobertas, valor por sessão e especialidades que liberam outras ----
 // Cadastro de Especialidades: libera = [ids] — "dentro de Psicologia posso atender
 // Musicoterapia, Psicopedagogia…" (igual para todos os convênios).
@@ -10262,7 +10281,7 @@ function specSumRender(){
   }
   el.className = "spec-sum spec-sum-" + cls; el.textContent = txt; el.hidden = false;
 }
-// ABA do tratamento e das linhas: só "Sim" ou "Não"; vazio (cadastros antigos) = Sim.
+// ABA dos quadros: só "Sim" ou "Não"; vazio (cadastros antigos) = Sim.
 function abaYesNo(v){ return v === "Não" ? "Não" : "Sim"; }
 function tlDayName(k){ var d = ALL_WEEKDAYS.filter(function(x){ return x.key === k; })[0]; return d ? d.name : k; }
 function tlWeeksText(v){ var w = TL_WEEKS.filter(function(x){ return x[0] === (v || ""); })[0]; return w ? w[1] : v; }
@@ -10397,7 +10416,7 @@ function openTreatLineModal(ctx){
 }
 function treatFieldsEditor(v, opts){
   // Quadros do tratamento (uma linha = um quadro; a mesma especialidade pode repetir).
-  var draftLines = patientSpecRows(v).map(function(row){ return Object.assign({}, row, {aba: abaYesNo(row.aba || v.aba)}); });
+  var draftLines = patientSpecRows(v).map(function(row){ return Object.assign({}, row, {aba: abaYesNo(row.aba || abaLegacy(v) || "Sim")}); });
   var lockedIds = null;   // ids dos quadros travados (tratamento com atendimentos realizados)
   var newSpecialties = [];
   var localConvenios = state.convenios.slice();
@@ -10428,10 +10447,6 @@ function treatFieldsEditor(v, opts){
         '<div class="tr-sec">Pacote</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="pPac">Sessão/Mês</label><input id="pPac" type="text" value="'+esc(v.sessoesMes == null ? "" : v.sessoesMes)+'"></div>' +
-          '<div class="field"><label for="pAba">ABA</label><select id="pAba">' +
-            '<option value="Sim"'+(abaYesNo(v.aba)==="Sim"?" selected":"")+'>Sim</option>' +
-            '<option value="Não"'+(abaYesNo(v.aba)==="Não"?" selected":"")+'>Não</option>' +
-          '</select></div>' +
         '</div>' +
         '<div class="tr-sec spec-sum-label">Especialidades e serviços <span class="spec-sum" id="specSum" hidden></span></div>' +
         '<div class="field">' +
@@ -10479,17 +10494,18 @@ function treatFieldsEditor(v, opts){
       var isNew = i == null, line = isNew ? null : draftLines[i];
       var nm = document.getElementById("trPat"), pName = nm && nm.selectedOptions && nm.selectedOptions[0] ? nm.selectedOptions[0].textContent : (v.nome || "");
       openTreatLineModal({line: line, isNew: isNew, locked: !isNew && lockedIds && lockedIds.indexOf(line.id) !== -1,
-        aba: document.getElementById("pAba").value, horarios: function(){ try { return readPatHours(); } catch (e){ return null; } },
+        aba: abaNewLine(), horarios: function(){ try { return readPatHours(); } catch (e){ return null; } },
         others: draftLines.filter(function(x, j){ return j !== i; }), patient: pName,
         onSave: function(o){ if (isNew) draftLines.push(o); else draftLines[i] = o; render(); },
         onDelete: function(){ draftLines.splice(i, 1); render(); }});
     }
     host.addEventListener("click", function(e){ var b = e.target.closest("[data-tl-edit]"); if (b) edit(+b.getAttribute("data-tl-edit")); });
     document.getElementById("specRowAdd").addEventListener("click", function(){ edit(null); });
-    // ABA do tratamento: trocar aqui troca o ABA de todos os quadros; cada quadro pode ser mudado depois.
-    document.getElementById("pAba").addEventListener("change", function(){
-      var val = this.value; draftLines.forEach(function(r){ r.aba = val; }); render();
-    });
+    // ABA do quadro novo: o ABA antigo do tratamento (enquanto existir) ou a regra automática do paciente.
+    function abaNewLine(){
+      var sel = document.getElementById("trPat"), pid = (sel && sel.value) || v.patientId || "";
+      return abaLegacy(v) || abaAuto((pid && findPatientById(pid)) || v);
+    }
     render();
 
     // Convênio picker: search+select+"cadastrar novo".
@@ -10584,7 +10600,8 @@ function treatFieldsEditor(v, opts){
         convenio: "",
         plano: document.getElementById("pPlano").value.trim(),
         sessoesMes: document.getElementById("pPac").value.trim(),
-        aba: document.getElementById("pAba").value,
+        aba: undefined,                              // ABA só nos quadros (o antigo fica em abaAntigo)
+        abaAntigo: abaLegacy(v) || undefined,
         horarios: readPatHours(),
         specHours: specHoursOut
       },
@@ -18657,8 +18674,8 @@ function rpExportCsv(){
  * horarios, criadoEm, atualizadoEm}]} — permissão "tratamentos".
  * Convênio, plano, pacote, ABA, especialidades e horários saíram do paciente: o
  * app enxerga cada paciente "somado" ao tratamento dele (rebuildPatients), então
- * Planner, Agenda, cores, regras "não ABA" e relatórios continuam lendo p.aba,
- * p.specHours... sem mudar. Idade/nascimento continuam no paciente.
+ * Planner, Agenda, cores, regras "não ABA" e relatórios continuam lendo
+ * p.specHours, p.horarios... sem mudar (o ABA fica nos quadros: bookingAbaOf). Idade/nascimento continuam no paciente.
  * Cada paciente tem no máximo UM tratamento Ativo. Tipo: Novo = primeiro
  * tratamento ou o anterior foi Cancelado; Renegociado = o anterior foi
  * renegociado (trTipoAuto). Término = data do último atendimento na Agenda dentro
@@ -18838,8 +18855,15 @@ function trTipoFor(rec, list){
 function trTipoAuto(pid){ return trTipoFor({patientId: pid, isNew: true}); }
 // Cor da bolinha (mesma regra do paciente: idade do paciente + ABA do tratamento).
 function trColor(t){
-  var p = rawPatient(t.patientId);
-  return p ? patientColor(Object.assign({}, p, {aba: t.aba})) : null;
+  var p = trPatObj(t);
+  return p ? patientColor(p) : null;
+}
+// Paciente "somado" a um tratamento qualquer (cadastro + saúde + campos do tratamento).
+function trPatObj(t){
+  var p = t && rawPatient(t.patientId); if (!p) return null;
+  var m = Object.assign({}, p, healthOf(p.id));
+  TREAT_FIELDS.forEach(function(k){ if (t[k] === undefined) delete m[k]; else m[k] = t[k]; });
+  return m;
 }
 function rawPatient(id){ return (state.patientsRaw || []).filter(function(p){ return p.id === id; })[0] || null; }
 // Paciente + campos do tratamento atual. Sempre uma lista nova (o índice de busca
@@ -18975,7 +18999,7 @@ function trPatEntrada(pid){ var p = pid && rawPatient(pid); return (p && p.entra
 // Janela do paciente: uma linha só com Início, Tipo, Plano e ABA do tratamento atual.
 function treatCardHtml(t){
   function item(label, val){ return '<span class="trc-item"><span>' + label + ':</span> <b>' + (val ? esc(val) : "—") + '</b></span>'; }
-  return '<div class="trc-line">' + item("Início", trBr(t.inicio)) + item("Tipo", trLabel(TR_TIPOS, t.tipo)) + item("Plano", t.plano) + item("ABA", abaYesNo(t.aba)) + '</div>';
+  return '<div class="trc-line">' + item("Início", trBr(t.inicio)) + item("Tipo", trLabel(TR_TIPOS, t.tipo)) + item("Plano", t.plano) + item("ABA", trAbaText(t)) + '</div>';
 }
 function treatSummaryHtml(t){
   var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
@@ -18983,7 +19007,7 @@ function treatSummaryHtml(t){
     'desde <b>' + esc(trBr(t.inicio)) + '</b> · ' + esc(trLabel(TR_TIPOS, t.tipo)) +
     (conv ? ' · ' + esc(conv) : '') + (t.plano ? ' · ' + esc(t.plano) : '') +
     (t.sessoesMes !== "" && t.sessoesMes != null ? ' · ' + esc(t.sessoesMes) + ' sessões/mês' : '') +
-    (t.aba ? ' · ABA: ' + esc(t.aba) : '');
+    (trAbaText(t) ? ' · ABA: ' + esc(trAbaText(t)) : '');
 }
 
 // Último atendimento (Agenda, sem bloqueios, até hoje) de cada paciente; recarrega a cada 2 min.
@@ -19429,17 +19453,18 @@ function renderTreatmentsTab(){
     return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"', cells: cells, vals: vals};
   }), renderTreatmentsTab, "tr-main");
 }
-// Coluna ABA da lista de Tratamentos: o ABA do tratamento; se as especialidades têm ABA
-// diferentes entre si, "Misto" (o detalhe de cada uma no title).
+// Coluna ABA da lista de Tratamentos: o ABA dos quadros; se eles têm ABA diferentes entre si,
+// "Misto" (o detalhe de cada um no title). Sem quadros: o ABA antigo ou a regra automática.
 function trAbaParts(t){
   var rows = (Array.isArray(t.specHours) ? t.specHours : []).filter(function(r){ return r && r.specId; });
-  return rows.map(function(r){ return {name: specialtyName(r.specId), aba: r.aba || t.aba || ""}; });
+  var fb = rows.some(function(r){ return !r.aba; }) ? abaFallback(trPatObj(t) || t) : "";
+  return rows.map(function(r){ return {name: lineLabel(r, false), aba: abaYesNo(r.aba || fb)}; });
 }
 function trAbaText(t){
   var vals = {}; trAbaParts(t).forEach(function(x){ vals[x.aba] = 1; });
   var k = Object.keys(vals);
   if (k.length > 1) return "Misto";
-  return (k.length ? k[0] : t.aba) || "";
+  return k.length ? k[0] : abaFallback(trPatObj(t) || t);
 }
 function trAbaCell(t){
   var v = trAbaText(t);
@@ -20033,7 +20058,7 @@ var HELP_TOPICS = [
       "CPF enviado igual ao de um paciente já cadastrado: o sistema pergunta se é uma atualização do cadastro dele.",
       "Laudo, escola não cadastrada, convênio e observações da família vão para as Observações do cadastro novo.",
       "Link que venceu sem resposta (1 dia) vira uma tarefa no CRM (lista Atendimento) para a recepção cobrar a família e mandar um novo link.",
-      "Depois do envio a família vê: “Cadastro enviado! Obrigado. Nossa equipe irá continuar seu atendimento pelo WhatsApp.” e, se a clínica tiver redes sociais cadastradas (Acesso → Clínica), as logos delas. As redes também aparecem no topo do formulário e no fim da mensagem com o link."
+      "Depois do envio a família vê: “Cadastro enviado! Obrigado. Nossa equipe irá continuar seu atendimento pelo WhatsApp.” e, se a clínica tiver redes sociais cadastradas (Acesso → Clínica), as logos delas. As redes também aparecem no fim da mensagem com o link."
     ],
     who: "Quem pode incluir Pacientes gera os links, vê o número no botão Cadastros e revisa os envios."},
   {id: "pacientes", group: "Cadastros", title: "Pacientes", mod: "pacientes", tab: "pacientes",
@@ -20069,13 +20094,13 @@ var HELP_TOPICS = [
       "<b>Mesclar cadastros</b> junta dois cadastros do mesmo paciente: o 1º fica e o 2º é excluído. Tratamentos, agendamentos do Planner, atendimentos da Agenda, evoluções do Prontuário, Planos Terapêuticos e tarefas do CRM do 2º passam para o 1º; campos vazios do 1º (inclusive os de saúde) são completados com os do 2º. Se os dois têm tratamento Ativo, o do 2º vira Renegociado. Se os dois têm Plano Terapêutico vigente, não mescla: encerre ou exclua um deles antes. Pede confirmação dupla e não pode ser desfeito.",
       "CPFs são conferidos pelos dígitos; e-mail precisa ser válido.",
       "A idade é calculada pela data de nascimento. Sem a data, aparece o campo Idade para digitar; ao preencher o nascimento, vale a idade calculada.",
-      "A cor do paciente vem do tratamento ativo: Não faz ABA = vermelho; senão pela idade (0–4 azul, 5–9 verde, 10+ laranja).",
+      "A cor do paciente vem do tratamento ativo: Não faz ABA (todos os quadros com ABA Não) = vermelho; senão pela idade (0–4 azul, 5–9 verde, 10+ laranja).",
       "Excluir pede confirmação. Paciente com tratamento, agendamento no Planner, atendimento na Agenda, evolução no Prontuário, Plano Terapêutico ou tarefa no CRM não é excluído: é <b>Inativado</b>. Ao excluir de verdade, os dados de saúde dele são apagados junto.",
       "Ao inativar um paciente com tratamento Ativo, o sistema pergunta se cancela também o tratamento (com motivo). \"Manter ativo\" deixa o tratamento como está."
     ],
     who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir). Campos obrigatórios: permissão <b>Pacientes – campos</b>. Mesclar cadastros: só Administrador."},
   {id: "tratamentos", group: "Cadastros", title: "Tratamentos", mod: "tratamentos", tab: "tratamentos",
-    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, ABA, as especialidades em quadros (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
+    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, as especialidades em quadros (cada um com o seu ABA) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
@@ -20133,8 +20158,9 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda).",
-      "Cada especialidade/serviço tem o seu <b>ABA</b>: Sim ou Não (tratamento novo começa com Sim). Escolher o ABA do tratamento (campo de cima) copia o valor para todas as linhas; depois cada linha pode ser trocada sozinha. As colunas são: Especialidade ou serviço, Sessões/mês, Terapeuta e ABA.",
-      "No Planner e na Agenda, a cor do paciente e as regras de \"não faz intervenção ABA\" usam o ABA da linha da especialidade do atendimento (especialidade principal ou complementar do profissional; serviço diferente de Sessão = a linha do serviço). Atendimento de especialidade que não está no tratamento usa o ABA do tratamento."
+      "O <b>ABA</b> fica só no quadro de cada especialidade (Sim ou Não). O quadro novo já vem com a regra automática: <b>Sim</b> para todos, <b>Não</b> quando o paciente tem nível de suporte 3 ou 17 anos ou mais. Pode ser trocado à mão em cada quadro.",
+      "No Planner e na Agenda, a cor do paciente e as regras de \u201cnão faz intervenção ABA\u201d usam o ABA do quadro da especialidade do atendimento (especialidade principal ou complementar do profissional; serviço diferente de Sessão = o quadro do serviço). Atendimento sem quadro no tratamento usa a regra automática.",
+      "Tratamentos cadastrados antes dos quadros guardam o ABA antigo (anotado no fim das Observações como \u201cABA (antigo)\u201d): enquanto o tratamento não tem nenhum quadro, vale ele, e o primeiro quadro já vem com esse valor."
     ],
     who: "Permissão <b>Tratamentos</b> (editar)."},
   {id: "tratamentos-vencimento", group: "Cadastros", title: "Tratamento: vencimento e renovação", mod: "tratamentos", tab: "tratamentos",
@@ -20614,7 +20640,7 @@ var HELP_TOPICS = [
     steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve.",
       "<b>Redes sociais</b>: clique em <b>+ Inserir</b>, escolha a rede (Instagram, Facebook, YouTube, TikTok, WhatsApp, Google Maps, Site, LinkedIn, E-mail ou Outro) e cole o link. ▲▼ mudam a ordem e ✕ tira a linha. Em “Outro”, escreva também o nome (ex.: Blog)."],
     rules: [
-      "As redes sociais aparecem, com a logo colorida de cada uma, na página do link de cadastro (no topo e depois do envio), na tela de entrada do sistema, no fim das mensagens com o link de cadastro e no rodapé das impressões (relatórios, ficha do paciente e Plano Terapêutico). Sem redes cadastradas, nada disso aparece.",
+      "As redes sociais aparecem, com a logo colorida de cada uma, na página do link de cadastro (só depois do envio, no agradecimento), na tela de entrada do sistema, no fim das mensagens com o link de cadastro e no rodapé das impressões (relatórios, ficha do paciente e Plano Terapêutico). Sem redes cadastradas, nada disso aparece.",
       "No WhatsApp basta o número com DDD; no E-mail, o endereço. Os outros aceitam o endereço com ou sem “https://”. Link inválido não deixa salvar.",
       "Os dias e horários abertos definem as linhas do Planner e da Agenda.",
       "Fechar um dia ou mudar horários e duração: se houver agendamentos do Planner em dias ou horários que deixam de existir, o Salvar mostra quantos e onde, e oferece apagá-los. Mantidos, ficam guardados e voltam a aparecer se o dia ou horário reabrir.",
@@ -24203,7 +24229,6 @@ function ioTrPlan(recs){
       else if (!o.status) o.msgs.push("Status desconhecido: " + esc(ioText(r.status)) + " (use Ativo, Renegociado/Alterado ou Cancelado).");
       if (o.inicio && o.fim && o.fim < o.inicio) o.msgs.push("Data fim (" + trBr(o.fim) + ") é antes do início (" + trBr(o.inicio) + ").");
       if (o.status === "ativo" && o.fim){ o.warn.push("Tratamento Ativo com data fim: a data fim foi ignorada."); o.fim = ""; }
-      o.aba = ioYesNo(r.aba); if (o.aba === null){ o.warn.push("ABA não entendido (" + esc(ioText(r.aba)) + "): ficou sem mudar."); o.aba = ""; }
       o.pacote = ioNum(r.pacote); if (o.pacote === null){ o.warn.push("Sessão/Mês não é número: ignorado."); o.pacote = ""; }
       o.valor = ioMoney(r.valor); o.desc = ioMoney(r.descontos);
       if ((o.valor !== "" || o.desc !== "") && !canVal){ o.warn.push("Valores não importados: seu nível não pode alterar \"Tratamentos – valores\"."); o.valor = o.desc = ""; }
@@ -24253,7 +24278,6 @@ function ioTrPlan(recs){
         if (!t || (t.convenioId || "") !== cid || (!cid && (t.convenio || "") !== cname)){ o.fields.convenioId = cid; o.fields.convenio = cname; if (t) ch.push(ioDiff("Convênio", t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio, cname)); }
       }
       set("sessoesMes", o.pacote, "Sessão/Mês");
-      set("aba", o.aba, "ABA", o.aba, t ? abaYesNo(t.aba) : "");
       set("status", o.status, "Status", trLabel(TR_STATUS, o.status), t ? trLabel(TR_STATUS, t.status) : "");
       if (o.status !== "ativo") set("statusEm", o.fim, "Data fim", trBr(o.fim), t ? trBr(t.statusEm) : "");
       set("plano", o.plano, "Plano");
@@ -24302,7 +24326,7 @@ function ioTrApply(plan){
         if (o.fields.status && o.fields.status !== t.status) trHistAdd(rec, {acao: "status", de: t.status, para: o.fields.status, obs: "Importado da planilha"});
         else trHistAdd(rec, {acao: "importado", obs: "Atualizado pela importação de planilha"});
       } else {
-        rec = Object.assign({id: uid("tr"), patientId: pid, inicio: o.inicio, aba: "Sim", vencPor: "sem", sessoesMes: "", specHours: [], criadoEm: now, atualizadoEm: now}, o.fields);
+        rec = Object.assign({id: uid("tr"), patientId: pid, inicio: o.inicio, vencPor: "sem", sessoesMes: "", specHours: [], criadoEm: now, atualizadoEm: now}, o.fields);
         if (!rec.statusEm) rec.statusEm = o.status === "ativo" ? o.inicio : "";
         trHistAdd(rec, {acao: "criado", para: rec.status, obs: "Importado da planilha"});
       }
@@ -24310,7 +24334,7 @@ function ioTrApply(plan){
       if (rec.motivoCancel){ delete rec.motivoPendente; rec.motivoCancelNome = (cancelReasonsList().filter(function(x){ return x.id === rec.motivoCancel; })[0] || {}).name || rec.motivoCancelNome || ""; }
       if (o === op.target && inherit){
         ["specHours", "horarios"].forEach(function(k){ if (inherit[k] && !(Array.isArray(rec[k]) ? rec[k].length : rec[k])) rec[k] = JSON.parse(JSON.stringify(inherit[k])); });
-        if (!o.fields.aba && inherit.aba) rec.aba = inherit.aba;
+        if (!rec.abaAntigo && abaLegacy(inherit)) rec.abaAntigo = abaLegacy(inherit);
         // Valor/Descontos do tratamento da migração passam para este quando a planilha não traz.
         if (!o.money){ var im = trMoney(inherit); if (im.valor || im.descontos) o = Object.assign({}, o, {money: {valor: im.valor, descontos: im.descontos}}); }
       }
@@ -24374,7 +24398,7 @@ function ioTrExportRows(){
     var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
     return {paciente: p.nome || "", nascimento: p.nascimento ? trBr(p.nascimento) : "", convenio: conv || "", inicio: trBr(t.inicio),
       fim: t.status !== "ativo" && t.statusEm ? trBr(t.statusEm) : "", pacote: t.sessoesMes === "" || t.sessoesMes == null ? "" : Number(t.sessoesMes),
-      valor: m.valor, descontos: m.descontos, aba: abaYesNo(t.aba), status: trLabel(TR_STATUS, t.status),
+      valor: m.valor, descontos: m.descontos, status: trLabel(TR_STATUS, t.status),
       motivo: t.status === "cancelado" ? cancelReasonName(t) : "", plano: t.plano || "", suporte: (h.suporte || "").replace(/^N[ií]vel\s*/i, "") || "", obs: t.obs || ""};
   });
 }
@@ -24678,7 +24702,6 @@ var IO_KINDS = {
       {k: "pacote", h: "Sessão/Mês", alias: ["pacote", "sessoes/mes", "sessoes por mes"], w: 11},
       {k: "valor", h: "Valor", w: 13, hide: function(){ return !trCanSeeVal(); }},
       {k: "descontos", h: "Descontos", alias: ["despesas", "desconto"], w: 13, hide: function(){ return !trCanSeeVal(); }},
-      {k: "aba", h: "ABA", w: 7, note: "Sim ou Não"},
       {k: "status", h: "Status", w: 13, req: true},
       {k: "motivo", h: "Motivo do cancelamento", alias: ["motivo"], w: 22},
       {k: "plano", h: "Plano", w: 24},

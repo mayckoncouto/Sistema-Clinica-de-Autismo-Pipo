@@ -43,16 +43,16 @@ const path = require('path');
   // 1º tratamento: Novo; campos vêm do cadastro antigo; valor final automático.
   await openNew('duda-vermelho');
   console.log('first treatment is "novo" and the type field is locked?', await page.$eval('#trTipo', (s) => s.value === 'novo' && s.disabled));
-  console.log('old ABA "Não" comes from the patient record?', (await page.$eval('#pAba', (s) => s.value)) === 'Não');
+  console.log('treatment window has no ABA field?', (await page.$('#pAba')) === null);
   await page.fill('#trVal', '1.500,00'); await page.fill('#trDesp', '200');
   console.log('final value = valor - descontos?', (await page.inputValue('#trFinal')) === 'R$ 1.300,00');
   await save();
   let L = await store();
   console.log('saved as Ativo/Novo with numbers?', L.length === 1 && L[0].status === 'ativo' && L[0].tipo === 'novo' && L[0].valor === 1500 && L[0].descontos === 200);
+  console.log('old ABA "Não" of the patient record kept as abaAntigo (no "aba" field)?', L[0].abaAntigo === 'Não' && !('aba' in L[0]));
 
   // 2º com o 1º ainda ativo: confirma, o 1º vira Renegociado e o novo é Renegociado.
   await openNew('duda-vermelho');
-  await page.$eval('#pAba', (s) => { s.value = 'Sim'; s.dispatchEvent(new Event('change', {bubbles: true})); });
   await save();
   L = (await store()).filter((t) => t.patientId === 'duda-vermelho');
   console.log('only one Ativo after the second treatment?', L.filter((t) => t.status === 'ativo').length === 1);
@@ -95,10 +95,10 @@ const path = require('path');
   // Bolinha de cor na lista de Tratamentos.
   console.log('treatment list shows the color dot before the name?', (await page.locator('#trHost tbody tr .pt-nome .pcolor-dot, #trHost tbody tr td:first-child .pcolor-dot').count()) > 0);
 
-  // Paciente "somado" ao tratamento: Bruno com ABA "Não" no tratamento fica vermelho no Planner.
+  // Paciente "somado" ao tratamento: Bruno com ABA "Não" nos quadros fica vermelho.
   await openNew('bruno-verde');
-  await page.$eval('#pAba', (s) => { s.value = 'Não'; s.dispatchEvent(new Event('change', {bubbles: true})); });
-  await require('./tl-helper').addLine(page, {prof: 'andrelisa-terapeuta'}, 0);
+  await require('./tl-helper').addLine(page, {prof: 'andrelisa-terapeuta', aba: 'Não'}, 0);
+  await require('./tl-helper').addLine(page, {aba: 'Não'}, 1);   // cor vermelha na lista = todos os quadros com ABA Não
   await save();
   await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); await page.waitForTimeout(200);
   const brunoRow = await page.$$eval('#patListHost tbody tr', (trs) => { const r = trs.find((t) => t.textContent.includes('Bruno Verde')); const d = r && r.querySelector('.pcolor-dot'); return r ? {st: r.querySelector('.pt-trat').textContent.trim(), dot: d ? d.getAttribute('style') : ''} : null; });

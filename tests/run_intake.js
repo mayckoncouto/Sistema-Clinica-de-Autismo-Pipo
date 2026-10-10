@@ -102,8 +102,7 @@ const path = require('path');
   await pub.route('https://viacep.com.br/**', (route) => route.fulfill({contentType: 'application/json', body: JSON.stringify({logradouro: 'Rua do CEP', bairro: 'Velha', localidade: 'Blumenau', uf: 'SC'})}));
   await pub.goto('http://pipo.test/c/abc');
   await pub.waitForSelector('#frm');
-  const topSoc = await pub.$$eval('#cSoc a.soc-link', (a) => a.map((x) => x.href));
-  check('public form: clinic social networks on top (valid links only, WhatsApp by number)?', JSON.stringify(topSoc) === '["https://instagram.com/clinica","https://wa.me/5547999990000"]', topSoc);
+  check('public form: no social networks on top (only on the thank-you)?', (await pub.$$('a.soc-link')).length === 0);
   check('public form opens with the clinic name and the patient name?', (await pub.textContent('#cName')) === 'Clínica Fictícia' && (await pub.inputValue('#nome')) === 'Duda');
   await pub.click('#send'); await pub.waitForTimeout(100);
   check('public form: required fields and consent are checked before sending?', sent === null && (await pub.$$('.bad')).length >= 4 && /autorização/.test(await pub.textContent('#err')));
@@ -188,7 +187,7 @@ const path = require('path');
   check('configured required field (escola) blocks sending?', sent === null && await pub.$eval('#escola', (e) => e.classList.contains('bad')));
   await pub.fill('#escola', 'Escola Y'); await pub.click('#send'); await pub.waitForTimeout(300);
   check('sends with only the configured fields?', sent && sent.p_data.escola === 'Escola Y' && /Cadastro enviado/.test(await pub.textContent('#box')), sent && sent.p_data);
-  check('without networks registered, no "Conheça mais…" and no top row?', !/Conheça mais/.test(await pub.textContent('#box')) && await pub.$eval('#cSoc', (e) => e.hidden));
+  check('without networks registered, no "Conheça mais…" and no top row?', !/Conheça mais/.test(await pub.textContent('#box')) && (await pub.$$('a.soc-link')).length === 0);
   await pub.unroute('http://pipo.test/**');
   await pub.route('http://pipo.test/**', (route) => {
     const u = route.request().url();

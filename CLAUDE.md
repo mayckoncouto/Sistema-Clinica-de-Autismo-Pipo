@@ -3597,3 +3597,28 @@ sobre nosso trabalho em nossas redes sociais:" e as logos.
   fica só leitura (sem teclado, `inputmode=none`) e tocar abre o calendário na janela de baixo (o botão de calendário
   some); calendário com "Limpar" e lista de anos (tocar no "mês de ano ▾" → `.pk-cal-y`, 100 anos). No computador a
   data continua digitável + botão de calendário.
+- (2026-10-10, pedido do usuário) Página do link (`cadastro.html`): as logos das redes aparecem SÓ no agradecimento
+  (saiu a fila `#cSoc` do topo), com ícones de 28px (antes 34px). Login, mensagem e impressões continuam como estavam.
+
+## ABA só nos quadros do tratamento (2026-10-10, SUBSTITUI o "ABA do tratamento" e o "ABA por linha" acima)
+Decisões do usuário: o campo ABA único do tratamento (`#pAba`) saiu; o ABA fica só no quadro de cada especialidade.
+Padrão **automático** (`abaAuto(p)`): **Sim** para todos, **Não** com nível de suporte 3 (`p.suporte` com "3", da
+tabela de saúde) ou **17 anos ou mais** (`patientAgeYears`); pode ser trocado à mão no quadro. Antes de mudar, o usuário
+conferiu a lista (`supabase/conferencia-aba.sql`, só leitura) e escolheu **manter o ABA antigo até criar os quadros**.
+- `abaAntigo` no tratamento (TREAT_FIELDS também lê o `aba` antigo ainda não convertido — `abaLegacy(t)`). Vale só
+  enquanto o tratamento NÃO tem nenhum quadro e é o padrão do 1º quadro (`abaNewLine` no `treatFieldsEditor`; sem ele,
+  `abaAuto` do paciente do `#trPat`). O salvar grava `aba: undefined` e mantém `abaAntigo`.
+- `bookingAbaOf(p, prof, serviço)`: sem quadros → `abaFallback` (antigo, senão automático); com quadros → o quadro do
+  atendimento (`treatLineFor`) ou, sem quadro para ele, `abaAuto`. `bookingPatient` devolve o paciente com `_aba`.
+  `patientAba(p)` (bolinha das listas, `patientIsNaoABA`, `patientColor`): `_aba` do atendimento; senão com quadros = Não
+  só se TODOS forem Não; sem quadros = `abaFallback`. `trPatObj(t)` = paciente + saúde + campos de um tratamento
+  (bolinha da lista de Tratamentos, `trAbaText`). Cartão/resumo do tratamento e coluna ABA mostram `trAbaText`.
+- Limitação: o automático usa o nível de suporte da tabela de saúde; quem não vê "Pacientes – saúde" calcula só pela
+  idade (só importa para atendimento sem quadro).
+- Planilha de Tratamentos: coluna ABA saiu (planilha com ABA = coluna ignorada). Tratamento da migração passa o
+  `abaAntigo` ao Ativo. CRM "Cadastrar paciente" não grava mais `aba`.
+- Migração só de dados `supabase/2026-10-10u-aba-so-nos-quadros.sql`: `aba` → `abaAntigo` (vazio = Sim), quadro sem ABA
+  recebe esse valor, fim das Observações ganha "ABA (antigo): Sim/Não", apaga `aba` dos tratamentos e de `patients/all`
+  (testada no PGlite, 2 vezes e com CRLF; linha 88 em `conferencia-migracoes.sql`). Ajuda (tratamentos-terapeuta,
+  pacientes). Testes: `run_aba_linha.js` (regra automática, padrão do quadro), `run_treatments.js`, `run_newfeatures.js`,
+  `run_registries.js`, `run_planilhas.js`, `run_treatment_history.js`.

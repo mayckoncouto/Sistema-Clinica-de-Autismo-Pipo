@@ -1,6 +1,6 @@
-// ABA por especialidade/serviço no tratamento: a linha da especialidade do
-// atendimento manda na cor e nas regras "não ABA"; fora das especialidades do
-// tratamento vale o ABA do tratamento. Também confere "Sem vencimento".
+// ABA só nos quadros do tratamento: o quadro da especialidade do atendimento manda na
+// cor e nas regras "não ABA"; sem quadro vale a regra automática (suporte 3 ou 17+ = Não);
+// tratamento sem nenhum quadro usa o ABA antigo. Também confere "Sem vencimento".
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -29,26 +29,32 @@ const path = require('path');
     out.psico = bookingAbaOf(p, "ana-terapeuta", "sessao");      // principal psico -> Não
     out.fono = bookingAbaOf(p, "bia-terapeuta", "sessao");       // principal fono -> Sim
     out.svc = bookingAbaOf(p, "bia-terapeuta", "triagem");       // serviço -> Não
-    out.outside = bookingAbaOf(p, "bia-terapeuta", "avaliacao"); // serviço fora -> Sim (tratamento)
+    out.outside = bookingAbaOf(p, "bia-terapeuta", "avaliacao"); // serviço sem quadro -> regra automática (6 anos = Sim)
     out.naoAna = isNaoABABooking({patient: pat.nome}, "ana-terapeuta");
     out.naoBia = isNaoABABooking({patient: pat.nome}, "bia-terapeuta");
     out.colorDiffers = patientColor(bookingPatient(p, {}, "ana-terapeuta")) !== patientColor(bookingPatient(p, {}, "bia-terapeuta"));
     out.agd = isNaoABABooking({patient: pat.nome, date: trTodayIso(), professional_id: "ana-terapeuta", service: "sessao"});
-    // sem ABA nas linhas: vale o do tratamento
-    state.treatments[0].specHours = [{specId: "psico", hours: 4}];
-    state.treatments[0].aba = "Não"; rebuildPatients();
+    // tratamento sem nenhum quadro: vale o ABA antigo (abaAntigo, ou "aba" ainda não convertido)
+    state.treatments[0].specHours = [];
+    state.treatments[0].abaAntigo = "Não"; delete state.treatments[0].aba; rebuildPatients();
     out.noLines = isNaoABABooking({patient: pat.nome}, "bia-terapeuta");
+    // com quadros, atendimento sem quadro usa a regra automática (não o ABA antigo)
+    state.treatments[0].specHours = [{specId: "psico", hours: 4, aba: "Sim"}]; rebuildPatients();
+    out.autoNotLegacy = bookingAbaOf(findPatientByName(pat.nome), "bia-terapeuta", "avaliacao");
+    // regra automática: Não com nível de suporte 3 ou 17 anos ou mais
+    out.auto = [abaAuto({idade: 16}), abaAuto({idade: 17}), abaAuto({idade: 5, suporte: "Nível 3"}), abaAuto({idade: 5, suporte: "Nível 2"}), abaAuto({idade: ""})].join(",");
     out.dueSem = trDue({status: "ativo", vencPor: "sem", validoAte: "2020-01-01"}) === null && trDueText({vencPor: "sem", validoAte: "2020-01-01"}) === "";
     return out;
   })()`);
   check('psico line ABA Não?', r.psico === 'Não', r.psico);
   check('fono line ABA Sim?', r.fono === 'Sim', r.fono);
   check('service line ABA Não?', r.svc === 'Não', r.svc);
-  check('outside treatment uses treatment ABA?', r.outside === 'Sim', r.outside);
+  check('booking without quadro uses the automatic rule?', r.outside === 'Sim' && r.autoNotLegacy === 'Sim', r.outside + ' ' + r.autoNotLegacy);
+  check('automatic rule: 16 Sim, 17 Não, suporte 3 Não, suporte 2 Sim, no age Sim?', r.auto === 'Sim,Não,Não,Sim,Sim', r.auto);
   check('não ABA only with psico professional?', r.naoAna === true && r.naoBia === false);
   check('color follows the line?', r.colorDiffers);
   check('Agenda uses professional_id of the row?', r.agd === true);
-  check('no line ABA = treatment ABA?', r.noLines === true);
+  check('treatment without quadros = old ABA (abaAntigo)?', r.noLines === true);
   check('Sem vencimento never due?', r.dueSem);
 
   // Editor: ABA de cima copia para as linhas; linha muda sozinha
@@ -58,8 +64,7 @@ const path = require('path');
     var out = {};
     out.vencDefault = document.getElementById("trVencPor").value;
     out.dateHidden = document.getElementById("trDateBox").hidden;
-    out.topOpts = Array.prototype.map.call(document.querySelectorAll("#pAba option"), function(o){ return o.value; }).join(",");
-    out.topVal = document.getElementById("pAba").value;
+    out.noTop = !document.getElementById("pAba");
     out.desc = !!document.querySelector('label[for="trDesp"]') && document.querySelector('label[for="trDesp"]').textContent;
     return out;
   })()`);
@@ -70,16 +75,13 @@ const path = require('path');
   await page.click('#specRowAdd'); await page.waitForSelector('#ovTLine');
   ed.lineOpts = await page.$$eval('#tlAba option', (a) => a.map((o) => o.value).join(','));
   await page.click('#tlCancel');
-  await page.$eval('#pAba', (x) => { x.value = 'Não'; x.dispatchEvent(new Event('change', {bubbles: true})); });
-  ed.all = await abaOf();
-  await TL.addLine(page, {aba: 'Sim'}, 0);
+  await TL.addLine(page, {aba: 'Não'}, 0);
   ed.after = await abaOf();
   check('Vencimento por defaults to Sem vencimento, date box hidden?', ed.vencDefault === 'sem' && ed.dateHidden === true, ed.vencDefault);
   check('label Descontos?', ed.desc === 'Descontos', ed.desc);
-  check('top ABA only Sim/Não, default Sim?', ed.topOpts === 'Sim,Não' && ed.topVal === 'Sim', ed.topOpts + ' ' + ed.topVal);
-  check('card ABA only Sim/Não, new cards = Sim?', ed.lineOpts === 'Sim,Não' && ed.lineDefault === 'Sim,Sim', ed.lineOpts + ' ' + ed.lineDefault);
-  check('top ABA copies to all cards?', ed.all === 'Não,Não', ed.all);
-  check('one card changes alone?', ed.after === 'Sim,Não', ed.after);
+  check('no ABA field outside the quadros?', ed.noTop);
+  check('card ABA only Sim/Não, new cards = automatic rule (6 anos = Sim)?', ed.lineOpts === 'Sim,Não' && ed.lineDefault === 'Sim,Sim', ed.lineOpts + ' ' + ed.lineDefault);
+  check('one card changes alone?', ed.after === 'Não,Sim', ed.after);
 
   const btnVisible = await page.$eval('#trOpenPat', (b) => !b.hidden).catch(() => false);
   if (btnVisible){ await page.click('#trMoreBtn'); await page.click('#trOpenPat'); }
@@ -191,6 +193,17 @@ const path = require('path');
   check('Planner: Reunião blocks the same professional in another room (rule + gray cell)?', /Reunião Clínica/.test(meet.sameProf || '') && /Reunião Clínica/.test(meet.sameProfMeeting || '') && meet.cellSame, JSON.stringify(meet));
   check('Planner: Reunião refused where the professional already has a patient elsewhere?', /ocupa o profissional/.test(meet.reverse || ''), JSON.stringify(meet));
   check('Agenda: Treinamento blocks the same professional anywhere, not the room?', meet.agOther === null && /Treinamento/.test(meet.agSame || '') && /Treinamento/.test(meet.agSameRoom || ''), JSON.stringify(meet));
+
+  // Quadro novo: vem com o ABA antigo do tratamento (Duda = Não); sem ele, a regra automática (17 anos = Não).
+  await ev(`(function(){ document.querySelectorAll(".overlay").forEach(function(o){ o.remove(); }); state.treatments = []; rebuildPatients(); openTreatmentModal(null, {patientId: "duda-vermelho"}); })()`);
+  await page.waitForTimeout(300);
+  await TL.addLine(page, {spec: 'Psicologia', hours: 4});
+  const dDef = await abaOf();
+  await ev(`(function(){ document.querySelectorAll(".overlay").forEach(function(o){ o.remove(); }); state.patientsRaw = state.patientsRaw.map(function(p){ return p.id === "carla-laranja" ? Object.assign({}, p, {idade: 17, aba: ""}) : p; }); rebuildPatients(); openTreatmentModal(null, {patientId: "carla-laranja"}); })()`);
+  await page.waitForTimeout(300);
+  await TL.addLine(page, {spec: 'Psicologia', hours: 4});
+  const cDef = await abaOf();
+  check('new quadro default: old ABA (Duda Não), else automatic (17 anos = Não)?', dDef === 'Não' && cDef === 'Não', dDef + ' ' + cDef);
 
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();

@@ -98,7 +98,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (84, '2026-10-10q-crm-lead-vira-paciente',        exists(select 1 from fx where proname = 'tasks_history' and prosrc like '%''paciente''%'), ''),
  (85, '2026-10-10r-link-de-cadastro',              exists(select 1 from fx where proname = 'intake_send'), ''),
  (86, '2026-10-10s-campos-do-link',                exists(select 1 from fx where proname = 'intake_send' and prosrc like '%patient_fields%'), ''),
- (87, '2026-10-10t-link-vale-1-dia',               exists(select 1 from fx where proname = 'intake_links_stamp' and prosrc like '%1 day%'), '')
+ (87, '2026-10-10t-link-vale-1-dia',               exists(select 1 from fx where proname = 'intake_links_stamp' and prosrc like '%1 day%'), ''),
+ (88, '2026-10-10u-aba-so-nos-quadros',             not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') e where d.path in ('treatments/all', 'patients/all') and e ? 'aba'), 'só dados: SIM = nenhum tratamento/paciente com o campo ABA antigo')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

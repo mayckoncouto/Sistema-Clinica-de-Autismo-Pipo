@@ -84,11 +84,11 @@ const path = require('path');
   await page.click('#pSave');
   await page.waitForSelector('#ovTreat');
   console.log('new patient opens its treatment right away?', (await page.$eval('#trPat', s => s.options[s.selectedIndex].text)) === 'Novo Paciente Teste');
-  await page.$eval('#pAba', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, 'Não'); // select vira lista própria (dpEnhance)
-  // dois quadros (o ABA do tratamento vem marcado em cada quadro novo)
+  console.log('treatment window has no ABA field (ABA only in the quadros)?', (await page.$('#pAba')) === null);
+  // dois quadros: o 1º com o ABA automático (6 anos = Sim), o 2º trocado à mão para Não
   const TL = require('./tl-helper');
   await TL.addLine(page, {spec: 'Fonoaudiologia', hours: 3});
-  await TL.addLine(page, {spec: 'Psicologia', hours: 2});
+  await TL.addLine(page, {spec: 'Psicologia', hours: 2, aba: 'Não'});
   await page.click('#trSave');
   await page.waitForTimeout(200);
 
@@ -97,7 +97,7 @@ const path = require('path');
   console.log('=== novo paciente salvo ===', JSON.stringify(newPatient));
   const treat = (await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['treatments/all'])))).list.find(t => t.patientId === newPatient.id);
   console.log('=== tratamento do novo paciente ===', JSON.stringify(treat));
-  console.log('treatment saved with ABA "Não" and 2 specialties (cards keep ABA Não)?', !!treat && treat.aba === 'Não' && treat.specHours.length === 2 && treat.specHours.every(h => h.aba === 'Não' && h.service === 'sessao' && h.id));
+  console.log('treatment saved without ABA field and 2 quadros (auto Sim + manual Não)?', !!treat && !('aba' in treat) && treat.specHours.length === 2 && treat.specHours.map(h => h.aba).join() === 'Sim,Não' && treat.specHours.every(h => h.service === 'sessao' && h.id));
   const specialtiesStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['config/specialties'])));
   console.log('=== catálogo de especialidades após criar "Equoterapia" ===', JSON.stringify(specialtiesStore));
 
