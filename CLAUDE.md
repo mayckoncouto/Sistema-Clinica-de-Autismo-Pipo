@@ -3441,3 +3441,10 @@ Mesma especialidade pode repetir. Base para o Planner se montar sozinho no futur
 - Passo 1: migração só de dados `supabase/2026-10-10n-tratamentos-limpar-especialidades.sql` (limpa `specHours` de
   TODOS os tratamentos e as sobras em `patients/all`). Testada no PGlite.
 - Produção (2026-10-10): `2026-10-10n` rodada (0 | 0 | 247 tratamentos).
+- (2026-10-10, decisão do usuário) **Redistribuir sessões em tratamento com atendimento realizado:** as sessões/mês dos
+  quadros que já existem podem mudar desde que a SOMA de todos os quadros fique igual (inclusive passando sessões para
+  um quadro novo); especialidade e serviço continuam travados, Sessão/Mês também. `trLinesSum`, `trLinesHoursChanged`,
+  `trLinesLockOk` (mesma especialidade/serviço e, se alguma quantidade mudou, mesma soma). Ao salvar uma
+  redistribuição, confirmação "Redistribuir sessões" avisando que o contratado × realizado e o Pacote dos meses
+  anteriores passam a usar a nova distribuição (o tratamento guarda só a quantidade atual). `#tlHours` não trava mais.
+  Testes em `run_tr_quadros.js` e `run_treatment_history.js`.

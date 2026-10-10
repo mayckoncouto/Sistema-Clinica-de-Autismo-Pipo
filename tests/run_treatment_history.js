@@ -79,7 +79,7 @@ const path = require('path');
   console.log('treatment with done sessions: no Excluir, lock note shown?', !(await page.isVisible('#trDel')) && await page.isVisible('#trLockNote'));
   console.log('Sessão/Mês locked, existing cards show the lock, new cards still allowed?', await page.$eval('#pPac', (i) => i.disabled) && !!(await page.$('#specRowsHost .tl-row .tl-lock')) && !(await page.$eval('#specRowAdd', (b) => b.disabled)));
   await page.click('[data-tl-edit="0"]'); await page.waitForSelector('#ovTLine');
-  console.log('existing card: specialty, sessions and service locked; therapist still editable; no Excluir?', await page.$eval('#tlSpec', (s) => s.disabled) && await page.$eval('#tlHours', (s) => s.disabled) && await page.$eval('#tlSvc', (s) => s.disabled) && !(await page.$eval('#tlProf', (s) => s.disabled)) && !(await page.$('#tlDel')));
+  console.log('existing card: specialty and service locked; sessions and therapist editable; no Excluir?', await page.$eval('#tlSpec', (s) => s.disabled) && !(await page.$eval('#tlHours', (s) => s.disabled)) && await page.$eval('#tlSvc', (s) => s.disabled) && !(await page.$eval('#tlProf', (s) => s.disabled)) && !(await page.$('#tlDel')));
   await page.click('#tlCancel');
   console.log('a new card can be added to a locked treatment?', await require('./tl-helper').addLine(page, {spec: 'Fonoaudiologia', hours: 1}) && (await require('./tl-helper').lines(page)).length >= 2);
   await page.$eval('#pPac', (i) => { i.disabled = false; i.value = '99'; });

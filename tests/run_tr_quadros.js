@@ -40,10 +40,18 @@ const TL = require('./tl-helper');
   })()`);
   check('therapist warning only for the card with a set therapist?', tm.acolOther && !tm.acolAna && !tm.sess, JSON.stringify(tm));
   check('ABA comes from the matching card?', tm.abaAcol === 'Não' && tm.abaSess === 'Sim', JSON.stringify(tm));
-  check('lock: changing an existing card is refused, adding one is fine?', await ev(`(function(){
-    var old = [{id: "a", specId: "psico", hours: 1, service: "acolh"}];
-    return trLinesLockOk(old, old.concat([{id: "n", specId: "fono", hours: 2}])) && !trLinesLockOk(old, [{id: "a", specId: "psico", hours: 2, service: "acolh"}]) && !trLinesLockOk(old, []);
-  })()`));
+  const lockR = await ev(`(function(){
+    var old = [{id: "a", specId: "psico", hours: 4, service: "acolh"}, {id: "b", specId: "fono", hours: 4}];
+    return {add: trLinesLockOk(old, old.concat([{id: "n", specId: "to", hours: 2}])),
+      redist: trLinesLockOk(old, [{id: "a", specId: "psico", hours: 2, service: "acolh"}, {id: "b", specId: "fono", hours: 6}]),
+      redistNew: trLinesLockOk(old, [{id: "a", specId: "psico", hours: 4, service: "acolh"}, {id: "b", specId: "fono", hours: 2}, {id: "n", specId: "to", hours: 2}]),
+      moreTotal: trLinesLockOk(old, [{id: "a", specId: "psico", hours: 5, service: "acolh"}, {id: "b", specId: "fono", hours: 4}]),
+      changedSpec: trLinesLockOk(old, [{id: "a", specId: "to", hours: 4, service: "acolh"}, {id: "b", specId: "fono", hours: 4}]),
+      changedSvc: trLinesLockOk(old, [{id: "a", specId: "psico", hours: 4}, {id: "b", specId: "fono", hours: 4}]),
+      removed: trLinesLockOk(old, [old[1]]), changedFlag: trLinesHoursChanged(old, [{id: "a", specId: "psico", hours: 2}, {id: "b", specId: "fono", hours: 6}])};
+  })()`);
+  check('lock: new card ok; sessions redistributed with the same sum ok (also into a new card); other changes refused?',
+    lockR.add && lockR.redist && lockR.redistNew && !lockR.moreTotal && !lockR.changedSpec && !lockR.changedSvc && !lockR.removed && lockR.changedFlag, JSON.stringify(lockR));
 
   // 2. Janela: quadros com o visual das salas, observação só fora de Sessão, avisos, gravação.
   await ev(`(function(){ state.treatments = []; rebuildPatients(); openTreatmentModal(null, {patientId: state.patientsRaw[0].id}); })()`);
@@ -78,6 +86,29 @@ const TL = require('./tl-helper');
   const saved = await ev(`JSON.stringify((state.treatments.filter(function(t){ return t.patientId === state.patientsRaw[0].id; })[0] || {}).specHours)`);
   const sh = JSON.parse(saved || '[]');
   check('saved cards keep all fields (and no observação on Sessão)?', sh.length === 2 && sh[0].service === 'acolh' && sh[0].dia === 'qui' && sh[0].hora === '08:00' && sh[0].semanas === '1,3' && sh[0].profId === 'ana-terapeuta' && sh[0].obs === 'Acolhimento pais' && sh[1].service === 'sessao' && !sh[1].obs && sh.every((x) => x.id), saved);
+
+  // 2b. Tratamento com atendimento realizado: redistribuir as sessões mantendo a soma.
+  await ev(`(function(){ document.querySelectorAll(".overlay").forEach(function(o){ o.remove(); });
+    var pat = state.patientsRaw[1];
+    state.treatments = [{id: "tr2", patientId: pat.id, inicio: "2026-01-01", status: "ativo", tipo: "novo", aba: "Sim", vencPor: "sem", sessoesMes: "8",
+      specHours: [{id: "a", specId: "psico", hours: "4", service: "sessao"}, {id: "b", specId: "fono", hours: "4", service: "sessao"}]}];
+    rebuildPatients(); TR.done = {}; TR.done[pat.id] = ["2026-02-10"];
+    openTreatmentModal(state.treatments[0]); })()`);
+  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(300);
+  await TL.addLine(page, {hours: 2}, 0); await TL.addLine(page, {hours: 6}, 1);
+  await page.click('#trSave'); await page.waitForTimeout(200);
+  const rd = await page.$eval('#ovConfirm', (e) => e.textContent).catch(() => '');
+  check('redistributing with the same sum asks to confirm (past months recalculated)?', /Redistribuir sessões/.test(rd) && /meses anteriores/.test(rd), rd.slice(0, 120));
+  await page.click('#cfOk'); await page.waitForTimeout(400);
+  const rdSaved = await ev(`JSON.stringify(state.treatments.filter(function(t){ return t.id === "tr2"; })[0].specHours.map(function(r){ return r.hours; }))`);
+  check('redistribution saved?', rdSaved === '["2","6"]' && !(await page.$('#ovTreat')), rdSaved);
+  await ev(`openTreatmentModal(state.treatments.filter(function(t){ return t.id === "tr2"; })[0])`);
+  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(300);
+  await TL.addLine(page, {hours: 5}, 0);
+  await page.click('#trSave'); await page.waitForTimeout(300);
+  const still = await ev(`JSON.stringify(state.treatments.filter(function(t){ return t.id === "tr2"; })[0].specHours.map(function(r){ return r.hours; }))`);
+  check('changing the sum is refused (window stays open)?', !!(await page.$('#ovTreat')) && still === '["2","6"]', still);
+  await ev(`document.querySelectorAll(".overlay").forEach(function(o){ o.remove(); })`);
 
   // 3. Celular: quadros e janela cabem na tela.
   const mob = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });

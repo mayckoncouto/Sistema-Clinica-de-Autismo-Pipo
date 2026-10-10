@@ -10150,11 +10150,11 @@ function openTreatLineModal(ctx){
         (ctx.patient ? '<div class="sub">' + esc(ctx.patient) + '</div>' : '') + '</div>' +
         '<button class="modal-close" id="tlX" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
-        (lk ? '<div class="pat-count tl-lock-note">Este tratamento já tem atendimentos realizados: especialidade, sessões/mês e serviço deste quadro não mudam (use Renegociar). Os outros campos podem ser alterados.</div>' : '') +
+        (lk ? '<div class="pat-count tl-lock-note">Este tratamento já tem atendimentos realizados: especialidade e serviço deste quadro não mudam (use Renegociar). As sessões/mês podem ser redistribuídas entre os quadros, mantendo a mesma soma; os outros campos podem ser alterados.</div>' : '') +
         '<div class="field-row">' +
           '<div class="field"><label for="tlSpec">Especialidade</label><select id="tlSpec" data-combo data-reg-add="especialidades"' + dis + '>' + opt("", "Escolha…", r.specId) +
             specs.map(function(s){ return opt(s.id, s.name, r.specId); }).join("") + '</select></div>' +
-          '<div class="field"><label for="tlHours">Sessões/mês</label><input id="tlHours" type="text" inputmode="decimal" value="' + esc(r.hours) + '"' + dis + '></div>' +
+          '<div class="field"><label for="tlHours">Sessões/mês</label><input id="tlHours" type="text" inputmode="decimal" value="' + esc(r.hours) + '"></div>' +
         '</div><div class="field-row">' +
           '<div class="field"><label for="tlSvc">Serviço</label><select id="tlSvc"' + dis + '>' + svcs.map(function(s){ return opt(s.id, s.name, r.service); }).join("") + '</select></div>' +
           '<div class="field"><label for="tlProf">Profissional</label><select id="tlProf" data-combo>' + specProfOptions(r.specId, r.profId) + '</select></div>' +
@@ -10205,7 +10205,7 @@ function openTreatLineModal(ctx){
     var o = {id: r.id || uid("tl"), specId: $("tlSpec").value, hours: $("tlHours").value.trim(), profId: $("tlProf").value, aba: $("tlAba").value,
       service: $("tlSvc").value || DEFAULT_SERVICE_ID, dia: $("tlDia").value, hora: $("tlHora").value, semanas: $("tlSem").value,
       roomId: $("tlRoom").value, seguidas: $("tlSeg").value, obs: $("tlSvc").value === DEFAULT_SERVICE_ID ? "" : $("tlObs").value.trim()};
-    if (lk){ o.specId = r.specId; o.hours = r.hours; o.service = r.service; }
+    if (lk){ o.specId = r.specId; o.service = r.service; }
     return o;
   }
   // Avisos (não bloqueiam): horário do paciente e do profissional, semanas × sessões/mês, seguidas, quadro repetido.
@@ -10311,7 +10311,7 @@ function treatFieldsEditor(v, opts){
         var locked = lockedIds && lockedIds.indexOf(r.id) !== -1;
         return '<div class="room-row tl-row' + (cov ? " " + cov.cls : "") + '" data-i="' + i + '" data-hours="' + esc(r.hours) + '">' +
           '<span class="room-dot" style="background:' + swatchVar(sp ? (sp.color || "teal") : "slate") + '"></span>' +
-          '<div class="room-info"><div class="rn">' + esc(lineLabel(r, false)) + (locked ? ' <span class="tl-lock" title="Atendimentos realizados: especialidade, sessões e serviço travados">🔒</span>' : '') + '</div>' +
+          '<div class="room-info"><div class="rn">' + esc(lineLabel(r, false)) + (locked ? ' <span class="tl-lock" title="Atendimentos realizados: especialidade e serviço travados; sessões só redistribuindo">🔒</span>' : '') + '</div>' +
             '<div class="rs">' + esc(tlSummary(r)) + '</div>' +
             (r.obs && lineSvc(r) !== DEFAULT_SERVICE_ID ? '<div class="rs tl-obs">Obs.: ' + esc(r.obs) + '</div>' : '') +
             (cov ? '<div class="rs tl-cover">' + esc(cov.txt) + '</div>' : '') + '</div>' +
@@ -18997,14 +18997,19 @@ function trQtyKey(o){
   return JSON.stringify([String(o.sessoesMes == null ? "" : o.sessoesMes).trim(),
     o.vencPor === "sessoes" ? String(o.totalSessoes || "") : ""]);
 }
-// Quadros que já existiam continuam com a mesma especialidade, sessões/mês e serviço
-// (tratamento com atendimentos realizados). Quadro novo é sempre permitido.
+// Tratamento com atendimentos realizados: os quadros que já existiam continuam com a mesma
+// especialidade e serviço. As sessões/mês podem ser REDISTRIBUÍDAS entre os quadros desde que
+// a soma de todos os quadros fique igual (pedido do usuário, 2026-10-10). Quadro novo sem mexer
+// nos antigos é sempre permitido.
+function trLinesSum(rows){ return Math.round(treatLines(rows).reduce(function(s, r){ return s + (specSumNum(r.hours) || 0); }, 0) * 100) / 100; }
+function trLinesHoursChanged(oldRows, newRows){
+  var nw = {}; treatLines(newRows).forEach(function(r){ nw[r.id] = r; });
+  return treatLines(oldRows).some(function(r){ var n = nw[r.id]; return n && specSumNum(n.hours) !== specSumNum(r.hours); });
+}
 function trLinesLockOk(oldRows, newRows){
   var nw = {}; treatLines(newRows).forEach(function(r){ nw[r.id] = r; });
-  return treatLines(oldRows).every(function(r){
-    var n = nw[r.id];
-    return n && n.specId === r.specId && String(n.hours).trim() === String(r.hours).trim() && lineSvc(n) === lineSvc(r);
-  });
+  var same = treatLines(oldRows).every(function(r){ var n = nw[r.id]; return n && n.specId === r.specId && lineSvc(n) === lineSvc(r); });
+  return same && (!trLinesHoursChanged(oldRows, newRows) || trLinesSum(newRows) === trLinesSum(oldRows));
 }
 // Término = o digitado na janela do tratamento; sem ele, o último atendimento entre o início
 // deste tratamento e o início do seguinte (automático).
@@ -19356,7 +19361,7 @@ function openTreatmentModal(t, opts){
     var note = document.getElementById("trLockNote");
     note.hidden = false;
     document.getElementById("trLockText").textContent = "Este tratamento já tem " + doneN + (doneN === 1 ? " atendimento realizado (Finalizado)" : " atendimentos realizados (Finalizados)") +
-      ": não pode ser excluído; Sessão/Mês e a especialidade, as sessões/mês e o serviço dos quadros que já existem não podem ser alterados (quadros novos podem ser incluídos). Para mudar, use Renegociar (ou Cancelar).";
+      ": não pode ser excluído; Sessão/Mês e a especialidade e o serviço dos quadros que já existem não podem ser alterados. As sessões/mês podem ser redistribuídas entre os quadros mantendo a mesma soma, e quadros novos podem ser incluídos. Para o resto, use Renegociar (ou Cancelar).";
     var d0 = document.getElementById("trDel"); if (d0) d0.hidden = true;
     var lockSel = "#trTotal, #trVencPor, #pPac";
     ed.lock();
@@ -19414,7 +19419,13 @@ function openTreatmentModal(t, opts){
     var r = ed.read();
     var qtyNew = Object.assign({}, r.fields, {vencPor: document.getElementById("trVencPor").value, totalSessoes: parseInt(document.getElementById("trTotal").value, 10) || ""});
     if (!isNew && trDoneCount(t) && (trQtyKey(qtyNew) !== trQtyKey(Object.assign({vencPor: "data"}, t)) || !trLinesLockOk(t.specHours, r.fields.specHours)) &&
-        !sysSaveGate(sv, "tr_realizados", "Tratamento com atendimentos realizados", "Já há atendimentos realizados neste tratamento: Sessão/Mês e a especialidade, as sessões/mês e o serviço dos quadros que já existem não podem ser alterados (quadros novos podem ser incluídos). Use Renegociar.")) return;
+        !sysSaveGate(sv, "tr_realizados", "Tratamento com atendimentos realizados", "Já há atendimentos realizados neste tratamento: Sessão/Mês e a especialidade e o serviço dos quadros que já existem não podem ser alterados. As sessões/mês podem ser redistribuídas entre os quadros só mantendo a mesma soma (agora " + String(trLinesSum(r.fields.specHours)).replace(".", ",") + ", antes " + String(trLinesSum(t.specHours)).replace(".", ",") + "). Use Renegociar.")) return;
+    // Redistribuição das sessões entre os quadros (mesma soma): os meses anteriores são recalculados.
+    if (!isNew && trDoneCount(t) && !sv._redistOk && trLinesHoursChanged(t.specHours, r.fields.specHours)){
+      confirmDialog({title: "Redistribuir sessões", message: "As sessões/mês dos quadros mudaram (a soma continua " + String(trLinesSum(r.fields.specHours)).replace(".", ",") + ").<br>O contratado × realizado e o relatório Pacote dos <b>meses anteriores</b> passam a usar a nova distribuição.<br>Salvar assim mesmo?", confirmLabel: "Salvar assim mesmo"})
+        .then(function(ok){ if (ok){ sv._redistOk = true; try { sv.click(); } finally { sv._redistOk = false; } } });
+      return;
+    }
     var sm = specSumRead();
     if (!sv._sumOk && sm && sm.total != null && sm.any && sm.total !== sm.sum && sysOn("tr_soma")){
       if (sysMode("tr_soma") === "block"){ showToast("A soma das especialidades/serviços (" + String(sm.sum).replace(".", ",") + ") é diferente de Sessão/Mês (" + String(sm.total).replace(".", ",") + ").", true); return; }
@@ -19772,7 +19783,7 @@ var HELP_TOPICS = [
       "Cancelar um tratamento <b>inativa o paciente</b>, se ele não tiver outro tratamento Ativo (precisa da permissão de editar Pacientes).",
       "Ao <b>cancelar ou renegociar</b> um tratamento, o sistema pergunta se remove os agendamentos do paciente: do <b>Planner</b> (as 4 semanas) e/ou da <b>Agenda</b> a partir de uma data que você escolhe. Atendimentos com evolução no prontuário ficam. As remoções entram no desfazer do Planner e da Agenda.",
       "No tratamento novo, a lista de pacientes mostra também os inativos, com \"(inativo)\" ao lado do nome. Salvar o tratamento novo <b>reativa o paciente</b> (menos quando ele já é salvo como Cancelado).",
-      "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b>; Sessão/Mês e a especialidade, as sessões/mês e o serviço dos quadros que já existem ficam travados (🔒). Os outros campos do quadro continuam editáveis e <b>quadros novos podem ser incluídos</b>. Para mudar o que está travado, use Renegociar.",
+      "Com atendimentos realizados (Finalizados), o tratamento <b>não pode ser excluído</b>; Sessão/Mês e a especialidade e o serviço dos quadros que já existem ficam travados (cadeado). As <b>sessões/mês podem ser redistribuídas</b> entre os quadros (inclusive para um quadro novo) desde que a soma de todos continue igual; ao salvar, o sistema avisa que o contratado × realizado e o Pacote dos meses anteriores passam a usar a nova distribuição. Os outros campos do quadro continuam editáveis e quadros novos podem ser incluídos. Para mudar o que está travado, use Renegociar.",
       "Cada atendimento conta para um quadro: o da especialidade do profissional (principal primeiro, depois as complementares) com o mesmo serviço; entre eles, o quadro do próprio profissional, depois o de \u201cTodos os terapeutas\u201d. Isso vale para o contratado × realizado, o ABA do atendimento, o aviso de terapeuta diferente, o Pacote e o \u201cEditar agendamento\u201d do Planner.",
       "Ao salvar um quadro, o sistema avisa (sem bloquear) quando: o dia/horário está fora do horário disponível do paciente ou do horário de trabalho do profissional; a clínica não abre no dia; as semanas e as sessões seguidas não batem com as sessões/mês; as sessões/mês não fecham com as sessões seguidas; ou já existe um quadro igual.",
       "A cobertura do convênio aparece no quadro: especialidade (ou serviço) não coberta em vermelho; coberta por outra especialidade que a libera, em cinza.",
