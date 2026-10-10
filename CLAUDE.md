@@ -3410,3 +3410,13 @@ Toda tela, lista, janela ou campo novo segue isto (e o que já existe foi corrig
    item em uso = Inativar; toda exclusão com `confirmDialog`.
 9. **Ajuda**: toda função nova entra no `HELP_TOPICS` (aspas curvas no texto).
 - (2026-10-10, pedidos do usuário) Janela da tarefa do CRM: etiqueta "Paciente cadastrado"/"Lead (sem cadastro)" (`#crmWhoTag`) ao lado do título "Dados do Paciente/Lead" (`.crm-sec-tw`), fora do campo. Janela com a altura da tela (`calc(100dvh - 32px)`, acompanha F11); a **Descrição ocupa o espaço livre** da coluna (`fitDesc` em `crmOpenTask`, refeito no `resize`; mínimo 4 linhas, só então a coluna rola) — o espaço entre os campos não muda.
+
+## Tratamento: especialidades em quadros (2026-10-10, EM ANDAMENTO)
+Decisões do usuário: cada linha de especialidade vira um QUADRO (mesmo visual dos cartões de Salas/Grupos:
+resumo + botão Editar; a janela de edição tem todos os campos): Especialidade, Sessões/mês, Profissional (Todos),
+ABA (Sim/Não), Serviço (Sessão), Dia (vazio), Horário de início (vazio), Semanas (Todas), Sala (Qualquer),
+Seguidas (1/2), Observação (só com serviço ≠ Sessão). Mesma especialidade pode repetir (outro profissional ou
+serviço). Acaba o "svc:" no lugar da especialidade. Quadros novos sempre permitidos, mesmo com atendimento
+realizado. Base para, no futuro, o Planner se montar sozinho.
+- Passo 1: migração só de dados `supabase/2026-10-10n-tratamentos-limpar-especialidades.sql` (limpa `specHours` de
+  TODOS os tratamentos e as sobras em `patients/all`; resto do tratamento intacto). Testada no PGlite.

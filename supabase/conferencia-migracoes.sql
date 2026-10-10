@@ -91,7 +91,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (77, '2026-10-10j-crm-lista-com-tarefas',          exists(select 1 from fx where proname = 'task_lists_guard'), ''),
  (78, '2026-10-10k-renomear-cadastros-de-texto',   exists(select 1 from fx where proname = 'rename_registry_text'), ''),
  (79, '2026-10-10l-excluir-usuario-tarefas',       exists(select 1 from fx where proname = 'profiles_tasks_cleanup'), ''),
- (80, '2026-10-10m-crm-dados-do-lead',             not exists(select 1 from public.tasks where lead ?| array['nascimento', 'responsavel', 'origem', 'email', 'plano']), 'só dados: SIM = nenhuma tarefa com os campos retirados')
+ (80, '2026-10-10m-crm-dados-do-lead',             not exists(select 1 from public.tasks where lead ?| array['nascimento', 'responsavel', 'origem', 'email', 'plano']), 'só dados: SIM = nenhuma tarefa com os campos retirados'),
+ (81, '2026-10-10n-tratamentos-limpar-especialidades', not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') e where d.path = 'patients/all' and e ? 'specHours'), 'só dados: SIM = nenhum paciente com sobras de especialidades')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,
