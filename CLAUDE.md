@@ -3704,3 +3704,7 @@ Pontos encontrados e decisões do usuário (todas as correções aprovadas):
   funil (`lead`): linha `.crm-home-extra` com leads sem cadastro (abertas sem `patient_id`), contratos no mês (status
   `done` sem `lost`, `closed_at` no mês) e perdidos no mês (`lost`). Celular continua um cartão por vez deslizando.
   Teste em `run_crm_mobile.js`.
+- (2026-10-10, pedido do usuário) Cartões da tela CRM no celular com ALTURA FIXA e sem sobra: todos com a altura do
+  cartão de conteúdo mais alto (`crmHomeRender` mede `scrollHeight` e grava `--crm-card-h` no `#crmHomeGrid`;
+  `.crm-home-grid{align-items:flex-start}`). Legenda de status no máximo 2 linhas (`max-height:34px`); linha do funil
+  numa linha só ("N leads sem cadastro · N contratos · N perdidos no mês", texto completo no `title`).

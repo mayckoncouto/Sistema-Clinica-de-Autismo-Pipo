@@ -270,7 +270,8 @@ div.ag-obj-head{cursor:default}
 @media (max-width:760px){
   .crm-home-h{padding:12px 12px 0}
   .crm-home-grid{display:flex;overflow-x:auto;padding:10px 12px 12px;gap:12px;scroll-snap-type:x mandatory;scroll-padding:0 12px}
-  .crm-home-grid .crm-home-card{flex:0 0 100%;max-width:none;scroll-snap-align:start;padding:12px 14px;gap:6px}
+  .crm-home-grid{align-items:flex-start}
+  .crm-home-grid .crm-home-card{flex:0 0 100%;max-width:none;scroll-snap-align:start;padding:12px 14px;gap:6px;height:var(--crm-card-h,auto);overflow:hidden;justify-content:flex-start}
   .crm-home-grid .crm-home-nums{font-size:14px}
 }
 .crm-home-card{display:flex;flex-direction:column;gap:8px;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--lc,var(--accent));border-radius:10px;padding:14px 16px;cursor:pointer;font:inherit;color:var(--ink)}
@@ -283,10 +284,10 @@ div.ag-obj-head{cursor:default}
 .crm-home-nums .urg{color:#b26a00;font-weight:600}
 .crm-home-strip{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px}
 .crm-home-strip i{display:block;height:100%;min-width:3px}
-.crm-home-leg{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:11.5px;color:var(--muted)}
+.crm-home-leg{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:11.5px;line-height:16px;max-height:34px;overflow:hidden;color:var(--muted)}
 .crm-home-leg span{display:inline-flex;align-items:center;gap:4px}
 .crm-home-leg span::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
-.crm-home-extra{display:flex;flex-wrap:wrap;gap:2px 12px;border-top:1px dashed var(--line);padding-top:6px;font-size:12.5px;color:var(--muted)}
+.crm-home-extra{display:flex;flex-wrap:nowrap;overflow:hidden;white-space:nowrap;gap:2px 10px;border-top:1px dashed var(--line);padding-top:6px;font-size:12.5px;color:var(--muted)}
 .crm-home-extra b{color:var(--ink)}
 #tab-crm[hidden]{display:none}
 .crm-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -6154,13 +6155,19 @@ function crmHomeRender(host){
     if (l && l.lead){
       var leads = open.filter(function(x){ return !x.patient_id; }).length, ctr = 0, lost = 0;
       tasks.forEach(function(x){ var s = crmStatus(l, x.status); if (!s || !s.done || String(x.closed_at || "").slice(0, 7) !== ym) return; if (s.lost) lost++; else ctr++; });
-      h += '<span class="crm-home-extra"><span><b>' + leads + '</b> ' + (leads === 1 ? "lead sem cadastro" : "leads sem cadastro") + '</span><span><b>' + ctr + '</b> ' + (ctr === 1 ? "contrato" : "contratos") + ' no mês</span><span><b>' + lost + '</b> ' + (lost === 1 ? "perdido" : "perdidos") + ' no mês</span></span>';
+      h += '<span class="crm-home-extra" title="Leads sem cadastro; contratos e perdidos neste mês"><span><b>' + leads + '</b> ' + (leads === 1 ? "lead" : "leads") + ' sem cadastro</span><span><b>' + ctr + '</b> ' + (ctr === 1 ? "contrato" : "contratos") + '</span><span><b>' + lost + '</b> ' + (lost === 1 ? "perdido" : "perdidos") + ' no mês</span></span>';
     }
     return '<button type="button" class="crm-home-card" data-crm-home="' + esc(id) + '"' + (color ? ' style="--lc:' + esc(swatchVar(color)) + '"' : '') + '><b>' + esc(name) + '</b>' + h + '</button>';
   }
   var mineTasks = all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(me) !== -1; });
   host.innerHTML = card("__mine", "Minhas tarefas", "", mineTasks) +
     vis.map(function(l){ return card(l.id, l.name, l.color, all.filter(function(x){ return x.list_id === l.id; })); }).join("");
+  // Celular: todos os cartões com a mesma altura fixa = a do cartão de conteúdo mais alto (sem sobra).
+  host.style.removeProperty("--crm-card-h");
+  if (isMobileView()){
+    var hmax = 0; Array.prototype.forEach.call(host.querySelectorAll(".crm-home-card"), function(b){ hmax = Math.max(hmax, b.scrollHeight); });
+    if (hmax) host.style.setProperty("--crm-card-h", (hmax + 2) + "px");
+  }
   Array.prototype.forEach.call(host.querySelectorAll("[data-crm-home]"), function(b){
     b.addEventListener("click", function(){ CRM.list = b.getAttribute("data-crm-home"); crmFillFilters(); crmRender(); if (typeof renderNavMenus === "function") renderNavMenus(); });
   });

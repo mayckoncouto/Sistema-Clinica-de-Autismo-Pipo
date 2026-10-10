@@ -148,8 +148,8 @@ const path = require('path');
     const sp = Array.from(n.children).map((x) => x.getBoundingClientRect());
     return {w: Math.round(cs[0].getBoundingClientRect().width), inner: Math.round(inner), items: n.children.length, twoCols: Math.abs(sp[0].top - sp[1].top) < 2 && sp[1].left > sp[0].left,
       strip: !!cs[1].querySelector('.crm-home-strip'), extra: !!cs[1].querySelector('.crm-home-extra'), mineMent: /menç/.test(cs[0].textContent), scroll: g.scrollWidth > g.clientWidth,
-      over: Array.from(n.children).filter((x) => x.scrollWidth > x.clientWidth + 1).map((x) => x.textContent)}; });
-  check('CRM home (phone): full-width swipe cards, 5 numbers in two columns, status strip, funnel line on Atendimento?', hc && Math.abs(hc.w - hc.inner) <= 2 && hc.items === 5 && hc.twoCols && hc.strip && hc.extra && hc.mineMent && hc.scroll && !hc.over.length, JSON.stringify(hc));
+      hs: Array.from(cs).map((c) => Math.round(c.getBoundingClientRect().height)), fit: Array.from(cs).every((c) => c.scrollHeight <= c.clientHeight + 1), over: Array.from(n.children).filter((x) => x.scrollWidth > x.clientWidth + 1).map((x) => x.textContent)}; });
+  check('CRM home (phone): full-width swipe cards, 5 numbers in two columns, status strip, funnel line on Atendimento, same fixed height, nothing cut?', hc && Math.abs(hc.w - hc.inner) <= 2 && hc.items === 5 && hc.twoCols && hc.strip && hc.extra && hc.mineMent && hc.scroll && !hc.over.length && new Set(hc.hs).size === 1 && hc.hs[0] < 230 && hc.fit, JSON.stringify(hc));
   const hv = await page.$$eval('#crmHost .pat-table thead th', (r) => r.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.textContent.trim()));
   check('CRM home list (phone): Status, Tarefa, Venc., Prio.?', hv.length === 4 && /Status/i.test(hv[0]) && /Tarefa/i.test(hv[1]), hv);
   check('no JS errors?', errors.length === 0, errors);
