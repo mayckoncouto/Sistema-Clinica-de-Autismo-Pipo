@@ -7125,7 +7125,23 @@ function crmListsWrite(next, msg){
   return listCommit("config/task_lists", listPrepare(orig, next)).then(function(ok){ if (ok && msg) showToast(msg); return ok; },
     function(e){ showToast("Não foi possível salvar: " + ((e && e.message) || e), true); return false; });
 }
-function crmListUsed(listId, stId){ return Object.keys(CRM.tasks).some(function(k){ var x = CRM.tasks[k]; return x.list_id === listId && (!stId || x.status === stId); }); }
+// Quantas tarefas há na lista/status: todas, pelo banco (crm_task_usage, também as que a
+// pessoa não vê; lido ao abrir a janela da lista); sem a função ou sem sistema online, as
+// tarefas carregadas.
+var CRM_USAGE = null;
+function crmLoadUsage(){
+  CRM_USAGE = null;
+  var cli = agdClient(); if (!cli) return;
+  cli.rpc("crm_task_usage").then(function(r){
+    if (r.error || !Array.isArray(r.data)) return;
+    var u = {}; r.data.forEach(function(x){ u[x.list_id + "|" + x.status] = +x.n || 0; }); CRM_USAGE = u;
+  }, function(){});
+}
+function crmListUsed(listId, stId){
+  if (CRM_USAGE) return Object.keys(CRM_USAGE).reduce(function(a, k){ var i = k.indexOf("|"); return a + (k.slice(0, i) === listId && (!stId || k.slice(i + 1) === stId) ? CRM_USAGE[k] : 0); }, 0);
+  return Object.keys(CRM.tasks).filter(function(k){ var x = CRM.tasks[k]; return x.list_id === listId && (!stId || x.status === stId); }).length;
+}
+function crmTaskCountText(n){ return n + (n === 1 ? " tarefa" : " tarefas"); }
 function crmOpenListsModal(){
   if (!crmListsCan("view")){ showToast("Seu nível não tem acesso a Listas e status do CRM.", true); return; }
   var canC = crmListsCan("create"), canE = crmListsCan("edit");
@@ -7176,6 +7192,7 @@ function crmOpenListsModal(){
 function crmOpenListEdit(list){
   var isNew = !list, canE = isNew ? crmListsCan("create") : crmListsCan("edit"), canD = !isNew && crmListsCan("delete");
   var d = list ? JSON.parse(JSON.stringify(list)) : {id: "", name: "", color: "#64748b", statuses: crmBasicStatuses()};
+  if (list) crmLoadUsage();
   var host = document.getElementById("modalHost");
   function opt(attr, on, label, title){ return '<label class="kind-opt' + (on ? ' on' : '') + '"' + (title ? ' title="' + esc(title) + '"' : '') + '><input type="checkbox" ' + attr + (on ? ' checked' : '') + (canE ? '' : ' disabled') + '>' + esc(label) + '</label>'; }
   function moves(i, n){ return '<div class="col-move"><button type="button" data-smv="-1"' + (i === 0 || !canE ? ' disabled' : '') + ' title="Subir" aria-label="Subir">▲</button><button type="button" data-smv="1"' + (i === n - 1 || !canE ? ' disabled' : '') + ' title="Descer" aria-label="Descer">▼</button></div>'; }
@@ -7230,13 +7247,13 @@ function crmOpenListEdit(list){
     if (b.hasAttribute("data-smv")){ var to = si + (+b.getAttribute("data-smv")); if (to >= 0 && to < d.statuses.length){ d.statuses.splice(to, 0, d.statuses.splice(si, 1)[0]); renderSts(); } return; }
     if (b.hasAttribute("data-sdel")){
       if (d.statuses.length <= 1){ showToast("A lista precisa de pelo menos um status.", true); return; }
-      if (s.id && d.id && crmListUsed(d.id, s.id)){ showToast("Há tarefas neste status: mude o status delas antes.", true); return; }
+      var ns = s.id && d.id ? crmListUsed(d.id, s.id) : 0; if (ns){ showToast("O status tem " + crmTaskCountText(ns) + ": mude o status delas antes de excluir.", true); return; }
       d.statuses.splice(si, 1); renderSts();
     }
   });
   var del = document.getElementById("crmLDel");
   if (del) del.addEventListener("click", function(){
-    if (crmListUsed(d.id)){ showToast("A lista tem tarefas: exclua ou mova as tarefas antes.", true); return; }
+    var nl = crmListUsed(d.id); if (nl){ showToast("A lista tem " + crmTaskCountText(nl) + ": exclua ou mova as tarefas antes de excluir a lista.", true); return; }
     confirmDialog({title: "Confirmar exclusão", message: "Excluir a lista <b>" + esc(d.name) + "</b>?", confirmLabel: "Confirmar exclusão"}).then(function(ok){
       if (!ok) return;
       crmListsWrite((CRM.lists || []).filter(function(x){ return x.id !== d.id; }).map(function(x){ return JSON.parse(JSON.stringify(x)); }), "Lista excluída.").then(function(done){ if (done) back(); });
@@ -19936,6 +19953,7 @@ var HELP_TOPICS = [
       "Comentários: os botões <b>B</b>, <i>I</i> e <u>U</u> na barra da caixa (ou Ctrl+B, Ctrl+I, Ctrl+U) deixam o texto escolhido em negrito, itálico ou sublinhado. Também dá para digitar as marcas: *negrito*, _itálico_, __sublinhado__.",
       "Só pode ser responsável por uma tarefa quem tem acesso ao CRM e à lista dela (Níveis de permissão). Quem perdeu o acesso continua na tarefa com “(sem acesso)” até alguém tirar.",
       "Ir para um status de perda (ex.: Cancelado) pede o motivo de perda. Tarefa num status finalizado não pode ser excluída.",
+      "Em <b>Listas e status</b>, lista ou status que tem tarefas não é excluído (contando todas as tarefas, também as que você não vê): mova as tarefas ou mude o status delas antes.",
       "Cada lista tem a sua permissão (ver, incluir, editar, excluir) em Níveis de permissão. Em Níveis de permissão, o grupo CRM começa pela permissão <b>CRM</b>: “Ver” dá o botão CRM do topo (tela CRM e Minhas tarefas) e a janela Listas e status; “Incluir”, “Editar” e “Excluir” valem para as listas e seus status. Depois vem uma linha para cada lista (ver, incluir, editar e excluir as tarefas dela), e toda lista nova ganha a sua linha. O Administrador sempre pode tudo.",
       "No celular, a janela da tarefa tem as abas Detalhes e Atividade: toque nelas ou deslize o dedo para o lado (para a esquerda abre Atividade, para a direita volta a Detalhes).",
       "No celular, todo campo de escolha do CRM (filtros, Status, Responsáveis, Vencimento, Prioridade, Origem, Convênio) abre uma janela que sobe da parte de baixo da tela; toque fora dela ou no ✕ para fechar. A lista mostra Status, o nome do paciente ou lead (cortado com “…” quando não cabe), Vencimento e a bandeira da Prioridade; no Quadro, cada status ocupa a tela toda: deslize para o lado ou escolha o status no campo acima dos quadros; no Calendário, toque num dia para ver as tarefas dele. Na janela da tarefa, os botões <b>Detalhes</b> (campos e descrição) e <b>Atividade</b> (alterações, comentários e o campo para comentar) trocam o que aparece. Na tarefa nova já dá para comentar: o comentário fica marcado \"enviado ao salvar\" e vai junto quando a tarefa é salva."

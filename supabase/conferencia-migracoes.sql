@@ -86,7 +86,9 @@ chk (ordem, migracao, aplicada, obs) as (values
  (72, '2026-10-10e-excluir-paciente',              exists(select 1 from fx where proname = 'delete_patient_health'), ''),
  (73, '2026-10-10f-mesclar-completo',               exists(select 1 from fx where proname = 'merge_patient_records' and prosrc like '%therapy_plans%'), ''),
  (74, '2026-10-10g-status-protegidos',              exists(select 1 from fx where proname = 'statuses_guard'), ''),
- (75, '2026-10-10h-excluir-plano',                  exists(select 1 from fx where proname = 'therapy_plans_delete_guard'), '')
+ (75, '2026-10-10h-excluir-plano',                  exists(select 1 from fx where proname = 'therapy_plans_delete_guard'), ''),
+ (76, '2026-10-10i-crm-recorrencia',               exists(select 1 from fx where proname = 'tasks_recur'), ''),
+ (77, '2026-10-10j-crm-lista-com-tarefas',          exists(select 1 from fx where proname = 'task_lists_guard'), '')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

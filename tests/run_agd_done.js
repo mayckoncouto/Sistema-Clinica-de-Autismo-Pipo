@@ -155,6 +155,21 @@ const path = require('path');
   check('especialidade: complementar, habilidade, banco e plano?', sp10[0].join('|') === '1 profissional com ela como área complementar|1 habilidade (especialidade sugerida)|1 objetivo no Banco de objetivos|1 objetivo de plano terapêutico', sp10[0]);
   check('escala e habilidade: plano e banco?', sp10[1].length === 2 && sp10[2].length === 2 && /Banco/.test(sp10[1][1]) && /Banco/.test(sp10[2][1]), sp10);
 
+  // Item 11: lista/status do CRM com tarefas não sai (conta as tarefas).
+  const cl = await ev(`(function(){
+    var saved = CRM.lists, savedT = CRM.tasks, toasts = [], st = window.showToast;
+    CRM.lists = [{id: "lx", name: "Lista X", statuses: [{id: "s1", name: "S1"}, {id: "s2", name: "S2"}]}];
+    CRM.tasks = {t1: {id: "t1", list_id: "lx", status: "s1"}, t2: {id: "t2", list_id: "lx", status: "s1"}};
+    showToast = function(m){ toasts.push(m); };
+    crmOpenListEdit(CRM.lists[0]);
+    document.querySelectorAll('#crmLSts [data-sdel]')[0].click();
+    document.getElementById('crmLDel').click();
+    var left = document.querySelectorAll('#crmLSts [data-si]').length;
+    document.getElementById("modalHost").innerHTML = ""; showToast = st; CRM.lists = saved; CRM.tasks = savedT;
+    return {toasts: toasts, left: left};
+  })()`);
+  check('CRM: status e lista com tarefas não saem (com a contagem)?', cl.left === 2 && /2 tarefas/.test(cl.toasts[0] || '') && /2 tarefas/.test(cl.toasts[1] || ''), cl);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

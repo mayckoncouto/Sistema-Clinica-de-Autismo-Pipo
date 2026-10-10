@@ -3179,7 +3179,7 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~MÉDIA 8~~ FEITO (2026-10-10, ver "Grupo de suporte em uso na Agenda" abaixo).
 - ~~MÉDIA 9~~ FEITO (2026-10-10, ver "Colaborador em uso" abaixo).
 - ~~MÉDIA 10~~ FEITO (2026-10-10, ver "Especialidade, Escala e Habilidade em uso" abaixo).
-- MÉDIA 11. CRM Listas e status: "lista/status com tarefas" conferido só nas tarefas que a pessoa vê; banco não confere.
+- ~~MÉDIA 11~~ FEITO (2026-10-10, ver "CRM: lista ou status com tarefas" abaixo).
 - MÉDIA 12. Importação de Tratamentos apaga os "tr-…" sem apagar `treatment_finance`.
 - BAIXA 13–16: renomear Diagnóstico/Origem/Convênio não propaga (texto guardado); excluir usuário deixa o código nos
   responsáveis das tarefas; excluir tarefa apaga comentários; fechar dia da clínica esconde agendamentos do Planner.
@@ -3312,3 +3312,12 @@ sugeridas (`skillAreasList()[].specIds`), Banco de objetivos (`goalBankUseCount(
 especialidade = todas, não conta) e objetivos de planos (`planSpecUseCount`). `USAGE.escalas` / `USAGE.habilidades`
 somam `goalBankUseCount("scaleId"|"areaId", id)`. Só no app; sem SQL. Ajuda (especialidades, escalas, habilidades) e
 teste no fim de `tests/run_agd_done.js`.
+
+## CRM: lista ou status com tarefas (2026-10-10, item 11 da auditoria)
+Decisão do usuário: não deixar excluir. Janela da lista (`crmOpenListEdit`): `crmListUsed(lista, status)` conta pela
+RPC `crm_task_usage()` (security definer, só números por lista/status, Administrador ou `crm_listas.view`; conta TODAS as
+tarefas, também as que a pessoa não vê; `crmLoadUsage` ao abrir a lista, em `CRM_USAGE`); sem a função / sem sistema online, as tarefas carregadas (`CRM.tasks`). Aviso
+com a quantidade. Banco: gatilho `task_lists_guard` (BEFORE UPDATE em `documents`, `config/task_lists`) recusa tirar
+lista ou status com tarefas. Migração `supabase/2026-10-10j-crm-lista-com-tarefas.sql` (testada no PGlite). Ajuda (CRM) e
+teste no fim de `tests/run_agd_done.js`. `conferencia-migracoes.sql` ganhou as linhas 76 (10i) e 77 (10j).
+- Produção: 2026-10-10j AINDA NÃO rodada.
