@@ -241,6 +241,8 @@ const path = require('path');
   await page.fill('#crmTitleIn', 'Agendar avaliação');
   await page.fill('#crmWho', 'Novo Lead Teste'); await page.dispatchEvent('#crmWho', 'input');
   await page.fill('#crmLTel', '47988887777');
+  const convName = await ev('(state.convenios || [])[0] ? state.convenios[0].name : ""');
+  await page.$eval('#crmLConv', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }, convName);
   await page.dispatchEvent('#crmWho', 'input');
   await page.waitForSelector('#crmRegPat:not([hidden])', {timeout: 10000}).catch(() => {});
   const rpPos = await page.evaluate(() => { const b = document.getElementById('crmRegPat'), t = document.querySelector('#crmLeadBox .crm-sec-t'), box = document.getElementById('crmLeadBox'); if (!b || !t) return null; const rb = b.getBoundingClientRect(), rt = t.getBoundingClientRect(), rx = box.getBoundingClientRect(); return {inBox: box.contains(b), sameLine: Math.abs((rb.top + rb.bottom) / 2 - (rt.top + rt.bottom) / 2) < 8, right: Math.abs(rb.right - rx.right) < 4}; });
@@ -257,6 +259,9 @@ const path = require('path');
   await page.click('#crmSave'); await page.waitForTimeout(250);
   const pt = await ev('(function(){ var x = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; }).filter(function(y){ return y.title === "Agendar avaliação"; })[0]; return x && x.patient_id ? (findPatientById(x.patient_id) || {}).nome : null; })()');
   check('task saved with the patient (not a lead)?', pt === 'Novo Lead Teste', pt);
+  const lt = await ev('(function(){ var x = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; }).filter(function(y){ return y.title === "Agendar avaliação"; })[0]; var p = findPatientById(x.patient_id); var trs = state.treatments.filter(function(t){ return t.patientId === p.id; }); return {lead: x.lead, n: trs.length, st: trs[0] && trs[0].status, conv: trs[0] && trs[0].convenio, conv2: trs[0] && trs[0].convenioId, spec: trs[0] && trs[0].specHours.length, ses: trs[0] && trs[0].sessoesMes}; })()');
+  check('lead data removed from the task and an active treatment created with only the convênio?', Object.keys(lt.lead || {}).length === 0 && lt.n === 1 && lt.st === 'ativo' && lt.conv === convName && !!convName && !!lt.conv2 && lt.spec === 0 && lt.ses === '', JSON.stringify(lt));
+  check('activity text for the patient link?', /cadastrou o lead “Lead X” como paciente/.test(await ev('crmEventText({author_name: "Ana", kind: "field", data: {campo: "paciente", de: "Lead X", para: "p"}}, {})')));
 
   // Menção para mim: contador + selo; abrir limpa
   await ev(`(function(){ CRM.mem.events.push({id: "ex", task_id: "${tid}", kind: "comment", body: "@Você Teste veja", mentions: ["local-me"], author_id: "u2", author_name: "Bia Sec", created_at: new Date(Date.now() + 1000).toISOString()}); crmLoadUnread(); return true; })()`);

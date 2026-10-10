@@ -350,7 +350,7 @@ const path = require('path');
   console.log('therapist cannot change a finalized status (others still can)?', locked && lockMsg && open, JSON.stringify({locked, lockMsg, open}));
   // Podem retirar acima do nome; Medida protetiva em quadro vermelho só quando há medida ativa.
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = "";
-    state.patientsRaw = state.patientsRaw.map(function(p){ return p.id !== "ana-azul" ? p : Object.assign({}, p, {rotina: [{nome: "Mara Azul", src: "mae"}], protetiva: [{nome: "Jorge", rel: "Pai"}]}); });
+    state.patientsRaw = state.patientsRaw.map(function(p){ return p.id !== "ana-azul" ? p : Object.assign({}, p, {mae: {nome: "Mara Azul"}, rotina: [], protetiva: [{nome: "Jorge", rel: "Pai"}]}); });
     rebuildPatients(); agdOpenDetails(AD.rows.r1); })()`);
   const pk = await page.$eval('#ovAgdDet .modal-body', (b) => {
     var ret = b.querySelector('.pickup-box:not(.pickup-alert)'), prot = b.querySelector('.pickup-box.pickup-alert'), name = b.querySelector('.agd-det-top');

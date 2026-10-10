@@ -47,10 +47,11 @@ const path = require('path');
   console.log('Responsável fills financial name/CPF from the mother (read-only)?', (await page.inputValue('#fi-nome')) === 'Maria Azul' && (await page.inputValue('#fi-doc')) === '390.533.447-05' && await page.$eval('#fi-nome', (e) => e.readOnly));
   await page.fill('#pm-mae-nome', 'Maria Azul Souza'); await page.waitForTimeout(100);
   console.log('linked: correcting the mother updates the financial responsible?', (await page.inputValue('#fi-nome')) === 'Maria Azul Souza');
-  const rot = await page.$$eval('#rotHost input', (a) => a.map((x) => x.value));
-  console.log('rotina starts with mother and father?', rot.includes('Maria Azul Souza') && rot.includes('João Azul'), JSON.stringify(rot));
-  console.log('rotina lists Mãe before Pai?', rot[0] === 'Maria Azul Souza');
-  await page.click('#rotAdd'); await page.fill('#rotHost .pm-row:last-child input', 'Vó Azul');
+  const rot = await page.$eval('#rotParents', (e) => e.textContent);
+  console.log('pickup shows mother and father from Filiação (not in the list)?', /Maria Azul Souza \(Mãe\) — pode retirar/.test(rot) && /João Azul \(Pai\) — pode retirar/.test(rot) && !(await page.$('#rotHost .pm-ret')), rot);
+  await page.click('#rotAdd'); await page.fill('#rotHost .pm-ret:last-child [data-rk="nome"]', 'Vó Azul');
+  await page.fill('#rotHost .pm-ret:last-child [data-rk="telefone"]', '47988887777');
+  console.log('other person has phone (masked) and document fields?', (await page.inputValue('#rotHost .pm-ret:last-child [data-rk="telefone"]')) === '(47) 98888-7777' && !!(await page.$('#rotHost [data-rk="doc"]')));
   // Contatos.
   await page.fill('#telHost .pm-row:nth-child(1) [data-tk="numero"]', '47999998888');
   await page.fill('#telHost .pm-row:nth-child(1) [data-tk="nome"]', 'Maria');
@@ -80,7 +81,7 @@ const path = require('path');
     (await ev("patientAgeYears(state.patients.filter(function(p){ return p.id === 'ana-azul'; })[0])")) === (function(){ const t = new Date(); let a = t.getFullYear() - 2020; if (t.getMonth() < 4 || (t.getMonth() === 4 && t.getDate() < 10)) a--; return a; })(), JSON.stringify(ana));
   console.log('saved in the new format (no legacy keys)?', !(await page.$('#ovPat')) && ana.cpf === '52998224725' && ana.mae.nome === 'Maria Azul Souza' && ana.mae.cpf === '39053344705' &&
     ana.financeiro.link === 'mae' && ana.financeiro.doc === '39053344705' && ana.telefones.length === 2 && ana.telefones[1].via === 'ligacao' &&
-    ana.rotina.length === 3 && ana.emails[0].email === 'maria@exemplo.com' && ana.medicoId === docId && ana.endereco.uf === 'SC' && !('responsaveis' in ana) && !('telefone' in ana), JSON.stringify(ana));
+    ana.rotina.length === 1 && ana.rotina[0].telefone === '47988887777' && !('rotinaOff' in ana) && ana.emails[0].email === 'maria@exemplo.com' && ana.medicoId === docId && ana.endereco.uf === 'SC' && !('responsaveis' in ana) && !('telefone' in ana), JSON.stringify(ana));
 
   // Outro paciente com o mesmo CPF: recusado; mesma mãe: só aviso.
   await page.click('#patListHost tbody tr:has-text("Bruno Verde")'); await page.waitForTimeout(300);
@@ -199,6 +200,32 @@ const path = require('path');
     return {first: /prot-last/.test(h1), last: /prot-last/.test(h2), box: /Vó Azul/.test(box) && /Processo 123/.test(box) && /Podem retirar/.test(box)};
   })()`);
   console.log('Agenda: alert only on the last appointment of the day; box lists both?', !pk.first && pk.last && pk.box, JSON.stringify(pk));
+  // Medida protetiva da Mãe (nome da Filiação) tira a mãe da retirada; "Pode retirar" desmarcado tira o pai.
+  await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
+  await page.click('#protAdd');
+  await page.$eval('#protHost .pm-prot:last-child select[data-pk="quem"]', (s) => { s.value = 'mae'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.waitForTimeout(100);
+  const pmName = await page.$eval('#protHost .pm-prot:last-child [data-pk="nome"]', (e) => [e.value, e.readOnly]);
+  console.log('protective measure "Mãe" takes the name from Filiação (read-only)?', pmName[0] === 'Maria Azul Souza' && pmName[1], JSON.stringify(pmName));
+  await page.uncheck('#pm-pai-retira'); await page.waitForTimeout(100);
+  const rot2 = await page.$eval('#rotParents', (e) => e.textContent);
+  console.log('mother with measure and father unchecked show "não pode retirar"?', /Maria Azul Souza \(Mãe\) — não pode retirar/.test(rot2) && /João Azul \(Pai\) — não pode retirar/.test(rot2) && await page.isVisible('[data-retira-prot="mae"]'), rot2);
+  await page.click('#pSave'); await page.waitForTimeout(300);
+  const an2 = await raw('ana-azul');
+  const pk2 = await ev(`(function(){ var k = patPickup(findPatientByName("Ana Azul")); return {ret: k.ret.map(function(r){ return r.nome; }), prot: k.prot.map(function(m){ return m.nome + "/" + m.rel; })}; })()`);
+  console.log('saved: mother as quem=mae, father retira=false; pickup only the other person?', an2.protetiva.some((m) => m.quem === 'mae') && an2.pai.retira === false &&
+    pk2.ret.length === 0 && pk2.prot.indexOf('Maria Azul Souza/Mãe') !== -1, JSON.stringify([pk2, an2.pai]));
+  // Mãe/Pai não entram como "outra pessoa".
+  await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
+  await page.click('#rotAdd'); await page.fill('#rotHost .pm-ret:last-child [data-rk="nome"]', 'Fulana'); await page.fill('#rotHost .pm-ret:last-child [data-rk="rel"]', 'mãe');
+  await page.click('#pSave'); await page.waitForTimeout(200);
+  console.log('"Mãe" as other person is refused?', await page.isVisible('#ovPat') && (await raw('ana-azul')).rotina.every((r) => r.nome !== 'Fulana'));
+  await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  if (await page.isVisible('#ovPat')) await page.click('#ovPat .modal-close');
+  // Formato antigo (src mãe/pai, rotinaOff, medida com o nome da mãe) é convertido ao ler.
+  const old = await ev(`(function(){ var n = patNormalize({mae: {nome: "Ana Mãe"}, pai: {nome: "Beto Pai"}, rotina: [{nome: "Ana Mãe", src: "mae"}, {nome: "Tia", rel: "Tia"}], rotinaOff: {pai: true}, protetiva: [{nome: "ana mãe", rel: "Mãe"}]});
+    return {rot: n.rotina.map(function(r){ return r.nome; }), paiRet: n.pai.retira, off: "rotinaOff" in n, quem: n.protetiva[0].quem, ret: patPickup(n).ret.map(function(r){ return r.nome; })}; })()`);
+  console.log('old pickup format converted?', JSON.stringify(old.rot) === '["Tia"]' && old.paiRet === false && !old.off && old.quem === 'mae' && JSON.stringify(old.ret) === '["Tia"]', JSON.stringify(old));
   const expired = await ev(`(function(){ return protActive({nome: "X", ate: "2020-01-01"}) === false && protActive({nome: "X", ate: ""}) === true; })()`);
   console.log('expired measure stops alerting?', expired);
 

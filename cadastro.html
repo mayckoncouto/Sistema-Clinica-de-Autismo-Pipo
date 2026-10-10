@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Cadastro do paciente</title>
+<link rel="icon" href="/favicon.png">
+<!--
+  Página pública do link de cadastro rápido (sem login). Lê o link pelo endereço
+  (?t=código), busca os dados do formulário na função intake_form e envia pela
+  intake_send (Supabase, chave pública). Tudo o que chega fica "pendente" até a
+  clínica revisar no sistema (Cadastros → Pacientes → Revisar cadastro).
+-->
+<style>
+:root{
+  --bg:#f4f6f8; --surface:#fff; --surface-2:#eef1f4; --ink:#1d2733; --muted:#5f6b78; --line:#d8dee5;
+  --accent:#2e7d6b; --accent-ink:#fff; --danger:#c62828; --ok:#2e7d32;
+  --ring:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11161c; --surface:#1a2129; --surface-2:#222b35; --ink:#e7edf3; --muted:#9aa7b4; --line:#2f3a46;
+    --danger:#ef6b6b; --ok:#6cc070;
+  }
+}
+:root[data-theme="dark"]{--bg:#11161c; --surface:#1a2129; --surface-2:#222b35; --ink:#e7edf3; --muted:#9aa7b4; --line:#2f3a46; --danger:#ef6b6b; --ok:#6cc070}
+*{box-sizing:border-box}
+html{accent-color:var(--accent)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:20px 16px 48px}
+.head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.head img{width:48px;height:48px;object-fit:contain}
+.head h1{margin:0;font-size:19px;line-height:1.2}
+.head .sub{color:var(--muted);font-size:13px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+.intro{color:var(--muted);font-size:14px;margin:0 0 6px}
+.sec{margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--line);color:var(--accent);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+.sec:first-of-type{border-top:0;padding-top:0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+.grid .wide{grid-column:1 / -1}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:12.5px;font-weight:600;color:var(--muted)}
+.req{color:var(--danger)}
+input,select,textarea{width:100%;min-height:44px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px}
+textarea{min-height:90px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+.bad{border-color:var(--danger)!important}
+.hint{font-size:12px;color:var(--muted)}
+.consent{display:flex;gap:10px;align-items:flex-start;margin-top:16px;font-size:14px}
+.consent input{width:20px;height:20px;min-height:0;margin-top:2px;flex:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 22px;border:0;border-radius:10px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:700;font-size:16px;cursor:pointer;width:100%;margin-top:18px}
+.btn[disabled]{opacity:.6;cursor:default}
+.msg{padding:12px 14px;border-radius:10px;font-size:14px;margin-top:12px}
+.msg.err{background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger)}
+.done{text-align:center;padding:28px 12px}
+.done h2{margin:0 0 8px;color:var(--ok)}
+.muted{color:var(--muted)}
+@media (max-width:560px){.grid{grid-template-columns:1fr}.head h1{font-size:17px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><img id="logo" src="/favicon.png" alt=""><div><h1 id="cName">Cadastro do paciente</h1><div class="sub" id="cSub"></div></div></div>
+  <div class="card" id="box"><p class="muted">Carregando…</p></div>
+</div>
+<script>
+(function(){
+  var CFG = null, FORM = null, token = new URLSearchParams(location.search).get("t") || "";
+  var box = document.getElementById("box");
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]; }); }
+  function digits(s){ return String(s || "").replace(/\D/g, ""); }
+  function fmtCpf(v){ var d = digits(v).slice(0, 11); return d.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2"); }
+  function fmtPhone(v){ var d = digits(v).slice(0, 11); if (d.length <= 2) return d; if (d.length <= 6) return "(" + d.slice(0, 2) + ") " + d.slice(2); if (d.length <= 10) return "(" + d.slice(0, 2) + ") " + d.slice(2, 6) + "-" + d.slice(6); return "(" + d.slice(0, 2) + ") " + d.slice(2, 7) + "-" + d.slice(7); }
+  function fmtCep(v){ var d = digits(v).slice(0, 8); return d.length > 5 ? d.slice(0, 5) + "-" + d.slice(5) : d; }
+  function cpfOk(v){
+    var d = digits(v); if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+    for (var t = 9; t < 11; t++){ var s = 0; for (var i = 0; i < t; i++) s += +d[i] * (t + 1 - i); if (((10 * s) % 11) % 10 !== +d[t]) return false; }
+    return true;
+  }
+  function theme(cor, txt){
+    if (!/^#[0-9a-f]{6}$/i.test(cor || "")) return;
+    var r = document.documentElement.style; r.setProperty("--accent", cor);
+    if (/^#[0-9a-f]{6}$/i.test(txt || "")) r.setProperty("--accent-ink", txt);
+    else { var n = parseInt(cor.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; r.setProperty("--accent-ink", l > 0.6 ? "#1d2733" : "#fff"); }
+  }
+  function rpc(fn, body){
+    var h = {apikey: CFG.supabaseAnonKey, "Content-Type": "application/json"};
+    if (!/^sb_/.test(CFG.supabaseAnonKey)) h.Authorization = "Bearer " + CFG.supabaseAnonKey;
+    return fetch(CFG.supabaseUrl + "/rest/v1/rpc/" + fn, {method: "POST", headers: h, body: JSON.stringify(body)}).then(function(r){
+      return r.json().then(function(j){ if (!r.ok) throw new Error((j && j.message) || "Erro " + r.status); return j; });
+    });
+  }
+  var STOP = {invalido: "Este link de cadastro não existe. Confira o endereço ou peça um novo link à clínica.",
+    usado: "Este link já foi usado. Se precisar corrigir alguma informação, peça um novo link à clínica.",
+    vencido: "Este link venceu (vale 7 dias). Peça um novo link à clínica.",
+    cancelado: "Este link foi cancelado pela clínica. Peça um novo link, se precisar."};
+  function stop(msg){ box.innerHTML = '<div class="done"><h2 style="color:var(--ink)">Link indisponível</h2><p class="muted">' + esc(msg) + '</p></div>'; }
+
+  function f(id, label, opt){
+    opt = opt || {};
+    var v = opt.value || "", req = opt.req ? ' <span class="req">*</span>' : "";
+    var input = opt.select ? '<select id="' + id + '"' + (opt.req ? ' required' : '') + '><option value="">Selecione…</option>' + opt.select.map(function(o){ return '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join("") + '</select>'
+      : opt.area ? '<textarea id="' + id + '">' + esc(v) + '</textarea>'
+      : '<input id="' + id + '" type="' + (opt.type || "text") + '"' + (opt.attrs || "") + (opt.req ? ' required' : '') + ' value="' + esc(v) + '">';
+    return '<div class="field' + (opt.wide ? ' wide' : '') + '"><label for="' + id + '">' + esc(label) + req + '</label>' + input + (opt.hint ? '<span class="hint">' + esc(opt.hint) + '</span>' : '') + '</div>';
+  }
+  function render(){
+    var p = FORM.prefill || {}, c = FORM.clinica || {}, upd = FORM.kind === "atualizacao";
+    var convs = (FORM.convenios || []).concat(["Particular", "Outro"]);
+    var nome = c.nome || "a clínica";
+    box.innerHTML =
+      '<p class="intro">' + (upd ? "Confira os dados abaixo e corrija o que mudou. " : "Preencha os dados abaixo para o cadastro. ") +
+        'Os campos com <span class="req">*</span> são obrigatórios. A clínica confere tudo antes de concluir o cadastro.</p>' +
+      '<form id="frm" novalidate>' +
+      '<div class="sec">Paciente</div><div class="grid">' +
+        f("nome", "Nome completo do paciente", {req: true, wide: true, value: p.nome || FORM.nome || "", attrs: ' autocomplete="off"'}) +
+        f("nascimento", "Data de nascimento", {req: true, type: "date", value: p.nascimento}) +
+        f("cpf", "CPF do paciente", {req: true, value: fmtCpf(p.cpf), attrs: ' inputmode="numeric" placeholder="000.000.000-00"'}) +
+        f("sexo", "Sexo", {select: ["Feminino", "Masculino", "Outro"], value: p.sexo}) + '</div>' +
+      '<div class="sec">Responsável</div><div class="grid">' +
+        f("respNome", "Nome do responsável", {req: true, value: p.respNome, attrs: ' autocomplete="name"'}) +
+        f("respParentesco", "Parentesco", {req: true, select: ["Mãe", "Pai", "Avó", "Avô", "Outro"], value: p.respParentesco}) +
+        f("telefone", "Telefone / WhatsApp", {req: true, value: fmtPhone(p.telefone || FORM.telefone), attrs: ' inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000"'}) +
+        f("email", "E-mail", {type: "email", value: p.email, attrs: ' autocomplete="email"'}) + '</div>' +
+      '<div class="sec">Endereço</div><div class="grid">' +
+        f("cep", "CEP", {value: fmtCep(p.cep), attrs: ' inputmode="numeric" placeholder="00000-000"', hint: "Preenche rua, bairro e cidade."}) +
+        f("numero", "Número", {value: p.numero}) +
+        f("rua", "Rua", {value: p.rua, wide: true}) +
+        f("compl", "Complemento", {value: p.compl}) + f("bairro", "Bairro", {value: p.bairro}) +
+        f("cidade", "Cidade", {value: p.cidade}) + f("uf", "UF", {value: p.uf, attrs: ' maxlength="2"'}) + '</div>' +
+      '<div class="sec">Atendimento</div><div class="grid">' +
+        f("convenio", "Convênio", {select: convs, value: p.convenio}) +
+        f("comoConheceu", "Como conheceu a clínica", {select: FORM.origens || [], value: p.comoConheceu}) +
+        f("diagnostico", "Diagnóstico ou suspeita", {value: p.diagnostico, wide: true, hint: "Ex.: autismo (TEA), suspeita de TEA, TDAH…"}) +
+        f("laudo", "Tem laudo?", {select: ["Sim", "Não", "Em avaliação"], value: p.laudo}) + '<div></div>' +
+        f("escola", "Escola", {value: p.escola}) +
+        f("escolaTurno", "Turno da escola", {select: ["Manhã", "Tarde", "Integral", "Noite"], value: p.escolaTurno}) +
+        f("obs", "Observações", {area: true, wide: true, value: p.obs}) + '</div>' +
+      '<label class="consent"><input type="checkbox" id="consent"> <span>Autorizo ' + esc(nome) + ' a usar estes dados para o cadastro e o atendimento do paciente, conforme a Lei Geral de Proteção de Dados (LGPD). <span class="req">*</span></span></label>' +
+      '<div id="err"></div>' +
+      '<button class="btn" type="submit" id="send">Enviar cadastro</button>' +
+      '</form>';
+    wire();
+  }
+  function wire(){
+    var frm = document.getElementById("frm");
+    frm.addEventListener("input", function(e){
+      var t = e.target;
+      if (t.id === "cpf") t.value = fmtCpf(t.value);
+      if (t.id === "telefone") t.value = fmtPhone(t.value);
+      if (t.id === "cep") t.value = fmtCep(t.value);
+      if (t.id === "uf") t.value = t.value.toUpperCase();
+      t.classList.remove("bad");
+    });
+    document.getElementById("cep").addEventListener("change", function(){
+      var d = digits(this.value); if (d.length !== 8) return;
+      fetch("https://viacep.com.br/ws/" + d + "/json/").then(function(r){ return r.json(); }).then(function(j){
+        if (!j || j.erro) return;
+        [["rua", j.logradouro], ["bairro", j.bairro], ["cidade", j.localidade], ["uf", j.uf]].forEach(function(x){ var el = document.getElementById(x[0]); if (el && !el.value && x[1]) el.value = x[1]; });
+      }).catch(function(){});
+    });
+    frm.addEventListener("submit", function(e){
+      e.preventDefault();
+      var err = document.getElementById("err"), bad = [];
+      function val(id){ return document.getElementById(id).value.trim(); }
+      ["nome", "nascimento", "cpf", "respNome", "respParentesco", "telefone"].forEach(function(id){ if (!val(id)){ bad.push(id); } });
+      if (val("cpf") && !cpfOk(val("cpf"))) bad.push("cpf");
+      if (val("telefone") && digits(val("telefone")).length < 10) bad.push("telefone");
+      if (val("email") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val("email"))) bad.push("email");
+      bad.forEach(function(id){ document.getElementById(id).classList.add("bad"); });
+      var consent = document.getElementById("consent").checked;
+      if (bad.length || !consent){
+        err.innerHTML = '<div class="msg err">' + (bad.length ? "Confira os campos marcados em vermelho" + (bad.indexOf("cpf") !== -1 && val("cpf") ? " (CPF inválido)" : "") + "." : "") + (!consent ? " Marque a autorização para enviar." : "") + '</div>';
+        var first = bad.length ? document.getElementById(bad[0]) : document.getElementById("consent"); first.focus();
+        return;
+      }
+      var data = {consentimento: true};
+      ["nome", "nascimento", "sexo", "respNome", "respParentesco", "email", "rua", "numero", "compl", "bairro", "cidade", "uf",
+       "convenio", "diagnostico", "laudo", "escola", "escolaTurno", "comoConheceu", "obs"].forEach(function(id){ data[id] = val(id); });
+      data.cpf = digits(val("cpf")); data.telefone = digits(val("telefone")); data.cep = digits(val("cep"));
+      var btn = document.getElementById("send"); btn.disabled = true; btn.textContent = "Enviando…"; err.innerHTML = "";
+      rpc("intake_send", {p_token: token, p_data: data}).then(function(r){
+        if (r && r.ok){ box.innerHTML = '<div class="done"><h2>Cadastro enviado!</h2><p class="muted">Obrigado. A clínica vai conferir os dados e entrar em contato, se precisar.</p></div>'; window.scrollTo(0, 0); return; }
+        var m = r && r.motivo;
+        if (STOP[m]) { stop(STOP[m]); return; }
+        btn.disabled = false; btn.textContent = "Enviar cadastro";
+        err.innerHTML = '<div class="msg err">' + (m === "limite" ? "Muitos cadastros enviados agora. Tente de novo em alguns minutos." : "Não foi possível enviar. Confira os campos obrigatórios e tente de novo.") + '</div>';
+      }, function(){ btn.disabled = false; btn.textContent = "Enviar cadastro"; err.innerHTML = '<div class="msg err">Sem conexão com a clínica agora. Tente de novo em instantes.</div>'; });
+    });
+  }
+  if (!token){ stop(STOP.invalido); return; }
+  fetch("/api/config").then(function(r){ return r.json(); }).then(function(cfg){
+    CFG = cfg;
+    if (cfg.theme) theme(cfg.theme.corBotoes, cfg.theme.corTexto);
+    return rpc("intake_form", {p_token: token});
+  }).then(function(j){
+    if (!j || !j.ok){ stop(STOP[j && j.motivo] || STOP.invalido); return; }
+    FORM = j;
+    var c = j.clinica || {};
+    if (c.nome){ document.getElementById("cName").textContent = c.nome; document.title = "Cadastro — " + c.nome; }
+    document.getElementById("cSub").textContent = j.kind === "atualizacao" ? "Atualização do cadastro" : "Cadastro do paciente";
+    if (c.logo) document.getElementById("logo").src = c.logo;
+    theme(c.cor, c.corTexto);
+    render();
+  }).catch(function(){ box.innerHTML = '<div class="msg err">Não foi possível abrir o cadastro agora. Tente de novo em instantes.</div>'; });
+})();
+</script>
+</body>
+</html>

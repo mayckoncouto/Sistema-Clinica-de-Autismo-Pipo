@@ -92,7 +92,11 @@ chk (ordem, migracao, aplicada, obs) as (values
  (78, '2026-10-10k-renomear-cadastros-de-texto',   exists(select 1 from fx where proname = 'rename_registry_text'), ''),
  (79, '2026-10-10l-excluir-usuario-tarefas',       exists(select 1 from fx where proname = 'profiles_tasks_cleanup'), ''),
  (80, '2026-10-10m-crm-dados-do-lead',             not exists(select 1 from public.tasks where lead ?| array['nascimento', 'responsavel', 'origem', 'email', 'plano']), 'só dados: SIM = nenhuma tarefa com os campos retirados'),
- (81, '2026-10-10n-tratamentos-limpar-especialidades', not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') e where d.path = 'patients/all' and e ? 'specHours'), 'só dados: SIM = nenhum paciente com sobras de especialidades')
+ (81, '2026-10-10n-tratamentos-limpar-especialidades', not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') e where d.path = 'patients/all' and e ? 'specHours'), 'só dados: SIM = nenhum paciente com sobras de especialidades'),
+ (82, '2026-10-10o-colaborador-sem-jornada',       not exists(select 1 from public.staff where data ? 'jornada'), 'só dados: SIM = nenhum colaborador com jornada'),
+ (83, '2026-10-10p-retirada-pela-filiacao',        not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') e where d.path = 'patients/all' and e ? 'rotinaOff'), 'só dados: SIM = nenhum paciente com rotinaOff'),
+ (84, '2026-10-10q-crm-lead-vira-paciente',        exists(select 1 from fx where proname = 'tasks_history' and prosrc like '%''paciente''%'), ''),
+ (85, '2026-10-10r-link-de-cadastro',              exists(select 1 from fx where proname = 'intake_send'), '')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

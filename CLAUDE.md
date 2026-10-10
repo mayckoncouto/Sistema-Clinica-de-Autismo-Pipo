@@ -3459,3 +3459,55 @@ Mesma especialidade pode repetir. Base para o Planner se montar sozinho no futur
   Status), **Níveis de permissão** (Nível · Permissões, em `js/usuarios.js`). `.prof-section-head .prof-access-title` (títulos
   "Horário de atendimento", seções do Editar agendamento) no mesmo azul. Janela nova de cadastro com vários campos: usar
   `.tr-sec` (ou `.pm-sec`) nos grupos. Pacientes, Colaboradores e a tarefa do CRM já seguiam o padrão.
+
+## Decisões do usuário para cadastro/retirada/CRM/link (2026-10-10)
+Itens da revisão de campos repetidos que não foram respondidos NÃO devem ser alterados.
+Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead → paciente,
+4) Link de cadastro rápido.
+- **1. Colaborador sem "Jornada semanal"** (FEITO): saíram `#sf-jornada` e o aviso `#sfJornadaNote`;
+  as horas vêm só do Horário de trabalho. O salvar apaga `jornada` de `staff.data`. Migração só de
+  dados `supabase/2026-10-10o-colaborador-sem-jornada.sql`.
+- **2. Retirada** (FEITO): Mãe/Pai não ficam gravados na lista; vêm da Filiação, com a caixa
+  "Pode retirar o paciente" (`#pm-mae-retira`/`#pm-pai-retira`, marcada por padrão; desmarcada grava
+  `mae.retira = false`). Resumo da Filiação em `#rotParents` (`rotParentsRender`). A lista `rotina` é só
+  de outras pessoas `{nome, rel, telefone, doc}` (`.pm-ret`, `data-rk`); Mãe/Pai como "outra pessoa"
+  (parentesco Mãe/Pai ou mesmo nome) é recusado ao salvar. Medida protetiva `{quem: "mae"|"pai"|"",
+  nome, rel, obs, ate}`: `select[data-pk="quem"]` Outra pessoa / Mãe / Pai; Mãe/Pai mostram o nome da
+  Filiação só leitura (`protResolve`, `protOut`, `PARENT_LABEL`). `patPickup` monta "podem retirar" =
+  Mãe/Pai (com nome, `retira` ≠ false, Filiação visível e sem medida ativa) + outras pessoas (sem
+  medida ativa), com telefone/documento no quadro da Agenda e na ficha. `patNormalize` converte o
+  formato antigo (src mae/pai, `rotinaOff` → `retira: false`, medida com o nome da mãe/pai → `quem`);
+  `rotinaOff` está em `PAT_LEGACY_KEYS`. Migração só de dados `supabase/2026-10-10p-retirada-pela-filiacao.sql`.
+- **3. CRM** (FEITO): "Cadastrar paciente" leva os dados do lead ao cadastro e, ao salvar, a tarefa
+  fica com `lead` vazio (só `motivoPerda`, se houver) e `crmLeadTreatment(pid, convênio)` grava um
+  tratamento Ativo só com o convênio (resto em branco; sem `tratamentos.create`, avisa). Status da
+  tarefa não muda. `tasks_history` registra `{campo: "paciente", de: nome do lead, para: patient_id}`
+  ("cadastrou o lead “X” como paciente"). Migração `supabase/2026-10-10q-crm-lead-vira-paciente.sql`
+  (gatilho + limpa leads de tarefas já ligadas a paciente).
+- **4. Link de cadastro rápido** (FEITO): tabelas `intake_links` (token, kind novo|atualizacao|crm|geral,
+  patient_id, task_id, nome, telefone, prefill, expires_at = 7 dias (geral não vence; um só geral
+  ativo), used_at, canceled_at, reminded_at) e `intake_submissions` (data, status
+  pendente|aprovado|descartado, result_patient_id). RLS: `intake_can()` = Administrador ou
+  `pacientes.create`. Página pública **`cadastro.html`** (`/cadastro?t=token`, sem login): lê
+  `/api/config` e chama as RPC `intake_form` / `intake_send` (security definer, anon; conferem o
+  link; só as chaves conhecidas, até 300 caracteres; nome, telefone e consentimento obrigatórios; link
+  geral até 40 envios por hora e cria lead novo no CRM, lista Atendimento, 1º status). A flag de sessão
+  `pipo.intake` deixa só as funções marcarem `used_at`/`reminded_at`. `intake_remind()` (chamada pelo app
+  uma vez por sessão) cria tarefa "Cobrar cadastro pelo link" para link sem resposta em 3 dias.
+  Campos do formulário: nome, nascimento, CPF (válido), sexo, responsável + parentesco, telefone, e-mail,
+  CEP (ViaCEP) e endereço, convênio, diagnóstico/suspeita, laudo, escola + turno, como conheceu, obs,
+  consentimento LGPD (sem disponibilidade).
+  App (bloco "Link de cadastro rápido" no fim do script): `INTAKE`, `intakeLoad` (pendentes + tempo
+  real), `intakeBadge` (`#cadBadge` no botão Cadastros, `#intakeRevBtn` "Revisar cadastro" na tela
+  Pacientes, número no grupo Cadastros do ☰ e ponto no `#mnavBtn`), `openIntakeLinkModal({kind,
+  patient, task})` (Gerar link, Copiar, WhatsApp `wa.me/55…`, e-mail `mailto:`, Cancelar/Desativar),
+  `openIntakeLinksList` (Links enviados), `intakePrefillFrom(p)` (Pedir atualização),
+  `intakeToPatient(d)` → {patch, notes}, `intakeReview(sub)` (CPF igual a outro paciente = pergunta se é
+  atualização), `intakeApplyReview` (aviso `.ik-banner` + "Descartar envio"; no existente, `.ik-diff`
+  com "Usar enviado"/"Manter atual"; vazio já vem preenchido; telefone/e-mail novos entram na lista),
+  `openIntakeReviewList`. Paciente novo aprovado = `crmLeadTreatment` com o convênio + liga a tarefa do
+  CRM (se houver). Botões: Pacientes → Outras opções (Enviar link de cadastro, Link geral da clínica,
+  Links enviados), janela do paciente (Pedir atualização, Revisar cadastro), tarefa do CRM (Enviar link
+  de cadastro, `#crmSendLink`). Sem sistema online, tudo em `INTAKE.mem`. Migração
+  `supabase/2026-10-10r-link-de-cadastro.sql`. Teste `tests/run_intake.js` (inclui a página pública
+  com o Supabase simulado). Ajuda: tópico "link-cadastro".
