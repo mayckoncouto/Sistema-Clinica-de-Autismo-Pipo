@@ -3527,3 +3527,4 @@ Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead �
   `intake_form` devolve `campos`; `intake_send` recusa sem os obrigatórios (`motivo obrigatorio`, `campos`).
   Migração `supabase/2026-10-10s-campos-do-link.sql`. Mudou a lista de campos do formulário? Ajustar
   `LINK_FIELDS` no index.html, `cadastro.html` e as chaves de `intake_send`.
+- Produção (2026-10-10): `2026-10-10s-campos-do-link` rodada (1 | 1).
