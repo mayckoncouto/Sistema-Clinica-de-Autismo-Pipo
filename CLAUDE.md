@@ -3182,8 +3182,8 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~MÉDIA 11~~ FEITO (2026-10-10, ver "CRM: lista ou status com tarefas" abaixo).
 - ~~MÉDIA 12~~ FEITO (2026-10-10, ver "Importação de Tratamentos: valores do tratamento da migração" abaixo).
 - ~~BAIXA 13~~ FEITO (2026-10-10, ver "Renomear Diagnóstico, Origem ou Convênio" abaixo).
-- BAIXA 14–16: excluir usuário deixa o código nos responsáveis das tarefas; excluir tarefa apaga comentários; fechar
-  dia da clínica esconde agendamentos do Planner.
+- ~~BAIXA 14~~ FEITO (2026-10-10, ver "Excluir usuário: sai das tarefas do CRM" abaixo).
+- BAIXA 15–16: excluir tarefa apaga comentários; fechar dia da clínica esconde agendamentos do Planner.
 
 ## Cadastros em lista gravam só o item; aviso de alteração simultânea (2026-10-10, item 1 da auditoria)
 Decisões do usuário: mesmo item alterado por duas pessoas = AVISAR e deixar escolher; vale para TODOS os cadastros em lista.
@@ -3342,3 +3342,11 @@ antigos) por `writeTreatments` (precisa de `tratamentos.edit`), quem não pode f
 maiúscula e espaços). Migração `supabase/2026-10-10k-renomear-cadastros-de-texto.sql` (testada no PGlite). Ajuda
 (Convênios, Diagnósticos, Origens) e teste no fim de `tests/run_agd_done.js`.
 - Produção (2026-10-10): `2026-10-10k-renomear-cadastros-de-texto` rodada (função criada = 1).
+
+## Excluir usuário: sai das tarefas do CRM (2026-10-10, item 14 da auditoria)
+Decisão do usuário: tirar dos responsáveis. Banco: gatilho `profiles_tasks_cleanup` (AFTER DELETE em `profiles`, que
+cai junto com `auth.users`): `array_remove` do id em `tasks.assignees` (a atividade da tarefa registra) e apaga
+`task_reads` dele. RPC `crm_user_open_tasks(p_user)` (Administrador ou `usuarios.delete`): tarefas não finalizadas
+(`crm_status_done`) com ele como responsável. `js/usuarios.js`: a confirmação de Excluir mostra quantas. Migração
+`supabase/2026-10-10l-excluir-usuario-tarefas.sql` (testada no PGlite). Ajuda (Usuários).
+- Produção: 2026-10-10l AINDA NÃO rodada.

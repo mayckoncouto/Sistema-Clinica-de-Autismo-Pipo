@@ -449,11 +449,14 @@
       });
       var del = document.getElementById("uDelete");
       if (del) del.addEventListener("click", function () {
-        confirmBox({
+        // Tarefas abertas do CRM com a pessoa como responsável: ao excluir, ela sai delas.
+        var cnt = auth.client ? auth.client.rpc("crm_user_open_tasks", { p_user: u.id }).then(function (r) { return r.error ? 0 : (+r.data || 0); }, function () { return 0; }) : Promise.resolve(0);
+        cnt.then(function (nTasks) { return confirmBox({
           title: "Excluir usuário",
-          message: "Excluir definitivamente o usuário <b>" + esc(u.full_name || u.email) + "</b>? Isso não pode ser desfeito.<br>Para só bloquear a entrada, use \"Desativar acesso\".",
+          message: "Excluir definitivamente o usuário <b>" + esc(u.full_name || u.email) + "</b>? Isso não pode ser desfeito.<br>Para só bloquear a entrada, use \"Desativar acesso\"." +
+            (nTasks ? "<br><br>A pessoa é responsável por <b>" + nTasks + (nTasks === 1 ? " tarefa aberta" : " tarefas abertas") + "</b> no CRM e sairá delas. Se quiser, passe as tarefas para outra pessoa antes." : "<br><br>Se a pessoa for responsável por tarefas do CRM, ela sai delas."),
           confirmLabel: "Excluir usuário"
-        }).then(function (ok) {
+        }); }).then(function (ok) {
           if (!ok) return;
           adminApi({ action: "delete", id: u.id })
             .then(function () { toast("Usuário excluído."); close(); reloadAll(); })

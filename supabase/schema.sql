@@ -5215,3 +5215,33 @@ begin
 end $$;
 grant execute on function public.rename_registry_text(text, text, text) to authenticated;
 revoke execute on function public.rename_registry_text(text, text, text) from anon;
+
+-- ---------------------------------------------------------------------
+-- Usuário excluído sai dos responsáveis das tarefas (2026-10-10l)
+-- ---------------------------------------------------------------------
+create or replace function public.profiles_tasks_cleanup()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update public.tasks set assignees = array_remove(assignees, old.id) where old.id = any(assignees);
+  delete from public.task_reads where user_id = old.id;
+  return old;
+end $$;
+
+drop trigger if exists profiles_tasks_cleanup on public.profiles;
+create trigger profiles_tasks_cleanup
+  after delete on public.profiles
+  for each row execute function public.profiles_tasks_cleanup();
+
+create or replace function public.crm_user_open_tasks(p_user uuid)
+returns int language plpgsql stable security definer set search_path = public as $$
+declare n int;
+begin
+  if not (public.is_admin() or public.has_perm('usuarios', 'delete')) then
+    raise exception 'Sem permissão.' using errcode = '42501';
+  end if;
+  select count(*) into n from public.tasks
+   where p_user = any(assignees) and not public.crm_status_done(list_id, status);
+  return n;
+end $$;
+grant execute on function public.crm_user_open_tasks(uuid) to authenticated;
+revoke execute on function public.crm_user_open_tasks(uuid) from anon;
