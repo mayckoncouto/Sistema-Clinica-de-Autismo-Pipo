@@ -325,6 +325,8 @@ const path = require('path');
       add: getComputedStyle(document.getElementById('crmAdd')).display, listaCol: [...document.querySelectorAll('#crmHost thead th')].some((t) => /Lista/i.test(t.textContent)),
       rows: rows.length, want, allVisible: rows.every((r) => crmCan(CRM.tasks[r.getAttribute('data-crm-id')].list_id, 'view')), hiddenList }; });
   check('CRM home: list cards on top (Minhas tarefas first), then the bar and ALL open tasks of the lists I can see (Lista column, no Quadro/+ Tarefa)?', home.cards.join('|').indexOf('Minhas tarefas|Atendimento|Agendas|Fature|Gestão') === 0 && home.cardsAbove && home.seg !== 'none' && home.quadro === 'none' && home.add === 'none' && home.listaCol && home.rows === home.want && home.rows > 0 && home.allVisible, JSON.stringify(home));
+  const homeHead = await page.$$eval('#crmHost .pat-table thead th .th-label', (r) => r.map((x) => x.textContent));
+  check('CRM home columns: Lista, Status, Tarefa, Paciente ou Lead, Convênio, Responsáveis, Vencimento, Prioridade?', homeHead.join('|') === 'Lista|Status|Tarefa|Paciente ou Lead|Convênio|Responsáveis|Vencimento|Prioridade', JSON.stringify(homeHead));
   const perm = await ev(`(function(){ var orig = crmCan, lid = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k].list_id; })[0];
     crmCan = function(l, a){ return l === lid ? false : orig(l, a); }; crmRender();
     var r = {lid: lid, cards: [].map.call(document.querySelectorAll('#crmHomeGrid [data-crm-home]'), function(b){ return b.getAttribute('data-crm-home'); }),

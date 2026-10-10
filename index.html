@@ -605,14 +605,14 @@ div.ag-obj-head{cursor:default}
   #crmHost .crm-com-n,#crmHost .crm-unread{margin-left:4px}
   /* celular: Status, Paciente ou Lead (uma linha, "…"), Venc. e Prio. */
   #crmHost .pat-table:not(.crm-mine-t) :is(col,th,td):is(:nth-child(3),:nth-child(4),:nth-child(5)){display:none}
-  #crmHost .pat-table.crm-mine-t :is(col,th,td):is(:nth-child(2),:nth-child(4),:nth-child(5),:nth-child(6)){display:none}
+  #crmHost .pat-table.crm-mine-t :is(col,th,td):is(:nth-child(1),:nth-child(3),:nth-child(5),:nth-child(6)){display:none}
   #crmHost .pat-table col:nth-child(1){width:34%!important}
   #crmHost .pat-table:not(.crm-mine-t) col:nth-child(6),#crmHost .pat-table.crm-mine-t col:nth-child(7){width:82px!important}
   #crmHost .pat-table:not(.crm-mine-t) col:nth-child(7),#crmHost .pat-table.crm-mine-t col:nth-child(8){width:44px!important}
   #crmHost .pat-table .crm-lead-tag{display:none}
   #crmHost .pat-table.crm-main td > .crm-prio-btn{padding-left:0;padding-right:0}
-  #crmHost .pat-table:not(.crm-mine-t) th:nth-child(2) .th-label,#crmHost .pat-table.crm-mine-t th:nth-child(3) .th-label{font-size:0}
-  #crmHost .pat-table:not(.crm-mine-t) th:nth-child(2) .th-label::after,#crmHost .pat-table.crm-mine-t th:nth-child(3) .th-label::after{content:"Paciente";font-size:11px}
+  #crmHost .pat-table:not(.crm-mine-t) th:nth-child(2) .th-label,#crmHost .pat-table.crm-mine-t th:nth-child(4) .th-label{font-size:0}
+  #crmHost .pat-table:not(.crm-mine-t) th:nth-child(2) .th-label::after,#crmHost .pat-table.crm-mine-t th:nth-child(4) .th-label::after{content:"Paciente";font-size:11px}
   #crmHost .pat-table:not(.crm-mine-t) th:nth-child(6) .th-label,#crmHost .pat-table.crm-mine-t th:nth-child(7) .th-label{font-size:0}
   #crmHost .pat-table:not(.crm-mine-t) th:nth-child(6) .th-label::after,#crmHost .pat-table.crm-mine-t th:nth-child(7) .th-label::after{content:"Venc.";font-size:11px}
   #crmHost .pat-table:not(.crm-mine-t) th:nth-child(7) .th-label,#crmHost .pat-table.crm-mine-t th:nth-child(8) .th-label{font-size:0}
@@ -6362,26 +6362,27 @@ function crmRender(){
   }
   if (!base.length){ host.innerHTML = '<div class="empty-state"><b>' + (home ? "Nenhuma tarefa nas suas listas." : mine ? "Nenhuma tarefa com você." : "Nenhuma tarefa nesta lista") + '</b>' + (multi ? "" : 'Use "+ Tarefa".') + '</div>'; return; }
   if (!tasks.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca, os filtros ou marque "Finalizados".</div>'; return; }
-  var cols = [{key: "st", label: "Status", width: 160, min: 100}];
-  if (multi) cols.push({key: "lista", label: "Lista", width: 140, min: 90, cls: "pt-muted"});
-  cols = cols.concat([{key: "who", label: "Paciente ou Lead", width: 240, min: 120}, {key: "nome", label: "Tarefa", width: 320, min: 140, cls: "pt-nome"},
-    {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"}, {key: "resp", label: "Responsáveis", width: 140, min: 100}, {key: "venc", label: "Vencimento", width: 130, min: 90}, {key: "prio", label: "Prioridade", width: 130, min: 100}]);
+  // Colunas: tela CRM e Minhas tarefas = Lista, Status, Tarefa, Paciente ou Lead, …; lista = Status, Paciente ou Lead, Tarefa, …
+  var CDEF = {lista: {key: "lista", label: "Lista", width: 140, min: 90, cls: "pt-muted"}, st: {key: "st", label: "Status", width: 160, min: 100},
+    who: {key: "who", label: "Paciente ou Lead", width: 240, min: 120}, nome: {key: "nome", label: "Tarefa", width: 320, min: 140, cls: "pt-nome"},
+    conv: {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"}, resp: {key: "resp", label: "Responsáveis", width: 140, min: 100},
+    venc: {key: "venc", label: "Vencimento", width: 130, min: 90}, prio: {key: "prio", label: "Prioridade", width: 130, min: 100}};
+  var order = multi ? ["lista", "st", "nome", "who", "conv", "resp", "venc", "prio"] : ["st", "who", "nome", "conv", "resp", "venc", "prio"];
+  var cols = order.map(function(k){ return CDEF[k]; });
   gtRender(host, home ? "crm-all" : mine ? "crm-mine" : "crm-lista", cols, tasks.map(function(x){
     var l = crmListById(x.list_id), st = crmStatus(l, x.status), who = crmWhoName(x), conv = crmConvName(x);
-    var canE = crmCan(x.list_id, "edit");
-    var cells = ['<button type="button" class="crm-prio-btn" data-crm-st="' + esc(x.id) + '"' + (canE ? ' title="Mudar o status"' : ' disabled') + '>' + crmStDot(st, x.status) + '</button>'];
-    var vals = [st ? (l.statuses.indexOf(st) + 1) : 99];
-    if (multi){ cells.push(esc(l ? l.name : "")); vals.push(l ? l.name : ""); }
-    var words = String(x.title || "").trim().split(/\s+/);
-    cells.push(who ? esc(who) + (crmIsLead(x) ? ' <span class="crm-lead-tag">lead</span>' : '') : '<span class="pt-muted">—</span>');
-    cells.push('<span class="crm-t">' + esc(x.title) + '</span><span class="crm-t-sm">' + esc(words.slice(0, 4).join(" ") + (words.length > 4 ? "…" : "")) + '</span>' + crmComHtml(x.id) + (CRM.unread[x.id] ? '<span class="crm-unread" title="Menção não lida">@' + CRM.unread[x.id] + '</span>' : ''));
-    cells.push(esc(conv || "—"));
-    cells.push('<button type="button" class="crm-prio-btn" data-crm-people="' + esc(x.id) + '"' + (canE ? ' title="Escolher responsáveis"' : ' disabled') + '>' + crmAvatars(x.assignees) + '</button>');
-    cells.push('<button type="button" class="crm-prio-btn" data-crm-due="' + esc(x.id) + '"' + (canE ? ' title="Mudar o vencimento"' : ' disabled') + '>' + crmDueHtml(x) + '</button>');
-    var pr = crmPrio(x.priority);
-    cells.push('<button type="button" class="crm-prio-btn" data-crm-prio="' + esc(x.id) + '" title="' + (crmCan(x.list_id, "edit") ? "Mudar a prioridade" : "Prioridade") + '"' + (crmCan(x.list_id, "edit") ? '' : ' disabled') + '>' + crmFlagSvg(pr) + '<span class="crm-prio-name">' + esc(pr.name) + '</span></button>');
-    vals = vals.concat([who, x.title, conv, (x.assignees || []).map(crmPersonName).join(", "), x.due_date || "", CRM_PRIOS.indexOf(pr)]);
-    return {attrs: 'class="pr-row" data-crm-id="' + esc(x.id) + '" tabindex="0"', cells: cells, vals: vals};
+    var canE = crmCan(x.list_id, "edit"), pr = crmPrio(x.priority), words = String(x.title || "").trim().split(/s+/);
+    var C = {
+      lista: [esc(l ? l.name : ""), l ? l.name : ""],
+      st: ['<button type="button" class="crm-prio-btn" data-crm-st="' + esc(x.id) + '"' + (canE ? ' title="Mudar o status"' : ' disabled') + '>' + crmStDot(st, x.status) + '</button>', st ? (l.statuses.indexOf(st) + 1) : 99],
+      who: [who ? esc(who) + (crmIsLead(x) ? ' <span class="crm-lead-tag">lead</span>' : '') : '<span class="pt-muted">—</span>', who],
+      nome: ['<span class="crm-t">' + esc(x.title) + '</span><span class="crm-t-sm">' + esc(words.slice(0, 4).join(" ") + (words.length > 4 ? "…" : "")) + '</span>' + crmComHtml(x.id) + (CRM.unread[x.id] ? '<span class="crm-unread" title="Menção não lida">@' + CRM.unread[x.id] + '</span>' : ''), x.title],
+      conv: [esc(conv || "—"), conv],
+      resp: ['<button type="button" class="crm-prio-btn" data-crm-people="' + esc(x.id) + '"' + (canE ? ' title="Escolher responsáveis"' : ' disabled') + '>' + crmAvatars(x.assignees) + '</button>', (x.assignees || []).map(crmPersonName).join(", ")],
+      venc: ['<button type="button" class="crm-prio-btn" data-crm-due="' + esc(x.id) + '"' + (canE ? ' title="Mudar o vencimento"' : ' disabled') + '>' + crmDueHtml(x) + '</button>', x.due_date || ""],
+      prio: ['<button type="button" class="crm-prio-btn" data-crm-prio="' + esc(x.id) + '" title="' + (canE ? "Mudar a prioridade" : "Prioridade") + '"' + (canE ? '' : ' disabled') + '>' + crmFlagSvg(pr) + '<span class="crm-prio-name">' + esc(pr.name) + '</span></button>', CRM_PRIOS.indexOf(pr)]
+    };
+    return {attrs: 'class="pr-row" data-crm-id="' + esc(x.id) + '" tabindex="0"', cells: order.map(function(k){ return C[k][0]; }), vals: order.map(function(k){ return C[k][1]; })};
   }), crmRender, multi ? "crm-main crm-mine-t" : "crm-main");
 }
 function wireCrm(){

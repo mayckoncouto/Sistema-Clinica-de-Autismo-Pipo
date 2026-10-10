@@ -3321,3 +3321,4 @@ com a quantidade. Banco: gatilho `task_lists_guard` (BEFORE UPDATE em `documents
 lista ou status com tarefas. Migração `supabase/2026-10-10j-crm-lista-com-tarefas.sql` (testada no PGlite). Ajuda (CRM) e
 teste no fim de `tests/run_agd_done.js`. `conferencia-migracoes.sql` ganhou as linhas 76 (10i) e 77 (10j).
 - Produção (2026-10-10): `2026-10-10j-crm-lista-com-tarefas` rodada (conferência 1 | 1).
+- (2026-10-10, pedido do usuário) Tabela da tela CRM e de Minhas tarefas: **Lista, Status, Tarefa, Paciente ou Lead**, Convênio, Responsáveis, Vencimento, Prioridade (`order` em `crmRender`; células montadas por chave). Listas continuam Status, Paciente ou Lead, Tarefa… Celular (`.crm-mine-t`): esconde 1, 3, 5, 6 (fica Status, Paciente, Venc., Prio.).
