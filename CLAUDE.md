@@ -3734,4 +3734,4 @@ locais; permissão própria **Conector Claude** (`conector_claude`, ver; grupo M
   Continuam na página do link (agradecimento), na mensagem do link e nas impressões. `api/config.js` ainda devolve `redes`
   (a página do link usa).
 - Produção (2026-10-10): conector "Clínica Pipo" ligado no Claude pelo usuário (registro automático/DCR) e testado
-  (listar_listas, listar_tarefas OK; `mcp_calls` grava `app = "Claude"`). Escrita ainda desligada.
+  (listar_listas, listar_tarefas OK; `mcp_calls` grava `app = "Claude"`). Escrita ligada pelo usuário (secret `PIPO_MCP_ESCRITA=1`, 2026-10-10).
