@@ -227,6 +227,8 @@ const path = require('path');
   await page.fill('#crmLResp', 'Pai Teste');
   await page.dispatchEvent('#crmWho', 'input');
   await page.waitForSelector('#crmRegPat:not([hidden])', {timeout: 10000}).catch(() => {});
+  const rpPos = await page.evaluate(() => { const b = document.getElementById('crmRegPat'), t = document.querySelector('#crmLeadBox .crm-sec-t'), box = document.getElementById('crmLeadBox'); if (!b || !t) return null; const rb = b.getBoundingClientRect(), rt = t.getBoundingClientRect(), rx = box.getBoundingClientRect(); return {inBox: box.contains(b), sameLine: Math.abs((rb.top + rb.bottom) / 2 - (rt.top + rt.bottom) / 2) < 8, right: Math.abs(rb.right - rx.right) < 4}; });
+  check('"Cadastrar paciente" on the Dados do lead title line, at the right edge?', rpPos && rpPos.inBox && rpPos.sameLine && rpPos.right, JSON.stringify(rpPos));
   await page.click('#crmRegPat');
   await page.waitForSelector('#ovPat');
   const pre = await page.evaluate(() => ({nome: document.getElementById('pNome').value, nasc: document.getElementById('pNasc').value}));
