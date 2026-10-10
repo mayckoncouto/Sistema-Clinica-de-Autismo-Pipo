@@ -3372,3 +3372,4 @@ inexistentes), Prontuário e Plano Terapêutico de paciente inexistente, evoluç
 só com planos encerrados, Planner (paciente inexistente, dia fechado na Clínica), bloqueios de horário soltos,
 usuário/colaborador/profissional desligados, id repetido nas listas. Complementa `conferencia-dos-dados.sql`.
 Testada no PGlite (também com CRLF). Correções só depois do resultado, em migração própria.
+- Produção (2026-10-10): conferência de integridade rodada — as 25 verificações deram 0 (nenhuma sobra).
