@@ -3692,3 +3692,7 @@ Pontos encontrados e decisões do usuário (todas as correções aprovadas):
   link de cadastro aberto, 5 caminhos de busca fixos, 6 regras rápidas — feitas com `alter policy`). FALTA só
   `drop table if exists public.planner_backups;` — o conector trava em comando que apaga (espera uma confirmação que
   não aparece); esse o usuário roda no SQL Editor. Dica: no conector, mudar regra com `alter policy` (não drop/create).
+- (2026-10-10, pedido do usuário, SUBSTITUI "cada cartão de lista ocupa a largura da tela e desliza") Tela CRM no
+  celular: cartões das listas em **três por linha** (`.crm-home-grid` grid de 3 colunas, sem rolagem lateral), cada um
+  mais alto (mín. 104px) com o nome (13px, quebra só entre palavras) e os números um embaixo do outro
+  (abertas / vencidas / comigo). Teste em `run_crm_mobile.js`.

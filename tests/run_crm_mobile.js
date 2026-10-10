@@ -141,11 +141,13 @@ const path = require('path');
   await page.click('#crmLBody .crm-lrow:first-child [data-ledit]'); await page.waitForTimeout(150);
   const over = await page.$$eval('#ovCrmL .therapist-row .rm', (l) => l.filter((b) => b.getBoundingClientRect().right > 390).length);
   check('Listas e status: nothing past the screen edge?', over === 0, over);
-  // Tela CRM: cada cartão de lista ocupa a largura da tela (desliza para o lado).
+  // Tela CRM: três cartões por linha, nome e números um embaixo do outro, nada passa da tela.
   await ev('crmGo("__home")'); await page.waitForTimeout(300);
-  const hc = await page.evaluate(() => { const g = document.getElementById('crmHomeGrid'), c = g && g.querySelector('.crm-home-card'); if (!c) return null;
-    const gs = getComputedStyle(g), inner = g.clientWidth - parseFloat(gs.paddingLeft) - parseFloat(gs.paddingRight); return {w: Math.round(c.getBoundingClientRect().width), inner: Math.round(inner)}; });
-  check('CRM home: each list card fills the screen width?', hc && Math.abs(hc.w - hc.inner) <= 2, JSON.stringify(hc));
+  const hc = await page.evaluate(() => { const cs = Array.from(document.querySelectorAll('#crmHomeGrid .crm-home-card')); if (cs.length < 3) return null;
+    const r = cs.map((c) => c.getBoundingClientRect());
+    return {row1: r.filter((x) => Math.abs(x.top - r[0].top) < 2).length, over: r.filter((x) => x.right > 390).length,
+      h: Math.round(r[0].height), stacked: getComputedStyle(cs[0].querySelector('.crm-home-nums')).flexDirection}; });
+  check('CRM home (phone): 3 cards per row, stacked numbers, inside the screen?', hc && hc.row1 === 3 && hc.over === 0 && hc.stacked === 'column' && hc.h >= 100, JSON.stringify(hc));
   const hv = await page.$$eval('#crmHost .pat-table thead th', (r) => r.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.textContent.trim()));
   check('CRM home list (phone): Status, Tarefa, Venc., Prio.?', hv.length === 4 && /Status/i.test(hv[0]) && /Tarefa/i.test(hv[1]), hv);
   check('no JS errors?', errors.length === 0, errors);
