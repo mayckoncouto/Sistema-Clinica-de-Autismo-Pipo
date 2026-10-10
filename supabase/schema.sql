@@ -5353,24 +5353,25 @@ $$;
 
 create or replace function public.intake_form(p_token text)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare l public.intake_links; c jsonb; st text; org jsonb;
+declare l public.intake_links; c jsonb; st text; org jsonb; cf jsonb;
 begin
   select * into l from public.intake_links where token = p_token;
   st := public.intake_link_state(l);
   if st <> 'ok' then return jsonb_build_object('ok', false, 'motivo', st); end if;
   select data into c from public.documents where path = 'config/clinic';
   c := coalesce(c, '{}'::jsonb);
+  select data -> 'link' -> (case when l.kind = 'geral' then 'geral' else 'individual' end) into cf from public.documents where path = 'config/patient_fields';
   org := public.intake_names('config/origins');
   if org = '[]'::jsonb then org := '["Indicação médica", "Indicação de outro paciente", "Escola", "Convênio", "Internet / redes sociais", "Outro"]'::jsonb; end if;
   return jsonb_build_object('ok', true, 'kind', l.kind, 'nome', l.nome, 'prefill', l.prefill,
     'clinica', jsonb_build_object('nome', coalesce(c ->> 'nome', ''), 'subtitulo', coalesce(c ->> 'subtitulo', ''), 'logo', coalesce(c ->> 'logo', ''),
                                   'telefone', coalesce(c ->> 'telefone', ''), 'cor', coalesce(c ->> 'corBotoes', ''), 'corTexto', coalesce(c ->> 'corTexto', '')),
-    'convenios', public.intake_names('config/convenios'), 'origens', org);
+    'convenios', public.intake_names('config/convenios'), 'origens', org, 'campos', coalesce(cf, '{}'::jsonb));
 end $$;
 
 create or replace function public.intake_send(p_token text, p_data jsonb)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
-declare l public.intake_links; st text; k text; v text; clean jsonb := '{}'::jsonb; tid uuid; lst text; sts text;
+declare l public.intake_links; st text; k text; v text; clean jsonb := '{}'::jsonb; tid uuid; lst text; sts text; cf jsonb; fk text; miss text[] := '{}';
   keys text[] := array['nome', 'nascimento', 'cpf', 'sexo', 'respNome', 'respParentesco', 'telefone', 'email', 'cep', 'rua', 'numero',
                        'compl', 'bairro', 'cidade', 'uf', 'convenio', 'diagnostico', 'laudo', 'escola', 'escolaTurno', 'comoConheceu', 'obs'];
 begin
@@ -5385,6 +5386,18 @@ begin
   if coalesce(clean ->> 'nome', '') = '' or coalesce(clean ->> 'telefone', '') = '' or coalesce((p_data ->> 'consentimento')::boolean, false) = false then
     return jsonb_build_object('ok', false, 'motivo', 'obrigatorio');
   end if;
+  -- Obrigatórios escolhidos em Campos obrigatórios (config/patient_fields.link.individual | geral).
+  select data -> 'link' -> (case when l.kind = 'geral' then 'geral' else 'individual' end) into cf from public.documents where path = 'config/patient_fields';
+  if cf is null then cf := '{"nascimento": {"req": true}, "cpf": {"req": true}, "responsavel": {"req": true}}'::jsonb; end if;
+  for fk in select key from jsonb_each(case when jsonb_typeof(cf) = 'object' then cf else '{}'::jsonb end) where coalesce((value ->> 'req')::boolean, false) loop
+    if fk = 'responsavel' then
+      if coalesce(clean ->> 'respNome', '') = '' or coalesce(clean ->> 'respParentesco', '') = '' then miss := miss || fk; end if;
+    elsif fk = 'endereco' then
+      if coalesce(clean ->> 'cep', '') = '' or coalesce(clean ->> 'numero', '') = '' or coalesce(clean ->> 'rua', '') = '' or coalesce(clean ->> 'cidade', '') = '' then miss := miss || fk; end if;
+    elsif fk = any(keys) and coalesce(clean ->> fk, '') = '' then miss := miss || fk;
+    end if;
+  end loop;
+  if array_length(miss, 1) > 0 then return jsonb_build_object('ok', false, 'motivo', 'obrigatorio', 'campos', to_jsonb(miss)); end if;
   clean := clean || jsonb_build_object('consentimento', true, 'consentimentoEm', now());
   if l.kind = 'geral' and (select count(*) from public.intake_submissions where kind = 'geral' and created_at > now() - interval '1 hour') >= 40 then
     return jsonb_build_object('ok', false, 'motivo', 'limite');

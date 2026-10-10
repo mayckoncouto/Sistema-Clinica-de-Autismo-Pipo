@@ -123,7 +123,57 @@ const path = require('path');
     return route.fulfill({status: 404, body: ''});
   });
   await pub.goto('http://pipo.test/cadastro?t=old'); await pub.waitForTimeout(300);
+  // Campos do link escolhidos em Campos obrigatórios: some o CPF, Escola vira obrigatória.
+  await pub.unroute('http://pipo.test/**');
+  sent = null;
+  await pub.route('http://pipo.test/**', (route) => {
+    const u = route.request().url();
+    if (/\/cadastro\?/.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
+    if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
+    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'geral', nome: '', prefill: {}, clinica: {nome: 'C'}, convenios: [], origens: [],
+      campos: {cpf: {show: false, req: false}, nascimento: {show: true, req: false}, responsavel: {show: false, req: false}, escola: {show: true, req: true}, endereco: {show: false, req: false}}})});
+    if (/rpc\/intake_send/.test(u)) { sent = JSON.parse(route.request().postData()); return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true})}); }
+    return route.fulfill({status: 404, body: ''});
+  });
+  await pub.goto('http://pipo.test/cadastro?t=g'); await pub.waitForSelector('#frm');
+  const shownIds = await pub.$$eval('#frm input, #frm select, #frm textarea', (a) => a.map((x) => x.id));
+  check('link fields follow the configuration (no CPF/responsável/endereço; escola required)?', shownIds.indexOf('cpf') === -1 && shownIds.indexOf('respNome') === -1 && shownIds.indexOf('cep') === -1 &&
+    await pub.$eval('#escola', (e) => e.required) && !(await pub.$eval('#nascimento', (e) => e.required)), shownIds);
+  await pub.fill('#nome', 'Ze'); await pub.fill('#telefone', '47955554444'); await pub.check('#consent'); await pub.click('#send'); await pub.waitForTimeout(100);
+  check('configured required field (escola) blocks sending?', sent === null && await pub.$eval('#escola', (e) => e.classList.contains('bad')));
+  await pub.fill('#escola', 'Escola Y'); await pub.click('#send'); await pub.waitForTimeout(300);
+  check('sends with only the configured fields?', sent && sent.p_data.escola === 'Escola Y' && /Cadastro enviado/.test(await pub.textContent('#box')), sent && sent.p_data);
+  await pub.unroute('http://pipo.test/**');
+  await pub.route('http://pipo.test/**', (route) => {
+    const u = route.request().url();
+    if (/\/cadastro\?/.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
+    if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
+    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: false, motivo: 'usado'})});
+    return route.fulfill({status: 404, body: ''});
+  });
+  await pub.goto('http://pipo.test/cadastro?t=old'); await pub.waitForTimeout(300);
   check('used link shows "Link indisponível"?', /Link indisponível/.test(await pub.textContent('#box')) && /já foi usado/.test(await pub.textContent('#box')));
+
+  // Janela Campos obrigatórios: colunas Aparece, Link rápido, Link fixo e Obrigatório numa tabela só.
+  await page.bringToFront();
+  await ev('openPatientFieldsModal()'); await page.waitForSelector('#ovPf');
+  const hd = await page.$$eval('#ovPf thead th', (a) => a.map((x) => x.textContent));
+  const lockNome = await page.$eval('tr[data-pfk="nome"] [data-pfx="fixo"]', (e) => e.disabled && e.checked);
+  check('Campos obrigatórios columns: Campo, Aparece, Link rápido, Link fixo, Obrigatório (Nome locked)?', JSON.stringify(hd) === '["Campo","Aparece","Link rápido","Link fixo","ObrigatórioObrig."]' && lockNome, hd);
+  check('link-only fields (Responsável, Convênio, Laudo) listed?', (await page.$$('tr[data-lonly]')).length === 3);
+  const fit = await page.evaluate(() => { const m = document.querySelector('#ovPf .modal-body'); return m.scrollWidth <= m.clientWidth + 1; });
+  check('table fits the window (no sideways scroll)?', fit);
+  await page.setViewportSize({width: 390, height: 800}); await page.waitForTimeout(200);
+  const fitM = await page.evaluate(() => { const m = document.querySelector('#ovPf .modal-body'); return m.scrollWidth <= m.clientWidth + 1; });
+  check('table fits a phone screen?', fitM);
+  await page.setViewportSize({width: 1300, height: 850}); await page.waitForTimeout(200);
+  await page.uncheck('tr[data-pfk="cpf"] [data-pfx="fixo"]');
+  await page.check('tr[data-pfk="escolaId"] [data-pfx="req"]');
+  await page.uncheck('tr[data-pfk="escolaId"] [data-pfx="rapido"]');
+  await page.click('#pfSave'); await page.waitForTimeout(300);
+  const lk = await ev('({link: state.patientLink, esc: state.patientFields.escolaId})');
+  check('saved: CPF out of the fixed link; escola required in the fixed link and in the cadastro, not in the quick link?', lk.link.geral.cpf.show === false && lk.link.individual.cpf.show === true &&
+    lk.link.geral.escola.req === true && lk.link.individual.escola.show === false && lk.link.individual.escola.req === false && lk.esc.req === true && lk.esc.show === true, lk);
 
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();

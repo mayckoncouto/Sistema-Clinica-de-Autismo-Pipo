@@ -96,7 +96,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (82, '2026-10-10o-colaborador-sem-jornada',       not exists(select 1 from public.staff where data ? 'jornada'), 'só dados: SIM = nenhum colaborador com jornada'),
  (83, '2026-10-10p-retirada-pela-filiacao',        not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') e where d.path = 'patients/all' and e ? 'rotinaOff'), 'só dados: SIM = nenhum paciente com rotinaOff'),
  (84, '2026-10-10q-crm-lead-vira-paciente',        exists(select 1 from fx where proname = 'tasks_history' and prosrc like '%''paciente''%'), ''),
- (85, '2026-10-10r-link-de-cadastro',              exists(select 1 from fx where proname = 'intake_send'), '')
+ (85, '2026-10-10r-link-de-cadastro',              exists(select 1 from fx where proname = 'intake_send'), ''),
+ (86, '2026-10-10s-campos-do-link',                exists(select 1 from fx where proname = 'intake_send' and prosrc like '%patient_fields%'), '')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

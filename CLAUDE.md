@@ -3513,3 +3513,17 @@ Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead �
   com o Supabase simulado). Ajuda: tópico "link-cadastro".
 - Produção (2026-10-10): `2026-10-10o` (0), `2026-10-10p` (0 | 0 | 0), `2026-10-10q` (0 | 1) e
   `2026-10-10r` (2 tabelas | 3 funções) rodadas.
+- (2026-10-10, pedido do usuário) **Campos do link escolhidos em Campos obrigatórios**: a janela
+  `openPatientFieldsModal` é UMA tabela (pedido do usuário) com as colunas Campo | Aparece | Link rápido
+  (link do paciente) | Link fixo (link geral) | Obrigatório; Obrigatório vale no cadastro e nos links em que o
+  campo aparece. `LINK_OF_FIELD` liga o campo do cadastro ao do link (`tr[data-pfk][data-lfk]`); `LINK_ONLY`
+  (responsavel, convenio, laudo) fica no grupo "Só no link de cadastro" (`tr[data-lonly]`). No celular os
+  títulos encolhem ("Obrig."). `LINK_FIELDS` (nome e telefone travados,
+  padrão obrigatório: nascimento, CPF, responsável) e `linkFieldCfg(which, key)`; grava
+  `config/patient_fields = {fields, link: {individual, geral}}` (`state.patientLink`). "Link do paciente"
+  vale para Enviar link de cadastro, Pedir atualização e o link da tarefa do CRM. `cadastro.html` mostra só
+  os campos que aparecem (`cfg`, `shown`, `required`; grupos responsavel = respNome+respParentesco,
+  endereco = cep/numero/rua/compl/bairro/cidade/uf, obrigatório = cep, número, rua, cidade). Banco:
+  `intake_form` devolve `campos`; `intake_send` recusa sem os obrigatórios (`motivo obrigatorio`, `campos`).
+  Migração `supabase/2026-10-10s-campos-do-link.sql`. Mudou a lista de campos do formulário? Ajustar
+  `LINK_FIELDS` no index.html, `cadastro.html` e as chaves de `intake_send`.

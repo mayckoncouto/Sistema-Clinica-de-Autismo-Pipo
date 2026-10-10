@@ -1890,6 +1890,8 @@ body.pat-col-resizing *{user-select:none}
 .pf-table td{padding:6px 8px;border-bottom:1px solid var(--line)}
 .pf-table .pf-chk{text-align:center;width:90px}
 .pf-table th:nth-child(n+2){text-align:center}
+.pf-table .pf-na{color:var(--muted)}
+.pf-table5 th:nth-child(n+2){width:76px;font-size:10.5px;line-height:1.2}
 .pf-table .pf-sec td{background:var(--surface-2);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
 .reg-pick .dp-btn{flex:1;min-width:0}
 /* Botão "+" ao lado das listas de cadastro: quadrado do tamanho do campo, "+" centralizado na cor do sistema. */
@@ -2227,7 +2229,11 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .pm-inline{flex-wrap:wrap}
   .pm-inline input{flex:1 1 100%}
   .pm-modal .pm-inline .btn{flex:1 1 auto;min-height:40px}
-  .pf-table .pf-chk{width:64px}
+  .pf-table .pf-chk,.pf-table5 th:nth-child(n+2){width:52px}
+  .pf-table5{table-layout:fixed}
+  .pf-table5 th:nth-child(n+2){padding:6px 2px;font-size:9.5px;letter-spacing:0;overflow-wrap:anywhere}
+  .pf-table5 td.pf-chk{padding:6px 2px}
+  .pf-table5 .pm-lg{display:none} .pf-table5 .pm-sm{display:inline}
   /* Barra em duas linhas: data, ‹ Hoje ›, ? e + / busca na largura toda */
   #tab-agenda .agd-toolbar{flex-wrap:wrap;overflow:visible;row-gap:8px;padding:10px 12px}
   #tab-agenda .agd-toolbar{column-gap:6px}
@@ -4106,6 +4112,7 @@ var state = {
   councils: [],          // conselhos [{id,sigla,name}] (config/councils); vazio = padrão (councilList)
   cbos: [],              // CBO [{id,code,name}] (config/cbo); vazio = sugestões (cboList)
   patientFields: {},     // {campo:{show,req}} (config/patient_fields)
+  patientLink: {},       // {individual: {campo:{show,req}}, geral: {...}} (config/patient_fields.link)
   cancelReasons: [],     // motivos de cancelamento dos tratamentos [{id,name}] (config/cancel_reasons)
   services: [],          // serviços [{id,name}] (Sessão, Triagem…), from db — tela Profissionais › Serviços
   professionals: [],     // staff registry [{id,name,specialtyId}], from db
@@ -5165,6 +5172,7 @@ function subscribeSimpleLists(){
   });
   db.doc("config/patient_fields").onSnapshot(function(snap){
     state.patientFields = (snap.exists && snap.data() && snap.data().fields) || {};
+    state.patientLink = (snap.exists && snap.data() && snap.data().link) || {};
   }, function(){});
 }
 // ---- Cadastros em lista: grava só o que mudou e confere quem mexeu antes (2026-10-10) ----
@@ -11382,25 +11390,69 @@ function openPatientModal(p, opts){
 }
 
 // Pacientes → Outras opções → "Campos obrigatórios": quais campos aparecem e quais são obrigatórios.
+// Campos do formulário do link de cadastro (cadastro.html). Mesma lista na página pública
+// (LINK_FIELDS de cadastro.html) e na função intake_send do banco (obrigatórios).
+var LINK_FIELDS = [
+  {key: "nome", label: "Nome do paciente", lock: true, req: true},
+  {key: "nascimento", label: "Data de nascimento", req: true},
+  {key: "cpf", label: "CPF do paciente", req: true},
+  {key: "sexo", label: "Sexo"},
+  {key: "responsavel", label: "Responsável e parentesco", req: true},
+  {key: "telefone", label: "Telefone / WhatsApp", lock: true, req: true},
+  {key: "email", label: "E-mail"},
+  {key: "endereco", label: "Endereço", hint: "CEP, número, rua, bairro, cidade e UF"},
+  {key: "convenio", label: "Convênio"},
+  {key: "comoConheceu", label: "Como conheceu a clínica"},
+  {key: "diagnostico", label: "Diagnóstico ou suspeita"},
+  {key: "laudo", label: "Tem laudo?"},
+  {key: "escola", label: "Escola"},
+  {key: "escolaTurno", label: "Turno da escola"},
+  {key: "obs", label: "Observações"}
+];
+function linkFieldCfg(which, key){
+  var f = LINK_FIELDS.filter(function(x){ return x.key === key; })[0] || {};
+  if (f.lock) return {show: true, req: true};
+  var c = ((state.patientLink || {})[which] || {})[key];
+  return c ? {show: !!c.show || !!c.req, req: !!c.req} : {show: true, req: !!f.req};
+}
+// Campo do cadastro ↔ campo do link (cadastro.html). Os do link sem campo no cadastro (Responsável e
+// parentesco, Convênio, Tem laudo?) aparecem no fim, no grupo "Só no link de cadastro".
+var LINK_OF_FIELD = {nome: "nome", nascimento: "nascimento", cpf: "cpf", sexo: "sexo", telefones: "telefone", emails: "email", endereco: "endereco",
+  comoConheceu: "comoConheceu", cid: "diagnostico", escolaId: "escola", escolaTurno: "escolaTurno", obs: "obs"};
+var LINK_ONLY = ["responsavel", "convenio", "laudo"];
 function openPatientFieldsModal(){
   if (!can("campos_paciente", "view")){ showToast(permDeniedMsg("campos_paciente", "view"), true); return; }
   var canEdit = can("campos_paciente", "edit");
   var host = document.getElementById("modalHost");
   var admin = patIsAdmin();
+  // Uma tabela: Aparece (cadastro do paciente), Link rápido (link do paciente: Enviar link de cadastro,
+  // Pedir atualização, tarefa do CRM), Link fixo (link geral da clínica) e Obrigatório (vale no cadastro
+  // e nos links em que o campo aparece). Nome e telefone são sempre obrigatórios nos links.
+  function chk(x, on, dis, lbl){ return '<td class="pf-chk"><input type="checkbox" data-pfx="' + x + '"' + (on ? ' checked' : '') + (dis || !canEdit ? ' disabled' : '') + ' aria-label="' + esc(lbl) + '"></td>'; }
+  function linkCells(lk, label){
+    if (!lk) return '<td class="pf-chk pf-na">—</td><td class="pf-chk pf-na">—</td>';
+    var lf = LINK_FIELDS.filter(function(x){ return x.key === lk; })[0] || {};
+    return chk("rapido", linkFieldCfg("individual", lk).show, lf.lock, "Link rápido: " + label) + chk("fixo", linkFieldCfg("geral", lk).show, lf.lock, "Link fixo: " + label);
+  }
   var rows = PAT_SECTIONS.map(function(sec){
-    return '<tr class="pf-sec"><td colspan="3">' + esc(sec.label) + '</td></tr>' + PAT_FIELDS.filter(function(f){ return f.sec === sec.id; }).map(function(f){
+    return '<tr class="pf-sec"><td colspan="5">' + esc(sec.label) + '</td></tr>' + PAT_FIELDS.filter(function(f){ return f.sec === sec.id; }).map(function(f){
       // Administrador: controle total (menos o Nome). Outros níveis não mexem no CPF nem em Filiação/Financeiro.
-      var cfg = patFieldCfg(f.key), show = cfg.show, req = cfg.req;
+      var cfg = patFieldCfg(f.key), lk = LINK_OF_FIELD[f.key] || "";
       var lockShow = f.lock || (!admin && (f.fixed || f.dfltReq)), lockReq = f.lock || (!admin && f.dfltReq);
-      return '<tr data-pfk="' + f.key + '"><td>' + esc(f.label) + (f.hint ? '<div class="pat-count">' + esc(f.hint) + '</div>' : '') + '</td>' +
-        '<td class="pf-chk"><input type="checkbox" data-pfx="show"' + (show ? ' checked' : '') + ((lockShow || !canEdit) ? ' disabled' : '') + ' aria-label="Aparece: ' + esc(f.label) + '"></td>' +
-        '<td class="pf-chk"><input type="checkbox" data-pfx="req"' + (req ? ' checked' : '') + ((lockReq || !canEdit) ? ' disabled' : '') + ' aria-label="Obrigatório: ' + esc(f.label) + '"></td></tr>';
+      return '<tr data-pfk="' + f.key + '"' + (lk ? ' data-lfk="' + lk + '"' : '') + '><td>' + esc(f.label) + (f.hint ? '<div class="pat-count">' + esc(f.hint) + '</div>' : '') + '</td>' +
+        chk("show", cfg.show, lockShow, "Aparece: " + f.label) + linkCells(lk, f.label) + chk("req", cfg.req, lockReq, "Obrigatório: " + f.label) + '</tr>';
     }).join("");
+  }).join("") +
+  '<tr class="pf-sec"><td colspan="5">Só no link de cadastro</td></tr>' + LINK_ONLY.map(function(k){
+    var lf = LINK_FIELDS.filter(function(x){ return x.key === k; })[0];
+    var req = linkFieldCfg("individual", k).req || linkFieldCfg("geral", k).req;
+    return '<tr data-lfk="' + k + '" data-lonly><td>' + esc(lf.label) + '</td><td class="pf-chk pf-na">—</td>' + linkCells(k, lf.label) + chk("req", req, false, "Obrigatório: " + lf.label) + '</tr>';
   }).join("");
-  host.innerHTML = '<div class="overlay" id="ovPf"><div class="modal" style="max-width:560px">' +
-    '<div class="modal-head"><div><h3>Campos obrigatórios</h3><div class="modal-sub">Escolha quais campos aparecem no cadastro de pacientes e quais precisam ser preenchidos para salvar. ' + (admin ? 'O Nome é sempre obrigatório; os demais campos você define.' : 'O Nome é sempre obrigatório. CPF, Filiação e Responsável financeiro só o Administrador muda.') + ' Esconder um campo não apaga o que já foi gravado nele.</div></div>' +
+  host.innerHTML = '<div class="overlay" id="ovPf"><div class="modal" style="max-width:640px">' +
+    '<div class="modal-head"><div><h3>Campos obrigatórios</h3><div class="modal-sub">Escolha os campos de cada formulário: <b>Aparece</b> = cadastro do paciente; <b>Link rápido</b> = link enviado ao paciente (Enviar link de cadastro, Pedir atualização e tarefa do CRM); <b>Link fixo</b> = link geral da clínica. <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece. ' +
+      (admin ? 'O Nome é sempre obrigatório; nos links, o telefone também.' : 'O Nome é sempre obrigatório; nos links, o telefone também. CPF, Filiação e Responsável financeiro só o Administrador muda.') + ' Esconder um campo não apaga o que já foi gravado nele.</div></div>' +
       '<button class="modal-close" id="pfClose" aria-label="Fechar">✕</button></div>' +
-    '<div class="modal-body"><table class="pf-table"><thead><tr><th>Campo</th><th>Aparece</th><th>Obrigatório</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="modal-body"><table class="pf-table pf-table5"><thead><tr><th>Campo</th><th>Aparece</th><th>Link rápido</th><th>Link fixo</th><th><span class="pm-lg">Obrigatório</span><span class="pm-sm">Obrig.</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="pfCancel">' + (canEdit ? "Cancelar" : "Fechar") + '</button>' +
       (canEdit ? '<button class="btn primary" id="pfSave">Salvar</button>' : '') + '</div></div></div>';
   var ov = document.getElementById("ovPf");
@@ -11409,21 +11461,26 @@ function openPatientFieldsModal(){
   document.getElementById("pfClose").addEventListener("click", close);
   document.getElementById("pfCancel").addEventListener("click", close);
   ov.addEventListener("change", function(e){
-    var tr = e.target.closest("tr[data-pfk]"); if (!tr) return;
+    var tr = e.target.closest("tr[data-pfk], tr[data-lfk]"); if (!tr) return;
     var sh = tr.querySelector('[data-pfx="show"]'), rq = tr.querySelector('[data-pfx="req"]');
-    if (e.target === rq && rq.checked) sh.checked = true;
-    if (e.target === sh && !sh.checked) rq.checked = false;
+    if (sh && e.target === rq && rq.checked && !sh.disabled) sh.checked = true;
+    if (sh && e.target === sh && !sh.checked && !rq.disabled) rq.checked = false;
   });
   var sv = document.getElementById("pfSave");
   if (sv) sv.addEventListener("click", function(){
-    var fields = {};
-    ov.querySelectorAll("tr[data-pfk]").forEach(function(tr){
-      var k = tr.getAttribute("data-pfk"); if (k === "nome") return;
-      fields[k] = {show: tr.querySelector('[data-pfx="show"]').checked, req: tr.querySelector('[data-pfx="req"]').checked};
+    var fields = {}, link = {individual: {}, geral: {}};
+    ov.querySelectorAll("tr[data-pfk], tr[data-lfk]").forEach(function(tr){
+      var k = tr.getAttribute("data-pfk"), lk = tr.getAttribute("data-lfk"), req = tr.querySelector('[data-pfx="req"]').checked;
+      if (k && k !== "nome") fields[k] = {show: tr.querySelector('[data-pfx="show"]').checked, req: req};
+      if (lk && !(LINK_FIELDS.filter(function(f){ return f.key === lk; })[0] || {}).lock){
+        var r = tr.querySelector('[data-pfx="rapido"]').checked, fx = tr.querySelector('[data-pfx="fixo"]').checked;
+        link.individual[lk] = {show: r, req: r && req};
+        link.geral[lk] = {show: fx, req: fx && req};
+      }
     });
-    state.patientFields = fields;
+    state.patientFields = fields; state.patientLink = link;
     if (!db){ close(); return; }
-    db.doc("config/patient_fields").set({fields: fields}).then(function(){ close(); showToast("Campos salvos."); }).catch(function(e){
+    db.doc("config/patient_fields").set({fields: fields, link: link}).then(function(){ close(); showToast("Campos salvos."); }).catch(function(e){
       var m = (e && e.message) || "";
       showToast(/check constraint|documents_path_valid/i.test(m) ? "Falta rodar a atualização do banco (cadastro do paciente)." : "Não foi possível salvar os campos.", true);
     });
@@ -19871,7 +19928,8 @@ var HELP_TOPICS = [
       "<b>Links enviados</b> (Outras opções) mostra a situação de cada link — Aguardando, Preenchido, Vencido ou Cancelado — com Copiar e Cancelar."
     ],
     rules: [
-      "O formulário pede: nome, nascimento e CPF do paciente, sexo, responsável e parentesco, telefone, e-mail, CEP e número, convênio, diagnóstico ou suspeita, se tem laudo, escola e turno, como conheceu a clínica, observações e a autorização da LGPD.",
+      "O formulário pode ter: nome, nascimento e CPF do paciente, sexo, responsável e parentesco, telefone, e-mail, endereço, convênio, diagnóstico ou suspeita, se tem laudo, escola e turno, como conheceu a clínica e observações, mais a autorização da LGPD.",
+      "Quais campos aparecem e quais são obrigatórios: Pacientes → Outras opções → <b>Campos obrigatórios</b>, colunas <b>Link rápido</b> (Enviar link de cadastro, Pedir atualização e o link da tarefa do CRM) e <b>Link fixo</b> (link geral da clínica). <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece; Responsável e parentesco, Convênio e “Tem laudo?” ficam no grupo “Só no link de cadastro”. Nome e telefone são sempre obrigatórios.",
       "O link do paciente vale 7 dias e uma vez só; o link geral não vence (gerar um novo desativa o anterior).",
       "Ao salvar um paciente novo vindo do link, nasce um tratamento <b>Ativo</b> só com o convênio informado (o resto do tratamento é preenchido depois). Se veio do CRM, a tarefa fica ligada ao paciente e os dados do lead saem da tarefa.",
       "CPF enviado igual ao de um paciente já cadastrado: o sistema pergunta se é uma atualização do cadastro dele.",

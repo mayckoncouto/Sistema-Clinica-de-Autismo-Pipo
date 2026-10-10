@@ -97,8 +97,22 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     cancelado: "Este link foi cancelado pela clínica. Peça um novo link, se precisar."};
   function stop(msg){ box.innerHTML = '<div class="done"><h2 style="color:var(--ink)">Link indisponível</h2><p class="muted">' + esc(msg) + '</p></div>'; }
 
+  // Campos escolhidos em Campos obrigatórios (Link do paciente / Link geral). Sem configuração,
+  // vale o padrão (mesmo LINK_FIELDS do sistema). Nome e telefone sempre obrigatórios.
+  var DEFAULT_REQ = {nome: 1, telefone: 1, nascimento: 1, cpf: 1, responsavel: 1};
+  var GROUP = {respNome: "responsavel", respParentesco: "responsavel", cep: "endereco", numero: "endereco", rua: "endereco", compl: "endereco", bairro: "endereco", cidade: "endereco", uf: "endereco"};
+  var ADDR_REQ = {cep: 1, numero: 1, rua: 1, cidade: 1};
+  function cfg(key){
+    if (key === "nome" || key === "telefone") return {show: true, req: true};
+    var c = (FORM.campos || {})[key];
+    return c ? {show: !!c.show || !!c.req, req: !!c.req} : {show: true, req: !!DEFAULT_REQ[key]};
+  }
+  function shown(id){ return cfg(GROUP[id] || id).show; }
+  function required(id){ var g = GROUP[id]; if (g === "endereco") return cfg(g).req && !!ADDR_REQ[id]; return cfg(g || id).req; }
   function f(id, label, opt){
     opt = opt || {};
+    if (!shown(id)) return "";
+    opt.req = required(id);
     var v = opt.value || "", req = opt.req ? ' <span class="req">*</span>' : "";
     var input = opt.select ? '<select id="' + id + '"' + (opt.req ? ' required' : '') + '><option value="">Selecione…</option>' + opt.select.map(function(o){ return '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join("") + '</select>'
       : opt.area ? '<textarea id="' + id + '">' + esc(v) + '</textarea>'
@@ -108,35 +122,36 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
   function render(){
     var p = FORM.prefill || {}, c = FORM.clinica || {}, upd = FORM.kind === "atualizacao";
     var convs = (FORM.convenios || []).concat(["Particular", "Outro"]);
+    function sec(title, html){ return html.replace(/<div><\/div>/g, "") ? '<div class="sec">' + title + '</div><div class="grid">' + html + '</div>' : ""; }
     var nome = c.nome || "a clínica";
     box.innerHTML =
       '<p class="intro">' + (upd ? "Confira os dados abaixo e corrija o que mudou. " : "Preencha os dados abaixo para o cadastro. ") +
         'Os campos com <span class="req">*</span> são obrigatórios. A clínica confere tudo antes de concluir o cadastro.</p>' +
       '<form id="frm" novalidate>' +
-      '<div class="sec">Paciente</div><div class="grid">' +
-        f("nome", "Nome completo do paciente", {req: true, wide: true, value: p.nome || FORM.nome || "", attrs: ' autocomplete="off"'}) +
-        f("nascimento", "Data de nascimento", {req: true, type: "date", value: p.nascimento}) +
-        f("cpf", "CPF do paciente", {req: true, value: fmtCpf(p.cpf), attrs: ' inputmode="numeric" placeholder="000.000.000-00"'}) +
-        f("sexo", "Sexo", {select: ["Feminino", "Masculino", "Outro"], value: p.sexo}) + '</div>' +
-      '<div class="sec">Responsável</div><div class="grid">' +
-        f("respNome", "Nome do responsável", {req: true, value: p.respNome, attrs: ' autocomplete="name"'}) +
-        f("respParentesco", "Parentesco", {req: true, select: ["Mãe", "Pai", "Avó", "Avô", "Outro"], value: p.respParentesco}) +
-        f("telefone", "Telefone / WhatsApp", {req: true, value: fmtPhone(p.telefone || FORM.telefone), attrs: ' inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000"'}) +
-        f("email", "E-mail", {type: "email", value: p.email, attrs: ' autocomplete="email"'}) + '</div>' +
-      '<div class="sec">Endereço</div><div class="grid">' +
+      sec("Paciente",
+        f("nome", "Nome completo do paciente", {wide: true, value: p.nome || FORM.nome || "", attrs: ' autocomplete="off"'}) +
+        f("nascimento", "Data de nascimento", {type: "date", value: p.nascimento}) +
+        f("cpf", "CPF do paciente", {value: fmtCpf(p.cpf), attrs: ' inputmode="numeric" placeholder="000.000.000-00"'}) +
+        f("sexo", "Sexo", {select: ["Feminino", "Masculino", "Outro"], value: p.sexo})) +
+      sec("Responsável",
+        f("respNome", "Nome do responsável", {value: p.respNome, attrs: ' autocomplete="name"'}) +
+        f("respParentesco", "Parentesco", {select: ["Mãe", "Pai", "Avó", "Avô", "Outro"], value: p.respParentesco}) +
+        f("telefone", "Telefone / WhatsApp", {value: fmtPhone(p.telefone || FORM.telefone), attrs: ' inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000"'}) +
+        f("email", "E-mail", {type: "email", value: p.email, attrs: ' autocomplete="email"'})) +
+      sec("Endereço",
         f("cep", "CEP", {value: fmtCep(p.cep), attrs: ' inputmode="numeric" placeholder="00000-000"', hint: "Preenche rua, bairro e cidade."}) +
         f("numero", "Número", {value: p.numero}) +
         f("rua", "Rua", {value: p.rua, wide: true}) +
         f("compl", "Complemento", {value: p.compl}) + f("bairro", "Bairro", {value: p.bairro}) +
-        f("cidade", "Cidade", {value: p.cidade}) + f("uf", "UF", {value: p.uf, attrs: ' maxlength="2"'}) + '</div>' +
-      '<div class="sec">Atendimento</div><div class="grid">' +
+        f("cidade", "Cidade", {value: p.cidade}) + f("uf", "UF", {value: p.uf, attrs: ' maxlength="2"'})) +
+      sec("Atendimento",
         f("convenio", "Convênio", {select: convs, value: p.convenio}) +
         f("comoConheceu", "Como conheceu a clínica", {select: FORM.origens || [], value: p.comoConheceu}) +
         f("diagnostico", "Diagnóstico ou suspeita", {value: p.diagnostico, wide: true, hint: "Ex.: autismo (TEA), suspeita de TEA, TDAH…"}) +
-        f("laudo", "Tem laudo?", {select: ["Sim", "Não", "Em avaliação"], value: p.laudo}) + '<div></div>' +
+        f("laudo", "Tem laudo?", {select: ["Sim", "Não", "Em avaliação"], value: p.laudo}) + (shown("laudo") ? '<div></div>' : '') +
         f("escola", "Escola", {value: p.escola}) +
         f("escolaTurno", "Turno da escola", {select: ["Manhã", "Tarde", "Integral", "Noite"], value: p.escolaTurno}) +
-        f("obs", "Observações", {area: true, wide: true, value: p.obs}) + '</div>' +
+        f("obs", "Observações", {area: true, wide: true, value: p.obs})) +
       '<label class="consent"><input type="checkbox" id="consent"> <span>Autorizo ' + esc(nome) + ' a usar estes dados para o cadastro e o atendimento do paciente, conforme a Lei Geral de Proteção de Dados (LGPD). <span class="req">*</span></span></label>' +
       '<div id="err"></div>' +
       '<button class="btn" type="submit" id="send">Enviar cadastro</button>' +
@@ -153,7 +168,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       if (t.id === "uf") t.value = t.value.toUpperCase();
       t.classList.remove("bad");
     });
-    document.getElementById("cep").addEventListener("change", function(){
+    if (document.getElementById("cep")) document.getElementById("cep").addEventListener("change", function(){
       var d = digits(this.value); if (d.length !== 8) return;
       fetch("https://viacep.com.br/ws/" + d + "/json/").then(function(r){ return r.json(); }).then(function(j){
         if (!j || j.erro) return;
@@ -163,8 +178,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     frm.addEventListener("submit", function(e){
       e.preventDefault();
       var err = document.getElementById("err"), bad = [];
-      function val(id){ return document.getElementById(id).value.trim(); }
-      ["nome", "nascimento", "cpf", "respNome", "respParentesco", "telefone"].forEach(function(id){ if (!val(id)){ bad.push(id); } });
+      function val(id){ var el = document.getElementById(id); return el ? el.value.trim() : ""; }
+      Array.prototype.forEach.call(frm.querySelectorAll("[required]"), function(el){ if (!el.value.trim()) bad.push(el.id); });
       if (val("cpf") && !cpfOk(val("cpf"))) bad.push("cpf");
       if (val("telefone") && digits(val("telefone")).length < 10) bad.push("telefone");
       if (val("email") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val("email"))) bad.push("email");
@@ -185,6 +200,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         var m = r && r.motivo;
         if (STOP[m]) { stop(STOP[m]); return; }
         btn.disabled = false; btn.textContent = "Enviar cadastro";
+        if (m === "obrigatorio" && r.campos) r.campos.forEach(function(k){ var el = document.getElementById(k === "responsavel" ? "respNome" : k === "endereco" ? "cep" : k); if (el) el.classList.add("bad"); });
         err.innerHTML = '<div class="msg err">' + (m === "limite" ? "Muitos cadastros enviados agora. Tente de novo em alguns minutos." : "Não foi possível enviar. Confira os campos obrigatórios e tente de novo.") + '</div>';
       }, function(){ btn.disabled = false; btn.textContent = "Enviar cadastro"; err.innerHTML = '<div class="msg err">Sem conexão com a clínica agora. Tente de novo em instantes.</div>'; });
     });
