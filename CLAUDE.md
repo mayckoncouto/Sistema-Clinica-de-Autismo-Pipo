@@ -3412,6 +3412,10 @@ Toda tela, lista, janela ou campo novo segue isto (e o que já existe foi corrig
 8. **Janelas**: rodapé Excluir à esquerda, Cancelar, Salvar; sem permissão = só leitura (`modalApplyPerms`);
    item em uso = Inativar; toda exclusão com `confirmDialog`.
 9. **Ajuda**: toda função nova entra no `HELP_TOPICS` (aspas curvas no texto).
+10. **Título da tela**: toda tela de cadastro tem o título no começo da barra (`h2.cad-title`, posto por
+   `cadTitlesInit()` no boot pelo mapa `cadTitleText`): no computador antes da busca, no celular na 1ª
+   linha. Tela nova de cadastro: acrescentar a chave em `cadTitleText`/`cadTitlesInit` e em
+   `tests/run_cad_titles.js`.
 - (2026-10-10, pedidos do usuário) Janela da tarefa do CRM: etiqueta "Paciente cadastrado"/"Lead (sem cadastro)" (`#crmWhoTag`) ao lado do título "Dados do Paciente/Lead" (`.crm-sec-tw`), fora do campo. Janela com a altura da tela (`calc(100dvh - 32px)`, acompanha F11); a **Descrição ocupa o espaço livre** da coluna (`fitDesc` em `crmOpenTask`, refeito no `resize`; mínimo 4 linhas, só então a coluna rola) — o espaço entre os campos não muda.
 
 ## Tratamento: especialidades em quadros (2026-10-10)
@@ -3537,3 +3541,10 @@ Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead �
   a rolagem. Teste `tests/run_autolist.js`. No celular, o painel de várias opções (`.ms-panel.ms-sheet`: Tipos e
   Serviços do colaborador) ficou igual às outras janelas de baixo (82% da tela, opções de 52px com linha,
   animação de subida).
+- (2026-10-10, pedido do usuário) **Título nas telas de cadastro** ("não sei qual cadastro estou"): Pacientes,
+  Tratamentos, Convênios, Motivos de cancelamento, Médicos, Escolas, Diagnósticos, Origens, Colaboradores, Tipos de
+  colaborador, Especialidades, Serviços, CBO, Conselhos, Salas / Grupos de Suporte (troca com o botão), Feriados e
+  recessos, Status, e os do Prontuário: Objetivos, Escalas, Habilidades. `.cad-title` (17px; celular 18px, `order:-10`,
+  linha inteira). Teste `tests/run_cad_titles.js`.
+- (2026-10-10, pedido do usuário) Campos obrigatórios: títulos das colunas presos no alto ao rolar a janela
+  (`#ovPf .pf-table thead th` sticky, `top:-4px` = padding de cima do `.modal-body`). Teste em `run_intake.js`.
