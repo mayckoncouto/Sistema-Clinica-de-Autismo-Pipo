@@ -5185,3 +5185,33 @@ begin
 end $$;
 grant execute on function public.crm_task_usage() to authenticated;
 revoke execute on function public.crm_task_usage() from anon;
+
+-- ---------------------------------------------------------------------
+-- Renomear Diagnóstico/Origem/Convênio atualiza saúde e leads (2026-10-10k)
+-- ---------------------------------------------------------------------
+create or replace function public.rename_registry_text(p_kind text, p_old text, p_new text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_key text; v_mod text; n_health int := 0; n_tasks int := 0;
+begin
+  v_key := case p_kind when 'diagnosticos' then 'diagnostico' when 'origens' then 'origem' when 'convenios' then 'convenio' end;
+  v_mod := p_kind;
+  if v_key is null then raise exception 'Cadastro desconhecido: %', p_kind using errcode = '22023'; end if;
+  if not (public.is_admin() or public.has_perm(v_mod, 'edit')) then
+    raise exception 'Seu nível não pode editar este cadastro.' using errcode = '42501';
+  end if;
+  if coalesce(trim(p_old), '') = '' or coalesce(trim(p_new), '') = '' or lower(trim(p_old)) = lower(trim(p_new)) then
+    return jsonb_build_object('saude', 0, 'tarefas', 0);
+  end if;
+  if p_kind = 'diagnosticos' then
+    update public.patient_health set data = jsonb_set(data, '{cid}', to_jsonb(trim(p_new)))
+     where lower(trim(data ->> 'cid')) = lower(trim(p_old));
+    get diagnostics n_health = row_count;
+  end if;
+  update public.tasks set lead = jsonb_set(lead, array[v_key], to_jsonb(trim(p_new)))
+   where lead is not null and lower(trim(lead ->> v_key)) = lower(trim(p_old));
+  get diagnostics n_tasks = row_count;
+  return jsonb_build_object('saude', n_health, 'tarefas', n_tasks);
+end $$;
+grant execute on function public.rename_registry_text(text, text, text) to authenticated;
+revoke execute on function public.rename_registry_text(text, text, text) from anon;

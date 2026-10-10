@@ -170,6 +170,23 @@ const path = require('path');
   })()`);
   check('CRM: status e lista com tarefas não saem (com a contagem)?', cl.left === 2 && /2 tarefas/.test(cl.toasts[0] || '') && /2 tarefas/.test(cl.toasts[1] || ''), cl);
 
+  // Item 13: renomear Diagnóstico/Origem/Convênio troca o texto em pacientes, tratamentos e leads.
+  const rn = await ev(`(function(){
+    var p = state.patientsRaw[0], pid = p.id, savedT = CRM.tasks, savedTr = state.treatments;
+    state.patientsRaw = state.patientsRaw.map(function(x){ return x.id === pid ? Object.assign({}, x, {comoConheceu: "Instagram", cid: "F84.0 Autismo infantil"}) : x; });
+    state.treatments = savedTr.concat([{id: "trx", patientId: "zz", inicio: "2026-01-01", status: "cancelado", convenio: "unimed velha"}]);
+    rebuildPatients();
+    CRM.tasks = {t9: {id: "t9", list_id: "atend", status: "novo", lead: {nome: "L", origem: "instagram", diagnostico: "F84.0 Autismo infantil", convenio: "Unimed Velha"}}};
+    return Promise.all([regRenameEverywhere("origens", "Instagram", "Redes sociais", "x"), regRenameEverywhere("diagnosticos", "F84.0 Autismo infantil", "F84.0 Autismo", "y")])
+      .then(function(){ return regRenameEverywhere("convenios", "Unimed Velha", "Unimed", "cv"); })
+      .then(function(){
+        var r = rawPatient(pid), l = CRM.tasks.t9.lead, t = state.treatments.filter(function(x){ return x.id === "trx"; })[0];
+        var out = [r.comoConheceu, r.cid, l.origem, l.diagnostico, l.convenio, t.convenio];
+        CRM.tasks = savedT; state.treatments = savedTr; return out;
+      });
+  })()`);
+  check('rename registry text: patients, leads and treatments updated?', rn.join('|') === 'Redes sociais|F84.0 Autismo|Redes sociais|F84.0 Autismo|Unimed|Unimed', rn);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}

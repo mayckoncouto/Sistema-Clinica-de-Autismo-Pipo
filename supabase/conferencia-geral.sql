@@ -180,6 +180,7 @@ exp_fn(n, h) as (values
   ('profiles_professional_name', 'b9717cbf5bb69a45cceb5e0179d6e38f'),
   ('rename_group', '6527273319704135e202356fe1dbe22b'),
   ('rename_patient', 'a4288cc6b532671226bbaaf9033d8e62'),
+  ('rename_registry_text', '9f069188e2e0d850c5c33076fa87041b'),
   ('report_appointments_with_records', '77a2528de8b2ee67592205d08fabf26d'),
   ('roles_before_delete', '391b19dbc8f2c11b1dfe899ed1a421b7'),
   ('roles_before_insert', 'a2b3e5fc51f2527f4113864f9bcf414d'),

@@ -3181,8 +3181,9 @@ Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A re
 - ~~MÉDIA 10~~ FEITO (2026-10-10, ver "Especialidade, Escala e Habilidade em uso" abaixo).
 - ~~MÉDIA 11~~ FEITO (2026-10-10, ver "CRM: lista ou status com tarefas" abaixo).
 - ~~MÉDIA 12~~ FEITO (2026-10-10, ver "Importação de Tratamentos: valores do tratamento da migração" abaixo).
-- BAIXA 13–16: renomear Diagnóstico/Origem/Convênio não propaga (texto guardado); excluir usuário deixa o código nos
-  responsáveis das tarefas; excluir tarefa apaga comentários; fechar dia da clínica esconde agendamentos do Planner.
+- ~~BAIXA 13~~ FEITO (2026-10-10, ver "Renomear Diagnóstico, Origem ou Convênio" abaixo).
+- BAIXA 14–16: excluir usuário deixa o código nos responsáveis das tarefas; excluir tarefa apaga comentários; fechar
+  dia da clínica esconde agendamentos do Planner.
 
 ## Cadastros em lista gravam só o item; aviso de alteração simultânea (2026-10-10, item 1 da auditoria)
 Decisões do usuário: mesmo item alterado por duas pessoas = AVISAR e deixar escolher; vale para TODOS os cadastros em lista.
@@ -3330,3 +3331,14 @@ apagado passa Valor/Descontos (`trMoney`) ao tratamento que recebe as especialid
 traz valor (com valor na planilha, vale o da planilha). A linha antiga de `treatment_finance` só é apagada depois de
 gravar a nova e só por quem edita valores (`trCanEditVal`); sem essa permissão fica como estava. Sem SQL. Ajuda
 (Planilhas) e teste em `tests/run_planilhas.js`.
+
+## Renomear Diagnóstico, Origem ou Convênio (2026-10-10, item 13 da auditoria)
+Decisão do usuário: atualizar todos junto. No salvar de `openRegistryItem` (item existente, texto mudou),
+`regRenameEverywhere(kind, antigo, novo, id)` (`REG_RENAME_TEXT`): pacientes (`comoConheceu`; `cid` só sem a tabela de
+saúde) por `writePatients` (precisa de `pacientes.edit`), tratamentos (`convenio` ao lado do código, ou só o nome nos
+antigos) por `writeTreatments` (precisa de `tratamentos.edit`), quem não pode fica com o nome antigo e há aviso; saúde
+(`patient_health.data.cid`) e leads das tarefas (`tasks.lead.diagnostico/origem/convenio`) pela RPC
+`rename_registry_text(p_kind, p_old, p_new)` (security definer; Administrador ou "editar" no cadastro; compara sem
+maiúscula e espaços). Migração `supabase/2026-10-10k-renomear-cadastros-de-texto.sql` (testada no PGlite). Ajuda
+(Convênios, Diagnósticos, Origens) e teste no fim de `tests/run_agd_done.js`.
+- Produção: 2026-10-10k AINDA NÃO rodada.

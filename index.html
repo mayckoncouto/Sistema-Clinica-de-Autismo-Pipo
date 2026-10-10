@@ -19745,7 +19745,7 @@ var HELP_TOPICS = [
       "Em <b>Especialidades/serviços cobertos</b>, clique em <b>+ especialidades/serviços</b>, escolha a especialidade ou o serviço e informe o <b>valor por sessão</b>. <b>Inserir todos</b> inclui de uma vez todas as especialidades e serviços que ainda não estão na lista.",
       "Abaixo de cada especialidade aparece o que ela libera (ex.: Psicologia libera Musicoterapia, Psicopedagogia e Psicomotricidade), conforme o cadastro de Especialidades."
     ],
-    rules: ["Na tarefa do CRM (Convênio do lead) e no tratamento (Convênio), <b>+ Incluir</b> no fim da lista cadastra um convênio novo sem sair da janela.", 
+    rules: ["Na tarefa do CRM (Convênio do lead) e no tratamento (Convênio), <b>+ Incluir</b> no fim da lista cadastra um convênio novo sem sair da janela.", "Corrigir o nome do convênio troca o nome também nos tratamentos e nos leads do CRM que usavam o nome anterior.", 
       "Especialidade liberada é cobrada pelo valor da especialidade que a liberou.",
       "No tratamento, a linha de especialidade mostra \"Coberta pelo convênio via …\" ou, em vermelho, \"Não coberta pelo convênio\". É só um aviso: o tratamento pode ser salvo.",
       "Convênio sem especialidades cadastradas não confere nada nos tratamentos. Serviços só são conferidos quando o convênio tem algum serviço na lista.",
@@ -19789,12 +19789,12 @@ var HELP_TOPICS = [
   {id: "diagnosticos", group: "Cadastros", title: "Diagnósticos", mod: "diagnosticos", tab: "diagnosticos",
     purpose: "Lista de diagnósticos (código CID e descrição) escolhida no cadastro do paciente (grupo Saúde) e nos dados do lead do CRM.",
     steps: ["Cadastros → <b>Diagnósticos</b> → <b>+ Incluir</b>: código CID (opcional) e descrição.", "No paciente e no lead do CRM, o campo <b>Diagnóstico</b> lista este cadastro; no fim da lista, <b>+ Incluir</b> cadastra um diagnóstico novo sem sair da janela."],
-    rules: ["A lista mostra quantos pacientes têm cada diagnóstico.", "Diagnóstico usado por paciente não é excluído: é <b>Inativado</b>."],
+    rules: ["A lista mostra quantos pacientes têm cada diagnóstico.", "Diagnóstico usado por paciente não é excluído: é <b>Inativado</b>.", "Corrigir o nome (ou o código) troca o texto também nos pacientes e nos leads do CRM que usavam o nome anterior."],
     who: "Permissão <b>Diagnósticos</b>."},
   {id: "origens", group: "Cadastros", title: "Origens", mod: "origens", tab: "origens",
     purpose: "Como o paciente conheceu a clínica (Indicação médica, Escola, Internet…). Usada no cadastro do paciente e na Origem do lead do CRM.",
     steps: ["Cadastros → <b>Origens</b> → <b>+ Incluir</b>: nome da origem.", "No paciente (Como conheceu a clínica) e no lead do CRM (Origem), o <b>+ Incluir</b> no fim da lista cadastra uma origem nova sem sair da janela."],
-    rules: ["A lista mostra quantos pacientes vieram de cada origem.", "Origem usada por paciente não é excluída: é <b>Inativada</b>."],
+    rules: ["A lista mostra quantos pacientes vieram de cada origem.", "Origem usada por paciente não é excluída: é <b>Inativada</b>.", "Corrigir o nome troca o texto também nos pacientes e nos leads do CRM que usavam o nome anterior."],
     who: "Permissão <b>Origens</b>."},
   {id: "feriados", group: "Cadastros", title: "Feriados e recessos", mod: "feriados", tab: "feriados",
     purpose: "Datas em que a clínica não atende (ou atende só meio período): feriados nacionais, municipais e recessos.",
@@ -20908,9 +20908,53 @@ function openRegistryItem(kind, item){
     }
     var list = cfg.list();
     list = isNew ? list.concat([rec]) : list.map(function(x){ return x.id === rec.id ? rec : x; });
+    var oldTxt = item ? regItemLabel(cfg, item) : "", newTxt = regItemLabel(cfg, rec);
     Promise.resolve(cfg.write(list))
       .then(function(){ return cvValsOut ? convSaveFinance(rec.id, cvValsOut) : true; })
-      .then(function(){ close(); renderRegistryTab(kind); showToast(isNew ? "Cadastrado." : "Alterado."); });
+      .then(function(){
+        close(); renderRegistryTab(kind); showToast(isNew ? "Cadastrado." : "Alterado.");
+        if (!isNew && REG_RENAME_TEXT[kind] && normText(oldTxt) !== normText(newTxt)) regRenameEverywhere(kind, oldTxt, newTxt, rec.id);
+      });
+  });
+}
+// Diagnóstico, Origem e Convênio: paciente, lead do CRM e tratamento guardam o TEXTO.
+// Renomear no cadastro troca o texto antigo pelo novo em todos (decisão do usuário):
+// pacientes e tratamentos pelo app; saúde e leads do CRM pela função do banco
+// rename_registry_text (também os que a pessoa não vê).
+var REG_RENAME_TEXT = {diagnosticos: "diagnostico", origens: "origem", convenios: "convenio"};
+function regRenameEverywhere(kind, oldTxt, newTxt, id){
+  var same = function(v){ return normText(String(v || "").trim()) === normText(String(oldTxt).trim()); };
+  var jobs = [], skipped = [], leadKey = REG_RENAME_TEXT[kind];
+  // Pacientes: origem (comoConheceu) e, sem a tabela de saúde (testes/banco antigo), o diagnóstico.
+  var pKey = kind === "origens" ? "comoConheceu" : (kind === "diagnosticos" && !HEALTH.map ? "cid" : "");
+  if (pKey){
+    var hit = state.patients.filter(function(p){ return same(p[pKey]); });
+    if (hit.length){
+      if (can("pacientes", "edit")) jobs.push(writePatients(state.patients.map(function(p){ var o = {}; o[pKey] = newTxt; return same(p[pKey]) ? Object.assign({}, p, o) : p; })));
+      else skipped.push(hit.length + (hit.length === 1 ? " paciente" : " pacientes"));
+    }
+  }
+  if (kind === "diagnosticos" && HEALTH.map) Object.keys(HEALTH.map).forEach(function(k){ if (same(HEALTH.map[k].cid)) HEALTH.map[k] = Object.assign({}, HEALTH.map[k], {cid: newTxt}); });
+  // Tratamentos: o nome guardado ao lado do código do convênio (e os antigos só com o nome).
+  if (kind === "convenios"){
+    var trHit = state.treatments.filter(function(t){ return t.convenioId === id ? (!!t.convenio && t.convenio !== newTxt) : same(t.convenio); });
+    if (trHit.length){
+      if (can("tratamentos", "edit")) jobs.push(writeTreatments(state.treatments.map(function(t){ return trHit.indexOf(t) !== -1 ? Object.assign({}, t, {convenio: newTxt}) : t; })));
+      else skipped.push(trHit.length + (trHit.length === 1 ? " tratamento" : " tratamentos"));
+    }
+  }
+  // Leads do CRM (na tela e no banco).
+  var memT = (CRM.mem && CRM.mem.tasks) || [];
+  Object.keys(CRM.tasks || {}).map(function(k){ return CRM.tasks[k]; }).concat(memT).forEach(function(t){
+    if (t && t.lead && same(t.lead[leadKey])){ var l = Object.assign({}, t.lead); l[leadKey] = newTxt; t.lead = l; }
+  });
+  var c = agdClient();
+  if (c) jobs.push(c.rpc("rename_registry_text", {p_kind: kind, p_old: oldTxt, p_new: newTxt}).then(function(r){
+    if (r.error && !/rename_registry_text|function/i.test(r.error.message || "")) showToast("Não foi possível atualizar os leads/saúde com o nome novo: " + r.error.message, true);
+  }, function(){}));
+  return Promise.all(jobs).then(function(){
+    if (skipped.length) showToast(skipped.join(" e ") + " continuam com o nome antigo: seu nível não pode editá-los.", true);
+    if (state.tab === "crm") crmRender();
   });
 }
 // Menus suspensos do topo: "Cadastros" e "Planner" (Planner / Resumo).
