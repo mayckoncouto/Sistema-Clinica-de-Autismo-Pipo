@@ -3341,4 +3341,4 @@ antigos) por `writeTreatments` (precisa de `tratamentos.edit`), quem não pode f
 `rename_registry_text(p_kind, p_old, p_new)` (security definer; Administrador ou "editar" no cadastro; compara sem
 maiúscula e espaços). Migração `supabase/2026-10-10k-renomear-cadastros-de-texto.sql` (testada no PGlite). Ajuda
 (Convênios, Diagnósticos, Origens) e teste no fim de `tests/run_agd_done.js`.
-- Produção: 2026-10-10k AINDA NÃO rodada.
+- Produção (2026-10-10): `2026-10-10k-renomear-cadastros-de-texto` rodada (função criada = 1).
