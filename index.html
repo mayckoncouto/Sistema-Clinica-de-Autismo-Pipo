@@ -1449,7 +1449,7 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
   #tab-planner .controls .search-wrap{min-width:90px}
   #tab-planner .controls #roomChips{min-width:110px}
 }
-@media (min-width:761px) and (max-width:960px){
+@media (min-width:761px) and (max-width:1100px){
   #tab-planner .controls{flex-wrap:wrap;row-gap:8px}
 }
 .pl-tools-menu .btn{display:block;width:100%;text-align:left;border:0;border-radius:0;box-shadow:none;background:transparent;font-weight:600}
@@ -2407,6 +2407,46 @@ select:not([multiple]):not([size]):not(.pl-tbl *),
 input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type=search],[type=date],[type=time],[type=url],:not([type])):not(.dp-in):not(.pl-tbl *){padding-top:0!important;padding-bottom:0!important}
 .dp-btn .dp-in{height:100%!important;min-height:0!important}
 @media (max-width:760px){:root{--field-h:44px}}
+/* Barras das telas (2026-10-10, regra do usuário para todo o sistema): no computador numa linha só
+   (busca, filtros e avisos encolhem com "…"); no celular no máximo 3 linhas abaixo do título.
+   Conferido por tests/run_toolbar_rows.js. */
+@media (min-width:761px){
+  #tab-tratamentos .pat-toolbar{flex-wrap:nowrap}
+  #tab-tratamentos .pat-toolbar > *{flex-shrink:0}
+  #tab-tratamentos .pat-toolbar .search-wrap{flex:0 1 220px;min-width:110px}
+  #tab-tratamentos .pat-toolbar > .dp-btn{flex:0 1 auto;min-width:96px;max-width:200px}
+  #tab-tratamentos .pat-toolbar > .dp-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue){flex:0 1 auto;min-width:0;display:inline-flex;gap:6px}
+  #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue):empty{display:none}
+  #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue) > *{flex:0 1 auto;min-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tab-tratamentos .pat-toolbar :is(.pat-count,.inact-toggle){white-space:nowrap}
+  #tab-tratamentos .pat-toolbar .spacer{flex:1 1 0;min-width:0}
+}
+@media (max-width:760px){
+  /* "Inativos" (e Cancelados/Renegociados) na linha do título, à direita */
+  .pat-toolbar:has(> .cad-title):has(> .inact-toggle) > .cad-title{flex:1 1 auto!important;min-width:0}
+  .pat-toolbar:has(> .cad-title) > .inact-toggle{order:-9!important;flex:none!important;margin:0}
+  /* Tratamentos: título + caixas / busca + status / contador, Opções, Incluir, ? (avisos embaixo) */
+  #tab-tratamentos .pat-toolbar .search-wrap{flex:1 1 calc(55% - 8px)!important;min-width:0}
+  #tab-tratamentos .pat-toolbar > :is(.dp-btn,select){order:0!important;flex:1 1 calc(45% - 8px)!important;min-width:0}
+  #tab-tratamentos .pat-toolbar > .dp-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tab-tratamentos .pat-toolbar > .inact-toggle{font-size:13px}
+  #tab-tratamentos .pat-toolbar > :is(.pat-count,[data-io-wrap],#trAdd,.help-q){order:1}
+  /* Plano Terapêutico: busca / filtro, contador, Incluir, ? */
+  #tab-planos .pat-toolbar > .dp-btn{flex:1 1 0;min-width:0}
+  #tab-planos .pat-toolbar > .dp-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tab-planos .pat-toolbar .pat-count{flex:0 1 auto;white-space:nowrap}
+  #tab-planos .pat-toolbar .help-q{flex:none;margin-left:0}
+  /* CRM: título + visualização / busca / filtros / contador, Finalizados, Opções, + Tarefa, ? */
+  #tab-crm .crm-toolbar > [data-io-wrap]{order:4}
+  /* Visão geral: data / busca + profissional / especialidade, sala, status */
+  #tab-visaogeral .vg-toolbar .vg-nav{order:1!important;flex:1 1 calc(100% - 50px)!important}
+  #tab-visaogeral .vg-toolbar .help-q{order:1!important}
+  #tab-visaogeral .vg-toolbar .vg-q{order:2!important;flex:1 1 calc(50% - 4px)!important}
+  #tab-visaogeral .vg-toolbar > .dp-btn{order:3!important;flex:1 1 calc(33.33% - 6px)!important;max-width:none!important}
+  #tab-visaogeral .vg-toolbar > .dp-btn[data-dp-for="vgProf"]{order:2!important;flex:1 1 calc(50% - 4px)!important}
+  #tab-visaogeral .vg-toolbar > .dp-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
 </style>
 <!-- APP-HEAD:END -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -5922,12 +5962,13 @@ function vgFillFilters(){
     var el = document.getElementById(id); if (!el) return;
     var cur = el.value;
     el.innerHTML = '<option value="">' + esc(first) + '</option>' + opts.map(function(o){ return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join("");
-    if (opts.some(function(o){ return o[0] === cur; })) el.value = cur;
+    el.value = opts.some(function(o){ return o[0] === cur; }) ? cur : "";   // grava sempre: o botão da lista acompanha
   }
-  fill("vgProf", "Todos os profissionais", activeOnly(state.professionals).slice().sort(function(a, b){ return profNome(a).localeCompare(profNome(b), "pt-BR"); }).map(function(p){ return [p.id, profNome(p)]; }));
-  fill("vgSpec", "Todas as especialidades", activeOnly(state.specialties).map(function(s){ return [s.id, s.name]; }));
-  fill("vgRoom", "Todas as salas", physicalRooms().concat(supportGroups()).map(function(r){ return [r.id, r.name]; }));
-  fill("vgStatus", "Todos os status", [["__sem", "Sem status"]].concat(statusesList().map(function(s){ return [s.id, s.name]; })));
+  var sm = isMobileView();   // celular: 3 filtros por linha, rótulo curto
+  fill("vgProf", sm ? "Profissional" : "Todos os profissionais", activeOnly(state.professionals).slice().sort(function(a, b){ return profNome(a).localeCompare(profNome(b), "pt-BR"); }).map(function(p){ return [p.id, profNome(p)]; }));
+  fill("vgSpec", sm ? "Especialidade" : "Todas as especialidades", activeOnly(state.specialties).map(function(s){ return [s.id, s.name]; }));
+  fill("vgRoom", sm ? "Sala" : "Todas as salas", physicalRooms().concat(supportGroups()).map(function(r){ return [r.id, r.name]; }));
+  fill("vgStatus", sm ? "Status" : "Todos os status", [["__sem", "Sem status"]].concat(statusesList().map(function(s){ return [s.id, s.name]; })));
 }
 function vgFilters(){
   function v(id){ var el = document.getElementById(id); return el ? el.value : ""; }
@@ -6417,7 +6458,12 @@ function crmBadgeRender(){
 function crmFillFilters(){
   var el = document.getElementById("crmFWho"); if (!el) return;
   var cur = el.value;
-  el.innerHTML = '<option value="">Todos os responsáveis</option><option value="__me">Eu</option><option value="__none">Sem responsável</option>' +
+  var sm = isMobileView();   // celular: 3 filtros por linha, rótulo curto na opção vazia
+  [["crmFPrio", "Todas as prioridades", "Prioridade"], ["crmFDue", "Qualquer vencimento", "Vencimento"]].forEach(function(x){
+    var s2 = document.getElementById(x[0]); if (!s2 || !s2.options[0]) return;
+    var txt = sm ? x[2] : x[1]; if (s2.options[0].textContent !== txt){ s2.options[0].textContent = txt; s2.value = s2.value; }
+  });
+  el.innerHTML = '<option value="">' + (sm ? "Responsável" : "Todos os responsáveis") + '</option><option value="__me">Eu</option><option value="__none">Sem responsável</option>' +
     CRM.people.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.full_name) + '</option>'; }).join("");
   // sempre atribui (mesmo vazio): o botão visual da lista só se atualiza quando .value é gravado
   el.value = Array.prototype.some.call(el.options, function(o){ return o.value === cur; }) ? cur : "";
@@ -20005,7 +20051,8 @@ var HELP_TOPICS = [
       "Você só vê as telas e os botões que o seu nível de permissão libera. Se faltar algo, fale com o Administrador.",
       "Toda exclusão pede confirmação.",
       "Duas pessoas podem mexer nos cadastros ao mesmo tempo: cada uma grava só o que alterou. Se outra pessoa alterou o mesmo cadastro depois que você o abriu, ao salvar aparece o aviso “Alterado enquanto você editava”, com quem alterou e a hora: <b>Salvar assim mesmo</b> grava a sua versão por cima; <b>Recarregar</b> descarta a sua e mostra a versão atual.",
-      "No celular, o menu fica no botão ☰ do canto superior. Planner e Resumo não aparecem no celular."
+      "No celular, o menu fica no botão ☰ do canto superior. Planner e Resumo não aparecem no celular.",
+      "A barra de cada tela (busca, filtros e botões) fica numa linha só no computador; quando falta espaço, a busca e os filtros encolhem e o texto termina em “…”. No celular ela ocupa no máximo 3 linhas abaixo do título, e a caixa “Inativos” fica ao lado do título."
     ],
     who: "Todos os usuários."},
   {id: "excluir", group: "Início", title: "Excluir, inativar e permissões", mod: null,
@@ -21701,6 +21748,8 @@ function wireMobileNav(){
     var onMq = function(){
       if (isMobileView()) mobileLeavePlanner();
       if (state.tab === "agenda") agdRender();
+      if (state.tab === "crm") crmFillFilters();     // rótulos curtos dos filtros no celular
+      if (state.tab === "visaogeral" && typeof vgFillFilters === "function") vgFillFilters();
     };
     if (MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener("change", onMq); else if (MOBILE_MQ.addListener) MOBILE_MQ.addListener(onMq);
   }

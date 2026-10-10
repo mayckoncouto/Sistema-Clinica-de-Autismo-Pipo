@@ -3636,3 +3636,17 @@ dados de saúde. Nunca copiar dados reais de pacientes para arquivos do reposit�
 - Primeira conferência pelo conector (2026-10-10): 10u confirmada (0 | 0 | 162 | 85); conferência de migrações 79 SIM e
   1 NÃO = 10m, porque 15 tarefas importadas do ClickUp (`created_by_name = 'ClickUp'`, chave `lead.clickup`) chegaram
   depois da 10m com nascimento/email/origem/responsavel no lead. Aguardando decisão do usuário.
+
+## Barras das telas: uma linha no computador, até 3 no celular (2026-10-10, REGRA FIXA do usuário para todo o sistema)
+Busca, filtros e botões de cada tela: **computador numa linha só** (a partir de 1280px; entre 761 e 1279px no máximo 2
+linhas e nunca passando da tela — busca, filtros e avisos encolhem com "…"); **celular no máximo 3 linhas abaixo do
+título**. Bloco "Barras das telas" no fim do `<style>` (`index.html`). Teste fixo `tests/run_toolbar_rows.js` (no
+`npm test`; mede todas as telas em 1280, 1440, 1024 e 390px) — tela nova com barra: acrescentar a aba em `TABS`.
+- Celular: "Inativos" (e Cancelados/Renegociados em Tratamentos) fica na linha do título, à direita
+  (`.pat-toolbar:has(> .cad-title) > .inact-toggle{order:-9}`; substitui o "Inativos na linha de baixo" de antes).
+  Tratamentos = título+caixas / busca+status / contador, Opções, Incluir, ? (aviso "N pacientes sem tratamento" embaixo,
+  só quando há). Plano Terapêutico = busca / filtro, contador, Incluir, ?. CRM = título+visualização / busca / 3 filtros /
+  contador, Finalizados, Opções, ?. Visão geral = data, ‹ Hoje ›, ? / busca + profissional / especialidade, sala, status.
+- Filtros 3 por linha no celular usam rótulo curto na opção vazia (Profissional, Especialidade, Sala, Status,
+  Responsável, Prioridade, Vencimento — `vgFillFilters`, `crmFillFilters`; trocar a largura refaz).
+- Planner: entre 761 e 1100px a barra quebra em 2 linhas (antes a 1024px o "?" saía da tela).
