@@ -3733,3 +3733,5 @@ locais; permissão própria **Conector Claude** (`conector_claude`, ver; grupo M
 - (2026-10-10, pedido do usuário) Redes sociais SAÍRAM da tela de login (`js/pipo-supabase.js`: sem `.pipo-login-soc`/`loginRedes`).
   Continuam na página do link (agradecimento), na mensagem do link e nas impressões. `api/config.js` ainda devolve `redes`
   (a página do link usa).
+- Produção (2026-10-10): conector "Clínica Pipo" ligado no Claude pelo usuário (registro automático/DCR) e testado
+  (listar_listas, listar_tarefas OK; `mcp_calls` grava `app = "Claude"`). Escrita ainda desligada.
