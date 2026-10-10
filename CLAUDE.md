@@ -3727,7 +3727,9 @@ locais; permissão própria **Conector Claude** (`conector_claude`, ver; grupo M
 - Teste local: `deno run -A --no-lock --config supabase/functions/pipo-mcp/deno.json supabase/functions/pipo-mcp/teste_local.ts` (30 checagens).
 - Produção (2026-10-10): `2026-10-10w-conector-claude` rodada pelo conector em partes (1 | 1 | 15; 2 políticas;
   0 funções abertas sem login; closed_at coerente). `drop policy` no conector trava (pede confirmação): como a
-  tabela era nova, as políticas foram criadas sem o drop. FALTA: painel OAuth (usuário) e publicar a função.
+  tabela era nova, as políticas foram criadas sem o drop. Painel OAuth configurado pelo usuário (servidor ligado, registro dinâmico, `/oauth/consent`, Site URL
+  `https://sistemaclinicadeautismopipo.vercel.app`); página `/oauth-consent` conferida no ar. Função `pipo-mcp`
+  publicada pelo conector (versão 1, `verify_jwt` false, SÓ LEITURA — `PIPO_MCP_ESCRITA` ainda não definida).
 - (2026-10-10, pedido do usuário) Redes sociais SAÍRAM da tela de login (`js/pipo-supabase.js`: sem `.pipo-login-soc`/`loginRedes`).
   Continuam na página do link (agradecimento), na mensagem do link e nas impressões. `api/config.js` ainda devolve `redes`
   (a página do link usa).
