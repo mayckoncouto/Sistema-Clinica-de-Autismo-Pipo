@@ -6258,11 +6258,11 @@ function crmPop(anchor, cls, html, o){
   else document.body.appendChild(m);
   function place(){
     if (sheet) return;
-    var r = anchor.getBoundingClientRect(), h = m.offsetHeight, w = m.offsetWidth;
+    var r = anchor.getBoundingClientRect(), w = m.offsetWidth;
     m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
-    m.style.top = (r.bottom + 4 + h > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4) + "px";
+    popPlaceV(m, r, 4);
   }
-  place();
+  place(); if (!sheet) popWatchSize(m, place);
   var k = -1;
   function btns(){ return Array.prototype.filter.call(m.querySelectorAll("[data-pick]"), function(b){ return !b.hidden; }); }
   function mark(){ btns().forEach(function(b, i){ b.classList.toggle("kb", i === k); }); var c = btns()[k]; if (c) c.scrollIntoView({block: "nearest"}); }
@@ -21370,14 +21370,24 @@ function inSheet(t){ var w = document.getElementById("mSheet"), bg = document.ge
 // Posição da lista flutuante: logo abaixo (ou acima, se não couber) do campo.
 // Chamada ao abrir e sempre que a janela/página rola ou muda de tamanho (inclusive
 // o teclado do celular), para a lista acompanhar o campo.
+// Posição vertical das listas flutuantes junto do campo (r = retângulo do campo). O lado (embaixo ou em cima)
+// é escolhido uma vez, ao abrir; aberta para CIMA, a lista fica presa pela parte de baixo, colada no campo —
+// assim, ao digitar e a lista diminuir, ela não se afasta do campo.
+function popPlaceV(pop, r, gap){
+  var vv = window.visualViewport, vh = vv ? vv.height + vv.offsetTop : window.innerHeight, h = pop.offsetHeight;
+  if (!pop.__dir) pop.__dir = (r.bottom + gap + h > vh - 8 && r.top - gap - 8 > vh - r.bottom - gap - 8) ? "up" : "down";
+  if (pop.__dir === "up" && r.top - gap - h >= 8){ pop.style.top = "auto"; pop.style.bottom = (window.innerHeight - r.top + gap) + "px"; }
+  else if (pop.__dir === "up"){ pop.style.bottom = "auto"; pop.style.top = "8px"; }
+  else { pop.style.bottom = "auto"; pop.style.top = (r.bottom + gap) + "px"; }
+}
+// Lista que muda de tamanho (digitar filtra) é reposicionada na hora.
+function popWatchSize(pop, fn){ if (window.ResizeObserver){ var ro = new ResizeObserver(function(){ if (!pop.isConnected){ ro.disconnect(); return; } fn(); }); ro.observe(pop); } }
 function dpPlace(pop){
   if (pop.__sheet) return;
   var btn = pop.__btn; if (!btn || !document.body.contains(btn)) return;
-  var r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
-  var vv = window.visualViewport, vh = vv ? vv.height + vv.offsetTop : window.innerHeight;
+  var r = btn.getBoundingClientRect(), w = pop.offsetWidth;
   var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
-  var top = r.bottom + 6; if (top + h > vh - 8 && r.top - h - 6 >= 8) top = r.top - h - 6;
-  pop.style.left = left + "px"; pop.style.top = top + "px";
+  pop.style.left = left + "px"; popPlaceV(pop, r, 6);
   // Campo saiu da área visível da janela (rolou para trás do cabeçalho/rodapé): esconde a lista.
   var box = btn.closest(".modal-body") || btn.closest(".panel"), b = box ? box.getBoundingClientRect() : null;
   pop.style.visibility = (b && (r.bottom < b.top || r.top > b.bottom)) ? "hidden" : "";
@@ -21406,7 +21416,7 @@ function dpOpenPop(btn, build){
     sheetWrap(sheetTitleFor(btn), function(){ var cb = pop.__onEsc; dpClose(); if (cb) cb(); }).appendChild(pop);
   } else document.body.appendChild(pop);
   build(pop);
-  dpPlace(pop);
+  dpPlace(pop); if (!pop.__sheet) popWatchSize(pop, function(){ dpPlace(pop); });
   setTimeout(function(){ document.addEventListener("mousedown", dpOutside, true); document.addEventListener("keydown", dpKey, true); }, 0);
   return pop;
 }
@@ -22396,7 +22406,7 @@ function openPlanModal(plan, opts){
     var r = btn.getBoundingClientRect();
     goalPop.style.width = Math.min(560, Math.max(r.width, 380)) + "px";
     goalPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - goalPop.offsetWidth - 8)) + "px";
-    goalPop.hidden = false;
+    goalPop.hidden = false; goalPop.__dir = "";
     goalPlace();
     goalPop.querySelector(".dp-filter").focus({preventScroll: true});
   }
@@ -22406,8 +22416,7 @@ function openPlanModal(plan, opts){
     var r = goalFor.btn.getBoundingClientRect(), box = ov.querySelector(".modal-body").getBoundingClientRect();
     if (r.bottom < box.top || r.top > box.bottom) return goalHide();
     goalPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - goalPop.offsetWidth - 8)) + "px";
-    var below = window.innerHeight - r.bottom - 8, h = goalPop.offsetHeight;
-    goalPop.style.top = (h <= below || r.top < h ? r.bottom + 4 : r.top - h - 4) + "px";
+    popPlaceV(goalPop, r, 4);
   }
   function goalApply(o, g){
     o.goalId = g.id; o.objetivo = g.name; o.criterio = g.criterio || "";
@@ -22455,6 +22464,7 @@ function openPlanModal(plan, opts){
   });
   ov.addEventListener("mousedown", function(e){ if (!goalPop.hidden && !goalPop.contains(e.target) && !(goalFor && goalFor.btn.contains(e.target))) goalHide(); });
   ov.querySelector(".modal-body").addEventListener("scroll", function(){ if (!goalPop.hidden) goalPlace(); });
+  popWatchSize(goalPop, function(){ if (!goalPop.hidden) goalPlace(); });
   secsEl.addEventListener("change", function(e){
     var f = e.target.getAttribute("data-f"), tr = e.target.closest("tr[data-obj]");
     if (!f || !tr || e.target.tagName === "TEXTAREA") return;

@@ -3381,3 +3381,10 @@ Testada no PGlite (também com CRLF). Correções só depois do resultado, em mi
   `origem`, `email` e `plano` de `tasks.lead`; o que estava preenchido e ainda não aparece na Descrição vai para o fim
   dela ("Dados do lead (campos retirados): …"). Testada no PGlite (também com CRLF e rodando 2 vezes).
 - Produção (2026-10-10): `2026-10-10m-crm-dados-do-lead` rodada (tarefas_com_campos_antigos = 0).
+- (2026-10-10, pedido do usuário) **Lista que abre para CIMA fica colada no campo ao digitar.** Antes ela ficava presa
+  pelo topo e, quando a busca diminuía a lista, abria um vão até o campo. `popPlaceV(pop, retânguloDoCampo, gap)`
+  (perto de `dpPlace`) escolhe o lado UMA vez ao abrir (`pop.__dir`) e, para cima, prende pela parte de baixo
+  (`style.bottom`); `popWatchSize(pop, fn)` (ResizeObserver) reposiciona quando a lista muda de tamanho. Usado nas
+  listas do sistema (`#dpPop`: combos de cadastro, listas com busca, calendário), nos seletores do CRM (`crmPop`) e na
+  lista de objetivos do Plano (`.pl-goal-pop`). Lista flutuante nova: posicionar com `popPlaceV` + `popWatchSize`.
+  Teste no fim de `tests/run_combo.js`.

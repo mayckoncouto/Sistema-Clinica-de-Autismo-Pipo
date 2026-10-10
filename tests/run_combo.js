@@ -48,6 +48,28 @@ const path = require('path');
   // Lista curta que não é de cadastro continua botão.
   await page.keyboard.press('Escape');
   console.log('non-registry lists stay as buttons?', await ev('(function(){ var d = document.createElement("div"); d.innerHTML = "<select data-x><option>Sim</option><option>Não</option></select>"; document.body.appendChild(d); dpScan(d); var r = d.querySelector(".dp-btn").tagName === "BUTTON"; d.remove(); return r; })()'));
+  // Lista aberta para CIMA (sem espaço embaixo): ao digitar e a lista diminuir, ela continua colada no campo.
+  await ev('document.getElementById("modalHost").innerHTML = ""');
+  await page.setViewportSize({width: 1200, height: 700});
+  await ev('crmOpenTask(null, {listId: "atendimento"})'); await page.waitForTimeout(400);
+  await page.fill('#crmWho', 'Lead Fictício'); await page.dispatchEvent('#crmWho', 'input'); await page.waitForTimeout(150);
+  const gap = () => page.evaluate(() => { const f = document.querySelector('[data-dp-for="crmLDiag"]').getBoundingClientRect(), p = document.getElementById('dpPop').getBoundingClientRect(); return {up: p.bottom <= f.top + 1, gap: Math.round(f.top - p.bottom), h: Math.round(p.height)}; });
+  await page.evaluate(() => { const b = document.querySelector('[data-dp-for="crmLDiag"]'); b.scrollIntoView({block: 'end'}); b.querySelector('.dp-in').click(); });
+  await page.waitForSelector('#dpPop'); await page.waitForTimeout(100);
+  const g1 = await gap();
+  await page.type('[data-dp-for="crmLDiag"] .dp-in', 'anore'); await page.waitForTimeout(200);
+  const g2 = await gap();
+  console.log('list opened upwards stays glued to the field while typing filters it?', g1.up && g2.up && g2.h < g1.h && Math.abs(g1.gap - 6) <= 1 && Math.abs(g2.gap - 6) <= 1, JSON.stringify([g1, g2]));
+  await page.keyboard.press('Escape');
+  // Seletor do CRM com busca (Responsáveis) aberto para cima: idem.
+  await page.evaluate(() => { const b = document.querySelector('#crmPeopleMs .ms-btn'); b.style.position = 'fixed'; b.style.top = '640px'; b.style.width = '240px'; b.click(); });
+  await page.waitForSelector('#crmPop'); await page.waitForTimeout(100);
+  const sg = () => page.evaluate(() => { const f = document.querySelector('#crmPeopleMs .ms-btn').getBoundingClientRect(), p = document.getElementById('crmPop').getBoundingClientRect(); return {up: p.bottom <= f.top + 1, gap: Math.round(f.top - p.bottom), h: Math.round(p.height)}; });
+  const s1 = await sg();
+  const q = await page.$('#crmPop .dp-filter');
+  if (q){ await q.type('zzz'); await page.waitForTimeout(200); }
+  const s2 = await sg();
+  console.log('CRM picker opened upwards stays glued to the field?', s1.up && s2.up && Math.abs(s1.gap - 4) <= 1 && Math.abs(s2.gap - 4) <= 1 && !!q, JSON.stringify([s1, s2, !!q]));
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
