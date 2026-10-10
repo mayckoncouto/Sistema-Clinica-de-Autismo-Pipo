@@ -3165,7 +3165,7 @@ no `title`). Celular: Nome + Tratamento (`:nth-child(1)` e `(8)`).
 - Produção (2026-10-10): conferência geral LIMPA ("No rows returned") — banco igual ao `schema.sql`. REGRA: toda
   migração nova que mudar estrutura ou função também atualiza `schema.sql` e regera `supabase/conferencia-geral.sql`.
 
-## Auditoria de integridade dos dados (2026-10-10) — PENDÊNCIAS (nada corrigido ainda)
+## Auditoria de integridade dos dados (2026-10-10) — CONCLUÍDA (16 de 16)
 Análise de excluir/editar/inativar/mesclar/cancelar em todos os cadastros. A resolver:
 - ~~ALTA 1~~ FEITO (2026-10-10, ver "Cadastros em lista gravam só o item" abaixo).
 - ~~ALTA 2~~ FEITO (2026-10-10). Era: Atendimento com status (Finalizado/Não compareceu/Falta justificada) ou com evolução: lixeira/Desmarcar
@@ -3363,3 +3363,12 @@ Com algum, a confirmação "Agendamentos do Planner fora do horário" mostra qua
 caixa `#clHiddenDel` "Apagar esses agendamentos do Planner" (`applyBookingChanges(..., {noHistory: true})` antes de
 gravar a clínica); sem marcar, ficam guardados e voltam se reabrir. Sem nenhum, vale a confirmação antiga de mudar a
 duração. Sem SQL. Ajuda (Clínica) e teste no fim de `tests/run_agd_done.js`.
+
+## Conferência de integridade (2026-10-10)
+`supabase/conferencia-integridade.sql`: SÓ LEITURA, 25 verificações de "sobras" (registros que apontam para algo que
+não existe mais): CRM (responsável que não é usuário, lista/status/paciente inexistente, "lido" solto), valores de
+tratamento/convênio soltos, convênio do tratamento, saúde solta, Agenda (paciente, grupo, status, serviço, sala
+inexistentes), Prontuário e Plano Terapêutico de paciente inexistente, evolução apontando para plano apagado, paciente
+só com planos encerrados, Planner (paciente inexistente, dia fechado na Clínica), bloqueios de horário soltos,
+usuário/colaborador/profissional desligados, id repetido nas listas. Complementa `conferencia-dos-dados.sql`.
+Testada no PGlite (também com CRLF). Correções só depois do resultado, em migração própria.
