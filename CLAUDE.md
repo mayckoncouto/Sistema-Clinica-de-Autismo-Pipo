@@ -3409,4 +3409,4 @@ Toda tela, lista, janela ou campo novo segue isto (e o que já existe foi corrig
 8. **Janelas**: rodapé Excluir à esquerda, Cancelar, Salvar; sem permissão = só leitura (`modalApplyPerms`);
    item em uso = Inativar; toda exclusão com `confirmDialog`.
 9. **Ajuda**: toda função nova entra no `HELP_TOPICS` (aspas curvas no texto).
-- (2026-10-10, pedidos do usuário) Janela da tarefa do CRM: etiqueta "Paciente cadastrado"/"Lead (sem cadastro)" (`#crmWhoTag`) ao lado do título "Dados do Paciente/Lead" (`.crm-sec-tw`), fora do campo. Altura fixada ao ABRIR (`--crm-h` = altura da tela − 32px; F11/tela maior não estica, tela menor limita por `max-height`); espaço entre os campos não muda com o tamanho da janela.
+- (2026-10-10, pedidos do usuário) Janela da tarefa do CRM: etiqueta "Paciente cadastrado"/"Lead (sem cadastro)" (`#crmWhoTag`) ao lado do título "Dados do Paciente/Lead" (`.crm-sec-tw`), fora do campo. Janela com a altura da tela (`calc(100dvh - 32px)`, acompanha F11); a **Descrição ocupa o espaço livre** da coluna (`fitDesc` em `crmOpenTask`, refeito no `resize`; mínimo 4 linhas, só então a coluna rola) — o espaço entre os campos não muda.

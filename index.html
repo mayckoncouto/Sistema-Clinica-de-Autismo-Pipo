@@ -472,7 +472,7 @@ div.ag-obj-head{cursor:default}
 .modal.crm-modal{max-width:min(760px,calc(100vw - 32px));width:100%}
 .modal.crm-modal.with-side{max-width:min(1060px,calc(100vw - 32px))}
 /* Janela da tarefa sempre com a altura da tela (não encolhe com pouco conteúdo nem muda de tamanho ao trocar de tarefa) */
-.modal.crm-modal.lay-modal{height:var(--crm-h,calc(100dvh - 32px));max-height:calc(100dvh - 32px)}
+.modal.crm-modal.lay-modal{height:calc(100dvh - 32px)}
 .modal.crm-modal.lay-cheia{max-width:none;width:calc(100vw - 24px);height:calc(100dvh - 24px);max-height:none}
 .overlay.crm-ov.lay-lateral{justify-content:flex-end;align-items:stretch;padding:0}
 .modal.crm-modal.lay-lateral{max-width:min(760px,100vw);height:100dvh;max-height:none;border-radius:0}
@@ -6886,8 +6886,21 @@ function crmOpenTask(task, opts){
         '<div class="spacer"></div><button class="btn ghost" id="crmCancel">' + (canEdit ? "Cancelar" : "Fechar") + '</button>' + (canEdit ? '<button class="btn primary" id="crmSave">Salvar</button>' : '') + '</div>' +
     '</div></div>';
   var ov = document.getElementById("ovCrm"), modal = ov.querySelector(".crm-modal");
-  // Altura da janela fixada ao abrir: F11 / tela maior não estica a janela (tela menor ainda limita).
-  if (!isMobileView()) modal.style.setProperty("--crm-h", Math.max(320, window.innerHeight - 32) + "px");
+  // Descrição ocupa o espaço livre da coluna (janela maior = mais linhas visíveis), sem a barra de rolagem da coluna;
+  // mínimo de 4 linhas (tela pequena: aí a coluna rola). Refeito ao mudar o tamanho da tela.
+  function fitDesc(){
+    var ta = document.getElementById("crmDesc"), main = modal.querySelector(".crm-main");
+    if (!ta || !main || !document.body.contains(ta)) { window.removeEventListener("resize", fitDesc); return; }
+    if (isMobileView()) { ta.style.height = ""; return; }
+    var lh = parseFloat(getComputedStyle(ta).lineHeight) || 20, min = Math.round(lh * 4 + 20);
+    ta.style.height = min + "px";
+    var r = main.getBoundingClientRect(), cs = getComputedStyle(main), bottom = r.top;
+    Array.prototype.forEach.call(main.children, function(c){ if (c.offsetParent) bottom = Math.max(bottom, c.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(c).marginBottom) || 0)); });
+    var free = Math.floor(r.top + main.clientHeight - (parseFloat(cs.paddingBottom) || 0) - bottom);
+    ta.style.height = Math.max(min, min + free) + "px";
+  }
+  window.addEventListener("resize", fitDesc);
+  requestAnimationFrame(fitDesc);
   CRM.openId = task ? task.id : null;
   function close(){ CRM.openId = null; host.innerHTML = ""; }
   document.getElementById("crmClose").addEventListener("click", close);
