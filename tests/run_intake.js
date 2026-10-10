@@ -104,14 +104,33 @@ const path = require('path');
   check('public form opens with the clinic name and the patient name?', (await pub.textContent('#cName')) === 'Clínica Fictícia' && (await pub.inputValue('#nome')) === 'Duda');
   await pub.click('#send'); await pub.waitForTimeout(100);
   check('public form: required fields and consent are checked before sending?', sent === null && (await pub.$$('.bad')).length >= 4 && /autorização/.test(await pub.textContent('#err')));
-  await pub.fill('#nascimento', '2019-05-06'); await pub.fill('#cpf', '11111111111');
-  await pub.fill('#respNome', 'Mara'); await pub.selectOption('#respParentesco', 'Mãe'); await pub.fill('#telefone', '47966665555');
+  // Padrão do sistema no celular: listas abrem a janela de baixo; data digitável (dd/mm/aaaa) + calendário; campos de 44px.
+  const look = await pub.evaluate(() => ({natives: [...document.querySelectorAll('#frm select')].every((s) => getComputedStyle(s).display === 'none'),
+    btns: document.querySelectorAll('#frm .pk-btn').length, h: [...document.querySelectorAll('#frm input[type=text], #frm .pk-btn')].every((e) => Math.round(e.getBoundingClientRect().height) === 44),
+    inCard: [...document.querySelectorAll('#frm input, #frm .pk-btn, #frm .pk-cal-btn')].every((e) => e.getBoundingClientRect().right <= document.getElementById('box').getBoundingClientRect().right)}));
+  check('phone: lists are system buttons, fields 44px and nothing passes the card edge?', look.natives && look.btns >= 4 && look.h && look.inCard, look);
+  await pub.type('#nascimento', '06052019');
+  check('birth date typed as dd/mm/aaaa?', (await pub.inputValue('#nascimento')) === '06/05/2019');
+  await pub.click('[data-cal="nascimento"]'); await pub.waitForTimeout(100);
+  const cal = await pub.evaluate(() => ({sheet: !!document.querySelector('#pkSheet .pk-cal'), title: (document.querySelector('#pkSheet .pk-head b') || {}).textContent, sel: (document.querySelector('#pkSheet .pk-cal-g .sel') || {}).textContent}));
+  check('calendar opens in the bottom window with the typed day selected?', cal.sheet && cal.title === 'Data de nascimento' && cal.sel === '6', cal);
+  await pub.click('#pkSheet [data-d="2019-05-07"]'); await pub.waitForTimeout(80);
+  check('picking a day fills the field and closes?', (await pub.inputValue('#nascimento')) === '07/05/2019' && !(await pub.$('#pkSheet')));
+  await pub.fill('#cpf', '11111111111');
+  await pub.fill('#respNome', 'Mara');
+  await pub.click('#respParentesco + .pk-btn'); await pub.waitForTimeout(100);
+  const sh = await pub.evaluate(() => ({title: (document.querySelector('#pkSheet .pk-head b') || {}).textContent, n: document.querySelectorAll('#pkSheet .pk-opt').length,
+    h: Math.round(document.querySelector('#pkSheet .pk-opt').getBoundingClientRect().height)}));
+  check('Parentesco opens the bottom window (title, 52px options)?', sh.title === 'Parentesco' && sh.n === 5 && sh.h >= 52, sh);
+  await pub.click('#pkSheet .pk-opt[data-v="Mãe"]'); await pub.waitForTimeout(80);
+  check('choosing fills the field and closes the window?', (await pub.inputValue('#respParentesco')) === 'Mãe' && /Mãe/.test(await pub.textContent('#respParentesco + .pk-btn')) && !(await pub.$('#pkSheet')));
+  await pub.fill('#telefone', '47966665555');
   await pub.check('#consent'); await pub.click('#send'); await pub.waitForTimeout(100);
   check('public form: invalid CPF refused?', sent === null && /CPF inválido/.test(await pub.textContent('#err')));
   await pub.fill('#cpf', '529.982.247-25'); await pub.fill('#cep', '89010000'); await pub.dispatchEvent('#cep', 'change'); await pub.waitForTimeout(200);
   check('CEP fills the street?', (await pub.inputValue('#rua')) === 'Rua do CEP');
   await pub.click('#send'); await pub.waitForTimeout(300);
-  check('public form sent (digits only, consent) and thank-you shown?', sent && sent.p_token === 'abc' && sent.p_data.cpf === '52998224725' && sent.p_data.telefone === '47966665555' && sent.p_data.consentimento === true && /Cadastro enviado/.test(await pub.textContent('#box')), sent);
+  check('public form sent (digits only, consent) and thank-you shown?', sent && sent.p_token === 'abc' && sent.p_data.cpf === '52998224725' && sent.p_data.telefone === '47966665555' && sent.p_data.consentimento === true && sent.p_data.nascimento === '2019-05-07' && sent.p_data.respParentesco === 'Mãe' && /Cadastro enviado/.test(await pub.textContent('#box')), sent);
   const noH = await pub.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   check('public form fits the phone screen (no sideways scroll)?', noH);
   await pub.unroute('http://pipo.test/**');
@@ -135,7 +154,13 @@ const path = require('path');
     if (/rpc\/intake_send/.test(u)) { sent = JSON.parse(route.request().postData()); return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true})}); }
     return route.fulfill({status: 404, body: ''});
   });
+  await pub.setViewportSize({width: 1300, height: 900});
   await pub.goto('http://pipo.test/cadastro?t=g'); await pub.waitForSelector('#frm');
+  await pub.click('#sexo + .pk-btn'); await pub.waitForTimeout(80);
+  const dk = await pub.evaluate(() => { const p = document.getElementById('pkPop'), b = document.querySelector('#sexo + .pk-btn'); if (!p) return null; const r = p.getBoundingClientRect(), br = b.getBoundingClientRect();
+    return {glued: Math.abs(r.top - br.bottom - 4) < 2, sheet: !!document.getElementById('pkSheet'), h: Math.round(br.height)}; });
+  check('computer: list floats glued under the field (no bottom window), fields 38px?', dk && dk.glued && !dk.sheet && dk.h === 38, dk);
+  await pub.keyboard.press('Escape');
   const shownIds = await pub.$$eval('#frm input, #frm select, #frm textarea', (a) => a.map((x) => x.id));
   check('link fields follow the configuration (no CPF/responsável/endereço; escola required)?', shownIds.indexOf('cpf') === -1 && shownIds.indexOf('respNome') === -1 && shownIds.indexOf('cep') === -1 &&
     await pub.$eval('#escola', (e) => e.required) && !(await pub.$eval('#nascimento', (e) => e.required)), shownIds);

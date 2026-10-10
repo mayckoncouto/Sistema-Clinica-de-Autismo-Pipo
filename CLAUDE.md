@@ -3548,3 +3548,10 @@ Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead �
   linha inteira). Teste `tests/run_cad_titles.js`.
 - (2026-10-10, pedido do usuário) Campos obrigatórios: títulos das colunas presos no alto ao rolar a janela
   (`#ovPf .pf-table thead th` sticky, `top:-4px` = padding de cima do `.modal-body`). Teste em `run_intake.js`.
+- (2026-10-10, pedido do usuário) **Página do link (`cadastro.html`) no padrão do sistema**: listas viram botão
+  `.pk-btn` (select original oculto `.pk-native`, guarda o valor); no celular abrem a janela de baixo (`#pkSheet`:
+  título do campo, ✕, opções de 52px), no computador flutuam coladas embaixo do campo (`#pkPop`, linhas entre itens,
+  escolhido na cor da clínica, ↑ ↓ Enter, Esc); mais de 6 opções = busca. Data de nascimento digitável dd/mm/aaaa
+  (`fmtDate`, `brToIso`: inválida ou futura = recusada) + botão de calendário (`openCalendar`, « ‹ › » ano/mês).
+  Campos com 38px no computador e 44px no celular (16px). `pkOpen`, `enhanceSelect`, `pkClose`. Testes em
+  `tests/run_intake.js`.
