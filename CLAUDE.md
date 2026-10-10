@@ -3349,4 +3349,4 @@ cai junto com `auth.users`): `array_remove` do id em `tasks.assignees` (a ativid
 `task_reads` dele. RPC `crm_user_open_tasks(p_user)` (Administrador ou `usuarios.delete`): tarefas não finalizadas
 (`crm_status_done`) com ele como responsável. `js/usuarios.js`: a confirmação de Excluir mostra quantas. Migração
 `supabase/2026-10-10l-excluir-usuario-tarefas.sql` (testada no PGlite). Ajuda (Usuários).
-- Produção: 2026-10-10l AINDA NÃO rodada.
+- Produção (2026-10-10): `2026-10-10l-excluir-usuario-tarefas` rodada (conferência 1 | 1).
