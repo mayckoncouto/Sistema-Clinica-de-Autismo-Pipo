@@ -260,9 +260,17 @@ div.ag-obj-head{cursor:default}
 .crm-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d64545;color:#fff;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;pointer-events:none}
 .crm-badge[hidden]{display:none}
 #tab-crm{flex:1;display:flex;flex-direction:column;min-height:0}
-/* CRM ▾ → CRM: cartões com as listas disponíveis */
-#tab-crm.crm-home :is(#crmViewSeg,.crm-q,[data-dp-for="crmFWho"],[data-dp-for="crmFPrio"],[data-dp-for="crmFDue"],#crmCount,.inact-toggle,#crmAdd){display:none!important}
-.crm-home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:16px}
+/* CRM ▾ → CRM: cartões com as listas disponíveis em cima; embaixo a barra e todas as tarefas dessas listas */
+#tab-crm.crm-home :is(#crmTitle,#crmViewSeg [data-cv="quadro"],#crmAdd){display:none!important}
+.crm-home-top{flex:none;align-self:stretch;width:100%;box-sizing:border-box;border-bottom:1px solid var(--line)}
+.crm-home-top[hidden]{display:none}
+.crm-home-h{display:flex;align-items:center;padding:14px 18px 0}
+.crm-home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:14px 18px 16px}
+@media (max-width:760px){
+  .crm-home-h{padding:12px 12px 0}
+  .crm-home-grid{display:flex;overflow-x:auto;padding:10px 12px 12px;gap:10px;scroll-snap-type:x proximity}
+  .crm-home-grid .crm-home-card{flex:0 0 72%;max-width:260px;scroll-snap-align:start;padding:12px 14px}
+}
 .crm-home-card{display:flex;flex-direction:column;gap:8px;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--lc,var(--accent));border-radius:10px;padding:14px 16px;cursor:pointer;font:inherit;color:var(--ink)}
 .crm-home-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.08);border-color:var(--lc,var(--accent))}
 .crm-home-card b{font-size:15px}
@@ -2387,6 +2395,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
 
   <!-- AGENDA POR DATA (nova) — código em "nova Agenda por data" no script -->
   <section id="tab-crm" class="panel" hidden>
+    <div class="crm-home-top" id="crmHomeTop" hidden><div class="crm-home-h"><b class="crm-title">CRM</b></div><div class="crm-home-grid" id="crmHomeGrid"></div></div>
     <div class="pat-toolbar crm-toolbar">
       <b class="crm-title" id="crmTitle">CRM</b>
       <div class="seg" id="crmViewSeg" role="group" aria-label="Visualização"><button type="button" data-cv="lista">Lista</button><button type="button" data-cv="quadro">Quadro</button><button type="button" data-cv="calendario">Calendário</button></div>
@@ -5733,9 +5742,10 @@ function subscribeTaskLists(){
 }
 // CRM ▾ → CRM: um cartão por lista que a pessoa vê (abertas, vencidas, minhas); clicar abre a lista.
 function crmHomeRender(host){
-  if (!CRM.loaded){ host.innerHTML = '<div class="empty-state"><b>Carregando…</b></div>'; return; }
+  if (!host) return;
+  if (!CRM.loaded){ host.innerHTML = ''; return; }
   var vis = crmVisibleLists();
-  if (!vis.length){ host.innerHTML = '<div class="empty-state"><b>Nenhuma lista disponível</b>Peça ao Administrador acesso a uma lista do CRM.</div>'; return; }
+  if (!vis.length){ host.innerHTML = '<div class="pat-count">Nenhuma lista disponível. Peça ao Administrador acesso a uma lista do CRM.</div>'; return; }
   var all = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; }), today = crmToday(), me = crmMe();
   function card(id, name, color, tasks){
     var open = tasks.filter(function(x){ return !crmIsDone(x); });
@@ -5747,8 +5757,8 @@ function crmHomeRender(host){
       (id === "__mine" ? '' : '<span>' + mine + ' comigo</span>') + '</span></button>';
   }
   var mineTasks = all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(me) !== -1; });
-  host.innerHTML = '<div class="crm-home-grid">' + card("__mine", "Minhas tarefas", "", mineTasks) +
-    vis.map(function(l){ return card(l.id, l.name, l.color, all.filter(function(x){ return x.list_id === l.id; })); }).join("") + '</div>';
+  host.innerHTML = card("__mine", "Minhas tarefas", "", mineTasks) +
+    vis.map(function(l){ return card(l.id, l.name, l.color, all.filter(function(x){ return x.list_id === l.id; })); }).join("");
   Array.prototype.forEach.call(host.querySelectorAll("[data-crm-home]"), function(b){
     b.addEventListener("click", function(){ CRM.list = b.getAttribute("data-crm-home"); crmFillFilters(); crmRender(); if (typeof renderNavMenus === "function") renderNavMenus(); });
   });
@@ -6230,25 +6240,28 @@ function crmRender(){
   if (crmResolveList()){ crmFillFilters(); if (CRM.list && !CRM.loaded && !CRM.loading){ crmLoad(); return; } }
   var home = CRM.list === "__home";
   var sec = document.getElementById("tab-crm"); if (sec) sec.classList.toggle("crm-home", home);
-  if (home){ var tt = document.getElementById("crmTitle"); if (tt) tt.textContent = "CRM"; crmHomeRender(host); return; }
-  var mine = CRM.list === "__mine", list = mine ? null : crmListById(CRM.list);
+  var top = document.getElementById("crmHomeTop"); if (top) top.hidden = !home;
+  if (home) crmHomeRender(document.getElementById("crmHomeGrid"));
+  // "multi" = Minhas tarefas ou a tela CRM (todas as tarefas das listas que a pessoa vê): sem Quadro, com coluna Lista
+  var mine = CRM.list === "__mine", multi = mine || home, list = multi ? null : crmListById(CRM.list);
   var title = document.getElementById("crmTitle"); if (title) title.textContent = mine ? "Minhas tarefas" : (list ? list.name : "CRM");
   var seg = document.getElementById("crmViewSeg");
-  if (seg){ var qb = seg.querySelector('[data-cv="quadro"]'); if (qb) qb.hidden = mine; }
-  if (mine && CRM.view === "quadro") CRM.view = "lista";
+  if (seg){ var qb = seg.querySelector('[data-cv="quadro"]'); if (qb) qb.hidden = multi; }
+  if (multi && CRM.view === "quadro") CRM.view = "lista";
   Array.prototype.forEach.call(document.querySelectorAll("#crmViewSeg [data-cv]"), function(b){ b.classList.toggle("active", b.getAttribute("data-cv") === CRM.view); });
-  var add = document.getElementById("crmAdd"); if (add) add.hidden = mine || !list || !crmCan(list.id, "create");
+  var add = document.getElementById("crmAdd"); if (add) add.hidden = multi || !list || !crmCan(list.id, "create");
   if (!CRM.loaded){ host.innerHTML = '<div class="empty-state"><b>Carregando…</b></div>'; return; }
   if (CRM.error){ host.innerHTML = '<div class="empty-state"><b>Não foi possível carregar o CRM.</b>' + esc(CRM.error) + '</div>'; return; }
-  if (!mine && !list){ host.innerHTML = '<div class="empty-state"><b>Nenhuma lista disponível</b>Peça ao Administrador acesso a uma lista do CRM.</div>'; return; }
+  if (!multi && !list){ host.innerHTML = '<div class="empty-state"><b>Nenhuma lista disponível</b>Peça ao Administrador acesso a uma lista do CRM.</div>'; return; }
   var f = crmFilters(), all = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; });
   var showDone = !!(document.getElementById("crmShowDone") || {}).checked;
   var cnt = document.getElementById("crmCount");
-  var base = mine ? all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1; }) : all.filter(function(x){ return x.list_id === list.id; });
+  var base = home ? all.filter(function(x){ return crmCan(x.list_id, "view"); }) :
+    mine ? all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1; }) : all.filter(function(x){ return x.list_id === list.id; });
   var tasks = base.filter(function(x){ return (showDone || !crmIsDone(x)) && crmPass(x, f); }).sort(crmSort);
   if (cnt) cnt.textContent = tasks.length + " de " + base.length + " tarefa" + (base.length === 1 ? "" : "s");
-  if (CRM.view === "calendario"){ host.innerHTML = crmCalHtml(tasks, base, mine ? null : list); return; }
-  if (!mine && CRM.view === "quadro"){
+  if (CRM.view === "calendario"){ host.innerHTML = crmCalHtml(tasks, base, multi ? null : list); return; }
+  if (!multi && CRM.view === "quadro"){
     var bsts = list.statuses.filter(function(s){ return showDone || !s.done; });
     // Celular: um status por vez na largura da tela; a barra de status em cima mostra onde está e leva até ele.
     // Celular: um campo de escolha (igual aos filtros) com o status que está na tela; tocar abre a lista dos status.
@@ -6266,18 +6279,18 @@ function crmRender(){
     crmBoardPager(host, bsts.map(function(s){ return {st: s, n: tasks.filter(function(x){ return x.status === s.id; }).length}; }), list);
     return;
   }
-  if (!base.length){ host.innerHTML = '<div class="empty-state"><b>' + (mine ? "Nenhuma tarefa com você." : "Nenhuma tarefa nesta lista") + '</b>' + (mine ? "" : 'Use "+ Tarefa".') + '</div>'; return; }
+  if (!base.length){ host.innerHTML = '<div class="empty-state"><b>' + (home ? "Nenhuma tarefa nas suas listas." : mine ? "Nenhuma tarefa com você." : "Nenhuma tarefa nesta lista") + '</b>' + (multi ? "" : 'Use "+ Tarefa".') + '</div>'; return; }
   if (!tasks.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca, os filtros ou marque "Finalizados".</div>'; return; }
   var cols = [{key: "st", label: "Status", width: 160, min: 100}];
-  if (mine) cols.push({key: "lista", label: "Lista", width: 140, min: 90, cls: "pt-muted"});
+  if (multi) cols.push({key: "lista", label: "Lista", width: 140, min: 90, cls: "pt-muted"});
   cols = cols.concat([{key: "who", label: "Paciente ou Lead", width: 240, min: 120}, {key: "nome", label: "Tarefa", width: 320, min: 140, cls: "pt-nome"},
     {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"}, {key: "resp", label: "Responsáveis", width: 140, min: 100}, {key: "venc", label: "Vencimento", width: 130, min: 90}, {key: "prio", label: "Prioridade", width: 130, min: 100}]);
-  gtRender(host, mine ? "crm-mine" : "crm-lista", cols, tasks.map(function(x){
+  gtRender(host, home ? "crm-all" : mine ? "crm-mine" : "crm-lista", cols, tasks.map(function(x){
     var l = crmListById(x.list_id), st = crmStatus(l, x.status), who = crmWhoName(x), conv = crmConvName(x);
     var canE = crmCan(x.list_id, "edit");
     var cells = ['<button type="button" class="crm-prio-btn" data-crm-st="' + esc(x.id) + '"' + (canE ? ' title="Mudar o status"' : ' disabled') + '>' + crmStDot(st, x.status) + '</button>'];
     var vals = [st ? (l.statuses.indexOf(st) + 1) : 99];
-    if (mine){ cells.push(esc(l ? l.name : "")); vals.push(l ? l.name : ""); }
+    if (multi){ cells.push(esc(l ? l.name : "")); vals.push(l ? l.name : ""); }
     var words = String(x.title || "").trim().split(/\s+/);
     cells.push(who ? esc(who) + (crmIsLead(x) ? ' <span class="crm-lead-tag">lead</span>' : '') : '<span class="pt-muted">—</span>');
     cells.push('<span class="crm-t">' + esc(x.title) + '</span><span class="crm-t-sm">' + esc(words.slice(0, 4).join(" ") + (words.length > 4 ? "…" : "")) + '</span>' + crmComHtml(x.id) + (CRM.unread[x.id] ? '<span class="crm-unread" title="Menção não lida">@' + CRM.unread[x.id] + '</span>' : ''));
@@ -6288,7 +6301,7 @@ function crmRender(){
     cells.push('<button type="button" class="crm-prio-btn" data-crm-prio="' + esc(x.id) + '" title="' + (crmCan(x.list_id, "edit") ? "Mudar a prioridade" : "Prioridade") + '"' + (crmCan(x.list_id, "edit") ? '' : ' disabled') + '>' + crmFlagSvg(pr) + '<span class="crm-prio-name">' + esc(pr.name) + '</span></button>');
     vals = vals.concat([who, x.title, conv, (x.assignees || []).map(crmPersonName).join(", "), x.due_date || "", CRM_PRIOS.indexOf(pr)]);
     return {attrs: 'class="pr-row" data-crm-id="' + esc(x.id) + '" tabindex="0"', cells: cells, vals: vals};
-  }), crmRender, mine ? "crm-main crm-mine-t" : "crm-main");
+  }), crmRender, multi ? "crm-main crm-mine-t" : "crm-main");
 }
 function wireCrm(){
   var host = document.getElementById("crmHost"); if (!host) return;
@@ -6420,10 +6433,10 @@ function crmBoardPager(host, items, list){
   });
 }
 function crmCalDaySheet(anchor, iso){
-  var mine = CRM.list === "__mine", list = mine ? null : crmListById(CRM.list), f = crmFilters();
+  var mine = CRM.list === "__mine", home = CRM.list === "__home", list = mine || home ? null : crmListById(CRM.list), f = crmFilters();
   var showDone = !!(document.getElementById("crmShowDone") || {}).checked;
   var xs = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; }).filter(function(x){
-    return x.due_date === iso && (mine ? crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1 : x.list_id === CRM.list) && (showDone || !crmIsDone(x)) && crmPass(x, f);
+    return x.due_date === iso && (home ? crmCan(x.list_id, "view") : mine ? crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1 : x.list_id === CRM.list) && (showDone || !crmIsDone(x)) && crmPass(x, f);
   }).sort(crmSort);
   var canNew = !!list && crmCan(list.id, "create");
   var html = (xs.length ? xs.map(function(x){

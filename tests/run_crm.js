@@ -261,9 +261,24 @@ const path = require('path');
   check('CRM: opening again uses the live data (1 read); reconnecting reads once more?', cache.afterOpens === 1 && cache.afterReconnect === 2, JSON.stringify(cache));
   // CRM ▾ → CRM: cartões das listas; clicar abre a lista.
   await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-home"]'); await page.waitForTimeout(150);
-  const home = await page.evaluate(() => ({ cards: [...document.querySelectorAll('#crmHost [data-crm-home]')].map((b) => b.querySelector('b').textContent), seg: getComputedStyle(document.getElementById('crmViewSeg')).display, title: document.getElementById('crmTitle').textContent }));
-  check('CRM home: one card per list (Minhas tarefas first), view buttons hidden?', home.cards.join('|').indexOf('Minhas tarefas|Atendimento|Agendas|Fature|Gestão') === 0 && home.seg === 'none' && home.title === 'CRM', home);
-  await page.click('#crmHost [data-crm-home="agendas"]'); await page.waitForTimeout(100);
+  const home = await page.evaluate(() => { const CRM = window.__ev("CRM"), crmCan = window.__ev("crmCan"), crmIsDone = window.__ev("crmIsDone"); const top = document.getElementById('crmHomeTop'), tb = document.querySelector('#tab-crm .crm-toolbar');
+    const rows = [...document.querySelectorAll('#crmHost tbody tr[data-crm-id]')];
+    const want = Object.keys(CRM.tasks).map((k) => CRM.tasks[k]).filter((x) => crmCan(x.list_id, 'view') && !crmIsDone(x)).length;
+    const hiddenList = Object.keys(CRM.tasks).map((k) => CRM.tasks[k]).some((x) => !crmCan(x.list_id, 'view'));
+    return { cards: [...document.querySelectorAll('#crmHomeGrid [data-crm-home]')].map((b) => b.querySelector('b').textContent),
+      cardsAbove: !!top && !top.hidden && top.getBoundingClientRect().bottom <= tb.getBoundingClientRect().top + 1,
+      seg: getComputedStyle(document.getElementById('crmViewSeg')).display, quadro: getComputedStyle(document.querySelector('#crmViewSeg [data-cv="quadro"]')).display,
+      add: getComputedStyle(document.getElementById('crmAdd')).display, listaCol: [...document.querySelectorAll('#crmHost thead th')].some((t) => /Lista/i.test(t.textContent)),
+      rows: rows.length, want, allVisible: rows.every((r) => crmCan(CRM.tasks[r.getAttribute('data-crm-id')].list_id, 'view')), hiddenList }; });
+  check('CRM home: list cards on top (Minhas tarefas first), then the bar and ALL open tasks of the lists I can see (Lista column, no Quadro/+ Tarefa)?', home.cards.join('|').indexOf('Minhas tarefas|Atendimento|Agendas|Fature|Gestão') === 0 && home.cardsAbove && home.seg !== 'none' && home.quadro === 'none' && home.add === 'none' && home.listaCol && home.rows === home.want && home.rows > 0 && home.allVisible, JSON.stringify(home));
+  const perm = await ev(`(function(){ var orig = crmCan, lid = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k].list_id; })[0];
+    crmCan = function(l, a){ return l === lid ? false : orig(l, a); }; crmRender();
+    var r = {lid: lid, cards: [].map.call(document.querySelectorAll('#crmHomeGrid [data-crm-home]'), function(b){ return b.getAttribute('data-crm-home'); }),
+      rows: [].map.call(document.querySelectorAll('#crmHost tbody tr[data-crm-id]'), function(t){ return CRM.tasks[t.getAttribute('data-crm-id')].list_id; })};
+    crmCan = orig; crmRender(); return JSON.stringify(r); })()`);
+  const pjH = JSON.parse(perm);
+  check('CRM home: a list without permission shows no card and none of its tasks?', pjH.cards.indexOf(pjH.lid) === -1 && pjH.rows.indexOf(pjH.lid) === -1, perm);
+  await page.click('#crmHomeGrid [data-crm-home="agendas"]'); await page.waitForTimeout(100);
   const opened = await page.evaluate(() => ({ title: document.getElementById('crmTitle').textContent, seg: getComputedStyle(document.getElementById('crmViewSeg')).display }));
   check('clicking a card opens that list?', opened.title === 'Agendas' && opened.seg !== 'none', opened);
   // Tela aberta (#crm, F5) antes de as permissões chegarem: quando chegam, abre Minhas tarefas.
