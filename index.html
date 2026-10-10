@@ -472,7 +472,7 @@ div.ag-obj-head{cursor:default}
 .modal.crm-modal{max-width:min(760px,calc(100vw - 32px));width:100%}
 .modal.crm-modal.with-side{max-width:min(1060px,calc(100vw - 32px))}
 /* Janela da tarefa sempre com a altura da tela (não encolhe com pouco conteúdo nem muda de tamanho ao trocar de tarefa) */
-.modal.crm-modal.lay-modal{height:calc(100dvh - 32px)}
+.modal.crm-modal.lay-modal{height:var(--crm-h,calc(100dvh - 32px));max-height:calc(100dvh - 32px)}
 .modal.crm-modal.lay-cheia{max-width:none;width:calc(100vw - 24px);height:calc(100dvh - 24px);max-height:none}
 .overlay.crm-ov.lay-lateral{justify-content:flex-end;align-items:stretch;padding:0}
 .modal.crm-modal.lay-lateral{max-width:min(760px,100vw);height:100dvh;max-height:none;border-radius:0}
@@ -543,8 +543,9 @@ div.ag-obj-head{cursor:default}
 .crm-who{position:relative;display:flex;align-items:center;gap:8px}
 .crm-who input{flex:1;min-width:0}
 .crm-who .autolist{left:0;right:0;top:calc(100% + 4px)}
-.crm-who input{padding-right:132px}
-.crm-who-tag:not(:empty){position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none}
+/* Etiqueta Paciente cadastrado / Lead ao lado do título "Dados do Paciente/Lead" (fora do campo) */
+.crm-sec-tw{display:flex;align-items:center;gap:10px;min-width:0}
+.crm-who-tag:empty{display:none}
 .crm-who-tag{font-size:11px;font-weight:800;white-space:nowrap;border-radius:6px;padding:2px 7px}
 .crm-who-tag.pat{background:var(--accent-weak);color:var(--accent)}
 .crm-who-tag.lead{background:color-mix(in srgb,#e8a400 20%,var(--surface));color:#9a6a00}
@@ -6832,12 +6833,12 @@ function crmOpenTask(task, opts){
     }).join("") : '<div class="ms-empty">Nenhum usuário.</div>') + '</div></div>';
   var whoVal = pat ? pat.nome : (lead.nome || "");
   var whoHtml = prop('<span>Paciente ou Lead</span>', '<div class="crm-who"><input id="crmWho" type="text" autocomplete="off" placeholder="Nome do paciente ou de quem ainda não tem cadastro…" value="' + esc(whoVal) + '"' + dis + '>' +
-    '<span class="crm-who-tag" id="crmWhoTag"></span><div class="autolist" id="crmWhoSug" hidden></div></div>');
+    '<div class="autolist" id="crmWhoSug" hidden></div></div>');
   // "Dados do Paciente/Lead" em todas as listas: Paciente ou Lead | Telefone; Diagnóstico | Convênio.
   // Paciente cadastrado: os campos mostram o cadastro dele (só leitura); lead: os dados digitados na tarefa.
   // "Cadastrar paciente" (só para lead) fica na linha do título, à direita.
   var regPatBtn = can("pacientes", "create") ? '<button type="button" class="btn ghost" id="crmRegPat" hidden>Cadastrar paciente</button>' : '';
-  var leadHtml = '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-h"><div class="crm-sec-t">Dados do Paciente/Lead</div>' + regPatBtn + '</div>' +
+  var leadHtml = '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-h"><div class="crm-sec-tw"><div class="crm-sec-t">Dados do Paciente/Lead</div><span class="crm-who-tag" id="crmWhoTag"></span></div>' + regPatBtn + '</div>' +
     '<div class="pat-count crm-lead-note" id="crmLeadNote">Sem cadastro de paciente: estes dados passam para o cadastro ao usar "Cadastrar paciente".</div>' +
     '<div class="pat-count crm-lead-note" id="crmPatNote" hidden>Dados do cadastro do paciente (para mudar, abra o cadastro do paciente).</div>' +
     '<div class="crm-props">' +
@@ -6885,6 +6886,8 @@ function crmOpenTask(task, opts){
         '<div class="spacer"></div><button class="btn ghost" id="crmCancel">' + (canEdit ? "Cancelar" : "Fechar") + '</button>' + (canEdit ? '<button class="btn primary" id="crmSave">Salvar</button>' : '') + '</div>' +
     '</div></div>';
   var ov = document.getElementById("ovCrm"), modal = ov.querySelector(".crm-modal");
+  // Altura da janela fixada ao abrir: F11 / tela maior não estica a janela (tela menor ainda limita).
+  if (!isMobileView()) modal.style.setProperty("--crm-h", Math.max(320, window.innerHeight - 32) + "px");
   CRM.openId = task ? task.id : null;
   function close(){ CRM.openId = null; host.innerHTML = ""; }
   document.getElementById("crmClose").addEventListener("click", close);
