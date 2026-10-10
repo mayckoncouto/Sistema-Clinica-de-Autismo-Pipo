@@ -681,7 +681,6 @@ div.ag-obj-head{cursor:default}
   #ovCrm .crm-sec{margin-top:14px}
   #ovCrm .crm-side{border-top:1px solid var(--line)}
   #ovCrm .crm-compose textarea{height:44px}
-  #ovCrm .modal-head-acts #crmRegPat{padding-inline:10px;font-size:13px}
   /* Listas e status: nome na largura toda, opções na linha de baixo */
   #ovCrmL .therapist-row{flex-wrap:wrap;row-gap:6px}
   #ovCrmL .therapist-row > input[type=text]{flex:1 1 0;min-width:0}
@@ -701,8 +700,6 @@ div.ag-obj-head{cursor:default}
 .crm-sec-t{font-size:13px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 .crm-sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
 .crm-sec-h .crm-sec-t{margin-bottom:0}
-.crm-sec-h #crmRegPat,.crm-sec-h #crmSendLink{white-space:nowrap;padding:6px 12px;font-size:13px}
-.crm-sec-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .crm-activity{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:6px;padding:2px}
 .crm-activity[hidden]{display:none}
 .crm-ev{font-size:12.5px}
@@ -1765,6 +1762,7 @@ body.pat-col-resizing *{user-select:none}
 .modal-head .modal-sub{font-size:12px;color:var(--muted);margin-top:3px}
 .modal-head-acts{display:flex;align-items:center;gap:8px;flex:none}
 .modal-head-acts .btn{white-space:nowrap}
+#ovCrm .modal-head > .modal-head-acts{margin-left:auto;margin-right:8px}
 .modal-close{border:0;background:transparent;cursor:pointer;color:var(--muted);padding:4px;border-radius:6px;flex:none}
 .modal-close:hover{background:var(--surface-2)}
 .modal-body{padding:4px 18px 14px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
@@ -7076,9 +7074,13 @@ function crmOpenTask(task, opts){
     '<div class="autolist" id="crmWhoSug" hidden></div></div>');
   // "Dados do Paciente/Lead" em todas as listas: Paciente ou Lead | Telefone; Diagnóstico | Convênio.
   // Paciente cadastrado: os campos mostram o cadastro dele (só leitura); lead: os dados digitados na tarefa.
-  // "Cadastrar paciente" (só para lead) fica na linha do título, à direita.
-  var regPatBtn = can("pacientes", "create") ? '<span class="crm-sec-btns"><button type="button" class="btn ghost" id="crmSendLink" hidden title="A família preenche o cadastro pelo celular; o envio fica esperando revisão">Enviar link de cadastro</button><button type="button" class="btn ghost" id="crmRegPat" hidden>Cadastrar paciente</button></span>' : '';
-  var leadHtml = '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-h"><div class="crm-sec-tw"><div class="crm-sec-t">Dados do Paciente/Lead</div><span class="crm-who-tag" id="crmWhoTag"></span></div>' + regPatBtn + '</div>' +
+  // "Enviar link de cadastro" e "Cadastrar paciente" (só para lead) ficam no menu Outras opções do topo da janela.
+  var moreHtml = can("pacientes", "create") ? '<div class="cad-wrap pl-tools-wrap crm-more-wrap" hidden><button type="button" class="btn ghost" id="crmMoreBtn" aria-haspopup="menu" aria-expanded="false">Outras opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+    '<div class="cad-menu pl-tools-menu" id="crmMoreMenu" role="menu" hidden>' +
+      '<button type="button" class="btn ghost" id="crmSendLink" hidden title="A família preenche o cadastro pelo celular; o envio fica esperando revisão">Enviar link de cadastro</button>' +
+      '<button type="button" class="btn ghost" id="crmRegPat" hidden>Cadastrar paciente</button>' +
+    '</div></div>' : '';
+  var leadHtml = '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-h"><div class="crm-sec-tw"><div class="crm-sec-t">Dados do Paciente/Lead</div><span class="crm-who-tag" id="crmWhoTag"></span></div></div>' +
     '<div class="pat-count crm-lead-note" id="crmLeadNote">Sem cadastro de paciente: estes dados passam para o cadastro ao usar "Cadastrar paciente".</div>' +
     '<div class="pat-count crm-lead-note" id="crmPatNote" hidden>Dados do cadastro do paciente (para mudar, abra o cadastro do paciente).</div>' +
     '<div class="crm-props">' +
@@ -7102,7 +7104,7 @@ function crmOpenTask(task, opts){
       '<div class="modal-head"><div><h3>' + (isNew ? "Nova tarefa" : canEdit ? "Editar tarefa" : "Tarefa") + '</h3>' +
         '<div class="modal-sub"><span class="crm-chip sm" style="--st:' + esc(list.color || "#64748b") + '">' + esc(list.name) + '</span>' +
         (task && task.created_by_name ? ' · criada por ' + esc(task.created_by_name) + (task.created_at ? ' em ' + esc(agdBrDate(String(task.created_at).slice(0, 10))) : '') : '') + '</div></div>' +
-        '<div class="modal-head-acts">' +
+        '<div class="modal-head-acts">' + moreHtml +
         '</div>' +
         '<button class="modal-close" id="crmClose" aria-label="Fechar">✕</button></div>' +
       // Celular: Detalhes (campos) | Atividade (alterações, comentários e o campo de comentar).
@@ -7126,6 +7128,16 @@ function crmOpenTask(task, opts){
         '<div class="spacer"></div><button class="btn ghost" id="crmCancel">' + (canEdit ? "Cancelar" : "Fechar") + '</button>' + (canEdit ? '<button class="btn primary" id="crmSave">Salvar</button>' : '') + '</div>' +
     '</div></div>';
   var ov = document.getElementById("ovCrm"), modal = ov.querySelector(".crm-modal");
+  // Menu Outras opções (topo): some quando nenhuma opção vale para a tarefa (paciente cadastrado, sem permissão).
+  var moreBtn = document.getElementById("crmMoreBtn"), moreMenu = document.getElementById("crmMoreMenu");
+  function crmMoreSync(){ if (!moreBtn) return; var w = moreBtn.parentNode; w.hidden = !moreMenu.querySelector("button:not([hidden])"); if (w.hidden) moreOpen(false); }
+  function moreOpen(o){ if (!moreBtn) return; moreMenu.hidden = !o; moreBtn.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ placeToolsMenu(moreBtn, moreMenu); var f = moreMenu.querySelector("button:not([hidden])"); if (f) f.focus(); } }
+  if (moreBtn){
+    moreBtn.addEventListener("click", function(e){ e.stopPropagation(); moreOpen(moreMenu.hidden); });
+    moreMenu.addEventListener("click", function(e){ if (e.target.closest("button")) moreOpen(false); });
+    ov.addEventListener("mousedown", function(e){ if (!e.target.closest(".crm-more-wrap")) moreOpen(false); });
+    moreMenu.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); moreOpen(false); moreBtn.focus(); } });
+  }
   // Descrição ocupa o espaço livre da coluna (janela maior = mais linhas visíveis), sem a barra de rolagem da coluna;
   // mínimo de 4 linhas (tela pequena: aí a coluna rola). Refeito ao mudar o tamanho da tela.
   function fitDesc(){
@@ -7195,6 +7207,7 @@ function crmOpenTask(task, opts){
     leadFill();
     var rb = document.getElementById("crmRegPat"); if (rb) rb.hidden = !isLead || !canEdit;
     var sl = document.getElementById("crmSendLink"); if (sl) sl.hidden = !isLead || !canEdit || !task;
+    crmMoreSync();
   }
   whoIn.addEventListener("input", function(){
     pid = ""; var q = normText(whoIn.value.trim());
@@ -20093,7 +20106,7 @@ var HELP_TOPICS = [
     steps: [
       "Paciente novo: Cadastros → Pacientes → <b>Outras opções</b> → <b>Enviar link de cadastro</b>. Escreva o telefone (e o nome, se souber), clique em <b>Gerar link</b> e use <b>Copiar</b>, <b>Enviar por WhatsApp</b> ou <b>Enviar por e-mail</b>.",
       "Paciente já cadastrado: na janela dele, <b>Pedir atualização</b> manda o link já preenchido com o cadastro atual; a família só corrige o que mudou.",
-      "Lead do CRM: na tarefa (já salva), <b>Enviar link de cadastro</b>, ao lado de Cadastrar paciente. O envio fica ligado à tarefa.",
+      "Lead do CRM: na tarefa (já salva), <b>Outras opções</b> → <b>Enviar link de cadastro</b>. O envio fica ligado à tarefa.",
       "<b>Link geral da clínica</b> (Outras opções): um link fixo para o Instagram, o site ou o WhatsApp da recepção. Cada envio cria um lead novo no CRM, na lista Atendimento.",
       "Quando chega um cadastro, o botão <b>Cadastros</b> mostra um número e a tela Pacientes mostra <b>Revisar cadastro</b>. Clique para abrir a janela do paciente já preenchida: confira e salve. No paciente já cadastrado, os campos diferentes do envio ficam destacados, com <b>Usar enviado</b> ou <b>Manter atual</b>; telefone e e-mail novos entram na lista.",
       "<b>Descartar envio</b> (no aviso do topo da janela, ou na lista de revisão) tira o envio da lista sem gravar nada.",
@@ -20486,7 +20499,7 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>CRM ▾</b> e escolha a lista (Atendimento, Agendas, Fature, Gestão…) ou <b>Minhas tarefas</b> (tudo o que está aberto com você). O primeiro item, <b>CRM</b>, mostra em cima um cartão por lista que você pode ver (abertas, vencidas, comigo; clique no cartão para abrir a lista) e embaixo a barra de busca e filtros com todas as tarefas dessas listas (coluna <b>Lista</b>; Lista ou Calendário). Ao entrar no CRM sem escolher uma lista (endereço #crm, atualizar a página), abre <b>Minhas tarefas</b>.",
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
-      "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Em todas as listas, o grupo <b>Dados do Paciente/Lead</b> traz, em duas linhas, Paciente ou Lead e Telefone, Diagnóstico e Convênio. Com paciente cadastrado, esses campos mostram o cadastro dele (telefone, diagnóstico e convênio do tratamento) e só mudam no cadastro do paciente; com lead, são preenchidos na tarefa. <b>Cadastrar paciente</b> (à direita, na linha do título, só para lead) abre o cadastro já preenchido com nome, telefone e diagnóstico (o diagnóstico vai para o campo Diagnóstico do paciente). Ao salvar, a tarefa fica ligada ao paciente, os dados do lead saem da tarefa (passam a valer os do cadastro), nasce um tratamento <b>Ativo</b> só com o convênio do lead — o resto do tratamento é preenchido depois — e a Atividade registra “cadastrou o lead como paciente”. O status da tarefa não muda. A lista de Status tem um campo de pesquisa: digite parte do nome (sem precisar de acento ou maiúscula) e Enter escolhe o primeiro.",
+      "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Em todas as listas, o grupo <b>Dados do Paciente/Lead</b> traz, em duas linhas, Paciente ou Lead e Telefone, Diagnóstico e Convênio. Com paciente cadastrado, esses campos mostram o cadastro dele (telefone, diagnóstico e convênio do tratamento) e só mudam no cadastro do paciente; com lead, são preenchidos na tarefa. <b>Outras opções</b> → <b>Cadastrar paciente</b> (no topo da janela, só para lead) abre o cadastro já preenchido com nome, telefone e diagnóstico (o diagnóstico vai para o campo Diagnóstico do paciente). Ao salvar, a tarefa fica ligada ao paciente, os dados do lead saem da tarefa (passam a valer os do cadastro), nasce um tratamento <b>Ativo</b> só com o convênio do lead — o resto do tratamento é preenchido depois — e a Atividade registra “cadastrou o lead como paciente”. O status da tarefa não muda. A lista de Status tem um campo de pesquisa: digite parte do nome (sem precisar de acento ou maiúscula) e Enter escolhe o primeiro.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",
       "<b>Vencimento</b> (na janela da tarefa ou clicando na data da lista): nas listas com <b>Recorrência</b> ligada abre uma janela com atalhos à esquerda (Hoje, Amanhã, Próxima Segunda, Semana que vem — o mesmo dia da semana que vem —, 2 semanas, 4 semanas) e o calendário à direita; o ✕ ao lado da data tira o vencimento; nas outras listas abre o calendário normal. Também dá para digitar a data no campo. A opção <b>Recorrência</b> de cada lista fica em <b>CRM ▾ → Listas e status</b> (ao lado de Funil de contatos).",
       "<b>Outras opções ▾</b> na barra do CRM: <b>Exportar planilha</b> baixa um Excel com as tarefas da tela aberta (a lista, Minhas tarefas ou a tela CRM, com a busca, os filtros e “Finalizados”), com a coluna <b>Código</b> de cada tarefa. <b>Importar planilha</b>: linha com Código atualiza aquela tarefa; sem Código vira tarefa nova (sem Lista, vai para a lista aberta). Status pelo nome do status da lista; Prioridade Urgente, Alta ou Normal; Responsáveis pelos nomes (só quem tem acesso ao CRM e à lista); nome que não é paciente cadastrado vira lead. Dados do lead só nas listas com Funil de contatos. A prévia mostra Novo, Atualizar, Igual e Com problema antes de gravar, e o sistema baixa uma cópia antes de importar. Célula vazia não apaga; comentários e histórico não entram; não dá para mudar a tarefa de lista pela planilha.",

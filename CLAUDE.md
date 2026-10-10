@@ -3657,3 +3657,4 @@ título**. Bloco "Barras das telas" no fim do `<style>` (`index.html`). Teste fi
 - Filtros 3 por linha no celular usam rótulo curto na opção vazia (Profissional, Especialidade, Sala, Status,
   Responsável, Prioridade, Vencimento — `vgFillFilters`, `crmFillFilters`; trocar a largura refaz).
 - Planner: entre 761 e 1100px a barra quebra em 2 linhas (antes a 1024px o "?" saía da tela).
+- (2026-10-10, pedido do usuário) Janela da tarefa do CRM: **Enviar link de cadastro** (`#crmSendLink`) e **Cadastrar paciente** (`#crmRegPat`) ficam no menu **Outras opções ▾** do topo da janela (`#crmMoreBtn`/`#crmMoreMenu`, `.crm-more-wrap`, mesmo padrão do menu do Tratamento, posição por `placeToolsMenu`); saíram da linha do título "Dados do Paciente/Lead". O menu some quando nenhuma opção vale (paciente cadastrado ou sem permissão; `crmMoreSync` em `whoRefresh`). Teste em `run_crm.js`.
