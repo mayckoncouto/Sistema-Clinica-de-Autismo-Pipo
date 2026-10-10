@@ -3535,6 +3535,12 @@ Ordem combinada: 1) Jornada semanal, 2) Retirada/medida protetiva, 3) CRM lead �
   Migração `supabase/2026-10-10s-campos-do-link.sql`. Mudou a lista de campos do formulário? Ajustar
   `LINK_FIELDS` no index.html, `cadastro.html` e as chaves de `intake_send`.
 - Produção (2026-10-10): `2026-10-10s-campos-do-link` rodada (1 | 1).
+- (2026-10-10, pedido do usuário) **Link do paciente vale 1 dia** (antes 7) e é **curto**: `/c/<10 letras e números>`
+  (`intakeToken()` no app grava o `token`; `intakeUrl` = origem + `/c/` + token; `vercel.json` reescreve `/c/:t` para
+  `/cadastro`, e `cadastro.html` lê o token do caminho ou do `?t=` antigo). O domínio continua o da Vercel (link mais
+  curto que isso só com domínio próprio). Mensagem: "Olá! Para que possamos realizar seu agendamento, preencha por este
+  link (vale 1 dia): …". Lembrete do CRM (`intake_remind`) sai quando o link VENCE sem resposta. Migração
+  `supabase/2026-10-10t-link-vale-1-dia.sql` (links já enviados mantêm a validade).
 - (2026-10-10, revisão de campos e listas) Listas de sugestões ao digitar (`.autolist`: Paciente ou Lead do
   CRM, paciente do agendamento no Planner/Agenda, convênio e especialidade do tratamento) flutuam por cima da
   janela (`autoAnchor`, `autoPlace`, `autoReplaceAll`; z-index 90): antes ficavam dentro da janela e aumentavam

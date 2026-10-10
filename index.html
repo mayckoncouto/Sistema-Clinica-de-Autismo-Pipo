@@ -19956,11 +19956,11 @@ var HELP_TOPICS = [
     rules: [
       "O formulário pode ter: nome, nascimento e CPF do paciente, sexo, responsável e parentesco, telefone, e-mail, endereço, convênio, diagnóstico ou suspeita, se tem laudo, escola e turno, como conheceu a clínica e observações, mais a autorização da LGPD.",
       "Quais campos aparecem e quais são obrigatórios: Pacientes → Outras opções → <b>Campos obrigatórios</b>, colunas <b>Link rápido</b> (Enviar link de cadastro, Pedir atualização e o link da tarefa do CRM) e <b>Link fixo</b> (link geral da clínica). <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece; Responsável e parentesco, Convênio e “Tem laudo?” ficam no grupo “Só no link de cadastro”. Nome e telefone são sempre obrigatórios.",
-      "O link do paciente vale 7 dias e uma vez só; o link geral não vence (gerar um novo desativa o anterior).",
+      "O link do paciente vale 1 dia e uma vez só; o link geral não vence (gerar um novo desativa o anterior).",
       "Ao salvar um paciente novo vindo do link, nasce um tratamento <b>Ativo</b> só com o convênio informado (o resto do tratamento é preenchido depois). Se veio do CRM, a tarefa fica ligada ao paciente e os dados do lead saem da tarefa.",
       "CPF enviado igual ao de um paciente já cadastrado: o sistema pergunta se é uma atualização do cadastro dele.",
       "Laudo, escola não cadastrada, convênio e observações da família vão para as Observações do cadastro novo.",
-      "Link sem resposta em 3 dias vira uma tarefa no CRM (lista Atendimento) para a recepção cobrar a família."
+      "Link que venceu sem resposta (1 dia) vira uma tarefa no CRM (lista Atendimento) para a recepção cobrar a família e mandar um novo link."
     ],
     who: "Quem pode incluir Pacientes gera os links, vê o número no botão Cadastros e revisa os envios."},
   {id: "pacientes", group: "Cadastros", title: "Pacientes", mod: "pacientes", tab: "pacientes",
@@ -24855,7 +24855,14 @@ var INTAKE = {subs: [], loaded: false, mem: null, chan: null, reminded: false, m
 var INTAKE_KIND = {novo: "Paciente novo", atualizacao: "Atualização", crm: "Lead do CRM", geral: "Link geral"};
 function intakeCan(){ return can("pacientes", "create"); }
 function intakeMem(){ if (!INTAKE.mem) INTAKE.mem = {links: [], subs: []}; return INTAKE.mem; }
-function intakeUrl(token){ return location.origin + "/cadastro?t=" + encodeURIComponent(token); }
+// Link curto: /c/<código de 10 letras e números> (vercel.json leva para cadastro.html).
+function intakeUrl(token){ return location.origin + "/c/" + encodeURIComponent(token); }
+function intakeToken(){
+  var abc = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789", a = new Uint8Array(10), out = "";
+  window.crypto.getRandomValues(a);
+  for (var i = 0; i < a.length; i++) out += abc[a[i] % abc.length];
+  return out;
+}
 // INTAKE é criado no fim do script: antes disso (perfil já carregado no início) as funções não fazem nada.
 function intakePendingFor(pid){ return pid && INTAKE ? (INTAKE.subs || []).filter(function(x){ return x.patient_id === pid && x.status === "pendente"; })[0] || null : null; }
 function intakeLoad(){
@@ -24867,7 +24874,7 @@ function intakeLoad(){
     if (r.error){ INTAKE.missing = true; INTAKE.subs = []; intakeBadge(); return; }
     INTAKE.subs = r.data || []; INTAKE.loaded = true; intakeBadge();
     if (!INTAKE.chan) INTAKE.chan = c.channel("pipo-intake").on("postgres_changes", {event: "*", schema: "public", table: "intake_submissions"}, function(){ intakeLoad(); }).subscribe();
-    // Lembrete: link individual sem resposta em 3 dias vira tarefa no CRM (uma vez por link).
+    // Lembrete: link individual que venceu sem resposta vira tarefa no CRM (uma vez por link).
     if (!INTAKE.reminded){ INTAKE.reminded = true; c.rpc("intake_remind").then(function(){}, function(){}); }
   });
 }
@@ -24884,13 +24891,13 @@ function intakeBadge(){
 function intakeCreate(o){
   var c = agdClient();
   if (!c){
-    var now = Date.now(), l = Object.assign({token: "t" + now.toString(36) + Math.random().toString(36).slice(2, 8), created_at: new Date(now).toISOString(),
-      expires_at: o.kind === "geral" ? null : new Date(now + 7 * 864e5).toISOString(), used_at: null, canceled_at: null, created_by_name: trWho()}, o);
+    var now = Date.now(), l = Object.assign({token: intakeToken(), created_at: new Date(now).toISOString(),
+      expires_at: o.kind === "geral" ? null : new Date(now + 864e5).toISOString(), used_at: null, canceled_at: null, created_by_name: trWho()}, o);
     if (o.kind === "geral") intakeMem().links.forEach(function(x){ if (x.kind === "geral" && !x.canceled_at) x.canceled_at = new Date(now).toISOString(); });
     intakeMem().links.push(l); return Promise.resolve(l);
   }
   var go = o.kind === "geral" ? c.from("intake_links").update({canceled_at: new Date().toISOString()}).eq("kind", "geral").is("canceled_at", null) : Promise.resolve({});
-  return go.then(function(){ return c.from("intake_links").insert(o).select().single(); }).then(function(r){ if (r.error) throw r.error; return r.data; });
+  return go.then(function(){ return c.from("intake_links").insert(Object.assign({token: intakeToken()}, o)).select().single(); }).then(function(r){ if (r.error) throw r.error; return r.data; });
 }
 function intakeLinks(kind){
   var c = agdClient();
@@ -24923,8 +24930,8 @@ function intakePrefillFrom(p){
 function intakeMessage(kind, nome, url){
   var cl = clinicName();
   if (kind === "geral") return "Olá! Para fazer o cadastro na " + cl + ", preencha por este link: " + url;
-  if (kind === "atualizacao") return "Olá! Confira e atualize o cadastro" + (nome ? " de " + nome : "") + " na " + cl + " por este link (vale 7 dias): " + url;
-  return "Olá! Para o cadastro" + (nome ? " de " + nome : "") + " na " + cl + ", preencha por este link (vale 7 dias): " + url;
+  if (kind === "atualizacao") return "Olá! Para atualizarmos o seu cadastro, confira e corrija por este link (vale 1 dia): " + url;
+  return "Olá! Para que possamos realizar seu agendamento, preencha por este link (vale 1 dia): " + url;
 }
 // Janela do link: opts {kind: "novo"|"atualizacao"|"crm"|"geral", patient, task}
 function openIntakeLinkModal(opts){
@@ -24936,8 +24943,8 @@ function openIntakeLinkModal(opts){
   var mail = p ? (patFirstEmail(p) || "") : "";
   var title = kind === "geral" ? "Link geral da clínica" : kind === "atualizacao" ? "Pedir atualização do cadastro" : "Enviar link de cadastro";
   var sub = kind === "geral" ? "Para o Instagram, o WhatsApp da recepção ou o site. Não vence. Cada envio vira um lead novo no CRM (lista Atendimento) e fica esperando revisão."
-    : kind === "atualizacao" ? "A família recebe o formulário já preenchido com o cadastro atual e corrige o que mudou. Vale 7 dias e uma vez só; o envio fica esperando revisão."
-    : "A família preenche os dados principais pelo celular. Vale 7 dias e uma vez só; o envio fica esperando revisão" + (task ? " e fica ligado a esta tarefa do CRM" : "") + ".";
+    : kind === "atualizacao" ? "A família recebe o formulário já preenchido com o cadastro atual e corrige o que mudou. Vale 1 dia e uma vez só; o envio fica esperando revisão."
+    : "A família preenche os dados principais pelo celular. Vale 1 dia e uma vez só; o envio fica esperando revisão" + (task ? " e fica ligado a esta tarefa do CRM" : "") + ".";
   var host = regQuickHost();
   host.innerHTML = '<div class="overlay" id="ovIntake"><div class="modal" style="max-width:560px">' +
     '<div class="modal-head"><div><h3>' + esc(title) + '</h3><div class="modal-sub">' + esc(sub) + '</div></div><button class="modal-close" id="ikClose" aria-label="Fechar">✕</button></div>' +

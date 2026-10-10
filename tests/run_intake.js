@@ -32,10 +32,10 @@ const path = require('path');
   await page.fill('#ikTel', '47999990000');
   await page.click('#ikGen'); await page.waitForTimeout(150);
   const url = await page.inputValue('#ikUrl');
-  check('link generated (/cadastro?t=…)?', /\/cadastro\?t=t/.test(url), url);
+  check('short link generated (/c/<10>)?', /\/c\/[A-Za-z0-9]{10}$/.test(url), url);
   const link = await ev('intakeMem().links[0]');
   check('update link carries the patient data and lasts 7 days?', link.kind === 'atualizacao' && link.patient_id === 'ana-azul' && link.prefill.nome === 'Ana Azul' &&
-    Math.round((new Date(link.expires_at) - new Date(link.created_at)) / 864e5) === 7, {k: link.kind, pf: link.prefill, exp: link.expires_at});
+    Math.round((new Date(link.expires_at) - new Date(link.created_at)) / 864e5) === 1, {k: link.kind, pf: link.prefill, exp: link.expires_at});
   await page.click('#ikWa');
   const wa = await ev('window.__opened[0]');
   check('WhatsApp opens wa.me with 55+phone and the link in the text?', /^https:\/\/wa\.me\/5547999990000\?text=/.test(wa) && decodeURIComponent(wa).indexOf(url) !== -1, wa);
@@ -91,7 +91,7 @@ const path = require('path');
   let sent = null;
   await pub.route('http://pipo.test/**', (route) => {
     const u = route.request().url();
-    if (/\/cadastro\?/.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
+    if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
     if (/\/favicon\.png/.test(u)) return route.fulfill({status: 404, body: ''});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
     if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'novo', nome: 'Duda', prefill: {}, clinica: {nome: 'Clínica Fictícia'}, convenios: ['Unimed'], origens: ['Instagram']})});
@@ -99,7 +99,7 @@ const path = require('path');
     return route.fulfill({status: 404, body: ''});
   });
   await pub.route('https://viacep.com.br/**', (route) => route.fulfill({contentType: 'application/json', body: JSON.stringify({logradouro: 'Rua do CEP', bairro: 'Velha', localidade: 'Blumenau', uf: 'SC'})}));
-  await pub.goto('http://pipo.test/cadastro?t=abc');
+  await pub.goto('http://pipo.test/c/abc');
   await pub.waitForSelector('#frm');
   check('public form opens with the clinic name and the patient name?', (await pub.textContent('#cName')) === 'Clínica Fictícia' && (await pub.inputValue('#nome')) === 'Duda');
   await pub.click('#send'); await pub.waitForTimeout(100);
@@ -146,7 +146,7 @@ const path = require('path');
   await pub.unroute('http://pipo.test/**');
   await pub.route('http://pipo.test/**', (route) => {
     const u = route.request().url();
-    if (/\/cadastro\?/.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
+    if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
     if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: false, motivo: 'usado'})});
     return route.fulfill({status: 404, body: ''});
@@ -157,7 +157,7 @@ const path = require('path');
   sent = null;
   await pub.route('http://pipo.test/**', (route) => {
     const u = route.request().url();
-    if (/\/cadastro\?/.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
+    if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
     if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'geral', nome: '', prefill: {}, clinica: {nome: 'C'}, convenios: [], origens: [],
       campos: {cpf: {show: false, req: false}, nascimento: {show: true, req: false}, responsavel: {show: false, req: false}, escola: {show: true, req: true}, endereco: {show: false, req: false}}})});
@@ -184,7 +184,7 @@ const path = require('path');
   await pub.unroute('http://pipo.test/**');
   await pub.route('http://pipo.test/**', (route) => {
     const u = route.request().url();
-    if (/\/cadastro\?/.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
+    if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
     if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: false, motivo: 'usado'})});
     return route.fulfill({status: 404, body: ''});

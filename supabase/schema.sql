@@ -5252,7 +5252,7 @@ revoke execute on function public.crm_user_open_tasks(uuid) from anon;
 
 -- Link de cadastro rápido (2026-10-10, migração 2026-10-10r-link-de-cadastro.sql)
 --   intake_links (links: novo, atualizacao, crm, geral) e intake_submissions (envios, esperando revisão);
---   intake_form / intake_send: página pública cadastro.html (sem login); intake_remind: lembrete de 3 dias.
+--   intake_form / intake_send: página pública cadastro.html (sem login); intake_remind: lembrete quando o link vence sem resposta.
 create table if not exists public.intake_links (
   token           text primary key default replace(gen_random_uuid()::text, '-', ''),
   kind            text not null check (kind in ('novo', 'atualizacao', 'crm', 'geral')),
@@ -5298,7 +5298,7 @@ begin
   if tg_op = 'INSERT' then
     new.created_by := auth.uid(); new.created_by_name := public.crm_my_name(); new.created_at := now();
     new.used_at := null; new.reminded_at := null;
-    new.expires_at := case when new.kind = 'geral' then null else now() + interval '7 days' end;
+    new.expires_at := case when new.kind = 'geral' then null else now() + interval '1 day' end;
   else
     -- Quem usa o app só pode cancelar ou mudar telefone/nome; uso e lembrete são marcados pelas funções.
     new.token := old.token; new.kind := old.kind; new.created_by := old.created_by; new.created_at := old.created_at; new.expires_at := old.expires_at;
@@ -5431,7 +5431,7 @@ begin
   end if;
   return jsonb_build_object('ok', true);
 end $$;
--- Lembrete: link individual não preenchido em 3 dias → tarefa no CRM (uma vez por link).
+-- Lembrete: link individual que venceu (1 dia) sem ser preenchido → tarefa no CRM (uma vez por link).
 create or replace function public.intake_remind()
 returns integer language plpgsql volatile security definer set search_path = public as $$
 declare l public.intake_links; lst text; sts text; n integer := 0;
@@ -5444,10 +5444,10 @@ begin
   if lst is null then lst := 'atendimento'; sts := 'triagem'; end if;
   for l in select * from public.intake_links
             where kind in ('novo', 'atualizacao', 'crm') and used_at is null and canceled_at is null and reminded_at is null
-              and created_at < now() - interval '3 days' for update skip locked loop
+              and expires_at is not null and expires_at < now() for update skip locked loop
     insert into public.tasks (list_id, status, title, description, due_date, assignees, patient_id, lead)
     values (lst, coalesce(sts, 'triagem'), 'Cobrar cadastro pelo link: ' || coalesce(nullif(l.nome, ''), 'sem nome'),
-            'O link de cadastro enviado em ' || to_char(l.created_at, 'DD/MM/YYYY') || coalesce(' por ' || nullif(l.created_by_name, ''), '') || ' ainda não foi preenchido.' ||
+            'O link de cadastro enviado em ' || to_char(l.created_at, 'DD/MM/YYYY') || coalesce(' por ' || nullif(l.created_by_name, ''), '') || ' venceu sem ser preenchido. Cobre a família e envie um novo link.' ||
               case when l.telefone <> '' then ' Telefone: ' || l.telefone || '.' else '' end,
             current_date,
             case when l.created_by is not null and public.crm_user_can(l.created_by, lst) then array[l.created_by] else '{}'::uuid[] end,
