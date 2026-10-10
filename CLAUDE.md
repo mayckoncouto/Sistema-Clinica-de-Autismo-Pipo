@@ -3688,3 +3688,7 @@ Pontos encontrados e decisões do usuário (todas as correções aprovadas):
   ativos incompletos (valor, Sessão/Mês, convênio, horário); 113 tratamentos ativos sem quadros (limpos em 10/10, a
   recadastrar); 341 atendimentos passados sem status (Agenda → Outras opções → Pendências / Status em lote; Finalizado
   não entra no lote, exige evolução).
+- Produção (2026-10-10): 10v aplicada pelo conector em partes (funções 9/9 iguais ao schema, 0 funções abertas sem login,
+  link de cadastro aberto, 5 caminhos de busca fixos, 6 regras rápidas — feitas com `alter policy`). FALTA só
+  `drop table if exists public.planner_backups;` — o conector trava em comando que apaga (espera uma confirmação que
+  não aparece); esse o usuário roda no SQL Editor. Dica: no conector, mudar regra com `alter policy` (não drop/create).
