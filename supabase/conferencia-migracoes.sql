@@ -103,7 +103,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (89, '2026-10-10v-revisao-geral',                 exists(select 1 from fx where proname = 'backup_restore_crm'), 'restaurar o CRM pelo Backup, segurança e velocidade'),
  (90, '2026-10-10w-conector-claude',               exists(select 1 from fx where proname = 'crm_tarefas_alterar'), 'conector Claude: funções, origem nas atividades e registro'),
  (91, '2026-10-11-notificacoes',                   exists(select 1 from fx where proname = 'push_overdue_counts'), 'notificações: aparelhos, menção na hora e resumo das vencidas às 8h'),
- (92, '2026-10-11b-link-campos-escolhidos',         exists(select 1 from fx where proname = 'intake_send' and prosrc like '%''vazio''%'), 'link de cadastro: nome e telefone escolhidos em Campos obrigatórios')
+ (92, '2026-10-11b-link-campos-escolhidos',         exists(select 1 from fx where proname = 'intake_send' and prosrc like '%''vazio''%'), 'link de cadastro: nome e telefone escolhidos em Campos obrigatórios'),
+ (93, '2026-10-11c-correcoes-de-texto',              to_regclass('public.correcoes_texto_2026_10_11') is not null, 'só dados: correção de português no CRM e cadastros (guarda o texto antigo)')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

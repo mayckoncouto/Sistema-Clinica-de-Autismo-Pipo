@@ -3792,3 +3792,12 @@ foi mencionado (o autor não recebe) e tem acesso à lista; cada pessoa liga no 
   nome = uma opção; valor = `normText(nome)`; `crmFillStatus`, `crmStKey`, `crmFilters().st`). Status escolhido mostra
   também as finalizadas; no Quadro fica só a coluna dele. Celular: Status na linha da busca. Filtros com rótulo curto em
   todo tamanho (Status, Responsável, Prioridade, Vencimento); no computador a busca encolhe antes dos filtros.
+- (2026-10-11, pedido do usuário) **Verificação de português** pelo conector Supabase (só leitura): cadastros quase
+  sem erros (só "Cordenação" em Tipos de colaborador e 2 nomes de paciente com espaço duplo); no CRM ~570 textos com
+  acento faltando ou digitação errada. Decisões: corrigir títulos, descrições E comentários, só palavras com um único
+  jeito certo (as/às, esta/está, pais/país, analise… ficam), e marcar Nome e Telefone obrigatórios no cadastro e nos
+  dois links. Migração só de dados `supabase/2026-10-11c-correcoes-de-texto.sql` (lista de palavras, palavra inteira,
+  mantém maiúsculas, não mexe em e-mail/site; `pipo.restore` = sem linhas novas no histórico das tarefas; texto antigo
+  em `public.correcoes_texto_2026_10_11` para desfazer — pode ser apagada depois). Testada no PGlite.
+- Produção (2026-10-11): `2026-10-11-notificacoes` rodada (1 | 1 | 1 | 1); `2026-10-11b` rodada (1); função
+  `pipo-push` publicada pelo conector (verify_jwt false) e testada pelo banco (devolveu a chave pública).
