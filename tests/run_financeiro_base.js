@@ -17,11 +17,11 @@ const fs = require('fs');
   let fails = 0;
   const check = (label, ok, extra) => { console.log(label, !!ok, extra === undefined ? '' : extra); if (!ok) fails++; };
   const setSel = (id, v) => page.$eval(id, (e, x) => { e.value = x; e.dispatchEvent(new Event('change', { bubbles: true })); }, v);
-  const open = async (key, tab) => { await page.click('#cadBtn'); await page.click('#cadMenu [data-nav="' + key + '"]'); await page.waitForTimeout(200); return page.$eval('#tab-' + tab, (e) => !e.hidden); };
+  const open = async (key, tab) => { await page.click('#finBtn'); await page.click('#finMenu [data-nav="' + key + '"]'); await page.waitForTimeout(200); return page.$eval('#tab-' + tab, (e) => !e.hidden); };
   const rows = (k) => page.$$eval('#reg-' + k + '-host tbody tr', (r) => r.map((x) => x.textContent));
 
   // ---- Categorias de fornecedor ----
-  check('menu lists the 3 new registries?', await (async () => { await page.click('#cadBtn'); const ok = !!(await page.$('#cadMenu [data-nav="catfornecedor"]')) && !!(await page.$('#cadMenu [data-nav="contas"]')) && !!(await page.$('#cadMenu [data-nav="planocontas"]')); await page.click('#cadBtn'); return ok; })());
+  check('menu lists the 3 new registries?', await (async () => { await page.click('#finBtn'); const ok = !!(await page.$('#finMenu [data-nav="catfornecedor"]')) && !!(await page.$('#finMenu [data-nav="contas"]')) && !!(await page.$('#finMenu [data-nav="planocontas"]')); await page.click('#finBtn'); return ok; })());
   check('Categorias screen opens with title?', await open('catfornecedor', 'catfornecedor') && /Categorias de fornecedor/.test(await page.$eval('#tab-catfornecedor .cad-title', (e) => e.textContent)));
   await page.click('#reg-catfornecedor-add'); await page.waitForSelector('#ovReg');
   await page.fill('#regName', 'Material'); await page.click('#regSave'); await page.waitForTimeout(300);

@@ -34,8 +34,11 @@ const fs = require('fs');
   await page.waitForTimeout(300);
 
   // ---- menu e tela ----
-  check('Financeiro button is visible (single item = direct button)?', await page.$eval('#finBtn', (b) => !b.hidden && /Lançamentos/.test(b.textContent)), await page.$eval('#finBtn', (b) => b.textContent));
-  await page.click('#finBtn'); await page.waitForTimeout(300);
+  await page.click('#finBtn');
+  check('Financeiro menu lists Lançamentos and the financial registries?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,fornecedores,catfornecedor,contas,planocontas');
+  check('Cadastros menu no longer lists them?', !(await page.$('#cadMenu [data-nav="contas"]')) && !(await page.$('#cadMenu [data-nav="fornecedores"]')));
+  await page.keyboard.press('Escape');
+  await page.click('#finBtn'); await page.click('#finMenu [data-nav="lancamentos"]'); await page.waitForTimeout(300);
   check('Lançamentos screen opens with title?', await page.$eval('#tab-lancamentos', (e) => !e.hidden) && /Lançamentos/.test(await page.$eval('#tab-lancamentos .cad-title', (e) => e.textContent)));
   check('empty state before any entry?', /Nenhum lançamento/.test(await page.textContent('#reg-lancamentos-host')));
   check('hash is #lancamentos?', (await page.evaluate(() => location.hash)) === '#lancamentos');

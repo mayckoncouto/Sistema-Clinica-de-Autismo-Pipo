@@ -3990,3 +3990,7 @@ para a Fase 3). O saldo de cada conta da planilha (aba DRE) = saldo inicial + Σ
 - Teste `tests/run_lancamentos.js` (no `npm test`); `run_cad_titles`, `run_toolbar_rows`, `run_sticky_headers` e `run_cad_sheets`
   incluem a tela.
 - Próximas fases: fluxo de caixa e DRE calculados dos lançamentos, contas a pagar/receber, empréstimos, conciliação; depois Unidades.
+- (2026-10-11, pedido do usuário) **Os cadastros que envolvem o financeiro moveram-se para o menu Financeiro ▾**: Lançamentos | Fornecedores,
+  Categorias de fornecedor | Contas bancárias, Plano de contas (`FIN_ITEMS`/`FIN_TABS`; saíram de `CAD_ITEMS`/`CAD_TABS`). Mesmas telas, abas
+  (`fornecedores`, `catfornecedor`, `contas`, `planocontas`), permissões e endereços; Ajuda no grupo "Financeiro". Cadastro financeiro novo:
+  colocar em `FIN_ITEMS`. Convênios continua em Cadastros.
