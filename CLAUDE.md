@@ -3739,7 +3739,7 @@ locais; permissão própria **Conector Claude** (`conector_claude`, ver; grupo M
 ## App instalável no celular (PWA) (2026-10-11)
 Decisão do usuário: continuar com o site adaptado (sem app de loja) e torná-lo instalável.
 - `manifest.webmanifest` (nome "Clínica de Autismo Pipo", `short_name` "Pipo", `display: standalone`, fundo branco)
-  e ícones em `icons/` (192, 512, `maskable-512` com fundo branco e `apple-touch-icon` 180 com fundo branco),
+  e ícones em `icons/` (192, 512, `maskable-512` e `apple-touch-icon` 180 com fundo branco e a logo ocupando ~82–91% do quadrado, como o ícone do Chrome; trocou o ícone = mudar o `?v=` no link e no manifesto e o `VERSION` do sw.js),
   gerados a partir do `favicon.png` (128px, ampliado — uma logo maior deixaria o ícone mais nítido). Metas
   `apple-mobile-web-app-*`, `theme-color` no `<head>` (dentro do APP-HEAD).
 - `sw.js` (service worker, na raiz; `vercel.json` com `no-cache` para ele e o manifesto): guarda página + `js/` +

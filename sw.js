@@ -10,7 +10,7 @@
  *   "notificationclick" já estão prontos aqui.
  * Mudou a lista de arquivos do sistema? Acrescentar em SHELL e trocar VERSION.
  */
-var VERSION = "pipo-v1";
+var VERSION = "pipo-v2";
 var SHELL = ["/", "/js/redes.js", "/js/pipo-supabase.js", "/js/usuarios.js"];
 var STATIC = ["/favicon.png", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png",
   "/icons/maskable-512.png", "/icons/apple-touch-icon.png"];
