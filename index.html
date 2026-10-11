@@ -4510,6 +4510,7 @@ function applyPermissionsUI(){
   setReadonlyBanner(!agendaWrite);
   // Perfil já carregado: última tentativa de abrir a tela do endereço.
   openNavFromHash(true);
+  notifOpenFromUrl();
 }
 var roomsLoaded = false, patientsLoaded = false, specialtiesLoaded = false, conveniosLoaded = false, professionalsLoaded = false;
 var reportSubs = {}; // docId -> {active, unsub}, independent of the Agenda tab's own day/week subscriptions
@@ -20850,6 +20851,23 @@ var HELP_TOPICS = [
       "Baixe um backup antes de qualquer atualização do banco."
     ],
     who: "Permissão <b>Backup</b> para baixar; restaurar, só o <b>Administrador</b>."},
+  {id: "notificacoes", group: "Acesso", title: "Notificações", mod: null,
+    purpose: "Receber avisos no celular ou no computador, mesmo com o sistema fechado: tarefas vencidas do CRM e menções (@nome) nos comentários.",
+    steps: [
+      "Abra Acesso → <b>Notificações</b> no aparelho que vai receber os avisos e toque em <b>Ligar neste aparelho</b>.",
+      "O navegador pergunta se pode mostrar notificações: responda <b>Permitir</b>.",
+      "Escolha os avisos: <b>Tarefas vencidas</b> e/ou <b>Menções (@nome)</b>.",
+      "Toque em <b>Enviar teste</b> para conferir se o aviso aparece.",
+      "Tocar no aviso de menção abre a tarefa no CRM; o de vencidas abre o CRM."
+    ],
+    rules: [
+      "<b>Tarefas vencidas:</b> um resumo por dia, às 8h de segunda a sexta, para cada responsável, com quantas tarefas abertas dele passaram do vencimento (só das listas em que a pessoa tem acesso).",
+      "<b>Menções:</b> na hora, só para quem foi mencionado com @nome no comentário (quem escreveu não recebe) e que tem acesso à lista da tarefa.",
+      "Cada aparelho liga e escolhe os avisos separadamente. Ao <b>Sair</b> do sistema, o aparelho para de receber.",
+      "<b>iPhone:</b> as notificações só funcionam com o sistema instalado na tela inicial (veja “Instalar no celular”) e aberto pelo ícone <b>Pipo</b>.",
+      "Se aparecer “bloqueadas”, libere as notificações do site nas configurações do navegador ou do celular e ligue de novo."
+    ],
+    who: "Todos os usuários, cada um no próprio aparelho."},
   {id: "instalar-app", group: "Acesso", title: "Instalar no celular", mod: null,
     purpose: "Pôr o sistema na tela inicial do celular (ou do computador) com a logo da clínica. Ao tocar no ícone ele abre em tela cheia, sem a barra do navegador, como um aplicativo.",
     steps: [
@@ -20961,6 +20979,193 @@ function openHelp(topicId){
 }
 window.pipoOpenHelp = function(){ openHelp(null); };
 window.pipoOpenHelpTopic = function(id){ openHelp(id); };
+
+/* ===================== Notificações (Acesso → Notificações) =====================
+ * Avisos no celular/computador (Web Push), enviados pela função pipo-push do Supabase:
+ * tarefas vencidas (resumo às 8h, segunda a sexta) e @menção em comentário do CRM (na hora).
+ * Cada pessoa liga no PRÓPRIO aparelho; a inscrição fica em public.push_subscriptions. */
+var NOTIF_PREFS = [
+  {k: "vencidas", label: "Tarefas vencidas", desc: "Resumo às 8h, de segunda a sexta, com quantas tarefas suas estão vencidas no CRM."},
+  {k: "mencoes", label: "Menções (@nome)", desc: "Na hora, quando alguém menciona você num comentário de tarefa."}
+];
+function notifSupported(){ return ("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window); }
+function notifIsIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
+// Mostra o item no menu: aparelho com notificações, ou iPhone (para explicar que precisa instalar).
+window.pipoNotifAvailable = function(){ return notifSupported() || notifIsIOS(); };
+function notifClient(){ return window.pipoAuth && window.pipoAuth.client; }
+function notifB64(s){
+  var t = s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4), bin = atob(t), u = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+function notifDevice(){
+  var ua = navigator.userAgent, d = /iPhone|iPad|iPod/.test(ua) || notifIsIOS() ? "iPhone/iPad" : /Android/.test(ua) ? "Android" : "Computador";
+  var b = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "";
+  return d + (b ? " · " + b : "") + ((window.pipoIsInstalled && window.pipoIsInstalled()) ? " (app)" : "");
+}
+function notifReg(){
+  return navigator.serviceWorker.getRegistration("/").then(function(r){
+    if (r) return r;
+    return navigator.serviceWorker.register("/sw.js").then(function(){ return navigator.serviceWorker.ready; });
+  });
+}
+// Estado deste aparelho: {sub (inscrição do navegador), row (linha no banco desta pessoa)}.
+function notifState(){
+  var c = notifClient();
+  if (!c || !notifSupported()) return Promise.resolve({sub: null, row: null});
+  return notifReg().then(function(reg){ return reg.pushManager.getSubscription(); }).then(function(sub){
+    if (!sub) return {sub: null, row: null};
+    return c.from("push_subscriptions").select("id,prefs").eq("endpoint", sub.endpoint).maybeSingle()
+      .then(function(r){ return {sub: sub, row: r.error ? null : r.data}; });
+  });
+}
+function notifSave(sub, prefs){
+  var c = notifClient(), j = sub.toJSON();
+  return c.from("push_subscriptions").upsert({endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth,
+    prefs: prefs, device: notifDevice(), updated_at: new Date().toISOString()}, {onConflict: "endpoint"})
+    .then(function(r){ if (r.error) throw r.error; });
+}
+function notifEnable(prefs){
+  var c = notifClient();
+  return Notification.requestPermission().then(function(perm){
+    if (perm !== "granted") throw new Error(perm === "denied"
+      ? "As notificações estão bloqueadas para este site. Libere nas configurações do navegador (ou do celular) e tente de novo."
+      : "Permissão não concedida.");
+    return c.functions.invoke("pipo-push", {body: {acao: "chave"}});
+  }).then(function(r){
+    if (r.error || !r.data || !r.data.publicKey) throw new Error("O serviço de notificações não respondeu. Tente mais tarde.");
+    var key = notifB64(r.data.publicKey);
+    return notifReg().then(function(reg){
+      return reg.pushManager.getSubscription().then(function(old){
+        var sub = old ? Promise.resolve(old) : reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: key});
+        return sub.then(function(s){
+          // Aparelho inscrito por outro usuário (ou com chave antiga): faz uma inscrição nova.
+          return notifSave(s, prefs).catch(function(){
+            return s.unsubscribe().then(function(){ return reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: key}); })
+              .then(function(s2){ return notifSave(s2, prefs); });
+          });
+        });
+      });
+    });
+  });
+}
+function notifDisable(){
+  var c = notifClient();
+  if (!c || !notifSupported()) return Promise.resolve();
+  return notifReg().then(function(reg){ return reg.pushManager.getSubscription(); }).then(function(sub){
+    if (!sub) return;
+    return c.from("push_subscriptions").delete().eq("endpoint", sub.endpoint)
+      .then(function(){ return sub.unsubscribe(); });
+  }).catch(function(){});
+}
+// Sair do sistema desliga as notificações deste aparelho (outra pessoa pode usar o mesmo aparelho).
+window.pipoNotifSignOut = function(){ return notifDisable(); };
+
+function openNotifModal(){
+  var host = document.getElementById("modalHost");
+  var c = notifClient(), ok = !!c && notifSupported();
+  var iosNeedsInstall = notifIsIOS() && !notifSupported();
+  host.innerHTML =
+    '<div class="overlay" id="ovNotif"><div class="modal">' +
+      '<div class="modal-head"><div><h3>Notificações</h3>' +
+        '<div class="modal-sub">Avisos neste aparelho, mesmo com o sistema fechado.</div>' +
+      '</div><button class="modal-close" id="closeNotif" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        (iosNeedsInstall
+          ? '<div class="bk-card"><b>Instale o app primeiro</b><div class="bk-txt">No iPhone, as notificações só funcionam com o sistema instalado na tela inicial. ' +
+            'No Safari, toque em <b>Compartilhar</b> → <b>Adicionar à Tela de Início</b>, abra pelo ícone <b>Pipo</b>, entre e volte aqui.</div>' +
+            '<div class="bk-row"><button class="btn" id="nfHowInstall">Ver como instalar</button></div></div>'
+          : !ok
+            ? '<div class="bk-card"><b>Indisponível</b><div class="bk-txt">Este navegador não recebe notificações do sistema.</div></div>'
+            : '<div class="tr-sec tr-sec-top">Este aparelho</div>' +
+              '<div class="bk-txt" id="nfState">Verificando…</div>' +
+              '<div class="bk-row"><button class="btn primary" id="nfOn" hidden>Ligar neste aparelho</button>' +
+                '<button class="btn" id="nfTest" hidden>Enviar teste</button>' +
+                '<button class="btn" id="nfOff" hidden>Desligar</button></div>' +
+              '<div class="tr-sec">Avisos</div>' +
+              NOTIF_PREFS.map(function(o){
+                return '<label class="kind-opt nf-opt"><input type="checkbox" data-nf="' + o.k + '" checked> <span><b>' + esc(o.label) + '</b>' +
+                  '<span class="bk-txt" style="display:block">' + esc(o.desc) + '</span></span></label>';
+              }).join("") +
+              '<div class="bk-txt">Cada aparelho tem a sua escolha. Ao <b>Sair</b> do sistema, este aparelho para de receber.</div>') +
+        '<div class="bk-status" id="nfStatus" aria-live="polite"></div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="nfClose">Fechar</button></div>' +
+    '</div></div>';
+  var overlay = document.getElementById("ovNotif"), busy = false, cur = {sub: null, row: null};
+  function close(){ if (!busy) host.innerHTML = ""; }
+  function $(id){ return document.getElementById(id); }
+  function status(t, err){ var el = $("nfStatus"); if (el){ el.textContent = t || ""; el.classList.toggle("err", !!err); } }
+  function prefs(){ var o = {}; overlay.querySelectorAll("[data-nf]").forEach(function(b){ o[b.getAttribute("data-nf")] = b.checked; }); return o; }
+  function paint(){
+    var on = !!(cur.sub && cur.row);
+    if ($("nfState")) $("nfState").textContent = on ? "Ligadas neste aparelho." :
+      (window.Notification && Notification.permission === "denied" ? "Bloqueadas neste navegador: libere nas configurações do navegador (ou do celular)." : "Desligadas neste aparelho.");
+    if ($("nfOn")) $("nfOn").hidden = on;
+    if ($("nfOff")) $("nfOff").hidden = !on;
+    if ($("nfTest")) $("nfTest").hidden = !on;
+    var p = (cur.row && cur.row.prefs) || {};
+    overlay.querySelectorAll("[data-nf]").forEach(function(b){ b.checked = p[b.getAttribute("data-nf")] !== false; });
+  }
+  function run(label, fn){
+    if (busy) return; busy = true; status(label);
+    overlay.querySelectorAll("button, input").forEach(function(b){ b.disabled = true; });
+    return fn().then(function(msg){ status(msg || ""); }, function(e){ status((e && e.message) || String(e), true); })
+      .then(function(){ busy = false; overlay.querySelectorAll("button, input").forEach(function(b){ b.disabled = false; }); });
+  }
+  function refresh(){ return notifState().then(function(st){ cur = st; paint(); }); }
+  overlay.addEventListener("mousedown", function(e){ if (e.target === overlay) close(); });
+  $("closeNotif").addEventListener("click", close);
+  $("nfClose").addEventListener("click", close);
+  if ($("nfHowInstall")) $("nfHowInstall").addEventListener("click", function(){ host.innerHTML = ""; openHelp("instalar-app"); });
+  if (!ok) return;
+  $("nfOn").addEventListener("click", function(){
+    run("Ligando…", function(){ return notifEnable(prefs()).then(refresh).then(function(){ return "Pronto: este aparelho vai receber os avisos."; }); });
+  });
+  $("nfOff").addEventListener("click", function(){
+    run("Desligando…", function(){ return notifDisable().then(refresh).then(function(){ return "Desligadas neste aparelho."; }); });
+  });
+  $("nfTest").addEventListener("click", function(){
+    run("Enviando teste…", function(){
+      return c.functions.invoke("pipo-push", {body: {acao: "teste"}}).then(function(r){
+        if (r.error) throw new Error("Não foi possível enviar o teste.");
+        return (r.data && r.data.enviados) ? "Teste enviado: o aviso deve aparecer em instantes." : "O teste não chegou a este aparelho. Desligue e ligue de novo.";
+      });
+    });
+  });
+  overlay.querySelectorAll("[data-nf]").forEach(function(b){
+    b.addEventListener("change", function(){
+      if (!(cur.sub && cur.row)) return;
+      var pr = prefs();
+      run("Salvando…", function(){
+        return c.from("push_subscriptions").update({prefs: pr, updated_at: new Date().toISOString()}).eq("endpoint", cur.sub.endpoint)
+          .then(function(r){ if (r.error) throw r.error; cur.row.prefs = pr; return "Salvo."; });
+      });
+    });
+  });
+  run("Verificando…", function(){ return refresh().then(function(){ return ""; }); });
+}
+window.pipoOpenNotif = function(){ openNotifModal(); };
+
+// Toque na notificação de menção abre "/?tarefa=<id>#crm": abre a tarefa quando o CRM carregar.
+var notifUrlDone = false;
+function notifOpenFromUrl(){
+  if (notifUrlDone) return;
+  var id = null;
+  try { id = new URLSearchParams(location.search).get("tarefa"); } catch(e){}
+  if (!id) { notifUrlDone = true; return; }
+  if (!window.pipoAuth || !window.pipoAuth.profile || !window.pipoAuth.profile()) return; // espera o perfil
+  notifUrlDone = true;
+  try { history.replaceState(null, "", location.pathname + (location.hash || "#crm")); } catch(e){}
+  var go = function(){
+    var t = CRM.tasks && CRM.tasks[id];
+    if (!t){ showToast("Tarefa não encontrada (pode ter sido excluída ou você não tem acesso).", true); return; }
+    if (state.tab !== "crm"){ var b = document.querySelector('#mainTabs button[data-tab="crm"]'); if (b) b.click(); }
+    crmOpenTask(t);
+  };
+  var p = (CRM.loaded && !CRM.loading) ? Promise.resolve() : (CRM.loading || crmLoad());
+  Promise.resolve(p).then(go, function(){});
+}
 // Botão "?" na barra de cada tela: abre o guia no tópico daquela tela.
 function helpTopicForTab(tab){
   if (tab === "salas") return state.salasView === "grupos" ? "grupos" : "salas";

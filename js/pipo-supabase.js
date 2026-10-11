@@ -431,6 +431,7 @@
              (isAdmin() ? '<button type="button" role="menuitem" data-act="sistema">Sistema</button>' : "")],
             // Pessoal
             [(canDefault("senha", "view", true) ? '<button type="button" role="menuitem" data-act="senha">Senha</button>' : ""),
+             ((window.pipoNotifAvailable && window.pipoNotifAvailable()) ? '<button type="button" role="menuitem" data-act="notificacoes">Notificações</button>' : ""),
              (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : ""),
              // App instalável: some quando o sistema já está aberto pelo ícone da tela inicial.
              ((window.pipoInstallApp && !(window.pipoIsInstalled && window.pipoIsInstalled())) ? '<button type="button" role="menuitem" data-act="instalar">Instalar app</button>' : "")],
@@ -463,9 +464,13 @@
       setAcessoMenu(false);
       var act = b.getAttribute("data-act");
       if (act === "sair") {
-        client.auth.signOut().then(function () { location.reload(); });
+        // Este aparelho para de receber notificações de quem saiu.
+        (window.pipoNotifSignOut ? window.pipoNotifSignOut() : Promise.resolve())
+          .then(function () { return client.auth.signOut(); }).then(function () { location.reload(); });
       } else if (act === "clinica") {
         if (window.pipoOpenClinic) window.pipoOpenClinic();
+      } else if (act === "notificacoes") {
+        if (window.pipoOpenNotif) window.pipoOpenNotif();
       } else if (act === "instalar") {
         if (window.pipoInstallApp) window.pipoInstallApp();
       } else if (act === "ajuda") {

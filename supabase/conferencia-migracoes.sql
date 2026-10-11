@@ -101,7 +101,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (87, '2026-10-10t-link-vale-1-dia',               exists(select 1 from fx where proname = 'intake_links_stamp' and prosrc like '%1 day%'), ''),
  (88, '2026-10-10u-aba-so-nos-quadros',             not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') e where d.path in ('treatments/all', 'patients/all') and e ? 'aba'), 'só dados: SIM = nenhum tratamento/paciente com o campo ABA antigo'),
  (89, '2026-10-10v-revisao-geral',                 exists(select 1 from fx where proname = 'backup_restore_crm'), 'restaurar o CRM pelo Backup, segurança e velocidade'),
- (90, '2026-10-10w-conector-claude',               exists(select 1 from fx where proname = 'crm_tarefas_alterar'), 'conector Claude: funções, origem nas atividades e registro')
+ (90, '2026-10-10w-conector-claude',               exists(select 1 from fx where proname = 'crm_tarefas_alterar'), 'conector Claude: funções, origem nas atividades e registro'),
+ (91, '2026-10-11-notificacoes',                   exists(select 1 from fx where proname = 'push_overdue_counts'), 'notificações: aparelhos, menção na hora e resumo das vencidas às 8h')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

@@ -3761,3 +3761,20 @@ Decisão do usuário: continuar com o site adaptado (sem app de loja) e torná-l
   legenda dos status sempre com o espaço de 2 linhas (`.crm-home-leg{height:34px}`); no cartão do funil a linha de
   leads/contratos/perdidos ocupa o lugar da 2ª linha da legenda (legenda 16px, `.crm-home-extra` 20px sem borda). Altura
   = 176px. Teste em `run_crm_mobile.js` (sobra embaixo ≤ 18px nos cartões com tarefas).
+
+## Notificações no celular/computador (2026-10-11)
+Decisões do usuário: tarefas vencidas = 1 resumo por dia às 8h (Brasília), segunda a sexta, para cada
+responsável (só listas em que ele tem acesso; status que finaliza não conta); @menção = na hora, só para quem
+foi mencionado (o autor não recebe) e tem acesso à lista; cada pessoa liga no PRÓPRIO aparelho em
+**Acesso → Notificações** e escolhe Vencidas / Menções.
+- Banco (migração `supabase/2026-10-11-notificacoes.sql`, testada no PGlite): `push_subscriptions` (um por
+  aparelho, RLS: cada um só os seus; `prefs {vencidas, mencoes}`), `push_config` (senha interna + chaves VAPID,
+  sem acesso pelo app), `push_call` (pg_net → função), gatilho `task_events_push` (comentário com menções; não no
+  restaurar), `push_mention_targets`, `push_overdue_counts` (só service_role), pg_cron `pipo-push-vencidas`
+  (`0 11 * * 1-5`). Envio pela Edge Function `pipo-push` (`supabase/functions/pipo-push/`, ver README).
+- App (bloco "Notificações" depois de `window.pipoOpenHelpTopic`): `openNotifModal` (`window.pipoOpenNotif`,
+  `#ovNotif`, `#nfOn`/`#nfOff`/`#nfTest`, caixas `[data-nf]`), `notifEnable`/`notifDisable`/`notifState`;
+  **Sair** desliga o aparelho (`window.pipoNotifSignOut` em `js/pipo-supabase.js`). iPhone sem o app instalado =
+  a janela pede para instalar (`pipoNotifAvailable` mostra o item). Tocar na menção abre `/?tarefa=<id>#crm`
+  → `notifOpenFromUrl()` (chamado no fim de `applyPermissionsUI`) abre a tarefa. sw.js `pipo-v5`.
+  Ajuda: tópico `notificacoes`. Teste `tests/run_notif.js`.

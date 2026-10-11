@@ -6,11 +6,11 @@
  *   js/) e avisa a tela, que mostra "Nova versão disponível — Atualizar".
  * - NUNCA guarda dados: /api/, Supabase (banco, login, tempo real), página do link de
  *   cadastro (/c/, /cadastro) e a página de autorização (/oauth) passam direto.
- * - Notificações (push) ficam para uma etapa futura; os eventos "push" e
- *   "notificationclick" já estão prontos aqui.
+ * - Notificações (push): "push" mostra o aviso enviado pela função pipo-push e
+ *   "notificationclick" abre o endereço dele (ex.: /?tarefa=<id>#crm).
  * Mudou a lista de arquivos do sistema? Acrescentar em SHELL e trocar VERSION.
  */
-var VERSION = "pipo-v4";
+var VERSION = "pipo-v5";
 var SHELL = ["/", "/js/redes.js", "/js/pipo-supabase.js", "/js/usuarios.js"];
 var STATIC = ["/favicon.png", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png",
   "/icons/maskable-512.png", "/icons/apple-touch-icon.png"];
@@ -110,7 +110,7 @@ self.addEventListener("message", function (e) {
   if (e.data && e.data.type === "pipo-check") e.waitUntil(refreshShell());
 });
 
-/* ---- Notificações (etapa futura) ---- */
+/* ---- Notificações (Acesso → Notificações) ---- */
 self.addEventListener("push", function (e) {
   var d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = {body: e.data ? e.data.text() : ""}; }
