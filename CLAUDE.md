@@ -3873,3 +3873,4 @@ Diagnóstico, Código (CID), Pacientes). `diagLabel(d)` = nome; o paciente (`cid
 nomes (`intake_form`). Migração `supabase/2026-10-11g-diagnostico-so-nome.sql`: função do link + troca "código nome" por "nome"
 em `patient_health.cid` e `tasks.lead.diagnostico` (só quando é exatamente um diagnóstico cadastrado; testada no PGlite 2×; em
 produção 2 saúdes a trocar, 0 leads). Linha 97 da conferência de migrações.
+- Produção (2026-10-11): `2026-10-11e-fornecedores` rodada (`true | true | 6`). A `2026-10-11g-diagnostico-so-nome` ainda NÃO foi rodada.
