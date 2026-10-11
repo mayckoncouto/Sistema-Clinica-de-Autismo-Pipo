@@ -3955,3 +3955,4 @@ começam SÓ para o Administrador (nenhum nível recebe). Fase 0 (limpeza da pla
   Fornecedores. Teste `tests/run_financeiro_base.js` (no `npm test`).
 - Próximas fases (aguardando o usuário): lançamentos (importar o FLUXO), contas a pagar/receber, empréstimos, relatórios (fluxo de caixa e DRE
   calculados dos lançamentos), conciliação; depois o projeto Unidades.
+- Produção (2026-10-11): `2026-10-11j-financeiro-base` rodada pelo conector, a pedido do usuário ("Pode rodar") — 67 subcategorias | 3 contas | saldo total 1.260.918,96 | 4 políticas na tabela protegida.
