@@ -298,6 +298,21 @@ const path = require('path');
   check('priority filter?', (await page.$$('#crmHost tr[data-crm-id]')).length === 1);
   await setv('#crmFPrio', '');
 
+  // Filtro de Status: opções da lista aberta; em Minhas tarefas, de todas as listas
+  const stOpts = await page.$$eval('#crmFSt option', (o) => o.map((x) => x.textContent));
+  const agSt = await ev('crmListById("agendas").statuses.map(function(s){ return s.name; })');
+  check('status filter lists the statuses of the open list?', stOpts[0] === 'Status' && JSON.stringify(stOpts.slice(1)) === JSON.stringify(agSt), stOpts);
+  const st0 = await ev('normText(crmListById("agendas").statuses[0].name)');
+  await setv('#crmFSt', st0); await page.waitForTimeout(100);
+  const stRows = await ev(`Array.prototype.map.call(document.querySelectorAll('#crmHost tr[data-crm-id]'), function(r){ return crmStKey(CRM.tasks[r.getAttribute('data-crm-id')]); })`);
+  check('status filter shows only tasks in that status?', stRows.length >= 1 && stRows.every((k) => k === st0), stRows);
+  await setv('#crmFSt', '');
+  await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-mine"]'); await page.waitForTimeout(150);
+  const mineSt = await page.$$eval('#crmFSt option', (o) => o.length);
+  const allSt = await ev('(function(){ var s = {}; crmVisibleLists().forEach(function(l){ l.statuses.forEach(function(x){ s[normText(x.name)] = 1; }); }); return Object.keys(s).length; })()');
+  check('Minhas tarefas: status filter joins the statuses of all lists?', mineSt === allSt + 1, {mineSt, allSt});
+  await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-agendas"]'); await page.waitForTimeout(150);
+
   const mods = await ev('window.pipoCrmModules().map(function(m){ return m.key + "|" + (m.group || ""); }).join(",")');
   check('Níveis de permissão: CRM group starts with Listas e status, then one row per list?', /^crm_listas\|CRM,crm_atendimento\|,crm_agendas\|/.test(mods), mods);
   // Listas e status: visual de Cadastros → Grupos (linhas com setas, bolinha, resumo e Editar; janela própria por lista)
@@ -377,7 +392,7 @@ const path = require('path');
   await ev('(function(){ crmVisibleLists = window.__vis; crmRender(); return true; })()');
   await page.waitForTimeout(100);
   const after = await page.evaluate(() => ({ title: document.getElementById('crmTitle').textContent, host: document.getElementById('crmHost').textContent, who: (document.querySelector('[data-dp-for="crmFWho"] .dp-txt') || {}).textContent }));
-  check('permissions arriving later: "Nenhuma lista" turns into Minhas tarefas, responsável filter labelled?', /Nenhuma lista/.test(before) && after.title === 'Minhas tarefas' && !/Nenhuma lista/.test(after.host) && after.who === 'Todos os responsáveis', after);
+  check('permissions arriving later: "Nenhuma lista" turns into Minhas tarefas, responsável filter labelled?', /Nenhuma lista/.test(before) && after.title === 'Minhas tarefas' && !/Nenhuma lista/.test(after.host) && after.who === 'Responsável', after);
   // Responsáveis: só quem tem acesso ao CRM e à lista; quem já estava sem acesso aparece com "(sem acesso)"
   const ppl = await ev(`(function(){ var old = CRM.people;
     CRM.people = [{id:'local-me',full_name:'Você',admin:true,crm:true,lists:[]},{id:'b',full_name:'Bia',admin:false,crm:true,lists:['atendimento']},

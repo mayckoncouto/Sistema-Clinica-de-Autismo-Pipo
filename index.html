@@ -309,8 +309,9 @@ div.ag-obj-head{cursor:default}
 @media (min-width:1260px){
   #tab-crm .crm-toolbar{flex-wrap:nowrap}
   #tab-crm .crm-toolbar > *{flex:none}
-  #tab-crm .crm-toolbar .crm-q{flex:1 1 200px;min-width:110px;max-width:260px}
-  #tab-crm .crm-toolbar > .dp-btn{flex:0 1 auto;min-width:96px;max-width:200px}
+  #tab-crm .crm-toolbar .crm-q{flex:1 1 140px;min-width:110px;max-width:260px}
+  /* filtros com o nome inteiro (Status, Responsável, Prioridade, Vencimento): quem encolhe primeiro é a busca */
+  #tab-crm .crm-toolbar > .dp-btn{flex:0 0.2 auto;min-width:96px;max-width:200px}
   #tab-crm .crm-toolbar > .dp-btn .dp-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #tab-crm .crm-toolbar :is(#crmCount,.inact-toggle){white-space:nowrap}
   #tab-crm .crm-toolbar .spacer{flex:1 1 0;min-width:0}
@@ -622,7 +623,8 @@ div.ag-obj-head{cursor:default}
   /* CRM: barra */
   #tab-crm .crm-toolbar{column-gap:8px;row-gap:8px}
   #tab-crm .crm-toolbar .crm-title{flex:1 1 auto;font-size:15px}
-  #tab-crm .crm-toolbar .crm-q{order:2;flex:1 1 100%;max-width:none}
+  #tab-crm .crm-toolbar .crm-q{order:2;flex:1 1 55%;min-width:0;max-width:none}
+  #tab-crm .crm-toolbar > .dp-btn.crm-fst{order:2;flex:0 1 38%}
   #tab-crm .crm-toolbar > .dp-btn{order:3;flex:1 1 28%;min-width:0;max-width:none;padding:8px 6px 8px 10px;font-size:13px}
   #tab-crm .crm-toolbar > .dp-btn .dp-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #tab-crm .crm-toolbar :is(#crmCount,.inact-toggle,#crmAdd,.help-q){order:4}
@@ -2665,6 +2667,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
         <input type="text" id="crmQ" placeholder="Buscar tarefa…" aria-label="Buscar tarefa">
       </div>
+      <select id="crmFSt" class="crm-fst" aria-label="Status"><option value="">Status</option></select>
       <select id="crmFWho" aria-label="Responsável"></select>
       <select id="crmFPrio" aria-label="Prioridade"><option value="">Todas as prioridades</option><option value="urgente">Urgente</option><option value="alta">Alta</option><option value="normal">Normal</option></select>
       <select id="crmFDue" aria-label="Vencimento"><option value="">Qualquer vencimento</option><option value="vencidas">Vencidas</option><option value="hoje">Vence hoje</option><option value="semana">Próximos 7 dias</option><option value="sem">Sem vencimento</option></select>
@@ -6565,7 +6568,7 @@ function crmBadgeRender(){
 function crmFillFilters(){
   var el = document.getElementById("crmFWho"); if (!el) return;
   var cur = el.value;
-  var sm = isMobileView();   // celular: 3 filtros por linha, rótulo curto na opção vazia
+  var sm = true;   // rótulo curto na opção vazia (Responsável, Prioridade, Vencimento) em todo tamanho de tela: com o filtro de Status a barra ficou apertada
   [["crmFPrio", "Todas as prioridades", "Prioridade"], ["crmFDue", "Qualquer vencimento", "Vencimento"]].forEach(function(x){
     var s2 = document.getElementById(x[0]); if (!s2 || !s2.options[0]) return;
     var txt = sm ? x[2] : x[1]; if (s2.options[0].textContent !== txt){ s2.options[0].textContent = txt; s2.value = s2.value; }
@@ -6574,11 +6577,31 @@ function crmFillFilters(){
     CRM.people.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.full_name) + '</option>'; }).join("");
   // sempre atribui (mesmo vazio): o botão visual da lista só se atualiza quando .value é gravado
   el.value = Array.prototype.some.call(el.options, function(o){ return o.value === cur; }) ? cur : "";
+  crmFillStatus();
+}
+// Filtro de Status (em toda tela do CRM): opções = status da lista aberta; em Minhas tarefas e na tela
+// CRM, os status de todas as listas visíveis (mesmo nome = uma opção). Valor = nome sem acento/maiúscula.
+function crmFillStatus(){
+  var el = document.getElementById("crmFSt"); if (!el) return;
+  var home = CRM.list === "__home", mine = CRM.list === "__mine", list = home || mine ? null : crmListById(CRM.list);
+  var seen = {}, opts = [];
+  (list ? [list] : crmVisibleLists()).forEach(function(l){ (l.statuses || []).forEach(function(st){
+    var k = normText(st.name || ""); if (!k || seen[k]) return; seen[k] = 1; opts.push({k: k, name: st.name});
+  }); });
+  var empty = "Status";
+  var sig = empty + "|" + opts.map(function(o){ return o.k; }).join("|");
+  var cur = el.value;
+  if (el.__sig !== sig){
+    el.__sig = sig;
+    el.innerHTML = '<option value="">' + empty + '</option>' + opts.map(function(o){ return '<option value="' + esc(o.k) + '">' + esc(o.name) + '</option>'; }).join("");
+  }
+  el.value = seen[cur] ? cur : "";
 }
 function crmFilters(){
   function v(id){ var e = document.getElementById(id); return e ? e.value : ""; }
-  return {q: normText(v("crmQ")), who: v("crmFWho"), prio: v("crmFPrio"), due: v("crmFDue")};
+  return {q: normText(v("crmQ")), st: v("crmFSt"), who: v("crmFWho"), prio: v("crmFPrio"), due: v("crmFDue")};
 }
+function crmStKey(x){ var st = crmStatus(crmListById(x.list_id), x.status); return st ? normText(st.name || "") : ""; }
 function crmPass(x, f){
   if (f.q){ var hay = normText([x.title, x.description, (x.tags || []).join(" "), (x.lead || {}).nome, (x.lead || {}).convenio, x.patient_id ? (findPatientById(x.patient_id) || {}).nome : ""].join(" ")); if (hay.indexOf(f.q) === -1) return false; }
   var as = x.assignees || [];
@@ -6586,6 +6609,7 @@ function crmPass(x, f){
   if (f.who === "__none" && as.length) return false;
   if (f.who && f.who.indexOf("__") !== 0 && as.indexOf(f.who) === -1) return false;
   if (f.prio && crmPrio(x.priority).id !== f.prio) return false;
+  if (f.st && crmStKey(x) !== f.st) return false;
   var today = crmToday();
   if (f.due === "vencidas" && !crmOverdue(x)) return false;
   if (f.due === "hoje" && x.due_date !== today) return false;
@@ -6735,11 +6759,12 @@ function crmScreenTasks(){
   var base = home ? all.filter(function(x){ return crmCan(x.list_id, "view"); }) :
     mine ? all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1; }) :
     list ? all.filter(function(x){ return x.list_id === list.id; }) : [];
-  return {home: home, mine: mine, list: list, base: base, tasks: base.filter(function(x){ return (showDone || !crmIsDone(x)) && crmPass(x, f); }).sort(crmSort)};
+  return {home: home, mine: mine, list: list, base: base, tasks: base.filter(function(x){ return (showDone || f.st || !crmIsDone(x)) && crmPass(x, f); }).sort(crmSort)};
 }
 function crmRender(){
   var host = document.getElementById("crmHost"); if (!host) return;
   if (crmResolveList()){ crmFillFilters(); if (CRM.list && !CRM.loaded && !CRM.loading){ crmLoad(); return; } }
+  crmFillStatus();
   var home = CRM.list === "__home";
   var sec = document.getElementById("tab-crm"); if (sec) sec.classList.toggle("crm-home", home);
   var top = document.getElementById("crmHomeTop"); if (top) top.hidden = !home;
@@ -6761,7 +6786,8 @@ function crmRender(){
   if (cnt) cnt.textContent = tasks.length + " de " + base.length + " tarefa" + (base.length === 1 ? "" : "s");
   if (CRM.view === "calendario"){ host.innerHTML = crmCalHtml(tasks, base, multi ? null : list); return; }
   if (!multi && CRM.view === "quadro"){
-    var bsts = list.statuses.filter(function(s){ return showDone || !s.done; });
+    var fst = crmFilters().st;
+    var bsts = list.statuses.filter(function(s){ return fst ? normText(s.name || "") === fst : (showDone || !s.done); });
     // Celular: um status por vez na largura da tela; a barra de status em cima mostra onde está e leva até ele.
     // Celular: um campo de escolha (igual aos filtros) com o status que está na tela; tocar abre a lista dos status.
     var pager = '<div class="crm-pager"><button type="button" class="dp-btn dp-plain crm-pager-btn" aria-label="Status do quadro"><span class="dp-txt"></span><span class="dp-chev">' + DP_CHEV + '</span></button></div>';
@@ -6805,7 +6831,7 @@ function crmRender(){
 }
 function wireCrm(){
   var host = document.getElementById("crmHost"); if (!host) return;
-  ["crmFWho", "crmFPrio", "crmFDue", "crmShowDone"].forEach(function(id){ var e = document.getElementById(id); if (e) e.addEventListener("change", crmRender); });
+  ["crmFSt", "crmFWho", "crmFPrio", "crmFDue", "crmShowDone"].forEach(function(id){ var e = document.getElementById(id); if (e) e.addEventListener("change", crmRender); });
   var q = document.getElementById("crmQ"); if (q) q.addEventListener("input", crmRender);
   var seg = document.getElementById("crmViewSeg");
   if (seg) seg.addEventListener("click", function(e){ var b = e.target.closest("[data-cv]"); if (!b) return; CRM.view = b.getAttribute("data-cv"); crmRender(); });
@@ -6936,7 +6962,7 @@ function crmCalDaySheet(anchor, iso){
   var mine = CRM.list === "__mine", home = CRM.list === "__home", list = mine || home ? null : crmListById(CRM.list), f = crmFilters();
   var showDone = !!(document.getElementById("crmShowDone") || {}).checked;
   var xs = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; }).filter(function(x){
-    return x.due_date === iso && (home ? crmCan(x.list_id, "view") : mine ? crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1 : x.list_id === CRM.list) && (showDone || !crmIsDone(x)) && crmPass(x, f);
+    return x.due_date === iso && (home ? crmCan(x.list_id, "view") : mine ? crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1 : x.list_id === CRM.list) && (showDone || f.st || !crmIsDone(x)) && crmPass(x, f);
   }).sort(crmSort);
   var canNew = !!list && crmCan(list.id, "create");
   var html = (xs.length ? xs.map(function(x){
@@ -20609,6 +20635,7 @@ var HELP_TOPICS = [
     purpose: "Acompanhar contatos (funil de atendimento) e tarefas da equipe por lista, com responsáveis, vencimento, prioridade, comentários e histórico.",
     steps: [
       "Abra <b>CRM ▾</b> e escolha a lista (Atendimento, Agendas, Fature, Gestão…) ou <b>Minhas tarefas</b> (tudo o que está aberto com você). O primeiro item, <b>CRM</b>, mostra em cima um cartão por lista que você pode ver, com os números em duas colunas (abertas, vencidas, vencem hoje, urgentes e comigo; em Minhas tarefas, menções não lidas; zero fica apagado), uma faixa colorida com quantas tarefas abertas há em cada status e, na lista de atendimento, leads sem cadastro, contratos e perdidos no mês; no celular um cartão por vez, deslizando para o lado; clique no cartão para abrir a lista e embaixo a barra de busca e filtros com todas as tarefas dessas listas (coluna <b>Lista</b>; Lista ou Calendário). Ao entrar no CRM sem escolher uma lista (endereço #crm, atualizar a página), abre <b>Minhas tarefas</b>.",
+      "Filtros na barra de toda tela do CRM: <b>Status</b> (os status da lista aberta; em Minhas tarefas e na tela CRM, os status de todas as listas, juntando os de mesmo nome), <b>Responsável</b>, <b>Prioridade</b> e <b>Vencimento</b>. Escolhendo um status, aparecem só as tarefas nele, inclusive as finalizadas; no Quadro fica só a coluna desse status.",
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Em todas as listas, o grupo <b>Dados do Paciente/Lead</b> traz, em duas linhas, Paciente ou Lead e Telefone, Diagnóstico e Convênio. Com paciente cadastrado, esses campos mostram o cadastro dele (telefone, diagnóstico e convênio do tratamento) e só mudam no cadastro do paciente; com lead, são preenchidos na tarefa. <b>Outras opções</b> → <b>Cadastrar paciente</b> (à direita do título Dados do Paciente/Lead, só para lead) abre o cadastro já preenchido com nome, telefone e diagnóstico (o diagnóstico vai para o campo Diagnóstico do paciente). Ao salvar, a tarefa fica ligada ao paciente, os dados do lead saem da tarefa (passam a valer os do cadastro), nasce um tratamento <b>Ativo</b> só com o convênio do lead — o resto do tratamento é preenchido depois — e a Atividade registra “cadastrou o lead como paciente”. O status da tarefa não muda. A lista de Status tem um campo de pesquisa: digite parte do nome (sem precisar de acento ou maiúscula) e Enter escolhe o primeiro.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",

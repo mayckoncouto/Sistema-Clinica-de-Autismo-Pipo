@@ -3787,3 +3787,8 @@ foi mencionado (o autor não recebe) e tem acesso à lista; cada pessoa liga no 
   de pelo menos nome, telefone, CPF ou e-mail (`motivo "vazio"`). Configuração antiga sem nome/telefone no link = os
   dois obrigatórios. Migração `supabase/2026-10-11b-link-campos-escolhidos.sql` (`intake_send`). Lead do link geral
   sem nome: título com o telefone/e-mail.
+- (2026-10-11, pedido do usuário) **CRM: filtro de Status** em toda tela do CRM (`#crmFSt`, classe `.crm-fst`, antes de
+  Responsável): opções = status da lista aberta; em Minhas tarefas e na tela CRM, os de todas as listas visíveis (mesmo
+  nome = uma opção; valor = `normText(nome)`; `crmFillStatus`, `crmStKey`, `crmFilters().st`). Status escolhido mostra
+  também as finalizadas; no Quadro fica só a coluna dele. Celular: Status na linha da busca. Filtros com rótulo curto em
+  todo tamanho (Status, Responsável, Prioridade, Vencimento); no computador a busca encolhe antes dos filtros.
