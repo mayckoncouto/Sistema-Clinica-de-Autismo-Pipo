@@ -54,7 +54,7 @@ const path = require('path');
   await page.waitForSelector('#ovPat');
   const nv = await page.evaluate(() => ({nome: document.getElementById('pNome').value, mae: (document.getElementById('pm-mae-nome') || {}).value, banner: !!document.querySelector('#ovPat .ik-banner'),
     obs: (document.getElementById('pf-obs') || {}).value || '', cpf: (document.getElementById('pf-cpf') || {}).value}));
-  check('review opens the new-patient window filled from the submission (with notice)?', nv.nome === 'Caio Link Teste' && nv.mae === 'Rita Link' && nv.banner && /Laudo: Sim/.test(nv.obs) && /Escola Fictícia X/.test(nv.obs), nv);
+  check('review opens the new-patient window filled from the submission (with notice)?', nv.nome === 'Caio Link Teste' && nv.mae === 'Rita Link' && nv.banner && /Possui diagnóstico: Sim/.test(nv.obs) && /Escola Fictícia X/.test(nv.obs), nv);
   await page.click('#pSave'); await page.waitForTimeout(500);
   if (await page.$('#cfOk')) { await page.click('#cfOk'); await page.waitForTimeout(400); }
   const after = await ev(`(function(){ var p = state.patientsRaw.filter(function(x){ return x.nome === "Caio Link Teste"; })[0]; var trs = p ? state.treatments.filter(function(t){ return t.patientId === p.id; }) : [];
@@ -209,7 +209,7 @@ const path = require('path');
     if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
     if (/\/js\/redes\.js/.test(u)) return route.fulfill({contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, '..', 'js', 'redes.js'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
-    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'novo', nome: 'Lia', prefill: {}, clinica: {nome: 'C'}, convenios: ['Unimed Fictícia'], origens: [],
+    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'novo', nome: 'Lia', prefill: {}, clinica: {nome: 'C'}, convenios: ['Unimed Fictícia'], origens: [], diagnosticos: ['F84.0 Autismo infantil', 'TDAH'],
       campos: {cpf: {show: false, req: false}, nascimento: {show: false, req: false}, endereco: {show: false, req: false}, mae: {show: true, req: true}, pai: {show: true, req: false},
         rotina: {show: true, req: true}, protetiva: {show: true, req: false}, financeiro: {show: true, req: false}, rotinaAtual: {show: true, req: false}, suporte: {show: true, req: false}}})});
     if (/rpc\/intake_send/.test(u)) { sent = JSON.parse(route.request().postData()); return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true})}); }
@@ -223,6 +223,12 @@ const path = require('path');
   check('choosing Mãe hides the financeiro name/CPF (they come from the mother)?', await pub.$eval('#finNome', (e) => e.closest('[data-when]').hidden) && await pub.$eval('#finDoc', (e) => e.closest('[data-when]').hidden));
   await pub.$eval('#convenio', (e) => { e.value = 'Outro'; e.dispatchEvent(new Event('change', {bubbles: true})); });
   check('"Qual convênio?" appears with Outro?', !(await pub.$eval('#convenioOutro', (e) => e.closest('[data-when]').hidden)));
+  check('"Possui diagnóstico?" (Sim/Não) replaces "Tem laudo?"; "Qual diagnóstico?" starts hidden?', JSON.stringify(await pub.$$eval('#laudo option', (a) => a.map((o) => o.value).filter(Boolean))) === '["Sim","Não"]' && await pub.$eval('#diagnostico', (e) => e.closest('[data-when]').hidden) && /Possui diagnóstico\?/.test(await pub.textContent('#frm')) && !/Tem laudo/.test(await pub.textContent('#frm')));
+  await pub.$eval('#laudo', (e) => { e.value = 'Sim'; e.dispatchEvent(new Event('change', {bubbles: true})); });
+  check('Sim shows the diagnosis list (registered ones + Outro, nothing preselected)?', !(await pub.$eval('#diagnostico', (e) => e.closest('[data-when]').hidden)) && JSON.stringify(await pub.$$eval('#diagnostico option', (a) => a.map((o) => o.value).filter(Boolean))) === '["F84.0 Autismo infantil","TDAH","Outro"]' && (await pub.$eval('#diagnostico', (e) => e.value)) === '' && await pub.$eval('#diagnosticoOutro', (e) => e.closest('[data-when]').hidden));
+  await pub.$eval('#diagnostico', (e) => { e.value = 'Outro'; e.dispatchEvent(new Event('change', {bubbles: true})); });
+  check('Outro shows the free text field?', !(await pub.$eval('#diagnosticoOutro', (e) => e.closest('[data-when]').hidden)));
+  await pub.fill('#diagnosticoOutro', 'Síndrome fictícia');
   await pub.fill('#nome', 'Lia Teste'); await pub.fill('#telNome', 'Vó Rosa (avó)'); await pub.fill('#telefone', '47977776666'); await pub.fill('#convenioOutro', 'Plano Fictício');
   await pub.check('#consent'); await pub.click('#send'); await pub.waitForTimeout(100);
   check('required mãe and retirada block sending?', sent === null && await pub.$eval('#maeNome', (e) => e.classList.contains('bad')));
@@ -234,6 +240,7 @@ const path = require('path');
   const d2 = sent && sent.p_data;
   check('sends mãe with profissão, 2 people for pickup, rotina, convênio Outro + qual, financeiro = Mãe, phone owner?', d2 && d2.maeNome === 'Mara Teste' && d2.maeProfissao === 'Enfermeira' && d2.retirada.length === 2 && d2.retirada[0].rel === 'Tio' &&
     d2.rotinaAtual.seg.m.tipo === 'escola' && d2.rotinaAtual.seg.m.txt === 'Escola Z' && d2.convenio === 'Outro' && d2.convenioOutro === 'Plano Fictício' && d2.finQuem === 'Mãe' && !d2.finNome && d2.telNome === 'Vó Rosa (avó)', d2);
+  check('sends laudo Sim and the typed diagnosis (Outro replaced by the text)?', d2.laudo === 'Sim' && d2.diagnostico === 'Síndrome fictícia', [d2.laudo, d2.diagnostico]);
   // No sistema: o envio vira campos do cadastro.
   const m2 = await ev(`intakeToPatient(${JSON.stringify(d2)})`);
   check('review: phone owner in contacts (WhatsApp); financeiro = the mother (linked); mãe with profissão; convênio Outro in the note?', m2.patch.telefones[0].nome === 'Vó Rosa (avó)' && m2.patch.telefones[0].via === 'whatsapp' &&
@@ -258,7 +265,7 @@ const path = require('path');
   const hd = await page.$$eval('#ovPf thead th', (a) => a.map((x) => x.textContent));
   const freeNome = await page.evaluate(() => ['nome', 'telefones'].every((k) => ['rapido', 'fixo'].every((x) => { const e = document.querySelector('tr[data-pfk="' + k + '"] [data-pfx="' + x + '"]'); return e && !e.disabled && e.checked; })));
   check('Campos obrigatórios columns: Campo, Aparece, Link rápido, Link fixo, Obrigatório (Nome and Telefone can be chosen in both links)?', JSON.stringify(hd) === '["Campo","Aparece","Link rápido","Link fixo","ObrigatórioObrig."]' && freeNome, hd);
-  check('link-only fields (Convênio, Laudo) listed?', (await page.$$('tr[data-lonly]')).length === 2);
+  check('link-only fields (Convênio, Possui diagnóstico?) listed?', (await page.$$('tr[data-lonly]')).length === 2);
   const allLink = await page.evaluate(() => [...document.querySelectorAll('#ovPf tr[data-pfk]')].every((tr) => tr.querySelector('[data-pfx="rapido"]') && tr.querySelector('[data-pfx="fixo"]')));
   const offNew = await page.evaluate(() => ['mae', 'rotinaAtual', 'medicoId', 'protetiva'].every((k) => { const tr = document.querySelector('tr[data-pfk="' + k + '"]'); return tr && !tr.querySelector('[data-pfx="rapido"]').checked && !tr.querySelector('[data-pfx="fixo"]').checked; }));
   check('every cadastro field can be chosen for both links; the new ones start off?', allLink && offNew, {allLink, offNew});

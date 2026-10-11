@@ -3854,3 +3854,12 @@ contato, Telefone, E-mail, Endereço, PIX / dados bancários e Observações.
   `run_sticky_headers` e `run_cad_sheets` incluem a tela.
 - Ideias ainda não feitas (aguardando o usuário): categoria como cadastro próprio com "+ Incluir", planilha de
   importar/exportar, ligar fornecedor a contas a pagar/despesas.
+
+## Link de cadastro: "Possui diagnóstico?" / "Qual diagnóstico?" (2026-10-11)
+Pedido do usuário: "Tem laudo?" virou **Possui diagnóstico?** (Sim/Não, chave `laudo`) e, com Sim, aparece **Qual diagnóstico?**
+(chave `diagnostico`) como lista dos diagnósticos cadastrados (Cadastros → Diagnósticos, "código nome", sem os inativos)
++ **Outro** no fim, SEM nenhum escolhido por padrão; com Outro aparece "Qual?" (`diagnosticoOutro`, só da página: o envio
+leva o texto digitado em `diagnostico`). Não → `diagnostico` vai vazio. Aberto por `data-when` "diag-sim"/"diag-outro"
+(`whenSync`). A revisão grava `Possui diagnóstico: Sim/Não` na observação e o diagnóstico em `cid`. `intake_form` devolve
+`diagnosticos`; migração `supabase/2026-10-11f-link-diagnosticos.sql` (só essa função; linha 96 da conferência de migrações;
+testada no PGlite). Teste em `tests/run_intake.js`.

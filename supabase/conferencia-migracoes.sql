@@ -106,7 +106,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (92, '2026-10-11b-link-campos-escolhidos',         exists(select 1 from fx where proname = 'intake_send' and prosrc like '%''vazio''%'), 'link de cadastro: nome e telefone escolhidos em Campos obrigatórios'),
  (93, '2026-10-11c-correcoes-de-texto',              to_regclass('public.correcoes_texto_2026_10_11') is not null, 'só dados: correção de português no CRM e cadastros (guarda o texto antigo)'),
  (94, '2026-10-11d-link-todos-os-campos',           exists(select 1 from fx where proname = 'intake_send' and prosrc like '%rotinaAtual%'), 'link de cadastro: todos os campos do cadastro do paciente'),
- (95, '2026-10-11e-fornecedores',                  exists(select 1 from pathdef where d like '%suppliers%'), 'cadastro de Fornecedores (caminho, módulo e permissão nos níveis)')
+ (95, '2026-10-11e-fornecedores',                  exists(select 1 from pathdef where d like '%suppliers%'), 'cadastro de Fornecedores (caminho, módulo e permissão nos níveis)'),
+ (96, '2026-10-11f-link-diagnosticos',              exists(select 1 from fx where proname = 'intake_form' and prosrc like '%diagnosticos%'), 'link de cadastro: lista de diagnósticos no formulário')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,
