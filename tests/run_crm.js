@@ -26,7 +26,7 @@ const path = require('path');
   // Menu CRM ▾
   await page.click('#crmBtn');
   const items = await page.$$eval('#crmMenu [data-nav]', (r) => r.map((x) => x.textContent));
-  check('CRM menu: Minhas tarefas, the 4 lists and Listas e status?', items.join('|') === 'CRM|Minhas tarefas|Atendimento|Agendas|Fature|Gestão|Listas e status', items);
+  check('CRM menu: Minhas tarefas, the 4 lists and Listas e status?', items.join('|') === 'CRM|Minhas tarefas|Atendimento|Agendas|Fature|Gestão|Listas e Status', items);
   await page.click('#crmMenu [data-nav="crm-atendimento"]');
   await page.waitForTimeout(200);
 
