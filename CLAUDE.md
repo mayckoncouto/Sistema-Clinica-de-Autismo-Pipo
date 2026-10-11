@@ -3757,3 +3757,7 @@ Decisão do usuário: continuar com o site adaptado (sem app de loja) e torná-l
   Multidisciplinar"), depois E-mail e Senha (saiu a frase "… — entre com seu e-mail e senha"). Nome e subtítulo vêm do
   cadastro da Clínica (`config/clinic.nome`/`subtitulo`, entregues por `api/config.js` em `clinica`; `loginBrand` em
   `js/pipo-supabase.js`), senão o padrão.
+- (2026-10-11, pedido do usuário) Cartões da tela CRM no celular sem espaço vazio embaixo e com altura fixa igual:
+  legenda dos status sempre com o espaço de 2 linhas (`.crm-home-leg{height:34px}`); no cartão do funil a linha de
+  leads/contratos/perdidos ocupa o lugar da 2ª linha da legenda (legenda 16px, `.crm-home-extra` 20px sem borda). Altura
+  = 176px. Teste em `run_crm_mobile.js` (sobra embaixo ≤ 18px nos cartões com tarefas).
