@@ -3827,5 +3827,10 @@ e, se cadastrado, também para o tratamento; profissão em todos os lugares; **t
 - `intakeToPatient` mapeia tudo; revisão de paciente existente: `intakeApplyReview` compara também RG, CNS, saúde, escola,
   mãe/pai (CPF/profissão) e financeiro; retirada/protetiva novas entram na lista e a rotina completa os vazios
   (`openPatientModal`, `intakeAdded`). `intakePrefillFrom` (Pedir atualização) leva os campos novos, menos a medida protetiva.
+- (pedido do usuário, SUBSTITUI o "Responsável e parentesco" acima) O grupo **Responsável e parentesco** saiu do link
+  (`LINK_ONLY` = convênio, laudo): no lugar, Contato com **De quem é este telefone?** (`telNome` → nome do contato do
+  telefone) e, no Responsável financeiro, **Quem é o responsável financeiro?** (`finQuem` Mãe/Pai/Outra pessoa, só com
+  mãe ou pai no link; Mãe/Pai liga o financeiro à Filiação e esconde nome/CPF). `intakeToPatient` ainda entende
+  `respNome`/`respParentesco` de envios antigos. O banco ignora `responsavel` em configurações antigas.
 - Banco: `supabase/2026-10-11d-link-todos-os-campos.sql` (`intake_send` aceita as chaves novas, listas e rotina com limite e
   confere os obrigatórios novos). Testada no PGlite. Teste em `tests/run_intake.js`.

@@ -105,7 +105,7 @@ const path = require('path');
   check('public form: no social networks on top (only on the thank-you)?', (await pub.$$('a.soc-link')).length === 0);
   check('public form opens with the clinic name and the patient name?', (await pub.textContent('#cName')) === 'Clínica Fictícia' && (await pub.inputValue('#nome')) === 'Duda');
   await pub.click('#send'); await pub.waitForTimeout(100);
-  check('public form: required fields and consent are checked before sending?', sent === null && (await pub.$$('.bad')).length >= 4 && /autorização/.test(await pub.textContent('#err')));
+  check('public form: required fields and consent are checked before sending?', sent === null && (await pub.$$('.bad')).length >= 2 && /autorização/.test(await pub.textContent('#err')));
   // Padrão do sistema no celular: listas abrem a janela de baixo; data digitável (dd/mm/aaaa) + calendário; campos de 44px.
   const look = await pub.evaluate(() => ({natives: [...document.querySelectorAll('#frm select')].every((s) => getComputedStyle(s).display === 'none'),
     btns: document.querySelectorAll('#frm .pk-btn').length, h: [...document.querySelectorAll('#frm input[type=text], #frm .pk-btn')].filter((e) => e.offsetParent).every((e) => Math.round(e.getBoundingClientRect().height) === 44),
@@ -129,20 +129,20 @@ const path = require('path');
   check('"Limpar" empties the date?', (await pub.inputValue('#nascimento')) === '');
   await pub.$eval('#nascimento', (e) => { e.value = '07/05/2019'; });
   await pub.fill('#cpf', '11111111111');
-  await pub.fill('#respNome', 'Mara');
-  await pub.click('#respParentesco + .pk-btn'); await pub.waitForTimeout(100);
+  await pub.click('#sexo + .pk-btn'); await pub.waitForTimeout(100);
   const sh = await pub.evaluate(() => ({title: (document.querySelector('#pkSheet .pk-head b') || {}).textContent, n: document.querySelectorAll('#pkSheet .pk-opt').length,
     h: Math.round(document.querySelector('#pkSheet .pk-opt').getBoundingClientRect().height)}));
-  check('Parentesco opens the bottom window (title, 52px options)?', sh.title === 'Parentesco' && sh.n === 9 && sh.h >= 52, sh);
-  await pub.click('#pkSheet .pk-opt[data-v="Mãe"]'); await pub.waitForTimeout(80);
-  check('choosing fills the field and closes the window?', (await pub.inputValue('#respParentesco')) === 'Mãe' && /Mãe/.test(await pub.textContent('#respParentesco + .pk-btn')) && !(await pub.$('#pkSheet')));
+  check('Sexo opens the bottom window (title, 52px options)?', sh.title === 'Sexo' && sh.n === 3 && sh.h >= 52, sh);
+  await pub.click('#pkSheet .pk-opt[data-v="Feminino"]'); await pub.waitForTimeout(80);
+  check('choosing fills the field and closes the window?', (await pub.inputValue('#sexo')) === 'Feminino' && /Feminino/.test(await pub.textContent('#sexo + .pk-btn')) && !(await pub.$('#pkSheet')));
+  check('no "Responsável e parentesco" in the link (Contato has "De quem é este telefone?")?', !(await pub.$('#respNome')) && !(await pub.$('#respParentesco')) && !!(await pub.$('#telNome')));
   await pub.fill('#telefone', '47966665555');
   await pub.check('#consent'); await pub.click('#send'); await pub.waitForTimeout(100);
   check('public form: invalid CPF refused?', sent === null && /CPF inválido/.test(await pub.textContent('#err')));
   await pub.fill('#cpf', '529.982.247-25'); await pub.fill('#cep', '89010000'); await pub.dispatchEvent('#cep', 'change'); await pub.waitForTimeout(200);
   check('CEP fills the street?', (await pub.inputValue('#rua')) === 'Rua do CEP');
   await pub.click('#send'); await pub.waitForTimeout(300);
-  check('public form sent (digits only, consent) and thank-you shown?', sent && sent.p_token === 'abc' && sent.p_data.cpf === '52998224725' && sent.p_data.telefone === '47966665555' && sent.p_data.consentimento === true && sent.p_data.nascimento === '2019-05-07' && sent.p_data.respParentesco === 'Mãe' && /Cadastro enviado/.test(await pub.textContent('#box')), sent);
+  check('public form sent (digits only, consent) and thank-you shown?', sent && sent.p_token === 'abc' && sent.p_data.cpf === '52998224725' && sent.p_data.telefone === '47966665555' && sent.p_data.consentimento === true && sent.p_data.nascimento === '2019-05-07' && sent.p_data.sexo === 'Feminino' && /Cadastro enviado/.test(await pub.textContent('#box')), sent);
   const ty = await pub.textContent('#box');
   check('thank-you: new text + "Conheça mais…" with the network logos?', /Nossa equipe irá continuar seu atendimento pelo WhatsApp/.test(ty) && /Conheça mais sobre nosso trabalho em nossas redes sociais/.test(ty) && (await pub.$$('#box .done a.soc-link')).length === 2, ty);
   const noH = await pub.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -218,12 +218,12 @@ const path = require('path');
   await pub.goto('http://pipo.test/c/novo'); await pub.waitForSelector('#frm');
   const ids2 = await pub.$$eval('#frm input, #frm select', (a) => a.map((x) => x.id).filter(Boolean));
   check('chosen fields appear (mãe/pai with profissão, financeiro, rotina, suporte); not chosen stay out (RG, médico)?', ['maeNome', 'maeProfissao', 'paiProfissao', 'finNome', 'rt-seg-m', 'suporte'].every((k) => ids2.indexOf(k) !== -1) && ids2.indexOf('rg') === -1 && ids2.indexOf('medico') === -1, ids2);
-  await pub.$eval('#respParentesco', (e) => { e.value = 'Mãe'; e.dispatchEvent(new Event('change', {bubbles: true})); });
-  check('responsável profissão hidden when the Mãe fields are in the link?', await pub.$eval('#respProfissao', (e) => e.closest('[data-when]').hidden));
-  await pub.$eval('#respParentesco', (e) => { e.value = 'Avó'; e.dispatchEvent(new Event('change', {bubbles: true})); });
+  check('financeiro: "Quem é o responsável financeiro?" (Mãe, Pai, Outra pessoa) with name shown for another person?', JSON.stringify(await pub.$$eval('#finQuem option', (a) => a.map((o) => o.value).filter(Boolean))) === '["Mãe","Pai","Outra pessoa"]' && !(await pub.$eval('#finNome', (e) => e.closest('[data-when]').hidden)));
+  await pub.$eval('#finQuem', (e) => { e.value = 'Mãe'; e.dispatchEvent(new Event('change', {bubbles: true})); });
+  check('choosing Mãe hides the financeiro name/CPF (they come from the mother)?', await pub.$eval('#finNome', (e) => e.closest('[data-when]').hidden) && await pub.$eval('#finDoc', (e) => e.closest('[data-when]').hidden));
   await pub.$eval('#convenio', (e) => { e.value = 'Outro'; e.dispatchEvent(new Event('change', {bubbles: true})); });
   check('"Qual convênio?" appears with Outro?', !(await pub.$eval('#convenioOutro', (e) => e.closest('[data-when]').hidden)));
-  await pub.fill('#nome', 'Lia Teste'); await pub.fill('#respNome', 'Vó Rosa'); await pub.fill('#telefone', '47977776666'); await pub.fill('#convenioOutro', 'Plano Fictício');
+  await pub.fill('#nome', 'Lia Teste'); await pub.fill('#telNome', 'Vó Rosa (avó)'); await pub.fill('#telefone', '47977776666'); await pub.fill('#convenioOutro', 'Plano Fictício');
   await pub.check('#consent'); await pub.click('#send'); await pub.waitForTimeout(100);
   check('required mãe and retirada block sending?', sent === null && await pub.$eval('#maeNome', (e) => e.classList.contains('bad')));
   await pub.fill('#maeNome', 'Mara Teste'); await pub.fill('#maeProfissao', 'Enfermeira');
@@ -232,15 +232,15 @@ const path = require('path');
   await pub.$eval('#rt-seg-m', (e) => { e.value = 'escola'; e.dispatchEvent(new Event('change', {bubbles: true})); }); await pub.fill('#rt-seg-m-txt', 'Escola Z');
   await pub.click('#send'); await pub.waitForTimeout(300);
   const d2 = sent && sent.p_data;
-  check('sends mãe with profissão, 2 people for pickup, rotina, convênio Outro + qual, parentesco Avó?', d2 && d2.maeNome === 'Mara Teste' && d2.maeProfissao === 'Enfermeira' && d2.retirada.length === 2 && d2.retirada[0].rel === 'Tio' &&
-    d2.rotinaAtual.seg.m.tipo === 'escola' && d2.rotinaAtual.seg.m.txt === 'Escola Z' && d2.convenio === 'Outro' && d2.convenioOutro === 'Plano Fictício' && d2.respParentesco === 'Avó' && !d2.respProfissao, d2);
+  check('sends mãe with profissão, 2 people for pickup, rotina, convênio Outro + qual, financeiro = Mãe, phone owner?', d2 && d2.maeNome === 'Mara Teste' && d2.maeProfissao === 'Enfermeira' && d2.retirada.length === 2 && d2.retirada[0].rel === 'Tio' &&
+    d2.rotinaAtual.seg.m.tipo === 'escola' && d2.rotinaAtual.seg.m.txt === 'Escola Z' && d2.convenio === 'Outro' && d2.convenioOutro === 'Plano Fictício' && d2.finQuem === 'Mãe' && !d2.finNome && d2.telNome === 'Vó Rosa (avó)', d2);
   // No sistema: o envio vira campos do cadastro.
   const m2 = await ev(`intakeToPatient(${JSON.stringify(d2)})`);
-  check('review: Avó goes to contacts (name + parentesco, WhatsApp) and is the financial responsible; mãe with profissão; convênio Outro in the note?', m2.patch.telefones[0].nome === 'Vó Rosa (Avó)' && m2.patch.telefones[0].via === 'whatsapp' &&
-    m2.patch.financeiro.nome === 'Vó Rosa' && m2.patch.mae.nome === 'Mara Teste' && m2.patch.mae.profissao === 'Enfermeira' && !m2.patch.pai && m2.patch.rotina.length === 2 && m2.patch.rotinaAtual.seg.m.tipo === 'escola' &&
+  check('review: phone owner in contacts (WhatsApp); financeiro = the mother (linked); mãe with profissão; convênio Outro in the note?', m2.patch.telefones[0].nome === 'Vó Rosa (avó)' && m2.patch.telefones[0].via === 'whatsapp' &&
+    m2.patch.financeiro.nome === 'Mara Teste' && m2.patch.financeiro.link === 'mae' && m2.patch.mae.nome === 'Mara Teste' && m2.patch.mae.profissao === 'Enfermeira' && !m2.patch.pai && m2.patch.rotina.length === 2 && m2.patch.rotinaAtual.seg.m.tipo === 'escola' &&
     m2.notes.some((n) => n === 'Convênio informado: Outro — Plano Fictício'), m2);
   const m3 = await ev(`intakeToPatient({respNome: "Paulo", respParentesco: "Pai", respProfissao: "Pedreiro", telefone: "47911112222", convenio: "Unimed Fictícia"})`);
-  check('review: Pai fills the father (with profissão) and the financial link; registered convênio in the note?', m3.patch.pai.nome === 'Paulo' && m3.patch.pai.profissao === 'Pedreiro' && m3.patch.financeiro.link === 'pai' &&
+  check('old submissions (Responsável): Pai fills the father (with profissão) and the financial link; registered convênio in the note?', m3.patch.pai.nome === 'Paulo' && m3.patch.pai.profissao === 'Pedreiro' && m3.patch.financeiro.link === 'pai' &&
     m3.notes.indexOf('Convênio informado: Unimed Fictícia') !== -1, m3);
   // Profissão da mãe e do pai no cadastro do paciente.
   await page.bringToFront();
@@ -258,7 +258,7 @@ const path = require('path');
   const hd = await page.$$eval('#ovPf thead th', (a) => a.map((x) => x.textContent));
   const freeNome = await page.evaluate(() => ['nome', 'telefones'].every((k) => ['rapido', 'fixo'].every((x) => { const e = document.querySelector('tr[data-pfk="' + k + '"] [data-pfx="' + x + '"]'); return e && !e.disabled && e.checked; })));
   check('Campos obrigatórios columns: Campo, Aparece, Link rápido, Link fixo, Obrigatório (Nome and Telefone can be chosen in both links)?', JSON.stringify(hd) === '["Campo","Aparece","Link rápido","Link fixo","ObrigatórioObrig."]' && freeNome, hd);
-  check('link-only fields (Responsável, Convênio, Laudo) listed?', (await page.$$('tr[data-lonly]')).length === 3);
+  check('link-only fields (Convênio, Laudo) listed?', (await page.$$('tr[data-lonly]')).length === 2);
   const allLink = await page.evaluate(() => [...document.querySelectorAll('#ovPf tr[data-pfk]')].every((tr) => tr.querySelector('[data-pfx="rapido"]') && tr.querySelector('[data-pfx="fixo"]')));
   const offNew = await page.evaluate(() => ['mae', 'rotinaAtual', 'medicoId', 'protetiva'].every((k) => { const tr = document.querySelector('tr[data-pfk="' + k + '"]'); return tr && !tr.querySelector('[data-pfx="rapido"]').checked && !tr.querySelector('[data-pfx="fixo"]').checked; }));
   check('every cadastro field can be chosen for both links; the new ones start off?', allLink && offNew, {allLink, offNew});

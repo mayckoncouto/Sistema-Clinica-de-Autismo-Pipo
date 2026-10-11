@@ -273,17 +273,16 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 
   // Campos escolhidos em Campos obrigatórios (Link do paciente / Link geral). Sem configuração,
   // vale o padrão (mesmo LINK_FIELDS do sistema). Todos os campos podem ser escolhidos (nome e telefone também).
-  var DEFAULT_REQ = {nome: 1, telefone: 1, nascimento: 1, cpf: 1, responsavel: 1};
+  var DEFAULT_REQ = {nome: 1, telefone: 1, nascimento: 1, cpf: 1};
   // Campos que só aparecem no link quando a clínica marca em Campos obrigatórios (sem configuração = fora).
   var OFF = {rg: 1, cns: 1, entrada: 1, mae: 1, pai: 1, rotina: 1, protetiva: 1, financeiro: 1, escolaSerie: 1, professor: 1, mediador: 1,
     rotinaAtual: 1, medico: 1, diagData: 1, suporte: 1, comunicacao: 1, alergias: 1, medicacoes: 1, restricoes: 1};
-  var GROUP = {respNome: "responsavel", respParentesco: "responsavel", respProfissao: "responsavel",
+  var GROUP = {telNome: "telefone", finQuem: "financeiro",
     cep: "endereco", numero: "endereco", rua: "endereco", compl: "endereco", bairro: "endereco", cidade: "endereco", uf: "endereco",
     maeNome: "mae", maeCpf: "mae", maeProfissao: "mae", paiNome: "pai", paiCpf: "pai", paiProfissao: "pai",
     finNome: "financeiro", finDoc: "financeiro", finTelefone: "financeiro", finEmail: "financeiro", convenioOutro: "convenio"};
   // Dentro de um grupo, só estes ficam obrigatórios quando o grupo é obrigatório.
-  var GROUP_REQ = {cep: 1, numero: 1, rua: 1, cidade: 1, respNome: 1, respParentesco: 1, maeNome: 1, paiNome: 1, finNome: 1};
-  var PARENTESCOS = ["Mãe", "Pai", "Avó", "Avô", "Tia", "Tio", "Padrasto", "Madrasta", "Outro"];
+  var GROUP_REQ = {cep: 1, numero: 1, rua: 1, cidade: 1, maeNome: 1, paiNome: 1, finNome: 1};
   var ROUTINE_DAYS = [["seg", "Segunda"], ["ter", "Terça"], ["qua", "Quarta"], ["qui", "Quinta"], ["sex", "Sexta"]];
   var ROUTINE_TYPES = [["escola", "Escola"], ["pipo", "Terapia na clínica"], ["terapia", "Outra terapia"], ["atividade", "Atividade"], ["casa", "Em casa / livre"], ["outro", "Outro"]];
   function cfg(key){
@@ -353,11 +352,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         f("rg", "RG", {value: p.rg}) +
         f("cns", "Cartão SUS (CNS)", {value: p.cns, attrs: ' inputmode="numeric" maxlength="15"'}) +
         f("entrada", "Data de entrada", {date: true, value: p.entrada})) +
-      sec("Responsável",
-        f("respNome", "Nome do responsável", {value: p.respNome, attrs: ' autocomplete="name"'}) +
-        f("respParentesco", "Parentesco", {select: PARENTESCOS, value: p.respParentesco}) +
-        f("respProfissao", "Profissão do responsável", {value: p.respProfissao, when: "resp-parent"}) +
+      sec("Contato",
         f("telefone", "Telefone / WhatsApp", {value: fmtPhone(p.telefone || FORM.telefone), attrs: ' inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000"'}) +
+        f("telNome", "De quem é este telefone?", {value: p.telNome, attrs: ' autocomplete="name"', hint: "Nome e parentesco. Ex.: Maria (mãe)"}) +
         f("email", "E-mail", {type: "email", value: p.email, attrs: ' autocomplete="email"'})) +
       sec("Mãe",
         f("maeNome", "Nome da mãe", {value: p.maeNome, wide: true}) +
@@ -376,8 +373,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       sec("Responsáveis pela retirada", listHtml("rotina", p.retirada, "Outras pessoas (além da mãe e do pai) que podem buscar o paciente na clínica.")) +
       sec("Medida protetiva", listHtml("protetiva", p.protetiva, "Pessoas que NÃO podem buscar o paciente na clínica.")) +
       sec("Responsável financeiro",
-        f("finNome", "Nome do responsável financeiro", {value: p.finNome, wide: true}) +
-        f("finDoc", "CPF ou CNPJ", {value: p.finDoc, attrs: ' inputmode="numeric"'}) +
+        (shown("mae") || shown("pai") ? f("finQuem", "Quem é o responsável financeiro?", {wide: true, select: (shown("mae") ? ["Mãe"] : []).concat(shown("pai") ? ["Pai"] : []).concat(["Outra pessoa"]), value: p.finQuem}) : "") +
+        f("finNome", "Nome do responsável financeiro", {value: p.finNome, wide: true, when: "fin-outro"}) +
+        f("finDoc", "CPF ou CNPJ", {value: p.finDoc, attrs: ' inputmode="numeric"', when: "fin-outro"}) +
         f("finTelefone", "Telefone", {value: fmtPhone(p.finTelefone), attrs: ' inputmode="tel" placeholder="(00) 00000-0000"'}) +
         f("finEmail", "E-mail", {type: "email", value: p.finEmail, wide: true})) +
       sec("Saúde",
@@ -419,15 +417,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       phoneMode(); window.addEventListener("resize", phoneMode);
       inp.addEventListener("click", function(){ if (isPhone()) openCalendar(inp, inp); });
     });
-    // Campos que dependem de outro: profissão do responsável (Mãe/Pai) e "Qual convênio?" (Outro).
+    // Campos que dependem de outro: nome/CPF do financeiro (quando não é a mãe nem o pai) e "Qual convênio?" (Outro).
     function whenSync(){
-      var par = (document.getElementById("respParentesco") || {}).value || "", conv = (document.getElementById("convenio") || {}).value || "";
+      var quem = (document.getElementById("finQuem") || {}).value || "", conv = (document.getElementById("convenio") || {}).value || "";
       Array.prototype.forEach.call(frm.querySelectorAll("[data-when]"), function(el){
-        var on = el.getAttribute("data-when") === "resp-parent" ? (par === "Mãe" || par === "Pai") && !(par === "Mãe" ? shown("maeNome") : shown("paiNome")) : conv === "Outro";
-        el.hidden = !on;
+        var w = el.getAttribute("data-when");
+        el.hidden = !(w === "fin-outro" ? quem !== "Mãe" && quem !== "Pai" : conv === "Outro");
       });
     }
-    frm.addEventListener("change", function(e){ if (e.target.id === "respParentesco" || e.target.id === "convenio") whenSync(); });
+    frm.addEventListener("change", function(e){ if (e.target.id === "finQuem" || e.target.id === "convenio") whenSync(); });
     whenSync();
     frm.addEventListener("click", function(e){
       var add = e.target.closest("[data-ladd]"), rm = e.target.closest("[data-lrm]");
@@ -455,7 +453,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       e.preventDefault();
       var err = document.getElementById("err"), bad = [];
       function val(id){ var el = document.getElementById(id); return el ? el.value.trim() : ""; }
-      Array.prototype.forEach.call(frm.querySelectorAll("[required]"), function(el){ if (!el.value.trim()) bad.push(el.id); });
+      Array.prototype.forEach.call(frm.querySelectorAll("[required]"), function(el){ if (!el.value.trim() && !el.closest("[data-when][hidden]")) bad.push(el.id); });
       ["cpf", "maeCpf", "paiCpf"].forEach(function(id){ if (val(id) && !cpfOk(val(id))) bad.push(id); });
       var nascIso = brToIso(val("nascimento")); if (nascIso === null) bad.push("nascimento");
       var entIso = brToIso(val("entrada")); if (entIso === null) bad.push("entrada");
@@ -492,16 +490,16 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         return;
       }
       var data = {consentimento: true};
-      ["nome", "nascimento", "sexo", "respNome", "respParentesco", "email", "rua", "numero", "compl", "bairro", "cidade", "uf",
+      ["nome", "nascimento", "sexo", "telNome", "finQuem", "email", "rua", "numero", "compl", "bairro", "cidade", "uf",
        "convenio", "diagnostico", "laudo", "escola", "escolaTurno", "comoConheceu", "obs",
        "rg", "maeNome", "maeProfissao", "paiNome", "paiProfissao", "finNome", "finEmail", "escolaSerie", "professor", "mediador",
        "medico", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"].forEach(function(id){ data[id] = val(id); });
-      var rpEl = document.getElementById("respProfissao"); data.respProfissao = rpEl && !rpEl.closest("[data-when]").hidden ? val("respProfissao") : "";
       data.convenioOutro = data.convenio === "Outro" ? val("convenioOutro") : "";
       data.nascimento = nascIso || ""; data.entrada = entIso || ""; data.diagData = diagIso || "";
       data.cpf = digits(val("cpf")); data.telefone = digits(val("telefone")); data.cep = digits(val("cep"));
       data.cns = digits(val("cns")); data.maeCpf = digits(val("maeCpf")); data.paiCpf = digits(val("paiCpf"));
-      data.finDoc = digits(val("finDoc")); data.finTelefone = digits(val("finTelefone"));
+      if (data.finQuem === "Mãe" || data.finQuem === "Pai"){ data.finNome = ""; }
+      data.finDoc = data.finQuem === "Mãe" || data.finQuem === "Pai" ? "" : digits(val("finDoc")); data.finTelefone = digits(val("finTelefone"));
       if (retirada.length) data.retirada = retirada;
       if (protetiva.length) data.protetiva = protetiva;
       if (Object.keys(rotinaAtual).length) data.rotinaAtual = rotinaAtual;
@@ -511,7 +509,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         var m = r && r.motivo;
         if (STOP[m]) { stop(STOP[m]); return; }
         btn.disabled = false; btn.textContent = "Enviar cadastro";
-        var FIRST = {responsavel: "respNome", endereco: "cep", mae: "maeNome", pai: "paiNome", financeiro: "finNome", rotinaAtual: "rt-seg-m"};
+        var FIRST = {endereco: "cep", mae: "maeNome", pai: "paiNome", financeiro: "finNome", rotinaAtual: "rt-seg-m"};
         if (m === "obrigatorio" && r.campos) r.campos.forEach(function(k){ var el = document.getElementById(FIRST[k] || k) || frm.querySelector('[data-list="' + k + '"] input'); if (el){ el.classList.add("bad"); if (el.__btn) el.__btn.classList.add("bad"); } });
         err.innerHTML = '<div class="msg err">' + (m === "limite" ? "Muitos cadastros enviados agora. Tente de novo em alguns minutos." : m === "vazio" ? "Preencha pelo menos o nome, o telefone, o CPF ou o e-mail." : "Não foi possível enviar. Confira os campos obrigatórios e tente de novo.") + '</div>';
       }, function(){ btn.disabled = false; btn.textContent = "Enviar cadastro"; err.innerHTML = '<div class="msg err">Sem conexão com a clínica agora. Tente de novo em instantes.</div>'; });

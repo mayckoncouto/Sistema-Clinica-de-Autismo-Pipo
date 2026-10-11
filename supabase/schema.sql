@@ -5376,7 +5376,7 @@ declare l public.intake_links; st text; k text; v text; clean jsonb := '{}'::jso
                        'compl', 'bairro', 'cidade', 'uf', 'convenio', 'diagnostico', 'laudo', 'escola', 'escolaTurno', 'comoConheceu', 'obs',
                        'rg', 'cns', 'entrada', 'respProfissao', 'convenioOutro', 'maeNome', 'maeCpf', 'maeProfissao', 'paiNome', 'paiCpf', 'paiProfissao',
                        'finNome', 'finDoc', 'finTelefone', 'finEmail', 'escolaSerie', 'professor', 'mediador', 'medico',
-                       'diagData', 'suporte', 'comunicacao', 'alergias', 'medicacoes', 'restricoes'];
+                       'diagData', 'suporte', 'comunicacao', 'alergias', 'medicacoes', 'restricoes', 'telNome', 'finQuem'];
   lk text; e jsonb; arr jsonb; o jsonb; ra jsonb := '{}'::jsonb; dd text; pp text; cell jsonb;
 begin
   select * into l from public.intake_links where token = p_token for update;
@@ -5424,13 +5424,13 @@ begin
   end if;
   -- Obrigatórios escolhidos em Campos obrigatórios (config/patient_fields.link.individual | geral).
   select data -> 'link' -> (case when l.kind = 'geral' then 'geral' else 'individual' end) into cf from public.documents where path = 'config/patient_fields';
-  if jsonb_typeof(cf) is distinct from 'object' then cf := '{"nascimento": {"req": true}, "cpf": {"req": true}, "responsavel": {"req": true}}'::jsonb; end if;
+  if jsonb_typeof(cf) is distinct from 'object' then cf := '{"nascimento": {"req": true}, "cpf": {"req": true}}'::jsonb; end if;
   -- Configuração gravada antes de nome/telefone serem escolhíveis: continuam obrigatórios.
   if not cf ? 'nome' then cf := cf || '{"nome": {"req": true}}'::jsonb; end if;
   if not cf ? 'telefone' then cf := cf || '{"telefone": {"req": true}}'::jsonb; end if;
   for fk in select key from jsonb_each(cf) where coalesce((value ->> 'req')::boolean, false) loop
     if fk = 'responsavel' then
-      if coalesce(clean ->> 'respNome', '') = '' or coalesce(clean ->> 'respParentesco', '') = '' then miss := miss || fk; end if;
+      null;   -- "Responsável e parentesco" saiu do link (2026-10-11): os dados vêm de Mãe, Pai, Contato e Financeiro.
     elsif fk = 'endereco' then
       if coalesce(clean ->> 'cep', '') = '' or coalesce(clean ->> 'numero', '') = '' or coalesce(clean ->> 'rua', '') = '' or coalesce(clean ->> 'cidade', '') = '' then miss := miss || fk; end if;
     elsif fk = 'mae' then
@@ -5438,7 +5438,8 @@ begin
     elsif fk = 'pai' then
       if coalesce(clean ->> 'paiNome', '') = '' then miss := miss || fk; end if;
     elsif fk = 'financeiro' then
-      if coalesce(clean ->> 'finNome', '') = '' then miss := miss || fk; end if;
+      if coalesce(clean ->> 'finNome', '') = '' and not (clean ->> 'finQuem' = 'Mãe' and coalesce(clean ->> 'maeNome', '') <> '')
+         and not (clean ->> 'finQuem' = 'Pai' and coalesce(clean ->> 'paiNome', '') <> '') then miss := miss || fk; end if;
     elsif fk = 'rotina' then
       if not clean ? 'retirada' then miss := miss || fk; end if;
     elsif fk in ('protetiva', 'rotinaAtual') then
