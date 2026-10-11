@@ -13518,24 +13518,30 @@ function cboKey(code){ return String(code || "").replace(/\D/g, ""); }
 // Diagnósticos (config/diagnoses) e Origens (config/origins). O paciente e o lead do CRM guardam o TEXTO
 // ("F84.0 Autismo infantil" / "Indicação médica"), igual antes do cadastro existir; sem documento no banco
 // valem as listas iniciais + o que já está gravado nos pacientes.
-function diagLabel(d){ return d ? ((d.code ? String(d.code).trim() + " " : "") + String(d.name || "").trim()).trim() : ""; }
+// O diagnóstico aparece e é gravado só pelo NOME (o código CID é outro campo do cadastro). Texto antigo no formato
+// "F84.0 Autismo infantil" ainda é reconhecido (diagMatch) até ser trocado pelo nome.
+function diagLabel(d){ return d ? String(d.name || "").trim() : ""; }
+function diagMatch(d, txt){
+  var t = normText(String(txt || "").trim()); if (!t || !d) return false;
+  return t === normText(diagLabel(d)) || (!!d.code && t === normText(String(d.code).trim() + " " + diagLabel(d)));
+}
 function diagParse(t){ var m = /^([A-Z]\d{2}(?:\.\d{1,2})?)\s+(.+)$/i.exec(String(t || "").trim()); return m ? {code: m[1].toUpperCase(), name: m[2]} : {code: "", name: String(t || "").trim()}; }
 function diagnosesList(){
   if (state.diagnoses && state.diagnoses.length) return state.diagnoses.slice();
   var out = CID_SUGGESTIONS.map(function(t){ var d = diagParse(t); return {id: slugify(t), code: d.code, name: d.name}; });
   (state.patients || []).forEach(function(p){
     var t = String(p.cid || "").trim();
-    if (t && !out.some(function(d){ return normText(diagLabel(d)) === normText(t); })){ var d = diagParse(t); out.push({id: slugify(t) || uid("dg"), code: d.code, name: d.name}); }
+    if (t && !out.some(function(d){ return diagMatch(d, t); })){ var d = diagParse(t); out.push({id: slugify(t) || uid("dg"), code: d.code, name: d.name}); }
   });
   return out;
 }
-function diagUseCount(d){ var k = normText(diagLabel(d)); return (state.patients || []).filter(function(p){ return k && normText(p.cid || "") === k; }).length; }
+function diagUseCount(d){ return (state.patients || []).filter(function(p){ return diagMatch(d, p.cid); }).length; }
 function diagOptionsHtml(cur){
-  var list = diagnosesList().filter(function(d){ return isActive(d) || normText(diagLabel(d)) === normText(cur || ""); })
+  var list = diagnosesList().filter(function(d){ return isActive(d) || diagMatch(d, cur); })
     .sort(function(a, b){ return diagLabel(a).localeCompare(diagLabel(b), "pt-BR"); });
-  var has = !cur || list.some(function(d){ return normText(diagLabel(d)) === normText(cur); });
+  var has = !cur || list.some(function(d){ return diagMatch(d, cur); });
   return '<option value="">Não informado</option>' + (has ? '' : '<option value="' + esc(cur) + '" selected>' + esc(cur) + '</option>') +
-    list.map(function(d){ var t = diagLabel(d); return '<option value="' + esc(t) + '"' + (cur && normText(t) === normText(cur) ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join("");
+    list.map(function(d){ var t = diagLabel(d); return '<option value="' + esc(t) + '"' + (cur && diagMatch(d, cur) ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join("");
 }
 var DEFAULT_ORIGINS = ["Indicação médica", "Indicação de outro paciente", "Escola", "Convênio", "Internet / redes sociais", "Outro"];
 function originsList(){
@@ -20551,9 +20557,9 @@ var HELP_TOPICS = [
     rules: ["O CNPJ ou CPF ganha a máscara ao digitar e é conferido pelos dígitos verificadores; o mesmo documento não pode ser cadastrado duas vezes.", "Sem documento, o que não se repete é o nome.", "<b>Excluir</b> pede sempre uma confirmação."],
     who: "Permissão <b>Fornecedores</b> (ver, incluir, editar e excluir) em Níveis de permissão."},
   {id: "diagnosticos", group: "Cadastros", title: "Diagnósticos", mod: "diagnosticos", tab: "diagnosticos",
-    purpose: "Lista de diagnósticos (código CID e descrição) escolhida no cadastro do paciente (grupo Saúde) e nos dados do lead do CRM.",
-    steps: ["Cadastros → <b>Diagnósticos</b> → <b>+ Incluir</b>: código CID (opcional) e descrição.", "No paciente e no lead do CRM, o campo <b>Diagnóstico</b> lista este cadastro; no fim da lista, <b>+ Incluir</b> cadastra um diagnóstico novo sem sair da janela."],
-    rules: ["A lista mostra quantos pacientes têm cada diagnóstico.", "Diagnóstico usado por paciente não é excluído: é <b>Inativado</b>.", "Corrigir o nome (ou o código) troca o texto também nos pacientes que usavam o nome anterior."],
+    purpose: "Lista de diagnósticos escolhida no cadastro do paciente (grupo Saúde) e nos dados do lead do CRM. Cada diagnóstico tem o nome e, à parte, o código CID.",
+    steps: ["Cadastros → <b>Diagnósticos</b> → <b>+ Incluir</b>: o <b>nome</b> do diagnóstico e, em outro campo, o código CID (opcional).", "No paciente e no lead do CRM, o campo <b>Diagnóstico</b> lista este cadastro; no fim da lista, <b>+ Incluir</b> cadastra um diagnóstico novo sem sair da janela."],
+    rules: ["A lista mostra quantos pacientes têm cada diagnóstico.", "Diagnóstico usado por paciente não é excluído: é <b>Inativado</b>.", "As listas mostram só o nome do diagnóstico, em ordem alfabética; o código CID fica só no cadastro.", "Corrigir o nome troca o texto também nos pacientes que usavam o nome anterior."],
     who: "Permissão <b>Diagnósticos</b>."},
   {id: "origens", group: "Cadastros", title: "Origens", mod: "origens", tab: "origens",
     purpose: "Como o paciente conheceu a clínica (Indicação médica, Escola, Internet…). Usada no cadastro do paciente.",
@@ -21616,18 +21622,18 @@ var REG_CFG = {
     vals: function(f){ return [f.name, f.categoria || "", supplierDocDigits(f.documento), f.telefone || "", f.email || ""]; }
   },
   diagnosticos: {
-    title: "diagnóstico", plural: "diagnósticos", module: "diagnosticos", newLabel: "+ Incluir", nameLabel: "Descrição",
+    title: "diagnóstico", plural: "diagnósticos", module: "diagnosticos", newLabel: "+ Incluir", nameLabel: "Diagnóstico",
     list: function(){ return diagnosesList(); },
     write: function(l){ return writeSimpleList("diagnosticos", l); },
-    fields: [{key: "code", label: "Código (CID)", ph: "Ex.: F84.0", first: true}],
+    fields: [{key: "code", label: "Código (CID)", ph: "Ex.: F84.0"}],
     dupKey: function(x){ return normText(diagLabel(x)); },
     label: function(x){ return diagLabel(x); },
     pickValue: function(x){ return diagLabel(x); },
     search: function(d){ return diagLabel(d); },
-    cols: ["Código (CID)", "Descrição", "Pacientes"],
-    widths: [140, 420, 110],
-    row: function(d){ return ['<b class="mono">' + esc(d.code || "—") + '</b>', esc(d.name), diagUseCount(d)]; },
-    vals: function(d){ return [d.code || "", d.name, diagUseCount(d)]; }
+    cols: ["Diagnóstico", "Código (CID)", "Pacientes"],
+    widths: [420, 140, 110],
+    row: function(d){ return ['<b>' + esc(d.name) + '</b>', '<span class="mono">' + esc(d.code || "—") + '</span>', diagUseCount(d)]; },
+    vals: function(d){ return [d.name, d.code || "", diagUseCount(d)]; }
   },
   origens: {
     title: "origem", plural: "origens", module: "origens", newLabel: "+ Incluir", fem: true,

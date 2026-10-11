@@ -3864,3 +3864,12 @@ leva o texto digitado em `diagnostico`). Não → `diagnostico` vai vazio. Abert
 `diagnosticos`; migração `supabase/2026-10-11f-link-diagnosticos.sql` (só essa função; linha 96 da conferência de migrações;
 testada no PGlite). Teste em `tests/run_intake.js`.
 - Produção (2026-10-11): `2026-10-11f-link-diagnosticos` rodada (`funcao_nova = true`; o link entrega 41 diagnósticos). A `2026-10-11e-fornecedores` ainda NÃO foi rodada (caminho não aceito, 0 níveis).
+
+## Diagnósticos só pelo nome (2026-10-11)
+Pedido do usuário: nas listas de escolha aparece SÓ o nome do diagnóstico, em ordem alfabética pelo nome (não mais "F84.0 Autismo
+infantil" ordenado pelo CID); no cadastro o nome e o código CID são campos separados (janela: Diagnóstico, depois Código (CID); lista:
+Diagnóstico, Código (CID), Pacientes). `diagLabel(d)` = nome; o paciente (`cid`) e o lead do CRM guardam o NOME. Texto antigo
+"código nome" ainda é reconhecido por `diagMatch(d, texto)` (contagem de uso, opção marcada). O formulário do link recebe só os
+nomes (`intake_form`). Migração `supabase/2026-10-11g-diagnostico-so-nome.sql`: função do link + troca "código nome" por "nome"
+em `patient_health.cid` e `tasks.lead.diagnostico` (só quando é exatamente um diagnóstico cadastrado; testada no PGlite 2×; em
+produção 2 saúdes a trocar, 0 leads). Linha 97 da conferência de migrações.

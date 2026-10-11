@@ -28,12 +28,12 @@ const path = require('path');
   // 1. Paciente: Diagnóstico e Como conheceu = listas dos cadastros com "+ Incluir" no fim
   await page.$eval('#mainTabs button[data-tab=pacientes]', (b) => b.click()); await page.waitForTimeout(300);
   await ev('openPatientModal(null)'); await page.waitForTimeout(400);
-  check('patient: Diagnóstico is a list of the Diagnósticos registry?', await page.$eval('#pf-cid', (s) => s.tagName === 'SELECT' && [...s.options].some((o) => o.value === 'F84.0 Autismo infantil')));
+  check('patient: Diagnóstico is a list of the Diagnósticos registry?', await page.$eval('#pf-cid', (s) => s.tagName === 'SELECT' && [...s.options].some((o) => o.value === 'Autismo infantil')));
   await page.click('[data-dp-for="pf-cid"] .dp-in'); await page.waitForSelector('#dpPop .dp-add');
   check('patient: "+ Incluir" is the last item of the Diagnóstico list?', await hasAdd());
   await page.click('#dpPop .dp-add'); await page.waitForSelector('#ovQuick');
   await page.fill('#regf-code', 'Q90'); await page.fill('#qkName', 'Síndrome de Down'); await page.click('#qkSave'); await page.waitForTimeout(250);
-  check('patient: new diagnosis saved in the registry and chosen in the field?', (await page.inputValue('#pf-cid')) === 'Q90 Síndrome de Down' &&
+  check('patient: new diagnosis saved in the registry and chosen in the field?', (await page.inputValue('#pf-cid')) === 'Síndrome de Down' &&
     await page.evaluate(() => (window.__STORE__['config/diagnoses'] || {list: []}).list.some((d) => d.code === 'Q90' && d.name === 'Síndrome de Down')) && !(await page.$('#ovQuick')) && await page.isVisible('#ovPat'));
   await page.click('[data-dp-for="pf-comoConheceu"] .dp-in'); await page.waitForSelector('#dpPop .dp-add');
   await page.fill('[data-dp-for="pf-comoConheceu"] .dp-in', 'Panfleto');

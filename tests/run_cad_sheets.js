@@ -91,7 +91,7 @@ const path = require('path');
   await page.evaluate(() => { const b = document.querySelector('#modalHost [data-dp-for="pf-cid"]'); b.scrollIntoView({block: 'center'}); b.click(); });
   await page.waitForTimeout(150);
   const one = await page.evaluate(() => { const o = [...document.querySelectorAll('#mSheet .dp-opt')]; const hs = o.map((x) => Math.round(x.getBoundingClientRect().height));
-    const long = o.find((x) => /F98.9/.test(x.textContent)); const lr = long ? long.getBoundingClientRect() : null;
+    const long = o.slice().sort((a, b) => b.textContent.length - a.textContent.length)[0]; const lr = long ? long.getBoundingClientRect() : null;
     return {n: o.length, maxH: Math.max.apply(null, hs), minH: Math.min.apply(null, hs), cut: long ? long.scrollWidth > long.clientWidth && getComputedStyle(long).textOverflow === 'ellipsis' : null, inside: lr ? lr.right <= window.innerWidth + 1 : null}; });
   check('mobile list options: one line each (long text ends in "…", no overlap)?', one.n > 10 && one.maxH === one.minH && one.maxH <= 54 && one.cut === true && one.inside, JSON.stringify(one));
   await page.evaluate(() => { ['mSheet', 'mSheetBg', 'dpPop'].forEach((id) => { const e = document.getElementById(id); if (e) e.remove(); }); document.getElementById('modalHost').innerHTML = ''; });
