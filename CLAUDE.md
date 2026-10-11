@@ -3994,3 +3994,4 @@ para a Fase 3). O saldo de cada conta da planilha (aba DRE) = saldo inicial + Σ
   Categorias de fornecedor | Contas bancárias, Plano de contas (`FIN_ITEMS`/`FIN_TABS`; saíram de `CAD_ITEMS`/`CAD_TABS`). Mesmas telas, abas
   (`fornecedores`, `catfornecedor`, `contas`, `planocontas`), permissões e endereços; Ajuda no grupo "Financeiro". Cadastro financeiro novo:
   colocar em `FIN_ITEMS`. Convênios continua em Cadastros.
+- Produção (2026-10-11): `2026-10-11k-financeiro-lancamentos` rodada pelo conector, autorizada pelo usuário ("Sim"). O script inteiro estourou o tempo do conector (60 s) sem criar nada; foi aplicado em 3 partes (tabela e índices | função, gatilho e 4 políticas | tempo real). Conferido: tabela, RLS ligada, 4 políticas, gatilho, tempo real, função fechada para anon. Falta o usuário importar `lancamentos-fluxo-2026.xlsx` e conferir os saldos mensais com a aba DRE.
