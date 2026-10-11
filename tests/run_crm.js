@@ -294,6 +294,7 @@ const path = require('path');
 
   // Filtro de prioridade
   await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-agendas"]'); await page.waitForTimeout(150);
+  check('in a list the Responsável filter is back?', await page.evaluate(() => getComputedStyle(document.querySelector('#tab-crm [data-dp-for="crmFWho"]')).display !== 'none'));
   await setv('#crmFPrio', 'alta'); await page.waitForTimeout(100);
   check('priority filter?', (await page.$$('#crmHost tr[data-crm-id]')).length === 1);
   await setv('#crmFPrio', '');
@@ -311,6 +312,9 @@ const path = require('path');
   const mineSt = await page.$$eval('#crmFSt option', (o) => o.length);
   const allSt = await ev('(function(){ var s = {}; crmVisibleLists().forEach(function(l){ l.statuses.forEach(function(x){ s[normText(x.name)] = 1; }); }); return Object.keys(s).length; })()');
   check('Minhas tarefas: status filter joins the statuses of all lists?', mineSt === allSt + 1, {mineSt, allSt});
+  const whoVis = await page.evaluate(() => { const b = document.querySelector('#tab-crm [data-dp-for="crmFWho"]'); return !!b && getComputedStyle(b).display !== 'none'; });
+  const stVis2 = await page.evaluate(() => { const b = document.querySelector('#tab-crm [data-dp-for="crmFSt"]'); return !!b && getComputedStyle(b).display !== 'none'; });
+  check('Minhas tarefas: no Responsável filter, Status in its place?', !whoVis && stVis2, {whoVis, stVis2});
   await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-agendas"]'); await page.waitForTimeout(150);
 
   const mods = await ev('window.pipoCrmModules().map(function(m){ return m.key + "|" + (m.group || ""); }).join(",")');

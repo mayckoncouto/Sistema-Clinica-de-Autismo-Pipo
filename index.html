@@ -305,6 +305,7 @@ div.ag-obj-head{cursor:default}
 .crm-title{font-size:14px;margin-right:4px}
 .crm-toolbar .crm-q{min-width:160px;flex:1 1 160px;max-width:260px}
 .crm-toolbar select{max-width:190px}
+#tab-crm.crm-mine-view .crm-toolbar [data-dp-for="crmFWho"],#tab-crm.crm-mine-view .crm-toolbar #crmFWho{display:none!important}
 /* Computador (1260px ou mais): barra do CRM numa linha só; falta espaço = busca e filtros encolhem (texto com …) e "Outras opções" vira "Opções". Abaixo de 1260px quebra linha. */
 @media (min-width:1260px){
   #tab-crm .crm-toolbar{flex-wrap:nowrap}
@@ -625,6 +626,9 @@ div.ag-obj-head{cursor:default}
   #tab-crm .crm-toolbar .crm-title{flex:1 1 auto;font-size:15px}
   #tab-crm .crm-toolbar .crm-q{order:2;flex:1 1 55%;min-width:0;max-width:none}
   #tab-crm .crm-toolbar > .dp-btn.crm-fst{order:2;flex:0 1 38%}
+  /* Minhas tarefas: busca na linha toda e Status na linha dos filtros, no lugar de Responsável */
+  #tab-crm.crm-mine-view .crm-toolbar .crm-q{flex:1 1 100%}
+  #tab-crm.crm-mine-view .crm-toolbar > .dp-btn.crm-fst{order:3;flex:1 1 28%}
   #tab-crm .crm-toolbar > .dp-btn{order:3;flex:1 1 28%;min-width:0;max-width:none;padding:8px 6px 8px 10px;font-size:13px}
   #tab-crm .crm-toolbar > .dp-btn .dp-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #tab-crm .crm-toolbar :is(#crmCount,.inact-toggle,#crmAdd,.help-q){order:4}
@@ -6767,6 +6771,11 @@ function crmRender(){
   crmFillStatus();
   var home = CRM.list === "__home";
   var sec = document.getElementById("tab-crm"); if (sec) sec.classList.toggle("crm-home", home);
+  // Minhas tarefas: todas já são suas, então o filtro Responsável sai e o Status fica no lugar dele.
+  var mineV = CRM.list === "__mine";
+  if (sec) sec.classList.toggle("crm-mine-view", mineV);
+  var fw = document.getElementById("crmFWho");
+  if (mineV && fw && fw.value){ fw.value = ""; fw.dispatchEvent(new Event("change")); }
   var top = document.getElementById("crmHomeTop"); if (top) top.hidden = !home;
   if (home) crmHomeRender(document.getElementById("crmHomeGrid"));
   // "multi" = Minhas tarefas ou a tela CRM (todas as tarefas das listas que a pessoa vê): sem Quadro, com coluna Lista
@@ -20635,7 +20644,7 @@ var HELP_TOPICS = [
     purpose: "Acompanhar contatos (funil de atendimento) e tarefas da equipe por lista, com responsáveis, vencimento, prioridade, comentários e histórico.",
     steps: [
       "Abra <b>CRM ▾</b> e escolha a lista (Atendimento, Agendas, Fature, Gestão…) ou <b>Minhas tarefas</b> (tudo o que está aberto com você). O primeiro item, <b>CRM</b>, mostra em cima um cartão por lista que você pode ver, com os números em duas colunas (abertas, vencidas, vencem hoje, urgentes e comigo; em Minhas tarefas, menções não lidas; zero fica apagado), uma faixa colorida com quantas tarefas abertas há em cada status e, na lista de atendimento, leads sem cadastro, contratos e perdidos no mês; no celular um cartão por vez, deslizando para o lado; clique no cartão para abrir a lista e embaixo a barra de busca e filtros com todas as tarefas dessas listas (coluna <b>Lista</b>; Lista ou Calendário). Ao entrar no CRM sem escolher uma lista (endereço #crm, atualizar a página), abre <b>Minhas tarefas</b>.",
-      "Filtros na barra de toda tela do CRM: <b>Status</b> (os status da lista aberta; em Minhas tarefas e na tela CRM, os status de todas as listas, juntando os de mesmo nome), <b>Responsável</b>, <b>Prioridade</b> e <b>Vencimento</b>. Escolhendo um status, aparecem só as tarefas nele, inclusive as finalizadas; no Quadro fica só a coluna desse status.",
+      "Filtros na barra de toda tela do CRM: <b>Status</b> (os status da lista aberta; em Minhas tarefas e na tela CRM, os status de todas as listas, juntando os de mesmo nome), <b>Responsável</b> (não aparece em Minhas tarefas, que já são todas suas), <b>Prioridade</b> e <b>Vencimento</b>. Escolhendo um status, aparecem só as tarefas nele, inclusive as finalizadas; no Quadro fica só a coluna desse status.",
       "<b>Lista</b>: tabela com Status (bolinha com a cor e o nome), Paciente ou Lead, Tarefa (com o número de comentários), Convênio, Responsáveis, Vencimento e Prioridade (clique no título para ordenar). Clique em qualquer ponto da célula de Status, Responsáveis, Vencimento ou Prioridade para mudar ali mesmo (lista de escolha ou calendário), sem abrir a tarefa. <b>Finalizados</b> mostra também as tarefas finalizadas. <b>Quadro</b>: uma coluna por status — arraste o cartão para mudar o status. <b>Calendário</b>: o mês com as tarefas pelo vencimento (‹ Hoje ›; arraste para outro dia para mudar o vencimento; o + no dia cria uma tarefa com aquele vencimento).",
       "<b>+ Tarefa</b> abre a janela: Tarefa, Status, Responsáveis, Vencimento, Prioridade, <b>Paciente ou Lead</b> (escolha um paciente; um nome sem cadastro vira lead) e Descrição. Em todas as listas, o grupo <b>Dados do Paciente/Lead</b> traz, em duas linhas, Paciente ou Lead e Telefone, Diagnóstico e Convênio. Com paciente cadastrado, esses campos mostram o cadastro dele (telefone, diagnóstico e convênio do tratamento) e só mudam no cadastro do paciente; com lead, são preenchidos na tarefa. <b>Outras opções</b> → <b>Cadastrar paciente</b> (à direita do título Dados do Paciente/Lead, só para lead) abre o cadastro já preenchido com nome, telefone e diagnóstico (o diagnóstico vai para o campo Diagnóstico do paciente). Ao salvar, a tarefa fica ligada ao paciente, os dados do lead saem da tarefa (passam a valer os do cadastro), nasce um tratamento <b>Ativo</b> só com o convênio do lead — o resto do tratamento é preenchido depois — e a Atividade registra “cadastrou o lead como paciente”. O status da tarefa não muda. A lista de Status tem um campo de pesquisa: digite parte do nome (sem precisar de acento ou maiúscula) e Enter escolhe o primeiro.",
       "<b>Status</b> abre a lista dos status da lista, cada um com a sua bolinha de cor. <b>Responsáveis</b> abre a lista de pessoas com busca (Eu primeiro); marque ou desmarque. <b>Prioridade</b> abre as bandeiras Urgente, Alta e Normal (tarefa nova começa em Normal).",

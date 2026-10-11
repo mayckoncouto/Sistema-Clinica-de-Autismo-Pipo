@@ -3801,3 +3801,6 @@ foi mencionado (o autor não recebe) e tem acesso à lista; cada pessoa liga no 
   em `public.correcoes_texto_2026_10_11` para desfazer — pode ser apagada depois). Testada no PGlite.
 - Produção (2026-10-11): `2026-10-11-notificacoes` rodada (1 | 1 | 1 | 1); `2026-10-11b` rodada (1); função
   `pipo-push` publicada pelo conector (verify_jwt false) e testada pelo banco (devolveu a chave pública).
+- (2026-10-11, pedido do usuário) **Minhas tarefas sem o filtro Responsável** (são todas da pessoa): `#tab-crm.crm-mine-view`
+  esconde `#crmFWho` (e zera o valor); o Status fica na linha dos filtros, no lugar dele (no celular a busca volta à
+  linha toda). Nas listas e na tela CRM o Responsável continua.
