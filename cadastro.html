@@ -110,6 +110,16 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .done h2{margin:0 0 8px;color:var(--ok)}
 .muted{color:var(--muted)}
 @media (max-width:560px){.grid{grid-template-columns:1fr}.head h1{font-size:17px}}
+.lst{display:flex;flex-direction:column;gap:8px}
+.lrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.lrm{width:var(--field-h);height:var(--field-h);border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--muted);cursor:pointer;font-size:15px}
+.ladd{align-self:flex-start;margin-top:4px;border:1px solid var(--accent);border-radius:8px;background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font:inherit;font-weight:700;font-size:14px;padding:8px 14px;cursor:pointer}
+.rt-cells{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.rt-cell{display:flex;flex-direction:column;gap:6px}
+.rt-per{font-size:11.5px;font-weight:700;color:var(--muted)}
+.grid > .hint.wide{grid-column:1 / -1}
+[hidden]{display:none!important}
+@media (max-width:560px){.lrow{grid-template-columns:1fr auto}.lrow .field{grid-column:1}.lrow .lrm{grid-column:2;grid-row:1}.rt-cells{grid-template-columns:1fr}}
 .done .soc-t{margin:22px 0 10px;font-size:14px;color:var(--muted)}
 </style>
 <script src="/js/redes.js"></script>
@@ -264,24 +274,61 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
   // Campos escolhidos em Campos obrigatórios (Link do paciente / Link geral). Sem configuração,
   // vale o padrão (mesmo LINK_FIELDS do sistema). Todos os campos podem ser escolhidos (nome e telefone também).
   var DEFAULT_REQ = {nome: 1, telefone: 1, nascimento: 1, cpf: 1, responsavel: 1};
-  var GROUP = {respNome: "responsavel", respParentesco: "responsavel", cep: "endereco", numero: "endereco", rua: "endereco", compl: "endereco", bairro: "endereco", cidade: "endereco", uf: "endereco"};
-  var ADDR_REQ = {cep: 1, numero: 1, rua: 1, cidade: 1};
+  // Campos que só aparecem no link quando a clínica marca em Campos obrigatórios (sem configuração = fora).
+  var OFF = {rg: 1, cns: 1, entrada: 1, mae: 1, pai: 1, rotina: 1, protetiva: 1, financeiro: 1, escolaSerie: 1, professor: 1, mediador: 1,
+    rotinaAtual: 1, medico: 1, diagData: 1, suporte: 1, comunicacao: 1, alergias: 1, medicacoes: 1, restricoes: 1};
+  var GROUP = {respNome: "responsavel", respParentesco: "responsavel", respProfissao: "responsavel",
+    cep: "endereco", numero: "endereco", rua: "endereco", compl: "endereco", bairro: "endereco", cidade: "endereco", uf: "endereco",
+    maeNome: "mae", maeCpf: "mae", maeProfissao: "mae", paiNome: "pai", paiCpf: "pai", paiProfissao: "pai",
+    finNome: "financeiro", finDoc: "financeiro", finTelefone: "financeiro", finEmail: "financeiro", convenioOutro: "convenio"};
+  // Dentro de um grupo, só estes ficam obrigatórios quando o grupo é obrigatório.
+  var GROUP_REQ = {cep: 1, numero: 1, rua: 1, cidade: 1, respNome: 1, respParentesco: 1, maeNome: 1, paiNome: 1, finNome: 1};
+  var PARENTESCOS = ["Mãe", "Pai", "Avó", "Avô", "Tia", "Tio", "Padrasto", "Madrasta", "Outro"];
+  var ROUTINE_DAYS = [["seg", "Segunda"], ["ter", "Terça"], ["qua", "Quarta"], ["qui", "Quinta"], ["sex", "Sexta"]];
+  var ROUTINE_TYPES = [["escola", "Escola"], ["pipo", "Terapia na clínica"], ["terapia", "Outra terapia"], ["atividade", "Atividade"], ["casa", "Em casa / livre"], ["outro", "Outro"]];
   function cfg(key){
     var c = (FORM.campos || {})[key];
-    return c ? {show: !!c.show || !!c.req, req: !!c.req} : {show: true, req: !!DEFAULT_REQ[key]};
+    return c ? {show: !!c.show || !!c.req, req: !!c.req} : {show: !OFF[key], req: !OFF[key] && !!DEFAULT_REQ[key]};
   }
   function shown(id){ return cfg(GROUP[id] || id).show; }
-  function required(id){ var g = GROUP[id]; if (g === "endereco") return cfg(g).req && !!ADDR_REQ[id]; return cfg(g || id).req; }
+  function required(id){ var g = GROUP[id]; if (g && g !== "convenio") return cfg(g).req && !!GROUP_REQ[id]; if (g === "convenio") return false; return cfg(id).req; }
   function f(id, label, opt){
     opt = opt || {};
     if (!shown(id)) return "";
     opt.req = required(id);
     var v = opt.value || "", req = opt.req ? ' <span class="req">*</span>' : "";
-    var input = opt.select ? '<select id="' + id + '"' + (opt.req ? ' required' : '') + '><option value="">Selecione…</option>' + opt.select.map(function(o){ return '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join("") + '</select>'
+    var input = opt.select ? '<select id="' + id + '"' + (opt.req ? ' required' : '') + '><option value="">Selecione…</option>' + opt.select.map(function(o){ var ov = Array.isArray(o) ? o[0] : o, ot = Array.isArray(o) ? o[1] : o; return '<option value="' + esc(ov) + '"' + (ov === v ? ' selected' : '') + '>' + esc(ot) + '</option>'; }).join("") + '</select>'
       : opt.date ? '<div class="pk-date"><input id="' + id + '" type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" autocomplete="off"' + (opt.req ? ' required' : '') + ' value="' + esc(isoToBr(v)) + '"><button type="button" class="pk-cal-btn" data-cal="' + id + '" aria-label="Abrir calendário"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></div>'
       : opt.area ? '<textarea id="' + id + '">' + esc(v) + '</textarea>'
       : '<input id="' + id + '" type="' + (opt.type || "text") + '"' + (opt.attrs || "") + (opt.req ? ' required' : '') + ' value="' + esc(v) + '">';
-    return '<div class="field' + (opt.wide ? ' wide' : '') + '"><label for="' + id + '">' + esc(label) + req + '</label>' + input + (opt.hint ? '<span class="hint">' + esc(opt.hint) + '</span>' : '') + '</div>';
+    return '<div class="field' + (opt.wide ? ' wide' : '') + '"' + (opt.when ? ' data-when="' + opt.when + '" hidden' : '') + '><label for="' + id + '">' + esc(label) + req + '</label>' + input + (opt.hint ? '<span class="hint">' + esc(opt.hint) + '</span>' : '') + '</div>';
+  }
+  // Listas de pessoas (Responsáveis pela retirada, Medida protetiva): uma linha por pessoa, "+ Incluir pessoa".
+  var LISTS = {
+    rotina: {data: "retirada", cols: [["nome", "Nome"], ["rel", "Parentesco"], ["telefone", "Telefone", ' inputmode="tel" placeholder="(00) 00000-0000"']]},
+    protetiva: {data: "protetiva", cols: [["nome", "Nome"], ["rel", "Parentesco"], ["obs", "Observação"]]}
+  };
+  function lrowHtml(kind, x){
+    x = x || {};
+    return '<div class="lrow">' + LISTS[kind].cols.map(function(c){ return '<div class="field"><label>' + c[1] + '</label><input type="text" data-k="' + c[0] + '"' + (c[2] || '') + ' value="' + esc(c[0] === "telefone" ? fmtPhone(x[c[0]]) : (x[c[0]] || "")) + '"></div>'; }).join("") +
+      '<button type="button" class="lrm" data-lrm aria-label="Tirar esta pessoa">✕</button></div>';
+  }
+  function listHtml(kind, items, hint){
+    if (!shown(kind)) return "";
+    var L = (items && items.length ? items : [{}]).map(function(x){ return lrowHtml(kind, x); }).join("");
+    return '<div class="field wide" data-list="' + kind + '">' + (hint ? '<span class="hint">' + esc(hint) + (cfg(kind).req ? ' <span class="req">*</span>' : '') + '</span>' : '') +
+      '<div class="lst">' + L + '</div><button type="button" class="ladd" data-ladd="' + kind + '">+ Incluir pessoa</button></div>';
+  }
+  function routineHtml(r){
+    if (!shown("rotinaAtual")) return "";
+    r = r || {};
+    return ROUTINE_DAYS.map(function(d){
+      return '<div class="field wide rt-day"><label>' + d[1] + '</label><div class="rt-cells">' + [["m", "Manhã"], ["t", "Tarde"]].map(function(pp){
+        var c = (r[d[0]] || {})[pp[0]] || {}, id = "rt-" + d[0] + "-" + pp[0];
+        return '<div class="rt-cell"><span class="rt-per">' + pp[1] + '</span><select id="' + id + '" aria-label="' + d[1] + ' — ' + pp[1] + '"><option value="">' + pp[1] + '…</option>' + ROUTINE_TYPES.map(function(t){ return '<option value="' + t[0] + '"' + (c.tipo === t[0] ? ' selected' : '') + '>' + esc(t[1]) + '</option>'; }).join("") + '</select>' +
+          '<input type="text" id="' + id + '-txt" placeholder="Detalhe (opcional)" value="' + esc(c.txt || "") + '"></div>';
+      }).join("") + '</div></div>';
+    }).join("");
   }
   // Nome que já vem no campo: o do cadastro ou o digitado ao gerar o link. No link geral (permanente)
   // o nome guardado no link é só o nome do link ("Link geral"), então o campo começa em branco.
@@ -302,25 +349,58 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         f("nome", "Nome completo do paciente", {wide: true, value: nomeInicial(p), attrs: ' autocomplete="off" placeholder="Digite o nome completo do paciente"'}) +
         f("nascimento", "Data de nascimento", {date: true, value: p.nascimento}) +
         f("cpf", "CPF do paciente", {value: fmtCpf(p.cpf), attrs: ' inputmode="numeric" placeholder="000.000.000-00"'}) +
-        f("sexo", "Sexo", {select: ["Feminino", "Masculino", "Outro"], value: p.sexo})) +
+        f("sexo", "Sexo", {select: ["Feminino", "Masculino", "Outro"], value: p.sexo}) +
+        f("rg", "RG", {value: p.rg}) +
+        f("cns", "Cartão SUS (CNS)", {value: p.cns, attrs: ' inputmode="numeric" maxlength="15"'}) +
+        f("entrada", "Data de entrada", {date: true, value: p.entrada})) +
       sec("Responsável",
         f("respNome", "Nome do responsável", {value: p.respNome, attrs: ' autocomplete="name"'}) +
-        f("respParentesco", "Parentesco", {select: ["Mãe", "Pai", "Avó", "Avô", "Outro"], value: p.respParentesco}) +
+        f("respParentesco", "Parentesco", {select: PARENTESCOS, value: p.respParentesco}) +
+        f("respProfissao", "Profissão do responsável", {value: p.respProfissao, when: "resp-parent"}) +
         f("telefone", "Telefone / WhatsApp", {value: fmtPhone(p.telefone || FORM.telefone), attrs: ' inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000"'}) +
         f("email", "E-mail", {type: "email", value: p.email, attrs: ' autocomplete="email"'})) +
+      sec("Mãe",
+        f("maeNome", "Nome da mãe", {value: p.maeNome, wide: true}) +
+        f("maeCpf", "CPF da mãe", {value: fmtCpf(p.maeCpf), attrs: ' inputmode="numeric" placeholder="000.000.000-00"'}) +
+        f("maeProfissao", "Profissão da mãe", {value: p.maeProfissao})) +
+      sec("Pai",
+        f("paiNome", "Nome do pai", {value: p.paiNome, wide: true}) +
+        f("paiCpf", "CPF do pai", {value: fmtCpf(p.paiCpf), attrs: ' inputmode="numeric" placeholder="000.000.000-00"'}) +
+        f("paiProfissao", "Profissão do pai", {value: p.paiProfissao})) +
       sec("Endereço",
         f("cep", "CEP", {value: fmtCep(p.cep), attrs: ' inputmode="numeric" placeholder="00000-000"', hint: "Preenche rua, bairro e cidade."}) +
         f("numero", "Número", {value: p.numero}) +
         f("rua", "Rua", {value: p.rua, wide: true}) +
         f("compl", "Complemento", {value: p.compl}) + f("bairro", "Bairro", {value: p.bairro}) +
         f("cidade", "Cidade", {value: p.cidade}) + f("uf", "UF", {value: p.uf, attrs: ' maxlength="2"'})) +
+      sec("Responsáveis pela retirada", listHtml("rotina", p.retirada, "Outras pessoas (além da mãe e do pai) que podem buscar o paciente na clínica.")) +
+      sec("Medida protetiva", listHtml("protetiva", p.protetiva, "Pessoas que NÃO podem buscar o paciente na clínica.")) +
+      sec("Responsável financeiro",
+        f("finNome", "Nome do responsável financeiro", {value: p.finNome, wide: true}) +
+        f("finDoc", "CPF ou CNPJ", {value: p.finDoc, attrs: ' inputmode="numeric"'}) +
+        f("finTelefone", "Telefone", {value: fmtPhone(p.finTelefone), attrs: ' inputmode="tel" placeholder="(00) 00000-0000"'}) +
+        f("finEmail", "E-mail", {type: "email", value: p.finEmail, wide: true})) +
+      sec("Saúde",
+        f("diagnostico", "Diagnóstico ou suspeita", {value: p.diagnostico, wide: true, hint: "Ex.: autismo (TEA), suspeita de TEA, TDAH…"}) +
+        f("laudo", "Tem laudo?", {select: ["Sim", "Não", "Em avaliação"], value: p.laudo}) +
+        f("diagData", "Data do diagnóstico", {date: true, value: p.diagData}) +
+        f("medico", "Médico que acompanha", {value: p.medico, wide: true}) +
+        f("suporte", "Nível de suporte", {select: ["Nível 1", "Nível 2", "Nível 3"], value: p.suporte}) +
+        f("comunicacao", "Comunicação", {select: ["Verbal", "Pouco verbal", "Não verbal", "Usa CAA (comunicação alternativa)"], value: p.comunicacao}) +
+        f("alergias", "Alergias", {value: p.alergias, wide: true}) +
+        f("medicacoes", "Medicações em uso", {value: p.medicacoes, wide: true}) +
+        f("restricoes", "Restrições alimentares", {value: p.restricoes, wide: true})) +
+      sec("Escola",
+        f("escola", "Escola", {value: p.escola, wide: true}) +
+        f("escolaSerie", "Série / ano", {value: p.escolaSerie}) +
+        f("escolaTurno", "Turno da escola", {select: ["Manhã", "Tarde", "Integral", "Noite"], value: p.escolaTurno}) +
+        f("professor", "Professor(a)", {value: p.professor}) +
+        f("mediador", "Tem mediador / AT", {select: ["Sim", "Não"], value: p.mediador})) +
+      sec("Rotina atual", (shown("rotinaAtual") ? '<span class="hint wide">O que o paciente faz em cada período (escola, outras terapias, atividades…).</span>' : '') + routineHtml(p.rotinaAtual)) +
       sec("Atendimento",
         f("convenio", "Convênio", {select: convs, value: p.convenio}) +
+        f("convenioOutro", "Qual convênio?", {value: p.convenioOutro, when: "conv-outro"}) +
         f("comoConheceu", "Como conheceu a clínica", {select: FORM.origens || [], value: p.comoConheceu}) +
-        f("diagnostico", "Diagnóstico ou suspeita", {value: p.diagnostico, wide: true, hint: "Ex.: autismo (TEA), suspeita de TEA, TDAH…"}) +
-        f("laudo", "Tem laudo?", {select: ["Sim", "Não", "Em avaliação"], value: p.laudo}) + (shown("laudo") ? '<div></div>' : '') +
-        f("escola", "Escola", {value: p.escola}) +
-        f("escolaTurno", "Turno da escola", {select: ["Manhã", "Tarde", "Integral", "Noite"], value: p.escolaTurno}) +
         f("obs", "Observações", {area: true, wide: true, value: p.obs})) +
       '<label class="consent"><input type="checkbox" id="consent"> <span>Autorizo ' + esc(nome) + ' a usar estes dados para o cadastro e o atendimento do paciente, conforme a Lei Geral de Proteção de Dados (LGPD). <span class="req">*</span></span></label>' +
       '<div id="err"></div>' +
@@ -339,13 +419,29 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       phoneMode(); window.addEventListener("resize", phoneMode);
       inp.addEventListener("click", function(){ if (isPhone()) openCalendar(inp, inp); });
     });
+    // Campos que dependem de outro: profissão do responsável (Mãe/Pai) e "Qual convênio?" (Outro).
+    function whenSync(){
+      var par = (document.getElementById("respParentesco") || {}).value || "", conv = (document.getElementById("convenio") || {}).value || "";
+      Array.prototype.forEach.call(frm.querySelectorAll("[data-when]"), function(el){
+        var on = el.getAttribute("data-when") === "resp-parent" ? (par === "Mãe" || par === "Pai") && !(par === "Mãe" ? shown("maeNome") : shown("paiNome")) : conv === "Outro";
+        el.hidden = !on;
+      });
+    }
+    frm.addEventListener("change", function(e){ if (e.target.id === "respParentesco" || e.target.id === "convenio") whenSync(); });
+    whenSync();
+    frm.addEventListener("click", function(e){
+      var add = e.target.closest("[data-ladd]"), rm = e.target.closest("[data-lrm]");
+      if (add){ var k = add.getAttribute("data-ladd"), lst = add.parentNode.querySelector(".lst"); if (lst.children.length >= 10) return; lst.insertAdjacentHTML("beforeend", lrowHtml(k)); lst.lastElementChild.querySelector("input").focus(); }
+      if (rm){ var row = rm.closest(".lrow"), l = row.parentNode; if (l.children.length > 1) row.remove(); else Array.prototype.forEach.call(row.querySelectorAll("input"), function(i){ i.value = ""; }); }
+    });
     frm.addEventListener("input", function(e){
       var t = e.target;
-      if (t.id === "cpf") t.value = fmtCpf(t.value);
-      if (t.id === "telefone") t.value = fmtPhone(t.value);
+      if (t.id === "cpf" || t.id === "maeCpf" || t.id === "paiCpf") t.value = fmtCpf(t.value);
+      if (t.id === "telefone" || t.id === "finTelefone" || t.getAttribute("data-k") === "telefone") t.value = fmtPhone(t.value);
+      if (t.id === "cns") t.value = digits(t.value).slice(0, 15);
       if (t.id === "cep") t.value = fmtCep(t.value);
       if (t.id === "uf") t.value = t.value.toUpperCase();
-      if (t.id === "nascimento") t.value = fmtDate(t.value);
+      if (t.id === "nascimento" || t.id === "entrada" || t.id === "diagData") t.value = fmtDate(t.value);
       t.classList.remove("bad");
     });
     if (document.getElementById("cep")) document.getElementById("cep").addEventListener("change", function(){
@@ -360,32 +456,63 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       var err = document.getElementById("err"), bad = [];
       function val(id){ var el = document.getElementById(id); return el ? el.value.trim() : ""; }
       Array.prototype.forEach.call(frm.querySelectorAll("[required]"), function(el){ if (!el.value.trim()) bad.push(el.id); });
-      if (val("cpf") && !cpfOk(val("cpf"))) bad.push("cpf");
+      ["cpf", "maeCpf", "paiCpf"].forEach(function(id){ if (val(id) && !cpfOk(val(id))) bad.push(id); });
       var nascIso = brToIso(val("nascimento")); if (nascIso === null) bad.push("nascimento");
-      if (val("telefone") && digits(val("telefone")).length < 10) bad.push("telefone");
-      if (val("email") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val("email"))) bad.push("email");
-      bad.forEach(function(id){ var el = document.getElementById(id); el.classList.add("bad"); if (el.__btn) el.__btn.classList.add("bad"); });
+      var entIso = brToIso(val("entrada")); if (entIso === null) bad.push("entrada");
+      var diagIso = brToIso(val("diagData")); if (diagIso === null) bad.push("diagData");
+      ["telefone", "finTelefone"].forEach(function(id){ if (val(id) && digits(val(id)).length < 10) bad.push(id); });
+      ["email", "finEmail"].forEach(function(id){ if (val(id) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val(id))) bad.push(id); });
+      if (val("convenio") === "Outro" && !val("convenioOutro") && cfg("convenio").req) bad.push("convenioOutro");
+      // Listas de pessoas e rotina: só as linhas com nome / os períodos escolhidos.
+      function listVal(kind){
+        var host = frm.querySelector('[data-list="' + kind + '"]'); if (!host) return [];
+        return Array.prototype.map.call(host.querySelectorAll(".lrow"), function(row){
+          var o = {}; Array.prototype.forEach.call(row.querySelectorAll("[data-k]"), function(i){ var v = i.value.trim(); if (v) o[i.getAttribute("data-k")] = i.getAttribute("data-k") === "telefone" ? digits(v) : v; });
+          return o;
+        }).filter(function(o){ return o.nome; });
+      }
+      var retirada = listVal("rotina"), protetiva = listVal("protetiva"), rotinaAtual = {};
+      if (shown("rotinaAtual")) ROUTINE_DAYS.forEach(function(d){ ["m", "t"].forEach(function(pp){
+        var t = val("rt-" + d[0] + "-" + pp), x = val("rt-" + d[0] + "-" + pp + "-txt");
+        if (t){ rotinaAtual[d[0]] = rotinaAtual[d[0]] || {}; rotinaAtual[d[0]][pp] = x ? {tipo: t, txt: x} : {tipo: t}; }
+      }); });
+      var listBad = [];
+      if (shown("rotina") && cfg("rotina").req && !retirada.length) listBad.push("rotina");
+      if (shown("protetiva") && cfg("protetiva").req && !protetiva.length) listBad.push("protetiva");
+      if (shown("rotinaAtual") && cfg("rotinaAtual").req && !Object.keys(rotinaAtual).length) listBad.push("rt-seg-m");
+      listBad.forEach(function(k){ var el = k === "rt-seg-m" ? document.getElementById(k) : frm.querySelector('[data-list="' + k + '"] input'); if (el){ bad.push(el.id || k); el.classList.add("bad"); if (el.__btn) el.__btn.classList.add("bad"); } });
+      bad.forEach(function(id){ var el = document.getElementById(id); if (!el) return; el.classList.add("bad"); if (el.__btn) el.__btn.classList.add("bad"); });
       var consent = document.getElementById("consent").checked;
       // Sem nenhum dado que identifique o paciente o envio não serve à clínica.
       var vazio = !bad.length && !val("nome") && !digits(val("telefone")) && !digits(val("cpf")) && !val("email");
       if (vazio){ err.innerHTML = '<div class="msg err">Preencha pelo menos o nome, o telefone, o CPF ou o e-mail.</div>'; return; }
       if (bad.length || !consent){
         err.innerHTML = '<div class="msg err">' + (bad.length ? "Confira os campos marcados em vermelho" + (bad.indexOf("cpf") !== -1 && val("cpf") ? " (CPF inválido)" : "") + (nascIso === null ? " (data de nascimento inválida: use dd/mm/aaaa)" : "") + "." : "") + (!consent ? " Marque a autorização para enviar." : "") + '</div>';
-        var first = bad.length ? document.getElementById(bad[0]) : document.getElementById("consent"); (first.__btn || first).focus();
+        var first = (bad.length && document.getElementById(bad[0])) || (listBad.length && frm.querySelector('[data-list="' + listBad[0] + '"] input')) || document.getElementById("consent"); (first.__btn || first).focus();
         return;
       }
       var data = {consentimento: true};
       ["nome", "nascimento", "sexo", "respNome", "respParentesco", "email", "rua", "numero", "compl", "bairro", "cidade", "uf",
-       "convenio", "diagnostico", "laudo", "escola", "escolaTurno", "comoConheceu", "obs"].forEach(function(id){ data[id] = val(id); });
-      data.nascimento = nascIso || "";
+       "convenio", "diagnostico", "laudo", "escola", "escolaTurno", "comoConheceu", "obs",
+       "rg", "maeNome", "maeProfissao", "paiNome", "paiProfissao", "finNome", "finEmail", "escolaSerie", "professor", "mediador",
+       "medico", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"].forEach(function(id){ data[id] = val(id); });
+      var rpEl = document.getElementById("respProfissao"); data.respProfissao = rpEl && !rpEl.closest("[data-when]").hidden ? val("respProfissao") : "";
+      data.convenioOutro = data.convenio === "Outro" ? val("convenioOutro") : "";
+      data.nascimento = nascIso || ""; data.entrada = entIso || ""; data.diagData = diagIso || "";
       data.cpf = digits(val("cpf")); data.telefone = digits(val("telefone")); data.cep = digits(val("cep"));
+      data.cns = digits(val("cns")); data.maeCpf = digits(val("maeCpf")); data.paiCpf = digits(val("paiCpf"));
+      data.finDoc = digits(val("finDoc")); data.finTelefone = digits(val("finTelefone"));
+      if (retirada.length) data.retirada = retirada;
+      if (protetiva.length) data.protetiva = protetiva;
+      if (Object.keys(rotinaAtual).length) data.rotinaAtual = rotinaAtual;
       var btn = document.getElementById("send"); btn.disabled = true; btn.textContent = "Enviando…"; err.innerHTML = "";
       rpc("intake_send", {p_token: token, p_data: data}).then(function(r){
         if (r && r.ok){ box.innerHTML = '<div class="done"><h2>Cadastro enviado!</h2><p class="muted">Obrigado. Nossa equipe irá continuar seu atendimento pelo WhatsApp.</p>' + (socHtml() ? '<p class="soc-t">Conheça mais sobre nosso trabalho em nossas redes sociais:</p>' + socHtml() : '') + '</div>'; window.scrollTo(0, 0); return; }
         var m = r && r.motivo;
         if (STOP[m]) { stop(STOP[m]); return; }
         btn.disabled = false; btn.textContent = "Enviar cadastro";
-        if (m === "obrigatorio" && r.campos) r.campos.forEach(function(k){ var el = document.getElementById(k === "responsavel" ? "respNome" : k === "endereco" ? "cep" : k); if (el){ el.classList.add("bad"); if (el.__btn) el.__btn.classList.add("bad"); } });
+        var FIRST = {responsavel: "respNome", endereco: "cep", mae: "maeNome", pai: "paiNome", financeiro: "finNome", rotinaAtual: "rt-seg-m"};
+        if (m === "obrigatorio" && r.campos) r.campos.forEach(function(k){ var el = document.getElementById(FIRST[k] || k) || frm.querySelector('[data-list="' + k + '"] input'); if (el){ el.classList.add("bad"); if (el.__btn) el.__btn.classList.add("bad"); } });
         err.innerHTML = '<div class="msg err">' + (m === "limite" ? "Muitos cadastros enviados agora. Tente de novo em alguns minutos." : m === "vazio" ? "Preencha pelo menos o nome, o telefone, o CPF ou o e-mail." : "Não foi possível enviar. Confira os campos obrigatórios e tente de novo.") + '</div>';
       }, function(){ btn.disabled = false; btn.textContent = "Enviar cadastro"; err.innerHTML = '<div class="msg err">Sem conexão com a clínica agora. Tente de novo em instantes.</div>'; });
     });

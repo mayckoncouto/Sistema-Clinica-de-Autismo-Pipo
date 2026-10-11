@@ -3809,3 +3809,23 @@ foi mencionado (o autor não recebe) e tem acesso à lista; cada pessoa liga no 
   Nome/Telefone obrigatórios no cadastro e nos links). A tabela de cópia pode ser apagada depois.
 - (2026-10-11, pedido do usuário) Aviso "Nova versão do sistema disponível" (`#pwaUpdate`): texto na 1ª linha e
   Atualizar / Agora não dividindo a 2ª linha com a mesma largura (`flex:1 1 0`); aviso com `min(420px, 100vw − 32px)`.
+
+## Link de cadastro: todos os campos do paciente; profissão da mãe/pai (2026-10-11)
+Decisões do usuário: parentesco do responsável Mãe, Pai, Avó, Avô, Tia, Tio, Padrasto, Madrasta, Outro (`PARENTESCOS` em
+`cadastro.html`); Mãe/Pai → Filiação (com a profissão), os outros → Telefones (nome + "(parentesco)", WhatsApp) e ele é o
+responsável financeiro; convênio = cadastrados + Particular + Outro ("Qual convênio?" `convenioOutro`), vai para a observação
+e, se cadastrado, também para o tratamento; profissão em todos os lugares; **todo campo do cadastro pode ir no link**.
+- Paciente: `mae`/`pai` = {nome, cpf, profissao, retira}; campo `#pm-<role>-prof` na Filiação, `parentNow`, ficha, planilha
+  de Pacientes (`maeProf`/`paiProf`), Mesclar completa CPF/profissão.
+- `LINK_FIELDS` ganhou os demais campos com `off: true` (começam fora; `linkFieldCfg` sem configuração = `show: !off`) e
+  `LINK_OF_FIELD` cobre todos os `PAT_FIELDS` (médico = chave de link `medico`). Campos obrigatórios mostra Link rápido/Link
+  fixo em toda linha.
+- `cadastro.html`: `OFF`, `GROUP`/`GROUP_REQ` (mae→maeNome, pai→paiNome, financeiro→finNome…), seções Mãe, Pai, Responsáveis
+  pela retirada e Medida protetiva (listas `.lrow`, "+ Incluir pessoa", até 10 → `retirada`/`protetiva`), Responsável
+  financeiro (`finNome/finDoc/finTelefone/finEmail`), Saúde, Escola, Rotina atual (`rt-<dia>-<m|t>` + `-txt` →
+  `rotinaAtual`); `respProfissao` só aparece com Mãe/Pai quando os campos da mãe/do pai não estão no link (`data-when`).
+- `intakeToPatient` mapeia tudo; revisão de paciente existente: `intakeApplyReview` compara também RG, CNS, saúde, escola,
+  mãe/pai (CPF/profissão) e financeiro; retirada/protetiva novas entram na lista e a rotina completa os vazios
+  (`openPatientModal`, `intakeAdded`). `intakePrefillFrom` (Pedir atualização) leva os campos novos, menos a medida protetiva.
+- Banco: `supabase/2026-10-11d-link-todos-os-campos.sql` (`intake_send` aceita as chaves novas, listas e rotina com limite e
+  confere os obrigatórios novos). Testada no PGlite. Teste em `tests/run_intake.js`.

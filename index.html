@@ -11231,6 +11231,18 @@ function openPatientModal(p, opts){
   }
   var rotina = (v.rotina || []).map(function(x){ return Object.assign({}, x); });
   var prot = (Array.isArray(v.protetiva) ? v.protetiva : []).map(function(x){ return Object.assign({}, x); });
+  // Revisão do link (paciente existente): pessoas novas da retirada / medida protetiva entram na lista;
+  // a rotina atual só preenche os períodos vazios.
+  if (opts.intake && !isNew){
+    var ip = opts.intake.patch;
+    (ip.rotina || []).forEach(function(x){ if (!rotina.some(function(r){ return normText(r.nome || "") === normText(x.nome); })){ rotina.push(Object.assign({}, x)); intakeAdded.push("Retirada: " + x.nome); } });
+    (ip.protetiva || []).forEach(function(x){ if (!prot.some(function(r){ return x.quem ? r.quem === x.quem : normText(r.nome || "") === normText(x.nome); })){ prot.push(Object.assign({}, x)); intakeAdded.push("Medida protetiva: " + (x.nome || PARENT_LABEL[x.quem])); } });
+    if (ip.rotinaAtual){
+      var ra = JSON.parse(JSON.stringify(v.rotinaAtual || {})), rn = 0;
+      Object.keys(ip.rotinaAtual).forEach(function(dd){ ["m", "t"].forEach(function(pp){ var c = ip.rotinaAtual[dd][pp]; if (c && !(ra[dd] && ra[dd][pp] && ra[dd][pp].tipo)){ ra[dd] = ra[dd] || {}; ra[dd][pp] = c; rn++; } }); });
+      if (rn){ v.rotinaAtual = ra; intakeAdded.push("Rotina atual: " + rn + " período" + (rn === 1 ? "" : "s")); }
+    }
+  }
   if (!phones.length) phones.push({numero: "", nome: "", via: "whatsapp"});
   if (!mails.length) mails.push({email: "", nome: ""});
   function reqMark(key){ return patFieldCfg(key).req ? ' <span class="pm-req" title="Obrigatório">*</span>' : ''; }
@@ -11242,6 +11254,7 @@ function openPatientModal(p, opts){
         '<div class="pm-inline"><input id="pm-' + role + '-nome" type="text" value="' + esc(x.nome || "") + '">' +
         '<button type="button" class="btn ghost pm-resp-btn' + (fin.link === role ? ' on' : '') + '" data-resp="' + role + '" title="Usar como responsável financeiro" aria-pressed="' + (fin.link === role) + '">Responsável</button></div></div>' +
       '<div class="field"><label for="pm-' + role + '-cpf">' + (role === "mae" ? "CPF da mãe" : "CPF do pai") + '</label><input id="pm-' + role + '-cpf" type="text" inputmode="numeric" placeholder="000.000.000-00" data-mask="cpf" value="' + esc(formatCpf(x.cpf || "")) + '"></div>' +
+      '<div class="field pm-span2"><label for="pm-' + role + '-prof">' + (role === "mae" ? "Profissão da mãe" : "Profissão do pai") + '</label><input id="pm-' + role + '-prof" type="text" value="' + esc(x.profissao || "") + '"></div>' +
       '</div><label class="chk-line pm-retira"><input type="checkbox" id="pm-' + role + '-retira"' + (x.retira === false ? '' : ' checked') + '> <span>Pode retirar o paciente</span><span class="pm-retira-prot" data-retira-prot="' + role + '" hidden> — medida protetiva ativa: não aparece como responsável pela retirada</span></label>' +
       '<div class="pm-note" data-note="' + role + '" hidden></div></div>';
   }
@@ -11310,6 +11323,7 @@ function openPatientModal(p, opts){
   function val(id){ var el = $(id); return el ? el.value.trim() : ""; }
   function parentNow(role){
     var o = {nome: val("pm-" + role + "-nome"), cpf: digitsOnly(val("pm-" + role + "-cpf"))}, ck = $("pm-" + role + "-retira");
+    if ($("pm-" + role + "-prof") ? val("pm-" + role + "-prof") : (v[role] && v[role].profissao)) o.profissao = $("pm-" + role + "-prof") ? val("pm-" + role + "-prof") : v[role].profissao;
     if (ck ? !ck.checked : (v[role] && v[role].retira === false)) o.retira = false;
     return o;
   }
@@ -11719,17 +11733,30 @@ var LINK_FIELDS = [
   {key: "laudo", label: "Tem laudo?"},
   {key: "escola", label: "Escola"},
   {key: "escolaTurno", label: "Turno da escola"},
-  {key: "obs", label: "Observações"}
+  {key: "obs", label: "Observações"},
+  // Os demais campos do cadastro do paciente (2026-10-11): também podem ir no link; começam fora (off).
+  {key: "rg", label: "RG", off: true}, {key: "cns", label: "Cartão SUS (CNS)", off: true}, {key: "entrada", label: "Data de entrada", off: true},
+  {key: "mae", label: "Mãe", off: true}, {key: "pai", label: "Pai", off: true},
+  {key: "rotina", label: "Responsáveis pela retirada", off: true}, {key: "protetiva", label: "Medida protetiva", off: true},
+  {key: "financeiro", label: "Responsável financeiro", off: true},
+  {key: "escolaSerie", label: "Série / ano", off: true}, {key: "professor", label: "Professor(a)", off: true}, {key: "mediador", label: "Tem mediador / AT", off: true},
+  {key: "rotinaAtual", label: "Rotina atual", off: true},
+  {key: "medico", label: "Médico", off: true}, {key: "diagData", label: "Data do diagnóstico", off: true}, {key: "suporte", label: "Nível de suporte", off: true},
+  {key: "comunicacao", label: "Comunicação", off: true}, {key: "alergias", label: "Alergias", off: true}, {key: "medicacoes", label: "Medicações em uso", off: true},
+  {key: "restricoes", label: "Restrições alimentares", off: true}
 ];
 function linkFieldCfg(which, key){
   var f = LINK_FIELDS.filter(function(x){ return x.key === key; })[0] || {};
   var c = ((state.patientLink || {})[which] || {})[key];
-  return c ? {show: !!c.show || !!c.req, req: !!c.req} : {show: true, req: !!f.req};
+  return c ? {show: !!c.show || !!c.req, req: !!c.req} : {show: !f.off, req: !f.off && !!f.req};
 }
 // Campo do cadastro ↔ campo do link (cadastro.html). Os do link sem campo no cadastro (Responsável e
 // parentesco, Convênio, Tem laudo?) aparecem no fim, no grupo "Só no link de cadastro".
 var LINK_OF_FIELD = {nome: "nome", nascimento: "nascimento", cpf: "cpf", sexo: "sexo", telefones: "telefone", emails: "email", endereco: "endereco",
-  comoConheceu: "comoConheceu", cid: "diagnostico", escolaId: "escola", escolaTurno: "escolaTurno", obs: "obs"};
+  comoConheceu: "comoConheceu", cid: "diagnostico", escolaId: "escola", escolaTurno: "escolaTurno", obs: "obs",
+  rg: "rg", cns: "cns", entrada: "entrada", mae: "mae", pai: "pai", rotina: "rotina", protetiva: "protetiva", financeiro: "financeiro",
+  escolaSerie: "escolaSerie", professor: "professor", mediador: "mediador", rotinaAtual: "rotinaAtual", medicoId: "medico",
+  diagData: "diagData", suporte: "suporte", comunicacao: "comunicacao", alergias: "alergias", medicacoes: "medicacoes", restricoes: "restricoes"};
 var LINK_ONLY = ["responsavel", "convenio", "laudo"];
 function openPatientFieldsModal(){
   if (!can("campos_paciente", "view")){ showToast(permDeniedMsg("campos_paciente", "view"), true); return; }
@@ -11761,7 +11788,7 @@ function openPatientFieldsModal(){
   }).join("");
   host.innerHTML = '<div class="overlay" id="ovPf"><div class="modal" style="max-width:640px">' +
     '<div class="modal-head"><div><h3>Campos obrigatórios</h3><div class="modal-sub">Escolha os campos de cada formulário: <b>Aparece</b> = cadastro do paciente; <b>Link rápido</b> = link enviado ao paciente (Enviar link de cadastro, Pedir atualização e tarefa do CRM); <b>Link fixo</b> = link geral da clínica. <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece. ' +
-      (admin ? 'No cadastro o Nome é sempre obrigatório; nos links, todos os campos podem ser escolhidos.' : 'No cadastro o Nome é sempre obrigatório; nos links, todos os campos podem ser escolhidos. CPF, Filiação e Responsável financeiro só o Administrador muda.') + ' Esconder um campo não apaga o que já foi gravado nele.</div></div>' +
+      (admin ? 'No cadastro o Nome é sempre obrigatório; nos links, todo campo do cadastro pode ser escolhido (os que não estão marcados ficam fora do link).' : 'No cadastro o Nome é sempre obrigatório; nos links, todo campo do cadastro pode ser escolhido (os que não estão marcados ficam fora do link). CPF, Filiação e Responsável financeiro só o Administrador muda.') + ' Esconder um campo não apaga o que já foi gravado nele.</div></div>' +
       '<button class="modal-close" id="pfClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body"><table class="pf-table pf-table5"><thead><tr><th>Campo</th><th>Aparece</th><th>Link rápido</th><th>Link fixo</th><th><span class="pm-lg">Obrigatório</span><span class="pm-sm">Obrig.</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="pfCancel">' + (canEdit ? "Cancelar" : "Fechar") + '</button>' +
@@ -11828,7 +11855,8 @@ function patientFichaHtml(p){
     ["Identificação", row("Nome", v.nome) + row("Nascimento", v.nascimento ? trBr(v.nascimento) + (age != null ? " (" + age + " anos)" : "") : "") +
       row("Sexo", v.sexo) + row("CPF", v.cpf ? formatCpf(v.cpf) : "") + row("RG", v.rg) + row("Cartão SUS", v.cns) + row("Data de entrada", v.entrada ? trBr(v.entrada) : "")],
     ["Endereço", row("Endereço", patAddressText(v.endereco))],
-    ["Filiação", row("Mãe", v.mae.nome + (v.mae.cpf ? " — CPF " + formatCpf(v.mae.cpf) : "")) + row("Pai", v.pai.nome + (v.pai.cpf ? " — CPF " + formatCpf(v.pai.cpf) : ""))],
+    ["Filiação", row("Mãe", v.mae.nome + (v.mae.cpf ? " — CPF " + formatCpf(v.mae.cpf) : "")) + row("Profissão da mãe", v.mae.profissao) +
+      row("Pai", v.pai.nome + (v.pai.cpf ? " — CPF " + formatCpf(v.pai.cpf) : "")) + row("Profissão do pai", v.pai.profissao)],
     (function(){ var k = patPickup(v), seeObs = protCanSeeObs();
       return ["Responsáveis pela retirada", row("Podem retirar", k.ret.map(function(r){ return r.nome + (r.rel ? " (" + r.rel + ")" : "") + (r.telefone ? " " + formatPhone(r.telefone) : "") + (r.doc ? " doc. " + r.doc : ""); }).join(", ")) +
         k.prot.concat(k.old).map(function(m){ return row("Medida protetiva" + (protActive(m) ? "" : " (vencida)"), m.nome + (m.rel ? " (" + m.rel + ")" : "") + (m.ate ? " — até " + trBr(m.ate) : "") + (seeObs && m.obs ? " — " + m.obs : "")); }).join("")]; })(),
@@ -12001,6 +12029,12 @@ function patientMerge(I){
       if (emptyA && b != null && b !== "") out[key] = b;
     });
     ["mae", "pai", "financeiro", "telefones", "emails", "rotina", "protetiva"].forEach(function(key){ if (out[key] == null) out[key] = k[key]; });
+    // Mãe/pai já preenchidos no 1º: completa só o que falta (CPF, profissão) com o do 2º.
+    ["mae", "pai"].forEach(function(key){
+      var a = out[key] || {}, b = d[key] || {}, c = Object.assign({}, a);
+      ["nome", "cpf", "profissao"].forEach(function(x){ if (!c[x] && b[x] && (!a.nome || !b.nome || normText(a.nome) === normText(b.nome))) c[x] = b[x]; });
+      out[key] = c;
+    });
     PAT_LEGACY_KEYS.forEach(function(x){ delete out[x]; });
     var list = state.patients.filter(function(p){ return p.id !== drop.id; }).map(function(p){ return p.id === keep.id ? Object.assign({}, p, out) : p; });
     // Saúde (tabela protegida): o 1º fica com os dados completados com os do 2º; a do 2º sai.
@@ -20261,12 +20295,15 @@ var HELP_TOPICS = [
       "<b>Links enviados</b> (Outras opções) mostra a situação de cada link — Aguardando, Preenchido, Vencido ou Cancelado — com Copiar e Cancelar."
     ],
     rules: [
-      "O formulário pode ter: nome, nascimento e CPF do paciente, sexo, responsável e parentesco, telefone, e-mail, endereço, convênio, diagnóstico ou suspeita, se tem laudo, escola e turno, como conheceu a clínica e observações, mais a autorização da LGPD.",
+      "O formulário pode ter qualquer campo do cadastro do paciente — identificação (nome, nascimento, CPF, sexo, RG, Cartão SUS, data de entrada), mãe e pai (nome, CPF e profissão), endereço, responsáveis pela retirada, medida protetiva, telefone, e-mail, responsável financeiro, saúde (diagnóstico, data do diagnóstico, médico, nível de suporte, comunicação, alergias, medicações, restrições alimentares), escola (nome, série, turno, professor, mediador), rotina atual, como conheceu e observações — e ainda <b>Responsável e parentesco</b>, <b>Convênio</b> e <b>Tem laudo?</b>, mais a autorização (LGPD), que é sempre obrigatória.",
       "Quais campos aparecem e quais são obrigatórios: Pacientes → Outras opções → <b>Campos obrigatórios</b>, colunas <b>Link rápido</b> (Enviar link de cadastro, Pedir atualização e o link da tarefa do CRM) e <b>Link fixo</b> (link geral da clínica). <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece; Responsável e parentesco, Convênio e “Tem laudo?” ficam no grupo “Só no link de cadastro”. Nos links todos os campos podem ser escolhidos, inclusive nome e telefone; o envio precisa ter pelo menos o nome, o telefone, o CPF ou o e-mail.",
       "O link do paciente vale 1 dia e uma vez só; o link geral não vence (gerar um novo desativa o anterior).",
       "Ao salvar um paciente novo vindo do link, nasce um tratamento <b>Ativo</b> só com o convênio informado (o resto do tratamento é preenchido depois). Se veio do CRM, a tarefa fica ligada ao paciente e os dados do lead saem da tarefa.",
       "CPF enviado igual ao de um paciente já cadastrado: o sistema pergunta se é uma atualização do cadastro dele.",
-      "Laudo, escola não cadastrada, convênio e observações da família vão para as Observações do cadastro novo.",
+      "<b>Parentesco</b> do responsável: Mãe, Pai, Avó, Avô, Tia, Tio, Padrasto, Madrasta ou Outro. Mãe ou Pai preenche a Filiação (com a profissão, perguntada no link quando os campos da mãe/do pai não estão nele); os outros vão para os <b>Telefones</b> do contato, com o nome e o parentesco, como WhatsApp. O responsável informado vira o responsável financeiro (se o link não pedir o financeiro).",
+      "<b>Convênio</b>: a família escolhe um dos convênios cadastrados, Particular ou <b>Outro</b> (aparece “Qual convênio?”). O convênio vai para as Observações do cadastro; se for um convênio cadastrado, também entra no tratamento criado.",
+      "Laudo, escola ou médico não cadastrados, convênio e observações da família vão para as Observações do cadastro novo. Na revisão de um paciente já cadastrado, pessoas novas da retirada e da medida protetiva entram na lista e a rotina atual só completa os períodos vazios.",
+      "A medida protetiva não vai preenchida no link de “Pedir atualização” (o link pode chegar a outra pessoa da família). Dados de saúde enviados pelo link ficam guardados no envio até a revisão: marque esses campos no link só se for preciso.",
       "Link que venceu sem resposta (1 dia) vira uma tarefa no CRM (lista Atendimento) para a recepção cobrar a família e mandar um novo link.",
       "Depois do envio a família vê: “Cadastro enviado! Obrigado. Nossa equipe irá continuar seu atendimento pelo WhatsApp.” e, se a clínica tiver redes sociais cadastradas (Acesso → Clínica), as logos delas. As redes também aparecem no fim da mensagem com o link."
     ],
@@ -20277,7 +20314,7 @@ var HELP_TOPICS = [
       "Cadastros → <b>Pacientes</b> → <b>+ Incluir</b>.",
       "A janela mostra todos os grupos, um embaixo do outro: <b>Identificação</b> (nome, nome social, nascimento, sexo, CPF, RG, Cartão SUS, data de entrada), <b>Endereço</b>, <b>Filiação</b>, <b>Responsáveis pela retirada</b>, <b>Medida protetiva</b>, <b>Contato</b>, <b>Responsável financeiro</b>, <b>Escola</b>, <b>Saúde</b>, <b>Administrativo</b> e o resumo do <b>Tratamento</b>.",
       "No <b>Endereço</b>, digite o CEP: rua, bairro, cidade e UF são preenchidos sozinhos; complete o número.",
-      "Em <b>Filiação</b> ficam Mãe e Pai (nome e CPF). O botão <b>Responsável</b> ao lado do nome faz da mãe ou do pai o responsável financeiro: nome e CPF passam para o grupo Responsável financeiro e acompanham as correções enquanto o botão estiver marcado. Desmarcado, o responsável financeiro é digitado à parte.",
+      "Em <b>Filiação</b> ficam Mãe e Pai (nome, CPF e profissão). O botão <b>Responsável</b> ao lado do nome faz da mãe ou do pai o responsável financeiro: nome e CPF passam para o grupo Responsável financeiro e acompanham as correções enquanto o botão estiver marcado. Desmarcado, o responsável financeiro é digitado à parte.",
       "<b>Responsáveis pela retirada</b>: a Mãe e o Pai vêm da <b>Filiação</b> — a caixa <b>Pode retirar o paciente</b>, ao lado de cada um, vem marcada; desmarque quando a pessoa não pode retirar. Em <b>+ Incluir outra pessoa</b> ficam só as outras pessoas (avó, tio, motorista…), com nome, parentesco, telefone e documento.",
       "<b>Medida protetiva</b>: use <b>+ Incluir pessoa impedida</b> para quem NÃO pode retirar o paciente. Escolha <b>Mãe</b>, <b>Pai</b> (o nome vem da Filiação) ou <b>Outra pessoa</b> (nome e relação); depois a observação — ex.: nº do processo — e <b>Válida até</b>, opcional. Mãe ou Pai com medida ativa não aparecem como responsáveis pela retirada. Depois da data, a medida fica como vencida e para de avisar.",
       "Em <b>Contato</b>, cadastre quantos telefones precisar, com o nome de quem atende e como fazer contato (<b>WhatsApp</b> ou <b>Ligação</b>), e os e-mails com o nome de quem é.",
@@ -24895,8 +24932,9 @@ function ioPatPlan(recs){
     var mae = ioText(r.mae), maeCpf = digitsOnly(r.maeCpf), pai = ioText(r.pai), paiCpf = digitsOnly(r.paiCpf);
     if (maeCpf && !cpfValido(maeCpf)){ it.warn.push("CPF da mãe inválido: ignorado."); maeCpf = ""; }
     if (paiCpf && !cpfValido(paiCpf)){ it.warn.push("CPF do pai inválido: ignorado."); paiCpf = ""; }
-    if (mae || maeCpf) v.mae = {nome: mae, cpf: maeCpf};
-    if (pai || paiCpf) v.pai = {nome: pai, cpf: paiCpf};
+    var maeProf = ioText(r.maeProf), paiProf = ioText(r.paiProf);
+    if (mae || maeCpf || maeProf) v.mae = {nome: mae, cpf: maeCpf, profissao: maeProf};
+    if (pai || paiCpf || paiProf) v.pai = {nome: pai, cpf: paiCpf, profissao: paiProf};
     var tels = ioList(r.telefone).map(digitsOnly).filter(function(x){ return x.length >= 8; });
     if (tels.length) v.telefones = tels.map(function(n){ return {numero: n, nome: "", via: "whatsapp"}; });
     var mails = ioList(r.email).filter(function(x){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x); });
@@ -24982,7 +25020,8 @@ function ioPatExportRows(){
     var esc0 = p.escolaId ? ((state.schools || []).filter(function(s){ return s.id === p.escolaId; })[0] || {}).name : "";
     var o = {nome: p.nome || "", nascimento: p.nascimento ? trBr(p.nascimento) : "", sexo: p.sexo || "", cpf: p.cpf ? formatCpf(p.cpf) : "",
       rg: p.rg || "", cns: p.cns || "", entrada: p.entrada ? trBr(p.entrada) : "",
-      mae: (p.mae || {}).nome || "", maeCpf: (p.mae || {}).cpf ? formatCpf(p.mae.cpf) : "", pai: (p.pai || {}).nome || "", paiCpf: (p.pai || {}).cpf ? formatCpf(p.pai.cpf) : "",
+      mae: (p.mae || {}).nome || "", maeCpf: (p.mae || {}).cpf ? formatCpf(p.mae.cpf) : "", maeProf: (p.mae || {}).profissao || "",
+      pai: (p.pai || {}).nome || "", paiCpf: (p.pai || {}).cpf ? formatCpf(p.pai.cpf) : "", paiProf: (p.pai || {}).profissao || "",
       telefone: (p.telefones || []).map(function(t){ return formatPhone(t.numero || ""); }).filter(Boolean).join("; "), email: (p.emails || []).map(function(m){ return m.email; }).filter(Boolean).join("; "),
       end_cep: e.cep || "", end_rua: e.rua || "", end_numero: e.numero || "", end_compl: e.compl || "", end_bairro: e.bairro || "", end_cidade: e.cidade || "", end_uf: e.uf || "",
       finNome: f.nome || "", finDoc: f.doc || "", escola: esc0 || "", escolaSerie: p.escolaSerie || "", escolaTurno: p.escolaTurno || "", professor: p.professor || "", mediador: p.mediador || "",
@@ -25176,7 +25215,8 @@ var IO_KINDS = {
       {k: "nascimento", h: "Data de nascimento", alias: ["nascimento", "data nascimento"], w: 14},
       {k: "sexo", h: "Sexo", w: 11}, {k: "cpf", h: "CPF", w: 16}, {k: "rg", h: "RG", w: 14}, {k: "cns", h: "Cartão SUS", alias: ["cns"], w: 18},
       {k: "entrada", h: "Data de entrada", alias: ["entrada"], w: 14},
-      {k: "mae", h: "Mãe", alias: ["nome da mae"], w: 30}, {k: "maeCpf", h: "CPF da mãe", w: 16}, {k: "pai", h: "Pai", alias: ["nome do pai"], w: 30}, {k: "paiCpf", h: "CPF do pai", w: 16},
+      {k: "mae", h: "Mãe", alias: ["nome da mae"], w: 30}, {k: "maeCpf", h: "CPF da mãe", w: 16}, {k: "maeProf", h: "Profissão da mãe", w: 20},
+      {k: "pai", h: "Pai", alias: ["nome do pai"], w: 30}, {k: "paiCpf", h: "CPF do pai", w: 16}, {k: "paiProf", h: "Profissão do pai", w: 20},
       {k: "telefone", h: "Telefones", alias: ["telefone", "celular", "whatsapp"], w: 20}, {k: "email", h: "E-mails", alias: ["e-mail", "email"], w: 26},
       {k: "end_cep", h: "CEP", w: 11}, {k: "end_rua", h: "Rua", alias: ["endereco", "logradouro"], w: 28}, {k: "end_numero", h: "Número", alias: ["numero"], w: 9},
       {k: "end_compl", h: "Complemento", w: 14}, {k: "end_bairro", h: "Bairro", w: 18}, {k: "end_cidade", h: "Cidade", w: 18}, {k: "end_uf", h: "UF", w: 6},
@@ -25479,7 +25519,20 @@ function intakePrefillFrom(p){
     telefone: patFirstPhone(n) ? digitsOnly(patFirstPhone(n)) : "", email: patFirstEmail(n) || "",
     cep: e.cep || "", rua: e.rua || "", numero: e.numero || "", compl: e.compl || "", bairro: e.bairro || "", cidade: e.cidade || "", uf: e.uf || "",
     convenio: tr ? (tr.convenio || "") : "", escola: n.escolaId ? patRegName("escolas", n.escolaId) : "", escolaTurno: n.escolaTurno || "", comoConheceu: n.comoConheceu || ""};
-  if (healthCanSee()) o.diagnostico = String((HEALTH.map ? healthOf(n.id).cid : n.cid) || "");
+  if (healthCanSee()){
+    var hh = Object.assign({}, n, HEALTH.map ? healthOf(n.id) : {});
+    o.diagnostico = String(hh.cid || "");
+    ["diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"].forEach(function(k){ o[k] = hh[k] || ""; });
+    o.medico = hh.medicoId ? patRegName("medicos", hh.medicoId) : "";
+  }
+  // Demais campos do cadastro (aparecem no link só quando marcados em Campos obrigatórios). A medida protetiva
+  // não vai preenchida: o link pode chegar a outra pessoa da família.
+  ["rg", "cns", "entrada", "escolaSerie", "professor", "mediador"].forEach(function(k){ o[k] = n[k] || ""; });
+  ["mae", "pai"].forEach(function(r){ var x = n[r] || {}; o[r + "Nome"] = x.nome || ""; o[r + "Cpf"] = x.cpf || ""; o[r + "Profissao"] = x.profissao || ""; });
+  if (resp.rel === "Mãe" || resp.rel === "Pai") o.respProfissao = (n[resp.rel === "Mãe" ? "mae" : "pai"] || {}).profissao || "";
+  o.finNome = fin.nome || ""; o.finDoc = fin.doc || ""; o.finTelefone = fin.telefone || ""; o.finEmail = fin.email || "";
+  if ((n.rotina || []).length) o.retirada = n.rotina.map(function(r){ return {nome: r.nome || "", rel: r.rel || "", telefone: r.telefone || ""}; });
+  if (n.rotinaAtual && Object.keys(n.rotinaAtual).length) o.rotinaAtual = n.rotinaAtual;
   Object.keys(o).forEach(function(k){ if (!o[k]) delete o[k]; });
   return o;
 }
@@ -25595,22 +25648,59 @@ function openIntakeLinksList(){
 function intakeToPatient(d){
   d = d || {};
   var o = {}, notes = [], rel = String(d.respParentesco || ""), role = rel === "Mãe" ? "mae" : rel === "Pai" ? "pai" : "";
-  ["nome", "nascimento", "sexo", "escolaTurno", "comoConheceu"].forEach(function(k){ if (d[k]) o[k] = d[k]; });
+  ["nome", "nascimento", "sexo", "escolaTurno", "comoConheceu", "rg", "entrada", "escolaSerie", "professor", "mediador",
+   "diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"].forEach(function(k){ if (d[k]) o[k] = d[k]; });
   if (d.cpf) o.cpf = digitsOnly(d.cpf);
+  if (d.cns) o.cns = digitsOnly(d.cns);
   if (d.diagnostico) o.cid = d.diagnostico;
-  if (d.telefone) o.telefones = [{numero: digitsOnly(d.telefone), nome: d.respNome || "", via: "whatsapp"}];
+  // Responsável: Mãe/Pai vão para a Filiação (com a profissão); outro parentesco (avó, tia, padrasto…) vai para os
+  // contatos com o nome e o parentesco. O telefone entra nos contatos como WhatsApp; o responsável é o financeiro.
+  var respTag = d.respNome ? d.respNome + (rel && !role ? " (" + rel + ")" : "") : "";
+  if (d.telefone) o.telefones = [{numero: digitsOnly(d.telefone), nome: respTag, via: "whatsapp"}];
   if (d.email) o.emails = [{email: d.email, nome: d.respNome || ""}];
   var e = {}; ["cep", "rua", "numero", "compl", "bairro", "cidade", "uf"].forEach(function(k){ if (d[k]) e[k] = k === "cep" ? digitsOnly(d[k]).replace(/^(\d{5})(\d)/, "$1-$2") : k === "uf" ? String(d[k]).toUpperCase() : d[k]; });
   if (Object.keys(e).length) o.endereco = e;
-  if (role && d.respNome) o[role] = {nome: d.respNome, cpf: ""};
-  if (d.respNome) o.financeiro = {nome: role ? d.respNome : d.respNome, doc: "", telefone: digitsOnly(d.telefone || ""), email: d.email || "", endereco: "", link: role};
-  if (d.respNome && !role) notes.push("Responsável: " + d.respNome + (rel ? " (" + rel + ")" : ""));
+  // Mãe e pai: os campos próprios do link valem mais que o responsável.
+  ["mae", "pai"].forEach(function(r){
+    var x = {nome: d[r + "Nome"] || "", cpf: digitsOnly(d[r + "Cpf"] || ""), profissao: d[r + "Profissao"] || ""};
+    if (role === r){ if (!x.nome) x.nome = d.respNome || ""; if (!x.profissao && (!d[r + "Nome"] || normText(d[r + "Nome"]) === normText(d.respNome || ""))) x.profissao = d.respProfissao || ""; }
+    if (x.nome || x.cpf || x.profissao){ if (!x.profissao) delete x.profissao; o[r] = x; }
+  });
+  if (d.finNome){
+    var fl = ["mae", "pai"].filter(function(r){ return o[r] && o[r].nome && normText(o[r].nome) === normText(d.finNome); })[0] || "";
+    o.financeiro = {nome: d.finNome, doc: digitsOnly(d.finDoc || ""), telefone: digitsOnly(d.finTelefone || ""), email: d.finEmail || "", endereco: "", link: fl};
+  } else if (d.respNome) o.financeiro = {nome: d.respNome, doc: "", telefone: digitsOnly(d.telefone || ""), email: d.email || "", endereco: "", link: role};
+  if (d.respNome && !role && !d.telefone) notes.push("Responsável: " + d.respNome + (rel ? " (" + rel + ")" : ""));
+  // Listas: retirada (sem a mãe e o pai, que vêm da Filiação) e medida protetiva.
+  var parents = ["mae", "pai"].map(function(r){ return o[r] && o[r].nome ? normText(o[r].nome) : ""; }).filter(Boolean);
+  if (Array.isArray(d.retirada)){
+    var ret = d.retirada.filter(function(x){ var k = normText(x.rel || ""); return x && x.nome && k !== "mae" && k !== "pai" && parents.indexOf(normText(x.nome)) === -1; })
+      .map(function(x){ return {nome: x.nome, rel: x.rel || "", telefone: digitsOnly(x.telefone || ""), doc: ""}; });
+    if (ret.length) o.rotina = ret;
+  }
+  if (Array.isArray(d.protetiva)){
+    var pr = d.protetiva.filter(function(x){ return x && x.nome; }).map(function(x){
+      var q = ["mae", "pai"].filter(function(r){ return o[r] && o[r].nome && normText(o[r].nome) === normText(x.nome); })[0] || "";
+      return {quem: q, nome: q ? "" : x.nome, rel: q ? "" : (x.rel || ""), obs: x.obs || "", ate: ""};
+    });
+    if (pr.length) o.protetiva = pr;
+  }
+  if (d.rotinaAtual && typeof d.rotinaAtual === "object"){
+    var ra = {}; ROUTINE_DAYS.forEach(function(dd){ ["m", "t"].forEach(function(pp){
+      var c = (d.rotinaAtual[dd[0]] || {})[pp]; if (c && c.tipo){ ra[dd[0]] = ra[dd[0]] || {}; ra[dd[0]][pp] = {tipo: c.tipo, txt: c.txt || ""}; }
+    }); });
+    if (Object.keys(ra).length) o.rotinaAtual = ra;
+  }
   if (d.escola){
     var sc = (state.schools || []).filter(function(x){ return normText(x.name || x.nome || "") === normText(d.escola); })[0];
     if (sc) o.escolaId = sc.id; else notes.push("Escola: " + d.escola + " (não cadastrada)");
   }
+  if (d.medico){
+    var md = (state.doctors || []).filter(function(x){ return normText(x.name || x.nome || "") === normText(d.medico); })[0];
+    if (md) o.medicoId = md.id; else notes.push("Médico: " + d.medico + " (não cadastrado)");
+  }
   if (d.laudo) notes.push("Laudo: " + d.laudo);
-  if (d.convenio) notes.push("Convênio informado: " + d.convenio);
+  if (d.convenio) notes.push("Convênio informado: " + (d.convenio === "Outro" && d.convenioOutro ? "Outro — " + d.convenioOutro : d.convenio));
   if (d.obs) notes.push("Observações da família: " + d.obs);
   return {patch: o, notes: notes};
 }
@@ -25666,10 +25756,12 @@ function intakeApplyReview(overlay, info, isNew, added){
   });
   if (isNew) return;
   // Campo a campo (só os que existem na janela).
-  var MAP = [["nome", "pNome"], ["nascimento", "pNasc"], ["sexo", "pf-sexo"], ["cpf", "pf-cpf"], ["cid", "pf-cid"], ["escolaId", "pf-escolaId"], ["escolaTurno", "pf-escolaTurno"], ["comoConheceu", "pf-comoConheceu"]];
+  var MAP = [["nome", "pNome"], ["nascimento", "pNasc"]];
+  ["sexo", "cpf", "rg", "cns", "entrada", "cid", "escolaId", "escolaSerie", "escolaTurno", "professor", "mediador", "comoConheceu",
+   "medicoId", "diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"].forEach(function(k){ if (p[k]) MAP.push([k, "pf-" + k]); });
   var e = p.endereco || {}; ["cep", "rua", "numero", "compl", "bairro", "cidade", "uf"].forEach(function(k){ if (e[k]) MAP.push(["endereco." + k, "pa-" + k]); });
-  ["mae", "pai"].forEach(function(r){ if (p[r]) MAP.push([r + ".nome", "pm-" + r + "-nome"]); });
-  if (p.financeiro){ MAP.push(["financeiro.nome", "fi-nome"]); if (p.financeiro.email) MAP.push(["financeiro.email", "fi-email"]); }
+  ["mae", "pai"].forEach(function(r){ if (p[r]) ["nome", "cpf", "profissao"].forEach(function(x){ if (p[r][x]) MAP.push([r + "." + x, "pm-" + r + "-" + (x === "profissao" ? "prof" : x)]); }); });
+  if (p.financeiro){ ["nome", "doc", "telefone", "email"].forEach(function(x){ if (p.financeiro[x]) MAP.push(["financeiro." + x, "fi-" + x]); }); }
   function get(path){ return path.split(".").reduce(function(o, k){ return o == null ? undefined : o[k]; }, p); }
   function setVal(el, v){
     if (el.tagName === "SELECT" && v && !Array.prototype.some.call(el.options, function(o){ return o.value === v; })) el.insertAdjacentHTML("beforeend", '<option value="' + esc(v) + '">' + esc(v) + '</option>');
@@ -25677,13 +25769,15 @@ function intakeApplyReview(overlay, info, isNew, added){
   }
   function show(el, v){
     if (el.getAttribute("data-mask") === "cpf" || el.id === "pf-cpf") return formatCpf(v);
-    if (el.id === "pNasc") return trBr(v);
+    if (el.id === "pNasc" || el.type === "date" || /^\d{4}-\d{2}-\d{2}$/.test(v)) return trBr(v);
+    if (el.id === "fi-telefone") return formatPhone(v);
     if (el.tagName === "SELECT"){ var o = Array.prototype.filter.call(el.options, function(x){ return x.value === v; })[0]; return o ? o.textContent : v; }
     return v;
   }
   MAP.forEach(function(m){
     var sent = get(m[0]), el = document.getElementById(m[1]); if (sent == null || sent === "" || !el) return;
-    sent = String(sent); var curV = String(el.value || "").trim(), norm = function(x){ return m[1] === "pf-cpf" || m[1] === "pa-cep" ? digitsOnly(x) : normText(x); };
+    if (m[1] === "fi-telefone") sent = formatPhone(sent);
+    sent = String(sent); var curV = String(el.value || "").trim(), norm = function(x){ return /cpf|cep|telefone|-doc$|pf-cns/.test(m[1]) ? digitsOnly(x) : normText(x); };
     if (norm(curV) === norm(sent)) return;
     var field = el.closest(".field") || el.parentNode; field.classList.add("ik-diff");
     var bar = document.createElement("div"); bar.className = "ik-diff-bar";

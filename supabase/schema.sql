@@ -5373,7 +5373,11 @@ create or replace function public.intake_send(p_token text, p_data jsonb)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare l public.intake_links; st text; k text; v text; clean jsonb := '{}'::jsonb; tid uuid; lst text; sts text; cf jsonb; fk text; miss text[] := '{}';
   keys text[] := array['nome', 'nascimento', 'cpf', 'sexo', 'respNome', 'respParentesco', 'telefone', 'email', 'cep', 'rua', 'numero',
-                       'compl', 'bairro', 'cidade', 'uf', 'convenio', 'diagnostico', 'laudo', 'escola', 'escolaTurno', 'comoConheceu', 'obs'];
+                       'compl', 'bairro', 'cidade', 'uf', 'convenio', 'diagnostico', 'laudo', 'escola', 'escolaTurno', 'comoConheceu', 'obs',
+                       'rg', 'cns', 'entrada', 'respProfissao', 'convenioOutro', 'maeNome', 'maeCpf', 'maeProfissao', 'paiNome', 'paiCpf', 'paiProfissao',
+                       'finNome', 'finDoc', 'finTelefone', 'finEmail', 'escolaSerie', 'professor', 'mediador', 'medico',
+                       'diagData', 'suporte', 'comunicacao', 'alergias', 'medicacoes', 'restricoes'];
+  lk text; e jsonb; arr jsonb; o jsonb; ra jsonb := '{}'::jsonb; dd text; pp text; cell jsonb;
 begin
   select * into l from public.intake_links where token = p_token for update;
   st := public.intake_link_state(l);
@@ -5383,6 +5387,34 @@ begin
     v := left(btrim(coalesce(p_data ->> k, '')), case when k = 'obs' then 2000 else 300 end);
     if v <> '' then clean := clean || jsonb_build_object(k, v); end if;
   end loop;
+  -- Listas de pessoas (até 10, só nome/parentesco/telefone/observação) e rotina atual (seg..sex, manhã/tarde).
+  foreach lk in array array['retirada', 'protetiva'] loop
+    arr := '[]'::jsonb;
+    if jsonb_typeof(p_data -> lk) = 'array' then
+      for e in select x from jsonb_array_elements(p_data -> lk) with ordinality t(x, n) where jsonb_typeof(x) = 'object' order by n limit 10 loop
+        o := '{}'::jsonb;
+        foreach k in array array['nome', 'rel', 'telefone', 'obs'] loop
+          v := left(btrim(coalesce(e ->> k, '')), 300);
+          if v <> '' then o := o || jsonb_build_object(k, v); end if;
+        end loop;
+        if coalesce(o ->> 'nome', '') <> '' then arr := arr || jsonb_build_array(o); end if;
+      end loop;
+    end if;
+    if jsonb_array_length(arr) > 0 then clean := clean || jsonb_build_object(lk, arr); end if;
+  end loop;
+  if jsonb_typeof(p_data -> 'rotinaAtual') = 'object' then
+    foreach dd in array array['seg', 'ter', 'qua', 'qui', 'sex'] loop
+      foreach pp in array array['m', 't'] loop
+        cell := p_data -> 'rotinaAtual' -> dd -> pp;
+        if jsonb_typeof(cell) = 'object' and (cell ->> 'tipo') in ('escola', 'pipo', 'terapia', 'atividade', 'casa', 'outro') then
+          o := jsonb_build_object('tipo', cell ->> 'tipo');
+          if btrim(coalesce(cell ->> 'txt', '')) <> '' then o := o || jsonb_build_object('txt', left(btrim(cell ->> 'txt'), 120)); end if;
+          ra := jsonb_set(case when ra ? dd then ra else ra || jsonb_build_object(dd, '{}'::jsonb) end, array[dd, pp], o);
+        end if;
+      end loop;
+    end loop;
+    if ra <> '{}'::jsonb then clean := clean || jsonb_build_object('rotinaAtual', ra); end if;
+  end if;
   if coalesce((p_data ->> 'consentimento')::boolean, false) = false then
     return jsonb_build_object('ok', false, 'motivo', 'obrigatorio');
   end if;
@@ -5401,6 +5433,16 @@ begin
       if coalesce(clean ->> 'respNome', '') = '' or coalesce(clean ->> 'respParentesco', '') = '' then miss := miss || fk; end if;
     elsif fk = 'endereco' then
       if coalesce(clean ->> 'cep', '') = '' or coalesce(clean ->> 'numero', '') = '' or coalesce(clean ->> 'rua', '') = '' or coalesce(clean ->> 'cidade', '') = '' then miss := miss || fk; end if;
+    elsif fk = 'mae' then
+      if coalesce(clean ->> 'maeNome', '') = '' then miss := miss || fk; end if;
+    elsif fk = 'pai' then
+      if coalesce(clean ->> 'paiNome', '') = '' then miss := miss || fk; end if;
+    elsif fk = 'financeiro' then
+      if coalesce(clean ->> 'finNome', '') = '' then miss := miss || fk; end if;
+    elsif fk = 'rotina' then
+      if not clean ? 'retirada' then miss := miss || fk; end if;
+    elsif fk in ('protetiva', 'rotinaAtual') then
+      if not clean ? fk then miss := miss || fk; end if;
     elsif fk = any(keys) and coalesce(clean ->> fk, '') = '' then miss := miss || fk;
     end if;
   end loop;
