@@ -3781,3 +3781,9 @@ foi mencionado (o autor não recebe) e tem acesso à lista; cada pessoa liga no 
 - (2026-10-11, pedido do usuário) Página do link: no link geral (permanente) o campo Nome começa em branco, com
   o texto de ajuda "Digite o nome completo do paciente" (`nomeInicial` em `cadastro.html`). Antes vinha o nome
   interno do link ("Link geral"). Um nome que já veio do cadastro continua; "Link geral/permanente/fixo" nunca.
+- (2026-10-11, pedido do usuário) **Campos do link: todos podem ser escolhidos** em Campos obrigatórios, inclusive
+  Nome e Telefone (antes travados) nas colunas Link rápido e Link fixo. Obrigatório continua UMA coluna (vale no
+  cadastro e nos links em que o campo aparece); no cadastro o Nome segue obrigatório. O envio precisa da autorização e
+  de pelo menos nome, telefone, CPF ou e-mail (`motivo "vazio"`). Configuração antiga sem nome/telefone no link = os
+  dois obrigatórios. Migração `supabase/2026-10-11b-link-campos-escolhidos.sql` (`intake_send`). Lead do link geral
+  sem nome: título com o telefone/e-mail.

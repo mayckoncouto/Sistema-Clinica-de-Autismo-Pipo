@@ -5383,13 +5383,20 @@ begin
     v := left(btrim(coalesce(p_data ->> k, '')), case when k = 'obs' then 2000 else 300 end);
     if v <> '' then clean := clean || jsonb_build_object(k, v); end if;
   end loop;
-  if coalesce(clean ->> 'nome', '') = '' or coalesce(clean ->> 'telefone', '') = '' or coalesce((p_data ->> 'consentimento')::boolean, false) = false then
+  if coalesce((p_data ->> 'consentimento')::boolean, false) = false then
     return jsonb_build_object('ok', false, 'motivo', 'obrigatorio');
+  end if;
+  -- Nome e telefone podem ser escolhidos em Campos obrigatórios; o envio precisa ter pelo menos um dado que identifique.
+  if coalesce(clean ->> 'nome', '') = '' and coalesce(clean ->> 'telefone', '') = '' and coalesce(clean ->> 'cpf', '') = '' and coalesce(clean ->> 'email', '') = '' then
+    return jsonb_build_object('ok', false, 'motivo', 'vazio');
   end if;
   -- Obrigatórios escolhidos em Campos obrigatórios (config/patient_fields.link.individual | geral).
   select data -> 'link' -> (case when l.kind = 'geral' then 'geral' else 'individual' end) into cf from public.documents where path = 'config/patient_fields';
-  if cf is null then cf := '{"nascimento": {"req": true}, "cpf": {"req": true}, "responsavel": {"req": true}}'::jsonb; end if;
-  for fk in select key from jsonb_each(case when jsonb_typeof(cf) = 'object' then cf else '{}'::jsonb end) where coalesce((value ->> 'req')::boolean, false) loop
+  if jsonb_typeof(cf) is distinct from 'object' then cf := '{"nascimento": {"req": true}, "cpf": {"req": true}, "responsavel": {"req": true}}'::jsonb; end if;
+  -- Configuração gravada antes de nome/telefone serem escolhíveis: continuam obrigatórios.
+  if not cf ? 'nome' then cf := cf || '{"nome": {"req": true}}'::jsonb; end if;
+  if not cf ? 'telefone' then cf := cf || '{"telefone": {"req": true}}'::jsonb; end if;
+  for fk in select key from jsonb_each(cf) where coalesce((value ->> 'req')::boolean, false) loop
     if fk = 'responsavel' then
       if coalesce(clean ->> 'respNome', '') = '' or coalesce(clean ->> 'respParentesco', '') = '' then miss := miss || fk; end if;
     elsif fk = 'endereco' then
@@ -5411,7 +5418,7 @@ begin
      order by (e ->> 'id' = 'atendimento') desc, n limit 1;
     if lst is null then lst := 'atendimento'; sts := 'triagem'; end if;
     insert into public.tasks (list_id, status, title, description, lead, created_by_name)
-    values (lst, coalesce(sts, 'triagem'), 'Cadastro pelo link: ' || (clean ->> 'nome'),
+    values (lst, coalesce(sts, 'triagem'), 'Cadastro pelo link: ' || coalesce(clean ->> 'nome', clean ->> 'telefone', clean ->> 'email', 'sem nome'),
             'Cadastro enviado pelo link da clínica. Revise em Cadastros → Pacientes → Revisar cadastro.',
             jsonb_strip_nulls(jsonb_build_object('nome', clean ->> 'nome', 'telefone', regexp_replace(clean ->> 'telefone', '\D', '', 'g'),
                                                  'diagnostico', clean ->> 'diagnostico', 'convenio', clean ->> 'convenio')),
@@ -5420,7 +5427,7 @@ begin
   end if;
   if tid is not null then
     insert into public.task_events (task_id, kind, data, author_name)
-    values (tid, 'field', jsonb_build_object('campo', 'cadastro_link', 'para', clean ->> 'nome'), 'Família (link de cadastro)');
+    values (tid, 'field', jsonb_build_object('campo', 'cadastro_link', 'para', coalesce(clean ->> 'nome', clean ->> 'telefone', clean ->> 'email', 'sem nome')), 'Família (link de cadastro)');
   end if;
   insert into public.intake_submissions (token, kind, patient_id, task_id, data)
   values (l.token, l.kind, l.patient_id, tid, clean);

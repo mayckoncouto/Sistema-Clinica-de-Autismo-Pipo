@@ -205,8 +205,8 @@ const path = require('path');
   await page.bringToFront();
   await ev('openPatientFieldsModal()'); await page.waitForSelector('#ovPf');
   const hd = await page.$$eval('#ovPf thead th', (a) => a.map((x) => x.textContent));
-  const lockNome = await page.$eval('tr[data-pfk="nome"] [data-pfx="fixo"]', (e) => e.disabled && e.checked);
-  check('Campos obrigatórios columns: Campo, Aparece, Link rápido, Link fixo, Obrigatório (Nome locked)?', JSON.stringify(hd) === '["Campo","Aparece","Link rápido","Link fixo","ObrigatórioObrig."]' && lockNome, hd);
+  const freeNome = await page.evaluate(() => ['nome', 'telefones'].every((k) => ['rapido', 'fixo'].every((x) => { const e = document.querySelector('tr[data-pfk="' + k + '"] [data-pfx="' + x + '"]'); return e && !e.disabled && e.checked; })));
+  check('Campos obrigatórios columns: Campo, Aparece, Link rápido, Link fixo, Obrigatório (Nome and Telefone can be chosen in both links)?', JSON.stringify(hd) === '["Campo","Aparece","Link rápido","Link fixo","ObrigatórioObrig."]' && freeNome, hd);
   check('link-only fields (Responsável, Convênio, Laudo) listed?', (await page.$$('tr[data-lonly]')).length === 3);
   const stick = await page.evaluate(() => new Promise((res) => { const body = document.querySelector('#ovPf .modal-body'); body.scrollTop = 600;
     setTimeout(() => { const th = document.querySelector('#ovPf thead th').getBoundingClientRect(), bb = body.getBoundingClientRect(); res(Math.abs(th.top - bb.top) < 2 && body.scrollTop > 100); }, 100); }));
@@ -219,12 +219,14 @@ const path = require('path');
   check('table fits a phone screen?', fitM);
   await page.setViewportSize({width: 1300, height: 850}); await page.waitForTimeout(200);
   await page.uncheck('tr[data-pfk="cpf"] [data-pfx="fixo"]');
+  await page.uncheck('tr[data-pfk="nome"] [data-pfx="fixo"]');
   await page.check('tr[data-pfk="escolaId"] [data-pfx="req"]');
   await page.uncheck('tr[data-pfk="escolaId"] [data-pfx="rapido"]');
   await page.click('#pfSave'); await page.waitForTimeout(300);
   const lk = await ev('({link: state.patientLink, esc: state.patientFields.escolaId})');
   check('saved: CPF out of the fixed link; escola required in the fixed link and in the cadastro, not in the quick link?', lk.link.geral.cpf.show === false && lk.link.individual.cpf.show === true &&
     lk.link.geral.escola.req === true && lk.link.individual.escola.show === false && lk.link.individual.escola.req === false && lk.esc.req === true && lk.esc.show === true, lk);
+  check('saved: Nome out of the fixed link, still required in the quick link?', lk.link.geral.nome.show === false && lk.link.individual.nome.show === true && lk.link.individual.nome.req === true, lk.link.geral.nome);
 
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();

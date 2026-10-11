@@ -262,12 +262,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
   function stop(msg){ box.innerHTML = '<div class="done"><h2 style="color:var(--ink)">Link indisponível</h2><p class="muted">' + esc(msg) + '</p></div>'; }
 
   // Campos escolhidos em Campos obrigatórios (Link do paciente / Link geral). Sem configuração,
-  // vale o padrão (mesmo LINK_FIELDS do sistema). Nome e telefone sempre obrigatórios.
+  // vale o padrão (mesmo LINK_FIELDS do sistema). Todos os campos podem ser escolhidos (nome e telefone também).
   var DEFAULT_REQ = {nome: 1, telefone: 1, nascimento: 1, cpf: 1, responsavel: 1};
   var GROUP = {respNome: "responsavel", respParentesco: "responsavel", cep: "endereco", numero: "endereco", rua: "endereco", compl: "endereco", bairro: "endereco", cidade: "endereco", uf: "endereco"};
   var ADDR_REQ = {cep: 1, numero: 1, rua: 1, cidade: 1};
   function cfg(key){
-    if (key === "nome" || key === "telefone") return {show: true, req: true};
     var c = (FORM.campos || {})[key];
     return c ? {show: !!c.show || !!c.req, req: !!c.req} : {show: true, req: !!DEFAULT_REQ[key]};
   }
@@ -367,6 +366,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       if (val("email") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val("email"))) bad.push("email");
       bad.forEach(function(id){ var el = document.getElementById(id); el.classList.add("bad"); if (el.__btn) el.__btn.classList.add("bad"); });
       var consent = document.getElementById("consent").checked;
+      // Sem nenhum dado que identifique o paciente o envio não serve à clínica.
+      var vazio = !bad.length && !val("nome") && !digits(val("telefone")) && !digits(val("cpf")) && !val("email");
+      if (vazio){ err.innerHTML = '<div class="msg err">Preencha pelo menos o nome, o telefone, o CPF ou o e-mail.</div>'; return; }
       if (bad.length || !consent){
         err.innerHTML = '<div class="msg err">' + (bad.length ? "Confira os campos marcados em vermelho" + (bad.indexOf("cpf") !== -1 && val("cpf") ? " (CPF inválido)" : "") + (nascIso === null ? " (data de nascimento inválida: use dd/mm/aaaa)" : "") + "." : "") + (!consent ? " Marque a autorização para enviar." : "") + '</div>';
         var first = bad.length ? document.getElementById(bad[0]) : document.getElementById("consent"); (first.__btn || first).focus();
@@ -384,7 +386,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         if (STOP[m]) { stop(STOP[m]); return; }
         btn.disabled = false; btn.textContent = "Enviar cadastro";
         if (m === "obrigatorio" && r.campos) r.campos.forEach(function(k){ var el = document.getElementById(k === "responsavel" ? "respNome" : k === "endereco" ? "cep" : k); if (el){ el.classList.add("bad"); if (el.__btn) el.__btn.classList.add("bad"); } });
-        err.innerHTML = '<div class="msg err">' + (m === "limite" ? "Muitos cadastros enviados agora. Tente de novo em alguns minutos." : "Não foi possível enviar. Confira os campos obrigatórios e tente de novo.") + '</div>';
+        err.innerHTML = '<div class="msg err">' + (m === "limite" ? "Muitos cadastros enviados agora. Tente de novo em alguns minutos." : m === "vazio" ? "Preencha pelo menos o nome, o telefone, o CPF ou o e-mail." : "Não foi possível enviar. Confira os campos obrigatórios e tente de novo.") + '</div>';
       }, function(){ btn.disabled = false; btn.textContent = "Enviar cadastro"; err.innerHTML = '<div class="msg err">Sem conexão com a clínica agora. Tente de novo em instantes.</div>'; });
     });
   }
