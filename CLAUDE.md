@@ -3956,3 +3956,37 @@ começam SÓ para o Administrador (nenhum nível recebe). Fase 0 (limpeza da pla
 - Próximas fases (aguardando o usuário): lançamentos (importar o FLUXO), contas a pagar/receber, empréstimos, relatórios (fluxo de caixa e DRE
   calculados dos lançamentos), conciliação; depois o projeto Unidades.
 - Produção (2026-10-11): `2026-10-11j-financeiro-base` rodada pelo conector, a pedido do usuário ("Pode rodar") — 67 subcategorias | 3 contas | saldo total 1.260.918,96 | 4 políticas na tabela protegida.
+
+## Financeiro — Fase 2: Lançamentos (2026-10-11)
+Decisões do usuário: **dois valores** por lançamento (Valor = o que entra no saldo e na DRE; Valor do extrato = o que passou no banco,
+para conferir); importar o FLUXO por planilha (com prévia, nada duplica); permissão própria **Financeiro** (ver/incluir/editar/excluir,
+`financeiro`; nenhum nível recebe, só o Administrador); entrega = lançamentos + saldo por conta (fluxo de caixa e DRE calculados ficam
+para a Fase 3). O saldo de cada conta da planilha (aba DRE) = saldo inicial + Σ sinal × **Valor** (não o Valor Extrato) — conferido mês a mês.
+- Menu do topo **Financeiro ▾** (`#finBtn`/`#finMenu`, `FIN_ITEMS`/`FIN_TABS`, depois do CRM; com uma opção só vira o botão "Lançamentos";
+  grupo "Financeiro" no ☰ do celular) → tela `#tab-lancamentos` (aba `lancamentos`, endereço `#lancamentos`, bloco "Financeiro: Lançamentos"
+  no fim do script: `FL`, `flLoad`, `flSaveRow`, `renderLancamentos`, `openLancamento`, `flOnShow`). Filtros mês (padrão = o mais recente
+  que tem lançamentos, até a pessoa escolher), conta, tipo e busca; cartões de resumo (`.fl-sum`): receitas, despesas, resultado, outras
+  entradas/saídas, "Valor ≠ extrato" e **saldo de cada conta** ao fim do mês filtrado (só com `financeiro_valores`.ver; `flBalances`,
+  `flOpening`). Tabela `gtRender` "lancamentos": Descrição, Data, Conta, Subcategoria, Categoria, Tipo, Valor (com sinal, vermelho/verde),
+  Extrato; celular = Descrição, Data, Valor.
+- Janela do lançamento (`#ovFl`): Conta e Subcategoria são listas de cadastro com "+ Incluir" (`data-reg-add="contas"`/`"planocontas"`),
+  data, descrição, valor sempre positivo (**o sinal vem do tipo da subcategoria**: Receita/Entrada somam, Despesa/Saída subtraem — `flSign`),
+  data/valor do extrato, observações; lançamento igual (conta+data+descrição+valor) pede confirmação; Excluir com `confirmDialog`.
+- Conta ou subcategoria com lançamentos não é excluída: Inativar (`USAGE.contas`, `USAGE.planocontas`).
+- Banco: tabela `public.finance_entries (id uuid, account_id, data, descricao, plan_id, valor ≥ 0, data_extrato, valor_extrato, obs,
+  origem_key único, created/updated_at/by)` com RLS `has_perm('financeiro', view/create/edit/delete)`, gatilho `finance_entries_stamp`,
+  tempo real. Migração `supabase/2026-10-11k-financeiro-lancamentos.sql` (testada no PGlite com RLS; linha 101 de
+  `conferencia-migracoes.sql`; `schema.sql` e `conferencia-geral.sql` atualizados). Backup inclui `finance_entries`
+  (`BACKUP_TABLES`, `api/admin-backup.js`).
+- Planilha (Outras opções ▾, `IO_KINDS.lancamentos`, `ioFlPlan`/`ioFlApply`): colunas da aba FLUXO — Conta, Descrição, Data, Valor,
+  (Tipo, Categoria: só conferem), Sub-Categoria, Data Extrato, Valor Extrato, Observações. Conta e subcategoria vêm pelo nome (sem
+  acento/maiúscula); desconhecida = "Com problema". Identidade = conta|data|descrição|valor|subcategoria + nº da repetição
+  (`flSig`; linhas idênticas no mesmo dia contam como várias): já existe = Igual (ou Atualizar se só o extrato/observação difere);
+  importar de novo não duplica. Grava em lotes de 200.
+- Permissão **Financeiro** em Níveis de permissão (`MODULES` nos dois js, grupo "Financeiro" antes de "Menu Acesso";
+  `allModules()` põe as linhas do CRM antes dele). Ajuda: tópico `lancamentos` (grupo "Financeiro").
+- Correção junto: `finCanSee`/`finCanEdit` do saldo inicial (Fase 1) se chamavam como as do Relatório financeiro e as sobrescreviam;
+  agora `bankCanSee`/`bankCanEdit`.
+- Teste `tests/run_lancamentos.js` (no `npm test`); `run_cad_titles`, `run_toolbar_rows`, `run_sticky_headers` e `run_cad_sheets`
+  incluem a tela.
+- Próximas fases: fluxo de caixa e DRE calculados dos lançamentos, contas a pagar/receber, empréstimos, conciliação; depois Unidades.

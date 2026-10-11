@@ -54,6 +54,7 @@
     { key: "objetivos", label: "Objetivos", hint: "objetivos prontos para usar no plano terapêutico" },
     { key: "escalas", label: "Escalas", hint: "escalas do plano terapêutico (níveis e cores)" },
     { key: "habilidades", label: "Habilidades", hint: "habilidades dos objetivos do plano terapêutico" },
+    { key: "financeiro", label: "Financeiro", hint: "Lançamentos: movimentação das contas (valores, extrato, subcategorias)", group: "Financeiro" },
     { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"], group: "Menu Acesso" },
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)" },
     { key: "backup", label: "Backup", hint: "baixar o backup (restaurar: só o Administrador)", actions: ["view"] },
@@ -210,7 +211,8 @@
   // As linhas do CRM (vêm do app) entram antes do grupo "Menu Acesso", como no menu do topo.
   function allModules() {
     var crm = window.pipoCrmModules ? window.pipoCrmModules() : [];
-    var cut = MODULES.findIndex(function (m) { return m.group === "Menu Acesso"; });
+    var cut = MODULES.findIndex(function (m) { return m.group === "Financeiro"; });
+    if (cut === -1) cut = MODULES.findIndex(function (m) { return m.group === "Menu Acesso"; });
     return cut === -1 ? MODULES.concat(crm) : MODULES.slice(0, cut).concat(crm, MODULES.slice(cut));
   }
   // Resumo curto das permissões de um nível, para a escolha no cadastro.
