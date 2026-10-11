@@ -6474,3 +6474,102 @@ begin
                                   'telefone', coalesce(c ->> 'telefone', ''), 'cor', coalesce(c ->> 'corBotoes', ''), 'corTexto', coalesce(c ->> 'corTexto', '')),
     'convenios', public.intake_names('config/convenios'), 'origens', org, 'diagnosticos', dg, 'escolas', public.intake_names('config/schools'), 'medicos', public.intake_names('config/doctors'), 'campos', coalesce(cf, '{}'::jsonb));
 end $$;
+
+
+-- Financeiro, Fase 1 (2026-10-11): categorias de fornecedor, contas bancárias e plano de contas
+--   config/supplier_categories  Cadastros → Categorias de fornecedor  (permissão "categorias_fornecedor")
+--   config/bank_accounts        Cadastros → Contas bancárias           (permissão "contas_bancarias")
+--   config/chart_accounts       Cadastros → Plano de contas            (permissão "plano_contas")
+--   public.bank_account_finance saldo inicial de cada conta, tabela protegida (permissão "financeiro_valores")
+-- 1. caminhos permitidos  2. módulo de cada caminho  3. tabela protegida do saldo inicial
+-- 4. Plano de contas (67 subcategorias revisadas) e as 3 contas com o saldo de 01/01/2026.
+-- Nenhum nível recebe estas permissões: só o Administrador vê e altera até você liberar em Níveis de permissão.
+-- Pode rodar de novo (não troca o que já existe).
+
+alter table public.documents drop constraint if exists documents_path_valid;
+alter table public.documents add constraint documents_path_valid check (
+  path ~ '^(config/(rooms|specialties|convenios|professionals|services|statuses|clinic|cancel_reasons|doctors|schools|cbo|councils|holidays|staff_types|patient_fields|scales|skill_areas|goal_bank|system|planner_blocks|task_lists|diagnoses|origins|suppliers|supplier_categories|bank_accounts|chart_accounts)|patients/all|treatments/all|schedule/(seg|ter|qua|qui|sex|sab|dom)-[1-4])$'
+);
+
+create or replace function public.module_for_path(p_path text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  select case
+    when p_path like 'schedule/%'           then 'planner'
+    when p_path = 'patients/all'            then 'pacientes'
+    when p_path = 'treatments/all'          then 'tratamentos'
+    when p_path = 'config/specialties'      then 'especialidades'
+    when p_path = 'config/convenios'        then 'convenios'
+    when p_path = 'config/professionals'    then 'colaboradores'   -- profissional = colaborador
+    when p_path = 'config/services'         then 'servicos'
+    when p_path = 'config/rooms'            then 'salas'   -- itens com "group": true usam 'grupos'
+    when p_path = 'config/statuses'         then 'cadastro_status'
+    when p_path = 'config/clinic'           then 'clinica'
+    when p_path = 'config/cancel_reasons'   then 'motivos_cancelamento'
+    when p_path = 'config/doctors'          then 'medicos'
+    when p_path = 'config/schools'          then 'escolas'
+    when p_path = 'config/diagnoses'        then 'diagnosticos'
+    when p_path = 'config/origins'          then 'origens'
+    when p_path = 'config/suppliers'        then 'fornecedores'
+    when p_path = 'config/supplier_categories' then 'categorias_fornecedor'
+    when p_path = 'config/bank_accounts'    then 'contas_bancarias'
+    when p_path = 'config/chart_accounts'   then 'plano_contas'
+    when p_path = 'config/cbo'              then 'cbo'
+    when p_path = 'config/councils'         then 'conselhos'
+    when p_path = 'config/holidays'         then 'feriados'
+    when p_path = 'config/staff_types'      then 'colaboradores'
+    when p_path = 'config/patient_fields'   then 'campos_paciente'
+    when p_path = 'config/scales'           then 'escalas'
+    when p_path = 'config/skill_areas'      then 'habilidades'
+    when p_path = 'config/goal_bank'        then 'objetivos'
+    when p_path = 'config/planner_blocks'   then 'bloqueio_horario'
+    when p_path = 'config/task_lists'       then 'crm_listas'  -- nenhum nível tem: só o Administrador
+    when p_path = 'config/system'           then 'sistema'   -- só o Administrador
+  end;
+$function$;
+
+-- 3. Saldo inicial de cada conta (protegido por "Financeiro – valores")
+create table if not exists public.bank_account_finance (
+  account_id    text primary key,              -- id da conta em config/bank_accounts
+  saldo_inicial numeric(14,2) not null default 0,
+  data_saldo    date not null,
+  updated_at    timestamptz not null default now(),
+  updated_by    uuid references auth.users(id) on delete set null
+);
+alter table public.bank_account_finance enable row level security;
+grant select, insert, update, delete on public.bank_account_finance to authenticated;
+
+create or replace function public.bank_account_finance_stamp()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then
+    new.updated_at := coalesce(new.updated_at, now());   -- restauração / scripts
+    return new;
+  end if;
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end $$;
+drop trigger if exists bank_account_finance_stamp on public.bank_account_finance;
+create trigger bank_account_finance_stamp
+  before insert or update on public.bank_account_finance
+  for each row execute function public.bank_account_finance_stamp();
+
+drop policy if exists bank_account_finance_select on public.bank_account_finance;
+create policy bank_account_finance_select on public.bank_account_finance
+  for select to authenticated using (public.has_perm('financeiro_valores', 'view'));
+drop policy if exists bank_account_finance_insert on public.bank_account_finance;
+create policy bank_account_finance_insert on public.bank_account_finance
+  for insert to authenticated with check (public.has_perm('financeiro_valores', 'edit'));
+drop policy if exists bank_account_finance_update on public.bank_account_finance;
+create policy bank_account_finance_update on public.bank_account_finance
+  for update to authenticated
+  using (public.has_perm('financeiro_valores', 'edit'))
+  with check (public.has_perm('financeiro_valores', 'edit'));
+drop policy if exists bank_account_finance_delete on public.bank_account_finance;
+create policy bank_account_finance_delete on public.bank_account_finance
+  for delete to authenticated
+  using (public.has_perm('financeiro_valores', 'edit') or public.has_perm('contas_bancarias', 'delete'));

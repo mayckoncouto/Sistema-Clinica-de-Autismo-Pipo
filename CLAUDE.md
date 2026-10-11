@@ -3926,3 +3926,32 @@ Pedidos do usuário.
   (`.th-label`) é que encurta com "…" (`max-width: calc(100% - 22px)`); no celular as colunas Venc. e Prio. ficam com 94px/66px (a regra que
   escondia o botão saiu). Testes: `tests/run_crm.js` (Mover tarefa, ordenar), `tests/run_crm_mobile.js` (linhas da barra, ordenar), `run_toolbar_rows.js`.
 - (2026-10-11, pedido do usuário) Filtro **Responsável** (`#crmFWho`) do CRM também só lista quem tem acesso: na lista aberta, quem vê o CRM e essa lista (`crmCanAssign`); em Minhas tarefas/tela CRM, quem vê o CRM. Menus de responsável da tarefa já seguiam a regra.
+
+## Financeiro — Fase 1: base (2026-10-11)
+Decisões do usuário: financeiro no regime de **caixa**; a planilha `Financeiro_Pipo.xlsx` é de UMA unidade (dois CNPJs existem, o projeto
+"Unidades / nível de organização" fica para depois do financeiro); **sem tela de Unidades por enquanto** — a conta bancária tem o campo "CNPJ da
+empresa" (texto) e lançamentos/empréstimos/plano vão se ligar à CONTA; quando houver o cadastro de Unidades, esse campo vira ligação. Permissões novas
+começam SÓ para o Administrador (nenhum nível recebe). Fase 0 (limpeza da planilha) fechada: saldos de 01/01/2026 Viacredi 208.724,77, Bradesco
+945.549,97, Caixa 106.644,22 (total 1.260.918,96); DRE × FLUXO conferidos de jan a ago.
+- Cadastros → **Categorias de fornecedor** (`#tab-catfornecedor`, `REG_CFG.catfornecedor`, `config/supplier_categories`, permissão
+  `categorias_fornecedor`), **Contas bancárias** (`#tab-contas`, `REG_CFG.contas`, `config/bank_accounts` {id, name, tipo Banco|Caixa|Cartão|Outra,
+  banco, cnpj, agencia, numero}, permissão `contas_bancarias`) e **Plano de contas** (`#tab-planocontas`, `REG_CFG.planocontas`,
+  `config/chart_accounts` {id, name = subcategoria, categoria, tipo Receita|Despesa|Entrada|Saída, convenioId}, permissão `plano_contas`). Grupo novo no
+  menu Cadastros depois de Fornecedores: Categorias de fornecedor | Contas bancárias, Plano de contas | Salas…
+  `PLANO_TIPOS`, `planoTipoNorm` (aceita plural: Despesas, Saídas). Receita/Despesa entram no resultado (DRE); Entrada/Saída não (sócios,
+  empréstimos, aplicações, transferências, repasses). Chaves de aba: `catfornecedor`, `contas`, `planocontas`.
+- **Saldo inicial protegido**: tabela `public.bank_account_finance (account_id pk, saldo_inicial, data_saldo)` com RLS por permissão
+  **Financeiro – valores** (`financeiro_valores`, ver/editar). Na janela da conta, grupo "Saldo inicial" (`extraHtml`/`extraWire`) só para quem vê;
+  `finLoadAccounts`, `finSaveAccount`, `FIN.acc`; sem sistema online (testes) fica em `saldoInicial`/`dataSaldo` na conta. Atenção: agência/conta/CNPJ
+  ficam no documento `config/bank_accounts`, legível por qualquer usuário ativo (só o saldo é protegido). Backup inclui `bank_account_finance` (optional).
+- Ganchos NOVOS no cadastro genérico (`REG_CFG`): campo de lista `fields[].select` (array ou função; `regAdd` = cadastro com "+ Incluir"; `empty` =
+  texto da opção vazia; valor atual que não está na lista é mantido) e `extraHtml`/`extraWire`({read, apply, after})/`onDelete` na janela.
+- **Fornecedores**: a Categoria virou lista de Categorias de fornecedor (com "+ Incluir"); `supplierCatNames`, `supplierCatUse`, `supplierKey`.
+- **Planilhas** (Outras opções ▾ nas telas Plano de contas e Fornecedores): `ioListPlan`/`ioListApply` genéricos (chave decide novo/atualiza; célula vazia
+  não apaga), `IO_PLANO` (chave = subcategoria; Convênio pelo nome), `IO_FORNEC` (chave = CNPJ/CPF ou nome; categoria nova entra em Categorias de fornecedor).
+- Migração `supabase/2026-10-11j-financeiro-base.sql` (caminhos, `module_for_path`, tabela protegida, semeia as 67 subcategorias revisadas — 19 receitas
+  ligadas a convênios — e as 3 contas com o saldo de 01/01/2026; roda de novo sem estragar; testada no PGlite com CRLF e RLS; linha 100 da conferência
+  de migrações; `schema.sql` e `conferencia-geral.sql` atualizados). Ajuda: tópicos `catfornecedor`, `contas-bancarias`, `plano-de-contas` e
+  Fornecedores. Teste `tests/run_financeiro_base.js` (no `npm test`).
+- Próximas fases (aguardando o usuário): lançamentos (importar o FLUXO), contas a pagar/receber, empréstimos, relatórios (fluxo de caixa e DRE
+  calculados dos lançamentos), conciliação; depois o projeto Unidades.

@@ -43,7 +43,7 @@ const path = require('path');
     }
     return {tested, bad};
   }
-  const tabs = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'escolas', 'colaboradores', 'tiposcolab', 'especialidades', 'servicos', 'cbo', 'conselhos', 'fornecedores', 'feriados', 'status'];
+  const tabs = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'escolas', 'colaboradores', 'tiposcolab', 'especialidades', 'servicos', 'cbo', 'conselhos', 'fornecedores', 'catfornecedor', 'contas', 'planocontas', 'feriados', 'status'];
   const addBtn = {pacientes: '#addPatientBtn', tratamentos: '#trAdd', colaboradores: '#staffAddBtn'};
   for (const t of tabs){
     await page.evaluate((t) => { document.querySelector('#mainTabs button[data-tab="' + t + '"]').click(); }, t);

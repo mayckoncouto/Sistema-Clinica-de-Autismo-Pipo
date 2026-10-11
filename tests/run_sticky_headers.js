@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const TABS = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'escolas', 'diagnosticos', 'origens', 'colaboradores', 'tiposcolab',
-  'especialidades', 'servicos', 'cbo', 'conselhos', 'fornecedores', 'feriados', 'status', 'prontuario', 'planos', 'objetivos', 'escalas', 'habilidades', 'crm', 'resumo', 'disponibilidade'];
+  'especialidades', 'servicos', 'cbo', 'conselhos', 'fornecedores', 'catfornecedor', 'contas', 'planocontas', 'feriados', 'status', 'prontuario', 'planos', 'objetivos', 'escalas', 'habilidades', 'crm', 'resumo', 'disponibilidade'];
 
 (async () => {
   const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
