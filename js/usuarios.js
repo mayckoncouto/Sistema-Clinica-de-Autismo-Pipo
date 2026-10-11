@@ -34,6 +34,7 @@
     { key: "servicos", label: "Serviços", hint: "" },
     { key: "cbo", label: "CBO", hint: "lista de CBO usada no cadastro dos profissionais" },
     { key: "conselhos", label: "Conselhos", hint: "conselhos profissionais (CRP, CRFa…) do cadastro dos profissionais" },
+    { key: "fornecedores", label: "Fornecedores", hint: "empresas e pessoas que fornecem produtos ou serviços para a clínica" },
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
     { key: "feriados", label: "Feriados e recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },

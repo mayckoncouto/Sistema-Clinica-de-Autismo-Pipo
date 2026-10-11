@@ -3834,3 +3834,23 @@ e, se cadastrado, também para o tratamento; profissão em todos os lugares; **t
   `respNome`/`respParentesco` de envios antigos. O banco ignora `responsavel` em configurações antigas.
 - Banco: `supabase/2026-10-11d-link-todos-os-campos.sql` (`intake_send` aceita as chaves novas, listas e rotina com limite e
   confere os obrigatórios novos). Testada no PGlite. Teste em `tests/run_intake.js`.
+- Produção (2026-10-11): `2026-10-11d-link-todos-os-campos` rodada (`funcao_nova = 1`).
+
+## Cadastro de Fornecedores (2026-10-11)
+Pedido do usuário: "Crie um cadastro de fornecedores dentro de cadastros". Campos escolhidos por padrão (o usuário não
+detalhou): Nome / Razão social (`name`), Nome fantasia, CNPJ ou CPF (`documento`), Categoria (texto livre), Pessoa de
+contato, Telefone, E-mail, Endereço, PIX / dados bancários e Observações.
+- Cadastros → **Fornecedores** (`#tab-fornecedores`, `REG_CFG.fornecedores`, `SIMPLE_LISTS.fornecedores` → documento
+  `config/suppliers {list:[…]}`, `state.suppliers`, permissão `fornecedores` ver/incluir/editar/excluir), logo depois de
+  Conselhos em `CAD_ITEMS`/`CAD_TABS`; título `cadTitleText`. Lista: Nome (+ nome fantasia), Categoria, CNPJ / CPF,
+  Telefone, E-mail; celular = Nome + Categoria. Busca por nome, fantasia, categoria, documento (com ou sem pontuação) e contato.
+- Campo de documento na janela genérica: `fields[].doc` → máscara (`formatDoc`: CPF até 11 dígitos, CNPJ 14) e conferência
+  dos dígitos verificadores (`docValido`, `cnpjValido`, `cpfValido`) em `readRegFields`. Repetido = mesmo documento
+  (`supplierDocDigits`) ou, sem documento, mesmo nome (`dupKey`). Sem "Inativar" (nada no sistema usa o fornecedor ainda).
+- Migração `supabase/2026-10-11e-fornecedores.sql`: caminho em `documents_path_valid`, `module_for_path`
+  (`config/suppliers` → `fornecedores`, mantendo `search_path`), níveis começam com o acesso de Convênios. Testada no
+  PGlite (2×, CRLF). Linha 95 de `conferencia-migracoes.sql`; `schema.sql` e `conferencia-geral.sql` atualizados.
+- Ajuda: tópico `fornecedores`. Teste `tests/run_fornecedores.js` (no `npm test`); `run_cad_titles`, `run_toolbar_rows`,
+  `run_sticky_headers` e `run_cad_sheets` incluem a tela.
+- Ideias ainda não feitas (aguardando o usuário): categoria como cadastro próprio com "+ Incluir", planilha de
+  importar/exportar, ligar fornecedor a contas a pagar/despesas.

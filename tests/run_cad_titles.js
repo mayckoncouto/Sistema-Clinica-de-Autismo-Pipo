@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const TABS = {pacientes: 'Pacientes', tratamentos: 'Tratamentos', convenios: 'Convênios', motivos: 'Motivos de cancelamento', medicos: 'Médicos',
   escolas: 'Escolas', diagnosticos: 'Diagnósticos', origens: 'Origens', colaboradores: 'Colaboradores', tiposcolab: 'Tipos de colaborador',
-  especialidades: 'Especialidades', servicos: 'Serviços', cbo: 'CBO', conselhos: 'Conselhos', salas: 'Salas', feriados: 'Feriados e recessos',
+  especialidades: 'Especialidades', servicos: 'Serviços', cbo: 'CBO', conselhos: 'Conselhos', fornecedores: 'Fornecedores', salas: 'Salas', feriados: 'Feriados e recessos',
   status: 'Status', objetivos: 'Objetivos', escalas: 'Escalas', habilidades: 'Habilidades'};
 (async () => {
   const browser = await chromium.launch(require('./launch-opts'));
