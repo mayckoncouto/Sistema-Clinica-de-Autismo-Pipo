@@ -221,7 +221,7 @@ begin
   return t;
 end $$;
 
-select set_config('pipo.restore', '1', true);
+select set_config('pipo.restore', '1', false);
 
 -- 1. Tarefas: título e descrição
 insert into public.correcoes_texto_2026_10_11 (tabela, id, campo, antes, depois)
@@ -269,7 +269,7 @@ update public.documents set data = jsonb_set(jsonb_set(jsonb_set(
     '{link,geral}', coalesce(data -> 'link' -> 'geral', '{}'::jsonb) || '{"nome": {"show": true, "req": true}, "telefone": {"show": true, "req": true}}'::jsonb)
  where path = 'config/patient_fields';
 
-select set_config('pipo.restore', '', true);
+select set_config('pipo.restore', '', false);
 
 -- Conferência: quantos textos foram corrigidos e se os obrigatórios ficaram marcados
 select tabela || '.' || campo as onde, count(*) as corrigidos from public.correcoes_texto_2026_10_11 group by 1
