@@ -3925,3 +3925,4 @@ Pedidos do usuário.
 - **Ordenar ▲▼ sempre visível** no título de todas as colunas das tabelas do CRM (`#crmHost .pat-table thead th`): o texto do título
   (`.th-label`) é que encurta com "…" (`max-width: calc(100% - 22px)`); no celular as colunas Venc. e Prio. ficam com 94px/66px (a regra que
   escondia o botão saiu). Testes: `tests/run_crm.js` (Mover tarefa, ordenar), `tests/run_crm_mobile.js` (linhas da barra, ordenar), `run_toolbar_rows.js`.
+- (2026-10-11, pedido do usuário) Filtro **Responsável** (`#crmFWho`) do CRM também só lista quem tem acesso: na lista aberta, quem vê o CRM e essa lista (`crmCanAssign`); em Minhas tarefas/tela CRM, quem vê o CRM. Menus de responsável da tarefa já seguiam a regra.
