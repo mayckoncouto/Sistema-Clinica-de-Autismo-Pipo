@@ -3863,3 +3863,4 @@ leva o texto digitado em `diagnostico`). Não → `diagnostico` vai vazio. Abert
 (`whenSync`). A revisão grava `Possui diagnóstico: Sim/Não` na observação e o diagnóstico em `cid`. `intake_form` devolve
 `diagnosticos`; migração `supabase/2026-10-11f-link-diagnosticos.sql` (só essa função; linha 96 da conferência de migrações;
 testada no PGlite). Teste em `tests/run_intake.js`.
+- Produção (2026-10-11): `2026-10-11f-link-diagnosticos` rodada (`funcao_nova = true`; o link entrega 41 diagnósticos). A `2026-10-11e-fornecedores` ainda NÃO foi rodada (caminho não aceito, 0 níveis).
