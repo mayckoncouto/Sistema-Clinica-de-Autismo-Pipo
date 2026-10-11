@@ -165,13 +165,14 @@ const path = require('path');
     if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
     if (/\/js\/redes\.js/.test(u)) return route.fulfill({contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, '..', 'js', 'redes.js'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
-    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'geral', nome: '', prefill: {}, clinica: {nome: 'C'}, convenios: [], origens: [],
+    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'geral', nome: 'Link geral', prefill: {}, clinica: {nome: 'C'}, convenios: [], origens: [],
       campos: {cpf: {show: false, req: false}, nascimento: {show: true, req: false}, responsavel: {show: false, req: false}, escola: {show: true, req: true}, endereco: {show: false, req: false}}})});
     if (/rpc\/intake_send/.test(u)) { sent = JSON.parse(route.request().postData()); return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true})}); }
     return route.fulfill({status: 404, body: ''});
   });
   await pub.setViewportSize({width: 1300, height: 900});
   await pub.goto('http://pipo.test/cadastro?t=g'); await pub.waitForSelector('#frm');
+  check('fixed link: name field starts blank (no "Link geral"), with a placeholder?', (await pub.inputValue('#nome')) === '' && /nome completo/i.test(await pub.getAttribute('#nome', 'placeholder')));
   await pub.click('#sexo + .pk-btn'); await pub.waitForTimeout(80);
   const dk = await pub.evaluate(() => { const p = document.getElementById('pkPop'), b = document.querySelector('#sexo + .pk-btn'); if (!p) return null; const r = p.getBoundingClientRect(), br = b.getBoundingClientRect();
     return {glued: Math.abs(r.top - br.bottom - 4) < 2, sheet: !!document.getElementById('pkSheet'), h: Math.round(br.height)}; });

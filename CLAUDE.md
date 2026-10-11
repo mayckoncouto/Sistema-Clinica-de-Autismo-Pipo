@@ -3778,3 +3778,6 @@ foi mencionado (o autor não recebe) e tem acesso à lista; cada pessoa liga no 
   a janela pede para instalar (`pipoNotifAvailable` mostra o item). Tocar na menção abre `/?tarefa=<id>#crm`
   → `notifOpenFromUrl()` (chamado no fim de `applyPermissionsUI`) abre a tarefa. sw.js `pipo-v5`.
   Ajuda: tópico `notificacoes`. Teste `tests/run_notif.js`.
+- (2026-10-11, pedido do usuário) Página do link: no link geral (permanente) o campo Nome começa em branco, com
+  o texto de ajuda "Digite o nome completo do paciente" (`nomeInicial` em `cadastro.html`). Antes vinha o nome
+  interno do link ("Link geral"). Um nome que já veio do cadastro continua; "Link geral/permanente/fixo" nunca.
