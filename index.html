@@ -2488,7 +2488,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
     if (document.getElementById("pwaUpdate")) return;
     var bar = document.createElement("div");
     bar.id = "pwaUpdate"; bar.setAttribute("role", "status");
-    bar.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:2000;" +
+    bar.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:10050;" +
       "display:flex;align-items:center;gap:12px;max-width:calc(100vw - 32px);padding:10px 12px 10px 16px;border-radius:12px;" +
       "background:var(--surface,#fff);color:var(--ink,#1f2b29);border:1px solid var(--line,#d8dee5);box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:14px";
     bar.innerHTML = '<span>Nova versão do sistema disponível.</span>' +
@@ -2500,6 +2500,15 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
     document.body.appendChild(bar);
   }
   if ("serviceWorker" in navigator && location.protocol === "https:"){
+    // Um sw.js novo assumiu (versão nova do sistema): ainda sem login, recarrega sozinho;
+    // logado, mostra o aviso para a pessoa escolher a hora.
+    var hadCtrl = !!navigator.serviceWorker.controller, reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function(){
+      if (!hadCtrl){ hadCtrl = true; return; }
+      if (reloaded) return;
+      if (document.querySelector(".pipo-login")){ reloaded = true; location.reload(); }
+      else showUpdate();
+    });
     window.addEventListener("load", function(){
       navigator.serviceWorker.register("/sw.js").then(function(reg){
         // Ao voltar para o app depois de um tempo, confere se há versão nova.
@@ -2511,7 +2520,9 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         });
       }).catch(function(){});
       navigator.serviceWorker.addEventListener("message", function(e){
-        if (e.data && e.data.type === "pipo-update") showUpdate();
+        if (!(e.data && e.data.type === "pipo-update")) return;
+        if (document.querySelector(".pipo-login") && !reloaded){ reloaded = true; location.reload(); }
+        else showUpdate();
       });
     });
   }

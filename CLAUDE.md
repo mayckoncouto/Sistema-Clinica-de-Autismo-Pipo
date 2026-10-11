@@ -3748,7 +3748,8 @@ Decisão do usuário: continuar com o site adaptado (sem app de loja) e torná-l
   `/c/`, `/cadastro`, `/oauth` passam direto. Eventos `push`/`notificationclick` prontos para as notificações (etapa
   futura). Arquivo novo do sistema em `js/`: acrescentar em `SHELL` e trocar `VERSION`.
 - Script depois de `js/pipo-supabase.js` (FORA dos marcadores; só registra em https): registra o `sw.js`, mostra a
-  barra "Nova versão do sistema disponível — Atualizar / Agora não" (`#pwaUpdate`), pede conferência ao voltar para o
+  barra "Nova versão do sistema disponível — Atualizar / Agora não" (`#pwaUpdate`, z-index acima do login) — na tela de
+  login (sem ninguém logado) recarrega sozinho; vale para `pipo-update` e para `controllerchange` (sw.js novo assumiu), pede conferência ao voltar para o
   app (`visibilitychange`), `window.pipoInstallApp` (pedido de instalação do Android/computador ou abre a Ajuda),
   `window.pipoIsInstalled`. Menu Acesso → **Instalar app** (`data-act="instalar"`, some quando já aberto pelo ícone).
   Ajuda: tópico `instalar-app` (`window.pipoOpenHelpTopic`).
