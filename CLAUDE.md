@@ -3875,3 +3875,11 @@ em `patient_health.cid` e `tasks.lead.diagnostico` (só quando é exatamente um 
 produção 2 saúdes a trocar, 0 leads). Linha 97 da conferência de migrações.
 - Produção (2026-10-11): `2026-10-11e-fornecedores` rodada (`true | true | 6`). A `2026-10-11g-diagnostico-so-nome` ainda NÃO foi rodada.
 - Produção (2026-10-11): `2026-10-11g-diagnostico-so-nome` rodada pelo conector, a pedido do usuário ("por que você mesmo não envia o SQL?") — resultado `0 | 0 | true`. Daqui em diante, SQL que altera o banco pode ser rodado pelo conector quando o usuário pedir ou autorizar; sem pedido, continua valendo mostrar o script e esperar.
+
+## Link de cadastro: Escola e Médico da lista, com "Outra/Outro" (2026-10-11)
+Pedido do usuário: no link, Escola e Médico mostram os cadastrados (Cadastros → Escolas / Médicos, sem os inativos) + **Outra**
+(escola) / **Outro** (médico); com a opção, abre "Nome da escola" / "Nome do médico" para digitar (`escolaOutro`, `medicoOutro`,
+`data-when` `esc-outro`/`med-outro`). O envio leva o texto digitado em `escola`/`medico`. Sem nenhum cadastrado, o campo continua
+texto livre. Na revisão (`intakeToPatient`) o nome que não está no cadastro vira aviso "digitada pela família — confira o nome e
+inclua em Cadastros". `intake_form` devolve `escolas` e `medicos` — migração `supabase/2026-10-11h-link-escolas-medicos.sql`
+(testada no PGlite; linha 98 da conferência de migrações). Teste em `tests/run_intake.js`.

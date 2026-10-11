@@ -280,7 +280,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
   var GROUP = {telNome: "telefone", finQuem: "financeiro",
     cep: "endereco", numero: "endereco", rua: "endereco", compl: "endereco", bairro: "endereco", cidade: "endereco", uf: "endereco",
     maeNome: "mae", maeCpf: "mae", maeProfissao: "mae", paiNome: "pai", paiCpf: "pai", paiProfissao: "pai",
-    finNome: "financeiro", finDoc: "financeiro", finTelefone: "financeiro", finEmail: "financeiro", convenioOutro: "convenio", diagnosticoOutro: "diagnostico"};
+    finNome: "financeiro", finDoc: "financeiro", finTelefone: "financeiro", finEmail: "financeiro", convenioOutro: "convenio", diagnosticoOutro: "diagnostico", escolaOutro: "escola", medicoOutro: "medico"};
   // Dentro de um grupo, só estes ficam obrigatórios quando o grupo é obrigatório.
   var GROUP_REQ = {cep: 1, numero: 1, rua: 1, cidade: 1, maeNome: 1, paiNome: 1, finNome: 1};
   var ROUTINE_DAYS = [["seg", "Segunda"], ["ter", "Terça"], ["qua", "Quarta"], ["qui", "Quinta"], ["sex", "Sexta"]];
@@ -339,6 +339,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     var p = FORM.prefill || {}, c = FORM.clinica || {}, upd = FORM.kind === "atualizacao";
     var convs = (FORM.convenios || []).concat(["Particular", "Outro"]);
     var diags = FORM.diagnosticos || [];
+    var escs = FORM.escolas || [], meds = FORM.medicos || [];
+    var esSel = !p.escola ? "" : (escs.indexOf(p.escola) !== -1 ? p.escola : "Outra"), esOutro = esSel === "Outra" ? p.escola : "";
+    var mdSel = !p.medico ? "" : (meds.indexOf(p.medico) !== -1 ? p.medico : "Outro"), mdOutro = mdSel === "Outro" ? p.medico : "";
     var dgSel = !p.diagnostico ? "" : (diags.indexOf(p.diagnostico) !== -1 ? p.diagnostico : "Outro"), dgOutro = dgSel === "Outro" ? p.diagnostico : "";
     function sec(title, html){ return html.replace(/<div><\/div>/g, "") ? '<div class="sec">' + title + '</div><div class="grid">' + html + '</div>' : ""; }
     var nome = c.nome || "a clínica";
@@ -385,14 +388,20 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         f("diagnostico", "Qual diagnóstico?", {select: diags.concat(["Outro"]), value: dgSel, wide: true, when: "diag-sim"}) +
         f("diagnosticoOutro", "Qual?", {value: dgOutro, wide: true, when: "diag-outro", attrs: ' placeholder="Escreva o diagnóstico"'}) +
         f("diagData", "Data do diagnóstico", {date: true, value: p.diagData}) +
-        f("medico", "Médico que acompanha", {value: p.medico, wide: true}) +
+        (meds.length
+          ? f("medico", "Médico que acompanha", {select: meds.concat(["Outro"]), value: mdSel, wide: true}) +
+            f("medicoOutro", "Nome do médico", {value: mdOutro, wide: true, when: "med-outro", attrs: ' placeholder="Escreva o nome do médico"'})
+          : f("medico", "Médico que acompanha", {value: p.medico, wide: true})) +
         f("suporte", "Nível de suporte", {select: ["Nível 1", "Nível 2", "Nível 3"], value: p.suporte}) +
         f("comunicacao", "Comunicação", {select: ["Verbal", "Pouco verbal", "Não verbal", "Usa CAA (comunicação alternativa)"], value: p.comunicacao}) +
         f("alergias", "Alergias", {value: p.alergias, wide: true}) +
         f("medicacoes", "Medicações em uso", {value: p.medicacoes, wide: true}) +
         f("restricoes", "Restrições alimentares", {value: p.restricoes, wide: true})) +
       sec("Escola",
-        f("escola", "Escola", {value: p.escola, wide: true}) +
+        (escs.length
+          ? f("escola", "Escola", {select: escs.concat(["Outra"]), value: esSel, wide: true}) +
+            f("escolaOutro", "Nome da escola", {value: esOutro, wide: true, when: "esc-outro", attrs: ' placeholder="Escreva o nome da escola"'})
+          : f("escola", "Escola", {value: p.escola, wide: true})) +
         f("escolaSerie", "Série / ano", {value: p.escolaSerie}) +
         f("escolaTurno", "Turno da escola", {select: ["Manhã", "Tarde", "Integral", "Noite"], value: p.escolaTurno}) +
         f("professor", "Professor(a)", {value: p.professor}) +
@@ -425,12 +434,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       var quem = (document.getElementById("finQuem") || {}).value || "", conv = (document.getElementById("convenio") || {}).value || "";
       var lau = document.getElementById("laudo"), dg = (document.getElementById("diagnostico") || {}).value || "";
       var temDiag = !lau || lau.value === "Sim";
+      var esc0 = (document.getElementById("escola") || {}).value || "", med0 = (document.getElementById("medico") || {}).value || "";
       Array.prototype.forEach.call(frm.querySelectorAll("[data-when]"), function(el){
         var w = el.getAttribute("data-when");
+        if (w === "esc-outro"){ el.hidden = esc0 !== "Outra"; return; }
+        if (w === "med-outro"){ el.hidden = med0 !== "Outro"; return; }
         el.hidden = !(w === "fin-outro" ? quem !== "Mãe" && quem !== "Pai" : w === "diag-sim" ? temDiag : w === "diag-outro" ? temDiag && dg === "Outro" : conv === "Outro");
       });
     }
-    frm.addEventListener("change", function(e){ if (e.target.id === "finQuem" || e.target.id === "convenio" || e.target.id === "laudo" || e.target.id === "diagnostico") whenSync(); });
+    frm.addEventListener("change", function(e){ if (e.target.id === "finQuem" || e.target.id === "convenio" || e.target.id === "laudo" || e.target.id === "diagnostico" || e.target.id === "escola" || e.target.id === "medico") whenSync(); });
     whenSync();
     frm.addEventListener("click", function(e){
       var add = e.target.closest("[data-ladd]"), rm = e.target.closest("[data-lrm]");
@@ -467,6 +479,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       ["email", "finEmail"].forEach(function(id){ if (val(id) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val(id))) bad.push(id); });
       if (val("convenio") === "Outro" && !val("convenioOutro") && cfg("convenio").req) bad.push("convenioOutro");
       if (document.getElementById("diagnosticoOutro") && !document.getElementById("diagnosticoOutro").closest("[data-when][hidden]") && !val("diagnosticoOutro") && cfg("diagnostico").req) bad.push("diagnosticoOutro");
+      [["escolaOutro", "escola"], ["medicoOutro", "medico"]].forEach(function(x){
+        var el = document.getElementById(x[0]);
+        if (el && !el.closest("[data-when][hidden]") && !val(x[0]) && cfg(x[1]).req) bad.push(x[0]);
+      });
       // Listas de pessoas e rotina: só as linhas com nome / os períodos escolhidos.
       function listVal(kind){
         var host = frm.querySelector('[data-list="' + kind + '"]'); if (!host) return [];
@@ -501,6 +517,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
        "rg", "maeNome", "maeProfissao", "paiNome", "paiProfissao", "finNome", "finEmail", "escolaSerie", "professor", "mediador",
        "medico", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"].forEach(function(id){ data[id] = val(id); });
       data.convenioOutro = data.convenio === "Outro" ? val("convenioOutro") : "";
+      if (document.getElementById("escolaOutro") && data.escola === "Outra") data.escola = val("escolaOutro");
+      if (document.getElementById("medicoOutro") && data.medico === "Outro") data.medico = val("medicoOutro");
       if (document.getElementById("laudo") && data.laudo !== "Sim") data.diagnostico = "";
       else if (data.diagnostico === "Outro") data.diagnostico = val("diagnosticoOutro");
       data.nascimento = nascIso || ""; data.entrada = entIso || ""; data.diagData = diagIso || "";

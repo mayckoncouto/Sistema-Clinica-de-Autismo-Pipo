@@ -209,15 +209,15 @@ const path = require('path');
     if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
     if (/\/js\/redes\.js/.test(u)) return route.fulfill({contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, '..', 'js', 'redes.js'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
-    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'novo', nome: 'Lia', prefill: {}, clinica: {nome: 'C'}, convenios: ['Unimed Fictícia'], origens: [], diagnosticos: ['F84.0 Autismo infantil', 'TDAH'],
+    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'novo', nome: 'Lia', prefill: {}, clinica: {nome: 'C'}, convenios: ['Unimed Fictícia'], origens: [], diagnosticos: ['F84.0 Autismo infantil', 'TDAH'], escolas: ['Escola Fictícia A', 'Escola Fictícia B'], medicos: ['Dra. Fictícia'],
       campos: {cpf: {show: false, req: false}, nascimento: {show: false, req: false}, endereco: {show: false, req: false}, mae: {show: true, req: true}, pai: {show: true, req: false},
-        rotina: {show: true, req: true}, protetiva: {show: true, req: false}, financeiro: {show: true, req: false}, rotinaAtual: {show: true, req: false}, suporte: {show: true, req: false}}})});
+        rotina: {show: true, req: true}, protetiva: {show: true, req: false}, financeiro: {show: true, req: false}, rotinaAtual: {show: true, req: false}, suporte: {show: true, req: false}, medico: {show: true, req: false}}})});
     if (/rpc\/intake_send/.test(u)) { sent = JSON.parse(route.request().postData()); return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true})}); }
     return route.fulfill({status: 404, body: ''});
   });
   await pub.goto('http://pipo.test/c/novo'); await pub.waitForSelector('#frm');
   const ids2 = await pub.$$eval('#frm input, #frm select', (a) => a.map((x) => x.id).filter(Boolean));
-  check('chosen fields appear (mãe/pai with profissão, financeiro, rotina, suporte); not chosen stay out (RG, médico)?', ['maeNome', 'maeProfissao', 'paiProfissao', 'finNome', 'rt-seg-m', 'suporte'].every((k) => ids2.indexOf(k) !== -1) && ids2.indexOf('rg') === -1 && ids2.indexOf('medico') === -1, ids2);
+  check('chosen fields appear (mãe/pai with profissão, financeiro, rotina, suporte); not chosen stay out (RG)?', ['maeNome', 'maeProfissao', 'paiProfissao', 'finNome', 'rt-seg-m', 'suporte'].every((k) => ids2.indexOf(k) !== -1) && ids2.indexOf('rg') === -1, ids2);
   check('financeiro: "Quem é o responsável financeiro?" (Mãe, Pai, Outra pessoa) with name shown for another person?', JSON.stringify(await pub.$$eval('#finQuem option', (a) => a.map((o) => o.value).filter(Boolean))) === '["Mãe","Pai","Outra pessoa"]' && !(await pub.$eval('#finNome', (e) => e.closest('[data-when]').hidden)));
   await pub.$eval('#finQuem', (e) => { e.value = 'Mãe'; e.dispatchEvent(new Event('change', {bubbles: true})); });
   check('choosing Mãe hides the financeiro name/CPF (they come from the mother)?', await pub.$eval('#finNome', (e) => e.closest('[data-when]').hidden) && await pub.$eval('#finDoc', (e) => e.closest('[data-when]').hidden));
@@ -229,6 +229,14 @@ const path = require('path');
   await pub.$eval('#diagnostico', (e) => { e.value = 'Outro'; e.dispatchEvent(new Event('change', {bubbles: true})); });
   check('Outro shows the free text field?', !(await pub.$eval('#diagnosticoOutro', (e) => e.closest('[data-when]').hidden)));
   await pub.fill('#diagnosticoOutro', 'Síndrome fictícia');
+  check('escola: registered schools + Outra, field for the name starts hidden?', JSON.stringify(await pub.$$eval('#escola option', (a) => a.map((o) => o.value).filter(Boolean))) === '["Escola Fictícia A","Escola Fictícia B","Outra"]' && await pub.$eval('#escolaOutro', (e) => e.closest('[data-when]').hidden));
+  await pub.$eval('#escola', (e) => { e.value = 'Outra'; e.dispatchEvent(new Event('change', {bubbles: true})); });
+  check('Outra shows "Nome da escola"?', !(await pub.$eval('#escolaOutro', (e) => e.closest('[data-when]').hidden)));
+  await pub.fill('#escolaOutro', 'Colégio Novo Fictício');
+  check('médico: registered doctors + Outro, name field hidden until Outro?', JSON.stringify(await pub.$$eval('#medico option', (a) => a.map((o) => o.value).filter(Boolean))) === '["Dra. Fictícia","Outro"]' && await pub.$eval('#medicoOutro', (e) => e.closest('[data-when]').hidden));
+  await pub.$eval('#medico', (e) => { e.value = 'Outro'; e.dispatchEvent(new Event('change', {bubbles: true})); });
+  check('Outro shows "Nome do médico"?', !(await pub.$eval('#medicoOutro', (e) => e.closest('[data-when]').hidden)));
+  await pub.fill('#medicoOutro', 'Dr. Novo Fictício');
   await pub.fill('#nome', 'Lia Teste'); await pub.fill('#telNome', 'Vó Rosa (avó)'); await pub.fill('#telefone', '47977776666'); await pub.fill('#convenioOutro', 'Plano Fictício');
   await pub.check('#consent'); await pub.click('#send'); await pub.waitForTimeout(100);
   check('required mãe and retirada block sending?', sent === null && await pub.$eval('#maeNome', (e) => e.classList.contains('bad')));
@@ -241,6 +249,7 @@ const path = require('path');
   check('sends mãe with profissão, 2 people for pickup, rotina, convênio Outro + qual, financeiro = Mãe, phone owner?', d2 && d2.maeNome === 'Mara Teste' && d2.maeProfissao === 'Enfermeira' && d2.retirada.length === 2 && d2.retirada[0].rel === 'Tio' &&
     d2.rotinaAtual.seg.m.tipo === 'escola' && d2.rotinaAtual.seg.m.txt === 'Escola Z' && d2.convenio === 'Outro' && d2.convenioOutro === 'Plano Fictício' && d2.finQuem === 'Mãe' && !d2.finNome && d2.telNome === 'Vó Rosa (avó)', d2);
   check('sends laudo Sim and the typed diagnosis (Outro replaced by the text)?', d2.laudo === 'Sim' && d2.diagnostico === 'Síndrome fictícia', [d2.laudo, d2.diagnostico]);
+  check('sends the typed school and doctor names (Outra/Outro replaced by the text)?', d2.escola === 'Colégio Novo Fictício' && d2.medico === 'Dr. Novo Fictício', [d2.escola, d2.medico]);
   // No sistema: o envio vira campos do cadastro.
   const m2 = await ev(`intakeToPatient(${JSON.stringify(d2)})`);
   check('review: phone owner in contacts (WhatsApp); financeiro = the mother (linked); mãe with profissão; convênio Outro in the note?', m2.patch.telefones[0].nome === 'Vó Rosa (avó)' && m2.patch.telefones[0].via === 'whatsapp' &&
