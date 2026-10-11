@@ -2,15 +2,15 @@
  *
  * - Guarda no aparelho os arquivos do sistema (index.html, js/, ícones e a biblioteca do
  *   Supabase): o sistema abre na hora com a cópia guardada e, ao mesmo tempo, confere no
- *   servidor se há versão nova. Havendo, baixa a versão nova inteira (página + js/) e avisa
- *   a tela, que mostra "Nova versão disponível — Atualizar".
+ *   servidor se a página ou algum js/ mudou. Havendo, baixa a versão nova inteira (página +
+ *   js/) e avisa a tela, que mostra "Nova versão disponível — Atualizar".
  * - NUNCA guarda dados: /api/, Supabase (banco, login, tempo real), página do link de
  *   cadastro (/c/, /cadastro) e a página de autorização (/oauth) passam direto.
  * - Notificações (push) ficam para uma etapa futura; os eventos "push" e
  *   "notificationclick" já estão prontos aqui.
  * Mudou a lista de arquivos do sistema? Acrescentar em SHELL e trocar VERSION.
  */
-var VERSION = "pipo-v2";
+var VERSION = "pipo-v3";
 var SHELL = ["/", "/js/redes.js", "/js/pipo-supabase.js", "/js/usuarios.js"];
 var STATIC = ["/favicon.png", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png",
   "/icons/maskable-512.png", "/icons/apple-touch-icon.png"];
@@ -42,26 +42,22 @@ function sameBody(a, b) {
 }
 
 var checking = null;
-// Confere a página no servidor; se mudou, baixa página + js/ juntos e avisa as abas abertas.
+// Confere a página e os js/ no servidor; se QUALQUER um mudou, guarda todos juntos (nunca página nova
+// com js velho, nem o contrário) e avisa as abas abertas.
 function refreshShell() {
   if (checking) return checking;
   checking = caches.open(VERSION).then(function (c) {
-    return c.match("/").then(function (old) {
-      return fetch("/", {cache: "no-cache"}).then(function (fresh) {
-        if (!fresh.ok || fresh.redirected) return;
-        return sameBody(old, fresh).then(function (same) {
-        if (same) return;
-        return Promise.all(SHELL.slice(1).map(function (u) {
-          return fetch(u, {cache: "no-cache"}).then(function (r) { return r.ok ? [u, r] : null; });
-        })).then(function (js) {
-          if (js.some(function (x) { return !x; })) return;   // não deixa página nova com js velho
-          return Promise.all([c.put("/", fresh)].concat(js.map(function (x) { return c.put(x[0], x[1]); }))).then(function () {
-            if (!old) return;
-            return self.clients.matchAll({type: "window"}).then(function (list) {
-              list.forEach(function (cl) { cl.postMessage({type: "pipo-update"}); });
-            });
-          });
-        });
+    return Promise.all(SHELL.map(function (u) {
+      return Promise.all([c.match(u), fetch(u, {cache: "no-cache"})]).then(function (x) {
+        if (!x[1].ok || x[1].redirected) throw new Error("falhou " + u);
+        return sameBody(x[0], x[1]).then(function (same) { return {u: u, fresh: x[1], had: !!x[0], same: same}; });
+      });
+    })).then(function (all) {
+      if (all.every(function (x) { return x.same; })) return;
+      return Promise.all(all.map(function (x) { return c.put(x.u, x.fresh); })).then(function () {
+        if (!all.every(function (x) { return x.had; })) return;
+        return self.clients.matchAll({type: "window"}).then(function (list) {
+          list.forEach(function (cl) { cl.postMessage({type: "pipo-update"}); });
         });
       });
     });

@@ -323,14 +323,14 @@
       ".pipo-login[hidden]{display:none}" +
       ".pipo-login form{width:100%;max-width:360px;background:var(--surface,#fff);border:1px solid var(--line,#dde3e1);border-radius:14px;padding:28px 24px;box-shadow:0 6px 20px rgba(20,30,28,.10);display:flex;flex-direction:column;gap:12px;font-family:Inter,system-ui,sans-serif;color:var(--ink,#182523)}" +
       ".pipo-login h2{margin:0;font-family:Manrope,Inter,sans-serif;font-size:20px;font-weight:800}" +
-      ".pipo-login .sub{margin:-6px 0 6px;color:var(--muted,#788481);font-size:13px}" +
+      ".pipo-login .sub{margin:2px 0 0;color:var(--muted,#788481);font-size:13px}" +
       ".pipo-login label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--ink-2,#465350)}" +
       ".pipo-login input{font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line-strong,#c7cfcc);border-radius:8px;background:var(--surface,#fff);color:var(--ink,#182523)}" +
       ".pipo-login input:focus{outline:none;border-color:var(--accent,#2c7a72);box-shadow:0 0 0 3px var(--accent-weak,#e2f0ee)}" +
       ".pipo-login button{font:inherit;font-weight:700;font-size:14px;padding:11px;border:0;border-radius:8px;background:var(--accent,#2c7a72);color:var(--accent-ink,#fff);cursor:pointer;margin-top:4px}" +
       ".pipo-login button[disabled]{opacity:.6;cursor:default}" +
       ".pipo-login .err{min-height:18px;font-size:13px;color:var(--danger,#b6403a)}" +
-      ".pipo-login .brand{display:flex;align-items:center;gap:10px;margin-bottom:4px}" +
+      ".pipo-login .brand{display:flex;align-items:center;gap:12px;margin-bottom:10px}" +
       ".pipo-login .brand img{width:40px;height:40px}" +
       ".user-pill{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2,#465350)}" +
       ".user-pill[hidden]{display:none}" +
@@ -351,6 +351,8 @@
     document.head.appendChild(st);
   }
 
+  // Nome e subtítulo da tela de login: os do cadastro da Clínica (vindos de /api/config), senão o padrão.
+  var loginBrand = { nome: "Clínica de Autismo Pipo", sub: "Clínica Multidisciplinar" };
   function showLogin(message) {
     if (!loginEl) {
       var logo = document.querySelector(".brand-mark");
@@ -359,8 +361,8 @@
       loginEl.innerHTML =
         '<form autocomplete="on">' +
           '<div class="brand">' + (logo ? '<img alt="" src="' + logo.getAttribute("src") + '">' : "") +
-            '<div><h2>Clínica de Autismo Pipo</h2></div></div>' +
-          '<p class="sub">Clínica de Autismo Pipo — entre com seu e-mail e senha.</p>' +
+            '<div><h2>' + escapeHtml(loginBrand.nome) + '</h2>' +
+            '<p class="sub">' + escapeHtml(loginBrand.sub) + '</p></div></div>' +
           '<label>E-mail<input type="email" name="email" autocomplete="username" required></label>' +
           '<label>Senha<input type="password" name="password" autocomplete="current-password" required></label>' +
           '<div class="err" role="alert"></div>' +
@@ -568,6 +570,10 @@
       return r.json();
     }).then(function (cfg) {
       // Cor dos botões da clínica já na tela de login (null = padrão; ausente = não leu).
+      if (cfg.clinica) {
+        if (cfg.clinica.nome) loginBrand.nome = cfg.clinica.nome;
+        if (cfg.clinica.subtitulo) loginBrand.sub = cfg.clinica.subtitulo;
+      }
       if (cfg.theme !== undefined && window.pipoTheme) window.pipoTheme(cfg.theme && cfg.theme.corBotoes, cfg.theme && cfg.theme.corTexto);
       if (!window.supabase || !window.supabase.createClient) throw new Error("biblioteca do Supabase não carregou");
       client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {

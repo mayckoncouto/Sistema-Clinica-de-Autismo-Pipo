@@ -31,7 +31,9 @@ async function clinicInfo(url) {
     var d = (rows && rows[0] && rows[0].data) || {};
     var c = HEX.test(String(d.corBotoes || "").trim()) ? String(d.corBotoes).trim() : null;
     var t = HEX.test(String(d.corTexto || "").trim()) ? String(d.corTexto).trim() : null;
-    return { theme: c ? { corBotoes: c, corTexto: t } : null, redes: cleanRedes(d.redes) };
+    var txt = function (v) { v = String(v == null ? "" : v).trim(); return v ? v.slice(0, 120) : null; };
+    return { theme: c ? { corBotoes: c, corTexto: t } : null, redes: cleanRedes(d.redes),
+      clinica: { nome: txt(d.nome), subtitulo: txt(d.subtitulo) } };
   } catch (e) {
     return undefined;
   } finally {
@@ -49,7 +51,7 @@ module.exports = async function handler(req, res) {
   }
   var out = { supabaseUrl: url, supabaseAnonKey: anonKey };
   var info = await clinicInfo(url);
-  if (info !== undefined) { out.theme = info.theme; out.redes = info.redes; }
+  if (info !== undefined) { out.theme = info.theme; out.redes = info.redes; out.clinica = info.clinica; }
   res.setHeader("Cache-Control", "public, max-age=60");
   res.status(200).json(out);
 };
