@@ -3735,3 +3735,20 @@ locais; permissão própria **Conector Claude** (`conector_claude`, ver; grupo M
   (a página do link usa).
 - Produção (2026-10-10): conector "Clínica Pipo" ligado no Claude pelo usuário (registro automático/DCR) e testado
   (listar_listas, listar_tarefas OK; `mcp_calls` grava `app = "Claude"`). Escrita ligada pelo usuário (secret `PIPO_MCP_ESCRITA=1`, 2026-10-10).
+
+## App instalável no celular (PWA) (2026-10-11)
+Decisão do usuário: continuar com o site adaptado (sem app de loja) e torná-lo instalável.
+- `manifest.webmanifest` (nome "Clínica de Autismo Pipo", `short_name` "Pipo", `display: standalone`, fundo branco)
+  e ícones em `icons/` (192, 512, `maskable-512` com fundo branco e `apple-touch-icon` 180 com fundo branco),
+  gerados a partir do `favicon.png` (128px, ampliado — uma logo maior deixaria o ícone mais nítido). Metas
+  `apple-mobile-web-app-*`, `theme-color` no `<head>` (dentro do APP-HEAD).
+- `sw.js` (service worker, na raiz; `vercel.json` com `no-cache` para ele e o manifesto): guarda página + `js/` +
+  ícones + supabase-js; abre com a cópia guardada e confere a página no servidor (`refreshShell`: compara o texto;
+  mudou = baixa página e `js/` JUNTOS e avisa as abas com `pipo-update`). NUNCA guarda dados: `/api/`, Supabase,
+  `/c/`, `/cadastro`, `/oauth` passam direto. Eventos `push`/`notificationclick` prontos para as notificações (etapa
+  futura). Arquivo novo do sistema em `js/`: acrescentar em `SHELL` e trocar `VERSION`.
+- Script depois de `js/pipo-supabase.js` (FORA dos marcadores; só registra em https): registra o `sw.js`, mostra a
+  barra "Nova versão do sistema disponível — Atualizar / Agora não" (`#pwaUpdate`), pede conferência ao voltar para o
+  app (`visibilitychange`), `window.pipoInstallApp` (pedido de instalação do Android/computador ou abre a Ajuda),
+  `window.pipoIsInstalled`. Menu Acesso → **Instalar app** (`data-act="instalar"`, some quando já aberto pelo ícone).
+  Ajuda: tópico `instalar-app` (`window.pipoOpenHelpTopic`).

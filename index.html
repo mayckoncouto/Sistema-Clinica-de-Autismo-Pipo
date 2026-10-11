@@ -33,7 +33,13 @@
 </script>
 <title>Clínica de Autismo Pipo</title>
 <link rel="icon" type="image/png" href="/favicon.png" id="favIcon">
-<link rel="apple-touch-icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pipo">
 <meta name="description" content="Sistema de agendas de atendimento da Clínica de Autismo Pipo — grade semanal por sala, terapeuta e paciente.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2461,6 +2467,56 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
 <!-- APP-HEAD:END -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/js/pipo-supabase.js"></script>
+<script>
+/* App instalável (fora dos marcadores: os testes não usam).
+ * Registra o sw.js (guarda os arquivos do sistema no aparelho), mostra "Nova versão
+ * disponível — Atualizar" quando o sw.js baixa uma versão nova e cuida do item
+ * "Instalar app" do menu Acesso (window.pipoInstallApp). */
+(function(){
+  var deferred = null;
+  window.pipoIsInstalled = function(){
+    return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  };
+  window.pipoCanInstallPrompt = function(){ return !!deferred; };
+  window.addEventListener("beforeinstallprompt", function(e){ e.preventDefault(); deferred = e; });
+  window.addEventListener("appinstalled", function(){ deferred = null; });
+  window.pipoInstallApp = function(){
+    if (deferred){ var d = deferred; deferred = null; d.prompt(); return; }
+    if (window.pipoOpenHelpTopic) window.pipoOpenHelpTopic("instalar-app");
+  };
+  function showUpdate(){
+    if (document.getElementById("pwaUpdate")) return;
+    var bar = document.createElement("div");
+    bar.id = "pwaUpdate"; bar.setAttribute("role", "status");
+    bar.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:2000;" +
+      "display:flex;align-items:center;gap:12px;max-width:calc(100vw - 32px);padding:10px 12px 10px 16px;border-radius:12px;" +
+      "background:var(--surface,#fff);color:var(--ink,#1f2b29);border:1px solid var(--line,#d8dee5);box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:14px";
+    bar.innerHTML = '<span>Nova versão do sistema disponível.</span>' +
+      '<button type="button" class="btn primary" style="height:36px">Atualizar</button>' +
+      '<button type="button" class="btn" aria-label="Agora não" style="height:36px">Agora não</button>';
+    var b = bar.querySelectorAll("button");
+    b[0].onclick = function(){ location.reload(); };
+    b[1].onclick = function(){ bar.remove(); };
+    document.body.appendChild(bar);
+  }
+  if ("serviceWorker" in navigator && location.protocol === "https:"){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("/sw.js").then(function(reg){
+        // Ao voltar para o app depois de um tempo, confere se há versão nova.
+        document.addEventListener("visibilitychange", function(){
+          if (document.visibilityState === "visible"){
+            reg.update().catch(function(){});
+            if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({type: "pipo-check"});
+          }
+        });
+      }).catch(function(){});
+      navigator.serviceWorker.addEventListener("message", function(e){
+        if (e.data && e.data.type === "pipo-update") showUpdate();
+      });
+    });
+  }
+})();
+</script>
 </head>
 <body>
 <!-- APP-BODY:START -->
@@ -20778,6 +20834,21 @@ var HELP_TOPICS = [
       "Baixe um backup antes de qualquer atualização do banco."
     ],
     who: "Permissão <b>Backup</b> para baixar; restaurar, só o <b>Administrador</b>."},
+  {id: "instalar-app", group: "Acesso", title: "Instalar no celular", mod: null,
+    purpose: "Pôr o sistema na tela inicial do celular (ou do computador) com a logo da clínica. Ao tocar no ícone ele abre em tela cheia, sem a barra do navegador, como um aplicativo.",
+    steps: [
+      "<b>iPhone (Safari):</b> abra o sistema no Safari, toque em <b>Compartilhar</b> (o quadrado com a seta para cima) e depois em <b>Adicionar à Tela de Início</b> → <b>Adicionar</b>.",
+      "<b>Android (Chrome):</b> abra o sistema no Chrome, toque em Acesso → <b>Instalar app</b> (ou no menu ⋮ do Chrome → <b>Instalar app</b> / <b>Adicionar à tela inicial</b>) e confirme.",
+      "<b>Computador (Chrome ou Edge):</b> Acesso → <b>Instalar app</b>, ou o ícone de instalar na barra de endereço.",
+      "Depois é só tocar no ícone <b>Pipo</b> na tela inicial e entrar com o seu e-mail e senha (o login fica guardado)."
+    ],
+    rules: [
+      "O celular guarda os arquivos do sistema: ele abre mais rápido e confere sozinho se há versão nova. Quando houver, aparece embaixo “Nova versão do sistema disponível” → toque em <b>Atualizar</b>.",
+      "Os dados (pacientes, agenda, CRM) não ficam guardados no aparelho: tudo continua vindo do servidor, então é preciso internet para usar.",
+      "O item <b>Instalar app</b> some do menu Acesso quando o sistema já está aberto pelo ícone instalado.",
+      "Para tirar: segure o ícone na tela inicial e escolha remover (não apaga nada do sistema)."
+    ],
+    who: "Todos os usuários."},
   {id: "conector-claude", group: "Acesso", title: "Conector Claude", mod: "conector_claude",
     purpose: "Usar o CRM e a busca de pacientes conversando com o Claude (claude.ai ou aplicativo), com o seu próprio login.",
     steps: [
@@ -20873,6 +20944,7 @@ function openHelp(topicId){
   renderHelp();
 }
 window.pipoOpenHelp = function(){ openHelp(null); };
+window.pipoOpenHelpTopic = function(id){ openHelp(id); };
 // Botão "?" na barra de cada tela: abre o guia no tópico daquela tela.
 function helpTopicForTab(tab){
   if (tab === "salas") return state.salasView === "grupos" ? "grupos" : "salas";

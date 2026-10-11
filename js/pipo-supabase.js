@@ -429,7 +429,9 @@
              (isAdmin() ? '<button type="button" role="menuitem" data-act="sistema">Sistema</button>' : "")],
             // Pessoal
             [(canDefault("senha", "view", true) ? '<button type="button" role="menuitem" data-act="senha">Senha</button>' : ""),
-             (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : "")],
+             (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : ""),
+             // App instalável: some quando o sistema já está aberto pelo ícone da tela inicial.
+             ((window.pipoInstallApp && !(window.pipoIsInstalled && window.pipoIsInstalled())) ? '<button type="button" role="menuitem" data-act="instalar">Instalar app</button>' : "")],
             ['<button type="button" role="menuitem" data-act="sair">Sair</button>']
           ]) +
         "</div>" +
@@ -462,6 +464,8 @@
         client.auth.signOut().then(function () { location.reload(); });
       } else if (act === "clinica") {
         if (window.pipoOpenClinic) window.pipoOpenClinic();
+      } else if (act === "instalar") {
+        if (window.pipoInstallApp) window.pipoInstallApp();
       } else if (act === "ajuda") {
         if (window.pipoOpenHelp) window.pipoOpenHelp();
       } else if (act === "sistema") {
