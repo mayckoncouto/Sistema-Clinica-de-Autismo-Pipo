@@ -17,7 +17,7 @@ declare l public.intake_links; st text; k text; v text; clean jsonb := '{}'::jso
                        'rg', 'cns', 'entrada', 'respProfissao', 'convenioOutro', 'maeNome', 'maeCpf', 'maeProfissao', 'paiNome', 'paiCpf', 'paiProfissao',
                        'finNome', 'finDoc', 'finTelefone', 'finEmail', 'escolaSerie', 'professor', 'mediador', 'medico',
                        'diagData', 'suporte', 'comunicacao', 'alergias', 'medicacoes', 'restricoes', 'telNome', 'finQuem'];
-  lk text; e jsonb; arr jsonb; o jsonb; ra jsonb := '{}'::jsonb; dd text; pp text; cell jsonb;
+  lk text; it jsonb; arr jsonb; o jsonb; ra jsonb := '{}'::jsonb; dd text; pp text; cell jsonb;
 begin
   select * into l from public.intake_links where token = p_token for update;
   st := public.intake_link_state(l);
@@ -31,10 +31,10 @@ begin
   foreach lk in array array['retirada', 'protetiva'] loop
     arr := '[]'::jsonb;
     if jsonb_typeof(p_data -> lk) = 'array' then
-      for e in select x from jsonb_array_elements(p_data -> lk) with ordinality t(x, n) where jsonb_typeof(x) = 'object' order by n limit 10 loop
+      for it in select x from jsonb_array_elements(p_data -> lk) with ordinality t(x, n) where jsonb_typeof(x) = 'object' order by n limit 10 loop
         o := '{}'::jsonb;
         foreach k in array array['nome', 'rel', 'telefone', 'obs'] loop
-          v := left(btrim(coalesce(e ->> k, '')), 300);
+          v := left(btrim(coalesce(it ->> k, '')), 300);
           if v <> '' then o := o || jsonb_build_object(k, v); end if;
         end loop;
         if coalesce(o ->> 'nome', '') <> '' then arr := arr || jsonb_build_array(o); end if;

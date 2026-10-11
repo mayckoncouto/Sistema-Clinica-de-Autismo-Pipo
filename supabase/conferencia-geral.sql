@@ -237,7 +237,7 @@ exp_fn(n, h) as (values
   ('intake_links_stamp', '01f43a1b4d9087e4552afc0b4139cf8d'),
   ('intake_names', '9d93a0b95e180a0e14556b8c6540c042'),
   ('intake_remind', '121cc7867970e60ee6c3063a461f4bbf'),
-  ('intake_send', '3dabc0d7669fed10ad44c08831310173'),
+  ('intake_send', 'f8d670208c2fe642f940e0cd3944faf4'),
   ('intake_submissions_stamp', 'ae3cc3d36f0d1bcc56cea3d8ef25d0b0'),
   ('is_active_user', '90f6bb0a886bff18323bba87246ea185'),
   ('is_admin', 'fb5e9b633e70f9594f176359718da808'),
