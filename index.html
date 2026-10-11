@@ -1977,6 +1977,9 @@ body.pat-col-resizing *{user-select:none}
 .spec-sum-ok{background:#e3f4ea;color:#1f7a45}
 .spec-sum-falta{background:#fdf1dc;color:#9a6212}
 .spec-sum-sobra{background:#fbe4e2;color:#b6403a}
+.card-warn{color:#a3352f}.card-warn.soon{color:#8a5a10}
+.pt-card-warn{margin-left:6px;vertical-align:middle;white-space:nowrap}
+@media (max-width:760px){.pt-card-warn{display:none}}
 .dp-btn .dp-in:focus,.dp-btn .dp-in:focus-visible{outline:none!important;box-shadow:none!important;border:0!important;background:transparent!important}
 .dp-btn .dp-chev{display:inline-flex;color:var(--muted);flex:none}
 .field .dp-btn,.prof-hours .dp-btn,.cl-hours .dp-btn,.rp-form .dp-btn{width:100%}
@@ -6197,7 +6200,7 @@ function crmPersonName(id){ var p = CRM.people.filter(function(x){ return x.id =
 function crmTagColor(s){ var h = 0; s = normText(s); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return ["#2e9d57", "#3b82d6", "#a855f7", "#ea6a0a", "#0e9f9a", "#d64545", "#64748b", "#c2410c"][h % 8]; }
 function crmWhoName(x){ var p = x.patient_id ? findPatientById(x.patient_id) : null; return p ? p.nome : ((x.lead || {}).nome || ""); }
 function crmIsLead(x){ return !x.patient_id && !!(x.lead || {}).nome; }
-function crmConvName(x){ var p = x.patient_id ? findPatientById(x.patient_id) : null; return p ? (p.convenio || "") : ((x.lead || {}).convenio || ""); }
+function crmConvName(x){ var p = x.patient_id ? findPatientById(x.patient_id) : null; return p ? (p.convenio || patConvDefault(rawPatient(p.id)).nome || "") : ((x.lead || {}).convenio || ""); }
 function crmTaskTags(task){
   var out = (task.tags || []).slice();
   var lead = task.lead || {};
@@ -7492,6 +7495,8 @@ function crmOpenTask(task, opts){
     var ld = readLead(), pre = {nome: ld.nome || ""};
     if (ld.telefone) pre.telefones = [{numero: ld.telefone, nome: "", via: "whatsapp"}];
     if (ld.diagnostico) pre.cid = ld.diagnostico;
+    var ldConv = ld.convenio ? (state.convenios || []).filter(function(c){ return normText(c.name) === normText(ld.convenio); })[0] : null;
+    if (ldConv) pre.convenioPadrao = ldConv.id;
     var snapshot = {title: val("crmTitleIn"), st: stEl.value, due: val("crmDue"), prio: val("crmPrio"), desc: val("crmDesc"),
       people: Array.prototype.map.call(pPanel.querySelectorAll("input:checked"), function(c){ return c.value; }), lead: ld};
     openPatientModal(null, {prefill: pre, noTreatment: true, onSaved: function(rec){
@@ -7554,8 +7559,10 @@ function crmLeadTreatment(patId, convName){
   if (!can("tratamentos", "create")){ showToast("O tratamento não foi criado: sem permissão para incluir Tratamentos.", true); return Promise.resolve(false); }
   var nm = String(convName || "").trim(), cv = nm ? (state.convenios || []).filter(function(c){ return normText(c.name) === normText(nm); })[0] : null;
   var now = new Date().toISOString(), today = trTodayIso();
+  var pcd = patConvDefault(rawPatient(patId));
+  if (!cv && !nm && pcd.id){ cv = (state.convenios || []).filter(function(c){ return c.id === pcd.id; })[0] || null; }
   var rec = {id: uid("tr"), patientId: patId, inicio: today, status: "ativo", statusEm: today, obs: "", criadoEm: now, atualizadoEm: now,
-    convenioId: cv ? cv.id : "", convenio: cv ? cv.name : nm, plano: "", sessoesMes: "", specHours: [],
+    convenioId: cv ? cv.id : "", convenio: cv ? cv.name : nm, plano: pcd.plano, sessoesMes: "", specHours: [],
     vencPor: "sem", totalSessoes: "", duracaoMeses: "", validoAte: ""};
   trHistAdd(rec, {acao: "criado", para: "ativo"});
   var list = (state.treatments || []).concat([rec]);
@@ -10218,7 +10225,7 @@ function renderPatientsTab(){
     var col = (!hasTr || activeTreatment(p.id)) ? patientColor(p) : null;
     var dot = col ? '<span class="pcolor-dot" style="background:'+col+'" title="Cor por idade/ABA"></span>' : '';
     return '<tr data-id="'+esc(p.id)+'"'+(p.inativo ? ' class="is-inactive"' : '')+'>' +
-      '<td class="pt-nome">'+dot+esc(p.nome)+(patHasProtetiva(p) ? ' '+protShieldHtml() : '')+'</td>' +
+      '<td class="pt-nome">'+dot+esc(p.nome)+(patHasProtetiva(p) ? ' '+protShieldHtml() : '')+patCardChip(p)+'</td>' +
       '<td class="pt-muted">'+idadeTxt+'</td>' +
       cellTxt(patFirstPhone(p)) + cellTxt(patFirstEmail(p)) +
       cellTxt(p.escolaId ? patRegName("escolas", p.escolaId) : "") +
@@ -10853,6 +10860,7 @@ var PAT_SECTIONS = [
   {id: "ident", label: "Identificação"}, {id: "endereco", label: "Endereço"},
   {id: "filiacao", label: "Filiação"}, {id: "rotina", label: "Responsáveis pela retirada"}, {id: "protetiva", label: "Medida protetiva"},
   {id: "contato", label: "Contato"}, {id: "financeiro", label: "Responsável financeiro"},
+  {id: "convenio", label: "Convênio"},
   {id: "saude", label: "Saúde"}, {id: "escola", label: "Escola"}, {id: "rotinaatual", label: "Rotina atual"}, {id: "admin", label: "Administrativo"}
 ];
 var CID_SUGGESTIONS = [
@@ -10914,6 +10922,12 @@ var PAT_FIELDS = [
   {key: "telefones", label: "Telefones", sec: "contato", type: "phones", hint: "pelo menos um"},
   {key: "emails", label: "E-mails", sec: "contato", type: "emails", hint: "pelo menos um"},
   {key: "financeiro", label: "Responsável financeiro", sec: "financeiro", type: "fin", fixed: true, hint: "nome e CPF/CNPJ"},
+  // Convênio padrão do paciente: o tratamento novo já começa com ele (pode ser trocado no tratamento).
+  // Chaves próprias (convenioPadrao…) para não se misturar com convênio/plano do tratamento.
+  {key: "convenioPadrao", label: "Convênio", sec: "convenio", type: "reg", reg: "convenios", span2: true},
+  {key: "planoPadrao", label: "Plano", sec: "convenio"},
+  {key: "carteirinha", label: "Nº da carteirinha", sec: "convenio"},
+  {key: "carteirinhaValidade", label: "Validade da carteirinha", sec: "convenio", type: "date"},
   {key: "escolaId", label: "Escola", sec: "escola", type: "reg", reg: "escolas", span2: true},
   {key: "escolaSerie", label: "Série / ano", sec: "escola"},
   {key: "escolaTurno", label: "Turno da escola", sec: "escola", type: "select", opts: ["Manhã", "Tarde", "Integral", "Noite"]},
@@ -11089,6 +11103,22 @@ function patNormalize(v){
     return role ? Object.assign({}, m, {quem: role}) : m;
   });
   return o;
+}
+// Convênio padrão do cadastro do paciente (o tratamento novo já começa com ele).
+function patConvDefault(p){
+  p = p || {};
+  var c = p.convenioPadrao ? (state.convenios || []).filter(function(x){ return x.id === p.convenioPadrao; })[0] : null;
+  return {id: c ? c.id : "", nome: c ? c.name : "", plano: String(p.planoPadrao || "").trim()};
+}
+// Situação da carteirinha: vencida, vencendo (30 dias) ou "" (em dia / sem validade).
+function patCardState(p){
+  var iso = p && p.carteirinhaValidade; if (!iso) return null;
+  var days = Math.round((agdParse(iso) - agdParse(trTodayIso())) / 86400000);
+  return {days: days, state: days < 0 ? "vencida" : days <= 30 ? "vencendo" : ""};
+}
+function patCardChip(p){
+  var c = patCardState(p); if (!c || !c.state) return "";
+  return ' <span class="tr-mchip pt-card-warn ' + (c.state === "vencida" ? "tr-falta" : "tr-sobra") + '" title="Carteirinha ' + (c.state === "vencida" ? "vencida em " : "vence em ") + esc(trBr(p.carteirinhaValidade)) + '">' + (c.state === "vencida" ? "Cart. vencida" : "Cart. vence") + '</span>';
 }
 // Faltando? (para obrigatórios e para o contador de pendências)
 function patValueEmpty(f, d){
@@ -11718,10 +11748,13 @@ function openPatientModal(p, opts){
     if (isNew) list.push(rec); else list = list.map(function(x){ return x.id === rec.id ? rec : x; });
     var hData = HEALTH.map && healthCanSee() && healthCanEdit() ? healthPick(rec) : null;
     var oldName = isNew ? "" : String((rawPatient(v.id) || v).nome || "");
+    var rawOld = isNew ? null : Object.assign({}, rawPatient(v.id) || v);
     writePatients(list).then(function(saved){
       var h = hData ? healthSave(rec.id, Object.assign({}, HEALTH.map[rec.id] || {}, hData)) : null;
       var rn = saved === true && oldName && oldName.trim() !== String(rec.nome).trim() ? patientRenameEverywhere(rec.id, oldName, rec.nome) : null;
       return Promise.all([h, rn]);
+    }).then(function(){
+      return isNew ? null : offerApplyConvenio(rawOld, rec);
     }).then(function(){
       close();
       if (opts.onSaved) opts.onSaved(rec);
@@ -11731,6 +11764,31 @@ function openPatientModal(p, opts){
   });
 }
 
+// Mudou o convênio (ou o plano) no cadastro do paciente: pergunta se vale para o tratamento ativo.
+// Tratamentos antigos nunca mudam sozinhos (histórico, relatórios e pacote seguem como estavam).
+function offerApplyConvenio(oldRec, rec){
+  var o = patConvDefault(oldRec), n = patConvDefault(rec);
+  if (!n.id && !n.plano) return Promise.resolve();
+  var convChanged = o.id !== n.id, planoChanged = o.plano !== n.plano;
+  if (!convChanged && !planoChanged) return Promise.resolve();
+  var t = activeTreatment(rec.id); if (!t) return Promise.resolve();
+  var tc = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : (t.convenio || "");
+  var newConv = convChanged && n.id && t.convenioId !== n.id, newPlano = planoChanged && n.plano !== String(t.plano || "").trim();
+  if (!newConv && !newPlano) return Promise.resolve();
+  if (!can("tratamentos", "edit")){ showToast("O tratamento ativo continua com " + (tc || "outro convênio") + ": quem edita Tratamentos pode ajustá-lo.", false); return Promise.resolve(); }
+  return confirmDialog({title: "Convênio do tratamento ativo",
+    message: "O cadastro do paciente agora tem " + (newConv ? "o convênio <b>" + esc(n.nome) + "</b>" : "o plano <b>" + esc(n.plano) + "</b>") + ".<br>O tratamento ativo está com <b>" + esc(tc || "sem convênio") + "</b>" + (t.plano ? " · " + esc(t.plano) : "") + ".<br>Aplicar ao tratamento ativo? Os tratamentos antigos não mudam.",
+    confirmLabel: "Aplicar ao tratamento", cancelLabel: "Só no cadastro"}).then(function(ok){
+    if (!ok) return;
+    var now = new Date().toISOString();
+    var nt = Object.assign({}, t, {atualizadoEm: now});
+    if (newConv){ nt.convenioId = n.id; nt.convenio = n.nome; nt.plano = n.plano; }
+    else nt.plano = n.plano;
+    function cp(nome, plano){ return [nome, plano].filter(Boolean).join(" · "); }
+    trHistAdd(nt, {acao: "convenio", de: cp(tc, String(t.plano || "").trim()), para: cp(newConv ? n.nome : tc, nt.plano)});
+    return writeTreatments(state.treatments.map(function(x){ return x.id === t.id ? nt : x; }));
+  });
+}
 // Pacientes → Outras opções → "Campos obrigatórios": quais campos aparecem e quais são obrigatórios.
 // Campos do formulário do link de cadastro (cadastro.html). Mesma lista na página pública
 // (LINK_FIELDS de cadastro.html) e na função intake_send do banco (obrigatórios).
@@ -11743,6 +11801,7 @@ var LINK_FIELDS = [
   {key: "email", label: "E-mail"},
   {key: "endereco", label: "Endereço", hint: "CEP, número, rua, bairro, cidade e UF"},
   {key: "convenio", label: "Convênio"},
+  {key: "plano", label: "Plano", off: true}, {key: "carteirinha", label: "Nº da carteirinha", off: true}, {key: "carteirinhaValidade", label: "Validade da carteirinha", off: true},
   {key: "comoConheceu", label: "Como conheceu a clínica"},
   {key: "diagnostico", label: "Qual diagnóstico?"},
   {key: "laudo", label: "Possui diagnóstico?"},
@@ -11771,8 +11830,9 @@ var LINK_OF_FIELD = {nome: "nome", nascimento: "nascimento", cpf: "cpf", sexo: "
   comoConheceu: "comoConheceu", cid: "diagnostico", escolaId: "escola", escolaTurno: "escolaTurno", obs: "obs",
   rg: "rg", cns: "cns", entrada: "entrada", mae: "mae", pai: "pai", rotina: "rotina", protetiva: "protetiva", financeiro: "financeiro",
   escolaSerie: "escolaSerie", professor: "professor", mediador: "mediador", rotinaAtual: "rotinaAtual", medicoId: "medico",
-  diagData: "diagData", suporte: "suporte", comunicacao: "comunicacao", alergias: "alergias", medicacoes: "medicacoes", restricoes: "restricoes"};
-var LINK_ONLY = ["convenio", "laudo"];
+  diagData: "diagData", suporte: "suporte", comunicacao: "comunicacao", alergias: "alergias", medicacoes: "medicacoes", restricoes: "restricoes",
+  convenioPadrao: "convenio", planoPadrao: "plano", carteirinha: "carteirinha", carteirinhaValidade: "carteirinhaValidade"};
+var LINK_ONLY = ["laudo"];
 function openPatientFieldsModal(){
   if (!can("campos_paciente", "view")){ showToast(permDeniedMsg("campos_paciente", "view"), true); return; }
   var canEdit = can("campos_paciente", "edit");
@@ -11879,6 +11939,7 @@ function patientFichaHtml(p){
       (v.emails || []).map(function(m){ return row("E-mail", m.email + (m.nome ? " — " + m.nome : "")); }).join("")],
     ["Responsável financeiro", row("Nome", v.financeiro.nome) + row("CPF/CNPJ", v.financeiro.doc && v.financeiro.doc.length === 11 ? formatCpf(v.financeiro.doc) : v.financeiro.doc) +
       row("Telefone", v.financeiro.telefone ? formatPhone(v.financeiro.telefone) : "") + row("E-mail", v.financeiro.email) + row("Endereço", v.financeiro.endereco)],
+    ["Convênio", row("Convênio", regName("convenios", v.convenioPadrao)) + row("Plano", v.planoPadrao) + row("Carteirinha", v.carteirinha) + row("Validade da carteirinha", v.carteirinhaValidade ? trBr(v.carteirinhaValidade) : "")],
     ["Escola", row("Escola", regName("escolas", v.escolaId)) + row("Série / ano", v.escolaSerie) + row("Turno", v.escolaTurno) + row("Professor(a)", v.professor) + row("Mediador / AT", v.mediador)],
     ["Rotina atual", ROUTINE_DAYS.map(function(d){
       var m = routineCell(v, d[0], "m"), tt = routineCell(v, d[0], "t");
@@ -18980,6 +19041,7 @@ function trHistHtml(t){
     var what = e.acao === "criado" ? "Tratamento criado como <b>" + esc(trLabel(TR_STATUS, e.para)) + "</b>"
       : e.acao === "motivo" ? "Motivo do cancelamento alterado"
       : e.acao === "importado" ? "Atualizado pela importação de planilha"
+      : e.acao === "convenio" ? "Convênio: " + esc(e.de || "—") + " → <b>" + esc(e.para || "—") + "</b> (aplicado pelo cadastro do paciente)"
       : "Status: " + esc(trLabel(TR_STATUS, e.de)) + " → <b>" + esc(trLabel(TR_STATUS, e.para)) + "</b>" + (e.auto ? " (outro tratamento ficou ativo)" : "");
     var mot = e.motivoNome ? " · Motivo: <b>" + esc(e.motivoNome) + "</b>" : "";
     return '<li><span class="tr-hist-when">' + esc(when) + '</span>' + what + mot + (e.por ? ' · por ' + esc(e.por) : '') +
@@ -19771,6 +19833,12 @@ function openTreatmentModal(t, opts){
   var base = src || (pid ? (rawPatient(pid) || {}) : {});
   var v = {};
   TREAT_FIELDS.forEach(function(k){ if (base[k] !== undefined) v[k] = base[k]; });
+  // Tratamento novo (sem copiar outro): convênio e plano do cadastro do paciente, se o tratamento ainda não tem.
+  if (!src && pid){
+    var pcd = patConvDefault(rawPatient(pid));
+    if (pcd.id){ v.convenioId = pcd.id; v.convenio = pcd.nome; }
+    if (pcd.plano) v.plano = pcd.plano;
+  }
   var d = {
     inicio: isNew ? trTodayIso() : (t.inicio || ""),
     termino: isNew ? "" : (t.termino || ""),
@@ -19793,7 +19861,7 @@ function openTreatmentModal(t, opts){
       '<div class="field"><label for="trDesp">Descontos</label><input type="text" inputmode="decimal" id="trDesp" placeholder="R$ 0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.descontos === "" ? "" : fmtMoney(parseMoney(d.descontos))) + '"></div>' +
       '<div class="field"><label>Valor final</label><input type="text" id="trFinal" disabled></div>' +
     '</div>') : '';
-  var ed = treatFieldsEditor(v, {afterConv: moneyRow, beforeHours: '<div class="tr-sec">Observações</div><div class="field"><textarea id="trObs" rows="2" placeholder="Opcional" aria-label="Observações">' + esc(d.obs) + '</textarea></div>'});
+  var ed = treatFieldsEditor(v, {afterConv: '<div class="pat-count" id="trConvHint" hidden></div>' + moneyRow, beforeHours: '<div class="tr-sec">Observações</div><div class="field"><textarea id="trObs" rows="2" placeholder="Opcional" aria-label="Observações">' + esc(d.obs) + '</textarea></div>'});
   var wasCancelled = !isNew && t.status === "cancelado" && sysOn("tr_cancelado_def");
   var mots = activeOnly(cancelReasonsList(), isNew ? "" : t.motivoCancel);
   if (!isNew && t.motivoCancel && !mots.some(function(m){ return m.id === t.motivoCancel; })) mots.push({id: t.motivoCancel, name: t.motivoCancelNome || t.motivoCancel});
@@ -19895,6 +19963,24 @@ function openTreatmentModal(t, opts){
     syncMore();
     var ps = document.getElementById("trPat"); if (ps) ps.addEventListener("change", function(){ setTimeout(syncMore, 0); });
   })();
+  // Dica sob o Convênio: o que está no cadastro do paciente (convênio, plano, carteirinha) e se este tratamento usa outro.
+  function trConvHint(){
+    var el = document.getElementById("trConvHint"); if (!el) return;
+    var sel = document.getElementById("trPat"), pidNow = (sel && sel.value) || pid, pr = pidNow ? rawPatient(pidNow) : null;
+    var pc = patConvDefault(pr), cs = patCardState(pr), ci = document.getElementById("pConv");
+    var typed = ci ? ci.value.trim() : "", cur = typed ? (state.convenios || []).filter(function(x){ return normText(x.name) === normText(typed); })[0] : null;
+    var parts = [];
+    if (pc.id) parts.push("Cadastro do paciente: <b>" + esc(pc.nome) + "</b>" + (pc.plano ? " · " + esc(pc.plano) : ""));
+    if (pc.id && typed && (!cur || cur.id !== pc.id)) parts.push("este tratamento usa outro convênio");
+    if (pr && pr.carteirinha) parts.push("carteirinha " + esc(pr.carteirinha) + (pr.carteirinhaValidade ? " (válida até " + esc(trBr(pr.carteirinhaValidade)) + ")" : ""));
+    if (cs && cs.state === "vencida") parts.push('<b class="card-warn">carteirinha vencida</b>');
+    else if (cs && cs.state === "vencendo") parts.push('<b class="card-warn soon">carteirinha vence em ' + cs.days + (cs.days === 1 ? " dia" : " dias") + '</b>');
+    el.hidden = !parts.length; el.innerHTML = parts.join(" · ");
+  }
+  trConvHint();
+  overlay.addEventListener("input", function(e){ if (e.target.id === "pConv") trConvHint(); });
+  overlay.addEventListener("click", function(){ setTimeout(trConvHint, 160); });
+  overlay.addEventListener("focusout", function(e){ if (e.target.id === "pConv") setTimeout(trConvHint, 200); });
   var trPlanBtn = document.getElementById("trOpenPlan");
   if (trPlanBtn) trPlanBtn.addEventListener("click", function(){ var pid = t.patientId; close(); planFromTreatment(pid); });
   function upFinal(){
@@ -20323,7 +20409,7 @@ var HELP_TOPICS = [
       "CPF enviado igual ao de um paciente já cadastrado: o sistema pergunta se é uma atualização do cadastro dele.",
       "No link não há um campo separado de “responsável”: os dados vão direto para os campos do cadastro. <b>De quem é este telefone?</b> (nome e parentesco) vira o nome do contato do telefone, como WhatsApp. Com a mãe ou o pai no link, <b>Quem é o responsável financeiro?</b> (Mãe, Pai ou Outra pessoa) liga o financeiro à Filiação; com Outra pessoa, a família informa nome, CPF/CNPJ, telefone e e-mail.",
       "<b>Escola</b> e <b>Médico</b>: a família escolhe entre os cadastrados ou marca <b>Outra</b>/<b>Outro</b> e digita o nome. Na revisão, o nome digitado que não está no cadastro aparece nas observações do aviso; corrija o nome e inclua em Cadastros → Escolas ou Médicos.",
-      "<b>Convênio</b>: a família escolhe um dos convênios cadastrados, Particular ou <b>Outro</b> (aparece “Qual convênio?”). O convênio vai para as Observações do cadastro; se for um convênio cadastrado, também entra no tratamento criado.",
+      "<b>Convênio</b>: a família escolhe um dos convênios cadastrados, Particular ou <b>Outro</b> (aparece “Qual convênio?”). O convênio informado vai para as Observações do cadastro; sendo um convênio cadastrado, passa a ser o convênio do paciente e também entra no tratamento criado. Plano, nº da carteirinha e validade da carteirinha também podem ser pedidos no link (Campos obrigatórios).",
       "Laudo, escola ou médico não cadastrados, convênio e observações da família vão para as Observações do cadastro novo. Na revisão de um paciente já cadastrado, pessoas novas da retirada e da medida protetiva entram na lista e a rotina atual só completa os períodos vazios.",
       "A medida protetiva não vai preenchida no link de “Pedir atualização” (o link pode chegar a outra pessoa da família). Dados de saúde enviados pelo link ficam guardados no envio até a revisão: marque esses campos no link só se for preciso.",
       "Link que venceu sem resposta (1 dia) vira uma tarefa no CRM (lista Atendimento) para a recepção cobrar a família e mandar um novo link.",
@@ -20331,11 +20417,12 @@ var HELP_TOPICS = [
     ],
     who: "Quem pode incluir Pacientes gera os links, vê o número no botão Cadastros e revisa os envios."},
   {id: "pacientes", group: "Cadastros", title: "Pacientes", mod: "pacientes", tab: "pacientes",
-    purpose: "Cadastro dos pacientes: identificação, endereço, filiação, quem pode retirar o paciente, contatos, responsável financeiro, escola, saúde e dados administrativos. Convênio, plano, sessões/mês, ABA, especialidades e horário ficam no <b>Tratamento</b> do paciente.",
+    purpose: "Cadastro dos pacientes: identificação, endereço, filiação, quem pode retirar o paciente, contatos, responsável financeiro, convênio, escola, saúde e dados administrativos. Sessões/mês, ABA, especialidades e horário ficam no <b>Tratamento</b> do paciente.",
     steps: [
       "Cadastros → <b>Pacientes</b> → <b>+ Incluir</b>.",
-      "A janela mostra todos os grupos, um embaixo do outro: <b>Identificação</b> (nome, nome social, nascimento, sexo, CPF, RG, Cartão SUS, data de entrada), <b>Endereço</b>, <b>Filiação</b>, <b>Responsáveis pela retirada</b>, <b>Medida protetiva</b>, <b>Contato</b>, <b>Responsável financeiro</b>, <b>Escola</b>, <b>Saúde</b>, <b>Administrativo</b> e o resumo do <b>Tratamento</b>.",
+      "A janela mostra todos os grupos, um embaixo do outro: <b>Identificação</b> (nome, nome social, nascimento, sexo, CPF, RG, Cartão SUS, data de entrada), <b>Endereço</b>, <b>Filiação</b>, <b>Responsáveis pela retirada</b>, <b>Medida protetiva</b>, <b>Contato</b>, <b>Responsável financeiro</b>, <b>Convênio</b>, <b>Escola</b>, <b>Saúde</b>, <b>Administrativo</b> e o resumo do <b>Tratamento</b>.",
       "No <b>Endereço</b>, digite o CEP: rua, bairro, cidade e UF são preenchidos sozinhos; complete o número.",
+      "Em <b>Convênio</b> ficam o convênio do paciente (lista do cadastro de Convênios; <b>+ Incluir</b> no fim da lista), o plano, o nº da carteirinha e a validade da carteirinha. Todo tratamento novo do paciente já começa com esse convênio e esse plano.",
       "Em <b>Filiação</b> ficam Mãe e Pai (nome, CPF e profissão). O botão <b>Responsável</b> ao lado do nome faz da mãe ou do pai o responsável financeiro: nome e CPF passam para o grupo Responsável financeiro e acompanham as correções enquanto o botão estiver marcado. Desmarcado, o responsável financeiro é digitado à parte.",
       "<b>Responsáveis pela retirada</b>: a Mãe e o Pai vêm da <b>Filiação</b> — a caixa <b>Pode retirar o paciente</b>, ao lado de cada um, vem marcada; desmarque quando a pessoa não pode retirar. Em <b>+ Incluir outra pessoa</b> ficam só as outras pessoas (avó, tio, motorista…), com nome, parentesco, telefone e documento.",
       "<b>Medida protetiva</b>: use <b>+ Incluir pessoa impedida</b> para quem NÃO pode retirar o paciente. Escolha <b>Mãe</b>, <b>Pai</b> (o nome vem da Filiação) ou <b>Outra pessoa</b> (nome e relação); depois a observação — ex.: nº do processo — e <b>Válida até</b>, opcional. Mãe ou Pai com medida ativa não aparecem como responsáveis pela retirada. Depois da data, a medida fica como vencida e para de avisar.",
@@ -20350,6 +20437,8 @@ var HELP_TOPICS = [
       "<b>Outras opções ▾</b>: <b>Campos obrigatórios</b>, <b>Imprimir ficha cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica), <b>Mesclar cadastros</b> (só Administrador) e <b>Exportar planilha</b> / <b>Importar planilha</b> (veja o tópico Planilhas)."
     ],
     rules: [
+      "<b>Convênio do cadastro × convênio do tratamento</b>: o do cadastro é o padrão; o tratamento pode usar outro. Ao trocar o convênio ou o plano no cadastro de um paciente que tem tratamento Ativo, o sistema pergunta se aplica ao tratamento ativo (quem pode editar Tratamentos); os tratamentos antigos nunca mudam. A troca fica no Histórico do tratamento.",
+      "<b>Carteirinha</b>: com a validade preenchida, a lista de Pacientes mostra uma etiqueta ao lado do nome quando a carteirinha está vencida ou vence em até 30 dias (no computador), e a janela do tratamento repete o aviso.",
       "<b>Rotina atual</b> (abaixo de Escola): para cada dia de segunda a sexta, manhã e tarde, escolha onde o paciente está (Escola, Terapia (Pipo), Outra terapia, Atividade, Em casa / livre ou Outro) e, se quiser, um detalhe. <b>Terapia (Pipo)</b> e <b>Em casa / livre</b> não avisam ao agendar. <b>Copiar segunda</b>, acima de Manhã ou de Tarde, repete aquele período de segunda nos outros dias (com Desfazer por alguns segundos). Ao agendar no Planner ou na Agenda num período de Escola, Outra terapia, Atividade ou Outro, o sistema avisa (regra em Acesso → Sistema). A rotina sai na ficha impressa e pode ser obrigatória em Campos obrigatórios.",
       "Trocar o nome do paciente no cadastro troca também nos agendamentos do Planner e da Agenda, nas evoluções do Prontuário e no Plano terapêutico. Se outro paciente tem o mesmo nome antigo, nada é trocado (aparece um aviso para conferir à mão).",
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",
@@ -20372,7 +20461,7 @@ var HELP_TOPICS = [
     purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, as especialidades em quadros (cada um com o seu ABA) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
-      "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
+      "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio e o plano do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "Valor, Descontos e Valor final ficam em <b>Convênio, pacote e horário</b>, logo depois de Convênio e Plano. Ao sair do campo, o valor aparece no formato R$ 1.234,56.",
       "Em <b>Especialidades e serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>).",
       "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de início</b> (vazios = qualquer um), <b>Semanas</b> (Todas, 1ª e 3ª, 2ª e 4ª ou uma só) e <b>Sessões seguidas</b> (1 ou 2). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
@@ -25011,6 +25100,12 @@ function ioPatPlan(recs){
     if (Object.keys(end).length) v.endereco = end;
     var fin = ioText(r.finNome), finDoc = digitsOnly(r.finDoc);
     if (fin || finDoc) v.financeiro = {nome: fin, doc: finDoc, telefone: "", email: "", endereco: "", link: ""};
+    var cv0 = ioText(r.convenio);
+    if (cv0){ var c0 = (state.convenios || []).filter(function(c){ return ioKey(c.name) === ioKey(cv0); })[0]; if (c0) v.convenioPadrao = c0.id; else it.warn.push("Convênio não cadastrado: <b>" + esc(cv0) + "</b> (ignorado)."); }
+    var pl0 = ioText(r.plano); if (pl0) v.planoPadrao = pl0;
+    var ca0 = ioText(r.carteirinha); if (ca0) v.carteirinha = ca0;
+    var cvd = ioDate(r.carteirinhaValidade);
+    if (cvd === null) it.warn.push("Validade da carteirinha inválida: ignorada."); else if (cvd) v.carteirinhaValidade = cvd;
     var esc0 = ioText(r.escola);
     if (esc0){ var e0 = (state.schools || []).filter(function(s){ return ioKey(s.name) === ioKey(esc0); })[0]; if (e0) v.escolaId = e0.id; else it.warn.push("Escola não cadastrada: <b>" + esc(esc0) + "</b> (ignorada)."); }
     var h = {};
@@ -25047,7 +25142,8 @@ function ioPatPlan(recs){
 }
 function ioPatLabel(k){ var f = PAT_FIELDS.filter(function(x){ return x.key === k; })[0]; return f ? f.label : k; }
 function ioPatShow(k, v){
-  if (k === "nascimento" || k === "entrada" || k === "diagData") return trBr(v);
+  if (k === "nascimento" || k === "entrada" || k === "diagData" || k === "carteirinhaValidade") return trBr(v);
+  if (k === "convenioPadrao") return patRegName("convenios", v);
   if (Array.isArray(v)) return v.map(function(x){ return x.numero || x.email || x.nome || ""; }).join(", ");
   if (v && typeof v === "object") return Object.keys(v).map(function(s){ return v[s]; }).filter(Boolean).join(", ");
   return v;
@@ -25091,7 +25187,8 @@ function ioPatExportRows(){
       pai: (p.pai || {}).nome || "", paiCpf: (p.pai || {}).cpf ? formatCpf(p.pai.cpf) : "", paiProf: (p.pai || {}).profissao || "",
       telefone: (p.telefones || []).map(function(t){ return formatPhone(t.numero || ""); }).filter(Boolean).join("; "), email: (p.emails || []).map(function(m){ return m.email; }).filter(Boolean).join("; "),
       end_cep: e.cep || "", end_rua: e.rua || "", end_numero: e.numero || "", end_compl: e.compl || "", end_bairro: e.bairro || "", end_cidade: e.cidade || "", end_uf: e.uf || "",
-      finNome: f.nome || "", finDoc: f.doc || "", escola: esc0 || "", escolaSerie: p.escolaSerie || "", escolaTurno: p.escolaTurno || "", professor: p.professor || "", mediador: p.mediador || "",
+      finNome: f.nome || "", finDoc: f.doc || "", convenio: p.convenioPadrao ? patRegName("convenios", p.convenioPadrao) : "", plano: p.planoPadrao || "", carteirinha: p.carteirinha || "", carteirinhaValidade: p.carteirinhaValidade ? trBr(p.carteirinhaValidade) : "",
+      escola: esc0 || "", escolaSerie: p.escolaSerie || "", escolaTurno: p.escolaTurno || "", professor: p.professor || "", mediador: p.mediador || "",
       comoConheceu: p.comoConheceu || "", obs: p.obs || ""};
     if (hs){ o.cid = p.cid || ""; o.diagData = p.diagData ? trBr(p.diagData) : ""; o.suporte = (p.suporte || "").replace(/^N[ií]vel\s*/i, ""); o.comunicacao = p.comunicacao || ""; o.alergias = p.alergias || ""; o.medicacoes = p.medicacoes || ""; o.restricoes = p.restricoes || ""; }
     return o;
@@ -25276,7 +25373,7 @@ var IO_KINDS = {
     sub: "Paciente que já existe só tem os campos vazios completados.",
     help: ["Uma linha por paciente. Só o Nome é obrigatório; o CPF é pedido depois, ao editar o cadastro.",
       "Paciente que já existe (mesmo CPF; sem CPF, mesmo nome e data de nascimento): a planilha só completa os campos vazios, nunca troca o que já está preenchido.",
-      "Vários telefones ou e-mails: separe com ponto e vírgula. Datas no formato dd/mm/aaaa. Escola: o nome precisa estar em Cadastros → Escolas."],
+      "Vários telefones ou e-mails: separe com ponto e vírgula. Datas no formato dd/mm/aaaa. Escola e Convênio: o nome precisa estar em Cadastros → Escolas / Convênios."],
     cols: [
       {k: "nome", h: "Nome", alias: ["paciente", "nome do paciente"], w: 36, req: true},
       {k: "nascimento", h: "Data de nascimento", alias: ["nascimento", "data nascimento"], w: 14},
@@ -25288,6 +25385,7 @@ var IO_KINDS = {
       {k: "end_cep", h: "CEP", w: 11}, {k: "end_rua", h: "Rua", alias: ["endereco", "logradouro"], w: 28}, {k: "end_numero", h: "Número", alias: ["numero"], w: 9},
       {k: "end_compl", h: "Complemento", w: 14}, {k: "end_bairro", h: "Bairro", w: 18}, {k: "end_cidade", h: "Cidade", w: 18}, {k: "end_uf", h: "UF", w: 6},
       {k: "finNome", h: "Responsável financeiro", w: 30}, {k: "finDoc", h: "CPF/CNPJ do financeiro", w: 18},
+      {k: "convenio", h: "Convênio", w: 22}, {k: "plano", h: "Plano", w: 16}, {k: "carteirinha", h: "Nº da carteirinha", alias: ["carteirinha"], w: 18}, {k: "carteirinhaValidade", h: "Validade da carteirinha", alias: ["validade"], w: 16},
       {k: "escola", h: "Escola", w: 26}, {k: "escolaSerie", h: "Série", w: 10}, {k: "escolaTurno", h: "Turno da escola", w: 12}, {k: "professor", h: "Professor(a)", alias: ["professor"], w: 20},
       {k: "mediador", h: "Mediador / AT", alias: ["mediador"], w: 10}, {k: "comoConheceu", h: "Como conheceu", w: 22},
       {k: "cid", h: "Diagnóstico (CID)", alias: ["cid", "diagnostico"], w: 18, hide: function(){ return !healthCanSee(); }},
@@ -25585,7 +25683,7 @@ function intakePrefillFrom(p){
     telNome: ((n.telefones || [])[0] || {}).nome || "", finQuem: fin.link === "mae" ? "Mãe" : fin.link === "pai" ? "Pai" : "",
     telefone: patFirstPhone(n) ? digitsOnly(patFirstPhone(n)) : "", email: patFirstEmail(n) || "",
     cep: e.cep || "", rua: e.rua || "", numero: e.numero || "", compl: e.compl || "", bairro: e.bairro || "", cidade: e.cidade || "", uf: e.uf || "",
-    convenio: tr ? (tr.convenio || "") : "", escola: n.escolaId ? patRegName("escolas", n.escolaId) : "", escolaTurno: n.escolaTurno || "", comoConheceu: n.comoConheceu || ""};
+    convenio: patConvDefault(n).nome || (tr ? (tr.convenio || "") : ""), plano: patConvDefault(n).plano, carteirinha: n.carteirinha || "", carteirinhaValidade: n.carteirinhaValidade || "", escola: n.escolaId ? patRegName("escolas", n.escolaId) : "", escolaTurno: n.escolaTurno || "", comoConheceu: n.comoConheceu || ""};
   if (healthCanSee()){
     var hh = Object.assign({}, n, HEALTH.map ? healthOf(n.id) : {});
     o.diagnostico = String(hh.cid || "");
@@ -25767,6 +25865,13 @@ function intakeToPatient(d){
     var md = (state.doctors || []).filter(function(x){ return normText(x.name || x.nome || "") === normText(d.medico); })[0];
     if (md) o.medicoId = md.id; else notes.push("Médico digitado pela família: " + d.medico + " (não está no cadastro — confira o nome e inclua em Cadastros → Médicos)");
   }
+  if (d.convenio && d.convenio !== "Outro" && d.convenio !== "Particular"){
+    var cvm = (state.convenios || []).filter(function(x){ return normText(x.name) === normText(d.convenio); })[0];
+    if (cvm) o.convenioPadrao = cvm.id;
+  }
+  if (d.plano) o.planoPadrao = d.plano;
+  if (d.carteirinha) o.carteirinha = d.carteirinha;
+  if (d.carteirinhaValidade) o.carteirinhaValidade = d.carteirinhaValidade;
   if (d.laudo) notes.push("Possui diagnóstico: " + d.laudo);
   if (d.convenio) notes.push("Convênio informado: " + (d.convenio === "Outro" && d.convenioOutro ? "Outro — " + d.convenioOutro : d.convenio));
   if (d.obs) notes.push("Observações da família: " + d.obs);
@@ -25826,7 +25931,7 @@ function intakeApplyReview(overlay, info, isNew, added){
   // Campo a campo (só os que existem na janela).
   var MAP = [["nome", "pNome"], ["nascimento", "pNasc"]];
   ["sexo", "cpf", "rg", "cns", "entrada", "cid", "escolaId", "escolaSerie", "escolaTurno", "professor", "mediador", "comoConheceu",
-   "medicoId", "diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"].forEach(function(k){ if (p[k]) MAP.push([k, "pf-" + k]); });
+   "medicoId", "diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes", "convenioPadrao", "planoPadrao", "carteirinha", "carteirinhaValidade"].forEach(function(k){ if (p[k]) MAP.push([k, "pf-" + k]); });
   var e = p.endereco || {}; ["cep", "rua", "numero", "compl", "bairro", "cidade", "uf"].forEach(function(k){ if (e[k]) MAP.push(["endereco." + k, "pa-" + k]); });
   ["mae", "pai"].forEach(function(r){ if (p[r]) ["nome", "cpf", "profissao"].forEach(function(x){ if (p[r][x]) MAP.push([r + "." + x, "pm-" + r + "-" + (x === "profissao" ? "prof" : x)]); }); });
   if (p.financeiro){ ["nome", "doc", "telefone", "email"].forEach(function(x){ if (p.financeiro[x]) MAP.push(["financeiro." + x, "fi-" + x]); }); }

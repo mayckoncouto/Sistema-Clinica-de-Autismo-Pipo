@@ -249,6 +249,7 @@ const path = require('path');
   check('sends mãe with profissão, 2 people for pickup, rotina, convênio Outro + qual, financeiro = Mãe, phone owner?', d2 && d2.maeNome === 'Mara Teste' && d2.maeProfissao === 'Enfermeira' && d2.retirada.length === 2 && d2.retirada[0].rel === 'Tio' &&
     d2.rotinaAtual.seg.m.tipo === 'escola' && d2.rotinaAtual.seg.m.txt === 'Escola Z' && d2.convenio === 'Outro' && d2.convenioOutro === 'Plano Fictício' && d2.finQuem === 'Mãe' && !d2.finNome && d2.telNome === 'Vó Rosa (avó)', d2);
   check('sends laudo Sim and the typed diagnosis (Outro replaced by the text)?', d2.laudo === 'Sim' && d2.diagnostico === 'Síndrome fictícia', [d2.laudo, d2.diagnostico]);
+  check('carteirinha fields are off by default (not in the link unless chosen)?', ids2.indexOf('carteirinha') === -1 && ids2.indexOf('plano') === -1);
   check('sends the typed school and doctor names (Outra/Outro replaced by the text)?', d2.escola === 'Colégio Novo Fictício' && d2.medico === 'Dr. Novo Fictício', [d2.escola, d2.medico]);
   // No sistema: o envio vira campos do cadastro.
   const m2 = await ev(`intakeToPatient(${JSON.stringify(d2)})`);
@@ -274,7 +275,7 @@ const path = require('path');
   const hd = await page.$$eval('#ovPf thead th', (a) => a.map((x) => x.textContent));
   const freeNome = await page.evaluate(() => ['nome', 'telefones'].every((k) => ['rapido', 'fixo'].every((x) => { const e = document.querySelector('tr[data-pfk="' + k + '"] [data-pfx="' + x + '"]'); return e && !e.disabled && e.checked; })));
   check('Campos obrigatórios columns: Campo, Aparece, Link rápido, Link fixo, Obrigatório (Nome and Telefone can be chosen in both links)?', JSON.stringify(hd) === '["Campo","Aparece","Link rápido","Link fixo","ObrigatórioObrig."]' && freeNome, hd);
-  check('link-only fields (Convênio, Possui diagnóstico?) listed?', (await page.$$('tr[data-lonly]')).length === 2);
+  check('link-only fields (Possui diagnóstico?) listed; Convênio now sits with the cadastro field?', (await page.$$('tr[data-lonly]')).length === 1 && !!(await page.$('tr[data-pfk="convenioPadrao"][data-lfk="convenio"]')));
   const allLink = await page.evaluate(() => [...document.querySelectorAll('#ovPf tr[data-pfk]')].every((tr) => tr.querySelector('[data-pfx="rapido"]') && tr.querySelector('[data-pfx="fixo"]')));
   const offNew = await page.evaluate(() => ['mae', 'rotinaAtual', 'medicoId', 'protetiva'].every((k) => { const tr = document.querySelector('tr[data-pfk="' + k + '"]'); return tr && !tr.querySelector('[data-pfx="rapido"]').checked && !tr.querySelector('[data-pfx="fixo"]').checked; }));
   check('every cadastro field can be chosen for both links; the new ones start off?', allLink && offNew, {allLink, offNew});

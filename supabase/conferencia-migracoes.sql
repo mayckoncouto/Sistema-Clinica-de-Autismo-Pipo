@@ -109,7 +109,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (95, '2026-10-11e-fornecedores',                  exists(select 1 from pathdef where d like '%suppliers%'), 'cadastro de Fornecedores (caminho, módulo e permissão nos níveis)'),
  (96, '2026-10-11f-link-diagnosticos',              exists(select 1 from fx where proname = 'intake_form' and prosrc like '%diagnosticos%'), 'link de cadastro: lista de diagnósticos no formulário'),
  (97, '2026-10-11g-diagnostico-so-nome',            exists(select 1 from fx where proname = 'intake_form' and prosrc like '%diagnosticos%' and prosrc not like '%code%'), 'diagnósticos só pelo nome (link e dados antigos)'),
- (98, '2026-10-11h-link-escolas-medicos',              exists(select 1 from fx where proname = 'intake_form' and prosrc like '%config/schools%' and prosrc like '%config/doctors%'), 'link de cadastro com escolas e médicos cadastrados')
+ (98, '2026-10-11h-link-escolas-medicos',              exists(select 1 from fx where proname = 'intake_form' and prosrc like '%config/schools%' and prosrc like '%config/doctors%'), 'link de cadastro com escolas e médicos cadastrados'),
+ (99, '2026-10-11i-convenio-no-paciente',            exists(select 1 from fx where proname = 'intake_send' and prosrc like '%carteirinhaValidade%'), 'convênio, plano e carteirinha no cadastro do paciente (link e dados)')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

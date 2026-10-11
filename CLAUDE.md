@@ -3883,3 +3883,29 @@ Pedido do usuário: no link, Escola e Médico mostram os cadastrados (Cadastros 
 texto livre. Na revisão (`intakeToPatient`) o nome que não está no cadastro vira aviso "digitada pela família — confira o nome e
 inclua em Cadastros". `intake_form` devolve `escolas` e `medicos` — migração `supabase/2026-10-11h-link-escolas-medicos.sql`
 (testada no PGlite; linha 98 da conferência de migrações). Teste em `tests/run_intake.js`.
+- Produção (2026-10-11): `2026-10-11h-link-escolas-medicos` rodada (`funcao_nova = true`).
+
+## Convênio no cadastro do paciente (2026-10-11)
+Decisões do usuário: convênio, plano, nº da carteirinha e validade no cadastro do paciente; tratamento novo já vem com o
+convênio e o plano do cadastro (pode trocar no tratamento); mudar o convênio/plano do cadastro com tratamento Ativo
+PERGUNTA se aplica ao tratamento ativo; Guia/autorização ficam para depois da parte financeira.
+- Grupo **Convênio** (`PAT_SECTIONS`, depois de Responsável financeiro). Chaves PRÓPRIAS no paciente — `convenioPadrao` (id),
+  `planoPadrao`, `carteirinha`, `carteirinhaValidade` — para não se misturar com `convenio`/`plano` do tratamento
+  (`TREAT_FIELDS`, somados ao paciente em `state.patients`). `patConvDefault(p)`, `patCardState(p)`/`patCardChip(p)`
+  (vencida ou vence em até 30 dias; etiqueta na lista de Pacientes, só no computador).
+- `openTreatmentModal`: tratamento NOVO sem cópia usa o padrão do cadastro (vence o convênio antigo do paciente); renegociar
+  continua copiando o tratamento anterior. Dica `#trConvHint` sob o Convênio (cadastro, carteirinha, aviso de validade, "usa
+  outro convênio").
+- `offerApplyConvenio(antigo, novo)` (depois de salvar o paciente): só com tratamento ativo diferente e `tratamentos.edit`;
+  "Aplicar ao tratamento" grava convênio/plano e uma entrada `acao: "convenio"` no histórico; "Só no cadastro" não mexe.
+  Tratamentos antigos nunca mudam sozinhos.
+- Link: `convenioPadrao` ↔ link `convenio` (o convênio cadastrado vira o do paciente; "Outro"/"Particular" ficam na
+  observação); novos campos do link `plano`, `carteirinha`, `carteirinhaValidade` (começam fora; `cadastro.html` aceita
+  validade no futuro). `LINK_ONLY` = só `laudo`. Pedir atualização leva os quatro. Planilha de Pacientes ganhou as colunas
+  Convênio, Plano, Nº da carteirinha e Validade. CRM: lead com convênio cadastrado vira `convenioPadrao` ao cadastrar paciente;
+  `crmConvName` cai no convênio do cadastro. Ficha impressa tem o grupo Convênio.
+- Migração `supabase/2026-10-11i-convenio-no-paciente.sql` (`intake_send` aceita as chaves novas + copia o convênio/plano do
+  tratamento Ativo, ou mais recente, para o paciente que ainda não tem; testada no PGlite 2×; linha 99 da conferência de
+  migrações; `schema.sql` e `conferencia-geral.sql` atualizados). Teste `tests/run_convenio_padrao.js` (no `npm test`).
+- Ideias futuras (aguardando o usuário): Guia/autorização (nº, sessões autorizadas, saldo, validade, ligadas ao tratamento),
+  relatório "Pacientes por convênio", aviso na Agenda quando o convênio não cobre a especialidade, troca de convênio em lote.

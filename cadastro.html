@@ -141,11 +141,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
   function isoToBr(v){ var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ""); return m ? m[3] + "/" + m[2] + "/" + m[1] : (v || ""); }
   function fmtDate(v){ var d = digits(v).slice(0, 8); return d.length > 4 ? d.slice(0, 2) + "/" + d.slice(2, 4) + "/" + d.slice(4) : d.length > 2 ? d.slice(0, 2) + "/" + d.slice(2) : d; }
   // "dd/mm/aaaa" → "aaaa-mm-dd" (vazio = ""; data inválida ou no futuro = null).
-  function brToIso(v){
+  function brToIso(v, fut){
     if (!v) return "";
     var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(v); if (!m) return null;
     var d = new Date(+m[3], +m[2] - 1, +m[1]);
-    if (d.getFullYear() !== +m[3] || d.getMonth() !== +m[2] - 1 || d.getDate() !== +m[1] || d > new Date() || +m[3] < 1900) return null;
+    if (d.getFullYear() !== +m[3] || d.getMonth() !== +m[2] - 1 || d.getDate() !== +m[1] || (!fut && d > new Date()) || +m[3] < 1900 || +m[3] > 2100) return null;
     return m[3] + "-" + m[2] + "-" + m[1];
   }
   // ---- Listas de escolha e calendário (padrão do sistema) ----
@@ -217,19 +217,19 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
   function normTxt(s){ return String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
   var MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   function openCalendar(inp, btn){
-    var iso = brToIso(inp.value), d = iso ? new Date(iso + "T12:00") : new Date(), y = d.getFullYear(), m = d.getMonth(), mode = "dias";
+    var fut = inp.id === "carteirinhaValidade", iso = brToIso(inp.value, fut), d = iso ? new Date(iso + "T12:00") : new Date(), y = d.getFullYear(), m = d.getMonth(), mode = "dias";
     var nowY = new Date().getFullYear();
     function grid(){
       if (mode === "anos"){
-        var ys = ""; for (var yy = nowY; yy >= nowY - 100; yy--) ys += '<button type="button" data-y="' + yy + '" class="' + (yy === y ? 'sel' : '') + '">' + yy + '</button>';
+        var ys = ""; for (var yy = nowY + (fut ? 10 : 0); yy >= nowY - (fut ? 10 : 100); yy--) ys += '<button type="button" data-y="' + yy + '" class="' + (yy === y ? 'sel' : '') + '">' + yy + '</button>';
         return '<div class="pk-cal"><div class="pk-cal-h"><b>Escolha o ano</b></div><div class="pk-cal-y">' + ys + '</div></div>';
       }
       var first = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate(), today = new Date(), out = "";
       ["D", "S", "T", "Q", "Q", "S", "S"].forEach(function(w){ out += '<div class="wd">' + w + '</div>'; });
       for (var i = 0; i < first; i++) out += '<div></div>';
       for (var dd = 1; dd <= days; dd++){
-        var v = y + "-" + ("0" + (m + 1)).slice(-2) + "-" + ("0" + dd).slice(-2), fut = new Date(y, m, dd) > today;
-        out += '<button type="button" data-d="' + v + '"' + (fut ? ' disabled style="opacity:.3"' : '') + ' class="' + (v === iso ? 'sel' : '') + (new Date(y, m, dd).toDateString() === today.toDateString() ? ' today' : '') + '">' + dd + '</button>';
+        var v = y + "-" + ("0" + (m + 1)).slice(-2) + "-" + ("0" + dd).slice(-2), isFut = !fut && new Date(y, m, dd) > today;
+        out += '<button type="button" data-d="' + v + '"' + (isFut ? ' disabled style="opacity:.3"' : '') + ' class="' + (v === iso ? 'sel' : '') + (new Date(y, m, dd).toDateString() === today.toDateString() ? ' today' : '') + '">' + dd + '</button>';
       }
       return '<div class="pk-cal"><div class="pk-cal-h"><button type="button" data-nav="-1" aria-label="Mês anterior">‹</button><button type="button" class="pk-cal-t" data-years title="Escolher o ano">' + MESES[m] + ' de ' + y + ' ▾</button><button type="button" data-nav="1" aria-label="Próximo mês">›</button></div><div class="pk-cal-g">' + out + '</div>' +
         '<div class="pk-cal-f"><button type="button" class="pk-clear" data-clear>Limpar</button></div></div>';
@@ -276,7 +276,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
   var DEFAULT_REQ = {nome: 1, telefone: 1, nascimento: 1, cpf: 1};
   // Campos que só aparecem no link quando a clínica marca em Campos obrigatórios (sem configuração = fora).
   var OFF = {rg: 1, cns: 1, entrada: 1, mae: 1, pai: 1, rotina: 1, protetiva: 1, financeiro: 1, escolaSerie: 1, professor: 1, mediador: 1,
-    rotinaAtual: 1, medico: 1, diagData: 1, suporte: 1, comunicacao: 1, alergias: 1, medicacoes: 1, restricoes: 1};
+    rotinaAtual: 1, medico: 1, plano: 1, carteirinha: 1, carteirinhaValidade: 1, diagData: 1, suporte: 1, comunicacao: 1, alergias: 1, medicacoes: 1, restricoes: 1};
   var GROUP = {telNome: "telefone", finQuem: "financeiro",
     cep: "endereco", numero: "endereco", rua: "endereco", compl: "endereco", bairro: "endereco", cidade: "endereco", uf: "endereco",
     maeNome: "mae", maeCpf: "mae", maeProfissao: "mae", paiNome: "pai", paiCpf: "pai", paiProfissao: "pai",
@@ -410,6 +410,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       sec("Atendimento",
         f("convenio", "Convênio", {select: convs, value: p.convenio}) +
         f("convenioOutro", "Qual convênio?", {value: p.convenioOutro, when: "conv-outro"}) +
+        f("plano", "Plano", {value: p.plano}) +
+        f("carteirinha", "Nº da carteirinha", {value: p.carteirinha, attrs: ' autocomplete="off"'}) +
+        f("carteirinhaValidade", "Validade da carteirinha", {date: true, value: p.carteirinhaValidade}) +
         f("comoConheceu", "Como conheceu a clínica", {select: FORM.origens || [], value: p.comoConheceu}) +
         f("obs", "Observações", {area: true, wide: true, value: p.obs})) +
       '<label class="consent"><input type="checkbox" id="consent"> <span>Autorizo ' + esc(nome) + ' a usar estes dados para o cadastro e o atendimento do paciente, conforme a Lei Geral de Proteção de Dados (LGPD). <span class="req">*</span></span></label>' +
@@ -456,7 +459,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       if (t.id === "cns") t.value = digits(t.value).slice(0, 15);
       if (t.id === "cep") t.value = fmtCep(t.value);
       if (t.id === "uf") t.value = t.value.toUpperCase();
-      if (t.id === "nascimento" || t.id === "entrada" || t.id === "diagData") t.value = fmtDate(t.value);
+      if (t.id === "nascimento" || t.id === "entrada" || t.id === "diagData" || t.id === "carteirinhaValidade") t.value = fmtDate(t.value);
       t.classList.remove("bad");
     });
     if (document.getElementById("cep")) document.getElementById("cep").addEventListener("change", function(){
@@ -475,6 +478,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       var nascIso = brToIso(val("nascimento")); if (nascIso === null) bad.push("nascimento");
       var entIso = brToIso(val("entrada")); if (entIso === null) bad.push("entrada");
       var diagIso = brToIso(val("diagData")); if (diagIso === null) bad.push("diagData");
+      var cartIso = brToIso(val("carteirinhaValidade"), true); if (cartIso === null) bad.push("carteirinhaValidade");
       ["telefone", "finTelefone"].forEach(function(id){ if (val(id) && digits(val(id)).length < 10) bad.push(id); });
       ["email", "finEmail"].forEach(function(id){ if (val(id) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val(id))) bad.push(id); });
       if (val("convenio") === "Outro" && !val("convenioOutro") && cfg("convenio").req) bad.push("convenioOutro");
@@ -515,13 +519,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       ["nome", "nascimento", "sexo", "telNome", "finQuem", "email", "rua", "numero", "compl", "bairro", "cidade", "uf",
        "convenio", "diagnostico", "laudo", "escola", "escolaTurno", "comoConheceu", "obs",
        "rg", "maeNome", "maeProfissao", "paiNome", "paiProfissao", "finNome", "finEmail", "escolaSerie", "professor", "mediador",
-       "medico", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"].forEach(function(id){ data[id] = val(id); });
+       "medico", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes", "plano", "carteirinha"].forEach(function(id){ data[id] = val(id); });
       data.convenioOutro = data.convenio === "Outro" ? val("convenioOutro") : "";
       if (document.getElementById("escolaOutro") && data.escola === "Outra") data.escola = val("escolaOutro");
       if (document.getElementById("medicoOutro") && data.medico === "Outro") data.medico = val("medicoOutro");
       if (document.getElementById("laudo") && data.laudo !== "Sim") data.diagnostico = "";
       else if (data.diagnostico === "Outro") data.diagnostico = val("diagnosticoOutro");
-      data.nascimento = nascIso || ""; data.entrada = entIso || ""; data.diagData = diagIso || "";
+      data.nascimento = nascIso || ""; data.entrada = entIso || ""; data.diagData = diagIso || ""; data.carteirinhaValidade = cartIso || "";
       data.cpf = digits(val("cpf")); data.telefone = digits(val("telefone")); data.cep = digits(val("cep"));
       data.cns = digits(val("cns")); data.maeCpf = digits(val("maeCpf")); data.paiCpf = digits(val("paiCpf"));
       if (data.finQuem === "Mãe" || data.finQuem === "Pai"){ data.finNome = ""; }

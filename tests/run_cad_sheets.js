@@ -99,7 +99,7 @@ const path = require('path');
   await page.evaluate(() => { document.querySelector('#mainTabs button[data-tab="colaboradores"]').click(); });
   await page.waitForTimeout(200); await page.click('#staffAddBtn'); await page.waitForTimeout(400);
   await page.evaluate(() => { const b = document.querySelector('#sfTypesMs .ms-btn'); b.scrollIntoView({block: 'center'}); b.click(); });
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(500);
   const msT = await page.evaluate(() => { const p = document.querySelector('#sfTypes'); const r = p.getBoundingClientRect(); return {t: (p.querySelector('.ms-sheet-head b') || {}).textContent, bottom: Math.round(r.bottom), vh: innerHeight}; });
   check('multi-choice (Tipos) opens as a bottom window titled "Tipos"?', msT.t === 'Tipos' && Math.abs(msT.bottom - msT.vh) <= 2, JSON.stringify(msT));
   await page.evaluate(() => { document.getElementById('modalHost').innerHTML = ''; });
