@@ -3807,3 +3807,5 @@ foi mencionado (o autor não recebe) e tem acesso à lista; cada pessoa liga no 
 - Produção (2026-10-11): `2026-10-11c-correcoes-de-texto` rodada (o SQL Editor mostrou "Load failed", mas a conferência
   pelo conector confirmou: 569 textos guardados em `correcoes_texto_2026_10_11`, "Cordenação" 0, nomes com espaço duplo 0,
   Nome/Telefone obrigatórios no cadastro e nos links). A tabela de cópia pode ser apagada depois.
+- (2026-10-11, pedido do usuário) Aviso "Nova versão do sistema disponível" (`#pwaUpdate`): texto na 1ª linha e
+  Atualizar / Agora não dividindo a 2ª linha com a mesma largura (`flex:1 1 0`); aviso com `min(420px, 100vw − 32px)`.
