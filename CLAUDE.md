@@ -3874,3 +3874,4 @@ nomes (`intake_form`). Migração `supabase/2026-10-11g-diagnostico-so-nome.sql`
 em `patient_health.cid` e `tasks.lead.diagnostico` (só quando é exatamente um diagnóstico cadastrado; testada no PGlite 2×; em
 produção 2 saúdes a trocar, 0 leads). Linha 97 da conferência de migrações.
 - Produção (2026-10-11): `2026-10-11e-fornecedores` rodada (`true | true | 6`). A `2026-10-11g-diagnostico-so-nome` ainda NÃO foi rodada.
+- Produção (2026-10-11): `2026-10-11g-diagnostico-so-nome` rodada pelo conector, a pedido do usuário ("por que você mesmo não envia o SQL?") — resultado `0 | 0 | true`. Daqui em diante, SQL que altera o banco pode ser rodado pelo conector quando o usuário pedir ou autorizar; sem pedido, continua valendo mostrar o script e esperar.
