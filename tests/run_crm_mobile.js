@@ -39,6 +39,17 @@ const path = require('path');
   const rowsH = await page.$$eval('#crmHost tbody tr', (r) => r.map((x) => Math.round(x.getBoundingClientRect().height)));
   check('every list row has the height of one line (long names do not grow the row)?', rowsH.length >= 2 && Math.max.apply(null, rowsH) <= 44 && Math.max.apply(null, rowsH) - Math.min.apply(null, rowsH) <= 1, rowsH);
   check('page has no sideways scroll?', (await ev('document.documentElement.scrollWidth')) <= 390);
+  // Barra: 1) Lista/Quadro/Calendário (+ Tarefa ao lado); 2) busca + Status; 3) Responsáveis, Prioridade, Vencimento; 4) título, Finalizados, Opções, ?
+  const bar = await page.evaluate(() => { const t = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().top) : null; };
+    const vis = (s) => { const e = document.querySelector(s); return !!e && e.getBoundingClientRect().height > 0; };
+    const pk = (id) => { const e = document.querySelector('[data-dp-for="' + id + '"]') || document.getElementById(id); return e ? Math.round(e.getBoundingClientRect().top) : null; };
+    return {seg: t('#crmViewSeg'), add: t('#crmAdd'), q: t('.crm-q'), st: pk('crmFSt'), who: pk('crmFWho'), prio: pk('crmFPrio'), due: pk('crmFDue'), title: t('#crmTitle'), fin: t('.crm-toolbar .inact-toggle'), help: t('.crm-toolbar .help-q'), addVis: vis('#crmAdd')}; });
+  check('toolbar line 1 is Lista/Calendário (with + Tarefa beside it), line 2 search + Status?', bar.seg < bar.q && Math.abs(bar.q - bar.st) <= 6 && Math.abs(bar.seg - bar.add) <= 6, bar);
+  check('toolbar line 3 is Responsáveis, Prioridade, Vencimento (same line), below search?', Math.abs(bar.who - bar.prio) <= 6 && Math.abs(bar.prio - bar.due) <= 6 && bar.who > bar.q + 20, bar);
+  check('toolbar last line has the list title, Finalizados and ?', bar.title > bar.who && Math.abs(bar.title - bar.fin) <= 8 && Math.abs(bar.fin - bar.help) <= 8, bar);
+  // Ordenar (▲▼) visível em todas as colunas que aparecem, sem ser cortado
+  const sortOk = await page.evaluate(() => [...document.querySelectorAll('#crmHost thead th')].filter((x) => getComputedStyle(x).display !== 'none').map((th) => { const b = th.querySelector('.sort-btn'), r = th.getBoundingClientRect(), br = b.getBoundingClientRect(); return {t: th.textContent.trim(), ok: br.width > 8 && br.left >= r.left - 1 && br.right <= r.right + 1}; }));
+  check('sort button visible and inside every visible column title (list)?', sortOk.length === 4 && sortOk.every((x) => x.ok), sortOk);
   // Menu ☰: só a tela aberta marcada, grupo dela aberto e em destaque
   await page.click('#mnavBtn');
   const mn = await page.evaluate(() => ({on: [...document.querySelectorAll('#mnavPanel button.on')].map((b) => b.textContent.trim()),

@@ -423,6 +423,35 @@ const path = require('path');
     fmt.h.indexOf('<b>forte</b>') !== -1 && fmt.h.indexOf('<i>leve</i>') !== -1 && fmt.h.indexOf('<u>linha</u>') !== -1 && fmt.h.indexOf('nome_sobrenome') !== -1 && fmt.h.indexOf('2*3*4') !== -1, JSON.stringify(fmt));
   const agSec = JSON.parse(await ev('(function(){ var host = document.getElementById("modalHost"); crmOpenTask(null, {listId: "agendas"}); var r = {box: !!document.getElementById("crmLeadBox"), who: !!document.querySelector("#crmLeadBox #crmWho"), tel: !!document.getElementById("crmLTel"), loss: !!document.getElementById("crmLossBox")}; host.innerHTML = ""; return JSON.stringify(r); })()'));
   check('any list (Agendas) also has Dados do Paciente/Lead (no Motivo de perda)?', agSec.box && agSec.who && agSec.tel && !agSec.loss, JSON.stringify(agSec));
+  // Mover tarefa (Outras opções no canto superior direito da janela)
+  const mvId = await ev('crmInsert({list_id: "atendimento", status: "triagem", title: "Tarefa para mover", priority: "normal", assignees: [], lead: {nome: "Lead Fictício"}}).then(function(t){ return t.id; })');
+  await ev(`(crmOpenTask(CRM.tasks["${mvId}"]), true)`); await page.waitForTimeout(300);
+  const topPos = await page.evaluate(() => { const b = document.getElementById('crmTopBtn'), h = document.querySelector('#ovCrm .modal-head'), c = document.getElementById('crmClose');
+    const rb = b && b.getBoundingClientRect(), rh = h.getBoundingClientRect(), rc = c.getBoundingClientRect(); return {has: !!b, text: b && b.textContent.trim(), firstLine: !!b && rb.top < rh.top + 40, rightOfTitle: !!b && rb.left > rh.left + rh.width / 2, besideClose: !!b && rb.right <= rc.left + 2}; });
+  check('"Outras opções" sits on the first line, top right, next to the close button?', topPos.has && topPos.firstLine && topPos.rightOfTitle && topPos.besideClose && /Outras opções/.test(topPos.text), topPos);
+  await page.click('#crmTopBtn'); await page.waitForTimeout(100);
+  check('menu has "Mover tarefa"?', /Mover tarefa/.test(await page.textContent('#crmTopMenu')));
+  await page.click('#crmMoveBtn'); await page.waitForSelector('#ovMove');
+  const dv = await page.$$eval('#mvList option', (a) => a.map((o) => o.value));
+  check('destination lists exclude the current one?', dv.indexOf('atendimento') === -1 && dv.indexOf('agendas') !== -1 && dv.indexOf('fature') !== -1, dv);
+  const note1 = await page.textContent('#mvNote');
+  check('status missing in the destination list says so and suggests an equivalent (Em aberto)?', /não tem o status/.test(note1) && /Triagem/.test(note1) && /Em aberto/.test(note1) && (await page.$eval('#mvSt', (e) => e.value)) === 'aberto', note1);
+  await page.$eval('#mvSt', (e) => { e.value = 'andamento'; e.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.click('#mvOk'); await page.waitForTimeout(400);
+  const moved = await ev(`(function(){ var t = CRM.tasks["${mvId}"]; return {list: t.list_id, st: t.status}; })()`);
+  check('task moved to Agendas with the chosen status (Em andamento)?', moved.list === 'agendas' && moved.st === 'andamento', moved);
+  check('window closed and the move is in the activity?', !(await page.$('#ovCrm')) && await ev(`CRM.mem.events.some(function(e){ return e.task_id === "${mvId}" && e.kind === "field" && e.data.campo === "lista" && e.data.para === "agendas"; })`));
+  check('new task has no top "Outras opções" (only saved ones)?', await ev('(function(){ crmOpenTask(null, {listId: "atendimento"}); var r = !document.getElementById("crmTopBtn"); document.getElementById("modalHost").innerHTML = ""; return r; })()'));
+  // Status que existe (mesmo nome) nas duas listas: mantém sem aviso; encerra → encerra
+  const mv2 = await ev('crmInsert({list_id: "agendas", status: "aberto", title: "Mover igual", priority: "normal", assignees: [], lead: {}}).then(function(t){ return t.id; })');
+  const stSame = await ev('(function(){ return crmMoveStatusFor(crmListById("agendas"), "aberto", crmListById("fature")); })()');
+  const stFinMv = await ev('(function(){ return crmMoveStatusFor(crmListById("atendimento"), "contrato", crmListById("agendas")); })()');
+  const stLost = await ev('(function(){ return crmMoveStatusFor(crmListById("agendas"), "concluido", crmListById("atendimento")); })()');
+  check('same status id keeps it; a finishing status maps to the finishing one of the other list?', stSame.exact && stSame.id === 'aberto' && !stFinMv.exact && stFinMv.id === 'concluido' && !stLost.exact && stLost.id === 'contrato', [stSame, stFinMv, stLost]);
+  // Ordenar visível em todas as colunas (computador)
+  await ev('crmGo("agendas")'); await page.waitForTimeout(300);
+  const sortAll = await page.evaluate(() => [...document.querySelectorAll('#crmHost thead th')].map((th) => { const b = th.querySelector('.sort-btn'), r = th.getBoundingClientRect(), br = b.getBoundingClientRect(); return br.width > 8 && br.right <= r.right + 1; }));
+  check('sort button visible in every column of the CRM list (desktop)?', sortAll.length >= 7 && sortAll.every(Boolean), sortAll);
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

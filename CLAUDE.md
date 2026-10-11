@@ -3909,3 +3909,19 @@ PERGUNTA se aplica ao tratamento ativo; Guia/autorização ficam para depois da 
   migrações; `schema.sql` e `conferencia-geral.sql` atualizados). Teste `tests/run_convenio_padrao.js` (no `npm test`).
 - Ideias futuras (aguardando o usuário): Guia/autorização (nº, sessões autorizadas, saldo, validade, ligadas ao tratamento),
   relatório "Pacientes por convênio", aviso na Agenda quando o convênio não cobre a especialidade, troca de convênio em lote.
+
+## CRM: Mover tarefa, barra mobile e ordenar visível (2026-10-11)
+Pedidos do usuário.
+- **Outras opções ▾ no topo da janela da tarefa** (`#crmTopBtn`/`#crmTopMenu`, dentro de `.modal-head-acts`, canto superior direito, ao lado do ✕;
+  só em tarefa já salva, com "editar" e outra lista onde dá para editar — `crmMoveDests`). Item **Mover tarefa** → `crmMoveDialog(task)`
+  (`#ovMove`: lista de destino, status na nova lista, avisos). `crmMoveStatusFor(origem, statusId, destino)`: mesmo id ou mesmo nome = mantém
+  (aviso verde); senão a janela diz que a lista não tem o status e sugere o equivalente (perda → perda, encerra → encerra, demais → o primeiro que
+  não encerra). Responsáveis sem acesso à lista nova saem; recorrência sai se a lista nova não permite (`crmRecAllowed`). Grava
+  `crmUpdate(id, {list_id, status, assignees?, recurrence?})`; o gatilho `tasks_history` já registra `campo: "lista"` (e `crmMemHistory` no teste).
+  O "Outras opções" de Dados do Paciente/Lead (Enviar link / Cadastrar paciente) continua onde estava.
+- **Barra do CRM no celular**, de cima para baixo: 1) Lista / Quadro / Calendário (+ Tarefa ao lado); 2) busca + Status; 3) Responsáveis,
+  Prioridade, Vencimento (em Minhas tarefas só Prioridade e Vencimento); 4) título da lista, Finalizados, Opções e ?. O contador (`#crmCount`)
+  fica oculto no celular (SUBSTITUI "Status na linha dos filtros" de Minhas tarefas).
+- **Ordenar ▲▼ sempre visível** no título de todas as colunas das tabelas do CRM (`#crmHost .pat-table thead th`): o texto do título
+  (`.th-label`) é que encurta com "…" (`max-width: calc(100% - 22px)`); no celular as colunas Venc. e Prio. ficam com 94px/66px (a regra que
+  escondia o botão saiu). Testes: `tests/run_crm.js` (Mover tarefa, ordenar), `tests/run_crm_mobile.js` (linhas da barra, ordenar), `run_toolbar_rows.js`.
