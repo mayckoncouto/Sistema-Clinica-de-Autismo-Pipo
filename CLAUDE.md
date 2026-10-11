@@ -3804,3 +3804,6 @@ foi mencionado (o autor não recebe) e tem acesso à lista; cada pessoa liga no 
 - (2026-10-11, pedido do usuário) **Minhas tarefas sem o filtro Responsável** (são todas da pessoa): `#tab-crm.crm-mine-view`
   esconde `#crmFWho` (e zera o valor); o Status fica na linha dos filtros, no lugar dele (no celular a busca volta à
   linha toda). Nas listas e na tela CRM o Responsável continua.
+- Produção (2026-10-11): `2026-10-11c-correcoes-de-texto` rodada (o SQL Editor mostrou "Load failed", mas a conferência
+  pelo conector confirmou: 569 textos guardados em `correcoes_texto_2026_10_11`, "Cordenação" 0, nomes com espaço duplo 0,
+  Nome/Telefone obrigatórios no cadastro e nos links). A tabela de cópia pode ser apagada depois.
