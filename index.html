@@ -20674,7 +20674,7 @@ var HELP_TOPICS = [
       "Na tela do cadastro, abra <b>Outras opções ▾</b> → <b>Exportar planilha</b>: baixa um arquivo do Excel (.xlsx) com os dados da tela e uma aba <b>Instruções</b>. Esse arquivo é também o <b>modelo</b> para importar.",
       "Para importar: <b>Outras opções ▾</b> → <b>Importar planilha</b>. Baixe o modelo (com os dados atuais ou vazio), preencha no Excel e escolha o arquivo — ou copie as linhas no Excel (com a linha dos títulos) e cole no quadro.",
       "Clique em <b>Ver prévia</b>: cada linha aparece como <b>Novo</b>, <b>Atualizar</b> (com o que muda), <b>Igual</b> ou <b>Com problema</b> (com o motivo). Clique nas contagens para filtrar.",
-      "Confira e clique em <b>Importar (N)</b>. Antes de gravar, o sistema baixa uma cópia dos dados atuais para você guardar."
+      "Confira e clique em <b>Importar (N)</b>. Quando já há dados no computador, o sistema baixa antes uma cópia deles para você guardar (no celular essa cópia não é baixada)."
     ],
     rules: [
       "Célula vazia nunca apaga o que já está no sistema. Linhas com problema não são importadas: corrija na planilha e importe de novo (o que já entrou aparece como Igual).",
@@ -25115,11 +25115,16 @@ function ioOpenImport(kind){
     var go = plan.items.filter(function(it){ return it.st === "novo" || it.st === "atualizar"; });
     if (!go.length && !(plan.extra && plan.extra())) { showToast("Nada para importar.", true); return; }
     var btn = this;
+    // Cópia dos dados atuais antes de gravar: só quando há o que guardar e fora do celular (no celular o
+    // download abre a visualização do arquivo e a página fica parada, sem concluir a importação).
+    var hasData = false;
+    try { hasData = K.exportRows().length > 0; } catch (e){}
+    var backup = hasData && !isMobileView();
     confirmDialog({title: "Importar planilha", message: "Gravar <b>" + go.length + "</b> " + (go.length === 1 ? "linha" : "linhas") + " (" +
       plan.items.filter(function(i){ return i.st === "novo"; }).length + " novas, " + plan.items.filter(function(i){ return i.st === "atualizar"; }).length + " atualizações)?" +
-      "<br>Antes, o sistema baixa uma cópia dos dados atuais (" + esc(K.label.toLowerCase()) + ") para você guardar.", confirmLabel: "Importar"}).then(function(ok){
+      (backup ? "<br>Antes, o sistema baixa uma cópia dos dados atuais (" + esc(K.label.toLowerCase()) + ") para você guardar." : ""), confirmLabel: "Importar"}).then(function(ok){
       if (!ok) return;
-      try { ioExport(kind, false); } catch (e){}
+      if (backup){ try { ioExport(kind, false); } catch (e){} }
       btn.disabled = true; btn.textContent = "Importando…";
       Promise.resolve(K.apply(plan)).then(function(msg){
         if (msg === false){ btn.disabled = false; btn.textContent = "Importar (" + go.length + ")"; return; }
