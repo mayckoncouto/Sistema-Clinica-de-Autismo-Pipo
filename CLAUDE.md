@@ -4060,3 +4060,21 @@ fechar/reabrir por permissão em Níveis de permissão; resumo mensal em PDF. **
   fluxo e saldo por conta, o que mais mudou, pendências, situação do mês).
 - Teste: `tests/run_demonstrativos.js` (fechar, reabrir com aviso, histórico, trava no app, importação, resumo, permissões; sem campos de anotação).
 - Produção (2026-10-12): rodado pelo conector, a pedido do usuário, em partes — tabelas, políticas, `finance_close_month`, `finance_entries_lock`, publicação; o conector trava em comando com `delete`/`drop`, então o usuário rodou no SQL Editor a função `finance_reopen_month`, o gatilho `finance_entries_lock` com `delete` e a remoção de `finance_notes` (conferência `true | true | true`). Migração completa em produção.
+
+## Financeiro — Demonstrativos, Etapa 3: Custo por atendimento (2026-10-12)
+Terceiro botão de Demonstrativos (**Custo por atendimento**, `data-dv="cus"`), um mês por vez. Decisões do usuário: a **categoria do Plano de contas**
+já define a natureza do custo (nenhum campo novo "Natureza do custo"): Despesas com Funcionários = equipe; Despesas Fixas; Despesas Variáveis; Imposto;
+Despesas Financeiras ficam FORA do custo por atendimento (mostradas à parte); qualquer outra despesa = como fixa. **Equipe**: o que foi PAGO no mês
+em Despesas com Funcionários (Lançamentos) é dividido entre os colaboradores pela **remuneração cadastrada** (Colaboradores – valores; quem está sem
+remuneração entra com a média e é listado); a parte de quem não é Profissional vai para o rateio por hora de sala. Custo do slot = parte da pessoa ÷
+slots disponíveis no mês (horário de trabalho × horários da clínica, sem feriados; usa o maior entre disponíveis e usados). Terapeuta: slot ÷ pacientes
+DELE no horário; apoio (coordenador/aplicador ABA agendados num Grupo de Suporte com a sala): slot ÷ todos os pacientes da sala no horário. Demais
+custos (fixos, variáveis, impostos, outras e pessoal que não atende) por hora de sala ocupada, divididos entre os pacientes da sala-hora. Conta TODAS as
+sessões agendadas (qualquer status). Receita por convênio = Lançamentos de receita com `convenioId` no Plano de contas, dividida entre as
+especialidades pelas sessões (receita sem convênio ligado e financeira ficam à parte); impostos vêm dos Lançamentos (valor mensal).
+- Código (bloco "Demonstrativos, etapa 3" depois do bloco de fechamento): `cuClassOf`, `cuAvailSlots`, `cuCompute(ym, appts, pays)` (puro; devolve pools,
+  pessoas, itens por atendimento, `bySpec`, `byConv`, `matrix`, `byN`, ociosidade, conciliação, avisos), `cuLoadAppts` (Agenda do mês), `cuLoadPays`
+  (`staff_pay`), `cuRender`/`cuHtml` (cartões, "De onde vem o custo", Por especialidade, Por convênio, matriz convênio × especialidade com resultado por
+  sessão, custo por nº de pacientes no horário, ociosidade de equipe), `cuExportXlsx`, `cuPrint`. Menu: Exportar Excel, Imprimir/PDF, Atualizar os dados,
+  Fechamento de mês. Sem a permissão "Colaboradores – valores" a tela explica e não calcula; para quem só vê a própria agenda os números ficam parciais.
+- Sem SQL. Teste `tests/run_custo.js` (no `npm test`, junto com `run_demonstrativos.js`).
