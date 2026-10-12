@@ -121,7 +121,7 @@ chk (ordem, migracao, aplicada, obs) as (values
  (107, '2026-10-12f-emprestimos',                    to_regclass('public.finance_loans') is not null, 'Financeiro: empréstimos tomados e concedidos (finance_loans, loan_id nas contas)'),
  (108, '2026-10-12g-conciliacao',                   to_regclass('public.finance_statement_lines') is not null, 'Financeiro: conciliação com o extrato (finance_statement_lines)'),
  (109, '2026-10-12h-crm-automacoes',                  to_regclass('public.crm_auto_log') is not null, 'CRM: automações (crm_auto_log, gatilhos e rotina diária)'),
- (110, '2026-10-12i-crm-automacoes-status',           exists(select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname = 'crm_auto_make' and prosrc like '%statusId%'), 'CRM: automações com status da tarefa criada e status que dispara'),,
+ (110, '2026-10-12i-crm-automacoes-status',           exists(select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname = 'crm_auto_make' and prosrc like '%statusId%'), 'CRM: automações com status da tarefa criada e status que dispara'),
  (111, '2026-10-12j-sala-aba',                         not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') r where d.path = 'config/rooms' and not coalesce((r ->> 'group')::boolean, false) and not (r ? 'aba')), 'Sala com campo ABA (Sim/Não)')
 )
 select ordem, migracao,
