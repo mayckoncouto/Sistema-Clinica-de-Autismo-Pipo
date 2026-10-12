@@ -17471,10 +17471,14 @@ function openFreeSlotModal(){
 }
 
 /* ---- Planner ▾ Outras Opções → Auto Planner (2026-10-12) ----
- * Modo "Completar o que falta": lê os quadros (especialidade × sessões/mês) dos tratamentos
+ * Modo "Completar o que Falta": lê os quadros (especialidade × sessões/mês) dos tratamentos
  * ATIVOS, compara com o que já está no Planner e PROPÕE as sessões que faltam, só em células
  * livres e respeitando todas as regras. Nada é gravado até a pessoa conferir a prévia e
  * clicar em Aplicar (uma gravação só, que entra no desfazer). Nunca mexe no que já está marcado.
+ * Prioridade: o que foi marcado à mão fica fixo (e atrai os grupos); depois os individuais
+ * (ABA = Não e outros serviços) e por último os pacientes ABA = Sim, juntados de 2 a 4 na mesma sala
+ * quando têm a mesma faixa etária (cor) e a especialidade da sessão em comum.
+ * Destino: Planner, Planner e Agenda (mês escolhido) ou só Agenda.
  */
 function apLinesOf(p){
   return patientSpecRows(p).map(function(r){ return {line: r, hours: Math.floor(Number(String(r.hours).replace(",", ".")) || 0)}; })
@@ -17501,8 +17505,25 @@ function apColumnsFor(line){
   });
   return out;
 }
-// Monta a proposta. Devolve {items:[{p, line, w, day, time, room, seat, prof, docId, key, rec}], gaps:[{p, line, falta, why}], noLines:[p]}.
-// Durante o cálculo cada sugestão é gravada TEMPORARIAMENTE em state.scheduleDocs (para as regras enxergarem), e tirada no fim.
+function apLineAba(p, line){ return line.aba ? abaYesNo(line.aba) : abaAuto(p); }
+// Sessão de paciente ABA = Sim (as que podem dividir a sala em grupo).
+function apIsAbaSim(p, line){ return lineSvc(line) === DEFAULT_SERVICE_ID && apLineAba(p, line) === "Sim"; }
+function apBandId(p){ var b = ageBandOf(patientAgeYears(p)); return b ? b.id : ""; }
+function apSpecIds(p){ return patientSpecRows(p).map(function(r){ return r.specId; }); }
+// Quem está numa sala num horário (marcado à mão, já no Planner ou sugerido agora).
+function apOcc(docId, time, room){
+  var bk = state.scheduleDocs[docId].bookings, out = [];
+  (room.therapists || []).forEach(function(t){
+    var b = bk[time + "|" + room.id + "|" + t.id];
+    if (!b || !b.patient || bookingKind(b)) return;
+    var p2 = findPatientRef(b); if (!p2) return;
+    out.push({p: p2, b: b, seat: t, prof: t.professionalId});
+  });
+  return out;
+}
+function apOccAba(list){
+  return list.filter(function(o){ return (o.b.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID && !isNaoABABooking(o.b, o.prof); });
+}
 // Grava uma sugestão só na memória (para as regras enxergarem) guardando o valor anterior; apRestore desfaz.
 function apPut(temp, docId, key, rec){
   var bk = state.scheduleDocs[docId].bookings;
@@ -17515,112 +17536,176 @@ function apRestore(temp){
     if (t.had) bk[t.key] = t.old; else delete bk[t.key];
   }
 }
+// Monta a proposta. Devolve {items:[{p, line, w, day, time, room, seat, prof, docId, key, rec, group}], gaps:[{p, line, falta, why}], noLines:[p]}.
 function apBuild(patients){
-  var plan = {items: [], gaps: [], noLines: []}, temp = [];
+  var plan = {items: [], gaps: [], noLines: []}, temp = [], haveBy = {}, tasks = [];
   var docIds = plannerAllDocIds();
   docIds.forEach(function(id){ if (!state.scheduleDocs[id]) state.scheduleDocs[id] = {bookings: {}}; if (!state.scheduleDocs[id].bookings) state.scheduleDocs[id].bookings = {}; });
+  function haveOf(p, lines){
+    if (haveBy[p.id]) return haveBy[p.id];
+    var have = [];
+    WEEKS.forEach(function(w){ DAYS.forEach(function(d){
+      var bk = state.scheduleDocs[d.key + "-" + w].bookings;
+      Object.keys(bk).forEach(function(key){
+        var b = bk[key]; if (!b || !b.patient || bookingKind(b)) return;
+        var ps = key.split("|"), room = findRoom(ps[1]); if (!room || isGroup(room)) return;
+        if (!recIsPatient(b, p)) return;
+        var th = findTherapist(room, ps[2]), pid = th && th.professionalId;
+        var ln = treatLineFor(lines, pid, b.service || DEFAULT_SERVICE_ID);
+        have.push({lineId: ln ? ln.id : "", w: w, day: d.key, time: ps[0], roomId: ps[1], seatId: ps[2]});
+      });
+    }); });
+    return (haveBy[p.id] = have);
+  }
   try {
     patients.forEach(function(p){
       var lines = patientSpecRows(p), todo = apLinesOf(p);
       if (!todo.length){ plan.noLines.push(p); return; }
-      // o que o paciente já tem no Planner, por quadro e semana
-      var have = [];
-      WEEKS.forEach(function(w){ DAYS.forEach(function(d){
-        var docId = d.key + "-" + w, bk = state.scheduleDocs[docId].bookings;
-        Object.keys(bk).forEach(function(key){
-          var b = bk[key]; if (!b || !b.patient || bookingKind(b)) return;
-          var ps = key.split("|"), room = findRoom(ps[1]); if (!room || isGroup(room)) return;
-          if (!recIsPatient(b, p)) return;
-          var th = findTherapist(room, ps[2]), pid = th && th.professionalId;
-          var ln = treatLineFor(lines, pid, b.service || DEFAULT_SERVICE_ID);
-          have.push({lineId: ln ? ln.id : "", w: w, day: d.key, time: ps[0], roomId: ps[1], seatId: ps[2]});
-        });
-      }); });
-      todo.forEach(function(x){
-        var line = x.line, mine = have.filter(function(h){ return h.lineId === line.id; });
-        var missing = x.hours - mine.length;
-        if (missing <= 0) return;
-        var allowed = apWeeksOf(line), per = {}, base = Math.floor(x.hours / allowed.length), rem = x.hours % allowed.length;
-        allowed.forEach(function(w, i){ per[w] = Math.max(0, base + (i < rem ? 1 : 0) - mine.filter(function(h){ return h.w === w; }).length); });
-        // se alguma semana já passou da conta, o que falta vai para as semanas com menos sessões
-        var planned = 0; allowed.forEach(function(w){ planned += per[w]; });
-        while (planned < missing){
-          var w0 = allowed.slice().sort(function(a, b){ return (per[a] + mine.filter(function(h){ return h.w === a; }).length) - (per[b] + mine.filter(function(h){ return h.w === b; }).length); })[0];
-          per[w0]++; planned++;
-        }
-        var cols = apColumnsFor(line), svc = lineSvc(line), placedHere = 0;
-        var why = cols.length ? "Sem horário livre que caiba (regras, horário do profissional ou do paciente)" : "Nenhuma coluna de sala com o profissional dessa especialidade";
-        var sched = []; // sugestões desta linha
-        var rec0 = {patient: p.nome, patientId: p.id, note: "", service: svc};
-        allowed.forEach(function(w){
-          for (var n = 0; n < per[w] && placedHere < missing; n++){
-            var best = null, bestScore = 1e9;
-            DAYS.forEach(function(d){
-              if (line.dia && d.key !== line.dia) return;
-              var docId = d.key + "-" + w, bk = state.scheduleDocs[docId].bookings;
-              var times = d.morning.concat(d.afternoon);
-              times.forEach(function(time, ti){
-                if (line.hora && time !== line.hora) return;
-                if (!patientSlotOk(p, d.key, time)) return;
-                if (routineConflictMsg(p, d.key, time, lineLabel(line))) return;
-                cols.forEach(function(c){
-                  var key = time + "|" + c.room.id + "|" + c.seat.id, cur = effectiveBooking(bk, key, d.key, time);
-                  if (cur && (cur.patient || cur.blocked || cur.lock)) return;
-                  if (!seatAvailable(c.seat, d.key, time)) return;
-                  if (plLockInfo(cur, d.key, w, time, c.room, c.seat)) return;
+      todo.forEach(function(x){ tasks.push({p: p, lines: lines, line: x.line, hours: x.hours, cls: apIsAbaSim(p, x.line) ? 1 : 0}); });
+    });
+    // 1º os individuais (ABA = Não e outros serviços), depois o grupo ABA = Sim (agrupado por faixa e especialidade).
+    tasks.sort(function(a, b){
+      return a.cls - b.cls || (a.cls ? (apBandId(a.p).localeCompare(apBandId(b.p)) || String(a.line.specId).localeCompare(String(b.line.specId))) : 0) ||
+        String(a.p.nome).localeCompare(String(b.p.nome), "pt-BR");
+    });
+    tasks.forEach(function(tk){
+      var p = tk.p, line = tk.line, lines = tk.lines, have = haveOf(p, lines);
+      var mine = have.filter(function(h){ return h.lineId === line.id; });
+      var missing = tk.hours - mine.length;
+      if (missing <= 0) return;
+      var allowed = apWeeksOf(line), per = {}, base = Math.floor(tk.hours / allowed.length), rem = tk.hours % allowed.length;
+      allowed.forEach(function(w, i){ per[w] = Math.max(0, base + (i < rem ? 1 : 0) - mine.filter(function(h){ return h.w === w; }).length); });
+      var planned = 0; allowed.forEach(function(w){ planned += per[w]; });
+      while (planned < missing){
+        var w0 = allowed.slice().sort(function(a, b){ return (per[a] + mine.filter(function(h){ return h.w === a; }).length) - (per[b] + mine.filter(function(h){ return h.w === b; }).length); })[0];
+        per[w0]++; planned++;
+      }
+      var cols = apColumnsFor(line), svc = lineSvc(line), placedHere = 0, abaSim = tk.cls === 1, band = apBandId(p);
+      var why = cols.length ? "Sem horário livre que caiba (regras, horário do profissional ou do paciente, ou faixa etária/especialidade do grupo)" : "Nenhuma coluna de sala com o profissional dessa especialidade";
+      var roomK = {}; cols.forEach(function(c){ roomK[c.room.id] = (roomK[c.room.id] || 0) + 1; });
+      var sched = [];
+      var rec0 = {patient: p.nome, patientId: p.id, note: "", service: svc};
+      allowed.forEach(function(w){
+        for (var n = 0; n < per[w] && placedHere < missing; n++){
+          var best = null, bestScore = 1e9;
+          DAYS.forEach(function(d){
+            if (line.dia && d.key !== line.dia) return;
+            var docId = d.key + "-" + w, bk = state.scheduleDocs[docId].bookings;
+            var times = d.morning.concat(d.afternoon);
+            times.forEach(function(time, ti){
+              if (line.hora && time !== line.hora) return;
+              if (!patientSlotOk(p, d.key, time)) return;
+              if (routineConflictMsg(p, d.key, time, lineLabel(line))) return;
+              cols.forEach(function(c){
+                var key = time + "|" + c.room.id + "|" + c.seat.id, cur = effectiveBooking(bk, key, d.key, time);
+                if (cur && (cur.patient || cur.blocked || cur.lock)) return;
+                if (!seatAvailable(c.seat, d.key, time)) return;
+                if (plLockInfo(cur, d.key, w, time, c.room, c.seat)) return;
+                var score = ti * 0.01, isAbaRoom = /aba/i.test(c.room.name || "");
+                if (abaSim){
+                  // grupo: só com ABA = Sim da mesma faixa etária e com a especialidade da sessão em comum
+                  var occ = apOccAba(apOcc(docId, time, c.room)), bad = false;
+                  occ.forEach(function(o){
+                    if (apBandId(o.p) !== band || apSpecIds(o.p).indexOf(line.specId) === -1) bad = true;
+                  });
+                  if (bad) return;
                   if (sysHard(plannerConflict(docId, key, rec0))) return;
-                  // pontuação: menor é melhor
-                  var all = mine.concat(sched), score = ti * 0.01;
-                  if (all.some(function(h){ return h.day === d.key && h.time === time && h.roomId === c.room.id && h.seatId === c.seat.id && h.w !== w; })) score -= 50;
-                  else if (all.some(function(h){ return h.day === d.key && h.time === time && h.w !== w; })) score -= 30;
-                  var sameDay = all.filter(function(h){ return h.w === w && h.day === d.key; });
-                  var seg = Number(line.seguidas) || 1;
-                  if (sameDay.length){
-                    var idx = times.indexOf(time), adj = sameDay.some(function(h){ return Math.abs(times.indexOf(h.time) - idx) === 1; });
-                    if (seg > 1 && adj && sameDay.length < seg) score -= 40; else score += 40;
-                  }
-                  if (score < bestScore){ bestScore = score; best = {d: d, time: time, c: c, docId: docId, key: key}; }
-                });
+                  var k = roomK[c.room.id] || 1, pref = k >= 4 ? 3 : (k >= 2 ? 2 : 1), size = occ.length + 1;
+                  if (occ.length){ score -= 60; if (size >= pref) score -= 10; if (size > k) return; }
+                  else score += 15;
+                  if (isAbaRoom) score -= 20;
+                } else {
+                  if (sysHard(plannerConflict(docId, key, rec0))) return;
+                  if (isAbaRoom) score += 20;   // sala ABA fica para os grupos
+                }
+                var all = mine.concat(sched);
+                if (all.some(function(h){ return h.day === d.key && h.time === time && h.roomId === c.room.id && h.seatId === c.seat.id && h.w !== w; })) score -= 50;
+                else if (all.some(function(h){ return h.day === d.key && h.time === time && h.w !== w; })) score -= 30;
+                var sameDay = all.filter(function(h){ return h.w === w && h.day === d.key; });
+                var seg = Number(line.seguidas) || 1;
+                if (sameDay.length){
+                  var idx = times.indexOf(time), adj = sameDay.some(function(h){ return Math.abs(times.indexOf(h.time) - idx) === 1; });
+                  if (seg > 1 && adj && sameDay.length < seg) score -= 40; else score += 40;
+                }
+                if (score < bestScore){ bestScore = score; best = {d: d, time: time, c: c, docId: docId, key: key}; }
               });
             });
-            if (!best) continue;
-            var rec = Object.assign({}, rec0);
-            apPut(temp, best.docId, best.key, rec);
-            var item = {p: p, line: line, w: w, day: best.d.key, dayFull: best.d.full, time: best.time, room: best.c.room, seat: best.c.seat, prof: best.c.prof, docId: best.docId, key: best.key, rec: rec};
-            plan.items.push(item);
-            sched.push({w: w, day: best.d.key, time: best.time, roomId: best.c.room.id, seatId: best.c.seat.id});
-            placedHere++;
-          }
-        });
-        if (placedHere < missing) plan.gaps.push({p: p, line: line, falta: missing - placedHere, why: why});
+          });
+          if (!best) continue;
+          var rec = Object.assign({}, rec0);
+          apPut(temp, best.docId, best.key, rec);
+          plan.items.push({p: p, line: line, w: w, day: best.d.key, dayFull: best.d.full, time: best.time, room: best.c.room, seat: best.c.seat, prof: best.c.prof, docId: best.docId, key: best.key, rec: rec, abaSim: abaSim});
+          sched.push({w: w, day: best.d.key, time: best.time, roomId: best.c.room.id, seatId: best.c.seat.id});
+          placedHere++;
+        }
       });
+      if (placedHere < missing) plan.gaps.push({p: p, line: line, falta: missing - placedHere, why: why});
     });
+    // tamanho final de cada grupo (ainda com as sugestões na memória)
+    plan.items.forEach(function(it){ if (it.abaSim) it.group = apOccAba(apOcc(it.docId, it.time, it.room)).length; });
   } finally {
     apRestore(temp);
   }
   return plan;
 }
+// Agenda: leva as sugestões escolhidas para as datas do mês (mesmas regras do Enviar para a Agenda; só acrescenta).
+function apAgendaPlan(items, ym){
+  var weeks = genMonthWeeks(ym), today = holIsoOf(new Date()), dates = [];
+  weeks.forEach(function(w){ w.days.forEach(function(x){ if (x.inMonth) dates.push(x.iso); }); });
+  dates.sort();
+  if (!dates.length) return Promise.resolve({send: [], skipped: 0});
+  return agdFetchRange(dates[0], dates[dates.length - 1]).then(function(rows){
+    var taken = (rows || []).slice(), send = [], skipped = 0;
+    items.forEach(function(it){
+      weeks.forEach(function(w){
+        if (w.week !== it.w) return;
+        w.days.forEach(function(x){
+          if (x.d.key !== it.day || !x.inMonth) return;
+          if (x.iso < today || holidayAt(x.iso, it.time)){ skipped++; return; }
+          var rec = {date: x.iso, time: it.time, professional_id: it.prof, note: "", source: "planner", patient: it.p.nome, blocked: false, service: lineSvc(it.line), room_id: it.room.id};
+          if (AD.hasPid){ rec.patient_id = it.p.id; rec.group_id = null; }
+          var pr = findProfessional(it.prof);
+          if (!pr || !agdInHours(pr, it.time, agdParse(x.iso))){ skipped++; return; }
+          var dup = taken.some(function(a){ return a.time === rec.time && a.date === rec.date && a.professional_id === rec.professional_id && samePatient(a, rec); });
+          if (dup){ skipped++; return; }
+          var cm = agdConflictIn(taken, rec);
+          if (typeof cm === "string" && cm){ skipped++; return; }
+          taken.push(rec); send.push(rec);
+        });
+      });
+    });
+    return {send: send, skipped: skipped};
+  });
+}
 function openAutoPlannerModal(){
   if (!db){ showToast("Sem conexão com o servidor.", true); return; }
   var host = document.getElementById("modalHost");
   var pats = state.patients.filter(function(p){ return isActive(p) && activeTreatment(p.id); }).sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); });
+  var canPl = can("planner", "create"), canAg = !!agdClient() && can("agenda", "create");
+  var now = new Date(), months = [];
+  for (var i = 0; i < 13; i++){ var md = new Date(now.getFullYear(), now.getMonth() + i, 1); months.push({ym: holIsoOf(md).slice(0, 7), label: AD_MONTHS[md.getMonth()] + " de " + md.getFullYear()}); }
+  var destOpts = (canPl ? '<option value="plan">Só no Planner</option>' : "") + (canPl && canAg ? '<option value="both">Planner e Agenda</option>' : "") + (canAg ? '<option value="agenda">Só na Agenda</option>' : "");
   host.innerHTML =
     '<div class="overlay" id="ovAp"><div class="modal wide" style="max-width:860px">' +
-      '<div class="modal-head"><div><h3>Auto Planner</h3><div class="modal-sub">Completa o Planner com as sessões que faltam, a partir dos quadros do tratamento ativo. Só usa células livres; nada é gravado antes de você conferir e aplicar.</div></div>' +
+      '<div class="modal-head"><div><h3>Auto Planner</h3><div class="modal-sub">Completa o Planner com as sessões que faltam, a partir dos quadros do tratamento ativo. Só usa células livres e nunca muda o que já foi marcado à mão. Primeiro os individuais (ABA Não e outros serviços); depois os pacientes ABA Sim, de 2 a 4 por sala (mesma faixa etária e especialidade em comum).</div></div>' +
         '<button class="modal-close" id="apClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="field-row"><div class="field"><label for="apMode">Modo</label><select id="apMode"><option value="completar">Completar o que Falta</option></select></div>' +
         '<div class="field"><label for="apPat">Paciente</label><select id="apPat"><option value="">Todos os pacientes com tratamento ativo</option>' + pats.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div></div>' +
+        '<div class="field-row"><div class="field"><label for="apDest">Gravar em</label><select id="apDest">' + destOpts + '</select></div>' +
+        '<div class="field" id="apMonthBox" hidden><label for="apMonth">Mês da Agenda</label><select id="apMonth">' + months.map(function(m, i){ return '<option value="' + m.ym + '"' + (i === 1 ? ' selected' : '') + '>' + esc(m.label) + '</option>'; }).join("") + '</select></div></div>' +
         '<div class="field-row"><button type="button" class="btn" id="apRun">Montar Proposta</button></div>' +
         '<div id="apOut" class="fx-report"><div class="pat-count">Escolha e clique em “Montar Proposta”.</div></div>' +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="apCancel">Fechar</button><button class="btn" id="apApply" disabled>Aplicar</button></div>' +
     '</div></div>';
-  var ov = document.getElementById("ovAp"), out = document.getElementById("apOut"), applyBtn = document.getElementById("apApply");
+  var ov = document.getElementById("ovAp"), out = document.getElementById("apOut"), applyBtn = document.getElementById("apApply"), destSel = document.getElementById("apDest");
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("apClose").addEventListener("click", close);
   document.getElementById("apCancel").addEventListener("click", close);
+  function syncDest(){ document.getElementById("apMonthBox").hidden = destSel.value === "plan"; }
+  destSel.addEventListener("change", syncDest); syncDest();
   var plan = null;
   function selectedItems(){
     var off = {}; out.querySelectorAll("input[data-ap-pat]").forEach(function(c){ if (!c.checked) off[c.getAttribute("data-ap-pat")] = true; });
@@ -17633,15 +17718,17 @@ function openAutoPlannerModal(){
   }
   function render(){
     var by = {}; plan.items.forEach(function(it){ (by[it.p.id] = by[it.p.id] || {p: it.p, list: []}).list.push(it); });
-    var gapBy = {}; plan.gaps.forEach(function(g){ (gapBy[g.p.id] = gapBy[g.p.id] || []).push(g); });
+    var aba = plan.items.filter(function(it){ return it.abaSim; }), alone = aba.filter(function(it){ return it.group === 1; }).length;
     var html = '<div class="pat-count" style="margin-bottom:8px"><b>' + plan.items.length + '</b> ' + (plan.items.length === 1 ? "sessão proposta" : "sessões propostas") + ' para <b>' + Object.keys(by).length + '</b> ' + (Object.keys(by).length === 1 ? "paciente" : "pacientes") +
       (plan.gaps.length ? ' · <b>' + plan.gaps.reduce(function(a, g){ return a + g.falta; }, 0) + '</b> não couberam' : '') +
-      (plan.noLines.length ? ' · ' + plan.noLines.length + ' sem quadros no tratamento' : '') + '.</div>';
+      (plan.noLines.length ? ' · ' + plan.noLines.length + ' sem quadros no tratamento' : '') +
+      (aba.length ? ' · ABA Sim: ' + (aba.length - alone) + ' em grupo, ' + alone + ' sozinhas' : '') + '.</div>';
     Object.keys(by).sort(function(a, b){ return String(by[a].p.nome).localeCompare(String(by[b].p.nome), "pt-BR"); }).forEach(function(id){
       var g = by[id];
       html += '<details class="fr-week" open><summary><label style="cursor:pointer"><input type="checkbox" data-ap-pat="' + esc(id) + '" checked> <b>' + esc(g.p.nome) + '</b></label> — ' + g.list.length + '</summary><div class="fr-day">' +
         g.list.map(function(it){
-          return '<div><span class="mono">' + esc(WEEK_LABEL[it.w]) + ' · ' + esc(it.dayFull) + ' ' + esc(it.time) + '</span> — ' + esc(lineLabel(it.line)) + ' · ' + esc(profShortName(it.prof)) + ' · ' + esc(it.room.name) + '</div>';
+          return '<div><span class="mono">' + esc(WEEK_LABEL[it.w]) + ' · ' + esc(it.dayFull) + ' ' + esc(it.time) + '</span> — ' + esc(lineLabel(it.line)) + ' · ' + esc(profShortName(it.prof)) + ' · ' + esc(it.room.name) +
+            (it.abaSim ? ' <span class="pat-count">' + (it.group > 1 ? 'grupo de ' + it.group : 'sozinho(a)') + '</span>' : (apLineAba(it.p, it.line) === "Não" ? ' <span class="pat-count">individual</span>' : '')) + '</div>';
         }).join("") + '</div></details>';
     });
     if (plan.gaps.length){
@@ -17666,26 +17753,36 @@ function openAutoPlannerModal(){
   applyBtn.addEventListener("click", function(){
     if (!plan) return;
     var items = selectedItems(); if (!items.length) return;
-    if (!can("planner", "create")){ showToast("Você não tem permissão para incluir no Planner.", true); return; }
+    var dest = destSel.value, ym = document.getElementById("apMonth").value;
+    var toPlanner = dest === "plan" || dest === "both", toAgenda = dest === "agenda" || dest === "both";
     applyBtn.disabled = true;
     plannerLoadDocs().then(function(){
       // reconfere com o Planner de agora, uma sugestão por vez (as aceitas anteriores já valem)
-      var changes = {}, ok = 0, lost = 0, temp = [];
+      var changes = {}, ok = [], lost = 0, temp = [];
       try {
         items.forEach(function(it){
           var bk = state.scheduleDocs[it.docId].bookings, cur = effectiveBooking(bk, it.key, it.day, it.time);
           if ((cur && (cur.patient || cur.blocked || cur.lock)) || sysHard(plannerConflict(it.docId, it.key, it.rec))){ lost++; return; }
           apPut(temp, it.docId, it.key, it.rec);
-          (changes[it.docId] = changes[it.docId] || {})[it.key] = Object.assign({}, it.rec); ok++;
+          (changes[it.docId] = changes[it.docId] || {})[it.key] = Object.assign({}, it.rec); ok.push(it);
         });
       } finally { apRestore(temp); }
-      if (!ok){ showToast("Nada aplicado: os horários mudaram desde a proposta. Monte de novo.", true); applyBtn.disabled = false; return; }
-      return applyBookingChanges(changes).then(function(res){
+      if (!ok.length){ showToast("Nada aplicado: os horários mudaram desde a proposta. Monte de novo.", true); applyBtn.disabled = false; return; }
+      var step1 = toPlanner ? applyBookingChanges(changes) : Promise.resolve(true);
+      return step1.then(function(res){
         if (res === false){ applyBtn.disabled = false; return; }
-        showToast(ok + (ok === 1 ? " sessão incluída" : " sessões incluídas") + " no Planner" + (lost ? " (" + lost + " mudaram e ficaram de fora)" : "") + ". Ctrl+Z desfaz.");
-        close(); renderGrid();
+        var msg = ok.length + (ok.length === 1 ? " sessão" : " sessões") + (toPlanner ? " no Planner" : "") + (lost ? " (" + lost + " mudaram e ficaram de fora)" : "");
+        if (!toAgenda){ showToast(msg + " incluídas. Ctrl+Z desfaz."); close(); renderGrid(); return; }
+        return apAgendaPlan(ok, ym).then(function(ap){
+          if (!ap.send.length){ showToast((toPlanner ? msg + " no Planner; " : "") + "nada novo para a Agenda (datas passadas, feriados, fora do horário, conflitos ou já existentes).", !toPlanner); close(); if (toPlanner) renderGrid(); return; }
+          return agdInsertBatches(ap.send).then(function(created){
+            agdRecord("Auto Planner · Agenda", [], created);
+            showToast((toPlanner ? ok.length + " no Planner e " : "") + created.length + " na Agenda" + (ap.skipped ? " (" + ap.skipped + " pulados)" : "") + ".");
+            close(); if (toPlanner) renderGrid(); if (AD.loaded) agdLoadWeek();
+          });
+        });
       });
-    }).catch(function(){ applyBtn.disabled = false; showToast("Não foi possível aplicar.", true); });
+    }).catch(function(err){ applyBtn.disabled = false; showToast("Não foi possível aplicar: " + (err && err.message ? err.message : agdErr(err)), true); });
   });
 }
 
@@ -21643,7 +21740,7 @@ var HELP_TOPICS = [
     steps: [
       "<b>Editar Agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar Profissional</b>: passa as colunas de um profissional para outro.",
-      "<b>Auto Planner</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo.",
+      "<b>Auto Planner</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. Prioridade: o que foi marcado à mão fica fixo e atrai os grupos; depois vêm os individuais (ABA Não e outros serviços) e por último os pacientes ABA Sim, juntados de 2 a 4 por sala no mesmo horário, só com a mesma faixa etária (cor) e com a especialidade da sessão em comum; as salas com ABA no nome são preferidas para os grupos (o tamanho vem das colunas do profissional na sala: 3 colunas, de 2 a 3; 4 colunas, de 3 a 4). Em Gravar em escolha Só no Planner, Planner e Agenda ou Só na Agenda (e o mês da Agenda; datas passadas, feriados, fora do horário e conflitos são pulados). Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo.",
       "<b>Outras Opções ▾ → Enviar para a Agenda</b>: comece escolhendo o <b>Período</b>. <b>Mês</b>: escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda; a 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª; a prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
       "<b>Semana</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes. Na prévia, \"com aviso\" lista os que ficam fora do horário do paciente ou com terapeuta diferente do tratamento: desmarque os que não devem ir.",
       "<b>Limpar Semana</b>: apaga todos os agendamentos de uma semana do Planner (dupla confirmação, desfazível).",

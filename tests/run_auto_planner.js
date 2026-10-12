@@ -67,6 +67,36 @@ const path = require('path');
   await page.waitForFunction(() => /Não Couberam/i.test(document.getElementById('apOut').innerText));
   check('unplaceable quadro is listed with the reason?', /Nenhuma coluna/.test(await page.innerText('#apOut')));
 
+
+  // ---- grupo ABA: dois pacientes da mesma faixa etária (10+) com Fono dividem a sala no mesmo horário; faixa diferente não ----
+  await page.click('#apCancel');
+  await ev(`(async function(){
+    var db = await window.claude.use('db');
+    var cur = JSON.parse(JSON.stringify(window.__STORE__['config/rooms']));
+    var r1 = cur.list.filter(function(r){ return r.id === 'r1'; })[0];
+    r1.therapists.push({id: 'r1-t3', name: 'Bia 2', professionalId: 'bia-terapeuta'});
+    await db.doc('config/rooms').set(cur);
+    var pr = JSON.parse(JSON.stringify(window.__STORE__['patients/all']));
+    pr.list.forEach(function(x){ if (x.id === 'bruno-verde' || x.id === 'duda-vermelho') x.idade = 12; if (x.id === 'ana-azul') x.idade = 3; });
+    await db.doc('patients/all').set(pr);
+  })()`);
+  await page.waitForTimeout(400);
+  await ev(`(function(){
+    state.treatments = ['duda-vermelho', 'bruno-verde', 'ana-azul'].map(function(id, i){ return {id: 'g' + i, patientId: id, inicio: '2026-01-01', status: 'ativo', tipo: 'novo', vencPor: 'sem',
+      specHours: [{id: 'f' + i, specId: 'fono', hours: 4, profId: 'bia-terapeuta', service: 'sessao', aba: 'Sim', dia: id === 'ana-azul' ? 'qui' : 'ter', hora: '07:20'}]}; });
+    rebuildPatients();
+  })()`);
+  const grp = await ev(`(function(){
+    var pats = state.patients.filter(function(p){ return ['duda-vermelho', 'bruno-verde', 'ana-azul'].indexOf(p.id) !== -1; });
+    var plan = apBuild(pats), by = {};
+    plan.items.forEach(function(it){ var k = it.w + '|' + it.day + '|' + it.time + '|' + it.room.id; (by[k] = by[k] || []).push(it.p.id + ':' + it.group); });
+    return JSON.stringify(by) + ' GAPS ' + JSON.stringify(plan.gaps.map(function(x){ return [x.p.id, x.falta, x.why.slice(0,30)]; }));
+  })()`);
+  const g = JSON.parse(grp.split(' GAPS ')[0]);
+  const sameSlot = Object.values(g).some((l) => l.some((x) => x.startsWith('duda')) && l.some((x) => x.startsWith('bruno')));
+  check('same age band + same specialty share the room at the same time?', sameSlot, grp);
+  check('different age band (Ana, 3 anos) is never put with them?', !Object.values(g).some((l) => l.some((x) => x.startsWith('ana')) && l.length > 1), grp);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
