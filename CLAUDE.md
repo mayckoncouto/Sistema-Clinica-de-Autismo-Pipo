@@ -4143,3 +4143,10 @@ subcategorias (ex.: parcela = principal "Pagamento de Empréstimos" Saída + jur
   `conferencia-geral.sql` atualizados). Backup: `linhas` entra; `finance_entries.payable_id` NÃO é restaurado (evita chave estrangeira circular). Testes no fim de `tests/run_pagar.js`.
 - **Entrega 2 (a fazer): Empréstimos.** Ver o que ficou combinado acima; antes de construir, mostrar a prévia das parcelas e criar no Plano de contas "Pagamento de Empréstimos" (Saída),
   "Recebimento de Empréstimos" (Entrada) e "Juros de Empréstimos Concedidos" (Receita Financeira). Já existem "Empréstimos Recebidos"/"Concedidos" (categoria Empréstimos) e "Juros" (Despesas Financeiras).
+
+## Autorização permanente para rodar SQL (2026-10-12)
+Pedido do usuário: "A partir de agora não me pergunte mais, pode rodar os SQL". SQL de migração que altera dados ou
+estrutura pode ser rodado direto pelo conector do Supabase (em partes pequenas; comando com delete/drop trava no
+conector — nesses, o usuário roda no SQL Editor), sem pedir confirmação antes. Depois de rodar, conferir e relatar o
+resultado. Continua valendo: nunca copiar dados reais de pacientes para o repositório.
+- Produção (2026-10-12): `2026-10-12e-rateio-das-contas` rodada (linhas | payable_id | funcao = true | true | true).
