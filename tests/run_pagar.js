@@ -172,6 +172,54 @@ const fs = require('fs');
   await ev('FL.acc = ""; FP.rows = []; renderDemonstrativos(); 1');
   check('with no accounts the forecast is the average and the note says so?', /nenhuma conta a pagar\/receber cadastrada/.test(await page.textContent('#demBody')));
 
+  // ---- saldo mínimo e alerta de saldo baixo ----
+  await page.evaluate(async () => {
+    const db = await window.claude.use('db');
+    await db.doc('config/bank_accounts').set({ list: [
+      { id: 'viacredi', name: 'Viacredi', tipo: 'Banco', saldoInicial: 1000, dataSaldo: '2020-01-01', saldoMinimo: 500 },
+      { id: 'caixa', name: 'Caixa', tipo: 'Caixa', saldoInicial: 50, dataSaldo: '2020-01-01' }] });
+  });
+  await page.waitForTimeout(300);
+  const R1 = JSON.parse(await ev(`(function(){
+    var t = trTodayIso();
+    FL.rows = [];
+    FP.rows = [
+      {id:'s1', venc: fpAddDays(t, 3), desc:'Fornecedor', plan:'alu', acc:'viacredi', sup:'', valor:700, entry:'', grupo:'', parcela:0, parcelas:0, obs:''},
+      {id:'s2', venc: fpAddDays(t, 40), desc:'Repasse tardio', plan:'conv', acc:'viacredi', sup:'', valor:300, entry:'', grupo:'', parcela:0, parcelas:0, obs:''},
+      {id:'s3', venc: fpAddDays(t, 2), desc:'Sem conta', plan:'agua', acc:'', sup:'', valor:100, entry:'', grupo:'', parcela:0, parcelas:0, obs:''}];
+    smSetHorizon("30");
+    var P = smProject(); var i = P.items[0];
+    return JSON.stringify({n: P.items.length, hoje: i.hoje, low: i.low.v, below: i.below, first: i.first === fpAddDays(t, 3), final: i.final, sem: P.sem, mes: smEndIso("mes") >= t}); })()`));
+  check('only accounts with a minimum are checked (Viacredi)', R1.n === 1, JSON.stringify(R1));
+  check('balance today 1.000; open payable of 700 drops it to 300, below the 500 minimum', R1.hoje === 1000 && R1.low === 300 && R1.below && R1.first, JSON.stringify(R1));
+  check('receivable 40 days away is outside "Próximos 30 dias"; the one without bank account is counted apart', R1.final === 300 && R1.sem === 1, JSON.stringify(R1));
+  await page.click('#finBtn'); await page.click('#finMenu [data-nav="pagar"]'); await page.waitForTimeout(400);
+  await ev('renderPagar(); 1');
+  let al = await page.textContent('#fpAlert');
+  check('Contas a pagar shows the low-balance alert with the day and the minimum', /saldo baixo/i.test(al) && /Viacredi/.test(al) && /abaixo do mínimo de R\$\s?500,00/.test(al) && /1 conta sem conta bancária prevista/.test(al), al);
+  check('alert box is red and has the horizon selector', await page.$eval('#fpAlert .sm-box', (e) => e.classList.contains('sm-low')) && !!(await page.$('#fpAlert select[data-sm-h]')));
+  await setSel('#fpAlert select[data-sm-h]', 'mes');
+  check('changing the horizon is remembered', (await ev('smHorizon()')) === 'mes');
+  await ev('smSetHorizon("30"); 1');
+  await ev(`FP.rows.push({id:'s4', venc: fpAddDays(trTodayIso(), -5), desc:'Atrasado', plan:'conv', acc:'viacredi', sup:'', valor:5000, entry:'', grupo:'', parcela:0, parcelas:0, obs:''}); renderPagar(); 1`);
+  al = await page.textContent('#fpAlert');
+  check('an overdue receivable counts today, so the minimum is back in order', /Saldo mínimo em dia/.test(al) && !(await page.$('#fpAlert .sm-low')), al);
+  await ev('FP.rows.pop(); 1');
+  // Fluxo de caixa mostra o mesmo alerta
+  await page.click('#finBtn'); await page.click('#finMenu [data-nav="demonstrativos"]'); await page.waitForTimeout(400);
+  await ev(`FL.rows = [{id:'z1', acc:'viacredi', date:'2026-03-05', desc:'x', plan:'conv', valor:10, extDate:'', extVal:null, obs:'', key:''}]; DM.view = 'flu'; renderDemonstrativos(); 1`);
+  await page.waitForTimeout(200);
+  check('Fluxo de caixa shows the low-balance box too', /Atenção: saldo baixo/.test(await page.textContent('#demBody')));
+  // janela da conta bancária: campo Saldo mínimo
+  await page.click('#finBtn'); await page.click('#finMenu [data-nav="contas"]'); await page.waitForTimeout(300);
+  await page.click('#reg-contas-host tbody tr:has-text("Viacredi")'); await page.waitForSelector('#regMinimo');
+  check('account window shows the saved minimum', (await page.inputValue('#regMinimo')) === '500,00', await page.inputValue('#regMinimo'));
+  await page.fill('#regMinimo', '800'); await page.click('#regSave'); await page.waitForTimeout(300);
+  check('the new minimum is saved on the account', (await ev('state.bankAccounts.filter(function(a){return a.id==="viacredi"})[0].saldoMinimo')) === 800);
+  await page.click('#reg-contas-host tbody tr:has-text("Viacredi")'); await page.waitForSelector('#regMinimo');
+  await page.fill('#regMinimo', ''); await page.click('#regSave'); await page.waitForTimeout(300);
+  check('empty minimum removes the alert setting', (await ev('state.bankAccounts.filter(function(a){return a.id==="viacredi"})[0].saldoMinimo')) === undefined);
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

@@ -4113,3 +4113,12 @@ recorrência mensal + parcelas; previsão = contas cadastradas e, onde faltar, a
   A receber/Atrasadas/Vence em 7 dias, subcategorias só receitas e entradas, sem campo Fornecedor. Saiu o filtro de tipo e o cartão “Resultado previsto”,
   que foi para o Fluxo de caixa (cartão “Contas em aberto: resultado”). Alertas do Fluxo separados (vencidas a pagar / atrasadas a receber), cada um leva
   à sua tela com o filtro Vencidas/Atrasadas. Mesma permissão **Financeiro** nas duas; permissão separada por tela só se pedirem.
+
+- (2026-10-12, item 1 do pedido: Meta e alerta de saldo baixo) **Saldo mínimo por conta bancária** (`saldoMinimo` no item de `config/bank_accounts`, campo
+  "Saldo mínimo" no grupo "Alerta de saldo baixo" da janela da conta; só aparece/edita com **Financeiro – valores**; vazio = sem alerta). `smProject()` (bloco
+  "Saldo mínimo e alerta", antes de `renderContas`): por conta com mínimo, saldo de hoje (`flBalances(hoje)`) + contas a pagar/receber EM ABERTO daquela conta
+  (`acc`) até o fim do horizonte (as vencidas contam hoje); menor saldo, 1ª data abaixo do mínimo, saldo final; contas em aberto sem conta bancária prevista
+  não entram (`sem`, avisado). Horizonte `smHorizon()`: **Até o fim do mês** ou **Próximos 30 dias** (seletor `[data-sm-h]` dentro do quadro, lembrado em
+  `agendaPipo:saldoHorizonte`). Quadro `smHtml()` (`.sm-box`, vermelho `.sm-low` quando alguma conta fica abaixo) no Fluxo de caixa (antes dos gráficos) e nas
+  telas Contas a pagar / Contas a receber (`#fpAlert` / `#frAlert`); só com `bankCanSee()`. A média dos meses anteriores NÃO entra (só o que está cadastrado).
+  Sem SQL. Teste no fim de `tests/run_pagar.js`.
