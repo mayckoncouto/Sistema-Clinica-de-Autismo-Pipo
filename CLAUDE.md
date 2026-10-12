@@ -4237,7 +4237,7 @@ especialidades do tratamento (Especialidade + Quantidade Semanal).
   [{id, specId, semanal}]}`. Sem SQL.
 - Janela: Data do Encaminhamento, Validade e Vencimento (calculado, só leitura; mesma conta do tratamento — 6 meses a partir de 01/01 =
   válido até 30/06, `encVenc` com `trAddMonths`), aviso quando vencido/vence em 30 dias (`encState`), quadros por especialidade
-  (`.room-row.tl-row`, "+ Incluir Especialidade", janela `openEncLineModal`: Especialidade com "+ Incluir" e Quantidade Semanal de 1 a 20;
+  (`.room-row.tl-row`, "+ Incluir Especialidade", janela `openEncLineModal`: Especialidade com "+ Incluir" e Quantidade Semanal **opcional e sem limite** (pedido do usuário: plano que não pede quantidade no encaminhamento — fica vazia, "Quantidade semanal não informada"; só aceita inteiro ≥ 1);
   a mesma especialidade não repete). `encHtml`, `encWire(root, valor, nomeDoPaciente)` → `{read}`.
 - Lista de Pacientes: etiqueta `Enc. vencido` / `Enc. vence` ao lado do nome (`encChip`, só no computador). Ficha impressa: linha
   "Encaminhamento" (`encSummary`). Automação `encaminhamento_vencendo` do CRM lê `patient_health.data.encaminhamento.venc`.

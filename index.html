@@ -11629,10 +11629,10 @@ function encSummary(e){
   var parts = [];
   if (e.data) parts.push("de " + trBr(e.data));
   if (encVenc(e)) parts.push("válido até " + trBr(encVenc(e)));
-  var esp = (e.esp || []).map(function(r){ return specialtyName(r.specId) + " " + r.semanal + "x/semana"; });
+  var esp = (e.esp || []).map(function(r){ return specialtyName(r.specId) + (Number(r.semanal) ? " " + r.semanal + "x/semana" : ""); });
   return (parts.join(" · ") + (esp.length ? (parts.length ? " · " : "") + esp.join(", ") : "")) || "";
 }
-function encSemanalText(n){ n = Number(n) || 0; return n + (n === 1 ? " sessão" : " sessões") + " por semana"; }
+function encSemanalText(n){ n = Number(n) || 0; return n ? n + (n === 1 ? " sessão" : " sessões") + " por semana" : "Quantidade semanal não informada"; }
 function encHtml(e){
   e = e || {};
   return '<div class="pm-sub">Encaminhamento</div>' +
@@ -11659,7 +11659,7 @@ function openEncLineModal(ctx){
         '<button class="modal-close" id="elX" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body"><div class="field-row">' +
         '<div class="field"><label for="elSpec">Especialidade</label><select id="elSpec" data-combo data-reg-add="especialidades">' + opt("", "Escolha…", r.specId) + specs.map(function(s){ return opt(s.id, s.name, r.specId); }).join("") + '</select></div>' +
-        '<div class="field"><label for="elQtd">Quantidade Semanal</label><input id="elQtd" type="text" inputmode="numeric" maxlength="2" value="' + esc(r.semanal) + '"></div>' +
+        '<div class="field"><label for="elQtd">Quantidade Semanal</label><input id="elQtd" type="text" inputmode="numeric" placeholder="Opcional" value="' + esc(r.semanal) + '"></div>' +
       '</div></div>' +
       '<div class="modal-foot">' + (!ctx.isNew ? '<button class="btn danger" id="elDel">Excluir</button>' : '') + '<span class="spacer"></span>' +
         '<button class="btn ghost" id="elCancel">Cancelar</button><button class="btn primary" id="elSave">Salvar</button></div>' +
@@ -11678,11 +11678,11 @@ function openEncLineModal(ctx){
       .then(function(ok){ if (ok){ close(); ctx.onDelete(); } });
   });
   $("elSave").addEventListener("click", function(){
-    var spec = $("elSpec").value, q = parseInt($("elQtd").value, 10);
+    var spec = $("elSpec").value, raw = $("elQtd").value.trim(), q = raw === "" ? 0 : parseInt(raw, 10);
     if (!spec){ showToast("Escolha a especialidade.", true); return; }
-    if (!(q >= 1 && q <= 20)){ showToast("Informe a quantidade semanal (de 1 a 20).", true); return; }
+    if (raw !== "" && (!/^\d+$/.test(raw) || q < 1)){ showToast("A quantidade semanal precisa ser um número maior que zero (ou deixe em branco).", true); return; }
     if ((ctx.others || []).some(function(x){ return x.specId === spec; })){ showToast("Esta especialidade já está no encaminhamento.", true); return; }
-    close(); ctx.onSave({id: r.id || uid("en"), specId: spec, semanal: String(q)});
+    close(); ctx.onSave({id: r.id || uid("en"), specId: spec, semanal: q ? String(q) : ""});
   });
   setTimeout(function(){ var f = $("elSpec"); if (f && f.focus) f.focus(); }, 30);
 }
@@ -21048,7 +21048,7 @@ var HELP_TOPICS = [
     rules: [
       "<b>Convênio do cadastro × convênio do tratamento</b>: o do cadastro é o padrão; o tratamento pode usar outro. Ao trocar o convênio ou o plano no cadastro de um paciente que tem tratamento Ativo, o sistema pergunta se aplica ao tratamento ativo (quem pode editar Tratamentos); os tratamentos antigos nunca mudam. A troca fica no Histórico do tratamento.",
       "<b>Carteirinha</b>: com a validade preenchida, a lista de Pacientes mostra uma etiqueta ao lado do nome quando a carteirinha está vencida ou vence em até 30 dias (no computador), e a janela do tratamento repete o aviso.",
-      "<b>Encaminhamento</b> (no grupo Saúde): informe a <b>Data do Encaminhamento</b> e a <b>Validade</b> (3 meses, 6 meses ou 1 ano); o <b>Vencimento</b> é calculado sozinho (6 meses a partir de 01/01 = válido até 30/06). Em <b>+ Incluir Especialidade</b> escolha a especialidade indicada pelo médico e a <b>Quantidade Semanal</b> de sessões (de 1 a 20); cada especialidade aparece num quadro com o botão Editar, e a mesma especialidade não repete. Quando o encaminhamento está vencido ou vence em até 30 dias, a janela mostra um aviso e a lista de Pacientes mostra a etiqueta <b>Enc. vencido</b> / <b>Enc. vence</b> (no computador). O encaminhamento sai na ficha impressa e, como todo dado de saúde, só aparece para quem tem <b>Pacientes – Saúde</b>.",
+      "<b>Encaminhamento</b> (no grupo Saúde): informe a <b>Data do Encaminhamento</b> e a <b>Validade</b> (3 meses, 6 meses ou 1 ano); o <b>Vencimento</b> é calculado sozinho (6 meses a partir de 01/01 = válido até 30/06). Em <b>+ Incluir Especialidade</b> escolha a especialidade indicada pelo médico e a <b>Quantidade Semanal</b> de sessões (sem limite; <b>opcional</b> — deixe em branco quando o plano de saúde não pede a quantidade no encaminhamento); cada especialidade aparece num quadro com o botão Editar, e a mesma especialidade não repete. Quando o encaminhamento está vencido ou vence em até 30 dias, a janela mostra um aviso e a lista de Pacientes mostra a etiqueta <b>Enc. vencido</b> / <b>Enc. vence</b> (no computador). O encaminhamento sai na ficha impressa e, como todo dado de saúde, só aparece para quem tem <b>Pacientes – Saúde</b>.",
       "<b>Rotina Atual</b> (abaixo de Escola): para cada dia de segunda a sexta, manhã e tarde, escolha onde o paciente está (Escola, Terapia (Pipo), Outra terapia, Atividade, Em casa / livre ou Outro) e, se quiser, um detalhe. <b>Terapia (Pipo)</b> e <b>Em casa / livre</b> não avisam ao agendar. <b>Copiar Segunda</b>, acima de Manhã ou de Tarde, repete aquele período de segunda nos outros dias (com Desfazer por alguns segundos). Ao agendar no Planner ou na Agenda num período de Escola, Outra terapia, Atividade ou Outro, o sistema avisa (regra em Acesso → Sistema). A rotina sai na ficha impressa e pode ser obrigatória em Campos obrigatórios.",
       "Trocar o nome do paciente no cadastro troca também nos agendamentos do Planner e da Agenda, nas evoluções do Prontuário e no Plano terapêutico. Se outro paciente tem o mesmo nome antigo, nada é trocado (aparece um aviso para conferir à mão).",
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",

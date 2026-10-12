@@ -45,6 +45,8 @@ const path = require('path');
   check('saving without specialty is refused (window stays)?', !!(await page.$('#ovEncLine')));
   await setv('#elSpec', 'fono'); await page.fill('#elQtd', '0'); await page.click('#elSave'); await page.waitForTimeout(80);
   check('quantity 0 is refused?', !!(await page.$('#ovEncLine')));
+  await page.fill('#elQtd', 'abc'); await page.click('#elSave'); await page.waitForTimeout(80);
+  check('non-numeric quantity is refused?', !!(await page.$('#ovEncLine')));
   await page.fill('#elQtd', '3'); await page.click('#elSave'); await page.waitForTimeout(150);
   check('card shows the specialty and 3 sessions per week?', await page.$eval('#encRows', (e) => /Fonoaudiologia/.test(e.textContent) && /3 sessões por semana/.test(e.textContent)));
   await page.click('#encAdd'); await page.waitForTimeout(150);
@@ -52,6 +54,15 @@ const path = require('path');
   check('same specialty twice is refused?', !!(await page.$('#ovEncLine')));
   await setv('#elSpec', 'psico'); await page.fill('#elQtd', '1'); await page.click('#elSave'); await page.waitForTimeout(150);
   check('second specialty added (1 sessão por semana)?', await page.$eval('#encRows', (e) => e.querySelectorAll('.tl-row').length === 2 && /1 sessão por semana/.test(e.textContent)));
+  // sem limite e opcional
+  await page.click('[data-enc-edit="1"]'); await page.waitForTimeout(150);
+  await page.fill('#elQtd', ''); await page.click('#elSave'); await page.waitForTimeout(150);
+  check('blank quantity is accepted (not informed)?', await page.$eval('#encRows', (e) => /Quantidade semanal não informada/.test(e.textContent)));
+  await page.click('[data-enc-edit="1"]'); await page.waitForTimeout(150);
+  await page.fill('#elQtd', '35'); await page.click('#elSave'); await page.waitForTimeout(150);
+  check('no upper limit (35 per week)?', await page.$eval('#encRows', (e) => /35 sessões por semana/.test(e.textContent)));
+  await page.click('[data-enc-edit="1"]'); await page.waitForTimeout(150);
+  await page.fill('#elQtd', '1'); await page.click('#elSave'); await page.waitForTimeout(150);
   // editar
   await page.click('[data-enc-edit="1"]'); await page.waitForTimeout(150);
   await page.fill('#elQtd', '2'); await page.click('#elSave'); await page.waitForTimeout(150);
