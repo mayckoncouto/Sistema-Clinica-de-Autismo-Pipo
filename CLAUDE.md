@@ -3997,3 +3997,30 @@ para a Fase 3). O saldo de cada conta da planilha (aba DRE) = saldo inicial + Σ
 - Produção (2026-10-11): `2026-10-11k-financeiro-lancamentos` rodada pelo conector, autorizada pelo usuário ("Sim"). O script inteiro estourou o tempo do conector (60 s) sem criar nada; foi aplicado em 3 partes (tabela e índices | função, gatilho e 4 políticas | tempo real). Conferido: tabela, RLS ligada, 4 políticas, gatilho, tempo real, função fechada para anon. Falta o usuário importar `lancamentos-fluxo-2026.xlsx` e conferir os saldos mensais com a aba DRE.
 - (2026-10-11, correção) **Importar planilha no iPhone não concluía**: a cópia de segurança baixada antes de gravar abria a visualização do arquivo e a página parava (0 lançamentos gravados). Agora a cópia só é baixada quando há dados a guardar (`K.exportRows().length`) e fora do celular (`isMobileView()`); a gravação roda sempre. Vale para todas as importações (`ioOpenImport`).
 - Produção (2026-10-11): FLUXO 2026 importado pelo usuário (2.206 lançamentos, 02/01 a 31/08/2026, 0 sem subcategoria). Saldo de fim de mês das 3 contas (jan–ago) conferido pelo conector: os 24 valores batem com a aba DRE da planilha (Viacredi 27.343,66, Bradesco 138.359,41, Caixa 128.201,70 em 31/08). Próxima fase: fluxo de caixa e DRE calculados dos lançamentos.
+
+## Financeiro — Demonstrativos: Fluxo de caixa, DRE e Lançamentos (2026-10-12, Etapa 1)
+Decisões do usuário (prévia aprovada, `previa-financeiro`): a janela do menu Financeiro se chama **Demonstrativos** e tem três
+botões, nesta ordem: **Fluxo de caixa** (abre por ele), **DRE** e **Lançamentos** (a lista de antes). Sem seletor "Valores em";
+Exportar fica dentro de **Outras opções**; DRE modular com visões salvas com nome; clicar num valor leva a Lançamentos
+filtrado (faixa + Voltar); comparação com o mês anterior ou com um mês de referência (padrão = o mais recente), em %, R$ ou nos dois.
+- A aba continua `lancamentos` (`#tab-lancamentos`, endereço `#lancamentos`, permissão `financeiro`); item do menu e título "Demonstrativos".
+  Bloco "Financeiro: Demonstrativos" logo antes de `USAGE.contas`: `DM` (estado; `DM.view` = flu|dre|lan, configurações guardadas em
+  `agendaPipo:demSettings`), `demBuildIndex` (soma por subcategoria×mês e saldos por conta, refeito a cada desenho), `demColumns`
+  (ano mês a mês / trimestres / um mês; coluna "previsto" só no Fluxo do ano = média dos 3 últimos meses), linhas `demFluxoLines` /
+  `demDreLines` (`fn(ms)` por linha), `demRowHtml`, `demNote` (comparação), gráficos `demChartDre` / `demChartSaldo` (saldo dia a dia, real +
+  previsto), `demAlerts` (categoria de despesa >15% acima da média; valor ≠ extrato), `demChanges`, `demGo` / `demOpenFilter` (abrem Lançamentos
+  com `FL.dm` = {tit, chips, plans, ms, ext, back}; `flFiltered` obedece), `demStripRender`, editor de visões, `demMenuHtml`, `demExportXlsx`, `demPrint`.
+- Toda a tela passa por `renderLancamentos()` (decide por `DM.view`); `demSyncBar()` mostra/esconde os controles com a classe `dem-off`
+  (nunca `hidden`: os seletores viram `.dp-btn`). Saldo (inicial/final, por conta, gráfico) só com **Financeiro – valores**.
+- Receita/Despesa entram no DRE; Receita/Entrada e Despesa/Saída no Fluxo de caixa (mesma regra do saldo das contas).
+- Visões do DRE: `config/dre_views {list:[{id, name, cats:[“categoria|tipo”], open}]}` (`SIMPLE_LISTS.visoesdre`, `state.dreViews`); salvar/excluir
+  segue a permissão Financeiro (incluir/editar/excluir). Migração `supabase/2026-10-12-demonstrativos.sql` (caminho permitido + `module_for_path`;
+  linha 102 de `conferencia-migracoes.sql`; `schema.sql` e `conferencia-geral.sql` atualizados). SQL ainda NÃO rodado em produção.
+- Teste `tests/run_demonstrativos.js` (no `npm test`); `run_lancamentos.js` passa pelo botão Lançamentos. Ajuda: tópico `lancamentos` (Demonstrativos).
+- Próximas etapas combinadas: **E2** fechamento de mês (permissão "Fechamento de mês"; reabrir qualquer mês com aviso de que o saldo dos meses
+  seguintes muda; mês reaberto edita todos os campos), anotações nas células, resumo mensal em PDF; **E3** custo e receita por atendimento.
+- Regras de custo por atendimento decididas (E3, ainda não construída): custo do slot = remuneração mensal ÷ slots disponíveis do mês (13 por dia útil);
+  custo de equipe por atendimento = custo do slot do terapeuta ÷ pacientes DELE no horário + custo do slot do apoio (coordenador/aplicador ABA) ÷ todos os
+  pacientes das salas que ele cobre; demais custos (fixos, variáveis, não profissionais, impostos — vindos dos Lançamentos — e outros) por hora de sala ocupada,
+  divididos entre os pacientes presentes; ociosidade de equipe e de sala à parte; matriz convênio × especialidade; contar todas as sessões agendadas.
+  Antes: campo "Natureza do custo" no Plano de contas e sugestão de classificação das subcategorias.

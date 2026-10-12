@@ -112,7 +112,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (98, '2026-10-11h-link-escolas-medicos',              exists(select 1 from fx where proname = 'intake_form' and prosrc like '%config/schools%' and prosrc like '%config/doctors%'), 'link de cadastro com escolas e médicos cadastrados'),
  (99, '2026-10-11i-convenio-no-paciente',            exists(select 1 from fx where proname = 'intake_send' and prosrc like '%carteirinhaValidade%'), 'convênio, plano e carteirinha no cadastro do paciente (link e dados)'),
  (100, '2026-10-11j-financeiro-base',                exists(select 1 from pg_tables where schemaname = 'public' and tablename = 'bank_account_finance'), 'Financeiro Fase 1: categorias de fornecedor, contas bancárias, plano de contas e saldo inicial protegido'),
- (101, '2026-10-11k-financeiro-lancamentos',       exists(select 1 from pg_tables where schemaname = 'public' and tablename = 'finance_entries'), 'Financeiro Fase 2: lançamentos (tabela protegida pela permissão Financeiro)')
+ (101, '2026-10-11k-financeiro-lancamentos',       exists(select 1 from pg_tables where schemaname = 'public' and tablename = 'finance_entries'), 'Financeiro Fase 2: lançamentos (tabela protegida pela permissão Financeiro)'),
+ (102, '2026-10-12-demonstrativos',                 exists(select 1 from pg_constraint where conname = 'documents_path_valid' and pg_get_constraintdef(oid) like '%dre_views%'), 'Demonstrativos: visões salvas do DRE (caminho permitido e módulo)')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,
