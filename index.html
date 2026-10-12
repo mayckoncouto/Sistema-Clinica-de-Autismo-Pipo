@@ -5432,6 +5432,9 @@ var SYS_GROUPS = [
 ];
 var SYS_MODE_LABEL = {block: "Bloquear", warn: "Avisar", off: "Desligado"};
 var BWO = ["block", "warn", "off"];
+var PL_ROOM_MAX = 4;   // pacientes por sala no mesmo horário (Planner e Auto Planner)
+// Sala ABA = campo "ABA" do cadastro da sala (o nome só mostra "… ABA").
+function roomAba(r){ return !!r && !r.group && r.aba === true; }
 var SYS_RULES = [
   {id: "pl_nao_aba", g: "planner", label: "Paciente que não faz ABA ocupa o horário", desc: "Sessão de paciente que não faz ABA ocupa a sala toda no horário (qualquer sala, inclusive as com ABA no nome).", def: "block", modes: BWO},
   {id: "pl_reuniao_prof", g: "planner", label: "Reunião Clínica / Treinamento ocupa o profissional", desc: "Profissional com Reunião Clínica ou Treinamento num horário não pode ter outro agendamento (paciente, grupo, outra reunião) em nenhuma sala ou grupo nesse horário. A sala continua livre para os outros profissionais.", def: "block", modes: BWO},
@@ -5439,6 +5442,7 @@ var SYS_RULES = [
   {id: "pl_pac_prof", g: "planner", label: "Paciente duas vezes com o mesmo profissional", desc: "O paciente não pode ter dois atendimentos com o mesmo profissional no mesmo horário.", def: "block", modes: BWO},
   {id: "pl_pac_servico", g: "planner", label: "Paciente com o mesmo serviço em dois lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
   {id: "pl_fora_prof", g: "planner", label: "Fora do horário de trabalho do profissional", desc: "Célula fora do horário de trabalho do profissional da coluna fica cinza e não aceita agendamento.", def: "block", modes: ["block", "off"]},
+  {id: "pl_sala_max", g: "planner", label: "Máximo de 4 Pacientes por Sala no Mesmo Horário", desc: "Agendar o 5º paciente numa sala no mesmo horário (Planner). Em Avisar, pede confirmação; o Auto Planner nunca passa de 4.", def: "warn", modes: BWO},
   {id: "pl_rotina", g: "planner", label: "Rotina Atual do Paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "pl_fora_paciente", g: "planner", label: "Fora do Horário do Paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
   {id: "pl_terapeuta", g: "planner", label: "Terapeuta Diferente do Tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
@@ -9603,6 +9607,20 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
     return msg;
   }
   var x;
+  // No máximo 4 pacientes por sala no mesmo horário (Acesso → Sistema: Avisar pede confirmação).
+  if (!isGroup(room) && !bookingKind(rec)){
+    var inRoom = 0;
+    (room.therapists || []).forEach(function(tt){
+      var kk = time + "|" + room.id + "|" + tt.id;
+      if (kk === key || ignoreKeys.indexOf(kk) !== -1) return;
+      var bb = Object.prototype.hasOwnProperty.call(extra, kk) ? extra[kk] : effectiveBooking(bookings, kk, dayKey, time);
+      if (bb && bb.patient && !bookingKind(bb)) inRoom++;
+    });
+    if (inRoom >= PL_ROOM_MAX){
+      var mx = hit("pl_sala_max", "A sala <b>" + esc(room.name) + "</b> já tem " + inRoom + " pacientes às " + esc(time) + " (máximo " + PL_ROOM_MAX + " por sala no mesmo horário).");
+      if (mx) return mx;
+    }
+  }
   for (var i=0;i<rooms.length;i++){
     var r = rooms[i], seats = r.therapists || [];
     for (var j=0;j<seats.length;j++){
@@ -14413,7 +14431,8 @@ function openRoomModal(r, asGroup){
   var grp = r ? isGroup(r) : !!asGroup;
   var noun = grp ? "grupo" : "sala";
   var host = document.getElementById("modalHost");
-  var draftName = r ? r.name : "";
+  var draftAba = !!(r && !grp && r.aba === true);
+  var draftName = r ? (draftAba ? String(r.name || "").replace(/\s*\bABA\s*$/i, "").trim() : r.name) : "";
   var draftColor = (r && r.color) ? r.color : "teal";
   var draftTherapists = (r ? r.therapists : [{id:null, professionalId:null, name:""}]).map(function(t){ return {id:t.id, professionalId:t.professionalId||null, name:t.name}; });
 
@@ -14423,7 +14442,8 @@ function openRoomModal(r, asGroup){
         '<button class="modal-close" id="closeRoom" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="tr-sec tr-sec-top">'+(grp ? "Grupo" : "Sala")+'</div>' +
-        '<div class="field"><label for="rmName">Nome '+(grp ? "do grupo" : "da sala")+'</label><input id="rmName" type="text" placeholder="'+(grp ? "ex: Coordenador" : "ex: Fonoaudiologia ABA")+'" value="'+esc(draftName)+'"></div>' +
+        '<div class="field"><label for="rmName">Nome '+(grp ? "do grupo" : "da sala")+'</label><input id="rmName" type="text" placeholder="'+(grp ? "ex: Coordenador" : "ex: Fonoaudiologia")+'" value="'+esc(draftName)+'"></div>' +
+        (grp ? '' : '<div class="field"><label for="rmAba">ABA</label><select id="rmAba"><option value="Sim"'+(draftAba ? ' selected' : '')+'>Sim</option><option value="Não"'+(draftAba ? '' : ' selected')+'>Não</option></select><div class="color-hex-label" style="margin-top:6px">Sala ABA recebe de 2 a 4 pacientes ABA Sim no mesmo horário e aparece com “ABA” no nome (ex.: Fonoaudiologia ABA). O Auto Planner prioriza essas salas para os grupos.</div></div>') +
         '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="rmColorBtn" title="Escolher cor" aria-label="Escolher cor"></button><span class="color-pick-code mono" id="rmColorCode"></span><span class="color-hex-label">clique na bolinha para escolher</span></div></div>' +
         '<div class="tr-sec">Terapeutas (Colunas na Grade)</div>' +
         '<div class="field"><div class="therapist-rows" id="rmTherapists"></div>' +
@@ -14525,6 +14545,8 @@ function openRoomModal(r, asGroup){
     syncFromDom();
     var name = document.getElementById("rmName").value.trim();
     if (!name){ document.getElementById("rmName").focus(); return; }
+    var abaSel = document.getElementById("rmAba"), roomAbaOn = !grp && !!abaSel && abaSel.value === "Sim";
+    if (!grp){ name = name.replace(/\s*\bABA\s*$/i, "").trim() || name; if (roomAbaOn) name += " ABA"; }
     var cleanTherapists = draftTherapists.filter(function(t){ return t.professionalId; });
     if (!cleanTherapists.length){ showToast("Selecione ao menos um profissional para "+(grp ? "o grupo." : "a sala."), true); return; }
     var roomId = isNew ? uid(slugify(name) || noun) : r.id;
@@ -14536,7 +14558,7 @@ function openRoomModal(r, asGroup){
       };
     });
     var rec = {id: roomId, name: name, color: draftColor, therapists: cleanTherapists};
-    if (grp) rec.group = true;
+    if (grp) rec.group = true; else rec.aba = roomAbaOn;
     var list = state.rooms.slice();
     if (isNew){ list.push(rec); }
     else { list = list.map(function(x){ return x.id===rec.id ? rec : x; }); }
@@ -17601,7 +17623,8 @@ function apBuild(patients){
                 if (cur && (cur.patient || cur.blocked || cur.lock)) return;
                 if (!seatAvailable(c.seat, d.key, time)) return;
                 if (plLockInfo(cur, d.key, w, time, c.room, c.seat)) return;
-                var score = ti * 0.01, isAbaRoom = /aba/i.test(c.room.name || "");
+                if (apOcc(docId, time, c.room).length >= PL_ROOM_MAX) return;
+                var score = ti * 0.01, isAbaRoom = roomAba(c.room);
                 if (abaSim){
                   // grupo: só com ABA = Sim da mesma faixa etária e com a especialidade da sessão em comum
                   var occ = apOccAba(apOcc(docId, time, c.room)), bad = false;
@@ -21676,12 +21699,13 @@ var HELP_TOPICS = [
   {id: "salas", group: "Cadastros", title: "Salas", mod: "salas", tab: "salas",
     purpose: "Salas da clínica e as colunas (terapeutas) de cada uma no Planner.",
     steps: [
-      "Cadastros → <b>Salas</b> → <b>+ Incluir</b>: nome, cor e colunas (um profissional por coluna).",
+      "Cadastros → <b>Salas</b> → <b>+ Incluir</b>: nome, ABA (Sim/Não), cor e colunas (um profissional por coluna).",
       "Use as setas ▲▼ para mudar a ordem das salas e das colunas."
     ],
     rules: [
       "Trocar o nome da sala troca também o nome nas marcações das colunas dos grupos de suporte do Planner que apontam para ela.",
-      "Sala <b>com \"ABA\" no nome</b>: paciente que não faz ABA ocupa só o horário do mesmo profissional. Sala <b>sem \"ABA\"</b>: ocupa a sala toda.",
+      "Campo <b>ABA</b> (Sim/Não) no cadastro da sala: com Sim o nome aparece como “Fonoaudiologia ABA” (digite só “Fonoaudiologia”). Sala ABA recebe de 2 a 4 pacientes ABA Sim no mesmo horário e é a preferida do Auto Planner para os grupos. O sistema não olha mais o nome da sala, só este campo.",
+      "No Planner, cada sala aceita no máximo <b>4 pacientes no mesmo horário</b> (o 5º pede confirmação; regra em Acesso → Sistema). O Auto Planner nunca passa de 4.",
       "As regras de quem não faz ABA valem só para o serviço <b>Sessão</b>: atendimento de outro serviço (avaliação, triagem, orientação…) não ocupa o horário e pode ser marcado no horário listrado por essa regra.",
       "Tirar uma coluna que tem agendamentos no Planner abre a janela <b>Colunas com Agendamentos</b>: os agendamentos precisam ser <b>movidos</b> para outra coluna (sala → sala, grupo → grupo) antes de a coluna sair. O sistema já sugere a coluna: primeiro outra do mesmo profissional, depois a mesma sala, depois as outras. Se algum agendamento não cabe no destino (horário ocupado, conflito ou fora do horário do profissional), escolha outra coluna ou mova esses agendamentos no Planner antes; enquanto isso a coluna não sai.",
       "Trocar o profissional de uma coluna que tem agendamentos também abre a janela: os agendamentos <b>ficam com o novo profissional</b> (a janela mostra quantos ficariam em conflito — em dois lugares no mesmo horário ou fora do horário de trabalho dele — e pede confirmação) ou vão para <b>outra coluna do profissional anterior</b>.",

@@ -4265,3 +4265,14 @@ irmãos juntos, folga por turno, intervalo entre "não ABA", marca "montado pelo
   entram temporariamente em `state.scheduleDocs` durante o cálculo (`apPut`/`apRestore`) para as regras enxergarem umas às outras.
 - Ajuda: tópico `planner-ferramentas`. Teste `tests/run_auto_planner.js` (no `npm test`). Sem SQL.
 - (2026-10-12, pedido do usuário) **Auto Planner: destino, prioridade e grupos ABA.** Campo **Gravar em**: Só no Planner / Planner e Agenda / Só na Agenda (+ mês da Agenda; `apAgendaPlan(items, ym)` usa `genMonthWeeks`, pula datas passadas, feriados, fora do horário, duplicados e `agdConflictIn`; insere por `agdInsertBatches`, entra no desfazer da Agenda). Respostas do usuário: manuais ficam fixos e entram primeiro (atraem os grupos); ordem de cálculo = individuais (quadro com ABA Não ou serviço ≠ Sessão) e depois ABA Sim, ordenados por faixa etária e especialidade. **ABA Sim em grupo** na mesma sala e horário (`apOcc`, `apOccAba`): só com a MESMA faixa etária (`apBandId` = `ageBandOf`) e a especialidade da sessão em comum nos tratamentos (`apSpecIds`); tamanho = nº de colunas da sala com o profissional do quadro (`roomK`): 2 colunas = 2, 3 colunas = 2 a 3, 4 colunas (ou 2 profissionais × 2) = 3 a 4 (`pref`); salas com "ABA" no nome preferidas para grupos (-20) e evitadas pelos individuais (+20); a prévia mostra "grupo de N / sozinho(a)" e o resumo "ABA Sim: X em grupo, Y sozinhas". Testes em `tests/run_auto_planner.js` (grupo e faixa diferente).
+
+## Sala com campo ABA; máximo de 4 pacientes por sala (2026-10-12)
+Pedido do usuário: o nome da sala não decide mais se ela é ABA. Cadastro da sala (`openRoomModal`) tem **ABA (Sim/Não)** (`rec.aba = true|false`; grupos de
+suporte não têm). O nome da sala continua guardado COMPLETO ("Fonoaudiologia ABA"): o cadastro mostra o nome sem "ABA" e, com Sim, acrescenta " ABA" ao salvar
+(assim nada que guarda o nome — células dos grupos no Planner, Agenda — mudou). `roomAba(r)` (perto de `PL_ROOM_MAX`) lê só `r.aba === true`; nenhuma regra consulta
+o nome (as regras "não ABA" já não olhavam desde 2026-10-08; só o Auto Planner usava `/aba/i`). Auto Planner prefere salas ABA para grupos e evita-as nos individuais.
+- **Máximo 4 pacientes por sala no mesmo horário** (`PL_ROOM_MAX`): `plannerConflict` ganhou a regra do Sistema `pl_sala_max` (padrão **Avisar** = pede confirmação;
+  Bloquear/Desligado possíveis); conta pacientes (sem Bloqueado/Reunião/Treinamento) nas colunas da sala. O Auto Planner nunca passa de 4 (`apOcc` ≥ 4 = pula).
+  A Agenda por data não tem essa regra.
+- Migração só de dados `supabase/2026-10-12j-sala-aba.sql` (aba = true nas salas com "ABA" no nome, false nas outras, grupos intactos; linha 111 da conferência).
+  Produção (2026-10-12): rodada pelo conector (5 salas ABA | 6 sem ABA). Teste `tests/run_sala_aba.js` (no `npm test`).
