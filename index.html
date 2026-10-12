@@ -17532,6 +17532,36 @@ function apLineAba(p, line){ return line.aba ? abaYesNo(line.aba) : abaAuto(p); 
 function apIsAbaSim(p, line){ return lineSvc(line) === DEFAULT_SERVICE_ID && apLineAba(p, line) === "Sim"; }
 function apBandId(p){ var b = ageBandOf(patientAgeYears(p)); return b ? b.id : ""; }
 function apSpecIds(p){ return patientSpecRows(p).map(function(r){ return r.specId; }); }
+function apIsAplicador(prof){
+  return !!prof && profAreas(prof).some(function(id){ return /aplicador/.test(normText(specialtyName(id) || "")); });
+}
+// Dois profissionais podem atender na mesma sala/horário quando têm a mesma especialidade principal
+// ou um deles tem Aplicador ABA (principal ou complementar).
+function apProfCompat(a, b){
+  if (!a || !b) return false;
+  if (a.id === b.id) return true;
+  if (apIsAplicador(a) || apIsAplicador(b)) return true;
+  return !!a.specialtyId && a.specialtyId === b.specialtyId;
+}
+// Irmãos = mesmo nome (ou CPF) de mãe ou de pai no cadastro.
+function apSibIds(p){
+  var tok = {};
+  ["mae", "pai"].forEach(function(r){
+    var x = p[r]; if (!x) return;
+    var n = normText(x.nome || ""), c = String(x.cpf || "").replace(/\D/g, "");
+    if (n.length > 3) tok[r + ":" + n] = 1;
+    if (c.length === 11) tok[r + "#" + c] = 1;
+  });
+  var keys = Object.keys(tok); if (!keys.length) return [];
+  return state.patients.filter(function(q){
+    if (q.id === p.id || !isActive(q)) return false;
+    return ["mae", "pai"].some(function(r){
+      var x = q[r]; if (!x) return false;
+      var n = normText(x.nome || ""), c = String(x.cpf || "").replace(/\D/g, "");
+      return tok[r + ":" + n] || (c.length === 11 && tok[r + "#" + c]);
+    });
+  }).map(function(q){ return q.id; });
+}
 // Quem está numa sala num horário (marcado à mão, já no Planner ou sugerido agora).
 function apOcc(docId, time, room){
   var bk = state.scheduleDocs[docId].bookings, out = [];
@@ -17563,6 +17593,20 @@ function apBuild(patients){
   var plan = {items: [], gaps: [], noLines: []}, temp = [], haveBy = {}, tasks = [];
   var docIds = plannerAllDocIds();
   docIds.forEach(function(id){ if (!state.scheduleDocs[id]) state.scheduleDocs[id] = {bookings: {}}; if (!state.scheduleDocs[id].bookings) state.scheduleDocs[id].bookings = {}; });
+  var sibCache = {}, profCache = {}, seatProf = {};
+  plannerRooms().forEach(function(r){ (r.therapists || []).forEach(function(t){ seatProf[r.id + "|" + t.id] = t.professionalId || ""; }); });
+  function sibTimes(docId, sibIds){   // horários em que algum irmão já está (marcado ou sugerido)
+    var k = docId + "|" + sibIds.join(","); if (sibCache[k]) return sibCache[k];
+    var set = {}, bk = state.scheduleDocs[docId].bookings;
+    Object.keys(bk).forEach(function(key){ var b = bk[key]; if (b && b.patient && !bookingKind(b) && sibIds.indexOf(recPid(b)) !== -1) set[key.split("|")[0]] = 1; });
+    return (sibCache[k] = set);
+  }
+  function profTimes(docId, profId){   // horários ocupados do profissional (qualquer coluna dele)
+    var k = docId + "|" + profId; if (profCache[k]) return profCache[k];
+    var set = {}, bk = state.scheduleDocs[docId].bookings;
+    Object.keys(bk).forEach(function(key){ var b = bk[key]; if (!b || !b.patient) return; var ps = key.split("|"); if (seatProf[ps[1] + "|" + ps[2]] === profId) set[ps[0]] = 1; });
+    return (profCache[k] = set);
+  }
   function haveOf(p, lines){
     if (haveBy[p.id]) return haveBy[p.id];
     var have = [];
@@ -17602,9 +17646,8 @@ function apBuild(patients){
         var w0 = allowed.slice().sort(function(a, b){ return (per[a] + mine.filter(function(h){ return h.w === a; }).length) - (per[b] + mine.filter(function(h){ return h.w === b; }).length); })[0];
         per[w0]++; planned++;
       }
-      var cols = apColumnsFor(line), svc = lineSvc(line), placedHere = 0, abaSim = tk.cls === 1, band = apBandId(p);
+      var cols = apColumnsFor(line), svc = lineSvc(line), placedHere = 0, abaSim = tk.cls === 1, band = apBandId(p), sibIds = apSibIds(p);
       var why = cols.length ? "Sem horário livre que caiba (regras, horário do profissional ou do paciente, ou faixa etária/especialidade do grupo)" : "Nenhuma coluna de sala com o profissional dessa especialidade";
-      var roomK = {}; cols.forEach(function(c){ roomK[c.room.id] = (roomK[c.room.id] || 0) + 1; });
       var sched = [];
       var rec0 = {patient: p.nome, patientId: p.id, note: "", service: svc};
       allowed.forEach(function(w){
@@ -17629,17 +17672,34 @@ function apBuild(patients){
                   // grupo: só com ABA = Sim da mesma faixa etária e com a especialidade da sessão em comum
                   var occ = apOccAba(apOcc(docId, time, c.room)), bad = false;
                   occ.forEach(function(o){
-                    if (apBandId(o.p) !== band || apSpecIds(o.p).indexOf(line.specId) === -1) bad = true;
+                    var oprof = findProfessional(o.prof);
+                    if (apBandId(o.p) !== band || !apProfCompat(c.prof, oprof)) { bad = true; return; }
+                    // mesma especialidade nos tratamentos, salvo quando um dos terapeutas é Aplicador ABA
+                    if (!apIsAplicador(c.prof) && !apIsAplicador(oprof) && apSpecIds(o.p).indexOf(line.specId) === -1) bad = true;
                   });
                   if (bad) return;
                   if (sysHard(plannerConflict(docId, key, rec0))) return;
-                  var k = roomK[c.room.id] || 1, pref = k >= 4 ? 3 : (k >= 2 ? 2 : 1), size = occ.length + 1;
+                  var k = (c.room.therapists || []).filter(function(t){ return t.professionalId && apProfCompat(c.prof, findProfessional(t.professionalId)); }).length || 1;
+                  var pref = k >= 4 ? 3 : (k >= 2 ? 2 : 1), size = occ.length + 1;
                   if (occ.length){ score -= 60; if (size >= pref) score -= 10; if (size > k) return; }
                   else score += 15;
                   if (isAbaRoom) score -= 20;
                 } else {
                   if (sysHard(plannerConflict(docId, key, rec0))) return;
                   if (isAbaRoom) score += 20;   // sala ABA fica para os grupos
+                }
+                // irmãos juntos ou em horários colados (sempre que possível)
+                if (sibIds.length){
+                  var st = sibTimes(docId, sibIds), ix = times.indexOf(time);
+                  if (st[time]) score -= 25; else if ((times[ix - 1] && st[times[ix - 1]]) || (times[ix + 1] && st[times[ix + 1]])) score -= 15;
+                }
+                // turno do profissional: 3 a 4 horários cheios e um horário livre que não seja o primeiro nem o último
+                var turn = d.morning.indexOf(time) !== -1 ? d.morning : d.afternoon, pt = profTimes(docId, c.prof.id);
+                if (!pt[time]){
+                  var usedN = turn.filter(function(t0){ return pt[t0]; }).length;
+                  if (abaSim && usedN >= 4) score += 25;
+                  var mid = turn.slice(1, -1);
+                  if (mid.length && !mid.some(function(t0){ return !pt[t0] && t0 !== time; })) score += 30;
                 }
                 var all = mine.concat(sched);
                 if (all.some(function(h){ return h.day === d.key && h.time === time && h.roomId === c.room.id && h.seatId === c.seat.id && h.w !== w; })) score -= 50;
@@ -17655,8 +17715,9 @@ function apBuild(patients){
             });
           });
           if (!best) continue;
-          var rec = Object.assign({}, rec0);
+          var rec = Object.assign({}, rec0, {auto: true});
           apPut(temp, best.docId, best.key, rec);
+          sibCache = {}; profCache = {};
           plan.items.push({p: p, line: line, w: w, day: best.d.key, dayFull: best.d.full, time: best.time, room: best.c.room, seat: best.c.seat, prof: best.c.prof, docId: best.docId, key: best.key, rec: rec, abaSim: abaSim});
           sched.push({w: w, day: best.d.key, time: best.time, roomId: best.c.room.id, seatId: best.c.seat.id});
           placedHere++;
@@ -17717,7 +17778,7 @@ function openAutoPlannerModal(){
         '<div class="field"><label for="apPat">Paciente</label><select id="apPat"><option value="">Todos os pacientes com tratamento ativo</option>' + pats.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div></div>' +
         '<div class="field-row"><div class="field"><label for="apDest">Gravar em</label><select id="apDest">' + destOpts + '</select></div>' +
         '<div class="field" id="apMonthBox" hidden><label for="apMonth">Mês da Agenda</label><select id="apMonth">' + months.map(function(m, i){ return '<option value="' + m.ym + '"' + (i === 1 ? ' selected' : '') + '>' + esc(m.label) + '</option>'; }).join("") + '</select></div></div>' +
-        '<div class="field-row"><button type="button" class="btn" id="apRun">Montar Proposta</button></div>' +
+        '<div class="field-row"><button type="button" class="btn" id="apRun">Montar Proposta</button><button type="button" class="btn ghost" id="apRemove" title="Apaga do Planner só o que o Auto Planner colocou (do paciente escolhido ou de todos)"' + (can("planner", "delete") ? '' : ' hidden') + '>Remover o que o Auto Planner Colocou</button></div>' +
         '<div id="apOut" class="fx-report"><div class="pat-count">Escolha e clique em “Montar Proposta”.</div></div>' +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="apCancel">Fechar</button><button class="btn" id="apApply" disabled>Aplicar</button></div>' +
@@ -17772,6 +17833,25 @@ function openAutoPlannerModal(){
       plan = apBuild(list);
       render();
     }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o Planner.</div>'; });
+  });
+  document.getElementById("apRemove").addEventListener("click", function(){
+    if (!can("planner", "delete")){ showToast("Você não tem permissão para excluir no Planner.", true); return; }
+    var sel = document.getElementById("apPat").value, who = sel ? (pats.filter(function(p){ return p.id === sel; })[0] || {}).nome : "todos os pacientes";
+    currentBookingsFor(plannerAllDocIds()).then(function(all){
+      var changes = {}, n = 0;
+      Object.keys(all).forEach(function(docId){
+        Object.keys(all[docId] || {}).forEach(function(key){
+          var b = all[docId][key]; if (!b || b.auto !== true || !b.patient) return;
+          if (sel && recPid(b) !== sel) return;
+          (changes[docId] = changes[docId] || {})[key] = clearValueFor(docId.split("-")[0], key.split("|")[0]); n++;
+        });
+      });
+      if (!n){ showToast("Nenhuma sessão marcada pelo Auto Planner" + (sel ? " para " + who : "") + "."); return; }
+      return confirmDialog({title: "Remover o que o Auto Planner Colocou", message: "Apagar <b>" + n + (n === 1 ? " sessão" : " sessões") + "</b> do Planner colocadas pelo Auto Planner (" + esc(who) + ")? O que foi marcado à mão não é tocado.", confirmLabel: "Remover"}).then(function(ok){
+        if (!ok) return;
+        return applyBookingChanges(changes).then(function(res){ if (res === false) return; showToast(n + (n === 1 ? " sessão removida" : " sessões removidas") + ". Ctrl+Z desfaz."); renderGrid(); });
+      });
+    });
   });
   applyBtn.addEventListener("click", function(){
     if (!plan) return;
@@ -21764,7 +21844,7 @@ var HELP_TOPICS = [
     steps: [
       "<b>Editar Agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar Profissional</b>: passa as colunas de um profissional para outro.",
-      "<b>Auto Planner</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. Prioridade: o que foi marcado à mão fica fixo e atrai os grupos; depois vêm os individuais (ABA Não e outros serviços) e por último os pacientes ABA Sim, juntados de 2 a 4 por sala no mesmo horário, só com a mesma faixa etária (cor) e com a especialidade da sessão em comum; as salas com ABA no nome são preferidas para os grupos (o tamanho vem das colunas do profissional na sala: 3 colunas, de 2 a 3; 4 colunas, de 3 a 4). Em Gravar em escolha Só no Planner, Planner e Agenda ou Só na Agenda (e o mês da Agenda; datas passadas, feriados, fora do horário e conflitos são pulados). Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo.",
+      "<b>Auto Planner</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. Prioridade: o que foi marcado à mão fica fixo e atrai os grupos; depois vêm os individuais (ABA Não e outros serviços) e por último os pacientes ABA Sim, juntados de 2 a 4 por sala no mesmo horário, só com a mesma faixa etária (cor) e com a especialidade da sessão em comum; as salas com ABA Sim são preferidas para os grupos (o tamanho vem das colunas compatíveis na sala: 3 colunas, de 2 a 3; 4 colunas, de 3 a 4). Terapeutas na mesma sala e horário precisam ter a mesma especialidade principal ou um deles ter Aplicador ABA (principal ou complementar). Sempre que possível: irmãos (mesma mãe ou pai no cadastro) no mesmo horário ou em horários colados; por turno, de 3 a 4 horários cheios por profissional e um horário livre que não seja o primeiro nem o último. Tudo que o Auto Planner coloca fica marcado: o botão Remover o que o Auto Planner Colocou apaga só essas sessões (do paciente escolhido ou de todos) sem tocar no que foi marcado à mão. Em Gravar em escolha Só no Planner, Planner e Agenda ou Só na Agenda (e o mês da Agenda; datas passadas, feriados, fora do horário e conflitos são pulados). Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo.",
       "<b>Outras Opções ▾ → Enviar para a Agenda</b>: comece escolhendo o <b>Período</b>. <b>Mês</b>: escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda; a 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª; a prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
       "<b>Semana</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes. Na prévia, \"com aviso\" lista os que ficam fora do horário do paciente ou com terapeuta diferente do tratamento: desmarque os que não devem ir.",
       "<b>Limpar Semana</b>: apaga todos os agendamentos de uma semana do Planner (dupla confirmação, desfazível).",

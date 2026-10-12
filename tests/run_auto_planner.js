@@ -97,6 +97,27 @@ const path = require('path');
   check('same age band + same specialty share the room at the same time?', sameSlot, grp);
   check('different age band (Ana, 3 anos) is never put with them?', !Object.values(g).some((l) => l.some((x) => x.startsWith('ana')) && l.length > 1), grp);
 
+  // ---- marca e remoção; irmãos; terapeutas compatíveis ----
+  const aplic = await ev(`(function(){
+    state.specialties = state.specialties.concat([{id: 'aplic', name: 'Aplicador ABA'}]);
+    var a = {id: 'x1', specialtyId: 'fono'}, b = {id: 'x2', specialtyId: 'psico'}, c = {id: 'x3', specialtyId: 'aplic'}, d = {id: 'x4', specialtyId: 'psico', complementares: ['aplic']};
+    return [apProfCompat(a, b), apProfCompat(a, c), apProfCompat(a, d), apProfCompat(b, {id: 'x5', specialtyId: 'psico'})].join(',');
+  })()`);
+  check('therapists compatible only with same specialty or Aplicador ABA (principal or complementar)?', aplic === 'false,true,true,true', aplic);
+  await ev(`(function(){
+    var m = {nome: 'Maria Souza Lima', cpf: ''};
+    state.patients.forEach(function(p){ if (p.id === 'bruno-verde' || p.id === 'duda-vermelho') p.mae = m; });
+  })()`);
+  const sib = await ev(`JSON.stringify([apSibIds(state.patients.filter(function(p){ return p.id === 'bruno-verde'; })[0]), apSibIds(state.patients.filter(function(p){ return p.id === 'ana-azul'; })[0])])`);
+  check('siblings found by the mother\'s name?', sib === '[["duda-vermelho"],[]]', sib);
+  const marked = await ev(`(function(){
+    state.treatments = [{id: 'm1', patientId: 'paciente-um', inicio: '2026-01-01', status: 'ativo', tipo: 'novo', vencPor: 'sem', specHours: [{id: 'q', specId: 'fono', hours: 2, profId: 'bia-terapeuta', service: 'sessao', aba: 'Não'}]}];
+    rebuildPatients();
+    var plan = apBuild(state.patients.filter(function(p){ return p.id === 'paciente-um'; }));
+    return JSON.stringify({n: plan.items.length, auto: plan.items.every(function(i){ return i.rec.auto === true; })});
+  })()`);
+  check('everything the Auto Planner proposes is marked auto:true?', /"auto":true/.test(marked) && !/"n":0/.test(marked), marked);
+
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
