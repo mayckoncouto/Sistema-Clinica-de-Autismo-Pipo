@@ -4277,3 +4277,22 @@ o nome (as regras "não ABA" já não olhavam desde 2026-10-08; só o Auto Plann
 - Migração só de dados `supabase/2026-10-12j-sala-aba.sql` (aba = true nas salas com "ABA" no nome, false nas outras, grupos intactos; linha 111 da conferência).
   Produção (2026-10-12): rodada pelo conector (5 salas ABA | 6 sem ABA). Teste `tests/run_sala_aba.js` (no `npm test`).
 - (2026-10-12, respostas do usuário) **Auto Planner: irmãos, folga por turno, marca e terapeutas compatíveis.** (1) Irmãos = mesmo nome ou CPF de mãe/pai (`apSibIds`): "sempre que possível" no mesmo horário (-25) ou colado (-15). (2) Por profissional e turno: sempre que possível um horário livre que NÃO seja o primeiro nem o último do turno (+30 se o encaixe tira a última folga do meio) e 3 a 4 horários cheios (+25 para abrir o 5º horário do turno, só ABA Sim). (3) Tudo que o Auto Planner grava leva `auto: true` no agendamento; botão **Remover o que o Auto Planner Colocou** (`#apRemove`, paciente escolhido ou todos, permissão excluir no Planner, entra no desfazer) apaga só as marcadas. Copiar/mover leva o `auto` junto. (4) Terapeutas na mesma sala e horário (grupo ABA Sim): mesma especialidade principal OU um deles com Aplicador ABA (especialidade com "aplicador" no nome, principal ou complementar) — `apProfCompat`/`apIsAplicador`; com Aplicador a regra de "especialidade em comum dos pacientes" não vale; tamanho do grupo = colunas compatíveis da sala. A faixa etária igual continua obrigatória. Testes em `tests/run_auto_planner.js`.
+
+## Unidades (nível de organização) — DECISÕES E PLANO (2026-10-12, ainda não implementado)
+Pedido do usuário: gerenciar várias unidades; os dados atuais são da **Unidade 1**. Decisões:
+- **Por unidade:** pacientes, tratamentos, prontuário, planos terapêuticos, colaboradores (cada um pertence a UMA unidade), Planner, Agenda,
+  salas e grupos de suporte, CRM (listas, tarefas, links, automações), Financeiro inteiro (contas bancárias passam a pertencer a uma unidade — o
+  campo de texto "CNPJ da empresa" vira ligação —, lançamentos, contas a pagar/receber, empréstimos, conciliação, fechamento de mês, custo), Fornecedores,
+  Médicos, Escolas, **Dados da Clínica inteiros** (nome fantasia, CNPJ, logo, redes, horário, duração, cores; duas unidades podem ter o MESMO nome fantasia com CNPJ diferente).
+- **Da empresa (únicos):** Níveis de permissão (+ novo nível), Diagnósticos, Origens, Motivos de cancelamento, Tipos de colaborador, CBO, Conselhos,
+  Status, Escalas, Habilidades, Banco de objetivos, Plano de contas, Categorias de fornecedor.
+- **Empresa + ocultar por unidade** (lista única; cada unidade esconde o que não usa): Convênios, Especialidades, Serviços, Feriados e recessos (nacionais valem para todos; municipais só da unidade).
+- **Permissão:** novo nível **Gestão** acima do Administrador, acesso total a todas as unidades; só a Gestão cria unidades e define qual Administrador pertence a qual unidade.
+  **Administrador** = total, só na própria unidade; vincula usuários só à sua unidade (Gestão, a qualquer uma).
+- **Seleção de unidade:** lista "Unidade" na TELA DE LOGIN (só o nome da unidade é público; última escolha lembrada no aparelho; sem acesso à unidade = recusa).
+  Dentro do sistema só a Gestão vê o seletor, no topo à direita (celular: no ☰); demais níveis veem o nome da unidade fixo. Opção "Todas as unidades"
+  (visão consolidada de Financeiro e Relatórios) entra na fase do Financeiro.
+- **Fases:** 1) cadastro de Unidades, nível Gestão, vínculo usuário↔unidade, seletor no login e no topo (Unidade 1 criada; todos os atuais nela; nada muda no uso);
+  2) coluna de unidade nas tabelas + regras do banco + carga/tempo real filtrados; 3) Salas, Planner, Agenda, Clínica; 4) pessoas e clínico (pacientes, tratamentos,
+  prontuário, planos, colaboradores, transferência entre unidades); 5) Financeiro por unidade + visão consolidada; 6) CRM, automações (rotinas diárias por unidade), link de
+  cadastro, notificações, conector Claude, backup por unidade, Relatórios; 7) comparativo entre unidades, conferência de integridade, revisão de segurança.
