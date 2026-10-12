@@ -4024,3 +4024,4 @@ filtrado (faixa + Voltar); comparação com o mês anterior ou com um mês de re
   pacientes das salas que ele cobre; demais custos (fixos, variáveis, não profissionais, impostos — vindos dos Lançamentos — e outros) por hora de sala ocupada,
   divididos entre os pacientes presentes; ociosidade de equipe e de sala à parte; matriz convênio × especialidade; contar todas as sessões agendadas.
   Antes: campo "Natureza do custo" no Plano de contas e sugestão de classificação das subcategorias.
+- (2026-10-12, pedido do usuário) Cartões da tela CRM no computador: dividem TODA a largura (`.crm-home-grid` com `auto-fit`, antes `auto-fill` deixava espaço vazio à direita) e ficam compactos como no celular (padding 12/14, legenda com espaço fixo de 2 linhas, no funil a linha de leads/contratos no lugar da 2ª linha — regras saíram do `@media` do celular e valem para os dois).
