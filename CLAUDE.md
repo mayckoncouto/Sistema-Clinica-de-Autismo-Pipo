@@ -4192,3 +4192,55 @@ Concedidos), permissão **Financeiro** (ver, editar = conciliar/desfazer, inclui
 - Ajuda: tópico `conciliacao`. Teste `tests/run_conciliacao.js` (no `npm test`).
 - Produção (2026-10-12): `2026-10-12g-conciliacao` rodada pelo conector (tabela | RLS | 4 políticas | gatilho | índice = true | true | 4 | true | true).
 - Próximos (aguardando o usuário): Unidades (dois CNPJs), metas e orçamento, Guia/autorização do convênio, Planner montado pelos tratamentos.
+
+## CRM → Automações (2026-10-12)
+Pedido do usuário: lista de automações para o CRM, com tela para ligar/desligar, escolher a lista de destino e um ou mais
+responsáveis; "inclua todas". Decisões: cada regra nasce DESLIGADA; as regras só criam tarefas/comentários (nada altera cadastros);
+"Contrato assinado" e "Cadastro recebido pelo link" criam a tarefa para a pessoa agir (o paciente/tratamento não é criado sozinho).
+- Menu **CRM ▾ → Automações** (`#tab-automacoes`, aba `automacoes`, endereço `#automacoes`, depois de Listas e Status; permissão `crm_listas`:
+  ver = consultar, editar = ligar/desligar/rodar). Bloco "CRM → Automações" do script: `CRMA_RULES` (26 regras: id, grupo, nome, descrição,
+  quando roda, lista padrão `def`, `param` {label, def, min, max} = campo `dias`, `motivo`, `listMode: "monitorada"` = lista vigiada em
+  vez de destino), `CRMA_GROUPS` (Funil de Leads, Tratamentos e Cadastro, Agenda e Presença, Financeiro, Rotina da Equipe), `subscribeCrmAuto`,
+  `crmaSave`, `renderAutomacoes` (tabela gtRender: Automação, Grupo, Lista, Responsáveis, Ligada, Criou (30 Dias)), `crmaToggle`
+  (etiqueta Ligada/Desligada), `crmaOpen` (janela da regra: ligada, lista, dias, motivo, Responsáveis por `crmPeopleMenu`, Últimas Ocorrências
+  de `crm_auto_log`), `crmaSetAll`, `crmaRunNow` (RPC `crm_auto_run_now`), `wireAutomacoes`. "Outras Opções": Ligar Todas / Desligar Todas.
+- Documento `config/crm_automations {rules: {<regra>: {on, listId, assignees: [uuid], dias, motivo}}}` (`module_for_path` = `crm_listas`).
+  Regra nova: acrescentar em `CRMA_RULES` E criar a função `crm_auto_r_<regra>` (rotina do dia) ou um gatilho no banco; manter os ids iguais
+  (o teste `tests/run_crm_auto.js` confere os 26).
+- Banco (migração `supabase/2026-10-12h-crm-automacoes.sql`, testada no PGlite; linha 109 de `conferencia-migracoes.sql`; `schema.sql` e
+  `conferencia-geral.sql` atualizados): `crm_auto_log (rule, key único, task_id)` = nada se repete (chave regra|item|período);
+  `crm_auto_state` (rodízio); `crm_auto_cfg(regra)` (null = desligada), `crm_auto_make(...)` (cria a tarefa na lista escolhida ou padrão,
+  só com responsáveis que têm acesso à lista, status = 1º que não finaliza), `crm_auto_comment(...)` (comentário com @menção, que vira aviso
+  no celular). Autor "Automação": o GUC `pipo.auto` é lido por `crm_my_name`, `pipo_origem` (marca `app: "Automação"` → "· via Automação"
+  na atividade), `tasks_stamp` e `task_events_stamp`. Hoje = Brasília (`crm_auto_today`).
+  - Gatilhos (na hora): `tasks_auto_assign` (rodízio, antes do insert), `tasks_auto_status` (lead perdido com o motivo escolhido, contrato
+    assinado), `intake_auto` (cadastro recebido pelo link), `appointments_auto_status` (falta = "nao-compareceu" — falta justificada não conta —
+    e faltas seguidas), `appointments_auto_first` (1º atendimento do paciente; só atendimento com `patient_id`, sem grupo/bloqueio).
+    Todos com `exception when others` (nunca impedem a gravação original).
+  - Rotina do dia: `crm_auto_run(p_force)` roda cada `crm_auto_r_<regra>` isolada (erro de uma não derruba as outras); cron
+    `pipo-crm-automacoes` às 11:10 UTC (8h10 de Brasília), todo dia. Resumos semanais só na segunda; "a partir do dia" (abaixo do contratado,
+    mês sem fechar) respeita o dia escolhido; `p_force` (Rodar Agora = `crm_auto_run_now`, só quem edita CRM) ignora dia da semana/do mês.
+  - Regras: lead_parado, link_respondido, link_segunda_cobranca, lead_perdido, contrato_assinado, rodizio_leads, trat_vencendo,
+    trat_cancelado, abaixo_contratado (sessões agendadas no mês × Sessão/Mês, tratamentos que começaram antes do mês), carteirinha_vencendo,
+    sem_tratamento, falta, faltas_seguidas, pendencias_status, primeiro_atendimento, conta_vencendo, conta_vencida (pagar e receber),
+    saldo_baixo (saldo de hoje × `saldoMinimo` da conta), mes_sem_fechar, conciliacao_pendente, rotinas_prontas (2 tarefas recorrentes
+    criadas uma vez: sexta semanal e mensal), plano_vencendo, tarefa_parada e tarefa_atrasada (comentam e mencionam o responsável + pessoas
+    escolhidas), aniversario, encaminhamento_vencendo (lê o encaminhamento da saúde do paciente).
+- Teste `tests/run_crm_auto.js` (no `npm test`); `run_cad_titles`, `run_toolbar_rows`, `run_sticky_headers`, `run_cad_sheets` incluem a tela.
+  Ajuda: tópico `crm-automacoes`.
+
+## Encaminhamento no cadastro do paciente (2026-10-12)
+Pedido do usuário: data do encaminhamento, vencimento (3 meses, 6 meses, 1 ano) e especialidades do encaminhamento no estilo das
+especialidades do tratamento (Especialidade + Quantidade Semanal).
+- Fica no grupo **Saúde** (`PAT_FIELDS` chave `encaminhamento`, tipo `referral`; também em `HEALTH_KEYS`, então vai para a tabela protegida
+  `patient_health` e só aparece com "Pacientes – Saúde"). Formato: `encaminhamento = {data, validade: "3m"|"6m"|"1a", venc (iso), esp:
+  [{id, specId, semanal}]}`. Sem SQL.
+- Janela: Data do Encaminhamento, Validade e Vencimento (calculado, só leitura; mesma conta do tratamento — 6 meses a partir de 01/01 =
+  válido até 30/06, `encVenc` com `trAddMonths`), aviso quando vencido/vence em 30 dias (`encState`), quadros por especialidade
+  (`.room-row.tl-row`, "+ Incluir Especialidade", janela `openEncLineModal`: Especialidade com "+ Incluir" e Quantidade Semanal de 1 a 20;
+  a mesma especialidade não repete). `encHtml`, `encWire(root, valor, nomeDoPaciente)` → `{read}`.
+- Lista de Pacientes: etiqueta `Enc. vencido` / `Enc. vence` ao lado do nome (`encChip`, só no computador). Ficha impressa: linha
+  "Encaminhamento" (`encSummary`). Automação `encaminhamento_vencendo` do CRM lê `patient_health.data.encaminhamento.venc`.
+- **Fora do link de cadastro** (decisão: documento clínico entregue à clínica): `LINK_OF_FIELD` não tem o campo e `tests/run_intake.js`
+  confere os demais campos, exceto `encaminhamento`.
+- Teste `tests/run_encaminhamento.js` (no `npm test`).
