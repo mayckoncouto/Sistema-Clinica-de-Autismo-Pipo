@@ -1,5 +1,5 @@
 // Cadastros em lista gravam só o item alterado (patch_list2) e avisam quando outra pessoa
-// mexeu no mesmo item depois que ele foi aberto ("Salvar assim mesmo" / "Recarregar").
+// mexeu no mesmo item depois que ele foi aberto ("Salvar Assim Mesmo" / "Recarregar").
 // Cria tests/page_lp.html: a página dos testes com um "eval" e um banco simulado que tem
 // patchList2/reload com as mesmas regras da função do banco (2026-10-10b).
 const { chromium } = require('playwright');
@@ -97,14 +97,14 @@ const path = require('path');
   await page.waitForSelector('#ovConfirm', { timeout: 3000 }).catch(() => {});
   const msg = await page.$eval('#ovConfirm', (e) => e.textContent).catch(() => '');
   const btns = await page.$$eval('#ovConfirm .btn', (bs) => bs.map((b) => b.textContent)).catch(() => []);
-  check('mesmo item: aviso com quem alterou e os dois botões?', /Lucas/.test(msg) && btns.includes('Salvar assim mesmo') && btns.includes('Recarregar'), {msg: msg.slice(0, 120), btns});
+  check('mesmo item: aviso com quem alterou e os dois botões?', /Lucas/.test(msg) && btns.includes('Salvar Assim Mesmo') && btns.includes('Recarregar'), {msg: msg.slice(0, 120), btns});
   await page.click('#cfCancel');
   await page.waitForTimeout(150);
   st = await store();
   const stateName = await ev(`state.patientsRaw.filter(function(p){ return p.id === "${A}"; })[0].nome`);
   check('Recarregar: banco e tela ficam com a versão da outra pessoa?', st.find((x) => x.id === A).nome === 'Ana por Lucas' && stateName === 'Ana por Lucas', {db: st.find((x) => x.id === A).nome, tela: stateName});
 
-  // 5. Mesmo paciente: "Salvar assim mesmo" grava a minha.
+  // 5. Mesmo paciente: "Salvar Assim Mesmo" grava a minha.
   await ev(`window.__baseA = JSON.parse(JSON.stringify(state.patients.filter(function(p){ return p.id === "${A}"; })[0]))`);
   await other(A, 'Ana de novo por Lucas', 'Lucas');
   await page.waitForTimeout(100);
@@ -113,7 +113,7 @@ const path = require('path');
   await page.click('#cfOk').catch(() => {});
   await page.waitForTimeout(150);
   st = await store();
-  check('Salvar assim mesmo: a minha versão fica?', st.find((x) => x.id === A).nome === 'Ana minha', st.find((x) => x.id === A));
+  check('Salvar Assim Mesmo: a minha versão fica?', st.find((x) => x.id === A).nome === 'Ana minha', st.find((x) => x.id === A));
 
   // 6. Mesmo paciente salvo duas vezes seguidas por mim: sem aviso (o carimbo novo fica na tela).
   await page.evaluate(() => { window.__LOG__ = []; });

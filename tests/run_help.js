@@ -13,15 +13,15 @@ const path = require('path');
 
   await page.evaluate(() => window.pipoOpenHelp());
   await page.waitForTimeout(200);
-  console.log('Ajuda opens the guide screen with the overview topic?', await page.isVisible('#tab-ajuda') && /Visão geral/.test(await page.textContent('#helpBody')));
+  console.log('Ajuda opens the guide screen with the overview topic?', await page.isVisible('#tab-ajuda') && /Visão Geral/.test(await page.textContent('#helpBody')));
   const groups = await page.$$eval('#helpNav .help-grp', (a) => a.map((x) => x.textContent));
   console.log('menu has the main areas (Cadastros, Planner, Agenda, Prontuário, Relatórios, Acesso)?', ['Cadastros', 'Planner', 'Agenda', 'Prontuário', 'Relatórios', 'Acesso'].every((g) => groups.includes(g)), groups.join(','));
   await page.click('#helpNav [data-help-go="tratamentos"]');
   const tb = await page.textContent('#helpBody');
-  console.log('topic shows purpose, steps, rules and who can use?', /Como fazer/.test(tb) && /Regras e avisos/.test(tb) && /Quem pode usar/.test(tb) && /só um tratamento Ativo/.test(tb));
+  console.log('topic shows purpose, steps, rules and who can use?', /Como Fazer/.test(tb) && /Regras e Avisos/.test(tb) && /Quem Pode Usar/.test(tb) && /só um tratamento Ativo/.test(tb));
   await page.fill('#helpSearch', 'CANCELADO'); await page.dispatchEvent('#helpSearch', 'input');
   const res = await page.$$eval('#helpBody .help-results li', (a) => a.map((x) => x.textContent));
-  console.log('search ignores case/accents and finds the cancellation topics?', res.some((t) => /Motivos de cancelamento/.test(t)) && res.some((t) => /Tratamentos/.test(t)));
+  console.log('search ignores case/accents and finds the cancellation topics?', res.some((t) => /Motivos de Cancelamento/.test(t)) && res.some((t) => /Tratamentos/.test(t)));
   await page.fill('#helpSearch', ''); await page.dispatchEvent('#helpSearch', 'input');
   console.log('no "Novidades" in the guide menu?', !(await page.$('#helpNav [data-help-go="novidades"]')));
 
@@ -35,7 +35,7 @@ const path = require('path');
   const qCount = await page.$$eval('.help-q', (a) => a.length);
   console.log('every main screen has a "?" button (12+)?', qCount >= 12, qCount);
 
-  // Permissão: sem "Tratamentos – valores" o tópico de valores some.
+  // Permissão: sem "Tratamentos – Valores" o tópico de valores some.
   await page.evaluate(() => { window.pipoAuth = { can: (m) => m !== 'tratamentos_valores' && m !== 'usuarios', isAdmin: () => false, onProfile(){}, profile: () => null }; window.pipoOpenHelp(); });
   await page.waitForTimeout(200);
   console.log('topics follow the permission level (values and Usuários hidden without the permission)?', !(await page.$('#helpNav [data-help-go="tratamentos-valores"]')) && !(await page.$('#helpNav [data-help-go="usuarios"]')) && !!(await page.$('#helpNav [data-help-go="tratamentos"]')));

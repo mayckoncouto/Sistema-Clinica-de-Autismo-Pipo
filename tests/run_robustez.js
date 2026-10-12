@@ -58,7 +58,7 @@ const path = require('path');
       return {sent: plan.send.length, warn: w ? w.msgs : null};
     });
   })()`);
-  console.log('preview flags "outside patient hours" and "different therapist"?', !!r2.warn && r2.warn.indexOf('Fora do horário do paciente') !== -1 && r2.warn.indexOf('Terapeuta diferente do tratamento') !== -1, JSON.stringify(r2));
+  console.log('preview flags "outside patient hours" and "different therapist"?', !!r2.warn && r2.warn.indexOf('Fora do Horário do Paciente') !== -1 && r2.warn.indexOf('Terapeuta Diferente do Tratamento') !== -1, JSON.stringify(r2));
   await ev(`openSendToAgendaModal()`);
   await page.waitForTimeout(300);
   await ev(`(function(){ var d = document.getElementById("sendDate"); d.value = "2030-01-07"; d.dispatchEvent(new Event("change", {bubbles: true})); })()`);

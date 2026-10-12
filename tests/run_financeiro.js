@@ -1,4 +1,4 @@
-// Relatório financeiro (Etapa 6): uma linha por mês (ativos, novos, renegociados,
+// Relatório Financeiro (Etapa 6): uma linha por mês (ativos, novos, renegociados,
 // cancelados, receita prevista, ticket médio), total do período e lista dos
 // tratamentos ativos com valor. O Início continua em branco. Dados 100% fictícios.
 const { chromium } = require('playwright');
@@ -49,7 +49,7 @@ const path = require('path');
   // Aparece na lista de tipos da aba Relatórios, com o nome de relatório.
   await page.$eval('#mainTabs button[data-tab=relatorios]', (b) => b.click()); await page.waitForTimeout(300);
   const opt = await page.$$eval('#rpType option', (a) => a.map((o) => o.value + '|' + o.textContent));
-  console.log('"Relatório financeiro" is a report type?', opt.some((o) => o === 'financeiro|Relatório financeiro'));
+  console.log('"Relatório Financeiro" is a report type?', opt.some((o) => o === 'financeiro|Relatório Financeiro'));
   // Início continua em branco.
   await page.$eval('#mainTabs button[data-tab=inicio]', (b) => b.click()); await page.waitForTimeout(200);
   console.log('Início stays blank?', (await page.innerHTML('#tab-inicio')).trim() === '');

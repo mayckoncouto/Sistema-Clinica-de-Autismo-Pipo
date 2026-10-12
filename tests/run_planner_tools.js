@@ -1,5 +1,5 @@
-// Ferramentas da barra do Planner: Exportar Excel, Editar agendamento
-// (resumo, pacote × Planner, copiar semana) e Trocar profissional.
+// Ferramentas da barra do Planner: Exportar Excel, Editar Agendamento
+// (resumo, pacote × Planner, copiar semana) e Trocar Profissional.
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -13,10 +13,10 @@ const path = require('path');
 
   // ---- Barra: "Enviar para a Agenda" visível; o resto no menu Ferramentas ----
   console.log('Ferramentas menu starts closed?', await page.locator('#plToolsMenu').isHidden());
-  console.log('Enviar para a Agenda is inside "Outras opções"?', (await page.locator('#plToolsMenu #sendToAgendaBtn').count()) === 1 && /Outras opções/.test(await page.textContent('#plToolsBtn')));
+  console.log('Enviar para a Agenda is inside "Outras Opções"?', (await page.locator('#plToolsMenu #sendToAgendaBtn').count()) === 1 && /Outras Opções/.test(await page.textContent('#plToolsBtn')));
   await page.click('#plToolsBtn');
   const items = await page.locator('#plToolsMenu button:visible').allInnerTexts();
-  console.log('menu lists Horário livre, Editar agendamento, Trocar profissional, Exportar Excel, Limpar semana?', ['Horário livre', 'Editar agendamento', 'Trocar profissional', 'Exportar Excel', 'Limpar semana'].every((t) => items.some((i) => i.trim() === t)));
+  console.log('menu lists Horário Livre, Editar Agendamento, Trocar Profissional, Exportar Excel, Limpar Semana?', ['Horário Livre', 'Editar Agendamento', 'Trocar Profissional', 'Exportar Excel', 'Limpar Semana'].every((t) => items.some((i) => i.trim() === t)));
   await page.keyboard.press('Escape');
   console.log('Esc closes the menu?', await page.locator('#plToolsMenu').isHidden());
 
@@ -29,7 +29,7 @@ const path = require('path');
   console.log('export lists Paciente Um on Monday 07:20 of the 1st week?', lines.some((l) => l.startsWith('1ª semana;Segunda-feira;07:20;Sala Teste;') && l.includes(';Paciente Um;Paciente;')));
   console.log('export marks special slots by type (Bloqueado)?', lines.some((l) => /;Bloqueado;/.test(l)));
 
-  // ---- Editar agendamento: resumo e pacote × Planner ----
+  // ---- Editar Agendamento: resumo e pacote × Planner ----
   await page.click('#plToolsBtn'); await page.click('#fixPatientBtn'); // dentro do menu Ferramentas
   await page.waitForSelector('#fxPat', { state: 'attached' });
   await page.waitForFunction(() => !/Carregando/.test(document.getElementById('fxReport').innerText));
@@ -48,13 +48,13 @@ const path = require('path');
   console.log('copying the 1st week to the 4th adds Bruno there?', (await page.locator('#fxList .fx-item').count()) === before + 1 &&
     (await page.evaluate(() => !!(window.__STORE__['schedule/ter-4'] && window.__STORE__['schedule/ter-4'].bookings['07:20|r1|r1-t1']))));
 
-  // ---- Visão geral: pacientes com pacote diferente ----
+  // ---- Visão Geral: pacientes com pacote diferente ----
   await page.click('#fxAllBtn');
   const all = await page.innerText('#fxAll');
   console.log('overview lists patients whose package differs (Paciente Um, Bruno)?', /Paciente Um/.test(all) && /Bruno Verde/.test(all));
   await page.click('#fxCancel');
 
-  // ---- Trocar profissional ----
+  // ---- Trocar Profissional ----
   await page.click('#plToolsBtn'); await page.click('#swapProfBtn'); // dentro do menu Ferramentas
   await page.waitForSelector('#swFrom', { state: 'attached' });
   await page.$eval('#swFrom', (s) => { s.value = 'bia-terapeuta'; s.dispatchEvent(new Event('change', { bubbles: true })); });

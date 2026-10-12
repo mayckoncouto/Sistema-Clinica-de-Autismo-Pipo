@@ -18,7 +18,7 @@ const path = require('path');
   // incluir
   await page.click('#reg-status-add');
   await page.waitForSelector('#ovStItem');
-  check('"+ Incluir" opens "Novo status"?', /Novo status/.test(await page.$eval('#ovStItem h3', (e) => e.textContent)));
+  check('"+ Incluir" opens "Novo Status"?', /Novo Status/.test(await page.$eval('#ovStItem h3', (e) => e.textContent)));
   await page.fill('#stiName', 'Remarcado Teste');
   await page.click('#stiSave'); await page.waitForTimeout(300);
   const rows = await page.$$eval('#reg-status-host tbody tr', (r) => r.map((x) => x.textContent));

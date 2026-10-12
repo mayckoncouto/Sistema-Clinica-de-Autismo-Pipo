@@ -1,6 +1,6 @@
 // Cadastro completo do paciente (janela única com grupos, filiação, rotina, contatos,
 // responsável financeiro ligado, CPF obrigatório/único, busca por mãe/pai/financeiro,
-// data de entrada, mesclar cadastros), Campos obrigatórios e
+// data de entrada, mesclar cadastros), Campos Obrigatórios e
 // cadastros de Médicos, Escolas e CBO. Dados 100% fictícios.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -25,13 +25,13 @@ const path = require('path');
 
   await page.$eval('#mainTabs button[data-tab=pacientes]', (b) => b.click()); await page.waitForTimeout(300);
   await page.click('#patMoreBtn');
-  console.log('"Outras opções" menu has Campos obrigatórios, Mesclar (admin) and Imprimir?', await page.isVisible('#patFieldsBtn') && await page.isVisible('#patMergeBtn') && await page.isVisible('#patPrintBtn'));
+  console.log('"Outras Opções" menu has Campos Obrigatórios, Mesclar (admin) and Imprimir?', await page.isVisible('#patFieldsBtn') && await page.isVisible('#patMergeBtn') && await page.isVisible('#patPrintBtn'));
   await page.keyboard.press('Escape');
 
   // Ana Azul: janela única com os grupos.
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
   const secs = await page.$$eval('#ovPat .pm-sec-title', (a) => a.map((x) => x.textContent));
-  console.log('single window with the groups in order?', JSON.stringify(secs) === '["Identificação","Endereço","Filiação","Responsáveis pela retirada","Medida protetiva","Contato","Responsável financeiro","Convênio","Saúde","Escola","Rotina atual","Administrativo","Tratamento"]', JSON.stringify(secs));
+  console.log('single window with the groups in order?', JSON.stringify(secs) === '["Identificação","Endereço","Filiação","Responsáveis pela Retirada","Medida Protetiva","Contato","Responsável Financeiro","Convênio","Saúde","Escola","Rotina Atual","Administrativo","Tratamento"]', JSON.stringify(secs));
   console.log('no tabs anymore?', !(await page.$('#ovPat .pm-tab')));
   await page.click('#pSave'); await page.waitForTimeout(200);
   console.log('CPF required when editing (window stays, pending chip)?', await page.isVisible('#ovPat') && /1 faltando/.test(await page.textContent('[data-pend="ident"]')));
@@ -60,14 +60,14 @@ const path = require('path');
   await page.$eval('#telHost .pm-row:nth-child(2) select', (s) => { s.value = 'ligacao'; s.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.fill('#mailHost [data-mk="email"]', 'maria@exemplo.com');
   await page.click('[data-copy="telefone"]'); await page.waitForTimeout(150);
-  console.log('Copiar telefone with 2 phones opens a pick list?', await page.isVisible('#dpPop .dp-opt'));
+  console.log('Copiar Telefone with 2 phones opens a pick list?', await page.isVisible('#dpPop .dp-opt'));
   await page.click('#dpPop .dp-opt:nth-child(2)'); await page.waitForTimeout(100);
   console.log('picked phone goes to the financial field?', (await page.inputValue('#fi-telefone')) === '(47) 3333-4444');
   await page.click('[data-copy="email"]'); await page.waitForTimeout(100);
-  console.log('Copiar e-mail with one e-mail copies directly?', (await page.inputValue('#fi-email')) === 'maria@exemplo.com');
+  console.log('Copiar E-mail with one e-mail copies directly?', (await page.inputValue('#fi-email')) === 'maria@exemplo.com');
   await page.fill('#pa-rua', 'Rua das Flores'); await page.fill('#pa-numero', '10'); await page.fill('#pa-uf', 'sc');
   await page.click('[data-copy="endereco"]'); await page.waitForTimeout(100);
-  console.log('Copiar endereço copies the patient address?', /Rua das Flores, 10/.test(await page.inputValue('#fi-endereco')));
+  console.log('Copiar Endereço copies the patient address?', /Rua das Flores, 10/.test(await page.inputValue('#fi-endereco')));
   // Médico pelo "+".
   await listAdd('pf-medicoId'); await page.waitForSelector('#ovQuick');
   await page.fill('#qkName', 'Dra. Teste Neuro'); await page.fill('#regf-crm', '1234/SC');
@@ -104,7 +104,7 @@ const path = require('path');
   console.log('search by patient CPF?', (await page.$$eval('#patListHost tbody tr', (r) => r.map((x) => x.textContent))).join('|').includes('Bruno Verde') && (await page.$$('#patListHost tbody tr')).length === 1);
   await page.fill('#patientListSearch', '');
 
-  // Campos obrigatórios: RG obrigatório, Sexo escondido.
+  // Campos Obrigatórios: RG obrigatório, Sexo escondido.
   await page.click('#patMoreBtn'); await page.click('#patFieldsBtn'); await page.waitForSelector('#ovPf');
   console.log('Nome locked; admin controls CPF and Filiação/Financeiro?', await page.$eval('tr[data-pfk="nome"] [data-pfx="req"]', (c) => c.checked && c.disabled) &&
     await page.$eval('tr[data-pfk="cpf"] [data-pfx="req"]', (c) => c.checked && !c.disabled) && await page.$eval('tr[data-pfk="mae"] [data-pfx="show"]', (c) => c.checked && !c.disabled));
@@ -138,7 +138,7 @@ const path = require('path');
   console.log('new patient: entry date defaults to today?', await page.$eval('#pf-entrada', (e) => e.value) === (await ev('dpIso(new Date())')));
   await page.click('#pCancel');
 
-  // Data de entrada × início do tratamento.
+  // Data de Entrada × início do tratamento.
   const ent = await ev(`(function(){
     state.treatments = [{id: "tz", patientId: "ana-azul", inicio: "2026-02-01", tipo: "novo", status: "ativo",
       horarios: {seg: {ativo: true, manha: {inicio: "07:20", fim: "12:00"}, tarde: {inicio: "", fim: ""}}, qua: {ativo: true, manha: {inicio: "", fim: ""}, tarde: {inicio: "13:30", fim: "17:30"}}, ter: {ativo: false}}}];
@@ -180,9 +180,9 @@ const path = require('path');
   console.log('merge: 2nd removed, Planner renamed, treatment moved and Renegociado, empty fields filled?', mg.gone && mg.planner === 'Ana Azul' && mg.tp === 'ana-azul' && mg.st === 'renegociado' && mg.hist === 1 && mg.rg === '7654321' && mg.cns === '123', JSON.stringify(mg));
 
   const ficha = await ev(`patientFichaHtml(state.patients.filter(function(p){ return p.id === "ana-azul"; })[0])`);
-  console.log('ficha cadastral has the groups, doctor and schedule?', /Filiação/.test(ficha) && /Maria Azul Souza/.test(ficha) && /Dra\. Teste Neuro/.test(ficha) && /Responsáveis pela retirada/.test(ficha), ficha.slice(0, 120));
+  console.log('ficha cadastral has the groups, doctor and schedule?', /Filiação/.test(ficha) && /Maria Azul Souza/.test(ficha) && /Dra\. Teste Neuro/.test(ficha) && /Responsáveis pela Retirada/.test(ficha), ficha.slice(0, 120));
 
-  // Medida protetiva: nome + parentesco na retirada; impedido não pode estar nas duas listas.
+  // Medida Protetiva: nome + parentesco na retirada; impedido não pode estar nas duas listas.
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
   await page.click('#protAdd'); await page.fill('#protHost [data-pk="nome"]', 'Vó Azul'); await page.fill('#protHost [data-pk="rel"]', 'Avó');
   await page.fill('#protHost [data-pk="obs"]', 'Processo 123');
@@ -200,7 +200,7 @@ const path = require('path');
     return {first: /prot-last/.test(h1), last: /prot-last/.test(h2), box: /Vó Azul/.test(box) && /Processo 123/.test(box) && /Podem retirar/.test(box)};
   })()`);
   console.log('Agenda: alert only on the last appointment of the day; box lists both?', !pk.first && pk.last && pk.box, JSON.stringify(pk));
-  // Medida protetiva da Mãe (nome da Filiação) tira a mãe da retirada; "Pode retirar" desmarcado tira o pai.
+  // Medida Protetiva da Mãe (nome da Filiação) tira a mãe da retirada; "Pode retirar" desmarcado tira o pai.
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
   await page.click('#protAdd');
   await page.$eval('#protHost .pm-prot:last-child select[data-pk="quem"]', (s) => { s.value = 'mae'; s.dispatchEvent(new Event('change', { bubbles: true })); });

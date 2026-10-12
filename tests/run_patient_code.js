@@ -65,14 +65,14 @@ const path = require('path');
   })()`);
   console.log('conflict rules tell homonyms apart?', JSON.stringify(conf) === '[false,true]', JSON.stringify(conf));
 
-  // 4) Cadastrar paciente com nome de outro: aviso antes de salvar.
+  // 4) Cadastrar Paciente com nome de outro: aviso antes de salvar.
   await ev('openPatientModal(null)');
   await page.waitForSelector('#ovPat');
   await page.fill('#pNome', 'Bruno Verde');
   await page.fill('#pf-cpf', '16899535009');
   await page.click('#pSave'); await page.waitForTimeout(250);
   const warnTxt = await page.locator('#confirmHost').innerText().catch(() => '');
-  console.log('same name as another patient asks before saving?', /Nome igual ao de outro paciente/.test(warnTxt), warnTxt.slice(0, 80));
+  console.log('same name as another patient asks before saving?', /Nome Igual ao de Outro Paciente/.test(warnTxt), warnTxt.slice(0, 80));
   await page.locator('#confirmHost button', { hasText: 'Cancelar' }).first().click().catch(() => {});
   await page.waitForTimeout(150);
   const notSaved = await page.evaluate(() => window.__STORE__['patients/all'].list.filter((p) => p.nome === 'Bruno Verde').length === 1);

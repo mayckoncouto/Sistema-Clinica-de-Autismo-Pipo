@@ -1,4 +1,4 @@
-// Planner: "Horário livre" — horários livres para um paciente, respeitando regras,
+// Planner: "Horário Livre" — horários livres para um paciente, respeitando regras,
 // horário do profissional e do paciente; clicar abre a janela já preenchida.
 const { chromium } = require('playwright');
 const path = require('path');

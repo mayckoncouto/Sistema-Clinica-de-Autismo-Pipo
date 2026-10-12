@@ -1,4 +1,4 @@
-// CRM: exportar e importar tarefas (Outras opções ▾ da barra do CRM). Exporta o que está na tela aberta;
+// CRM: exportar e importar tarefas (Outras Opções ▾ da barra do CRM). Exporta o que está na tela aberta;
 // importa pela coluna Código (com código = atualiza, sem = nova); nome que não é paciente vira lead.
 // Em memória. Dados 100% fictícios.
 const { chromium } = require('playwright');
@@ -29,7 +29,7 @@ const path = require('path');
       crmInsert({list_id: "agendas", status: "aberto", title: "Outra lista", priority: "normal", assignees: [], lead: {}, position: 1})]).then(function(){ crmRender(); return true; }); })()`);
   await page.waitForTimeout(200);
 
-  check('CRM bar has "Outras opções" with Exportar/Importar planilha?', !!(await page.$('#tab-crm [data-io-wrap="tarefas"]')));
+  check('CRM bar has "Outras Opções" with Exportar/Importar Planilha?', !!(await page.$('#tab-crm [data-io-wrap="tarefas"]')));
   const exp = JSON.parse(await ev('JSON.stringify(ioTaskExportRows())'));
   check('export = tasks of the open list (Atendimento), with Código, Lista, Status, Tarefa, Paciente ou Lead?', exp.length === 2 && exp.every((r) => r.codigo && r.lista === 'Atendimento') && exp.some((r) => r.quem === 'Contato Antigo' && r.resp === 'Você Teste'), exp.map((r) => [r.lista, r.status, r.tarefa, r.quem]));
   const fname = await ev('IO_KINDS.tarefas.file');

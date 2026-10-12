@@ -1,7 +1,7 @@
 // CRM: menu CRM ▾, lista no padrão de Tratamentos (Status, Tarefa, Paciente ou Lead, Convênio,
 // Vencimento; "Finalizados"), Quadro com arrastar, janela da tarefa (Responsáveis em lista de marcar,
-// Paciente ou Lead, Cadastrar paciente, barra lateral com resumo e comentários, layout), finalizada
-// não exclui, @menção não lida, contador, Minhas tarefas, Listas e status. Em memória. Dados fictícios.
+// Paciente ou Lead, Cadastrar Paciente, barra lateral com resumo e comentários, layout), finalizada
+// não exclui, @menção não lida, contador, Minhas Tarefas, Listas e Status. Em memória. Dados fictícios.
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -26,11 +26,11 @@ const path = require('path');
   // Menu CRM ▾
   await page.click('#crmBtn');
   const items = await page.$$eval('#crmMenu [data-nav]', (r) => r.map((x) => x.textContent));
-  check('CRM menu: Minhas tarefas, the 4 lists and Listas e status?', items.join('|') === 'CRM|Minhas tarefas|Atendimento|Agendas|Fature|Gestão|Listas e Status', items);
+  check('CRM menu: Minhas Tarefas, the 4 lists and Listas e Status?', items.join('|') === 'CRM|Minhas Tarefas|Atendimento|Agendas|Fature|Gestão|Listas e Status', items);
   await page.click('#crmMenu [data-nav="crm-atendimento"]');
   await page.waitForTimeout(200);
 
-  // Nova tarefa com lead
+  // Nova Tarefa com lead
   await page.click('#crmAdd');
   await page.waitForSelector('#ovCrm');
   const labels = await page.$$eval('#ovCrm .crm-main label', (r) => r.map((x) => x.textContent.trim()));
@@ -39,7 +39,7 @@ const path = require('path');
   await page.fill('#crmWho', 'Criança Teste');
   await page.dispatchEvent('#crmWho', 'input');
   await page.waitForFunction(() => /Lead/.test((document.getElementById('crmWhoTag') || {}).textContent || '') && !document.getElementById('crmRegPat').hidden, null, {timeout: 3000}).catch(() => {});
-  check('a name without registration is a lead: tag + "Cadastrar paciente" + lead data?', /Lead/.test(await page.$eval('#crmWhoTag', (e) => e.textContent)) && !(await page.$eval('#crmRegPat', (e) => e.hidden)) && !(await page.$eval('#crmLeadBox', (e) => e.hidden)), await page.evaluate(() => JSON.stringify({tag: (document.getElementById('crmWhoTag') || {}).textContent, rp: document.getElementById('crmRegPat') && document.getElementById('crmRegPat').hidden, who: document.getElementById('crmWho').value, n: document.querySelectorAll('#ovCrm').length})));
+  check('a name without registration is a lead: tag + "Cadastrar Paciente" + lead data?', /Lead/.test(await page.$eval('#crmWhoTag', (e) => e.textContent)) && !(await page.$eval('#crmRegPat', (e) => e.hidden)) && !(await page.$eval('#crmLeadBox', (e) => e.hidden)), await page.evaluate(() => JSON.stringify({tag: (document.getElementById('crmWhoTag') || {}).textContent, rp: document.getElementById('crmRegPat') && document.getElementById('crmRegPat').hidden, who: document.getElementById('crmWho').value, n: document.querySelectorAll('#ovCrm').length})));
   const leadOrder = await page.$$eval('#crmLeadBox .crm-prop > label', (r) => r.map((x) => x.textContent.trim()));
   check('Dados do Paciente/Lead: Paciente ou Lead, Telefone, Diagnóstico, Convênio (only two lines)?', leadOrder.join('|') === 'Paciente ou Lead|Telefone|Diagnóstico|Convênio', leadOrder);
   // Paciente cadastrado: Telefone, Diagnóstico e Convênio vêm do cadastro (só leitura) e continuam visíveis
@@ -219,7 +219,7 @@ const path = require('path');
   // Editar e excluir o próprio comentário
   await page.hover('#crmFeed .crm-cmt:last-child');
   await page.click('#crmFeed .crm-cmt:last-child [data-cmt-act="edit"]');
-  check('edit opens the "Editar mensagem" window with the text?', (await page.$eval('#ceTitle', (e) => e.textContent)) === 'Editar mensagem' && (await page.$eval('#ceText', (e) => e.value)) === 'Mãe confirmou');
+  check('edit opens the "Editar Mensagem" window with the text?', (await page.$eval('#ceTitle', (e) => e.textContent)) === 'Editar Mensagem' && (await page.$eval('#ceText', (e) => e.value)) === 'Mãe confirmou');
   await page.fill('#ceText', 'Mãe confirmou às 10h');
   await page.press('#ceText', 'Control+Enter'); await page.waitForTimeout(250);
   check('edit window closed, task window still open?', !(await page.$('#ovCmtEdit')) && !!(await page.$('#ovCrm')));
@@ -247,7 +247,7 @@ const path = require('path');
   await page.click('#crmCancel');
   await page.waitForSelector('#ovCrm', {state: 'detached'});
 
-  // Lead → Cadastrar paciente: abre o cadastro preenchido e liga a tarefa ao paciente
+  // Lead → Cadastrar Paciente: abre o cadastro preenchido e liga a tarefa ao paciente
   await page.click('#crmAdd'); await page.waitForSelector('#ovCrm'); await page.waitForTimeout(400);
   await page.fill('#crmTitleIn', 'Agendar avaliação');
   await page.fill('#crmWho', 'Novo Lead Teste'); await page.dispatchEvent('#crmWho', 'input');
@@ -257,13 +257,13 @@ const path = require('path');
   await page.dispatchEvent('#crmWho', 'input');
   await page.waitForSelector('#crmRegPat:not([hidden])', {timeout: 10000}).catch(() => {});
   const rpPos = await page.evaluate(() => { const b = document.getElementById('crmRegPat'), mb = document.getElementById('crmMoreBtn'); return {inMenu: !!b && !!b.closest('#crmMoreMenu'), inHead: !!mb && !!mb.closest('#crmLeadBox .crm-sec-h') && (function(){ const t = document.querySelector('#crmLeadBox .crm-sec-t').getBoundingClientRect(), r = mb.getBoundingClientRect(), bx = document.getElementById('crmLeadBox').getBoundingClientRect(); return Math.abs((t.top + t.bottom) / 2 - (r.top + r.bottom) / 2) < 8 && Math.abs(r.right - bx.right) < 4; })(), shown: !!mb && !mb.parentNode.hidden, menuClosed: document.getElementById('crmMoreMenu').hidden, link: !!document.querySelector('#crmMoreMenu #crmSendLink'), notInBox: true}; });
-  check('"Cadastrar paciente" and "Enviar link de cadastro" inside Outras opções, on the Dados do Paciente/Lead title line at the right?', rpPos.inMenu && rpPos.inHead && rpPos.shown && rpPos.menuClosed && rpPos.link && rpPos.notInBox, JSON.stringify(rpPos));
+  check('"Cadastrar Paciente" and "Enviar Link de Cadastro" inside Outras Opções, on the Dados do Paciente/Lead title line at the right?', rpPos.inMenu && rpPos.inHead && rpPos.shown && rpPos.menuClosed && rpPos.link && rpPos.notInBox, JSON.stringify(rpPos));
   await page.click('#crmMoreBtn');
-  check('Outras opções opens the menu with Cadastrar paciente visible?', await page.evaluate(() => !document.getElementById('crmMoreMenu').hidden && !!document.getElementById('crmRegPat').offsetParent));
+  check('Outras Opções opens the menu with Cadastrar Paciente visible?', await page.evaluate(() => !document.getElementById('crmMoreMenu').hidden && !!document.getElementById('crmRegPat').offsetParent));
   await page.click('#crmRegPat');
   await page.waitForSelector('#ovPat');
   const pre = await page.evaluate(() => ({nome: document.getElementById('pNome').value, tel: [...document.querySelectorAll('#telHost input')].map(i => i.value).join(' ')}));
-  check('"Cadastrar paciente" opens the patient form with the lead data?', pre.nome === 'Novo Lead Teste' && /88887777|8888-7777/.test(pre.tel), JSON.stringify(pre));
+  check('"Cadastrar Paciente" opens the patient form with the lead data?', pre.nome === 'Novo Lead Teste' && /88887777|8888-7777/.test(pre.tel), JSON.stringify(pre));
   await page.fill('#pf-cpf', '52998224725');
   await page.click('#pSave'); await page.waitForTimeout(400);
   if (await page.$('#cfOk')) { await page.click('#cfOk'); await page.waitForTimeout(300); }
@@ -284,13 +284,13 @@ const path = require('path');
   await page.click('#crmCancel');
   check('opening the task marks it read?', await page.$eval('#crmBadge', (e) => e.hidden));
 
-  // Minhas tarefas
+  // Minhas Tarefas
   await ev(`(function(){ crmInsert({list_id: "agendas", status: "aberto", title: "Alterar agenda do João", assignees: ["local-me"], priority: "alta"}); crmInsert({list_id: "agendas", status: "aberto", title: "Da Bia", assignees: ["u2"]}); return true; })()`);
   await page.uncheck('#crmShowDone');
   await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-mine"]');
   await page.waitForTimeout(200);
   const mine = await page.$$eval('#crmHost tr[data-crm-id]', (r) => r.map((x) => x.textContent));
-  check('Minhas tarefas: only open tasks assigned to me (with the Lista column)?', mine.length === 1 && /Alterar agenda do João/.test(mine[0]) && /Agendas/.test(mine[0]), mine);
+  check('Minhas Tarefas: only open tasks assigned to me (with the Lista column)?', mine.length === 1 && /Alterar agenda do João/.test(mine[0]) && /Agendas/.test(mine[0]), mine);
 
   // Filtro de prioridade
   await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-agendas"]'); await page.waitForTimeout(150);
@@ -299,7 +299,7 @@ const path = require('path');
   check('priority filter?', (await page.$$('#crmHost tr[data-crm-id]')).length === 1);
   await setv('#crmFPrio', '');
 
-  // Filtro de Status: opções da lista aberta; em Minhas tarefas, de todas as listas
+  // Filtro de Status: opções da lista aberta; em Minhas Tarefas, de todas as listas
   const stOpts = await page.$$eval('#crmFSt option', (o) => o.map((x) => x.textContent));
   const agSt = await ev('crmListById("agendas").statuses.map(function(s){ return s.name; })');
   check('status filter lists the statuses of the open list?', stOpts[0] === 'Status' && JSON.stringify(stOpts.slice(1)) === JSON.stringify(agSt), stOpts);
@@ -311,19 +311,19 @@ const path = require('path');
   await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-mine"]'); await page.waitForTimeout(150);
   const mineSt = await page.$$eval('#crmFSt option', (o) => o.length);
   const allSt = await ev('(function(){ var s = {}; crmVisibleLists().forEach(function(l){ l.statuses.forEach(function(x){ s[normText(x.name)] = 1; }); }); return Object.keys(s).length; })()');
-  check('Minhas tarefas: status filter joins the statuses of all lists?', mineSt === allSt + 1, {mineSt, allSt});
+  check('Minhas Tarefas: status filter joins the statuses of all lists?', mineSt === allSt + 1, {mineSt, allSt});
   const whoVis = await page.evaluate(() => { const b = document.querySelector('#tab-crm [data-dp-for="crmFWho"]'); return !!b && getComputedStyle(b).display !== 'none'; });
   const stVis2 = await page.evaluate(() => { const b = document.querySelector('#tab-crm [data-dp-for="crmFSt"]'); return !!b && getComputedStyle(b).display !== 'none'; });
-  check('Minhas tarefas: no Responsável filter, Status in its place?', !whoVis && stVis2, {whoVis, stVis2});
+  check('Minhas Tarefas: no Responsável filter, Status in its place?', !whoVis && stVis2, {whoVis, stVis2});
   await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-agendas"]'); await page.waitForTimeout(150);
 
   const mods = await ev('window.pipoCrmModules().map(function(m){ return m.key + "|" + (m.group || ""); }).join(",")');
-  check('Níveis de permissão: CRM group starts with Listas e status, then one row per list?', /^crm_listas\|CRM,crm_atendimento\|,crm_agendas\|/.test(mods), mods);
-  // Listas e status: visual de Cadastros → Grupos (linhas com setas, bolinha, resumo e Editar; janela própria por lista)
+  check('Níveis de Permissão: CRM group starts with Listas e Status, then one row per list?', /^crm_listas\|CRM,crm_atendimento\|,crm_agendas\|/.test(mods), mods);
+  // Listas e Status: visual de Cadastros → Grupos (linhas com setas, bolinha, resumo e Editar; janela própria por lista)
   await ev('crmOpenListsModal()');
   await page.waitForSelector('#ovCrmL');
   const lrows = await page.evaluate(() => [...document.querySelectorAll('#crmLBody .crm-lrow')].map((r) => ({n: r.querySelector('.rn').textContent, s: r.querySelector('.rs').textContent, ed: !!r.querySelector('[data-ledit]'), mv: !!r.querySelector('.move-col')})));
-  check('Listas e status: one row per list (name, summary of statuses, arrows, Editar)?', lrows.length === (await ev('CRM.lists.length')) && lrows.every((r) => r.ed && r.mv) && /status ·/.test(lrows[0].s), JSON.stringify(lrows.slice(0, 2)));
+  check('Listas e Status: one row per list (name, summary of statuses, arrows, Editar)?', lrows.length === (await ev('CRM.lists.length')) && lrows.every((r) => r.ed && r.mv) && /status ·/.test(lrows[0].s), JSON.stringify(lrows.slice(0, 2)));
   const firstId = await ev('CRM.lists[0].id');
   await page.click('#crmLBody .crm-lrow:first-child [data-lmv="1"]'); await page.waitForTimeout(200);
   check('arrow ▼ moves the list down (saved right away)?', (await ev('CRM.lists[1].id')) === firstId && (await page.$eval('#crmLBody .crm-lrow:nth-child(2)', (e) => e.getAttribute('data-lid'))) === firstId);
@@ -331,22 +331,22 @@ const path = require('path');
   await page.click('#crmLBody .crm-lrow:first-child [data-ledit]'); await page.waitForTimeout(150);
   const ed = await page.evaluate(() => ({t: document.querySelector('#ovCrmL h3').textContent, name: document.getElementById('crmLName').value, color: !!document.getElementById('crmLColor'),
     sts: document.querySelectorAll('#crmLSts .therapist-row').length, txt: document.getElementById('ovCrmL').textContent, del: !!document.getElementById('crmLDel')}));
-  check('Editar opens the list window (name, color, options, statuses with "Finalizado", Excluir)?', ed.t === 'Editar lista' && ed.name && ed.color && ed.sts >= 2 && /Finalizado/.test(ed.txt) && !/Encerra/.test(ed.txt) && /Recorrência/.test(ed.txt) && ed.del, JSON.stringify({t: ed.t, name: ed.name, sts: ed.sts}));
+  check('Editar opens the list window (name, color, options, statuses with "Finalizado", Excluir)?', ed.t === 'Editar Lista' && ed.name && ed.color && ed.sts >= 2 && /Finalizado/.test(ed.txt) && !/Encerra/.test(ed.txt) && /Recorrência/.test(ed.txt) && ed.del, JSON.stringify({t: ed.t, name: ed.name, sts: ed.sts}));
   await page.click('#crmLCancel'); await page.waitForTimeout(100);
-  check('Cancelar goes back to Listas e status?', !!(await page.$('#crmLBody .crm-lrow')));
+  check('Cancelar goes back to Listas e Status?', !!(await page.$('#crmLBody .crm-lrow')));
   await page.click('#crmLAdd'); await page.waitForTimeout(150);
   await page.fill('#crmLName', 'Compras');
   const recBox = await page.$('#ovCrmL input[data-lf="recorrencia"]');
   if (recBox) await recBox.click();
   await page.click('#crmLSave'); await page.waitForTimeout(250);
-  check('Listas e status: new list saved with "Recorrência" (on for Compras, off for Agendas) and back to the rows?', !!recBox && (await ev('!!crmListById("compras") && crmListById("compras").recorrencia === true && !("recorrencia" in crmListById("agendas"))')) && !!(await page.$('#crmLBody .crm-lrow[data-lid="compras"]')));
+  check('Listas e Status: new list saved with "Recorrência" (on for Compras, off for Agendas) and back to the rows?', !!recBox && (await ev('!!crmListById("compras") && crmListById("compras").recorrencia === true && !("recorrencia" in crmListById("agendas"))')) && !!(await page.$('#crmLBody .crm-lrow[data-lid="compras"]')));
   await page.click('#crmLCancel');
   await page.click('#crmBtn');
   const items2 = await page.$$eval('#crmMenu [data-nav]', (r) => r.map((x) => x.textContent));
   check('new list "Compras" in the menu?', items2.indexOf('Compras') !== -1 && !!(await ev('crmListById("compras")')), items2);
   await page.keyboard.press('Escape');
   const mods2 = await ev('window.pipoCrmModules().map(function(m){ return m.key; })');
-  check('permission modules: Listas e status first, then one per list (new list included)?', mods2[0] === 'crm_listas' && mods2[1] === 'crm_atendimento' && mods2.indexOf('crm_compras') !== -1, mods2);
+  check('permission modules: Listas e Status first, then one per list (new list included)?', mods2[0] === 'crm_listas' && mods2[1] === 'crm_atendimento' && mods2.indexOf('crm_compras') !== -1, mods2);
 
   // Velocidade: com o tempo real conectado, abrir o CRM de novo não relê tudo do banco
   const cache = await ev(`(async function(){
@@ -377,7 +377,7 @@ const path = require('path');
       seg: getComputedStyle(document.getElementById('crmViewSeg')).display, quadro: getComputedStyle(document.querySelector('#crmViewSeg [data-cv="quadro"]')).display,
       add: getComputedStyle(document.getElementById('crmAdd')).display, listaCol: [...document.querySelectorAll('#crmHost thead th')].some((t) => /Lista/i.test(t.textContent)),
       rows: rows.length, want, allVisible: rows.every((r) => crmCan(CRM.tasks[r.getAttribute('data-crm-id')].list_id, 'view')), hiddenList }; });
-  check('CRM home: list cards on top (Minhas tarefas first), then the bar and ALL open tasks of the lists I can see (Lista column, no Quadro/+ Tarefa)?', home.cards.join('|').indexOf('Minhas tarefas|Atendimento|Agendas|Fature|Gestão') === 0 && home.cardsAbove && home.seg !== 'none' && home.quadro === 'none' && home.add === 'none' && home.listaCol && home.rows === home.want && home.rows > 0 && home.allVisible, JSON.stringify(home));
+  check('CRM home: list cards on top (Minhas Tarefas first), then the bar and ALL open tasks of the lists I can see (Lista column, no Quadro/+ Tarefa)?', home.cards.join('|').indexOf('Minhas Tarefas|Atendimento|Agendas|Fature|Gestão') === 0 && home.cardsAbove && home.seg !== 'none' && home.quadro === 'none' && home.add === 'none' && home.listaCol && home.rows === home.want && home.rows > 0 && home.allVisible, JSON.stringify(home));
   const homeHead = await page.$$eval('#crmHost .pat-table thead th .th-label', (r) => r.map((x) => x.textContent));
   check('CRM home columns: Status, Tarefa, Lista, Paciente ou Lead, Convênio, Responsáveis, Vencimento, Prioridade?', homeHead.join('|') === 'Status|Tarefa|Lista|Paciente ou Lead|Convênio|Responsáveis|Vencimento|Prioridade', JSON.stringify(homeHead));
   const perm = await ev(`(function(){ var orig = crmCan, lid = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k].list_id; })[0];
@@ -390,13 +390,13 @@ const path = require('path');
   await page.click('#crmHomeGrid [data-crm-home="agendas"]'); await page.waitForTimeout(100);
   const opened = await page.evaluate(() => ({ title: document.getElementById('crmTitle').textContent, seg: getComputedStyle(document.getElementById('crmViewSeg')).display }));
   check('clicking a card opens that list?', opened.title === 'Agendas' && opened.seg !== 'none', opened);
-  // Tela aberta (#crm, F5) antes de as permissões chegarem: quando chegam, abre Minhas tarefas.
+  // Tela aberta (#crm, F5) antes de as permissões chegarem: quando chegam, abre Minhas Tarefas.
   await ev('(function(){ window.__vis = crmVisibleLists; crmVisibleLists = function(){ return []; }; CRM.list = ""; crmOnShow(); return true; })()');
   const before = await page.$eval('#crmHost', (e) => e.textContent);
   await ev('(function(){ crmVisibleLists = window.__vis; crmRender(); return true; })()');
   await page.waitForTimeout(100);
   const after = await page.evaluate(() => ({ title: document.getElementById('crmTitle').textContent, host: document.getElementById('crmHost').textContent, who: (document.querySelector('[data-dp-for="crmFWho"] .dp-txt') || {}).textContent }));
-  check('permissions arriving later: "Nenhuma lista" turns into Minhas tarefas, responsável filter labelled?', /Nenhuma lista/.test(before) && after.title === 'Minhas tarefas' && !/Nenhuma lista/.test(after.host) && after.who === 'Responsável', after);
+  check('permissions arriving later: "Nenhuma lista" turns into Minhas Tarefas, responsável filter labelled?', /Nenhuma lista/.test(before) && after.title === 'Minhas Tarefas' && !/Nenhuma lista/.test(after.host) && after.who === 'Responsável', after);
   // Responsáveis: só quem tem acesso ao CRM e à lista; quem já estava sem acesso aparece com "(sem acesso)"
   const ppl = await ev(`(function(){ var old = CRM.people;
     CRM.people = [{id:'local-me',full_name:'Você',admin:true,crm:true,lists:[]},{id:'b',full_name:'Bia',admin:false,crm:true,lists:['atendimento']},
@@ -422,15 +422,15 @@ const path = require('path');
   check('comment B/I/U: 3 buttons wrap selection and the feed shows bold/italic/underline?', fmt.n === 3 && fmt.v1 === 'oi *mundo*' && fmt.v2 === 'a __b__' &&
     fmt.h.indexOf('<b>forte</b>') !== -1 && fmt.h.indexOf('<i>leve</i>') !== -1 && fmt.h.indexOf('<u>linha</u>') !== -1 && fmt.h.indexOf('nome_sobrenome') !== -1 && fmt.h.indexOf('2*3*4') !== -1, JSON.stringify(fmt));
   const agSec = JSON.parse(await ev('(function(){ var host = document.getElementById("modalHost"); crmOpenTask(null, {listId: "agendas"}); var r = {box: !!document.getElementById("crmLeadBox"), who: !!document.querySelector("#crmLeadBox #crmWho"), tel: !!document.getElementById("crmLTel"), loss: !!document.getElementById("crmLossBox")}; host.innerHTML = ""; return JSON.stringify(r); })()'));
-  check('any list (Agendas) also has Dados do Paciente/Lead (no Motivo de perda)?', agSec.box && agSec.who && agSec.tel && !agSec.loss, JSON.stringify(agSec));
-  // Mover tarefa (Outras opções no canto superior direito da janela)
+  check('any list (Agendas) also has Dados do Paciente/Lead (no Motivo de Perda)?', agSec.box && agSec.who && agSec.tel && !agSec.loss, JSON.stringify(agSec));
+  // Mover Tarefa (Outras Opções no canto superior direito da janela)
   const mvId = await ev('crmInsert({list_id: "atendimento", status: "triagem", title: "Tarefa para mover", priority: "normal", assignees: [], lead: {nome: "Lead Fictício"}}).then(function(t){ return t.id; })');
   await ev(`(crmOpenTask(CRM.tasks["${mvId}"]), true)`); await page.waitForTimeout(300);
   const topPos = await page.evaluate(() => { const b = document.getElementById('crmTopBtn'), h = document.querySelector('#ovCrm .modal-head'), c = document.getElementById('crmClose');
     const rb = b && b.getBoundingClientRect(), rh = h.getBoundingClientRect(), rc = c.getBoundingClientRect(); return {has: !!b, text: b && b.textContent.trim(), firstLine: !!b && rb.top < rh.top + 40, rightOfTitle: !!b && rb.left > rh.left + rh.width / 2, besideClose: !!b && rb.right <= rc.left + 2}; });
-  check('"Outras opções" sits on the first line, top right, next to the close button?', topPos.has && topPos.firstLine && topPos.rightOfTitle && topPos.besideClose && /Outras opções/.test(topPos.text), topPos);
+  check('"Outras Opções" sits on the first line, top right, next to the close button?', topPos.has && topPos.firstLine && topPos.rightOfTitle && topPos.besideClose && /Outras Opções/.test(topPos.text), topPos);
   await page.click('#crmTopBtn'); await page.waitForTimeout(100);
-  check('menu has "Mover tarefa"?', /Mover tarefa/.test(await page.textContent('#crmTopMenu')));
+  check('menu has "Mover Tarefa"?', /Mover Tarefa/.test(await page.textContent('#crmTopMenu')));
   await page.click('#crmMoveBtn'); await page.waitForSelector('#ovMove');
   const dv = await page.$$eval('#mvList option', (a) => a.map((o) => o.value));
   check('destination lists exclude the current one?', dv.indexOf('atendimento') === -1 && dv.indexOf('agendas') !== -1 && dv.indexOf('fature') !== -1, dv);
@@ -441,7 +441,7 @@ const path = require('path');
   const moved = await ev(`(function(){ var t = CRM.tasks["${mvId}"]; return {list: t.list_id, st: t.status}; })()`);
   check('task moved to Agendas with the chosen status (Em andamento)?', moved.list === 'agendas' && moved.st === 'andamento', moved);
   check('window closed and the move is in the activity?', !(await page.$('#ovCrm')) && await ev(`CRM.mem.events.some(function(e){ return e.task_id === "${mvId}" && e.kind === "field" && e.data.campo === "lista" && e.data.para === "agendas"; })`));
-  check('new task has no top "Outras opções" (only saved ones)?', await ev('(function(){ crmOpenTask(null, {listId: "atendimento"}); var r = !document.getElementById("crmTopBtn"); document.getElementById("modalHost").innerHTML = ""; return r; })()'));
+  check('new task has no top "Outras Opções" (only saved ones)?', await ev('(function(){ crmOpenTask(null, {listId: "atendimento"}); var r = !document.getElementById("crmTopBtn"); document.getElementById("modalHost").innerHTML = ""; return r; })()'));
   // Status que existe (mesmo nome) nas duas listas: mantém sem aviso; encerra → encerra
   const mv2 = await ev('crmInsert({list_id: "agendas", status: "aberto", title: "Mover igual", priority: "normal", assignees: [], lead: {}}).then(function(t){ return t.id; })');
   const stSame = await ev('(function(){ return crmMoveStatusFor(crmListById("agendas"), "aberto", crmListById("fature")); })()');

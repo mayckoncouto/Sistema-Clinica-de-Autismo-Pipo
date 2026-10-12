@@ -87,7 +87,7 @@ const path = require('path');
   if (btnVisible){ await page.click('#trMoreBtn'); await page.click('#trOpenPat'); }
   await page.waitForTimeout(300);
   const patOpen = !(await page.$('#ovTreat')) && !!(await page.$('#pNome'));
-  check('"Cadastro do paciente" opens the patient window?', btnVisible && patOpen);
+  check('"Cadastro do Paciente" opens the patient window?', btnVisible && patOpen);
   // Trocar o ABA de UMA linha pela lista da tela e salvar: tem que ficar gravado.
   await ev(`(function(){ document.querySelectorAll(".overlay").forEach(function(o){ o.remove(); });
     var pat = state.patientsRaw[0];

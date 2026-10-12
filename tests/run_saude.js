@@ -1,4 +1,4 @@
-// Dados de saúde do paciente com permissão própria ("Pacientes – saúde"): saem do
+// Dados de saúde do paciente com permissão própria ("Pacientes – Saúde"): saem do
 // cadastro de pacientes para a tabela protegida; sem "ver" não aparecem em lugar nenhum.
 const { chromium } = require('playwright');
 const fs = require('fs');

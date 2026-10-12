@@ -31,7 +31,7 @@ const path = require('path');
   await page.click('#regLib input[value="musico"]');
   await page.click('#regSave'); await page.waitForTimeout(300);
   console.log('specialty saves what it releases?', (await ev(`JSON.stringify(state.specialties.filter(function(s){ return s.id === "psico"; })[0].libera)`)) === '["musico"]');
-  console.log('list shows the "Libera atender também" column?', /Musicoterapia/.test(await page.textContent('#reg-especialidades-host tr:has-text("Psicologia")')));
+  console.log('list shows the "Libera Atender Também" column?', /Musicoterapia/.test(await page.textContent('#reg-especialidades-host tr:has-text("Psicologia")')));
 
   // Convênio Unimed: cobre Psicologia a R$ 120,50 por sessão.
   await page.$eval('#mainTabs button[data-tab=convenios]', (b) => b.click()); await page.waitForTimeout(300);
@@ -50,11 +50,11 @@ const path = require('path');
   // Reabrir mostra o valor salvo.
   await page.click('#reg-convenios-host tr:has-text("Unimed")'); await page.waitForTimeout(300);
   console.log('reopening shows the saved value?', (await page.inputValue('#cvRows .cv-val')) === '120,50');
-  // "Inserir todos": todas as especialidades e serviços (menos Sessão) que faltam.
+  // "Inserir Todos": todas as especialidades e serviços (menos Sessão) que faltam.
   const expected = await ev(`state.specialties.filter(isActive).length + servicesList().filter(function(x){ return x.id !== DEFAULT_SERVICE_ID && isActive(x); }).length`);
   await page.click('#cvAll'); await page.waitForTimeout(200);
   const rows = await page.$$eval('#cvRows .cv-row', (a) => a.length);
-  console.log('"Inserir todos" adds every specialty and service once (value kept)?', rows === expected && (await page.inputValue('#cvRows .cv-val')) === '120,50', rows, expected);
+  console.log('"Inserir Todos" adds every specialty and service once (value kept)?', rows === expected && (await page.inputValue('#cvRows .cv-val')) === '120,50', rows, expected);
   const svcOpt = await page.$$eval('#cvRows .cv-spec option', (a) => a.some((o) => o.value.indexOf('svc:') === 0));
   console.log('services are offered as options?', svcOpt);
   await page.click('#regCancel');

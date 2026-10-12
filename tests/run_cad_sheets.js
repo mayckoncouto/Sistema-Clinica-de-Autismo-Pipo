@@ -103,7 +103,7 @@ const path = require('path');
   const msT = await page.evaluate(() => { const p = document.querySelector('#sfTypes'); const r = p.getBoundingClientRect(); return {t: (p.querySelector('.ms-sheet-head b') || {}).textContent, bottom: Math.round(r.bottom), vh: innerHeight}; });
   check('multi-choice (Tipos) opens as a bottom window titled "Tipos"?', msT.t === 'Tipos' && Math.abs(msT.bottom - msT.vh) <= 2, JSON.stringify(msT));
   await page.evaluate(() => { document.getElementById('modalHost').innerHTML = ''; });
-  // Visão geral no celular (barra em 3 linhas): data + Hoje + ? / busca + profissional / especialidade, sala, status; contagem embaixo
+  // Visão Geral no celular (barra em 3 linhas): data + Hoje + ? / busca + profissional / especialidade, sala, status; contagem embaixo
   await page.evaluate(() => { document.querySelector('#mainTabs button[data-tab="visaogeral"]').click(); });
   await page.waitForTimeout(400);
   const vg = await page.evaluate(() => {
@@ -118,9 +118,9 @@ const path = require('path');
       helpSameRow: Math.abs(h.top - d.top) < 12, countBelow: c.top >= rest[0].bottom - 1, sw: document.documentElement.scrollWidth,
       labels: f.map((e) => e.textContent.trim()), title: getComputedStyle(document.querySelector('.vg-title')).display};
   });
-  check('Visão geral (celular): date+Hoje+? / search+profissional / 3 filters with short labels, count below?', vg.fN === 4 && vg.qProfRow && vg.restRow && vg.helpSameRow && vg.countBelow && vg.sw <= 390 && vg.title === 'none' && vg.labels.join() === 'Profissional,Especialidade,Sala,Status', JSON.stringify(vg));
+  check('Visão Geral (celular): date+Hoje+? / search+profissional / 3 filters with short labels, count below?', vg.fN === 4 && vg.qProfRow && vg.restRow && vg.helpSameRow && vg.countBelow && vg.sw <= 390 && vg.title === 'none' && vg.labels.join() === 'Profissional,Especialidade,Sala,Status', JSON.stringify(vg));
   const r3 = await probe('#tab-visaogeral');
-  check('Visão geral: filters and date open the bottom window?', r3.tested >= 5 && !r3.bad.length, JSON.stringify(r3));
+  check('Visão Geral: filters and date open the bottom window?', r3.tested >= 5 && !r3.bad.length, JSON.stringify(r3));
   // fora dos cadastros também (Agenda) e Salas continua com a lista flutuante
   await page.evaluate(() => { document.querySelector('#mainTabs button[data-tab="agenda"]').click(); });
   await page.waitForTimeout(400);

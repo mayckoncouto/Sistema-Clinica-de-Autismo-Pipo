@@ -109,7 +109,7 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab="planner"]', (b) => b.click()); await page.waitForTimeout(400);
   await page.locator('td.slotcell[data-doc="seg-1"][data-key="08:00|r1|r1-t1"]').click(); await page.waitForSelector('#ovBook');
   await page.fill('#bkPatient', 'Bruno Verde'); await page.click('#bkSave'); await page.waitForTimeout(250);
-  console.log('Planner asks before booking with a different therapist?', (await page.locator('#cfTitle').textContent().catch(() => '')) === 'Terapeuta diferente do tratamento');
+  console.log('Planner asks before booking with a different therapist?', (await page.locator('#cfTitle').textContent().catch(() => '')) === 'Terapeuta Diferente do Tratamento');
   await page.click('#cfCancel'); await page.waitForTimeout(200);
   console.log('cancelling keeps the slot empty?', await page.evaluate(() => !((window.__STORE__['schedule/seg-1'] || {}).bookings || {})['08:00|r1|r1-t1']));
 
@@ -136,9 +136,9 @@ const path = require('path');
     const vals = [...document.querySelectorAll('#trHost table.tr-main tbody tr')].map((tr) => tr.cells[i] ? tr.cells[i].textContent.trim() : '?');
     return {i, ths, vals};
   });
-  console.log('treatments list columns in the requested order, ABA with Sim/Não?', abaCol.ths.slice(0, 9).map((t) => t.replace(/[⇅▲▼]/g, '').trim()).join('|') === 'Paciente|Início|Vencimento|Convênio|ABA|Término|Tipo|Status|Mês (realizado/contratado)' && abaCol.vals.some((v) => v === 'Sim' || v === 'Não'), JSON.stringify(abaCol.ths));
+  console.log('treatments list columns in the requested order, ABA with Sim/Não?', abaCol.ths.slice(0, 9).map((t) => t.replace(/[⇅▲▼]/g, '').trim()).join('|') === 'Paciente|Início|Vencimento|Convênio|ABA|Término|Tipo|Status|Mês (Realizado/Contratado)' && abaCol.vals.some((v) => v === 'Sim' || v === 'Não'), JSON.stringify(abaCol.ths));
 
-  // Horário de atendimento: menu "Outras opções" (limpar todos, limpar sem Disponível, copiar) + Desfazer.
+  // Horário de atendimento: menu "Outras Opções" (limpar todos, limpar sem Disponível, copiar) + Desfazer.
   await openNew('ana-azul');
   const ph = await page.evaluate(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -164,11 +164,11 @@ const path = require('path');
     const copied = rows.every((tr) => tr.querySelector('.cl-ativo').checked && tr.querySelector('input[id$="-mi"]').value === '08:00');
     return {head: head.slice(0, 2), items, offOk, undoShown, undoOk, cleared, copied};
   });
-  console.log('patient hours: "Disponível" column, Outras opções (clear all / clear unmarked / copy) and Desfazer work?',
+  console.log('patient hours: "Disponível" column, Outras Opções (clear all / clear unmarked / copy) and Desfazer work?',
     ph.head.join('|') === 'Dia|Disponível' && ph.items.length === 3 && ph.offOk && ph.undoShown && ph.undoOk && ph.cleared && ph.copied, JSON.stringify(ph));
   await page.click('#trCancel').catch(() => {});
 
-  // Data de término digitável: antes do início é recusada; válida fica gravada e aparece na lista.
+  // Data de Término digitável: antes do início é recusada; válida fica gravada e aparece na lista.
   if (await page.$('#ovTreat')) await page.click('#trCancel').catch(() => {});
   await page.$eval('#mainTabs button[data-tab=tratamentos]', (b) => b.click()); await page.waitForTimeout(200);
   await page.click('#trHost tbody tr'); await page.waitForSelector('#ovTreat');

@@ -102,7 +102,7 @@ const path = require('path');
   check('Planner window in Avisar mode asks and then saves?', /ABA/.test(asked) && wrote === 'Bruno Verde', JSON.stringify([asked.slice(0, 60), wrote]));
   await ev(`(function(){ var d = state.scheduleDocs["seg-1"]; delete d.bookings["09:20|r1|r1-t1"]; delete d.bookings["09:20|r1|r1-t2"]; state.sysRules = {}; document.querySelectorAll(".overlay").forEach(function(o){ o.remove(); }); })()`);
 
-  // Restaurar tudo.
+  // Restaurar Tudo.
   await ev(`state.sysRules = {pl_nao_aba: "off"}`);
   await page.evaluate(() => window.pipoOpenSystem());
   await page.waitForSelector('#ovSys');
@@ -111,7 +111,7 @@ const path = require('path');
   const chg2 = await page.$$eval('#sysBody .sys-changed', (x) => x.length);
   await page.click('[data-view="hist"]');
   const histRows = await page.$$eval('#sysHist tbody tr', (x) => x.length);
-  check('"alterada" tag, Restaurar tudo and history tab?', chg === 1 && chg2 === 0 && histRows === 2, JSON.stringify([chg, chg2, histRows]));
+  check('"alterada" tag, Restaurar Tudo and history tab?', chg === 1 && chg2 === 0 && histRows === 2, JSON.stringify([chg, chg2, histRows]));
   await page.click('#sysCancel');
 
   check('no page errors?', errors.length === 0, errors.join(' | '));

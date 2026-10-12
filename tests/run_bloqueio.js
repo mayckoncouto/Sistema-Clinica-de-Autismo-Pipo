@@ -1,5 +1,5 @@
-// Planner: Bloqueio de horário. Botões da grade criam horário bloqueado (célula cinza, sem
-// agendamento) só nas colunas livres; Outras opções → Bloquear/Liberar horário por
+// Planner: Bloqueio de Horário. Botões da grade criam horário bloqueado (célula cinza, sem
+// agendamento) só nas colunas livres; Outras Opções → Bloquear/Liberar Horário por
 // profissional, sala ou clínica toda, por semana e grade, com motivo e prévia. Dados fictícios.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -62,20 +62,20 @@ const path = require('path');
   bk = (await store('schedule/seg-1')).bookings;
   console.log('column unlock removes the time blocks and keeps bookings?', freeKeys.every((k) => !bk[k] || !bk[k].lock) && busyKeys.every((k) => JSON.stringify(bk[k]) === JSON.stringify(before[k])));
 
-  // 3) Outras opções → Bloquear horário: profissional Ana, segunda manhã, só 1ª semana, Férias.
+  // 3) Outras Opções → Bloquear Horário: profissional Ana, segunda manhã, só 1ª semana, Férias.
   await ev('openPlBlockModal("lock")');
   await page.waitForSelector('#ovPlb');
   await setSel('#plbAlvo', 'prof');
   await setSel('#plbId', 'ana-terapeuta');
   for (const w of ['2', '3', '4']) await page.uncheck(`.plb-weeks input[value="${w}"]`);
-  // Já vem preenchida com o horário de trabalho da Ana; "Limpar horários" esvazia.
+  // Já vem preenchida com o horário de trabalho da Ana; "Limpar Horários" esvazia.
   const filled = await page.$$eval('.plb-h', (l) => l.filter((x) => x.value).length);
   await page.click('#plbClearHours');
   const emptied = await page.$$eval('.plb-h', (l) => l.every((x) => !x.value));
   const prevEmpty = await page.$eval('#plbPrev', (e) => e.textContent);
-  console.log('hours table comes filled, "Limpar horários" empties it (nothing to save)?', filled > 0 && emptied && /preencha/i.test(prevEmpty) && await page.$eval('#plbSave', (b) => b.disabled));
+  console.log('hours table comes filled, "Limpar Horários" empties it (nothing to save)?', filled > 0 && emptied && /preencha/i.test(prevEmpty) && await page.$eval('#plbSave', (b) => b.disabled));
   await page.click('#plbDefault');
-  console.log('"Horário padrão" fills it again?', (await page.$$eval('.plb-h', (l) => l.filter((x) => x.value).length)) === filled);
+  console.log('"Horário Padrão" fills it again?', (await page.$$eval('.plb-h', (l) => l.filter((x) => x.value).length)) === filled);
   await onlyHours('seg', 'm', '00:00', '12:00');
   await setSel('#plbMotivo', 'Férias');
   const prev = await page.$eval('#plbPrev', (e) => e.textContent);
@@ -92,11 +92,11 @@ const path = require('path');
   const bia = await cell('seg-1', morning[2] + '|r1|r1-t2').getAttribute('class');
   console.log('other professionals are not blocked?', !/pl-lock/.test(bia));
 
-  // Botão da grade não libera bloqueio de Outras opções (avisa).
+  // Botão da grade não libera bloqueio de Outras Opções (avisa).
   const rowUn = page.locator(`.row-lock [data-row-action="unlock"][data-doc="seg-1"][data-time="${anaFree.split('|')[0]}"]`);
   await rowUn.click(); await rowUn.click(); await page.waitForTimeout(250);
   const toast = await page.evaluate(() => (document.querySelector('.toast') || {}).textContent || '');
-  console.log('grid unlock does not remove a tool block (and says so)?', /pl-lock/.test(await cell('seg-1', anaFree).getAttribute('class')) && /Outras opções/.test(toast), toast);
+  console.log('grid unlock does not remove a tool block (and says so)?', /pl-lock/.test(await cell('seg-1', anaFree).getAttribute('class')) && /Outras Opções/.test(toast), toast);
 
   // Sala e clínica toda.
   await ev('openPlBlockModal("lock")');
@@ -109,7 +109,7 @@ const path = require('path');
   const clinicHit = await ev(`!!plRuleLock("ter", 1, "${morning[3]}", findRoom("r1"), findRoom("r1").therapists[1])`);
   console.log('"Clínica toda" blocks every column at that time?', clinicHit === true && (await store('config/planner_blocks')).list.length === 2);
 
-  // 4) Liberar horário: Ana, segunda manhã, 1ª semana → bloqueio sai.
+  // 4) Liberar Horário: Ana, segunda manhã, 1ª semana → bloqueio sai.
   await ev('openPlBlockModal("unlock")');
   await page.waitForSelector('#ovPlb');
   await setSel('#plbAlvo', 'prof');
@@ -118,7 +118,7 @@ const path = require('path');
   await onlyHours('seg', 'm', '00:00', '12:00');
   await page.click('#plbSave'); await page.waitForTimeout(300);
   const after = (await store('config/planner_blocks')).list;
-  console.log('"Liberar horário" removes the professional block (clinic block stays)?', after.length === 1 && after[0].alvo === 'clinica' && !/pl-lock/.test(await cell('seg-1', anaFree).getAttribute('class')));
+  console.log('"Liberar Horário" removes the professional block (clinic block stays)?', after.length === 1 && after[0].alvo === 'clinica' && !/pl-lock/.test(await cell('seg-1', anaFree).getAttribute('class')));
 
   // 5) Janela de atendimento: "Bloqueado" vira horário bloqueado.
   await cell('seg-1', anaFree).locator('.book-main').click();
@@ -129,12 +129,12 @@ const path = require('path');
   bk = (await store('schedule/seg-1')).bookings;
   console.log('booking window "Bloqueado" saves a time block with the reason?', bk[anaFree] && bk[anaFree].lock === true && bk[anaFree].patient === '' && bk[anaFree].motivo === 'Supervisão', JSON.stringify(bk[anaFree]));
 
-  // 6) Permissão: sem "Bloqueio de horário" os botões somem e a gravação recusa.
+  // 6) Permissão: sem "Bloqueio de Horário" os botões somem e a gravação recusa.
   const denied = await ev(`(function(){ var old = window.pipoAuth; window.pipoAuth = {can: function(m, a){ return m !== "bloqueio_horario"; }, profile: function(){ return null; }};
     var msg = bookingPermDenied({"seg-1": {"${morning[4]}|r1|r1-t2": {patient: "", lock: true}}}); permToolClasses();
     var hidden = getComputedStyle(document.querySelector('[data-row-action="lock"]')).display === "none";
     window.pipoAuth = old; permToolClasses(); return [msg, hidden]; })()`);
-  console.log('without the permission: grid lock buttons hidden and saving is refused?', /Bloqueio de horário/.test(denied[0]) && denied[1] === true, denied[0]);
+  console.log('without the permission: grid lock buttons hidden and saving is refused?', /Bloqueio de Horário/.test(denied[0]) && denied[1] === true, denied[0]);
 
   // Bloqueio de profissional numa sala específica: só as colunas dele naquela sala.
   const roomOnly = await ev(`(function(){
@@ -154,7 +154,7 @@ const path = require('path');
     var vis = !f.hidden, opts = Array.prototype.map.call(r.options, function(o){ return o.textContent; });
     var a = document.getElementById("plbAlvo"); a.value = "sala"; a.dispatchEvent(new Event("change")); var hiddenForRoom = f.hidden;
     document.getElementById("modalHost").innerHTML = ""; return {vis: vis, opts: opts, hiddenForRoom: hiddenForRoom}; })()`);
-  console.log('Bloquear horário: "Sala" field (Todas as salas + rooms of the professional) only for Profissional?', roomField.vis && roomField.opts[0] === 'Todas as salas' && roomField.opts.length >= 2 && roomField.hiddenForRoom, JSON.stringify(roomField));
+  console.log('Bloquear Horário: "Sala" field (Todas as salas + rooms of the professional) only for Profissional?', roomField.vis && roomField.opts[0] === 'Todas as salas' && roomField.opts.length >= 2 && roomField.hiddenForRoom, JSON.stringify(roomField));
 
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();

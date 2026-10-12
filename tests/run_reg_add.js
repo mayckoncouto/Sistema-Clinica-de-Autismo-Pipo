@@ -25,7 +25,7 @@ const path = require('path');
   const closePop = () => page.evaluate(() => { const p = document.getElementById('dpPop'); if (p) p.remove(); });
   const hasAdd = () => page.evaluate(() => { const a = document.querySelector('#dpPop .dp-add'); return !!a && a === a.parentNode.lastElementChild; });
 
-  // 1. Paciente: Diagnóstico e Como conheceu = listas dos cadastros com "+ Incluir" no fim
+  // 1. Paciente: Diagnóstico e Como Conheceu = listas dos cadastros com "+ Incluir" no fim
   await page.$eval('#mainTabs button[data-tab=pacientes]', (b) => b.click()); await page.waitForTimeout(300);
   await ev('openPatientModal(null)'); await page.waitForTimeout(400);
   check('patient: Diagnóstico is a list of the Diagnósticos registry?', await page.$eval('#pf-cid', (s) => s.tagName === 'SELECT' && [...s.options].some((o) => o.value === 'Autismo infantil')));
@@ -40,7 +40,7 @@ const path = require('path');
   await page.click('#dpPop .dp-add'); await page.waitForSelector('#ovQuick');
   check('typed text goes to the name of the new item?', (await page.inputValue('#qkName')) === 'Panfleto');
   await page.click('#qkSave'); await page.waitForTimeout(250);
-  check('patient: new origin chosen in "Como conheceu"?', (await page.inputValue('#pf-comoConheceu')) === 'Panfleto');
+  check('patient: new origin chosen in "Como Conheceu"?', (await page.inputValue('#pf-comoConheceu')) === 'Panfleto');
   await page.click('[data-dp-for="pf-medicoId"] .dp-in'); await page.waitForSelector('#dpPop');
   check('patient: Médico list has "+ Incluir" at the end (no side "+" button)?', await hasAdd() && !(await page.$('#ovPat [data-regadd="medicos"]')));
   await closePop();
@@ -66,7 +66,7 @@ const path = require('path');
   await page.$eval('#trSt', (s) => { s.value = 'cancelado'; s.dispatchEvent(new Event('change', {bubbles: true})); });
   await page.waitForTimeout(150);
   await openList('trMot');
-  check('treatment: Motivo do cancelamento list has "+ Incluir"?', await hasAdd());
+  check('treatment: Motivo do Cancelamento list has "+ Incluir"?', await hasAdd());
   await page.click('#dpPop .dp-add'); await page.waitForSelector('#ovQuick');
   await page.fill('#qkName', 'Fim do convênio'); await page.click('#qkSave'); await page.waitForTimeout(250);
   check('treatment: new reason chosen?', await page.$eval('#trMot', (s) => s.options[s.selectedIndex].textContent === 'Fim do convênio'));
@@ -79,10 +79,10 @@ const path = require('path');
   await page.click('#tlCancel');
   await ev('document.getElementById("modalHost").innerHTML = ""');
 
-  // 4. Colaborador: Especialidade principal, Tipos (painel de várias opções), CBO, Conselho
+  // 4. Colaborador: Especialidade Principal, Tipos (painel de várias opções), CBO, Conselho
   await ev('openProfessionalModal(state.professionals[0])'); await page.waitForTimeout(400);
   await openList('profSpecialty');
-  check('collaborator: Especialidade principal has "+ Incluir"?', await hasAdd());
+  check('collaborator: Especialidade Principal has "+ Incluir"?', await hasAdd());
   await closePop();
   await page.click('#sfTypesMs .ms-btn'); await page.waitForTimeout(100);
   check('collaborator: Tipos panel ends with "+ Incluir" (no side "+")?', await page.evaluate(() => { const p = document.getElementById('sfTypes'); const a = p.querySelector('.ms-add'); return !!a && a === p.lastElementChild && !document.querySelector('.sf-types-pick > .reg-pick-add'); }));

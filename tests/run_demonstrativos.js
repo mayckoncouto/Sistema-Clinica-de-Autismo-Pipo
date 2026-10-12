@@ -1,4 +1,4 @@
-// Financeiro: Demonstrativos (Fluxo de caixa, DRE e Lançamentos) — dados fictícios.
+// Financeiro: Demonstrativos (Fluxo de Caixa, DRE e Lançamentos) — dados fictícios.
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
@@ -48,18 +48,18 @@ const fs = require('fs');
     ]));
   });
 
-  // ---- abre em Fluxo de caixa ----
+  // ---- abre em Fluxo de Caixa ----
   await page.click('#finBtn'); await page.click('#finMenu [data-nav="demonstrativos"]'); await page.waitForTimeout(300);
-  check('opens on Fluxo de caixa', await page.$eval('#demSeg [data-dv="flu"]', (b) => b.classList.contains('active')));
-  check('three buttons in order (Lançamentos is its own screen)', (await page.$$eval('#demSeg button', (b) => b.map((x) => x.textContent.trim()))).join('|') === 'Fluxo de caixa|DRE|Custo por atendimento');
+  check('opens on Fluxo de Caixa', await page.$eval('#demSeg [data-dv="flu"]', (b) => b.classList.contains('active')));
+  check('three buttons in order (Lançamentos is its own screen)', (await page.$$eval('#demSeg button', (b) => b.map((x) => x.textContent.trim()))).join('|') === 'Fluxo de Caixa|DRE|Custo por Atendimento');
   check('no "Valores em" selector', !(await page.$('#demValores')) && !/Valores em/.test(await text('#tab-lancamentos')));
-  const ini = await rowTxt('Saldo inicial');
-  check('Saldo inicial jan = 12.000, fev = 14.000 (10k+2k, +10k-... )', ini && /12\.000/.test(ini[1]), JSON.stringify(ini));
+  const ini = await rowTxt('Saldo Inicial');
+  check('Saldo Inicial jan = 12.000, fev = 14.000 (10k+2k, +10k-... )', ini && /12\.000/.test(ini[1]), JSON.stringify(ini));
   const ent = await rowTxt('Entradas'), sai = await rowTxt('Saídas');
   check('Entradas jan 12.000, fev 17.000, mar 12.000', /12\.000/.test(ent[1]) && /17\.000/.test(ent[2]) && /12\.000/.test(ent[3]), JSON.stringify(ent));
   check('Saídas jan 6.000, fev 7.000, mar 12.000', /6\.000/.test(sai[1]) && /7\.000/.test(sai[2]) && /12\.000/.test(sai[3]), JSON.stringify(sai));
-  const fin = await rowTxt('Saldo final');
-  check('Saldo final mar = 12.000 + 6.000 + 10.000 + 0 = 28.000', /28\.000/.test(fin[3]), JSON.stringify(fin));
+  const fin = await rowTxt('Saldo Final');
+  check('Saldo Final mar = 12.000 + 6.000 + 10.000 + 0 = 28.000', /28\.000/.test(fin[3]), JSON.stringify(fin));
   check('forecast column "abr/26 previsto"', /abr\/26/.test(await text('#demBody thead')) && /previsto/.test(await text('#demBody thead')));
   const ent4 = ent[4];
   check('forecast entradas = média dos 3 meses (13.667)', /13\.667/.test(ent4), ent4);
@@ -76,7 +76,7 @@ const fs = require('fs');
   await page.click('#demBody [data-dtg="ent"]'); await page.waitForTimeout(100);
   await page.evaluate(() => { const r = Array.from(document.querySelectorAll('#demBody .dem-table tbody tr')).find((x) => x.cells[0].textContent.includes('Receita Operacional')); r.cells[2].querySelector('.dem-cell').click(); });
   await page.waitForTimeout(200);
-  check('went to Lançamentos with strip', (await ev('state.tab')) === 'lancamentos' && /Voltar ao Fluxo de caixa/.test(await text('#demStrip')));
+  check('went to Lançamentos with strip', (await ev('state.tab')) === 'lancamentos' && /Voltar ao Fluxo de Caixa/.test(await text('#demStrip')));
   const lr = await page.$$eval('#reg-lancamentos-host tbody tr', (r) => r.map((x) => x.textContent));
   check('filtered to the 2 Receita Operacional entries of fev', lr.length === 2 && lr.every((t) => /\/02\/2026/.test(t)), JSON.stringify(lr));
   check('strip sum = 14.000,00', /14\.000,00/.test(await text('#demStrip')));
@@ -85,9 +85,9 @@ const fs = require('fs');
 
   // ---- DRE ----
   await page.click('#demSeg [data-dv="dre"]'); await page.waitForTimeout(200);
-  const rec = await rowTxt('Receita total'), des = await rowTxt('Despesas totais'), res = await rowTxt('Resultado'), mg = await rowTxt('Margem do resultado');
-  check('Receita total jan 12.000', /12\.000/.test(rec[1]), JSON.stringify(rec));
-  check('Despesas totais mar 10.000', /10\.000/.test(des[3]), JSON.stringify(des));
+  const rec = await rowTxt('Receita Total'), des = await rowTxt('Despesas Totais'), res = await rowTxt('Resultado'), mg = await rowTxt('Margem do Resultado');
+  check('Receita Total jan 12.000', /12\.000/.test(rec[1]), JSON.stringify(rec));
+  check('Despesas Totais mar 10.000', /10\.000/.test(des[3]), JSON.stringify(des));
   check('Resultado mar 2.000 (aporte e retirada fora)', /2\.000/.test(res[3]) && !/−/.test(res[3]), JSON.stringify(res));
   check('Margem jan 50,0%', /50,0%/.test(mg[1]), JSON.stringify(mg));
   check('no previsto column in DRE', !/previsto/.test(await text('#demBody thead')));
@@ -99,14 +99,14 @@ const fs = require('fs');
   // ---- comparação ----
   await setSel('#demCmp', 'prev'); await page.waitForTimeout(150);
   check('modo buttons appear with comparison', await page.$eval('#demModo', (e) => !e.classList.contains('dem-off')));
-  let r2 = await rowTxt('Receita total');
+  let r2 = await rowTxt('Receita Total');
   check('% vs previous month (fev vs jan: +33,3% receita... )', /▲/.test(r2[2]) && /%/.test(r2[2]), r2[2]);
   await page.click('#demModo [data-md="brl"]'); await page.waitForTimeout(100);
-  r2 = await rowTxt('Receita total'); check('R$ mode', /R\$ 2\.000/.test(r2[2]) && !/%/.test(r2[2].split('R$ 14.000')[1] || ''), r2[2]);
+  r2 = await rowTxt('Receita Total'); check('R$ mode', /R\$ 2\.000/.test(r2[2]) && !/%/.test(r2[2].split('R$ 14.000')[1] || ''), r2[2]);
   await page.click('#demModo [data-md="both"]'); await page.waitForTimeout(100);
-  r2 = await rowTxt('Receita total'); check('R$ e % mode', /R\$ 2\.000 \(16,7%\)/.test(r2[2]), r2[2]);
+  r2 = await rowTxt('Receita Total'); check('R$ e % mode', /R\$ 2\.000 \(16,7%\)/.test(r2[2]), r2[2]);
   await setSel('#demCmp', 'ref'); await page.waitForTimeout(150);
-  r2 = await rowTxt('Receita total');
+  r2 = await rowTxt('Receita Total');
   check('reference month marked (mar default = latest)', /referência/.test(r2[3]), JSON.stringify(r2));
   await setSel('#demCmp', 'off');
 
@@ -121,7 +121,7 @@ const fs = require('fs');
   check('persisted in state.dreViews', (await ev('state.dreViews.length')) === 1);
   await page.click('#demMenuBtn'); await page.click('#demMenu [data-dact="vedit"]'); await page.waitForTimeout(100);
   await page.click('#demVDel'); await page.waitForSelector('#confirmHost .modal, #confirmHost .overlay'); 
-  await page.evaluate(() => { const b = Array.from(document.querySelectorAll('#confirmHost button')).find((x) => /Confirmar exclusão/.test(x.textContent)); b.click(); });
+  await page.evaluate(() => { const b = Array.from(document.querySelectorAll('#confirmHost button')).find((x) => /Confirmar Exclusão/.test(x.textContent)); b.click(); });
   await page.waitForTimeout(400);
   check('view deleted', (await ev('state.dreViews.length')) === 0 && (await page.$eval('#demVisao', (s) => s.value)) === 'completo');
 
@@ -134,11 +134,11 @@ const fs = require('fs');
   await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="demonstrativos"]').click()); await page.waitForTimeout(200);
   await page.click('#demSeg [data-dv="flu"]'); await page.waitForTimeout(150);
   const model = await ev('JSON.stringify(DM.model.rows.map(function(r){ return r.label; }))');
-  check('export model has rows', /Saldo inicial/.test(model) && /Saldo final/.test(model), model);
+  check('export model has rows', /Saldo Inicial/.test(model) && /Saldo Final/.test(model), model);
 
   // ---- conta filtra ----
   await setSel('#demAcc', 'caixa'); await page.waitForTimeout(200);
-  const ini2 = await rowTxt('Saldo inicial'), ent2 = await rowTxt('Entradas');
+  const ini2 = await rowTxt('Saldo Inicial'), ent2 = await rowTxt('Entradas');
   check('Conta=Caixa: saldo inicial jan 2.000, entradas jan 2.000', /2\.000/.test(ini2[1]) && /2\.000/.test(ent2[1]), JSON.stringify([ini2, ent2]));
   await setSel('#demAcc', '');
 
@@ -147,7 +147,7 @@ const fs = require('fs');
   check('alert: oldest month not closed', /jan\/26 ainda não foi fechado/.test(await text('#demBody .dem-alerts')));
   const openMenu = async () => { await page.click('#demMenuBtn'); await page.waitForTimeout(80); };
   await openMenu();
-  check('menu has Fechamento de mês and Resumo mensal', !!(await page.$('#demMenu [data-dact="fech"]')) && !!(await page.$('#demMenu [data-dact="resumo"]')));
+  check('menu has Fechamento de Mês and Resumo mensal', !!(await page.$('#demMenu [data-dact="fech"]')) && !!(await page.$('#demMenu [data-dact="resumo"]')));
   await page.click('#demMenu [data-dact="fech"]'); await page.waitForSelector('#ovFc');
   check('window opens on the oldest open month (jan)', (await page.$eval('#fcMes', (s) => s.value)) === '2026-01');
   check('jan has no pendências and no ciente box', !(await page.$('#fcOk')));
@@ -178,7 +178,7 @@ const fs = require('fs');
   await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="lancamentos"]').click()); await page.waitForTimeout(200);
   await setSel('#flMonth', '2026-01'); await page.waitForTimeout(150);
   await page.click('#flMenuBtn'); await page.waitForTimeout(80);
-  check('Lançamentos menu: export, import and Fechamento de mês', !!(await page.$('#flMenu [data-dact="ioexp"]')) && !!(await page.$('#flMenu [data-dact="ioimp"]')) && !!(await page.$('#flMenu [data-dact="fech"]')));
+  check('Lançamentos menu: export, import and Fechamento de Mês', !!(await page.$('#flMenu [data-dact="ioexp"]')) && !!(await page.$('#flMenu [data-dact="ioimp"]')) && !!(await page.$('#flMenu [data-dact="fech"]')));
   await page.keyboard.press('Escape');
   check('lançamento list shows lock on closed month', (await page.$$eval('#reg-lancamentos-host tbody .dem-lk', (e) => e.length)) > 0);
   await page.evaluate(() => document.querySelector('#reg-lancamentos-host tr[data-fl-id]').click()); await page.waitForSelector('#ovFl');
@@ -198,7 +198,7 @@ const fs = require('fs');
   await page.click('#demSeg [data-dv="dre"]'); await page.waitForTimeout(200);
   check('no comment/note buttons in the DRE or Fluxo cells', !(await page.$('#demBody .dem-nt')) && !(await page.$('#demNotePop')));
   const rs = await ev(`(function(){ return fcResumoHtml(fcFigures('2026-03'), {g:1,d:1,f:1,a:1}); })()`);
-  check('resumo has title, KPIs, DRE, fluxo, mudou, fechado and no notes', /Resumo financeiro de Março de 2026/.test(rs) && /R\$ 12\.000/.test(rs) && /DRE resumido/.test(rs) && /Fluxo de caixa/.test(rs) && /O que mais mudou/.test(rs) && /Mês fechado por/.test(rs) && !/Anotaç/.test(rs));
+  check('resumo has title, KPIs, DRE, fluxo, mudou, fechado and no notes', /Resumo financeiro de Março de 2026/.test(rs) && /R\$ 12\.000/.test(rs) && /DRE Resumido/.test(rs) && /Fluxo de Caixa/.test(rs) && /O que Mais Mudou/.test(rs) && /Mês fechado por/.test(rs) && !/Anotaç/.test(rs));
   await openMenu(); await page.click('#demMenu [data-dact="resumo"]'); await page.waitForSelector('#ovRm');
   check('Resumo mensal window lists months and 4 options', (await page.$$eval('#rmMes option', (o) => o.length)) === 3 && (await page.$$eval('#ovRm [data-ro]', (o) => o.length)) === 4);
   await page.click('#rmCancel'); await page.waitForTimeout(100);
@@ -218,10 +218,10 @@ const fs = require('fs');
   await page.evaluate(() => { delete window.pipoAuth; });
   await page.click('#demSeg [data-dv="flu"]'); await page.waitForTimeout(150);
 
-  // ---- sem Financeiro – valores: sem saldo ----
+  // ---- sem Financeiro – Valores: sem saldo ----
   await page.evaluate(() => { window.pipoAuth = { can: (m, a) => m === 'financeiro' && a === 'view', canDefault: () => true, isAdmin: () => false, onProfile: () => {} }; });
   await ev('renderDemonstrativos()'); await page.waitForTimeout(150);
-  check('without valores: no Saldo rows', !(await rowTxt('Saldo inicial')) && !(await rowTxt('Saldo final')) && !!(await rowTxt('Entradas')));
+  check('without valores: no Saldo rows', !(await rowTxt('Saldo Inicial')) && !(await rowTxt('Saldo Final')) && !!(await rowTxt('Entradas')));
   await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="lancamentos"]').click()); await page.waitForTimeout(150);
   check('without create: Incluir hidden', await page.$eval('#flAdd', (b) => b.hidden));
   await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="demonstrativos"]').click()); await page.waitForTimeout(150);

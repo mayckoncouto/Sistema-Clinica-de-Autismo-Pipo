@@ -1,4 +1,4 @@
-// Agenda ▾ → Visão geral: todos os atendimentos de um dia por horário (Paciente, Sala, Serviço;
+// Agenda ▾ → Visão Geral: todos os atendimentos de um dia por horário (Paciente, Sala, Serviço;
 // cor da especialidade), filtros, contadores, avisos do dia e tempo real. Banco em memória.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -66,12 +66,12 @@ const path = require('path');
     return true;
   })()`);
 
-  // Menu Agenda ▾ com Agenda e Visão geral.
+  // Menu Agenda ▾ com Agenda e Visão Geral.
   const menu = await ev('AG_ITEMS.map(function(x){ return x.label; }).join("|")');
-  check('top menu "Agenda ▾" has Agenda and Visão geral?', menu === 'Agenda|Visão geral' && !!(await page.$('#agBtn')), menu);
+  check('top menu "Agenda ▾" has Agenda and Visão Geral?', menu === 'Agenda|Visão Geral' && !!(await page.$('#agBtn')), menu);
   await page.click('#agBtn');
   const opts = await page.$$eval('#agMenu [data-nav]', (r) => r.map((x) => x.textContent));
-  check('clicking "Agenda" opens the menu with both options?', opts.join('|') === 'Agenda|Visão geral', opts);
+  check('clicking "Agenda" opens the menu with both options?', opts.join('|') === 'Agenda|Visão Geral', opts);
   await page.click('#agMenu [data-nav="visaogeral"]');
   await ev('(function(){ VG.date = "2030-01-07"; vgLoad(); return true; })()');
   await page.waitForSelector('#vgHost .vg-card');

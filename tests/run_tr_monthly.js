@@ -60,7 +60,7 @@ const path = require('path');
   const ref = await ev(`(function(){ var d = document.createElement("div"); d.className = "pat-count"; document.body.appendChild(d); var f = getComputedStyle(d).fontSize; d.remove(); return f; })()`);
   console.log('explanation uses the same text style as the hours note?', font === ref, font);
 
-  // Janela: Histórico recolhido, "Outras opções" no topo, valores em R$ depois de Convênio/Plano.
+  // Janela: Histórico recolhido, "Outras Opções" no topo, valores em R$ depois de Convênio/Plano.
   const win = await ev(`(function(){
     var t = state.treatments[0]; t.valor = 1500; t.descontos = 100;
     try { localStorage.removeItem("agendaPipo:trHistOpen"); } catch(e){}
@@ -71,8 +71,8 @@ const path = require('path');
       order: all.indexOf("pPlano") < all.indexOf("trVal") && all.indexOf("trVal") < all.indexOf("pPac"), val: document.getElementById("trVal").value, fin: document.getElementById("trFinal").value};
   })()`);
   console.log('Histórico starts hidden?', win.histHidden);
-  console.log('"Outras opções" has patient and plan, plan link left the body?', win.menu.join('|') === 'Cadastro do paciente|Abrir plano terapêutico' && !win.inBody, win.menu);
-  console.log('Valor/Descontos/Valor final after Convênio/Plano, in R$?', win.order && /^R\$ 1\.500,00$/.test(win.val) && /^R\$ 1\.400,00$/.test(win.fin), win.val, win.fin);
+  console.log('"Outras Opções" has patient and plan, plan link left the body?', win.menu.join('|') === 'Cadastro do Paciente|Abrir Plano Terapêutico' && !win.inBody, win.menu);
+  console.log('Valor/Descontos/Valor Final after Convênio/Plano, in R$?', win.order && /^R\$ 1\.500,00$/.test(win.val) && /^R\$ 1\.400,00$/.test(win.fin), win.val, win.fin);
   await page.click('#trHistToggle');
   console.log('arrow opens the Histórico?', !(await page.$eval('#trHistBody', (e) => e.hidden)));
   await page.fill('#trDesp', '50'); await page.click('#trVal');

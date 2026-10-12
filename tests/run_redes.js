@@ -1,4 +1,4 @@
-// Redes sociais da clínica (2026-10-10): cadastro na janela da Clínica (rede + link, "+ Inserir",
+// Redes Sociais da clínica (2026-10-10): cadastro na janela da Clínica (rede + link, "+ Inserir",
 // ▲▼, ✕, "Outro" com nome), link inválido recusado, mensagem do link de cadastro e rodapé das
 // impressões. Cria tests/page_rs.html com um "eval" para chamar o app direto. Dados fictícios.
 const { chromium } = require('playwright');
@@ -24,7 +24,7 @@ const path = require('path');
   check('without networks: no text in the message, no print footer?', await ev('clinicSocialText() === "" && printSocialHtml() === "" && intakeMessage("novo", "", "https://x/c/1").indexOf("Conheça") === -1'));
 
   await ev('openClinicModal()'); await page.waitForSelector('#ovClinic');
-  check('Clínica window has the "Redes sociais" group, empty?', /Redes sociais/.test(await page.textContent('#ovClinic')) && /Nenhuma rede/.test(await page.textContent('#clSocs')));
+  check('Clínica window has the "Redes Sociais" group, empty?', /Redes Sociais/.test(await page.textContent('#ovClinic')) && /Nenhuma rede/.test(await page.textContent('#clSocs')));
   await page.click('#clSocAdd'); await page.click('#clSocAdd');
   let rows = await page.$$eval('#clSocs .cl-soc select[data-sk="rede"]', (a) => a.map((s) => s.value));
   check('"+ Inserir" adds rows with the next network not used yet?', JSON.stringify(rows) === '["instagram","facebook"]', rows);

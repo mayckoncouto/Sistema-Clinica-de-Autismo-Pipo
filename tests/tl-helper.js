@@ -1,6 +1,6 @@
-// Quadros do tratamento (2026-10-10): inclui ou edita um quadro pela janela "Incluir/Editar especialidade".
+// Quadros do tratamento (2026-10-10): inclui ou edita um quadro pela janela "Incluir/Editar Especialidade".
 // o = {spec: "Nome da especialidade", hours, svc: id do serviço, prof: id, aba: "Sim"|"Não", dia, hora, semanas, room, seguidas, obs}
-// Confirma os avisos ("Salvar assim mesmo") quando aparecem. editIndex = número do quadro a editar.
+// Confirma os avisos ("Salvar Assim Mesmo") quando aparecem. editIndex = número do quadro a editar.
 exports.addLine = async function(page, o, editIndex){
   if (editIndex == null) await page.click('#specRowAdd'); else await page.click('[data-tl-edit="' + editIndex + '"]');
   await page.waitForSelector('#ovTLine');

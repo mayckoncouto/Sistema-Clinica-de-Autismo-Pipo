@@ -1,4 +1,4 @@
-// Financeiro: Empréstimos tomados e concedidos — cálculo das 4 modalidades, prévia, contas geradas, saldo devedor, excluir. Dados fictícios.
+// Financeiro: Empréstimos Tomados e Concedidos — cálculo das 4 modalidades, prévia, contas geradas, saldo devedor, excluir. Dados fictícios.
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
@@ -51,14 +51,14 @@ const fs = require('fs');
   });
   await page.waitForTimeout(300);
   await page.click('#finBtn');
-  check('Financeiro menu tem os dois empréstimos depois de Contas a receber?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,demonstrativos,fornecedores,catfornecedor,contas,planocontas');
+  check('Financeiro menu tem os dois empréstimos depois de Contas a Receber?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,demonstrativos,fornecedores,catfornecedor,contas,planocontas');
   await page.click('#finMenu [data-nav="emptomados"]'); await page.waitForTimeout(300);
-  check('tela tomados abre com título?', await page.$eval('#tab-emptomados', (e) => !e.hidden) && /Empréstimos tomados/.test(await page.$eval('#tab-emptomados .cad-title', (e) => e.textContent)));
+  check('tela tomados abre com título?', await page.$eval('#tab-emptomados', (e) => !e.hidden) && /Empréstimos Tomados/.test(await page.$eval('#tab-emptomados .cad-title', (e) => e.textContent)));
   check('estado vazio?', /Nenhum empréstimo tomado/.test(await page.textContent('#reg-emptomados-host')));
   check('hash #emptomados?', (await page.evaluate(() => location.hash)) === '#emptomados');
 
   await page.click('#ltAdd'); await page.waitForSelector('#ovLn');
-  check('janela nova: título e prévia vazia?', /Novo empréstimo tomado/.test(await page.textContent('#ovLn h3')) && /Preencha valor/.test(await page.textContent('#lnParc')));
+  check('janela nova: título e prévia vazia?', /Novo Empréstimo Tomado/.test(await page.textContent('#ovLn h3')) && /Preencha valor/.test(await page.textContent('#lnParc')));
   await page.fill('#lnDesc', 'Capital de giro');
   await page.fill('#lnParte', 'Viacredi');
   await page.$eval('#lnConta', (e) => { e.value = 'viacredi'; e.dispatchEvent(new Event('change', { bubbles: true })); });
@@ -106,7 +106,7 @@ const fs = require('fs');
 
   // ---- concedido ----
   await page.click('#finBtn'); await page.click('#finMenu [data-nav="empconcedidos"]'); await page.waitForTimeout(300);
-  check('tela concedidos abre?', await page.$eval('#tab-empconcedidos', (e) => !e.hidden) && /Empréstimos concedidos/.test(await page.$eval('#tab-empconcedidos .cad-title', (e) => e.textContent)));
+  check('tela concedidos abre?', await page.$eval('#tab-empconcedidos', (e) => !e.hidden) && /Empréstimos Concedidos/.test(await page.$eval('#tab-empconcedidos .cad-title', (e) => e.textContent)));
   await page.click('#lcAdd'); await page.waitForSelector('#ovLn');
   await page.fill('#lnDesc', 'Empréstimo a sócio'); await page.fill('#lnParte', 'Fulano');
   await page.$eval('#lnTipo', (e) => { e.value = 'sac'; e.dispatchEvent(new Event('change', { bubbles: true })); });
@@ -119,7 +119,7 @@ const fs = require('fs');
   const l0 = fc.filter((r) => !r.parcela)[0], c1 = fc.filter((r) => r.parcela === 1)[0];
   check('concedido: liberação a pagar (Empréstimos Concedidos) e parcelas a receber com juros de receita?', l0.plan === 'emprestimos-concedidos' && c1.plan === 'recebimento-de-emprestimos' && c1.linhas[1].plan === 'juros-de-emprestimos-concedidos' && near(c1.linhas[1].valor, 120), JSON.stringify(c1.linhas));
   check('saldo a receber = 6.000 e o tomado segue zerado?', near(await ev('lnTotalBalance("concedido")'), 6000) && (await ev('lnTotalBalance("tomado")')) === 0);
-  check('contas aparecem na tela certa (liberação em Contas a pagar, parcela em Contas a receber)?', (await ev('fpKind(FP.rows.filter(function(r){ return r.loan && !r.parcela; })[0])')) === 'pagar' && (await ev('fpKind(FP.rows.filter(function(r){ return r.loan && r.parcela === 1; })[0])')) === 'receber');
+  check('contas aparecem na tela certa (liberação em Contas a Pagar, parcela em Contas a Receber)?', (await ev('fpKind(FP.rows.filter(function(r){ return r.loan && !r.parcela; })[0])')) === 'pagar' && (await ev('fpKind(FP.rows.filter(function(r){ return r.loan && r.parcela === 1; })[0])')) === 'receber');
 
   check('no JS errors?', errors.length === 0, JSON.stringify(errors));
   await browser.close();

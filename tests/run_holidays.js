@@ -1,4 +1,4 @@
-// Feriados e recessos (cálculo, cadastro, Agenda) e "Gerar mês" (semanas, feriado pulado).
+// Feriados e Recessos (cálculo, cadastro, Agenda) e "Gerar mês" (semanas, feriado pulado).
 // Dados 100% fictícios.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -69,7 +69,7 @@ const path = require('path');
   console.log('Agenda: holiday cells are gray with the name in the header (other days normal)?', ag.gray > 0 && ag.other === 0 && !!ag.head, JSON.stringify(ag));
   const conf = await ev(`(function(){ var r = agdPatientConfirm([{rec: {patient: "Paciente Um", date: "2026-12-25", time: "08:00", professional_id: "x"}, old: null}]); return true; })()`);
   await page.waitForTimeout(150);
-  console.log('marking on a holiday asks for confirmation (not blocked)?', conf && /Feriado ou recesso/.test(await page.textContent('#confirmHost')));
+  console.log('marking on a holiday asks for confirmation (not blocked)?', conf && /Feriado ou Recesso/.test(await page.textContent('#confirmHost')));
   await page.click('#confirmHost .btn.ghost').catch(() => {});
 
   console.log('no JS errors?', errors.length === 0, errors);

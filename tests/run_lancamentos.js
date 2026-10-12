@@ -145,7 +145,7 @@ const fs = require('fs');
   check('different extrato value on an existing entry = atualizar?', up.join() === 'atualizar', up);
   const exp = await ev('IO_KINDS.lancamentos.exportRows().map(function(x){ return [x.conta, x.data, x.valor, x.tipo, x.sub].join("|"); })');
   check('export has conta, date, tipo and subcategory?', exp.includes('Caixa|20/01/2026|500|Entrada|Aporte de sócios'), exp);
-  check('Outras opções menu on Lançamentos?', !!(await page.$('#flMenuWrap')));
+  check('Outras Opções menu on Lançamentos?', !!(await page.$('#flMenuWrap')));
 
   // ---- somente leitura: sem permissão de incluir, o botão some ----
   await page.evaluate(() => { window.pipoAuth = { can: (m, a) => m === 'financeiro' && a === 'view', canDefault: () => true, isAdmin: () => false, onProfile: () => {} }; });

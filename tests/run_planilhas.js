@@ -121,7 +121,7 @@ const path = require('path');
   const pa = await ev(`(function(){
     var P = state.patientsRaw[0];
     var keepName = P.nome, hadNasc = P.nascimento;
-    var txt = ["Nome;Data de nascimento;Telefones;Mãe;Observações", keepName + ";01/01/2000;(47) 99999-1111;Maria Teste;nova obs", "Paciente Importado Teste;10/05/2019;47 98888-2222;;", ";;;;"].join("\\n");
+    var txt = ["Nome;Data de Nascimento;Telefones;Mãe;Observações", keepName + ";01/01/2000;(47) 99999-1111;Maria Teste;nova obs", "Paciente Importado Teste;10/05/2019;47 98888-2222;;", ";;;;"].join("\\n");
     var plan = ioPatPlan(ioRecords("pacientes", xlParseText(txt)).recs);
     var st = plan.items.map(function(it){ return it.st; });
     return Promise.resolve(ioPatApply(plan)).then(function(){
@@ -133,11 +133,11 @@ const path = require('path');
 
   // 4) Habilidades → Escalas → Objetivos (mesmo nome = atualizar).
   const pl = await ev(`(function(){
-    var hab = ioHabPlan(ioRecords("habilidades", xlParseText("Habilidade\\tEspecialidades sugeridas\\nImitação Teste\\tFonoaudiologia\\nComunicação\\t")).recs);
+    var hab = ioHabPlan(ioRecords("habilidades", xlParseText("Habilidade\\tEspecialidades Sugeridas\\nImitação Teste\\tFonoaudiologia\\nComunicação\\t")).recs);
     return Promise.resolve(ioHabApply(hab)).then(function(){
       var sc = ioScalePlan(ioRecords("escalas", xlParseText("Escala;Nível;Cor\\nTrês passos;Começou;#ff0000\\nTrês passos;Meio;\\nTrês passos;Final;#00aa00\\nLikert;0 – Não realiza;")).recs);
       return Promise.resolve(ioScaleApply(sc)).then(function(){
-        var gtxt = "Objetivo\\tHabilidade\\tCritério de sucesso\\tEscala\\tEspecialidades\\nPedir ajuda com gesto\\tImitação Teste\\t80% em 3 sessões\\tTrês passos\\tFonoaudiologia\\nObjetivo sem área\\tNão Existe\\t\\t\\t";
+        var gtxt = "Objetivo\\tHabilidade\\tCritério de Sucesso\\tEscala\\tEspecialidades\\nPedir ajuda com gesto\\tImitação Teste\\t80% em 3 sessões\\tTrês passos\\tFonoaudiologia\\nObjetivo sem área\\tNão Existe\\t\\t\\t";
         var go = ioGoalPlan(ioRecords("objetivos", xlParseText(gtxt)).recs);
         return Promise.resolve(ioGoalApply(go)).then(function(){
           var g = goalBankList().filter(function(x){ return x.name === "Pedir ajuda com gesto"; })[0];
@@ -153,7 +153,7 @@ const path = require('path');
     pl.hab.join() === 'novo,igual' && pl.sc.join() === 'novo,problema' && pl.go.join() === 'novo,problema' && pl.levels === 'Começou#FF0000,Meio#EE8A3C,Final#00AA00' && pl.goal && pl.goal.join('|') === 'Imitação Teste|80% em 3 sessões|Três passos|1', pl);
   check('same objective with another criterion = update?', pl.again.join() === 'atualizar,problema', pl.again);
 
-  // 5) Tela: menu "Outras opções" de Tratamentos, Exportar (arquivo .xlsx) e Importar (colar → prévia).
+  // 5) Tela: menu "Outras Opções" de Tratamentos, Exportar (arquivo .xlsx) e Importar (colar → prévia).
   await page.$eval('#mainTabs button[data-tab=tratamentos]', (b) => b.click()); await page.waitForTimeout(200);
   await page.click('[data-io-wrap="tratamentos"] [data-io-btn]');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-io-wrap="tratamentos"] [data-io-act="export"]')]);
@@ -175,7 +175,7 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab=pacientes]', (b) => b.click()); await page.waitForTimeout(200);
   await page.click('#patMoreBtn');
   const pm = await page.evaluate(() => ['patExportBtn', 'patImportBtn'].every((id) => { const b = document.getElementById(id); return b && !b.hidden && b.offsetParent; }));
-  check('Pacientes → Outras opções has Exportar/Importar planilha?', pm);
+  check('Pacientes → Outras Opções has Exportar/Importar Planilha?', pm);
   check('Tratamentos filter "Cancelados sem motivo" exists?', await page.evaluate(() => !!document.querySelector('#trFilter option[value="semmotivo"]')));
 
   check('no JS errors?', errors.length === 0, errors);

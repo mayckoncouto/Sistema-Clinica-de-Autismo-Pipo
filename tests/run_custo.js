@@ -1,4 +1,4 @@
-// Demonstrativos — Custo por atendimento (etapa 3). Dados fictícios; conferência dos números pela regra decidida:
+// Demonstrativos — Custo por Atendimento (etapa 3). Dados fictícios; conferência dos números pela regra decidida:
 // equipe paga dividida pela remuneração cadastrada; slot ÷ pacientes do profissional; apoio ÷ pacientes da sala;
 // demais custos por hora de sala ocupada; receita do convênio pelos Lançamentos; todas as sessões agendadas.
 const { chromium } = require('playwright');
@@ -56,7 +56,7 @@ const fs = require('fs');
     return JSON.stringify({err: r.err, pools: r.pools, naoAssist: r.naoAssist, T: r.T, sc: sc, H: r.salaHours, recOther: r.recOther, eqAlloc: r.eqAlloc, ocioso: r.ociosoCost, eqAssist: r.eqAssist, nItems: r.items.length, byN: r.byN, warn: r.warn}); })()`));
   console.log(JSON.stringify(R));
   check('no error; 3 patient appointments (group row is not a patient)', !R.err && R.nItems === 3);
-  check('pools by Plano de contas category: equipe 12.000, fixo 3.000, variável 1.000, imposto 1.000, financeiras 500', R.pools.equipe === 12000 && R.pools.fixo === 3000 && R.pools.variavel === 1000 && R.pools.imposto === 1000 && R.pools.financeiro === 500);
+  check('pools by Plano de Contas category: equipe 12.000, fixo 3.000, variável 1.000, imposto 1.000, financeiras 500', R.pools.equipe === 12000 && R.pools.fixo === 3000 && R.pools.variavel === 1000 && R.pools.imposto === 1000 && R.pools.financeiro === 500);
   check('team pool split by cadastrada remuneração (Ana 4.000, Bia 4.000, coord 2.000, recepção 2.000 → sala)', near(R.sc['ana-terapeuta'].share, 4000) && near(R.sc['andrelisa-terapeuta'].share, 2000) && near(R.naoAssist, 2000));
   check('slot cost = share ÷ available slots of the month', near(R.sc['ana-terapeuta'].sc, 4000 / R.sc['ana-terapeuta'].slots) && R.sc['ana-terapeuta'].avail > 100, JSON.stringify(R.sc['ana-terapeuta']));
   check('equipe total = Ana slot (2 patients share it) + Bia slot', near(R.T.eq, R.sc['ana-terapeuta'].sc + R.sc['bia-terapeuta'].sc));
@@ -87,7 +87,7 @@ const fs = require('fs');
   // sem permissão de valores dos colaboradores
   await page.evaluate(() => { window.pipoAuth = { can: (m, a) => m === 'financeiro' && a === 'view', canDefault: () => true, isAdmin: () => false, onProfile: () => {} }; });
   await ev('renderDemonstrativos()'); await page.waitForTimeout(200);
-  check('without Colaboradores – valores: explains the permission', /Colaboradores – valores/.test(await text('#demBody')));
+  check('without Colaboradores – Valores: explains the permission', /Colaboradores – Valores/.test(await text('#demBody')));
   await page.evaluate(() => { delete window.pipoAuth; });
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();

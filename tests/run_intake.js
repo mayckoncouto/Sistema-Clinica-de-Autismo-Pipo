@@ -1,4 +1,4 @@
-// Link de cadastro rápido (2026-10-10): gerar link, aviso no botão Cadastros, revisar envio de
+// Link de Cadastro rápido (2026-10-10): gerar link, aviso no botão Cadastros, revisar envio de
 // paciente novo (cadastro + tratamento com o convênio) e de paciente existente (campos diferentes
 // destacados), e a página pública cadastro.html (com o Supabase simulado). Dados fictícios.
 // Cria tests/page_ik.html com um "eval" para chamar o app direto.
@@ -25,7 +25,7 @@ const path = require('path');
   const early = await ev('(function(){ var keep = INTAKE; INTAKE = undefined; try { intakeBadge(); intakeLoad(); intakePendingFor("x"); mnavRender(); return true; } catch(e){ return e.message; } finally { INTAKE = keep; } })()');
   check('link functions are safe before the module is ready?', early === true, early);
 
-  // 1) Gerar link de atualização: já leva os dados do paciente; WhatsApp com a mensagem e o link.
+  // 1) Gerar Link de atualização: já leva os dados do paciente; WhatsApp com a mensagem e o link.
   await ev('window.__opened = []; window.open = function(u){ window.__opened.push(u); return null; }; true');
   await ev('openIntakeLinkModal({kind: "atualizacao", patient: rawPatient("ana-azul")})');
   await page.waitForSelector('#ovIntake');
@@ -41,7 +41,7 @@ const path = require('path');
   check('WhatsApp opens wa.me with 55+phone and the link in the text?', /^https:\/\/wa\.me\/5547999990000\?text=/.test(wa) && decodeURIComponent(wa).indexOf(url) !== -1, wa);
   await page.click('#ikClose');
 
-  // 2) Envio pendente: número no botão Cadastros e botão "Revisar cadastro" na tela Pacientes.
+  // 2) Envio pendente: número no botão Cadastros e botão "Revisar Cadastro" na tela Pacientes.
   await ev(`(function(){ intakeMem().subs.push({id: "s1", kind: "novo", status: "pendente", created_at: new Date().toISOString(), patient_id: null, task_id: null,
     data: {nome: "Caio Link Teste", nascimento: "2020-03-04", cpf: "52998224725", sexo: "Masculino", respNome: "Rita Link", respParentesco: "Mãe", telefone: "47988881111",
       email: "rita@exemplo.com", cep: "89010000", numero: "10", rua: "Rua A", bairro: "Centro", cidade: "Blumenau", uf: "SC", convenio: "Unimed", diagnostico: "TEA", laudo: "Sim", escola: "Escola Fictícia X", obs: "Prefere manhã"}});
@@ -49,7 +49,7 @@ const path = require('path');
   await page.waitForTimeout(100);
   check('Cadastros button shows the count of pending submissions?', await page.$eval('#cadBadge', (e) => !e.hidden && e.textContent === '1'));
   await page.$eval('#mainTabs button[data-tab="pacientes"]', (b) => b.click()); await page.waitForTimeout(200);
-  check('"Revisar cadastro" button on the Pacientes screen?', await page.isVisible('#intakeRevBtn'));
+  check('"Revisar Cadastro" button on the Pacientes screen?', await page.isVisible('#intakeRevBtn'));
   await page.click('#intakeRevBtn');
   await page.waitForSelector('#ovPat');
   const nv = await page.evaluate(() => ({nome: document.getElementById('pNome').value, mae: (document.getElementById('pm-mae-nome') || {}).value, banner: !!document.querySelector('#ovPat .ik-banner'),
@@ -67,7 +67,7 @@ const path = require('path');
     data: {nome: "Ana Azul", telefone: "47977776666", cep: "89020000", rua: "Rua Nova", numero: "99"}}); return intakeLoad().then(function(){ return true; }); })()`);
   await page.waitForTimeout(100);
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
-  check('patient window shows "Revisar cadastro" when a submission is pending?', await page.isVisible('#pReview') && await page.isVisible('#pAskUpd'));
+  check('patient window shows "Revisar Cadastro" when a submission is pending?', await page.isVisible('#pReview') && await page.isVisible('#pAskUpd'));
   await page.click('#pReview'); await page.waitForTimeout(300);
   const df = await page.evaluate(() => ({diffs: document.querySelectorAll('#ovPat .ik-diff').length, rua: document.getElementById('pa-rua').value,
     bar: (document.querySelector('#pa-rua') && document.querySelector('#pa-rua').closest('.field').querySelector('.ik-diff-bar') || {}).textContent || '',
@@ -79,7 +79,7 @@ const path = require('path');
   const upd = await ev('(function(){ var p = rawPatient("ana-azul"); return {rua: p.endereco && p.endereco.rua, tel: (p.telefones || []).map(function(t){ return t.numero; }), st: intakeMem().subs[1].status}; })()');
   check('update saved with the chosen values and submission approved?', upd.rua === 'Rua Nova' && upd.tel.indexOf('47977776666') !== -1 && upd.st === 'aprovado', upd);
 
-  // 4) Descartar envio.
+  // 4) Descartar Envio.
   await ev(`(function(){ intakeMem().subs.push({id: "s3", kind: "geral", status: "pendente", created_at: new Date().toISOString(), data: {nome: "Spam", telefone: "11"}}); return intakeLoad().then(function(){ return true; }); })()`);
   await ev('intakeReview(INTAKE.subs[0])'); await page.waitForSelector('#ovPat');
   await page.click('#ikDiscard'); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(200);
@@ -122,7 +122,7 @@ const path = require('path');
   await pub.$eval('#nascimento', (e) => { e.value = '06/05/2019'; });
   await pub.click('#nascimento'); await pub.waitForTimeout(100);
   const cal = await pub.evaluate(() => ({sheet: !!document.querySelector('#pkSheet .pk-cal'), title: (document.querySelector('#pkSheet .pk-head b') || {}).textContent, sel: (document.querySelector('#pkSheet .pk-cal-g .sel') || {}).textContent}));
-  check('calendar opens in the bottom window with the typed day selected?', cal.sheet && cal.title === 'Data de nascimento' && cal.sel === '6', cal);
+  check('calendar opens in the bottom window with the typed day selected?', cal.sheet && cal.title === 'Data de Nascimento' && cal.sel === '6', cal);
   await pub.click('#pkSheet [data-d="2019-05-07"]'); await pub.waitForTimeout(80);
   check('picking a day fills the field and closes?', (await pub.inputValue('#nascimento')) === '07/05/2019' && !(await pub.$('#pkSheet')));
   await pub.click('#nascimento'); await pub.waitForTimeout(80); await pub.click('#pkSheet [data-clear]'); await pub.waitForTimeout(60);
@@ -157,7 +157,7 @@ const path = require('path');
     return route.fulfill({status: 404, body: ''});
   });
   await pub.goto('http://pipo.test/cadastro?t=old'); await pub.waitForTimeout(300);
-  // Campos do link escolhidos em Campos obrigatórios: some o CPF, Escola vira obrigatória.
+  // Campos do link escolhidos em Campos Obrigatórios: some o CPF, Escola vira obrigatória.
   await pub.unroute('http://pipo.test/**');
   sent = null;
   await pub.route('http://pipo.test/**', (route) => {
@@ -199,7 +199,7 @@ const path = require('path');
     return route.fulfill({status: 404, body: ''});
   });
   await pub.goto('http://pipo.test/cadastro?t=old'); await pub.waitForTimeout(300);
-  check('used link shows "Link indisponível"?', /Link indisponível/.test(await pub.textContent('#box')) && /já foi usado/.test(await pub.textContent('#box')));
+  check('used link shows "Link Indisponível"?', /Link Indisponível/.test(await pub.textContent('#box')) && /já foi usado/.test(await pub.textContent('#box')));
 
   // Todos os campos do cadastro no link: mãe/pai com profissão, listas, financeiro, rotina, saúde e "Qual convênio?".
   await pub.unroute('http://pipo.test/**');
@@ -259,22 +259,22 @@ const path = require('path');
   const m3 = await ev(`intakeToPatient({respNome: "Paulo", respParentesco: "Pai", respProfissao: "Pedreiro", telefone: "47911112222", convenio: "Unimed Fictícia"})`);
   check('old submissions (Responsável): Pai fills the father (with profissão) and the financial link; registered convênio in the note?', m3.patch.pai.nome === 'Paulo' && m3.patch.pai.profissao === 'Pedreiro' && m3.patch.financeiro.link === 'pai' &&
     m3.notes.indexOf('Convênio informado: Unimed Fictícia') !== -1, m3);
-  // Profissão da mãe e do pai no cadastro do paciente.
+  // Profissão da Mãe e do pai no cadastro do paciente.
   await page.bringToFront();
   await ev('openPatientModal(findPatientById("ana-azul"))'); await page.waitForSelector('#ovPat');
-  check('patient window: Profissão da mãe / do pai fields?', !!(await page.$('#pm-mae-prof')) && !!(await page.$('#pm-pai-prof')));
+  check('patient window: Profissão da Mãe / do pai fields?', !!(await page.$('#pm-mae-prof')) && !!(await page.$('#pm-pai-prof')));
   await page.fill('#pm-mae-nome', 'Mãe Fictícia'); await page.fill('#pm-mae-prof', 'Advogada');
   await page.click('#pSave'); await page.waitForTimeout(400);
   const mp = await ev('(rawPatient("ana-azul").mae || {})');
   check('saved: mother profissão in the patient?', mp.profissao === 'Advogada' && mp.nome === 'Mãe Fictícia', mp);
-  check('ficha shows the profissão?', /Profissão da mãe/.test(await ev('patientFichaHtml(findPatientById("ana-azul"))')));
+  check('ficha shows the profissão?', /Profissão da Mãe/.test(await ev('patientFichaHtml(findPatientById("ana-azul"))')));
 
-  // Janela Campos obrigatórios: colunas Aparece, Link rápido, Link fixo e Obrigatório numa tabela só.
+  // Janela Campos Obrigatórios: colunas Aparece, Link Rápido, Link Fixo e Obrigatório numa tabela só.
   await page.bringToFront();
   await ev('openPatientFieldsModal()'); await page.waitForSelector('#ovPf');
   const hd = await page.$$eval('#ovPf thead th', (a) => a.map((x) => x.textContent));
   const freeNome = await page.evaluate(() => ['nome', 'telefones'].every((k) => ['rapido', 'fixo'].every((x) => { const e = document.querySelector('tr[data-pfk="' + k + '"] [data-pfx="' + x + '"]'); return e && !e.disabled && e.checked; })));
-  check('Campos obrigatórios columns: Campo, Aparece, Link rápido, Link fixo, Obrigatório (Nome and Telefone can be chosen in both links)?', JSON.stringify(hd) === '["Campo","Aparece","Link rápido","Link fixo","ObrigatórioObrig."]' && freeNome, hd);
+  check('Campos Obrigatórios columns: Campo, Aparece, Link Rápido, Link Fixo, Obrigatório (Nome and Telefone can be chosen in both links)?', JSON.stringify(hd) === '["Campo","Aparece","Link Rápido","Link Fixo","ObrigatórioObrig."]' && freeNome, hd);
   check('link-only fields (Possui diagnóstico?) listed; Convênio now sits with the cadastro field?', (await page.$$('tr[data-lonly]')).length === 1 && !!(await page.$('tr[data-pfk="convenioPadrao"][data-lfk="convenio"]')));
   const allLink = await page.evaluate(() => [...document.querySelectorAll('#ovPf tr[data-pfk]')].every((tr) => tr.querySelector('[data-pfx="rapido"]') && tr.querySelector('[data-pfx="fixo"]')));
   const offNew = await page.evaluate(() => ['mae', 'rotinaAtual', 'medicoId', 'protetiva'].every((k) => { const tr = document.querySelector('tr[data-pfk="' + k + '"]'); return tr && !tr.querySelector('[data-pfx="rapido"]').checked && !tr.querySelector('[data-pfx="fixo"]').checked; }));

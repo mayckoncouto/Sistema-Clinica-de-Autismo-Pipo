@@ -41,7 +41,7 @@ const fs = require('fs');
   });
   await page.evaluate(() => window.pipoOpenNotif());
   await page.waitForTimeout(200);
-  console.log('starts off with the "Ligar neste aparelho" button?', /Desligadas/.test(await page.textContent('#nfState')) && await page.isVisible('#nfOn'));
+  console.log('starts off with the "Ligar Neste Aparelho" button?', /Desligadas/.test(await page.textContent('#nfState')) && await page.isVisible('#nfOn'));
   await page.uncheck('[data-nf="vencidas"]');
   await page.click('#nfOn'); await page.waitForTimeout(300);
   const r1 = await page.evaluate(() => window.__nf);

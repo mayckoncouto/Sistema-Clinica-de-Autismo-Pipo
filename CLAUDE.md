@@ -4164,3 +4164,11 @@ estrutura pode ser rodado direto pelo conector do Supabase (em partes pequenas; 
 conector — nesses, o usuário roda no SQL Editor), sem pedir confirmação antes. Depois de rodar, conferir e relatar o
 resultado. Continua valendo: nunca copiar dados reais de pacientes para o repositório.
 - Produção (2026-10-12): `2026-10-12e-rateio-das-contas` rodada (linhas | payable_id | funcao = true | true | true).
+
+## Padrão de maiúsculas nos nomes da interface (2026-10-12, REGRA FIXA do usuário)
+Menus, títulos de telas, títulos de janelas, rótulos de campos, cabeçalhos de colunas e botões usam **Title Case**: cada palavra com
+inicial maiúscula, exceto as de ligação (a, e, o, as, os, de, da, do, das, dos, em, no, na, para, por, com, ou, um, uma, ao, sem, até, que…), que
+ficam minúsculas; a primeira palavra sempre maiúscula. Ex.: “Contas a Receber”, “Plano de Contas”, “Data de Nascimento”, “Pagamento de
+Empréstimos”. Frases, dicas, mensagens, placeholders e textos de Ajuda continuam em frase normal; nomes de telas citados na Ajuda
+(`<b>…</b>` e “…”) seguem o padrão. Helper `ttl(s)` (perto de `normText`) para montar títulos a partir de texto dinâmico. Texto novo de
+interface: já escrever assim (aplicado em index.html, js/, cadastro.html e oauth-consent.html).

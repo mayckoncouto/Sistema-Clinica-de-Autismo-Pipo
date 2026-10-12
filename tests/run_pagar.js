@@ -1,4 +1,4 @@
-// Financeiro: Contas a pagar e a receber — tela, janela, repetição, baixa, desfazer baixa, previsto do Fluxo de caixa. Dados fictícios.
+// Financeiro: Contas a Pagar e a Receber — tela, janela, repetição, baixa, desfazer baixa, previsto do Fluxo de Caixa. Dados fictícios.
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
@@ -32,9 +32,9 @@ const fs = require('fs');
 
   // ---- menu e tela ----
   await page.click('#finBtn');
-  check('Financeiro menu lists Contas a pagar e receber after Lançamentos?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,demonstrativos,fornecedores,catfornecedor,contas,planocontas');
+  check('Financeiro menu lists Contas a Pagar e receber after Lançamentos?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,demonstrativos,fornecedores,catfornecedor,contas,planocontas');
   await page.click('#finMenu [data-nav="pagar"]'); await page.waitForTimeout(300);
-  check('screen opens with title?', await page.$eval('#tab-pagar', (e) => !e.hidden) && /Contas a pagar/.test(await page.$eval('#tab-pagar .cad-title', (e) => e.textContent)));
+  check('screen opens with title?', await page.$eval('#tab-pagar', (e) => !e.hidden) && /Contas a Pagar/.test(await page.$eval('#tab-pagar .cad-title', (e) => e.textContent)));
   check('empty state?', /Nenhuma conta a pagar cadastrada/.test(await page.textContent('#reg-pagar-host')));
   check('hash is #pagar?', (await page.evaluate(() => location.hash)) === '#pagar');
 
@@ -44,7 +44,7 @@ const fs = require('fs');
   check('empty form refused?', !!(await page.$('#ovFp')));
   await page.fill('#fpDesc', 'Aluguel sede'); await setSel('#fpSub', 'alu'); await setSel('#fpVenc', '2099-01-10'); await page.fill('#fpValor', '3.000,00');
   await setSel('#fpForn', 'imob'); await setSel('#fpConta', 'viacredi');
-  check('Contas a pagar lists only despesa/saída subcategories?', (await page.$$eval('#fpSub option', (o) => o.map((x) => x.value).filter(Boolean))).join() === 'agua,alu');
+  check('Contas a Pagar lists only despesa/saída subcategories?', (await page.$$eval('#fpSub option', (o) => o.map((x) => x.value).filter(Boolean))).join() === 'agua,alu');
   check('subcategory hint says a pagar?', /conta a pagar/.test(await page.textContent('#fpSubHint')));
   check('repeat count disabled until repeating?', await page.$eval('#fpRepN', (e) => e.disabled));
   await setSel('#fpRep', '1'); await page.fill('#fpRepN', '3');
@@ -56,13 +56,13 @@ const fs = require('fs');
   check('value shown negative (a pagar)?', /−R\$\s?3\.000,00/.test(r[0]));
   // dia 31 -> último dia do mês
   check('fpAddMonths clamps to the last day?', (await ev('fpAddMonths("2026-01-31", 1)')) === '2026-02-28' && (await ev('fpAddMonths("2026-11-30", 3)')) === '2027-02-28' && (await ev('fpAddMonths("2026-12-15", 2)')) === '2027-02-15');
-  // conta a receber avulsa e vencida: na tela Contas a receber
+  // conta a receber avulsa e vencida: na tela Contas a Receber
   let r2 = await rows();
-  check('Contas a pagar has the 3 rent accounts only', r2.length === 3);
+  check('Contas a Pagar has the 3 rent accounts only', r2.length === 3);
   let sum = await page.textContent('#fpSum');
   check('pagar summary: 9.000 em aberto, nenhuma vencida?', /A pagar \(em aberto\)\s*R\$\s?9\.000,00/.test(sum) && /VencidasNenhuma/.test(sum), sum);
   await page.click('#finBtn'); await page.click('#finMenu [data-nav="receber"]'); await page.waitForTimeout(300);
-  check('Contas a receber screen with its title and empty state?', /Contas a receber/.test(await page.$eval('#tab-receber .cad-title', (e) => e.textContent)) && /Nenhuma conta a receber cadastrada/.test(await page.textContent('#reg-receber-host')));
+  check('Contas a Receber screen with its title and empty state?', /Contas a Receber/.test(await page.$eval('#tab-receber .cad-title', (e) => e.textContent)) && /Nenhuma conta a receber cadastrada/.test(await page.textContent('#reg-receber-host')));
   await page.click('#frAdd'); await page.waitForSelector('#ovFp');
   check('receber lists only receita/entrada subcategories and has no supplier field?', (await page.$$eval('#fpSub option', (o) => o.map((x) => x.value).filter(Boolean))).join() === 'conv' && !(await page.$('#fpForn')));
   await page.fill('#fpDesc', 'Repasse convênio X'); await setSel('#fpSub', 'conv'); await setSel('#fpVenc', '2020-02-10'); await page.fill('#fpValor', '5000');
@@ -137,7 +137,7 @@ const fs = require('fs');
   const useC = await ev('USAGE.contas({id: "viacredi"})');
   check('bank account named in an account counts as in use?', useC.some((t) => /conta a pagar/.test(t)), useC);
 
-  // ---- previsto do Fluxo de caixa ----
+  // ---- previsto do Fluxo de Caixa ----
   await ev(`(function(){
     var mk = function(id, d, plan, v){ return {id: id, acc: 'viacredi', date: d, desc: id, plan: plan, valor: v, extDate: '', extVal: null, obs: '', key: ''}; };
     FL.rows = [mk('a1','2026-01-05','alu',1000), mk('a2','2026-02-05','alu',1000), mk('a3','2026-03-05','alu',1000),
@@ -196,21 +196,21 @@ const fs = require('fs');
   await page.click('#finBtn'); await page.click('#finMenu [data-nav="pagar"]'); await page.waitForTimeout(400);
   await ev('renderPagar(); 1');
   let al = await page.textContent('#fpAlert');
-  check('Contas a pagar shows the low-balance alert with the day and the minimum', /saldo baixo/i.test(al) && /Viacredi/.test(al) && /abaixo do mínimo de R\$\s?500,00/.test(al) && /1 conta sem conta bancária prevista/.test(al), al);
+  check('Contas a Pagar shows the low-balance alert with the day and the minimum', /saldo baixo/i.test(al) && /Viacredi/.test(al) && /abaixo do mínimo de R\$\s?500,00/.test(al) && /1 conta sem conta bancária prevista/.test(al), al);
   check('alert box is red and has the horizon selector', await page.$eval('#fpAlert .sm-box', (e) => e.classList.contains('sm-low')) && !!(await page.$('#fpAlert select[data-sm-h]')));
   await setSel('#fpAlert select[data-sm-h]', 'mes');
   check('changing the horizon is remembered', (await ev('smHorizon()')) === 'mes');
   await ev('smSetHorizon("30"); 1');
   await ev(`FP.rows.push({id:'s4', venc: fpAddDays(trTodayIso(), -5), desc:'Atrasado', plan:'conv', acc:'viacredi', sup:'', valor:5000, entry:'', grupo:'', parcela:0, parcelas:0, obs:''}); renderPagar(); 1`);
   al = await page.textContent('#fpAlert');
-  check('an overdue receivable counts today, so the minimum is back in order', /Saldo mínimo em dia/.test(al) && !(await page.$('#fpAlert .sm-low')), al);
+  check('an overdue receivable counts today, so the minimum is back in order', /Saldo Mínimo em Dia/.test(al) && !(await page.$('#fpAlert .sm-low')), al);
   await ev('FP.rows.pop(); 1');
-  // Fluxo de caixa mostra o mesmo alerta
+  // Fluxo de Caixa mostra o mesmo alerta
   await page.click('#finBtn'); await page.click('#finMenu [data-nav="demonstrativos"]'); await page.waitForTimeout(400);
   await ev(`FL.rows = [{id:'z1', acc:'viacredi', date:'2026-03-05', desc:'x', plan:'conv', valor:10, extDate:'', extVal:null, obs:'', key:''}]; DM.view = 'flu'; renderDemonstrativos(); 1`);
   await page.waitForTimeout(200);
-  check('Fluxo de caixa shows the low-balance box too', /Atenção: saldo baixo/.test(await page.textContent('#demBody')));
-  // janela da conta bancária: campo Saldo mínimo
+  check('Fluxo de Caixa shows the low-balance box too', /Atenção: Saldo Baixo/.test(await page.textContent('#demBody')));
+  // janela da conta bancária: campo Saldo Mínimo
   await page.click('#finBtn'); await page.click('#finMenu [data-nav="contas"]'); await page.waitForTimeout(300);
   await page.click('#reg-contas-host tbody tr:has-text("Viacredi")'); await page.waitForSelector('#regMinimo');
   check('account window shows the saved minimum', (await page.inputValue('#regMinimo')) === '500,00', await page.inputValue('#regMinimo'));

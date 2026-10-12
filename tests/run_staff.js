@@ -21,7 +21,7 @@ const path = require('path');
 
   // Menu RH e lista: os profissionais já cadastrados aparecem como tipo Profissional.
   const cad = await ev(`(function(){ renderNavMenus(); return Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav") + "=" + b.textContent; }); })()`);
-  console.log('Profissionais left Cadastros; Colaboradores and Tipos de colaborador are there; no RH menu?', !cad.some((x) => x.startsWith('profissionais=')) && cad.indexOf('colaboradores=Colaboradores') !== -1 && cad.indexOf('tiposcolab=Tipos de colaborador') !== -1 && !(await page.$('#rhBtn')), JSON.stringify(cad));
+  console.log('Profissionais left Cadastros; Colaboradores and Tipos de Colaborador are there; no RH menu?', !cad.some((x) => x.startsWith('profissionais=')) && cad.indexOf('colaboradores=Colaboradores') !== -1 && cad.indexOf('tiposcolab=Tipos de Colaborador') !== -1 && !(await page.$('#rhBtn')), JSON.stringify(cad));
   await page.$eval('#mainTabs button[data-tab=colaboradores]', (b) => b.click()); await page.waitForTimeout(300);
   const nProf = await ev('state.professionals.filter(function(p){ return !p.inativo; }).length');
   const rows0 = await page.$$eval('#staffListHost tbody tr', (r) => r.map((x) => x.cells[1].textContent));

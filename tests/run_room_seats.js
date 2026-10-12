@@ -44,7 +44,7 @@ const path = require('path');
   check('no delete option: only "move to" another room column (not groups)?', !!dlg && dlg.opts.indexOf('') === -1 && dlg.opts.indexOf('r1|r1-t2') !== -1 && !dlg.opts.some((v) => /^coord/.test(v)), dlg && dlg.opts.join(','));
   check('suggested column already chosen and everything fits?', !!dlg && /serão movidos/.test(dlg.prev), dlg && dlg.prev);
   const okEnabled = await ev(`!document.getElementById("srOk").disabled`);
-  check('"Aplicar e salvar" enabled when all bookings fit?', okEnabled);
+  check('"Aplicar e Salvar" enabled when all bookings fit?', okEnabled);
   await page.click('#srOk');
   await page.waitForTimeout(700);
   const s1 = await bk('seg-1'), t1 = await bk('ter-1'), s2 = await bk('seg-2'), q3 = await bk('qua-3');
@@ -115,7 +115,7 @@ const path = require('path');
   await page.click('#rmDelete');
   await page.waitForTimeout(400);
   const simple = await ev(`(function(){ var o = document.getElementById("ovConfirm"); return o ? o.textContent : null; })()`);
-  check('room without bookings: plain delete confirmation?', !!simple && !/no Planner/.test(simple) && /Confirmar exclusão/.test(simple), simple);
+  check('room without bookings: plain delete confirmation?', !!simple && !/no Planner/.test(simple) && /Confirmar Exclusão/.test(simple), simple);
   await page.click('#cfCancel');
 
   check('no page errors?', errors.length === 0, errors.join(' | '));

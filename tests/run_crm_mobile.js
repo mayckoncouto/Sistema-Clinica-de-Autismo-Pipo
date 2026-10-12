@@ -144,14 +144,14 @@ const path = require('path');
   await page.waitForTimeout(300);
   const sent = await ev('JSON.stringify(CRM.mem.events.filter(function(e){ var t = CRM.tasks[e.task_id]; return e.kind === "comment" && t && t.title === "Tarefa nova com comentário"; }).map(function(e){ return e.body; }))');
   check('saving the new task sends its comment?', sent === '["Primeiro contato feito"]', sent);
-  // Listas e status
+  // Listas e Status
   await ev('crmOpenListsModal()');
   await page.waitForSelector('#ovCrmL');
   const rowOver = await page.$$eval('#crmLBody .crm-lrow', (l) => l.filter((r) => r.getBoundingClientRect().right > 390).length);
-  check('Listas e status rows fit the screen?', rowOver === 0, rowOver);
+  check('Listas e Status rows fit the screen?', rowOver === 0, rowOver);
   await page.click('#crmLBody .crm-lrow:first-child [data-ledit]'); await page.waitForTimeout(150);
   const over = await page.$$eval('#ovCrmL .therapist-row .rm', (l) => l.filter((b) => b.getBoundingClientRect().right > 390).length);
-  check('Listas e status: nothing past the screen edge?', over === 0, over);
+  check('Listas e Status: nothing past the screen edge?', over === 0, over);
   // Tela CRM: um cartão por vez na largura da tela (desliza para o lado), números em duas colunas, faixa de status.
   await ev('crmGo("__home")'); await page.waitForTimeout(300);
   const hc = await page.evaluate(() => { const g = document.getElementById('crmHomeGrid'), cs = g && g.querySelectorAll('.crm-home-card'); if (!cs || cs.length < 2) return null;

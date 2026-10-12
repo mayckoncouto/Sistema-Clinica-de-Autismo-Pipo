@@ -36,7 +36,7 @@ const path = require('path');
   // ---- TEST: opening it shows it pre-filled and editable ----
   await cell1.locator('.book-main').click();
   await page.waitForSelector('#ovBook');
-  console.log('modal title says "Editar" (looks already booked)?', (await page.locator('.modal-head h3').innerText()) === 'Editar atendimento');
+  console.log('modal title says "Editar" (looks already booked)?', (await page.locator('.modal-head h3').innerText()) === 'Editar Atendimento');
   console.log('opens with the "Reunião Clínica" kind ticked?', await page.locator('#ovBook .kind-pick input[value="reuniao"]').isChecked());
   console.log('"Desmarcar" button is present?', (await page.locator('#bkClear').count()) === 1);
 

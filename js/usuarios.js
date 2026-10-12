@@ -1,11 +1,11 @@
 /* =====================================================================
- * Agenda Pipo — abas "Usuários" e "Níveis de permissão" (só Administrador)
+ * Agenda Pipo — abas "Usuários" e "Níveis de Permissão" (só Administrador)
  *
  * Usuários: quem entra no sistema e em qual NÍVEL está (tabela profiles,
  *   coluna role_id). Criar / senha / ativar / excluir passam por
  *   /api/admin-users (precisa da service role key); nome e nível são
  *   gravados direto no banco — a política RLS só deixa administrador alterar.
- * Níveis de permissão: a grade módulo × ação de cada nível (tabela roles).
+ * Níveis de Permissão: a grade módulo × ação de cada nível (tabela roles).
  *   O nível Administrador tem sempre acesso total e não é editável.
  * ===================================================================== */
 (function () {
@@ -18,53 +18,53 @@
   // Item novo: entra no grupo do assunto, na ordem em que aparece no menu.
   var MODULES = [
     { key: "pacientes", label: "Pacientes", hint: "", group: "Cadastros" },
-    { key: "saude_paciente", label: "Pacientes – saúde", hint: "ver/editar médico, CID, diagnóstico, suporte, comunicação, alergias, medicações e restrições", actions: ["view", "edit"] },
-    { key: "campos_paciente", label: "Pacientes – campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
+    { key: "saude_paciente", label: "Pacientes – Saúde", hint: "ver/editar médico, CID, diagnóstico, suporte, comunicação, alergias, medicações e restrições", actions: ["view", "edit"] },
+    { key: "campos_paciente", label: "Pacientes – Campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
-    { key: "tratamentos_valores", label: "Tratamentos – valores", hint: "ver/editar valor, descontos e valor final", actions: ["view", "edit"] },
+    { key: "tratamentos_valores", label: "Tratamentos – Valores", hint: "ver/editar valor, descontos e valor final", actions: ["view", "edit"] },
     { key: "convenios", label: "Convênios", hint: "" },
-    { key: "motivos_cancelamento", label: "Motivos de cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
+    { key: "motivos_cancelamento", label: "Motivos de Cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
     { key: "medicos", label: "Médicos", hint: "médicos dos pacientes" },
     { key: "escolas", label: "Escolas", hint: "escolas dos pacientes" },
     { key: "diagnosticos", label: "Diagnósticos", hint: "lista de diagnósticos (CID) do paciente e do lead do CRM" },
     { key: "origens", label: "Origens", hint: "como o paciente conheceu a clínica (paciente e lead do CRM)" },
     { key: "colaboradores", label: "Colaboradores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)" },
-    { key: "colaboradores_valores", label: "Colaboradores – valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
+    { key: "colaboradores_valores", label: "Colaboradores – Valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
     { key: "especialidades", label: "Especialidades", hint: "" },
     { key: "servicos", label: "Serviços", hint: "" },
     { key: "cbo", label: "CBO", hint: "lista de CBO usada no cadastro dos profissionais" },
     { key: "conselhos", label: "Conselhos", hint: "conselhos profissionais (CRP, CRFa…) do cadastro dos profissionais" },
     { key: "fornecedores", label: "Fornecedores", hint: "empresas e pessoas que fornecem produtos ou serviços para a clínica" },
-    { key: "categorias_fornecedor", label: "Categorias de fornecedor", hint: "lista de categorias usada no cadastro de fornecedores" },
-    { key: "contas_bancarias", label: "Contas bancárias", hint: "contas e caixa da clínica (banco, agência, CNPJ)" },
-    { key: "plano_contas", label: "Plano de contas", hint: "tipo, categoria e subcategoria dos lançamentos financeiros" },
-    { key: "financeiro_valores", label: "Financeiro – valores", hint: "ver/editar o saldo inicial das contas bancárias", actions: ["view", "edit"] },
+    { key: "categorias_fornecedor", label: "Categorias de Fornecedor", hint: "lista de categorias usada no cadastro de fornecedores" },
+    { key: "contas_bancarias", label: "Contas Bancárias", hint: "contas e caixa da clínica (banco, agência, CNPJ)" },
+    { key: "plano_contas", label: "Plano de Contas", hint: "tipo, categoria e subcategoria dos lançamentos financeiros" },
+    { key: "financeiro_valores", label: "Financeiro – Valores", hint: "ver/editar o saldo inicial das contas bancárias", actions: ["view", "edit"] },
     { key: "salas", label: "Salas", hint: "" },
     { key: "grupos", label: "Grupos de Suporte", hint: "" },
-    { key: "feriados", label: "Feriados e recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },
-    { key: "cadastro_status", label: "Status (cadastro)", hint: "criar e alterar os status dos atendimentos" },
+    { key: "feriados", label: "Feriados e Recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },
+    { key: "cadastro_status", label: "Status (Cadastro)", hint: "criar e alterar os status dos atendimentos" },
     { key: "planner", label: "Planner", hint: "grade de 4 semanas", group: "Planner" },
-    { key: "bloqueio_horario", label: "Bloqueio de horário", hint: "Planner: bloquear (incluir) e liberar (excluir) horários — botões da grade e Outras opções" },
+    { key: "bloqueio_horario", label: "Bloqueio de Horário", hint: "Planner: bloquear (incluir) e liberar (excluir) horários — botões da grade e Outras Opções" },
     { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
     { key: "disponibilidade", label: "Disponibilidade", hint: "relatório de atendidos e vagas livres do Planner por dia, horário e especialidade", actions: ["view"] },
     { key: "agenda", label: "Agenda", hint: "atendimentos por data", group: "Agenda" },
-    { key: "visao_geral", label: "Visão geral", hint: "Agenda ▾ → Visão geral: todos os atendimentos do dia numa tela", actions: ["view"] },
+    { key: "visao_geral", label: "Visão Geral", hint: "Agenda ▾ → Visão Geral: todos os atendimentos do dia numa tela", actions: ["view"] },
     { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)", group: "Prontuário" },
     { key: "plano_terapeutico", label: "Plano Terapêutico", hint: "ver: consultar; incluir: criar e revisar; editar: tudo. Profissional sem editar muda só situação/status nas especialidades dele" },
     { key: "objetivos", label: "Objetivos", hint: "objetivos prontos para usar no plano terapêutico" },
     { key: "escalas", label: "Escalas", hint: "escalas do plano terapêutico (níveis e cores)" },
     { key: "habilidades", label: "Habilidades", hint: "habilidades dos objetivos do plano terapêutico" },
     { key: "financeiro", label: "Financeiro", hint: "Lançamentos: movimentação das contas (valores, extrato, subcategorias)", group: "Financeiro" },
-    { key: "fechamento_mes", label: "Fechamento de mês", hint: "incluir = fechar o mês; excluir = reabrir; ver = histórico dos fechamentos", actions: ["view", "create", "delete"] },
+    { key: "fechamento_mes", label: "Fechamento de Mês", hint: "incluir = fechar o mês; excluir = reabrir; ver = histórico dos fechamentos", actions: ["view", "create", "delete"] },
     { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"], group: "Menu Acesso" },
-    { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de permissão e administradores: só o Administrador)" },
+    { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de Permissão e administradores: só o Administrador)" },
     { key: "backup", label: "Backup", hint: "baixar o backup (restaurar: só o Administrador)", actions: ["view"] },
     { key: "conector_claude", label: "Conector Claude", hint: "usar o sistema pelo Claude (conector MCP); lá vale o mesmo que o nível já pode no sistema", actions: ["view"] },
     { key: "senha", label: "Senha", hint: "trocar a própria senha", actions: ["view"], dflt: true },
     { key: "ajuda", label: "Ajuda", hint: "guia do sistema", actions: ["view"], dflt: true }
   ];
   function modActs(m) { return m.actions || ["view", "create", "edit", "delete"]; }
-  // Permissão "Usuários" do nível (o Administrador pode tudo). Níveis de permissão e
+  // Permissão "Usuários" do nível (o Administrador pode tudo). Níveis de Permissão e
   // contas de administrador continuam só com o Administrador (a API e o banco conferem).
   function uCan(a) { return auth.isAdmin() || auth.can("usuarios", a); }
   var ACTIONS = [
@@ -89,18 +89,18 @@
   function toast(msg, isErr) { if (typeof window.showToast === "function") window.showToast(msg, isErr); }
   // Relatórios da aba "Relatórios" (ids iguais a RP_TYPES no index.html).
   var REPORTS = [
-    { key: "lista", label: "Lista de atendimentos" },
-    { key: "produtividade", label: "Produtividade por profissional" },
-    { key: "frequencia", label: "Frequência por paciente" },
-    { key: "convenios", label: "Atendimentos por convênio" },
-    { key: "pacote", label: "Pacote contratado × realizado" },
-    { key: "pendentes", label: "Evoluções pendentes" },
+    { key: "lista", label: "Lista de Atendimentos" },
+    { key: "produtividade", label: "Produtividade por Profissional" },
+    { key: "frequencia", label: "Frequência por Paciente" },
+    { key: "convenios", label: "Atendimentos por Convênio" },
+    { key: "pacote", label: "Pacote Contratado × Realizado" },
+    { key: "pendentes", label: "Evoluções Pendentes" },
     { key: "ocupacao", label: "Ocupação" },
-    { key: "bloqueios", label: "Bloqueios, reuniões e treinamentos" },
-    { key: "sem-atendimento", label: "Pacientes sem atendimento" },
-    { key: "tratamentos", label: "Tratamentos novos e renegociados" },
-    { key: "financeiro", label: "Relatório financeiro" },
-    { key: "evolucao-habilidade", label: "Evolução por habilidade" }
+    { key: "bloqueios", label: "Bloqueios, Reuniões e Treinamentos" },
+    { key: "sem-atendimento", label: "Pacientes sem Atendimento" },
+    { key: "tratamentos", label: "Tratamentos Novos e Renegociados" },
+    { key: "financeiro", label: "Relatório Financeiro" },
+    { key: "evolucao-habilidade", label: "Evolução por Habilidade" }
   ];
   function confirmBox(opts) { return window.pipoConfirm ? window.pipoConfirm(opts) : Promise.resolve(window.confirm(opts.title)); }
   function roleById(id) { return roles.filter(function (r) { return r.id === id; })[0] || null; }
@@ -159,7 +159,7 @@
         ".adm-users :is(th,td):nth-child(2),.adm-users :is(th,td):nth-child(3){display:none}" +
         ".adm-users td.u-name{overflow-wrap:anywhere}" +
         ".adm-users :is(th,td):last-child{width:1%;white-space:nowrap}" +
-        // Níveis de permissão: só Nível e Usuários (o resumo das permissões aparece ao abrir o nível).
+        // Níveis de Permissão: só Nível e Usuários (o resumo das permissões aparece ao abrir o nível).
         ".adm-roles :is(th,td):nth-child(2){display:none}" +
         ".adm-roles :is(th,td):first-child{width:auto!important;overflow-wrap:anywhere}" +
         ".adm-roles :is(th,td):last-child{width:1%!important;white-space:nowrap}" +
@@ -219,7 +219,7 @@
   // Resumo curto das permissões de um nível, para a escolha no cadastro.
   function roleSummary(role) {
     if (!role) return "";
-    if (role.is_admin) return "Acesso total, inclusive Usuários e Níveis de permissão";
+    if (role.is_admin) return "Acesso total, inclusive Usuários e Níveis de Permissão";
     var p = role.permissions || {};
     var parts = allModules().map(function (m) {
       var mp = p[m.key] || {};
@@ -252,8 +252,8 @@
           "</div>" +
           '<span class="pat-count" id="userCount"></span>' +
           '<div class="spacer"></div>' +
-          '<button class="btn ghost" id="bulkProfBtn" hidden>Criar acessos dos profissionais</button>' +
-          '<button class="btn ghost" id="rolesBtn">Níveis de permissão</button>' +
+          '<button class="btn ghost" id="bulkProfBtn" hidden>Criar Acessos dos Profissionais</button>' +
+          '<button class="btn ghost" id="rolesBtn">Níveis de Permissão</button>' +
           '<button class="btn primary" id="addUserBtn">+ Incluir</button>' +
         "</div>" +
         '<div class="adm-wrap" id="usersListHost"></div>';
@@ -286,7 +286,7 @@
       return;
     }
     host.innerHTML =
-        '<table class="adm-table adm-users"><thead><tr><th>Nome</th><th>E-mail</th><th>Nível de permissão</th><th>Situação</th></tr></thead><tbody>' +
+        '<table class="adm-table adm-users"><thead><tr><th>Nome</th><th>E-mail</th><th>Nível de Permissão</th><th>Situação</th></tr></thead><tbody>' +
           list.map(function (u) {
             var role = roleById(u.role_id);
             return '<tr data-uid="' + esc(u.id) + '" class="' + (u.active ? "" : "inactive") + '" tabindex="0">' +
@@ -321,11 +321,11 @@
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
       '<div class="overlay" id="ovUserKind"><div class="modal" style="max-width:460px">' +
-        '<div class="modal-head"><div><h3>Incluir usuário</h3><div class="modal-sub">O acesso fica ligado ao cadastro da pessoa.</div></div>' +
+        '<div class="modal-head"><div><h3>Incluir Usuário</h3><div class="modal-sub">O acesso fica ligado ao cadastro da pessoa.</div></div>' +
           '<button class="modal-close" id="ukClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body"><div class="u-kind">' +
-          '<button type="button" class="btn primary" id="ukStaff">Novo colaborador (recomendado)</button>' +
-          '<button type="button" class="btn ghost" id="ukPlain">Conta sem colaborador (ex.: contador)</button>' +
+          '<button type="button" class="btn primary" id="ukStaff">Novo Colaborador (Recomendado)</button>' +
+          '<button type="button" class="btn ghost" id="ukPlain">Conta sem Colaborador (Ex.: Contador)</button>' +
         "</div></div></div></div>";
     var ov = document.getElementById("ovUserKind");
     function close() { mh.innerHTML = ""; }
@@ -359,7 +359,7 @@
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
       '<div class="overlay" id="ovUser"><div class="modal wide" style="max-width:560px">' +
-        '<div class="modal-head"><div><h3>' + (isNew ? "Novo usuário" : ro ? "Usuário" : "Editar usuário") + "</h3>" +
+        '<div class="modal-head"><div><h3>' + (isNew ? "Novo Usuário" : ro ? "Usuário" : "Editar Usuário") + "</h3>" +
           '<div class="modal-sub">' + (isNew
             ? "A pessoa entra com este e-mail e a senha inicial, e pode trocar a senha depois no menu \"Acesso\" do topo."
             : esc(u.email)) + "</div></div>" +
@@ -371,26 +371,26 @@
           (isNew
             ? '<div class="field-row">' +
                 '<div class="field"><label for="uEmail">E-mail</label><input id="uEmail" type="email" autocomplete="off"></div>' +
-                '<div class="field"><label for="uPass">Senha inicial (mín. 8)</label><input id="uPass" type="text" autocomplete="off"></div>' +
+                '<div class="field"><label for="uPass">Senha Inicial (Mín. 8)</label><input id="uPass" type="text" autocomplete="off"></div>' +
               "</div>"
             : "") +
-          '<div class="field"><label>Nível de permissão</label>' + rolePickerHtml(isNew ? defaultRole : u.role_id, isMe || ro) +
+          '<div class="field"><label>Nível de Permissão</label>' + rolePickerHtml(isNew ? defaultRole : u.role_id, isMe || ro) +
             (isMe ? '<div class="pat-count" style="margin-top:6px">Você não pode mudar o seu próprio nível.</div>' :
               (ro && tRole && tRole.is_admin ? '<div class="pat-count" style="margin-top:6px">Conta de administrador: só o Administrador altera.</div>' : "")) + "</div>" +
           (!isNew && canEd
-            ? '<div class="field" style="margin-top:4px"><label>Senha e acesso</label><div class="u-actions">' +
+            ? '<div class="field" style="margin-top:4px"><label>Senha e Acesso</label><div class="u-actions">' +
                 '<div class="field"><input id="uNewPass" type="text" placeholder="Nova senha (mín. 8)" autocomplete="off"></div>' +
-                '<button type="button" class="btn" id="uSetPass">Definir senha</button>' +
+                '<button type="button" class="btn" id="uSetPass">Definir Senha</button>' +
               "</div>" +
               (isMe ? "" : '<div class="u-actions" style="margin-top:8px">' +
-                '<button type="button" class="btn" id="uToggle">' + (u.active ? "Desativar acesso" : "Reativar acesso") + "</button>" +
-                (canDel ? '<button type="button" class="btn danger" id="uDelete">Excluir usuário</button>' : "") + "</div>") +
+                '<button type="button" class="btn" id="uToggle">' + (u.active ? "Desativar Acesso" : "Reativar Acesso") + "</button>" +
+                (canDel ? '<button type="button" class="btn danger" id="uDelete">Excluir Usuário</button>' : "") + "</div>") +
               "</div>"
             : "") +
         "</div>" +
         '<div class="modal-foot"><div class="spacer"></div>' +
           '<button class="btn ghost" id="uCancel">' + (ro ? "Fechar" : "Cancelar") + "</button>" +
-          (ro ? "" : '<button class="btn primary" id="uSave">' + (isNew ? "Criar usuário" : "Salvar") + "</button>") + "</div>" +
+          (ro ? "" : '<button class="btn primary" id="uSave">' + (isNew ? "Criar Usuário" : "Salvar") + "</button>") + "</div>" +
       "</div></div>";
 
     var ov = document.getElementById("ovUser");
@@ -447,7 +447,7 @@
       if (tg) tg.addEventListener("click", function () {
         var activate = !u.active;
         (activate ? Promise.resolve(true) : confirmBox({
-          title: "Desativar acesso",
+          title: "Desativar Acesso",
           message: "Desativar o acesso de <b>" + esc(u.full_name || u.email) + "</b>? A pessoa não conseguirá mais entrar até ser reativada.",
           confirmLabel: "Desativar"
         })).then(function (ok) {
@@ -462,10 +462,10 @@
         // Tarefas abertas do CRM com a pessoa como responsável: ao excluir, ela sai delas.
         var cnt = auth.client ? auth.client.rpc("crm_user_open_tasks", { p_user: u.id }).then(function (r) { return r.error ? 0 : (+r.data || 0); }, function () { return 0; }) : Promise.resolve(0);
         cnt.then(function (nTasks) { return confirmBox({
-          title: "Excluir usuário",
+          title: "Excluir Usuário",
           message: "Excluir definitivamente o usuário <b>" + esc(u.full_name || u.email) + "</b>? Isso não pode ser desfeito.<br>Para só bloquear a entrada, use \"Desativar acesso\"." +
             (nTasks ? "<br><br>A pessoa é responsável por <b>" + nTasks + (nTasks === 1 ? " tarefa aberta" : " tarefas abertas") + "</b> no CRM e sairá delas. Se quiser, passe as tarefas para outra pessoa antes." : "<br><br>Se a pessoa for responsável por tarefas do CRM, ela sai delas."),
-          confirmLabel: "Excluir usuário"
+          confirmLabel: "Excluir Usuário"
         }); }).then(function (ok) {
           if (!ok) return;
           adminApi({ action: "delete", id: u.id })
@@ -478,7 +478,7 @@
     document.getElementById("uName").focus();
   }
 
-  /* ================= Tela: Níveis de permissão ================= */
+  /* ================= Tela: Níveis de Permissão ================= */
   function dbPerms(p) { return dbNew ? p : window.pipoPerms.downgrade(p); }
   function normalizePerms(p) {
     var out = {};
@@ -528,16 +528,16 @@
       .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "nivel";
   }
 
-  // Janela "Níveis de permissão" (aberta pelo botão na tela de Usuários, como
+  // Janela "Níveis de Permissão" (aberta pelo botão na tela de Usuários, como
   // "Especialidades" em Pacientes): lista dos níveis + "Novo nível".
   function openRolesModal() {
-    if (!auth.isAdmin()) return;   // Níveis de permissão: só o Administrador
+    if (!auth.isAdmin()) return;   // Níveis de Permissão: só o Administrador
     var counts = {};
     users.forEach(function (u) { counts[u.role_id] = (counts[u.role_id] || 0) + 1; });
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
       '<div class="overlay" id="ovRoles"><div class="modal wide" style="max-width:760px">' +
-        '<div class="modal-head"><div><h3>Níveis de permissão</h3>' +
+        '<div class="modal-head"><div><h3>Níveis de Permissão</h3>' +
           '<div class="modal-sub">O que cada nível pode fazer em cada tela. Clique num nível para editar. ' +
           'Uma mudança vale na hora para todos os usuários daquele nível.</div></div>' +
           '<button class="modal-close" id="rlClose" aria-label="Fechar">✕</button></div>' +
@@ -596,14 +596,14 @@
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
       '<div class="overlay" id="ovRole"><div class="modal wide" style="max-width:560px">' +
-        '<div class="modal-head"><div><h3>' + (isNew ? "Novo nível de permissão" : locked ? "Nível Administrador" : "Editar nível de permissão") + "</h3>" +
+        '<div class="modal-head"><div><h3>' + (isNew ? "Novo Nível de Permissão" : locked ? "Nível Administrador" : "Editar Nível de Permissão") + "</h3>" +
           '<div class="modal-sub">' + (locked
-            ? "Acesso total, inclusive às telas de Usuários e Níveis de permissão. Este nível não pode ser alterado nem excluído."
+            ? "Acesso total, inclusive às telas de Usuários e Níveis de Permissão. Este nível não pode ser alterado nem excluído."
             : "Marque o que este nível pode fazer em cada tela. Incluir, editar ou excluir marcam \"Ver\" junto.") + "</div></div>" +
           '<button class="modal-close" id="rClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
           '<div class="tr-sec tr-sec-top">Nível</div>' +
-          '<div class="field"><label for="rName">Nome do nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
+          '<div class="field"><label for="rName">Nome do Nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
           '<div class="tr-sec">Permissões</div>' +
           roleGridHtml(role ? (role.permissions || {}) : { agenda: { view: true }, planner: { view: true }, resumo: { view: true }, pacientes: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
           statusPermsHtml(role ? (role.permissions || {}) : {}, locked) +
@@ -611,10 +611,10 @@
           (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +
         "</div>" +
         '<div class="modal-foot">' +
-          (!isNew && !locked ? '<button class="btn danger" id="rDelete">Excluir nível</button>' : "<span></span>") +
+          (!isNew && !locked ? '<button class="btn danger" id="rDelete">Excluir Nível</button>' : "<span></span>") +
           '<div class="spacer"></div>' +
           '<button class="btn ghost" id="rCancel">' + (locked ? "Fechar" : "Cancelar") + "</button>" +
-          (locked ? "" : '<button class="btn primary" id="rSave">' + (isNew ? "Criar nível" : "Salvar") + "</button>") +
+          (locked ? "" : '<button class="btn primary" id="rSave">' + (isNew ? "Criar Nível" : "Salvar") + "</button>") +
         "</div>" +
       "</div></div>";
 
@@ -696,9 +696,9 @@
         return;
       }
       confirmBox({
-        title: "Excluir nível",
+        title: "Excluir Nível",
         message: "Excluir o nível de permissão <b>" + esc(role.name) + "</b>? Isso não pode ser desfeito.",
-        confirmLabel: "Excluir nível"
+        confirmLabel: "Excluir Nível"
       }).then(function (ok) {
         if (!ok) return;
         auth.client.from("roles").delete().eq("id", role.id).then(function (r) {
@@ -770,13 +770,13 @@
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
       '<div class="overlay" id="ovBulk"><div class="modal wide" style="max-width:640px">' +
-        '<div class="modal-head"><div><h3>Criar acessos dos profissionais</h3>' +
+        '<div class="modal-head"><div><h3>Criar Acessos dos Profissionais</h3>' +
           '<div class="modal-sub">' + rows.length + (rows.length === 1 ? " profissional ainda não tem" : " profissionais ainda não têm") +
           ' usuário. Confira os e-mails (dá para editar) e desmarque quem não deve ter acesso. Todos entram no nível "Profissional".</div></div>' +
           '<button class="modal-close" id="bkClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
-          '<div class="field"><label for="bkPass">Senha inicial (a mesma para todos)</label><input id="bkPass" type="text" value="' + esc(BULK_PASSWORD) + '"></div>' +
-          '<table class="adm-table"><thead><tr><th style="width:36px"></th><th>Profissional</th><th>Usuário (e-mail)</th><th style="width:90px">Situação</th></tr></thead><tbody>' +
+          '<div class="field"><label for="bkPass">Senha Inicial (a Mesma para Todos)</label><input id="bkPass" type="text" value="' + esc(BULK_PASSWORD) + '"></div>' +
+          '<table class="adm-table"><thead><tr><th style="width:36px"></th><th>Profissional</th><th>Usuário (E-mail)</th><th style="width:90px">Situação</th></tr></thead><tbody>' +
             rows.map(function (r, i) {
               return '<tr data-i="' + i + '"><td><input type="checkbox" class="bk-on" checked aria-label="Criar acesso"></td>' +
                 '<td class="u-name">' + esc(r.prof.nome || r.prof.name) + "</td>" +
@@ -788,7 +788,7 @@
         "</div>" +
         '<div class="modal-foot"><div class="spacer"></div>' +
           '<button class="btn ghost" id="bkCancel">Cancelar</button>' +
-          '<button class="btn primary" id="bkGo">Criar acessos</button></div>' +
+          '<button class="btn primary" id="bkGo">Criar Acessos</button></div>' +
       "</div></div>";
     var ov = document.getElementById("ovBulk");
     var running = false;
@@ -831,7 +831,7 @@
         });
       }, Promise.resolve()).then(function () {
         running = false;
-        go.disabled = false; go.textContent = fail ? "Tentar de novo os que falharam" : "Criar acessos";
+        go.disabled = false; go.textContent = fail ? "Tentar de novo os que falharam" : "Criar Acessos";
         toast(ok + (ok === 1 ? " acesso criado" : " acessos criados") + (fail ? ", " + fail + " com erro (passe o mouse em \"Erro\" para ver o motivo)." : "."), !!fail);
         loadUsers().then(function () { renderUsers(); });
         if (!fail) document.getElementById("bkCancel").textContent = "Fechar";

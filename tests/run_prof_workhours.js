@@ -70,7 +70,7 @@ const path = require('path');
     if (ed) ed.click();
     return det && !!document.getElementById("agdSave");
   })()`);
-  console.log('an existing booking out of hours opens the details and "Editar agendamento" opens the edit window?', opened === true, opened);
+  console.log('an existing booking out of hours opens the details and "Editar Agendamento" opens the edit window?', opened === true, opened);
   await page.click('#agdCancel').catch(() => {});
 
   // Janela do colaborador: se o banco recusar o cadastro do profissional, não diz "Alterado"

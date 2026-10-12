@@ -1,4 +1,4 @@
-// Financeiro (Fase 1): Categorias de fornecedor, Contas bancárias (com saldo inicial), Plano de contas e as planilhas do Plano de contas e de Fornecedores.
+// Financeiro (Fase 1): Categorias de Fornecedor, Contas Bancárias (com saldo inicial), Plano de Contas e as planilhas do Plano de Contas e de Fornecedores.
 // Dados fictícios (CNPJ de exemplo válido: 11.222.333/0001-81).
 const { chromium } = require('playwright');
 const path = require('path');
@@ -20,9 +20,9 @@ const fs = require('fs');
   const open = async (key, tab) => { await page.click('#finBtn'); await page.click('#finMenu [data-nav="' + key + '"]'); await page.waitForTimeout(200); return page.$eval('#tab-' + tab, (e) => !e.hidden); };
   const rows = (k) => page.$$eval('#reg-' + k + '-host tbody tr', (r) => r.map((x) => x.textContent));
 
-  // ---- Categorias de fornecedor ----
+  // ---- Categorias de Fornecedor ----
   check('menu lists the 3 new registries?', await (async () => { await page.click('#finBtn'); const ok = !!(await page.$('#finMenu [data-nav="catfornecedor"]')) && !!(await page.$('#finMenu [data-nav="contas"]')) && !!(await page.$('#finMenu [data-nav="planocontas"]')); await page.click('#finBtn'); return ok; })());
-  check('Categorias screen opens with title?', await open('catfornecedor', 'catfornecedor') && /Categorias de fornecedor/.test(await page.$eval('#tab-catfornecedor .cad-title', (e) => e.textContent)));
+  check('Categorias screen opens with title?', await open('catfornecedor', 'catfornecedor') && /Categorias de Fornecedor/.test(await page.$eval('#tab-catfornecedor .cad-title', (e) => e.textContent)));
   await page.click('#reg-catfornecedor-add'); await page.waitForSelector('#ovReg');
   await page.fill('#regName', 'Material'); await page.click('#regSave'); await page.waitForTimeout(300);
   await page.click('#reg-catfornecedor-add'); await page.waitForSelector('#ovReg');
@@ -38,10 +38,10 @@ const fs = require('fs');
   check('supplier Categoria list has the "+ Incluir" hook?', await page.$eval('#regf-categoria', (e) => e.getAttribute('data-reg-add') === 'catfornecedor'));
   await page.click('#regCancel');
 
-  // ---- Contas bancárias ----
-  check('Contas screen opens with title?', await open('contas', 'contas') && /Contas bancárias/.test(await page.$eval('#tab-contas .cad-title', (e) => e.textContent)));
+  // ---- Contas Bancárias ----
+  check('Contas screen opens with title?', await open('contas', 'contas') && /Contas Bancárias/.test(await page.$eval('#tab-contas .cad-title', (e) => e.textContent)));
   await page.click('#reg-contas-add'); await page.waitForSelector('#ovReg');
-  check('conta window has the Saldo inicial group?', !!(await page.$('#regSaldo')) && !!(await page.$('#regSaldoData')));
+  check('conta window has the Saldo Inicial group?', !!(await page.$('#regSaldo')) && !!(await page.$('#regSaldoData')));
   await page.fill('#regName', 'Viacredi');
   await setSel('#regf-tipo', 'Banco');
   await page.fill('#regf-banco', 'Viacredi');
@@ -64,10 +64,10 @@ const fs = require('fs');
   check('same account name refused?', !!(await page.$('#ovReg')));
   await page.click('#regCancel');
 
-  // ---- Plano de contas ----
+  // ---- Plano de Contas ----
   await page.evaluate(async () => { const db = await window.claude.use('db'); await db.doc('config/convenios').set({ list: [{ id: 'bradesco-saude', name: 'Bradesco Saúde' }] }); });
   await page.waitForTimeout(200);
-  check('Plano screen opens with title?', await open('planocontas', 'planocontas') && /Plano de contas/.test(await page.$eval('#tab-planocontas .cad-title', (e) => e.textContent)));
+  check('Plano screen opens with title?', await open('planocontas', 'planocontas') && /Plano de Contas/.test(await page.$eval('#tab-planocontas .cad-title', (e) => e.textContent)));
   await page.click('#reg-planocontas-add'); await page.waitForSelector('#ovReg');
   await page.fill('#regName', 'Bradesco'); await page.click('#regSave'); await page.waitForTimeout(200);
   check('category and type are required?', !!(await page.$('#ovReg')));
@@ -86,7 +86,7 @@ const fs = require('fs');
   check('search by category ignores accents?', (await rows('planocontas')).length === 1);
   await page.fill('#reg-planocontas-search', ''); await page.waitForTimeout(150);
 
-  // ---- Planilha do Plano de contas ----
+  // ---- Planilha do Plano de Contas ----
   const pl = await page.evaluate(() => {
     const recs = [
       { _line: 2, nome: 'Bradesco', categoria: 'Receita Operacional', tipo: 'Receitas', convenio: 'Bradesco Saúde' },        // igual
@@ -132,7 +132,7 @@ const fs = require('fs');
   // reimportar o mesmo = igual
   const again = await page.evaluate(() => window.__ev('IO_KINDS').fornecedores.plan([{ _line: 2, nome: 'Papelaria Nova', documento: '11.222.333/0001-81', categoria: 'Papelaria', telefone: '(47) 99999-8888' }]).items.map((i) => i.st));
   check('re-import of the same supplier is "igual"?', again.join() === 'igual', again);
-  check('Outras opções menu on Plano de contas and Fornecedores?', !!(await page.$('#tab-planocontas [data-io-wrap]')) && !!(await page.$('#tab-fornecedores [data-io-wrap]')));
+  check('Outras Opções menu on Plano de Contas and Fornecedores?', !!(await page.$('#tab-planocontas [data-io-wrap]')) && !!(await page.$('#tab-fornecedores [data-io-wrap]')));
 
   // ---- Excluir conta ----
   await open('contas', 'contas');

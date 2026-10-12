@@ -1,5 +1,5 @@
-// Cadastro de Habilidades: Habilidade, Escopo, Faixas etárias (as mesmas da cor do
-// paciente) e Especialidades sugeridas; no plano, as da idade do paciente primeiro.
+// Cadastro de Habilidades: Habilidade, Escopo, Faixas Etárias (as mesmas da cor do
+// paciente) e Especialidades Sugeridas; no plano, as da idade do paciente primeiro.
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -26,7 +26,7 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab=habilidades]', (b) => b.click());
   await page.click('#reg-habilidades-add'); await page.waitForSelector('#regHabEscopo');
   const labels = await page.$$eval('#ovReg .modal-body > .field > label', (l) => l.map((x) => x.textContent.replace(/\s+/g, ' ').trim()));
-  console.log('fields: Habilidade, Escopo, Faixas etárias, Especialidades sugeridas?', /^Habilidade/.test(labels[0]) && labels[1] === 'Escopo' && /^Faixas etárias/.test(labels[2]) && /^Especialidades sugeridas/.test(labels[3]), labels);
+  console.log('fields: Habilidade, Escopo, Faixas Etárias, Especialidades Sugeridas?', /^Habilidade/.test(labels[0]) && labels[1] === 'Escopo' && /^Faixas Etárias/.test(labels[2]) && /^Especialidades Sugeridas/.test(labels[3]), labels);
   await page.fill('#regName', 'Brincar simbólico');
   await page.fill('#regHabEscopo', 'Faz de conta, uso de objetos.');
   await page.check('#regHabAges input[value="0-4"]');
@@ -58,7 +58,7 @@ const path = require('path');
     var pl = ioHabPlan([{_line: 2, nome: "Brincar simbólico", escopo: "", faixas: "5-9", specs: ""}]);
     return {a: a, b: b, w: w.length, st: pl.items[0].st, msg: pl.items[0].msgs.join(" ")};
   })()`);
-  console.log('import reads bands, warns unknown, empty scope keeps the old one?', JSON.stringify(imp.a) === '["0-4","10+"]' && imp.b.length === 0 && imp.w === 1 && imp.st === 'atualizar' && /Faixas etárias/.test(imp.msg) && !/Escopo/.test(imp.msg), JSON.stringify(imp));
+  console.log('import reads bands, warns unknown, empty scope keeps the old one?', JSON.stringify(imp.a) === '["0-4","10+"]' && imp.b.length === 0 && imp.w === 1 && imp.st === 'atualizar' && /Faixas Etárias/.test(imp.msg) && !/Escopo/.test(imp.msg), JSON.stringify(imp));
 
   const exp = await ev(`(function(){
     var k = IO_KINDS.habilidades, rows = k.exportRows(), b = rows.filter(function(r){ return r.nome === "Brincar simbólico"; })[0];
@@ -66,7 +66,7 @@ const path = require('path');
     var pl = ioHabPlan([{_line: 2, nome: "Brincar simbólico", escopo: "", faixas: "Todas as idades", specs: ""}]);
     return {cols: k.cols.map(function(x){ return x.h; }).join("|"), b: b, c: c.faixas, st: pl.items[0].st, msg: pl.items[0].msgs.join(" ")};
   })()`);
-  console.log('export has Escopo and Faixas etárias (empty = "Todas as idades")?', exp.cols === 'Habilidade|Escopo|Faixas etárias|Especialidades sugeridas' &&
+  console.log('export has Escopo and Faixas Etárias (empty = "Todas as idades")?', exp.cols === 'Habilidade|Escopo|Faixas Etárias|Especialidades Sugeridas' &&
     exp.b.escopo === 'Faz de conta, uso de objetos.' && exp.c === 'Todas as idades', JSON.stringify(exp));
   console.log('importing "Todas as idades" clears the bands?', exp.st === 'atualizar' && /Todas as idades/.test(exp.msg));
   // Janela do objetivo: ordem e tipo dos campos.
@@ -76,28 +76,28 @@ const path = require('path');
     var r = {labs: labs, name: document.getElementById("glName").tagName + ":" + document.getElementById("glName").type, crit: document.getElementById("glCrit").tagName + ":" + document.getElementById("glCrit").type};
     return r;
   })()`);
-  console.log('goal window: Habilidade, Faixas etárias, Objetivo, Critério, Escala, Especialidades; texts on one line?',
-    JSON.stringify(gl.labs) === JSON.stringify(['Habilidade', 'Faixas etárias', 'Objetivo', 'Critério de sucesso (sugerido)', 'Escala (sugerida)', 'Especialidades (nenhuma marcada = todas)']) &&
+  console.log('goal window: Habilidade, Faixas Etárias, Objetivo, Critério, Escala, Especialidades; texts on one line?',
+    JSON.stringify(gl.labs) === JSON.stringify(['Habilidade', 'Faixas Etárias', 'Objetivo', 'Critério de Sucesso (Sugerido)', 'Escala (Sugerida)', 'Especialidades (Nenhuma Marcada = Todas)']) &&
     gl.name === 'INPUT:text' && gl.crit === 'INPUT:text', JSON.stringify(gl));
   await page.waitForTimeout(80);
   console.log('goal window starts on Habilidade?', await page.evaluate(() => !!document.activeElement.closest('.dp-combo') && document.getElementById('glArea').parentNode.contains(document.activeElement)));
-  // "[0–4]" digitado no começo do nome vira faixa ao salvar; a lista mostra a coluna Faixas etárias.
+  // "[0–4]" digitado no começo do nome vira faixa ao salvar; a lista mostra a coluna Faixas Etárias.
   await page.fill('#glName', '[0–4] Apontar para pedir');
   await page.$eval('#glArea', (e) => { e.value = 'comunicacao'; e.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.click('#glSave'); await page.waitForTimeout(250);
   const g1 = JSON.parse(await ev('JSON.stringify(goalBankList().filter(function(g){ return /Apontar/.test(g.name); })[0])'));
   console.log('typed "[0–4] Name" saves name without prefix and band 0–4; label = "[0–4] Name"?', g1.name === 'Apontar para pedir' && JSON.stringify(g1.faixas) === '["0-4"]' && (await ev('goalLabel(goalBankList().filter(function(g){ return /Apontar/.test(g.name); })[0])')) === '[0–4] Apontar para pedir', JSON.stringify(g1));
   const reg = await ev(`(function(){ renderRegistryTab("objetivos"); return Array.from(document.querySelectorAll("#reg-objetivos-host thead th")).map(function(t){ return t.textContent.trim(); }).slice(0, 3).join("|"); })()`);
-  console.log('Objetivos list has the Faixas etárias column after Habilidade?', /^Objetivo.*\|Habilidade.*\|Faixas etárias/.test(reg), reg);
-  // Planilha de Objetivos: coluna Faixas etárias; "[5–9] Nome" na planilha atualiza o mesmo objetivo.
+  console.log('Objetivos list has the Faixas Etárias column after Habilidade?', /^Objetivo.*\|Habilidade.*\|Faixas Etárias/.test(reg), reg);
+  // Planilha de Objetivos: coluna Faixas Etárias; "[5–9] Nome" na planilha atualiza o mesmo objetivo.
   const io = await ev(`(function(){
     var k = IO_KINDS.objetivos, row = k.exportRows().filter(function(r){ return /Apontar/.test(r.objetivo); })[0];
     var pl = ioGoalPlan([{_line: 2, objetivo: "[5–9] Apontar para pedir", habilidade: "Comunicação", faixas: "", criterio: "", escala: "", specs: ""},
                          {_line: 3, objetivo: "Novo da planilha", habilidade: "Comunicação", faixas: "0–4 anos, 10+", criterio: "", escala: "", specs: ""}]);
     return {cols: k.cols.map(function(x){ return x.h; }).join("|"), fx: row.faixas, name: row.objetivo, st: pl.items.map(function(i){ return i.st; }).join(), v0: pl.items[0].vals.faixas, v1: pl.items[1].vals.faixas, n1: pl.items[1].vals.name};
   })()`);
-  console.log('Objetivos spreadsheet: Faixas etárias column; prefix in the name updates the same goal; band text read?',
-    io.cols === 'Objetivo|Habilidade|Faixas etárias|Critério de sucesso|Escala|Especialidades' && io.fx === '0–4 anos' && io.name === 'Apontar para pedir' &&
+  console.log('Objetivos spreadsheet: Faixas Etárias column; prefix in the name updates the same goal; band text read?',
+    io.cols === 'Objetivo|Habilidade|Faixas Etárias|Critério de Sucesso|Escala|Especialidades' && io.fx === '0–4 anos' && io.name === 'Apontar para pedir' &&
     io.st === 'atualizar,novo' && JSON.stringify(io.v0) === '["5-9"]' && JSON.stringify(io.v1) === '["0-4","10+"]' && io.n1 === 'Novo da planilha', JSON.stringify(io));
   await ev('document.getElementById("modalHost").innerHTML = ""');
   console.log('no JS errors?', errors.length === 0, errors);

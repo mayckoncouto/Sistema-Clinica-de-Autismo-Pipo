@@ -23,7 +23,7 @@ const path = require('path');
   check('empty state says "Nenhum fornecedor cadastrado"?', /Nenhum fornecedor cadastrado/.test(await page.textContent('#reg-fornecedores-host')));
   // incluir
   await page.click('#reg-fornecedores-add'); await page.waitForSelector('#ovReg');
-  check('window is "Novo fornecedor" with the name label?', /Novo fornecedor/.test(await page.textContent('#ovReg h3')) && /Razão social/.test(await page.textContent('#ovReg')));
+  check('window is "Novo fornecedor" with the name label?', /Novo Fornecedor/.test(await page.textContent('#ovReg h3')) && /Razão Social/.test(await page.textContent('#ovReg')));
   await page.fill('#regName', 'Papelaria Teste Ltda');
   await page.fill('#regf-documento', '11222333000100');
   await page.click('#regSave'); await page.waitForTimeout(200);

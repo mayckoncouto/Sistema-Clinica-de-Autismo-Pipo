@@ -28,7 +28,7 @@ const path = require('path');
   await rowPU.click();
   await page.waitForSelector('#ovPat');
   // Convênio, plano, pacote, ABA e especialidades ficam no Tratamento (desde 2026-10-03):
-  // paciente sem tratamento → "+ Novo tratamento", que já vem com os dados antigos dele.
+  // paciente sem tratamento → "+ Novo Tratamento", que já vem com os dados antigos dele.
   console.log('patient modal no longer has the treatment fields?', (await page.$('#pAba')) === null);
   await page.click('#pNewTreat');
   await page.waitForSelector('#ovTreat');

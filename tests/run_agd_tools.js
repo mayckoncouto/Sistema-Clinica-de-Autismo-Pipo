@@ -1,5 +1,5 @@
-// Agenda → "Outras opções": Limpar por período, Bloquear período, Trocar profissional,
-// Copiar dia/semana, Pendências/Status em lote e Exportar. Usa um banco em memória
+// Agenda → "Outras Opções": Limpar por Período, Bloquear Período, Trocar Profissional,
+// Copiar dia/semana, Pendências/Status em Lote e Exportar. Usa um banco em memória
 // (window.__fakeAgd) no lugar do Supabase.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -70,14 +70,14 @@ const path = require('path');
   })()`);
   await page.waitForTimeout(400);
 
-  // Menu "Outras opções" no lugar de "Limpar semana"
+  // Menu "Outras Opções" no lugar de "Limpar Semana"
   const menu = await ev(`(function(){ document.getElementById("agdToolsBtn").click();
     var items = Array.prototype.map.call(document.querySelectorAll("#agdToolsMenu [data-agd-tool]"), function(b){ return b.textContent; });
     document.getElementById("agdToolsBtn").click();
     return {wrap: !document.getElementById("agdToolsWrap").hidden, old: !!document.getElementById("agdClearWeekBtn"), items: items}; })()`);
-  check('Agenda has "Outras opções" with the tools (no Limpar semana button)?', menu.wrap && !menu.old && menu.items.length === 7 && menu.items[0] === 'Limpar por período', JSON.stringify(menu));
+  check('Agenda has "Outras Opções" with the tools (no Limpar Semana button)?', menu.wrap && !menu.old && menu.items.length === 7 && menu.items[0] === 'Limpar por Período', JSON.stringify(menu));
 
-  // Limpar por período: só Ana, tudo; protege status e evolução
+  // Limpar por Período: só Ana, tudo; protege status e evolução
   await ev(`agdOpenClearPeriod()`);
   await page.waitForTimeout(200);
   await ev(`(function(){ document.getElementById("acFrom").value = "2030-01-07"; document.getElementById("acTo").value = "2030-01-11"; document.getElementById("acSee").click(); })()`);
@@ -90,7 +90,7 @@ const path = require('path');
   const undo1 = await ev(`AD_HISTORY.undo[AD_HISTORY.undo.length - 1].before.length`);
   check('Limpar enters the undo history?', undo1 === 3, undo1);
 
-  // Bloquear período: Bia na terça de manhã (livres) com motivo
+  // Bloquear Período: Bia na terça de manhã (livres) com motivo
   await ev(`agdOpenBlockPeriod()`);
   await page.waitForTimeout(200);
   await ev(`(function(){ document.getElementById("abFrom").value = "2030-01-09"; document.getElementById("abTo").value = "2030-01-09";
@@ -106,7 +106,7 @@ const path = require('path');
     return {n: b.length, note: b[0] && b[0].note, morning: b.every(function(r){ return r.time < "12:00"; }), keepsAna: !b.some(function(r){ return r.time === "08:00"; })}; })()`);
   check('Bloquear: blocks free morning slots of Bia (not the 08:00 já marcado), with motivo?', blk.n > 3 && blk.note === 'Férias' && blk.morning && blk.keepsAna && /continuam marcados: 1/.test(bl.prev), JSON.stringify(blk) + ' ' + bl.prev.slice(0, 120));
 
-  // Trocar profissional: Ana → Bia em 07/01–09/01 (a2 tem status, fica)
+  // Trocar Profissional: Ana → Bia em 07/01–09/01 (a2 tem status, fica)
   await ev(`window.__fakeAgd.appointments.push({id: "t1", date: "2030-01-10", time: "13:30", professional_id: "ana-terapeuta", room_id: "r1", patient: "Carla Laranja", note: "", blocked: false, service: "sessao", status: null})`);
   await ev(`agdOpenSwapPeriod()`);
   await page.waitForTimeout(200);
@@ -129,7 +129,7 @@ const path = require('path');
   const cp = await ev(`window.__fakeAgd.appointments.filter(function(r){ return r.date === "2030-01-17"; }).map(function(r){ return r.time + " " + r.patient + " " + (r.status || "-"); }).join(",")`);
   check('Copiar: Thursday copied to next Thursday, without status?', cp === '13:30 Carla Laranja -', cp);
 
-  // Status em lote: marcar Não compareceu em t1
+  // Status em Lote: marcar Não compareceu em t1
   await ev(`agdOpenStatusTool("lote")`);
   await page.waitForTimeout(200);
   await ev(`(function(){ document.querySelectorAll("#asxProfs input:checked").forEach(function(c){ c.checked = false; }); document.getElementById("asxFrom").value = "2030-01-10"; var t = document.getElementById("asxTo"); t.value = "2030-01-10"; t.dispatchEvent(new Event("change", {bubbles: true})); })()`);
@@ -137,10 +137,10 @@ const path = require('path');
   const lote = await ev(`(function(){ var opts = Array.prototype.map.call(document.querySelectorAll("#asxSt option"), function(o){ return o.value; });
     var c = document.querySelector('[data-asx="t1"]'); if (c){ c.checked = true; c.dispatchEvent(new Event("change", {bubbles: true})); }
     document.getElementById("asxSt").value = "nao-compareceu"; return {opts: opts, found: !!c}; })()`);
-  check('Status em lote: lists the day and has no Finalizado option?', lote.found && lote.opts.indexOf('finalizado') === -1 && lote.opts.length > 0, JSON.stringify(lote));
+  check('Status em Lote: lists the day and has no Finalizado option?', lote.found && lote.opts.indexOf('finalizado') === -1 && lote.opts.length > 0, JSON.stringify(lote));
   await page.click('#asxGo'); await page.waitForTimeout(150); await page.click('#cfOk'); await page.waitForTimeout(400);
   const st = await ev(`window.__fakeAgd.appointments.filter(function(r){ return r.id === "t1"; })[0].status`);
-  check('Status em lote applied?', st === 'nao-compareceu', st);
+  check('Status em Lote applied?', st === 'nao-compareceu', st);
   await ev(`document.querySelector('#ovAgdLote [data-tclose]').click()`);
 
   // Pendências: atendimento passado sem status aparece

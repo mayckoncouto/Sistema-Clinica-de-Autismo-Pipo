@@ -1,4 +1,4 @@
-// Cadastros → Médicos: campos Município e Outro telefone, coluna Município e busca pelo município.
+// Cadastros → Médicos: campos Município e Outro Telefone, coluna Município e busca pelo município.
 // Dados 100% fictícios.
 const { chromium } = require('playwright');
 const path = require('path');
@@ -18,7 +18,7 @@ const path = require('path');
   await page.click('#reg-medicos-add'); await page.waitForTimeout(300);
   check('form has Município field?', await page.$('#regf-municipio'));
   const labels = await page.$$eval('.modal label', (l) => l.map((x) => x.textContent.trim()));
-  check('fields: Município then Telefone then Outro telefone?', labels.join('|').indexOf('Município|Telefone|Outro telefone') !== -1, JSON.stringify(labels));
+  check('fields: Município then Telefone then Outro Telefone?', labels.join('|').indexOf('Município|Telefone|Outro Telefone') !== -1, JSON.stringify(labels));
   const nameInput = await page.$('.modal input[type=text]:not([data-regf])');
   await nameInput.fill('Dra. Teste Fictícia');
   await page.fill('#regf-municipio', 'Gaspar');

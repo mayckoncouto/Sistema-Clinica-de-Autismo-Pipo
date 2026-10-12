@@ -1,5 +1,5 @@
-// Cadastro do paciente: grupo "Rotina atual" (segunda a sexta × manhã/tarde, tipo + detalhe),
-// "Copiar segunda" por coluna com Desfazer, gravação, ficha impressa, Campos obrigatórios e
+// Cadastro do Paciente: grupo "Rotina Atual" (segunda a sexta × manhã/tarde, tipo + detalhe),
+// "Copiar Segunda" por coluna com Desfazer, gravação, ficha impressa, Campos Obrigatórios e
 // o aviso ao agendar no Planner e na Agenda (regras pl_rotina / ag_rotina). Dados fictícios.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -23,7 +23,7 @@ const path = require('path');
   await page.waitForSelector('#ovPat');
   const order = await page.$$eval('#ovPat .pm-sec', (r) => r.map((s) => s.getAttribute('data-pmsec')));
   const days = await page.$$eval('#ovPat [data-pmsec="rotinaatual"] tbody th', (r) => r.map((x) => x.textContent));
-  console.log('"Rotina atual" comes right after Escola, Monday to Friday?', order.indexOf('rotinaatual') === order.indexOf('escola') + 1 && days.join() === 'Segunda,Terça,Quarta,Quinta,Sexta', JSON.stringify(order), JSON.stringify(days));
+  console.log('"Rotina Atual" comes right after Escola, Monday to Friday?', order.indexOf('rotinaatual') === order.indexOf('escola') + 1 && days.join() === 'Segunda,Terça,Quarta,Quinta,Sexta', JSON.stringify(order), JSON.stringify(days));
 
   await setv('#rt-seg-m-tipo', 'escola');
   await page.fill('#rt-seg-m-txt', 'Escola Azul');
@@ -34,7 +34,7 @@ const path = require('path');
   const undoShown = await page.isVisible('#rtUndo');
   await page.click('#rtUndoBtn');
   const undone = await page.evaluate(() => document.getElementById('rt-ter-m-tipo').value === '' && document.getElementById('rt-seg-m-tipo').value === 'escola');
-  console.log('"Copiar segunda" copies only that column to Tue–Fri; Desfazer brings back?', copied && undoShown && undone);
+  console.log('"Copiar Segunda" copies only that column to Tue–Fri; Desfazer brings back?', copied && undoShown && undone);
   await page.click('[data-rt-copy="m"]');
 
   await page.fill('#pf-cpf', '52998224725');
@@ -42,11 +42,11 @@ const path = require('path');
   const saved = await page.evaluate(() => (window.__STORE__['patients/all'].list.filter((p) => p.nome === 'Paciente Um')[0] || {}).rotinaAtual);
   console.log('saved: Monday–Friday morning School, Monday afternoon at home?', !(await page.$('#ovPat')) && saved && saved.seg.m.tipo === 'escola' && saved.seg.m.txt === 'Escola Azul' && saved.sex.m.tipo === 'escola' && saved.seg.t.tipo === 'casa' && !saved.ter.t, JSON.stringify(saved));
 
-  // Ficha impressa e Campos obrigatórios.
+  // Ficha impressa e Campos Obrigatórios.
   const ficha = await ev('patientFichaHtml(state.patients.filter(function(p){ return p.nome === "Paciente Um"; })[0])');
-  console.log('printed form has the routine?', /Rotina atual/.test(ficha) && /Manhã: Escola \(Escola Azul\)/.test(ficha) && /Tarde: Em casa/.test(ficha));
+  console.log('printed form has the routine?', /Rotina Atual/.test(ficha) && /Manhã: Escola \(Escola Azul\)/.test(ficha) && /Tarde: Em casa/.test(ficha));
   const inFields = await ev('PAT_FIELDS.some(function(f){ return f.key === "rotinaAtual" && f.sec === "rotinaatual"; }) && PAT_SECTIONS.some(function(s){ return s.id === "rotinaatual"; })');
-  console.log('"Rotina atual" is in Campos obrigatórios (same list as the form)?', inFields === true);
+  console.log('"Rotina Atual" is in Campos Obrigatórios (same list as the form)?', inFields === true);
 
   // Planner: marcar segunda de manhã avisa; segunda à tarde (em casa) não.
   const morning = await ev('DAYS.filter(function(d){ return d.key === "seg"; })[0].morning[1]');
@@ -57,7 +57,7 @@ const path = require('path');
   const m1 = await page.$eval('#confirmHost', (e) => e.textContent);
   await page.click('#cfCancel'); await page.waitForTimeout(200);
   const notSaved = await page.evaluate((k) => !((window.__STORE__['schedule/seg-2'] || {}).bookings || {})[k], morning + '|r1|r1-t1');
-  console.log('Planner: booking on a school morning asks first ("Rotina atual do paciente"); cancel keeps it empty?', t1 === 'Rotina atual do paciente' && /manhã de Escola \(Escola Azul\)/.test(m1) && notSaved, t1, m1);
+  console.log('Planner: booking on a school morning asks first ("Rotina Atual do Paciente"); cancel keeps it empty?', t1 === 'Rotina Atual do Paciente' && /manhã de Escola \(Escola Azul\)/.test(m1) && notSaved, t1, m1);
   await ev(`(function(){ var l = state.patients.filter(function(p){ return p.nome === "Paciente Um"; })[0]; l.rotinaAtual.ter.t = {tipo: "pipo", txt: ""}; return true; })()`);
   const pipoAsk = await ev(`routineConflicts({"ter-2": {"${afternoon}|r1|r1-t1": {patient: "Paciente Um", service: "sessao"}}}).length`);
   console.log("Planner: \"Terapia (Pipo)\" does not warn?", pipoAsk === 0, pipoAsk);
@@ -73,7 +73,7 @@ const path = require('path');
   await page.waitForSelector('#cfTitle');
   const t2 = await page.$eval('#cfTitle', (e) => e.textContent);
   await page.click('#cfCancel'); await page.waitForTimeout(200);
-  console.log('Agenda: booking on a school morning asks first?', t2 === 'Rotina atual do paciente' && (await page.evaluate(() => window.__a)) === false, t2);
+  console.log('Agenda: booking on a school morning asks first?', t2 === 'Rotina Atual do Paciente' && (await page.evaluate(() => window.__a)) === false, t2);
 
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();

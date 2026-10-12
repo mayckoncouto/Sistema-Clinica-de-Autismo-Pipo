@@ -434,7 +434,7 @@
              ((window.pipoNotifAvailable && window.pipoNotifAvailable()) ? '<button type="button" role="menuitem" data-act="notificacoes">Notificações</button>' : ""),
              (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : ""),
              // App instalável: some quando o sistema já está aberto pelo ícone da tela inicial.
-             ((window.pipoInstallApp && !(window.pipoIsInstalled && window.pipoIsInstalled())) ? '<button type="button" role="menuitem" data-act="instalar">Instalar app</button>' : "")],
+             ((window.pipoInstallApp && !(window.pipoIsInstalled && window.pipoIsInstalled())) ? '<button type="button" role="menuitem" data-act="instalar">Instalar App</button>' : "")],
             ['<button type="button" role="menuitem" data-act="sair">Sair</button>']
           ]) +
         "</div>" +
@@ -510,12 +510,12 @@
     if (!host) return;
     host.innerHTML =
       '<div class="overlay" id="ovPwd"><div class="modal" style="max-width:380px">' +
-        '<div class="modal-head"><div><h3>Trocar minha senha</h3>' +
+        '<div class="modal-head"><div><h3>Trocar Minha Senha</h3>' +
           '<div class="modal-sub">Mínimo de 8 caracteres.</div></div>' +
           '<button class="modal-close" id="pwdClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
-          '<div class="field"><label>Nova senha</label><input type="password" id="pwdNew" autocomplete="new-password"></div>' +
-          '<div class="field"><label>Repita a nova senha</label><input type="password" id="pwdNew2" autocomplete="new-password"></div>' +
+          '<div class="field"><label>Nova Senha</label><input type="password" id="pwdNew" autocomplete="new-password"></div>' +
+          '<div class="field"><label>Repita a Nova Senha</label><input type="password" id="pwdNew2" autocomplete="new-password"></div>' +
         "</div>" +
         '<div class="modal-foot"><div class="spacer"></div>' +
           '<button class="btn ghost" id="pwdCancel">Cancelar</button>' +

@@ -2,9 +2,9 @@
 // celular na 1ª linha; Salas troca para "Grupos de Suporte". Dados fictícios.
 const { chromium } = require('playwright');
 const path = require('path');
-const TABS = {pacientes: 'Pacientes', tratamentos: 'Tratamentos', convenios: 'Convênios', motivos: 'Motivos de cancelamento', medicos: 'Médicos',
-  escolas: 'Escolas', diagnosticos: 'Diagnósticos', origens: 'Origens', colaboradores: 'Colaboradores', tiposcolab: 'Tipos de colaborador',
-  especialidades: 'Especialidades', servicos: 'Serviços', cbo: 'CBO', conselhos: 'Conselhos', fornecedores: 'Fornecedores', catfornecedor: 'Categorias de fornecedor', contas: 'Contas bancárias', planocontas: 'Plano de contas', lancamentos: 'Lançamentos', emptomados: 'Empréstimos tomados', empconcedidos: 'Empréstimos concedidos', pagar: 'Contas a pagar', receber: 'Contas a receber', demonstrativos: 'Demonstrativos', salas: 'Salas', feriados: 'Feriados e recessos',
+const TABS = {pacientes: 'Pacientes', tratamentos: 'Tratamentos', convenios: 'Convênios', motivos: 'Motivos de Cancelamento', medicos: 'Médicos',
+  escolas: 'Escolas', diagnosticos: 'Diagnósticos', origens: 'Origens', colaboradores: 'Colaboradores', tiposcolab: 'Tipos de Colaborador',
+  especialidades: 'Especialidades', servicos: 'Serviços', cbo: 'CBO', conselhos: 'Conselhos', fornecedores: 'Fornecedores', catfornecedor: 'Categorias de Fornecedor', contas: 'Contas Bancárias', planocontas: 'Plano de Contas', lancamentos: 'Lançamentos', emptomados: 'Empréstimos Tomados', empconcedidos: 'Empréstimos Concedidos', pagar: 'Contas a Pagar', receber: 'Contas a Receber', demonstrativos: 'Demonstrativos', salas: 'Salas', feriados: 'Feriados e Recessos',
   status: 'Status', objetivos: 'Objetivos', escalas: 'Escalas', habilidades: 'Habilidades'};
 (async () => {
   const browser = await chromium.launch(require('./launch-opts'));

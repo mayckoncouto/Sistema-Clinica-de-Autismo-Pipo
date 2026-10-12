@@ -1,5 +1,5 @@
 // Botões das janelas conforme a permissão (só ver = leitura; sem excluir = sem
-// Excluir), confirmação padrão "Confirmar exclusão" e Inativar/Reativar de
+// Excluir), confirmação padrão "Confirmar Exclusão" e Inativar/Reativar de
 // cadastro em uso, com "Mostrar inativos" e inativos fora das sugestões.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -55,7 +55,7 @@ const path = require('path');
   await page.waitForSelector('#ovCancTr');
   console.log('inactivating asks whether to cancel the active treatment?', await page.isVisible('#ovCancTr'));
   await page.click('#ctNo'); await page.waitForTimeout(150);
-  console.log('"Manter ativo" keeps the treatment active?', (await ev('state.treatments[0].status')) === 'ativo' && !(await page.$('#ovCancTr')));
+  console.log('"Manter Ativo" keeps the treatment active?', (await ev('state.treatments[0].status')) === 'ativo' && !(await page.$('#ovCancTr')));
   await page.$eval('#mainTabs button[data-tab=pacientes]', (b) => b.click()); await page.waitForTimeout(200);
   const nm = raw.nome;
   console.log('inactive patient hidden from the list by default?', !(await page.textContent('#patListHost')).includes(nm));
@@ -69,12 +69,12 @@ const path = require('path');
   await page.click('#pDeleteReactivate'); await page.waitForTimeout(300);
   console.log('reactivated?', (await ev(`state.patientsRaw.filter(function(p){ return p.id === "${patId}"; })[0].inativo`)) === false);
 
-  // Convênio sem uso: Excluir com a janela "Confirmar exclusão".
+  // Convênio sem uso: Excluir com a janela "Confirmar Exclusão".
   await ev(`state.convenios = [{id: "cv-livre", name: "Convênio Livre"}]; renderRegistryTab("convenios");`);
   await ev(`openRegistryItem("convenios", state.convenios[0])`);
   await page.waitForFunction(() => document.getElementById('regDel') && document.getElementById('regDel').textContent === 'Excluir');
   await page.click('#regDel'); await page.waitForSelector('#cfOk');
-  console.log('unused item: standard "Confirmar exclusão" dialog?', (await page.textContent('#cfTitle')) === 'Confirmar exclusão' && (await page.textContent('#cfOk')) === 'Confirmar exclusão');
+  console.log('unused item: standard "Confirmar Exclusão" dialog?', (await page.textContent('#cfTitle')) === 'Confirmar Exclusão' && (await page.textContent('#cfOk')) === 'Confirmar Exclusão');
   await page.click('#cfOk'); await page.waitForTimeout(200);
   console.log('deleted after confirming?', (await ev('state.convenios.length')) === 0);
 

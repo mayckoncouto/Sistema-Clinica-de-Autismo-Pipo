@@ -55,7 +55,7 @@ const path = require('path');
   const nAreas = await page.$$eval('#reg-habilidades-host tbody tr', (r) => r.length);
   console.log('8 skill areas pre-registered?', nAreas === 8, nAreas);
 
-  // Habilidades: "Especialidades sugeridas" (Comunicação → Fonoaudiologia).
+  // Habilidades: "Especialidades Sugeridas" (Comunicação → Fonoaudiologia).
   await page.locator('#reg-habilidades-host tbody tr', { hasText: 'Comunicação' }).click(); await page.waitForSelector('#ovReg');
   const habName = await page.$eval('#regName', (e) => e.value);
   await page.$eval('#regHabSpecs input[value="fono"]', (e) => { e.checked = true; e.dispatchEvent(new Event('change', { bubbles: true })); });
@@ -188,7 +188,7 @@ const path = require('path');
   await setv('#sfCompl select[data-compl="0"]', 'fono');
   await page.click('#profSave'); await page.waitForTimeout(400);
   const compl = await ev('JSON.stringify((state.professionals.filter(function(p){ return p.id === "ana-terapeuta"; })[0] || {}).complementares)');
-  console.log('Áreas complementares saved on the professional?', compl === '["fono"]', compl);
+  console.log('Áreas Complementares saved on the professional?', compl === '["fono"]', compl);
 
   // Aviso de área: profissional fora das especialidades do tratamento (Bruno: psico + fono).
   await ev('(function(){ state.professionals = state.professionals.concat([{id: "tito", name: "Tito", specialtyId: "to"}]); })()');
@@ -201,7 +201,7 @@ const path = require('path');
   await ev('(function(){ state.professionals = state.professionals.map(function(p){ return p.id === "tito" ? Object.assign({}, p, {complementares: []}) : p; }); state.rooms = state.rooms.map(function(r){ return r.id !== "r1" ? r : Object.assign({}, r, {therapists: r.therapists.map(function(t){ return t.id === "r1-t1" ? Object.assign({}, t, {professionalId: "tito"}) : t; })}); }); applyBookingChanges({"seg-1": {"09:20|r1|r1-t1": {patient: "Bruno Verde", note: ""}}}); })()');
   await page.waitForSelector('#cfTitle');
   const cfT = await page.$eval('#cfTitle', (e) => e.textContent);
-  console.log('Planner asks before booking outside the treatment specialties?', /fora das especialidades/.test(cfT), cfT);
+  console.log('Planner asks before booking outside the treatment specialties?', /fora das especialidades/i.test(cfT), cfT);
   await page.click('#cfCancel'); await page.waitForTimeout(200);
   const notSaved = await ev('!((state.scheduleDocs["seg-1"] || {}).bookings || {})["09:20|r1|r1-t1"]');
   console.log('cancel keeps the slot empty?', notSaved);
@@ -240,7 +240,7 @@ const path = require('path');
   const lst = await page.evaluate(() => { const l = document.querySelector('.pl-goal-pop .pl-goal-list'); const kids = Array.prototype.map.call(l.children, (x) => x.classList.contains('pl-goal-grp') ? '#' + x.textContent : (x.querySelector('.autolist-name') || x).textContent); return kids; });
   const iGrp = lst.indexOf('#Outras faixas etárias');
   console.log('age band shown as [0–4] before the name; other bands after "Outras faixas etárias"; "+ Incluir objetivo" last?',
-    iGrp > lst.indexOf('[5–9] Contar o fim de semana') && lst.indexOf('[0–4] Apontar para pedir') > iGrp && /Incluir objetivo/.test(lst[lst.length - 1]), JSON.stringify(lst));
+    iGrp > lst.indexOf('[5–9] Contar o fim de semana') && lst.indexOf('[0–4] Apontar para pedir') > iGrp && /Incluir Objetivo/.test(lst[lst.length - 1]), JSON.stringify(lst));
   await page.click('.pl-goal-pop [data-goal-new]'); await page.waitForSelector('#ovGoal');
   const preArea = await page.$eval('#glArea', (e) => e.value);
   const preAge = await page.$$eval('#glAges input:checked', (r) => r.map((x) => x.value).join());
@@ -327,15 +327,15 @@ const path = require('path');
   const goalsFirst = await page.$eval('#ovAgdDet .modal-body', (b) => { var g = b.querySelector('#agdDetGoals'), st = b.querySelector('#agdDetStatus'); return !st || !!(g.compareDocumentPosition(st) & Node.DOCUMENT_POSITION_FOLLOWING); });
   const objTitle = await page.$eval('#agdDetGoals .ag-obj-title', (e) => e.textContent);
   console.log('details: Agendamento/Saúde/Tratamento selector, panes with the asked fields, Objetivos before Status?',
-    tabs.join() === 'Agendamento,Saúde,Tratamento' && agPane === 'Serviço|Sala|Data/Hora|Observação' && saPane.vis && agHidden && saPane.keys === 'Diagnóstico (CID)|Alergias|Medicações em uso|Restrições alimentares' && trKeys === 'Plano|ABA|Horários'&& goalsFirst && objTitle === 'Objetivos',
+    tabs.join() === 'Agendamento,Saúde,Tratamento' && agPane === 'Serviço|Sala|Data/Hora|Observação' && saPane.vis && agHidden && saPane.keys === 'Diagnóstico (CID)|Alergias|Medicações em Uso|Restrições Alimentares' && trKeys === 'Plano|ABA|Horários'&& goalsFirst && objTitle === 'Objetivos',
     JSON.stringify({tabs, agPane, saPane, trKeys, goalsFirst, objTitle}));
   await page.click('[data-ag-box="own"] [data-ag-toggle]');
   const nOpen = await page.$$eval('#agdDetGoals .ag-obj-line', (r) => r.filter((l) => !l.closest('[hidden]')).length);
   console.log('"Objetivos do paciente" reveals the specific ones?', nOpen === 2, nOpen);
   const editBtn = await page.$('#agdDetEdit');
-  console.log('details has "Editar agendamento" for who can edit?', !!editBtn);
+  console.log('details has "Editar Agendamento" for who can edit?', !!editBtn);
   await editBtn.click(); await page.waitForSelector('#ovAgd');
-  console.log('"Editar agendamento" opens the edit window?', !!(await page.$('#ovAgd')));
+  console.log('"Editar Agendamento" opens the edit window?', !!(await page.$('#ovAgd')));
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; delete AD.rows.r2; agdOpenDetails(AD.rows.r1); })()`);
   await page.waitForSelector('#agdDetGoals .ag-obj-line', {state: 'attached'});
   const alone = await page.$eval('#agdDetGoals', (h) => ({n: h.querySelectorAll('.ag-obj-line').length, more: !!h.querySelector('[data-ag-box="own"]')}));
@@ -348,7 +348,7 @@ const path = require('path');
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; AD.rows.r1.status = ""; agdOpenDetails(AD.rows.r1); })()`);
   const open = await page.$eval('#agdDetStatus', (e) => !e.disabled);
   console.log('therapist cannot change a finalized status (others still can)?', locked && lockMsg && open, JSON.stringify({locked, lockMsg, open}));
-  // Podem retirar acima do nome; Medida protetiva em quadro vermelho só quando há medida ativa.
+  // Podem retirar acima do nome; Medida Protetiva em quadro vermelho só quando há medida ativa.
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = "";
     state.patientsRaw = state.patientsRaw.map(function(p){ return p.id !== "ana-azul" ? p : Object.assign({}, p, {mae: {nome: "Mara Azul"}, rotina: [], protetiva: [{nome: "Jorge", rel: "Pai"}]}); });
     rebuildPatients(); agdOpenDetails(AD.rows.r1); })()`);
@@ -381,7 +381,7 @@ const path = require('path');
   const gcMsg = await page.$eval('#confirmHost', (e) => e.textContent);
   await page.click('#cfCancel');
   const gcRes = await page.evaluate(() => window.__gc);
-  console.log('booking a patient with a plan and no objective in common asks first?', gcTitle === 'Sem objetivos em comum' && /Duda Vermelho/.test(gcMsg) && /Ana Azul/.test(gcMsg) && gcRes === false, gcTitle, gcRes);
+  console.log('booking a patient with a plan and no objective in common asks first?', gcTitle === 'Sem Objetivos em Comum' && /Duda Vermelho/.test(gcMsg) && /Ana Azul/.test(gcMsg) && gcRes === false, gcTitle, gcRes);
   // Grupo de suporte nos Detalhes: Agendamento | Pacientes (da sala no horário) e objetivos em comum + de cada paciente.
   await ev(`(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = "";
     AD.rows = {g1: {id: "g1", date: "2026-10-12", time: "08:00", professional_id: "ana-terapeuta", patient: "Coordenador", group_id: "coord", room_id: "r1", status: ""},
@@ -415,7 +415,7 @@ const path = require('path');
   console.log('group details read the room patients from the database when the week does not have them?', /^group_slot_appointments:g1\|.*Ana Azul/.test(gDb), gDb);
   await ev('(function(){ delete window.__planProfId; document.getElementById("modalHost").innerHTML = ""; AD.rows = {}; })()');
 
-  // Relatório "Evolução por habilidade" (planos vigentes).
+  // Relatório "Evolução por Habilidade" (planos vigentes).
   const rep = JSON.parse(await ev('JSON.stringify(RP_BUILDERS["evolucao-habilidade"]([], {from: "2000-01-01", to: "2100-01-01", pac: "", prof: ""}))'));
   const bruno = rep.sections[1].rows.filter((r) => r[0] === 'Bruno Verde')[0];
   const repTito = JSON.parse(await ev('JSON.stringify(RP_BUILDERS["evolucao-habilidade"]([], {from: "2000-01-01", to: "2100-01-01", pac: "", prof: "tito"}))'));

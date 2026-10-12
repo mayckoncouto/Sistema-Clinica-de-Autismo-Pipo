@@ -172,7 +172,7 @@ const path = require('path');
   // ---- TEST: each header row has its own row-title in the leftmost column, instead
   // of one merged "Paciente" label spanning all four rows ----
   const cornerLabels = (await page.locator('.report-table thead .rpt-corner').allInnerTexts()).map(s => s.trim());
-  console.log('the four header rows have their own titles (Especialidades / Total por especialidade / Profissionais / Total por Profissional)?',
+  console.log('the four header rows have their own titles (Especialidades / Total por Especialidade / Profissionais / Total por Profissional)?',
     cornerLabels.length === 4 &&
     cornerLabels[0].toLowerCase() === 'especialidades' &&
     cornerLabels[1].toLowerCase() === 'total por especialidade' &&

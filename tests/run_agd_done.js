@@ -177,7 +177,7 @@ const path = require('path');
     state.treatments = savedTr.concat([{id: "trx", patientId: "zz", inicio: "2026-01-01", status: "cancelado", convenio: "unimed velha"}]);
     rebuildPatients();
     CRM.tasks = {t9: {id: "t9", list_id: "atend", status: "novo", lead: {nome: "L", origem: "instagram", diagnostico: "F84.0 Autismo infantil", convenio: "Unimed Velha"}}};
-    return Promise.all([regRenameEverywhere("origens", "Instagram", "Redes sociais", "x"), regRenameEverywhere("diagnosticos", "F84.0 Autismo infantil", "F84.0 Autismo", "y")])
+    return Promise.all([regRenameEverywhere("origens", "Instagram", "Redes Sociais", "x"), regRenameEverywhere("diagnosticos", "F84.0 Autismo infantil", "F84.0 Autismo", "y")])
       .then(function(){ return regRenameEverywhere("convenios", "Unimed Velha", "Unimed", "cv"); })
       .then(function(){
         var r = rawPatient(pid), l = CRM.tasks.t9.lead, t = state.treatments.filter(function(x){ return x.id === "trx"; })[0];
@@ -185,7 +185,7 @@ const path = require('path');
         CRM.tasks = savedT; state.treatments = savedTr; return out;
       });
   })()`);
-  check('rename registry text: patients, leads and treatments updated?', rn.join('|') === 'Redes sociais|F84.0 Autismo|Redes sociais|F84.0 Autismo|Unimed|Unimed', rn);
+  check('rename registry text: patients, leads and treatments updated?', rn.join('|') === 'Redes Sociais|F84.0 Autismo|Redes Sociais|F84.0 Autismo|Unimed|Unimed', rn);
 
   // Item 15: excluir tarefa avisa quantos comentários saem junto.
   const td = await ev(`(function(){

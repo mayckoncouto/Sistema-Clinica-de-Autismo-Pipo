@@ -74,7 +74,7 @@ const path = require('path');
   const d1 = row(await ev('dispCompute([1])'), 'seg', T);
   check('booking Ana: atendidos +1 and her free slots drop?', (d1.at[specA] || 0) === (d0.at[specA] || 0) + 1 && (d1.free[specA] || 0) < (d0.free[specA] || 0), JSON.stringify({d0, d1}));
 
-  // Bloqueio de horário na coluna da Bia: livres −1 e NÃO entra em Bloqueios (fica fora da conta).
+  // Bloqueio de Horário na coluna da Bia: livres −1 e NÃO entra em Bloqueios (fica fora da conta).
   const bBefore = d1.free[specB] || 0;
   await setBk('seg-1', `${T}|r1|r1-t2`, {patient: '', lock: true});
   const d2 = row(await ev('dispCompute([1])'), 'seg', T);
