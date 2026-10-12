@@ -4248,3 +4248,19 @@ especialidades do tratamento (Especialidade + Quantidade Semanal).
 
 - (2026-10-12, pedido do usuário: "em editar automação tem que ter campo da lista e do status quando necessário") A janela da automação ganhou **Status da Tarefa Criada** (`#crmaStatus`, os status que NÃO finalizam da lista escolhida — ou da padrão —, refeito ao trocar a lista; em branco = o 1º; `rules.<regra>.statusId`; não existe nas regras de lista vigiada: rodízio, tarefa parada e vencida) e **Status que Dispara** (`#crmaGat`, só `lead_perdido` = status de perda e `contrato_assinado` = status que finaliza sem ser perda, dos funis; `rules.<regra>.gatilho`; em branco = qualquer um; `CRMA_RULES[].gat`). A coluna Lista mostra "Gestão › Em andamento". Banco: migração `supabase/2026-10-12i-crm-automacoes-status.sql` (`crm_auto_make` usa `crm_rec_status(lista, statusId)` — status que não existe na lista cai no 1º — e `tasks_auto_status` lê `gatilho`; testada no PGlite, linha 110 da conferência de migrações; `schema.sql` e `conferencia-geral.sql` atualizados). Testes em `tests/run_crm_auto.js`.
 - Produção (2026-10-12): `2026-10-12i-crm-automacoes-status` rodada pelo conector (`status_na_criacao` e `gatilho` = true, 0 funções abertas).
+
+## Planner ▾ Outras Opções → Auto Planner (2026-10-12)
+Pedido do usuário: "Janela Auto Planner". Primeira entrega = modo **Completar o que Falta** (decisões anteriores do usuário
+sobre rotina fixa, sessões seguidas, listar quem não coube etc. valem; ficam para depois: reorganizar um paciente/tudo,
+irmãos juntos, folga por turno, intervalo entre "não ABA", marca "montado pelo tratamento").
+- Botão `#autoPlannerBtn` em Outras Opções (permissão: incluir no Planner) → `openAutoPlannerModal()` (bloco antes de "Planner → Agenda").
+  Paciente (ou todos com tratamento ativo) → **Montar Proposta** (`apBuild(pacientes)`) → prévia por paciente (caixa para tirar) +
+  tabela **Não Couberam** (paciente, quadro, faltam, motivo) → **Aplicar (N)**: reconfere cada sugestão com o Planner de agora e grava
+  tudo num único `applyBookingChanges` (entra no desfazer, Ctrl+Z). Nada é gravado antes.
+- Regras: lê `patientSpecRows(p)` (quadros com sessões/mês > 0); conta o que o paciente já tem por quadro (`treatLineFor`) e propõe só a
+  diferença; sessões/mês divididas pelas semanas permitidas (`semanas` do quadro), semana com sessão a mais recebe o resto. Colunas:
+  sala (não grupo), profissional do quadro (ou quem tem a especialidade como principal), sala do quadro; dia/horário do quadro quando preenchidos.
+  Célula livre, `seatAvailable`, `plLockInfo`, `patientSlotOk`, rotina atual (`routineConflictMsg`) e `plannerConflict`. Pontuação: repetir o
+  MESMO dia/horário/coluna das outras semanas (rotina da família), dias diferentes na semana, sessões seguidas (`seguidas`). As sugestões
+  entram temporariamente em `state.scheduleDocs` durante o cálculo (`apPut`/`apRestore`) para as regras enxergarem umas às outras.
+- Ajuda: tópico `planner-ferramentas`. Teste `tests/run_auto_planner.js` (no `npm test`). Sem SQL.
