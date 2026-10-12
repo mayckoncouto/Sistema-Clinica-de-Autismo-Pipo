@@ -177,7 +177,7 @@
         return fetchDoc(path).then(function (d) { return snap(d); });
       },
       set: function (obj) {
-        return client.from("documents").upsert({ path: path, data: obj }, { onConflict: "path" }).then(function (r) {
+        return client.from("documents").upsert({ path: path, data: obj }, { onConflict: "path,unit_id" }).then(function (r) {
           if (r.error) {
             // O app já aplicou a mudança na tela; recarrega o valor real do
             // banco para desfazê-la visualmente.
@@ -352,6 +352,28 @@
     if (!mgr) return want && want !== own ? { erro: true } : { id: own };
     var ok = units.some(function (u) { return u.id === want; });
     return { id: ok ? want : (units.some(function (u) { return u.id === own; }) ? own : (units[0] ? units[0].id : own)) };
+  }
+  // A unidade que a Gestão está usando vai no token (user_metadata.active_unit): é por ele que o banco separa os dados
+  // (active_unit() em supabase/2026-10-12l). Quem não é da Gestão usa sempre a do próprio perfil.
+  function jwtUnit(token) {
+    try {
+      var b = String(token || "").split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      while (b.length % 4) b += "=";
+      var j = JSON.parse(decodeURIComponent(escape(atob(b))));
+      return (j.user_metadata && j.user_metadata.active_unit) || "";
+    } catch (e) { return ""; }
+  }
+  function syncTokenUnit(p, id) {
+    if (!(p.role && p.role.is_manager) || !session) return Promise.resolve();
+    if ((jwtUnit(session.access_token) || p.unit_id || "unidade-1") === id) return Promise.resolve();
+    return client.auth.updateUser({ data: { active_unit: id } }).then(function (r) {
+      if (r && r.error) throw r.error;
+      return client.auth.refreshSession();
+    }).then(function (r) {
+      if (r && r.error) throw r.error;
+      if (r && r.data && r.data.session) session = r.data.session;
+      if (client.realtime && client.realtime.setAuth && session) client.realtime.setAuth(session.access_token);
+    });
   }
   function setCurrentUnit(id) {
     currentUnit = { id: id, name: unitName(id) };
@@ -651,10 +673,12 @@
           showLogin("Você não tem acesso a esta unidade.");
           return;
         }
-        setCurrentUnit(u.id);
-        hideLogin();
-        setProfile(p);
-        readyResolve(true);
+        return syncTokenUnit(p, u.id).then(function () {
+          setCurrentUnit(u.id);
+          hideLogin();
+          setProfile(p);
+          readyResolve(true);
+        });
       });
     }).catch(function (e) {
       showLogin("Não foi possível carregar seu perfil: " + (e.message || e));

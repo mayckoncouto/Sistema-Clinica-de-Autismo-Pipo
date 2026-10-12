@@ -21,6 +21,8 @@ const path = require('path');
           onAuthStateChange: function(f){ ls.push(f); },
           getSession: function(){ return Promise.resolve({data: {session: sess()}}).then(function(r){ if (r.data.session) setTimeout(function(){ ls.forEach(function(f){ f('SIGNED_IN', r.data.session); }); }, 0); return r; }); },
           signInWithPassword: function(){ var s = {access_token: 't', user: {id: 'u1'}}; sessionStorage.setItem('__s', JSON.stringify(s)); setTimeout(function(){ ls.forEach(function(f){ f('SIGNED_IN', s); }); }, 0); return Promise.resolve({error: null}); },
+          updateUser: function(a){ (window.__upd = window.__upd || []).push(a.data.active_unit); window.__tokUnit = a.data.active_unit; return Promise.resolve({error: null}); },
+          refreshSession: function(){ var c = sess() || {user: {id: 'u1'}}; var n = {access_token: 'jwt-' + window.__tokUnit, user: c.user}; sessionStorage.setItem('__s', JSON.stringify(n)); return Promise.resolve({data: {session: n}, error: null}); },
           signOut: function(){ sessionStorage.removeItem('__s'); ls.forEach(function(f){ f('SIGNED_OUT', null); }); return Promise.resolve({}); }
         },
         rpc: function(n){ return Promise.resolve({data: n === 'login_units' ? window.__cfg.units : null, error: null}); },
@@ -82,6 +84,7 @@ const path = require('path');
   s = await open({ units, profile: profile(role({ id: 'administrador', name: 'Administrador', is_admin: true }), 'unidade-1') });
   await login(s.page, 'unidade-1');
   await s.page.waitForSelector('#userPill .user-name');
+  check('non-manager never changes the token unit?', (await s.page.evaluate(() => (window.__upd || []).length)) === 0);
   check('Administrador has no unit switch?', !(await s.page.$('#userPill select[data-unit-switch]')));
   check('Administrador: isAdmin yes, isManager no, Unidades no?', await s.page.evaluate(() => window.pipoAuth.isAdmin() && !window.pipoAuth.isManager() && window.pipoAuth.can('unidades', 'view') === false && window.pipoAuth.can('pacientes', 'delete') === true));
   await s.ctx.close();
@@ -91,6 +94,7 @@ const path = require('path');
   await login(s.page, 'unidade-2');
   await s.page.waitForSelector('#userPill select[data-unit-switch]');
   check('Gestão enters the chosen unit?', (await s.page.$eval('#userPill select[data-unit-switch]', (e) => e.value)) === 'unidade-2' && (await s.page.evaluate(() => window.pipoAuth.unit().id)) === 'unidade-2');
+  check('Gestão in another unit asks the token to carry the active unit?', (await s.page.evaluate(() => (window.__upd || []).join())) === 'unidade-2');
   check('Gestão can see Unidades?', await s.page.evaluate(() => window.pipoAuth.can('unidades', 'view') === true && window.pipoAuth.isManager()));
   await Promise.all([s.page.waitForNavigation(), s.page.selectOption('#userPill select[data-unit-switch]', 'unidade-1')]);
   await s.page.waitForSelector('#userPill select[data-unit-switch]');

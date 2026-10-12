@@ -4320,3 +4320,17 @@ novos no lugar dos outros (a desenhar na fase do Financeiro/Relatórios, "mais a
 - Testes: `tests/run_unidades.js` (cadastro) e `tests/run_login_units.js` (login com Supabase simulado: lista, recusa, Gestão, seletor).
 - Próximas fases (ver plano acima): 2) coluna de unidade nas tabelas + regras do banco + carga/tempo real filtrados; 3) salas/Planner/Agenda/Clínica; 4) pessoas e clínico;
   5) Financeiro + visão consolidada; 6) CRM, automações, link de cadastro, notificações, conector, backup por unidade; 7) comparativo e revisão.
+
+### Unidades — Fase 2 (2026-10-12): infraestrutura de separação no banco (sem mudar o uso)
+Migrações (rodadas em produção pelo conector, testadas no PGlite com 2 unidades; linhas 113–115 de `conferencia-migracoes.sql`; `schema.sql` e `conferencia-geral.sql` atualizados):
+- `2026-10-12l-unidades-fase2a-documentos.sql`: `documents.unit_id` (`'empresa'` para os documentos da empresa, definido por `doc_scope(path)`; unidade para os demais), índice único `(path, unit_id)`
+  (a PK antiga `(path)` continua até a etapa final), `active_unit()`, gatilho `documents_0_unit_stamp`, política RESTRICTIVE `documents_unit`; `patch_bookings`/`patch_list`/`patch_list2` e
+  `documents_enforce` usam `(path, unit_id)`.
+- `2026-10-12m-unidades-fase2b-tabelas.sql`: `unit_id` + `unit_stamp()` (gatilho `<t>_0_unit_stamp`) + política RESTRICTIVE `<t>_unit` nas 19 tabelas com dados da unidade.
+- `2026-10-12n-unidades-fase2c-funcoes.sql`: view `documents_u` (definer, sem acesso direto) e 31 funções security definer reescritas para ler dela; `crm_people`, `intake_form`/`intake_send`
+  (marcam `pipo.unit` pelo link), `intake_remind` e relatórios filtram pela unidade.
+- Regra: a unidade ativa vem do token (`user_metadata.active_unit`, só vale para `is_manager()`), senão `profiles.unit_id`; sem usuário (cron, link público, restauração) vale o GUC `pipo.unit`.
+- App: `js/pipo-supabase.js` usa `onConflict: "path,unit_id"` e, para a Gestão em outra unidade, `syncTokenUnit` grava `active_unit` (`updateUser` + `refreshSession`) antes de abrir; `api/config.js`
+  lê a Clínica da `unidade-1` (marca por unidade vem na Fase 3); `api/admin-backup.js` leva/restaura `unit_id` (documentos por `path,unit_id`). Testes: `run_login_units.js`, `run_backup_api.js`.
+- FALTA (etapa final, só depois de o app novo estar publicado): trocar a PK de `documents` para `(path, unit_id)` em migração `2026-10-12o-unidades-fase2d-chave-final.sql` (linha 116 da conferência); depois criar documento em outra unidade.
+- Próximas fases: 3) Salas/Planner/Agenda/Clínica por unidade (marca no login por unidade); 4) pessoas e clínico; 5) Financeiro; 6) CRM e demais; 7) revisão.

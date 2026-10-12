@@ -62,24 +62,24 @@ async function readJson(req) {
 // Colunas de usuário apontam para auth.users: usuário que não existe mais vira null.
 var TABLES = {
   documents: {
-    key: "path",
-    cols: ["path", "data", "updated_at", "updated_by"],
+    key: "path,unit_id",
+    cols: ["unit_id", "path", "data", "updated_at", "updated_by"],
     users: ["updated_by"]
   },
   appointments: {
     key: "id",
-    cols: ["id", "date", "time", "professional_id", "room_id", "patient", "note", "blocked", "service",
+    cols: ["unit_id", "id", "date", "time", "professional_id", "room_id", "patient", "note", "blocked", "service",
            "source", "status", "patient_id", "group_id", "created_by", "updated_by", "created_at", "updated_at"],
     users: ["created_by", "updated_by"]
   },
   patient_health: {
     key: "patient_id",
-    cols: ["patient_id", "data", "updated_at", "updated_by"],
+    cols: ["unit_id", "patient_id", "data", "updated_at", "updated_by"],
     users: ["updated_by"]
   },
   treatment_finance: {
     key: "treatment_id",
-    cols: ["treatment_id", "valor", "descontos", "updated_at", "updated_by"],
+    cols: ["unit_id", "treatment_id", "valor", "descontos", "updated_at", "updated_by"],
     users: ["updated_by"]
   },
   convenio_finance: {
@@ -89,51 +89,51 @@ var TABLES = {
   },
   bank_account_finance: {
     key: "account_id",
-    cols: ["account_id", "saldo_inicial", "data_saldo", "updated_at", "updated_by"],
+    cols: ["unit_id", "account_id", "saldo_inicial", "data_saldo", "updated_at", "updated_by"],
     users: ["updated_by"]
   },
   finance_entries: {
     key: "id",
-    cols: ["id", "account_id", "data", "descricao", "plan_id", "valor", "data_extrato", "valor_extrato", "obs", "origem_key",
+    cols: ["unit_id", "id", "account_id", "data", "descricao", "plan_id", "valor", "data_extrato", "valor_extrato", "obs", "origem_key",
            "created_at", "created_by", "updated_at", "updated_by"],
     users: ["created_by", "updated_by"]
   },
   finance_statement_lines: {
     key: "id",
-    cols: ["id", "account_id", "data", "descricao", "valor", "doc", "key", "entry_id", "matched_at", "matched_by", "created_at", "created_by"],
+    cols: ["unit_id", "id", "account_id", "data", "descricao", "valor", "doc", "key", "entry_id", "matched_at", "matched_by", "created_at", "created_by"],
     users: ["matched_by", "created_by"]
   },
   finance_loans: {
     key: "id",
-    cols: ["id", "sentido", "descricao", "contraparte", "supplier_id", "account_id", "valor", "tipo", "taxa", "parcelas", "liberacao",
+    cols: ["unit_id", "id", "sentido", "descricao", "contraparte", "supplier_id", "account_id", "valor", "tipo", "taxa", "parcelas", "liberacao",
            "primeiro_venc", "obs", "created_at", "created_by", "updated_at", "updated_by"],
     users: ["created_by", "updated_by"]
   },
   finance_payables: {
     key: "id",
-    cols: ["id", "vencimento", "descricao", "plan_id", "account_id", "supplier_id", "valor", "entry_id", "grupo", "parcela", "parcelas",
+    cols: ["unit_id", "id", "vencimento", "descricao", "plan_id", "account_id", "supplier_id", "valor", "entry_id", "grupo", "parcela", "parcelas",
            "obs", "linhas", "loan_id", "created_at", "created_by", "updated_at", "updated_by"],
     users: ["created_by", "updated_by"]
   },
   staff: {
     key: "id",
-    cols: ["id", "professional_id", "data", "updated_at", "updated_by"],
+    cols: ["unit_id", "id", "professional_id", "data", "updated_at", "updated_by"],
     users: ["updated_by"]
   },
   staff_pay: {
     key: "staff_id",
-    cols: ["staff_id", "data", "updated_at", "updated_by"],
+    cols: ["unit_id", "staff_id", "data", "updated_at", "updated_by"],
     users: ["updated_by"]
   },
   therapy_plans: {
     key: "id",
-    cols: ["id", "patient_id", "patient_name", "version", "status", "plan_date", "review_date", "summary", "sections",
+    cols: ["unit_id", "id", "patient_id", "patient_name", "version", "status", "plan_date", "review_date", "summary", "sections",
            "prev_id", "created_by", "created_by_name", "created_at", "updated_by", "updated_by_name", "updated_at"],
     users: ["created_by", "updated_by"]
   },
   clinical_records: {
     key: "id",
-    cols: ["id", "patient_id", "patient_name", "appointment_id", "appointment_date", "appointment_time",
+    cols: ["unit_id", "id", "patient_id", "patient_name", "appointment_id", "appointment_date", "appointment_time",
            "professional_id", "author_id", "author_name", "content", "plan_goals", "created_at", "updated_at"],
     users: ["author_id"]
   },
@@ -195,7 +195,7 @@ module.exports = async function handler(req, res) {
 
     var clean = [];
     rows.forEach(function (r) {
-      if (!r || typeof r !== "object" || r[cfg.key] == null || r[cfg.key] === "") return;
+      if (!r || typeof r !== "object" || r[cfg.key.split(",")[0]] == null || r[cfg.key.split(",")[0]] === "") return;
       // Cópias anteriores a 2026-10-07: coluna "despesas" virou "descontos".
       if (body.table === "treatment_finance" && r.descontos === undefined && r.despesas !== undefined) r = Object.assign({}, r, { descontos: r.despesas });
       var o = {};

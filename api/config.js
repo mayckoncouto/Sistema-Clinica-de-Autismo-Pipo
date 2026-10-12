@@ -25,7 +25,7 @@ async function clinicInfo(url) {
   var ctrl = typeof AbortController === "function" ? new AbortController() : null;
   var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 2500) : null;
   try {
-    var r = await fetch(url + "/rest/v1/documents?path=eq.config%2Fclinic&select=data", { headers: h, signal: ctrl ? ctrl.signal : undefined });
+    var r = await fetch(url + "/rest/v1/documents?path=eq.config%2Fclinic&unit_id=eq.unidade-1&select=data", { headers: h, signal: ctrl ? ctrl.signal : undefined });
     if (!r.ok) return undefined;
     var rows = await r.json();
     var d = (rows && rows[0] && rows[0].data) || {};

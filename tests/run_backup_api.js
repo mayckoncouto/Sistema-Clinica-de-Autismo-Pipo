@@ -38,6 +38,9 @@ function run(payload) {
   check("appointments still use upsert?", r2.code === 200 && calls.some((c) => c.url.includes("/rest/v1/appointments?on_conflict=id")));
   const r3 = await run({ action: "restore", table: "profiles", rows: [{ id: "x" }] });
   check("profiles cannot be restored?", r3.code === 400);
+  calls.length = 0;
+  const r5 = await run({ action: "restore", table: "documents", rows: [{ path: "patients/all", unit_id: "unidade-1", data: { list: [] } }] });
+  check("documents restore keeps the unit and uses (path, unit_id)?", r5.code === 200 && calls.some((c) => c.url.includes("/rest/v1/documents?on_conflict=path,unit_id")) && JSON.parse(calls.find((c) => c.url.includes("/rest/v1/documents")).opts.body)[0].unit_id === "unidade-1");
   global.__mgr = false;
   const r4 = await run({ action: "restore", table: "tasks", rows: [{ id: "t9", list_id: "a", status: "s", title: "T" }] });
   check("Administrador (not Gestão) cannot restore?", r4.code === 403);
