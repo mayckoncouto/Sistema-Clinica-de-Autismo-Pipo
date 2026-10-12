@@ -113,7 +113,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (99, '2026-10-11i-convenio-no-paciente',            exists(select 1 from fx where proname = 'intake_send' and prosrc like '%carteirinhaValidade%'), 'convênio, plano e carteirinha no cadastro do paciente (link e dados)'),
  (100, '2026-10-11j-financeiro-base',                exists(select 1 from pg_tables where schemaname = 'public' and tablename = 'bank_account_finance'), 'Financeiro Fase 1: categorias de fornecedor, contas bancárias, plano de contas e saldo inicial protegido'),
  (101, '2026-10-11k-financeiro-lancamentos',       exists(select 1 from pg_tables where schemaname = 'public' and tablename = 'finance_entries'), 'Financeiro Fase 2: lançamentos (tabela protegida pela permissão Financeiro)'),
- (102, '2026-10-12-demonstrativos',                 exists(select 1 from pg_constraint where conname = 'documents_path_valid' and pg_get_constraintdef(oid) like '%dre_views%'), 'Demonstrativos: visões salvas do DRE (caminho permitido e módulo)')
+ (102, '2026-10-12-demonstrativos',                 exists(select 1 from pg_constraint where conname = 'documents_path_valid' and pg_get_constraintdef(oid) like '%dre_views%'), 'Demonstrativos: visões salvas do DRE (caminho permitido e módulo)'),
+ (103, '2026-10-12b-fechamento-de-mes',              exists(select 1 from pg_tables where schemaname = 'public' and tablename = 'finance_closings'), 'Demonstrativos: fechamento de mês (trava dos lançamentos), histórico e anotações das células')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

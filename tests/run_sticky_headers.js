@@ -28,7 +28,6 @@ const TABS = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'es
       const r = await page.evaluate(async (t) => {
         const btn = document.querySelector('#mainTabs button[data-tab="' + t + '"]'); if (!btn) return 'skip';
         btn.click(); await new Promise((res) => setTimeout(res, 300));
-        if (t === 'lancamentos'){ document.querySelector('#demSeg [data-dv="lan"]').click(); await new Promise((res) => setTimeout(res, 150)); }
         const sec = document.getElementById('tab-' + t); if (!sec || sec.hidden) return 'skip';
         let tb = sec.querySelector('table');
         if (!tb){

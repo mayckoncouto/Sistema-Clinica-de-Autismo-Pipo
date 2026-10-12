@@ -35,12 +35,11 @@ const fs = require('fs');
 
   // ---- menu e tela ----
   await page.click('#finBtn');
-  check('Financeiro menu lists Demonstrativos and the financial registries?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,fornecedores,catfornecedor,contas,planocontas');
+  check('Financeiro menu lists Lançamentos, Demonstrativos and the financial registries?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,demonstrativos,fornecedores,catfornecedor,contas,planocontas');
   check('Cadastros menu no longer lists them?', !(await page.$('#cadMenu [data-nav="contas"]')) && !(await page.$('#cadMenu [data-nav="fornecedores"]')));
   await page.keyboard.press('Escape');
   await page.click('#finBtn'); await page.click('#finMenu [data-nav="lancamentos"]'); await page.waitForTimeout(300);
-  check('Demonstrativos opens on Fluxo de caixa with title?', await page.$eval('#tab-lancamentos', (e) => !e.hidden) && /Demonstrativos/.test(await page.$eval('#tab-lancamentos .cad-title', (e) => e.textContent)) && await page.$eval('#demSeg [data-dv="flu"]', (b) => b.classList.contains('active')));
-  await page.click('#demSeg [data-dv="lan"]'); await page.waitForTimeout(200);
+  check('Lançamentos screen opens with title?', await page.$eval('#tab-lancamentos', (e) => !e.hidden) && /Lançamentos/.test(await page.$eval('#tab-lancamentos .cad-title', (e) => e.textContent)));
   check('empty state before any entry?', /Nenhum lançamento/.test(await page.textContent('#reg-lancamentos-host')));
   check('hash is #lancamentos?', (await page.evaluate(() => location.hash)) === '#lancamentos');
 
@@ -146,7 +145,7 @@ const fs = require('fs');
   check('different extrato value on an existing entry = atualizar?', up.join() === 'atualizar', up);
   const exp = await ev('IO_KINDS.lancamentos.exportRows().map(function(x){ return [x.conta, x.data, x.valor, x.tipo, x.sub].join("|"); })');
   check('export has conta, date, tipo and subcategory?', exp.includes('Caixa|20/01/2026|500|Entrada|Aporte de sócios'), exp);
-  check('Outras opções menu on Lançamentos?', !!(await page.$('#demMenuWrap')));
+  check('Outras opções menu on Lançamentos?', !!(await page.$('#flMenuWrap')));
 
   // ---- somente leitura: sem permissão de incluir, o botão some ----
   await page.evaluate(() => { window.pipoAuth = { can: (m, a) => m === 'financeiro' && a === 'view', canDefault: () => true, isAdmin: () => false, onProfile: () => {} }; });

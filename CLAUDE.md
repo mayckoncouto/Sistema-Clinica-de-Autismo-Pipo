@@ -4027,3 +4027,37 @@ filtrado (faixa + Voltar); comparação com o mês anterior ou com um mês de re
 - (2026-10-12, pedido do usuário) Cartões da tela CRM no computador: dividem TODA a largura (`.crm-home-grid` com `auto-fit`, antes `auto-fill` deixava espaço vazio à direita) e ficam compactos como no celular (padding 12/14, legenda com espaço fixo de 2 linhas, no funil a linha de leads/contratos no lugar da 2ª linha — regras saíram do `@media` do celular e valem para os dois).
 - (2026-10-12, pedido do usuário) Barra de Tratamentos no celular em 3 linhas: título + Cancelados + Renegociados (12,5px, título encolhe com "…") / busca + status / contador (mín. 90px, "…") + Opções + Incluir + ?. Aviso "N pacientes sem tratamento" embaixo.
 - (2026-10-12, pedido do usuário: "quando atualizo a página em CRM vai para Minhas tarefas") A lista aberta do CRM fica no endereço: `navHashKey` devolve `crm-home`, `crm-mine` ou `crm-<lista>` (as chaves de `CRM_ITEMS`) e `crmRender` chama `navSaveHash`; o F5 volta para a mesma lista. Endereço antigo `#crm` continua abrindo (Minhas tarefas).
+
+## Financeiro — Demonstrativos separado de Lançamentos; largura da tabela (2026-10-12, pedido do usuário)
+- Menu Financeiro ▾ (ordem): **Lançamentos**, **Demonstrativos**, Fornecedores, Categorias de fornecedor, Contas bancárias, Plano de contas.
+  **Substitui** a seção de Etapa 1 que dizia que Lançamentos era um dos botões: agora são DUAS telas. `#tab-lancamentos` (aba `lancamentos`) é só a
+  lista de antes (busca, mês, conta, tipo, + Incluir, Outras opções = exportar/importar planilha e Fechamento de mês, `#flMenu`); `#tab-demonstrativos`
+  (aba `demonstrativos`, endereço `#demonstrativos`, permissão `financeiro`) tem os botões **Fluxo de caixa | DRE** e a barra própria (`#demSearch`, ano,
+  período, mês, conta `#demAcc`, visão, comparação, referência, `#demModo`, Outras opções `#demMenu`). A conta (`FL.acc`) é compartilhada.
+  Clicar num valor chama `demGo` → vai para Lançamentos (`demGoTab`) com `FL.dm` e a faixa `#demStrip`; **Voltar** volta à tela Demonstrativos.
+  Funções novas: `renderDemonstrativos`, `demOnShow`, `demRefresh` (redesenha a tela de financeiro aberta), `demWireMenu`, `flMenuHtml`.
+- Largura da tabela do Fluxo/DRE: `table-layout:fixed`, `<colgroup>` — coluna de linhas `--df` (230px; 150px no celular), a de tendência
+  `--dt = clamp(120px, 14%, 360px)` (cresce quando sobra espaço) e as demais (meses, previsto, total) dividem igualmente o resto; `min-width` =
+  `--df + n × 104px + 120px` (abaixo disso rola para o lado).
+- Ajuda: tópicos `lancamentos` e `demonstrativos`. Testes: `run_demonstrativos.js`, `run_lancamentos.js` (cada um abre a sua tela).
+
+## Financeiro — Demonstrativos, Etapa 2: Fechamento de mês, anotações e Resumo mensal (2026-10-12)
+Decisões do usuário: mês fechado trava incluir/editar/excluir/importar lançamentos (vale para todos, inclusive Administrador); **qualquer mês** pode
+ser reaberto, com aviso de que o saldo dos meses seguintes muda (e confirmação); mês reaberto edita todos os campos (sem lançamento de ajuste);
+fechar/reabrir por permissão em Níveis de permissão; anotações nas células; resumo mensal em PDF.
+- Permissão **Fechamento de mês** (`fechamento_mes`, grupo Financeiro; ver = histórico, incluir = fechar, excluir = reabrir; `MODULES` nos dois js e
+  `PERM_MODULE_LABELS`). Nenhum nível recebe: só o Administrador até liberar. Quem vê o Financeiro vê os meses fechados (cadeado).
+- Banco (migração `supabase/2026-10-12b-fechamento-de-mes.sql`; linha 103 de `conferencia-migracoes.sql`; `schema.sql` e `conferencia-geral.sql` atualizados):
+  `finance_closings (ym pk, closed_at, closed_by, closed_by_name)` (só leitura direta; escrita pelas funções `finance_close_month(p_ym)` e
+  `finance_reopen_month(p_ym, p_motivo)`, que conferem a permissão), `finance_closing_log` (histórico: fechou/reabriu, quem, quando, motivo),
+  `finance_notes (chave pk "tela|linha|aaaa-mm", rotulo, texto ≤1000, autor, autor_nome, atualizado_em)` (lê quem vê Financeiro; grava quem edita Financeiro)
+  e o gatilho `finance_entries_lock` (recusa insert/update/delete — e mudar a data para dentro — de lançamento em mês fechado com
+  `PIPO_MES_FECHADO:aaaa-mm`; restauração sem usuário passa). `fcErrMsg` traduz o erro.
+- App (bloco "Demonstrativos, etapa 2" depois do bloco de Demonstrativos): `FC` (estado), `fcLoad`, `fcCan`, `fcIsClosed`, `fcDateClosed`, `openFechamento(ym)`
+  (janela: mês, situação, pendências = valor ≠ extrato com "estou ciente", aviso de saldo ao reabrir com saldo inicial dos meses seguintes, motivo, histórico),
+  cadeado (`DEM_LK`) no cabeçalho do mês e na data dos lançamentos, janela do lançamento em leitura quando o mês é fechado, salvar/importar recusam mês fechado,
+  alerta "mês ainda não foi fechado" (só para quem pode fechar). Anotações: balão `.dem-nt` por célula de um mês (`fcNoteBtn`, `fcOpenNote`, linhas com `nk`).
+  Resumo mensal: `openResumoMensal` → `fcFigures` (todas as contas) + `fcResumoHtml` + `demPrintFrame` (KPIs com variação, gráfico 6 meses, DRE resumido,
+  fluxo e saldo por conta, o que mais mudou, anotações do mês, pendências, situação do mês).
+- Teste: `tests/run_demonstrativos.js` (fechar, reabrir com aviso, histórico, trava no app, importação, anotações, resumo, permissões).
+- Produção: SQL ainda NÃO rodado (aguarda autorização do usuário).
