@@ -4122,3 +4122,10 @@ recorrência mensal + parcelas; previsão = contas cadastradas e, onde faltar, a
   `agendaPipo:saldoHorizonte`). Quadro `smHtml()` (`.sm-box`, vermelho `.sm-low` quando alguma conta fica abaixo) no Fluxo de caixa (antes dos gráficos) e nas
   telas Contas a pagar / Contas a receber (`#fpAlert` / `#frAlert`); só com `bankCanSee()`. A média dos meses anteriores NÃO entra (só o que está cadastrado).
   Sem SQL. Teste no fim de `tests/run_pagar.js`.
+- (2026-10-12, pedido do usuário) **Vincular conta a um lançamento que já existe** (sem criar lançamento): botão **Vincular a um lançamento…** (`#fpLink`) na janela da conta em aberto
+  → `openLinkEntry(p)`; na janela do lançamento a caixa **Conta a pagar / a receber** (`#flLinkBox`: ligada ou "Vincular a uma conta em aberto…" `#flLinkBtn` →
+  `openLinkPayable(e)`; `#flUnlinkBtn`); conta paga ganha **Desvincular** (`#fpUnlink`, mantém o lançamento; **Desfazer baixa** continua apagando). Lista de escolha `fpPickModal`
+  (busca, "Mais parecido" marcado); `fpScore(p, e)` (subcategoria +3, valor/extrato igual +3, data ≤3 dias +2/≤15 +1, descrição contida +1), `fpEntryCands`, `fpPayCands`,
+  `fpSuggest(p)` (≥6 e ≤15 dias: banner `.fp-sugg` "Parece que esta conta já foi paga" com `#fpSugg`), `fpLinkSet(payId, entryId|"")` (recusa lançamento já ligado). Mês fechado
+  não vincula/desvincula pelo lançamento. Migração `supabase/2026-10-12d-um-lancamento-uma-conta.sql` (índice único parcial em `entry_id`; linha 105 da conferência de migrações; schema
+  atualizado; o app funciona antes dela).

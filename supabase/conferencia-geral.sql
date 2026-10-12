@@ -490,6 +490,7 @@ exp_idx(n) as (values
   ('finance_entries_origem_key'),
   ('finance_entries_pkey'),
   ('finance_payables_entry'),
+  ('finance_payables_entry_uni'),
   ('finance_payables_grupo'),
   ('finance_payables_pkey'),
   ('finance_payables_venc'),

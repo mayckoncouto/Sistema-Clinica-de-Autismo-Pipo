@@ -220,6 +220,54 @@ const fs = require('fs');
   await page.fill('#regMinimo', ''); await page.click('#regSave'); await page.waitForTimeout(300);
   check('empty minimum removes the alert setting', (await ev('state.bankAccounts.filter(function(a){return a.id==="viacredi"})[0].saldoMinimo')) === undefined);
 
+  // ---- vincular conta a lançamento que já existe ----
+  await ev(`(function(){
+    var mk = function(id, d, plan, v, desc){ return {id: id, acc: 'viacredi', date: d, desc: desc, plan: plan, valor: v, extDate: '', extVal: null, obs: '', key: ''}; };
+    FL.rows = [mk('e1','2026-03-10','alu',1500,'Aluguel março'), mk('e2','2026-03-11','conv',4000,'Repasse Unimed'), mk('e3','2026-03-20','agua',90,'Água')];
+    FP.rows = [
+      {id:'q1', venc:'2026-03-12', desc:'Aluguel sede', plan:'alu', acc:'viacredi', sup:'', valor:1500, entry:'', grupo:'', parcela:0, parcelas:0, obs:''},
+      {id:'q2', venc:'2026-03-15', desc:'Repasse convênio', plan:'conv', acc:'viacredi', sup:'', valor:4000, entry:'', grupo:'', parcela:0, parcelas:0, obs:''}];
+    FP.f.pagar.st = 'aberta'; FP.f.pagar.ym = ''; FP.f.pagar.q = ''; FP.f.receber.st = 'aberta'; FP.f.receber.ym = ''; FP.f.receber.q = '';
+    return 1; })()`);
+  await page.click('#finBtn'); await page.click('#finMenu [data-nav="pagar"]'); await page.waitForTimeout(400);
+  await ev('renderPagar(); 1');
+  await page.click('#reg-pagar-host tbody tr'); await page.waitForSelector('#ovFp');
+  check('open account with a matching entry suggests linking it', /já foi paga/.test(await page.textContent('#ovFp .fp-sugg')) && /Aluguel março/.test(await page.textContent('#ovFp .fp-sugg')));
+  await page.click('#fpSugg'); await page.waitForTimeout(250);
+  check('suggestion links the entry (account becomes paid, entry untouched)', (await ev('FP.rows[0].entry')) === 'e1' && (await ev('FL.rows.length')) === 3 && (await ev('FL.rows[0].valor')) === 1500);
+  check('an entry already linked cannot be linked to another account', (await ev('fpLinkSet("q2", "e1")')) === false && !(await ev('FP.rows[1].entry')));
+  await setSel('#fpSt', 'paga');
+  await page.click('#reg-pagar-host tbody tr'); await page.waitForSelector('#fpUnlink');
+  await page.click('#fpUnlink'); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(250);
+  check('Desvincular reopens the account and keeps the lançamento', !(await ev('FP.rows[0].entry')) && (await ev('FL.rows.length')) === 3);
+  await setSel('#fpSt', 'aberta');
+  await page.click('#reg-pagar-host tbody tr'); await page.waitForSelector('#fpLink');
+  await page.click('#fpLink'); await page.waitForSelector('#ovFpl');
+  const lst = await page.$$eval('#fplList .fpl-row', (r) => r.map((x) => x.textContent.replace(/\s+/g, ' ')));
+  check('link list shows only despesa entries, the best one first and marked', lst.length === 2 && /Aluguel março/.test(lst[0]) && /Mais parecido/.test(lst[0]) && !lst.some((x) => /Repasse Unimed/.test(x)), lst);
+  check('Vincular is off until one is chosen', await page.$eval('#fplOk', (b) => b.disabled));
+  await page.fill('#fplQ', 'agua'); await page.waitForTimeout(100);
+  check('search filters the list', (await page.$$eval('#fplList .fpl-row', (r) => r.filter((x) => !x.hidden).length)) === 1);
+  await page.fill('#fplQ', '');
+  await page.check('input[name="fplPick"][value="e3"]'); await page.click('#fplOk'); await page.waitForTimeout(250);
+  check('picking from the list links it', (await ev('FP.rows[0].entry')) === 'e3');
+  await ev('fpLinkSet("q1", ""); 1');
+  // pelo lançamento
+  await ev('openLancamento(FL.rows.filter(function(x){return x.id==="e2"})[0]); 1'); await page.waitForSelector('#flLinkBox');
+  check('entry window says no account is linked and offers to link', /Nenhuma conta a pagar ou a receber ligada/.test(await page.textContent('#flLinkBox')) && !!(await page.$('#flLinkBtn')));
+  await page.click('#flLinkBtn'); await page.waitForSelector('#ovFpl');
+  const lst2 = await page.$$eval('#fplList .fpl-row', (r) => r.map((x) => x.textContent.replace(/\s+/g, ' ')));
+  check('the list has only receivable accounts, best first', lst2.length === 1 && /Repasse convênio/.test(lst2[0]) && /Mais parecido/.test(lst2[0]), lst2);
+  await page.check('input[name="fplPick"]'); await page.click('#fplOk'); await page.waitForTimeout(250);
+  check('linked from the entry side', (await ev('FP.rows[1].entry')) === 'e2');
+  await ev('openLancamento(FL.rows.filter(function(x){return x.id==="e2"})[0]); 1'); await page.waitForSelector('#flUnlinkBtn');
+  check('entry window now shows the linked account', /Ligado à conta/.test(await page.textContent('#flLinkBox')) && /Repasse convênio/.test(await page.textContent('#flLinkBox')));
+  await page.click('#flUnlinkBtn'); await page.waitForTimeout(250);
+  check('unlink from the entry side', !(await ev('FP.rows[1].entry')) && !!(await page.$('#flLinkBtn')));
+  await ev('FC.closed = {"2026-03": {ym: "2026-03"}}; openLancamento(FL.rows.filter(function(x){return x.id==="e2"})[0]); 1'); await page.waitForSelector('#flLinkBox');
+  check('closed month: no link/unlink buttons', !(await page.$('#flLinkBtn')) && !(await page.$('#flUnlinkBtn')));
+  await ev('FC.closed = {}; document.getElementById("modalHost").innerHTML = ""; 1');
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

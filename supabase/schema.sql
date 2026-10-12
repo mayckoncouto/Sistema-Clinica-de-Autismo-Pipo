@@ -6892,3 +6892,6 @@ grant execute on function public.finance_payable_settle(uuid, text, date, numeri
 do $$ begin
   alter publication supabase_realtime add table public.finance_payables;
 exception when duplicate_object or undefined_object then null; end $$;
+
+-- ===== Um lançamento só em UMA conta a pagar/receber (2026-10-12d) =====
+create unique index if not exists finance_payables_entry_uni on public.finance_payables (entry_id) where entry_id is not null;
