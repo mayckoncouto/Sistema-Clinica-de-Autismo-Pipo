@@ -8249,6 +8249,16 @@ update public.documents set unit_id = 'empresa' where public.doc_scope(path) = '
 
 create unique index if not exists documents_path_unit_key on public.documents (path, unit_id);
 
+-- Fase 2D: a chave final de documents é (path, unit_id)
+do $$
+begin
+  if exists (select 1 from pg_constraint where conrelid = 'public.documents'::regclass and contype = 'p'
+              and pg_get_constraintdef(oid) = 'PRIMARY KEY (path)') then
+    alter table public.documents drop constraint documents_pkey;
+    alter table public.documents add constraint documents_pkey primary key using index documents_path_unit_key;
+  end if;
+end $$;
+
 -- 3. Unidade ativa da sessão
 --   • sem usuário (cron, link público, restauração): a unidade posta em `pipo.unit` (set_config) ou a Unidade 1;
 --   • Gestão: a escolhida (token), se existir; • os demais: a do próprio perfil (nunca vale o que vem no token).

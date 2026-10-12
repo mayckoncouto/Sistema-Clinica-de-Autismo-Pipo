@@ -660,7 +660,6 @@ exp_idx(n) as (values
   ('crm_auto_log_pkey'),
   ('crm_auto_log_rule_idx'),
   ('crm_auto_state_pkey'),
-  ('documents_path_unit_key'),
   ('documents_pkey'),
   ('finance_closing_log_pkey'),
   ('finance_closings_pkey'),

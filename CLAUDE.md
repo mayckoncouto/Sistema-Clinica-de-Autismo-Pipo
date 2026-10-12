@@ -4332,5 +4332,5 @@ Migrações (rodadas em produção pelo conector, testadas no PGlite com 2 unida
 - Regra: a unidade ativa vem do token (`user_metadata.active_unit`, só vale para `is_manager()`), senão `profiles.unit_id`; sem usuário (cron, link público, restauração) vale o GUC `pipo.unit`.
 - App: `js/pipo-supabase.js` usa `onConflict: "path,unit_id"` e, para a Gestão em outra unidade, `syncTokenUnit` grava `active_unit` (`updateUser` + `refreshSession`) antes de abrir; `api/config.js`
   lê a Clínica da `unidade-1` (marca por unidade vem na Fase 3); `api/admin-backup.js` leva/restaura `unit_id` (documentos por `path,unit_id`). Testes: `run_login_units.js`, `run_backup_api.js`.
-- FALTA (etapa final, só depois de o app novo estar publicado): trocar a PK de `documents` para `(path, unit_id)` em migração `2026-10-12o-unidades-fase2d-chave-final.sql` (linha 116 da conferência); depois criar documento em outra unidade.
+- Etapa final (2D): `supabase/2026-10-12o-unidades-fase2d-chave-final.sql` troca a PK de `documents` para `(path, unit_id)` (linha 116 da conferência; tem `drop constraint`, então roda no SQL Editor; `schema.sql` já nasce com a chave final). Só depois dela uma segunda unidade pode ter o mesmo caminho.
 - Próximas fases: 3) Salas/Planner/Agenda/Clínica por unidade (marca no login por unidade); 4) pessoas e clínico; 5) Financeiro; 6) CRM e demais; 7) revisão.
