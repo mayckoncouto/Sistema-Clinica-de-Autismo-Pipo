@@ -21479,7 +21479,7 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>CRM ▾ → Automações</b>. A tabela mostra as 26 automações em cinco grupos (Funil de Leads, Tratamentos e Cadastro, Agenda e Presença, Financeiro, Rotina da Equipe), com a lista, os responsáveis, se está ligada e quantas ocorrências criou nos últimos 30 dias.",
       "Clique na etiqueta <b>Ligada / Desligada</b> para ligar ou desligar na hora. Todas começam <b>desligadas</b>.",
-      "Clique na linha para abrir a automação: <b>Automação ligada</b>, <b>Lista de Destino</b> (onde a tarefa nasce; em branco vale a lista padrão), o número de dias da regra (quando existe), <b>Responsáveis</b> (uma ou mais pessoas, só quem tem acesso ao CRM e à lista) e as <b>Últimas Ocorrências</b>.",
+      "Clique na linha para abrir a automação: <b>Automação ligada</b>, <b>Lista de Destino</b> (onde a tarefa nasce; em branco vale a lista padrão), <b>Status da Tarefa Criada</b> (os status que não finalizam da lista escolhida; em branco nasce no primeiro), <b>Status que Dispara</b> (só em Lead Perdido e Contrato Assinado: em branco vale qualquer status de perda ou de sucesso do funil), o número de dias da regra (quando existe), <b>Responsáveis</b> (uma ou mais pessoas, só quem tem acesso ao CRM e à lista) e as <b>Últimas Ocorrências</b>.",
       "<b>Rodízio de Leads Novos</b>: em Responsáveis fica a fila; cada lead novo sem responsável vai para a próxima pessoa. <b>Tarefa Parada</b> e <b>Tarefa Vencida há Dias</b> comentam na própria tarefa e avisam (@menção) o responsável dela e as pessoas escolhidas em “Avisar também”; em “Aplicar na Lista”, em branco vale para todas as listas.",
       "<b>Outras Opções ▾</b>: <b>Ligar Todas</b> e <b>Desligar Todas</b>. <b>Rodar Agora</b> executa já as automações ligadas (ignora o dia da semana e do mês) e informa quantas ocorrências criou."
     ],
@@ -29975,9 +29975,9 @@ var CRMA_RULES = [
     desc: "Quando a família envia o link de cadastro, cria a tarefa “Revisar cadastro recebido”."},
   {id: "link_segunda_cobranca", group: 0, name: "Segunda Cobrança do Link", when: "Todo dia", def: "atendimento", param: {label: "Dias depois da 1ª cobrança", def: 3},
     desc: "Link de cadastro que já teve a 1ª cobrança (venceu sem resposta) e continua sem resposta: cria a tarefa de cobrar de novo."},
-  {id: "lead_perdido", group: 0, name: "Lead Perdido: Retomar Contato", when: "Na hora", def: "atendimento", param: {label: "Dias até o novo contato", def: 60}, motivo: true,
+  {id: "lead_perdido", group: 0, name: "Lead Perdido: Retomar Contato", when: "Na hora", def: "atendimento", param: {label: "Dias até o novo contato", def: 60}, motivo: true, gat: "lost",
     desc: "Quando um lead vai para um status de perda com o motivo escolhido (ex.: Financeiro), cria a tarefa de retomar o contato daqui a alguns dias."},
-  {id: "contrato_assinado", group: 0, name: "Contrato Assinado", when: "Na hora", def: "atendimento",
+  {id: "contrato_assinado", group: 0, name: "Contrato Assinado", when: "Na hora", def: "atendimento", gat: "done",
     desc: "Quando o lead chega ao status que finaliza com sucesso (ex.: Contrato assinado), cria a tarefa de cadastrar o paciente e abrir o tratamento."},
   {id: "rodizio_leads", group: 0, name: "Rodízio de Leads Novos", when: "Na hora", listMode: "monitorada", noPeopleTask: true,
     desc: "Distribui os leads novos que chegam sem responsável entre as pessoas escolhidas, uma de cada vez. Em “Responsáveis” fica a fila do rodízio."},
@@ -30042,9 +30042,33 @@ function crmaSave(rules){
     function(e){ showToast("Não foi possível salvar: " + ((e && e.message) || "tente de novo."), true); return false; });
 }
 function crmaListName(r, cfg){
-  if (cfg.listId){ var l = crmListById(cfg.listId); return l ? l.name : cfg.listId; }
-  if (r.listMode === "monitorada") return "Todas as listas";
-  var d = crmListById(r.def); return r.defLabel || ("Padrão (" + (d ? d.name : (r.def || "")) + ")");
+  var base;
+  if (cfg.listId){ var l = crmListById(cfg.listId); base = l ? l.name : cfg.listId; }
+  else if (r.listMode === "monitorada") return "Todas as listas";
+  else { var d = crmListById(r.def); base = r.defLabel || ("Padrão (" + (d ? d.name : (r.def || "")) + ")"); }
+  var st = cfg.statusId && r.listMode !== "monitorada" ? crmStatus(crmaEffList(r, cfg.listId), cfg.statusId) : null;
+  return base + (st ? " › " + st.name : "");
+}
+// Lista efetiva da regra (escolhida ou padrão) e os status em que a tarefa pode nascer (os que não finalizam).
+function crmaEffList(r, listId){ return crmListById(listId || (r.listMode === "monitorada" ? "" : r.def)); }
+function crmaStatusOpts(r, listId, cur){
+  var l = crmaEffList(r, listId), opts = ['<option value="">Padrão (primeiro status)</option>'];
+  ((l && l.statuses) || []).filter(function(st){ return !st.done; }).forEach(function(st){
+    opts.push('<option value="' + esc(st.id) + '"' + (cur === st.id ? ' selected' : '') + '>' + esc(st.name) + '</option>');
+  });
+  return opts.join("");
+}
+// Status que dispara (lead perdido = status de perda; contrato assinado = status que finaliza sem ser perda), das listas de funil.
+function crmaGatOpts(r, cur){
+  var leads = (CRM.lists || []).filter(function(l){ return l.lead; }), multi = leads.length > 1;
+  var any = r.gat === "lost" ? "Qualquer status de perda" : "Qualquer status que finaliza";
+  var opts = ['<option value="">' + any + '</option>'];
+  leads.forEach(function(l){
+    (l.statuses || []).filter(function(st){ return r.gat === "lost" ? st.lost : (st.done && !st.lost); }).forEach(function(st){
+      opts.push('<option value="' + esc(st.id) + '"' + (cur === st.id ? ' selected' : '') + '>' + esc(st.name + (multi ? " (" + l.name + ")" : "")) + '</option>');
+    });
+  });
+  return opts.join("");
 }
 function crmaPeopleText(ids){
   if (!ids || !ids.length) return "";
@@ -30138,6 +30162,10 @@ function crmaOpen(id){
         '<div class="field-row">' +
           '<div class="field"><label for="crmaList">' + listLabel + '</label><select id="crmaList"' + dis + '><option value="">' + esc(firstOpt) + '</option>' +
             lists.map(function(l){ return '<option value="' + esc(l.id) + '"' + (cfg.listId === l.id ? ' selected' : '') + '>' + esc(l.name) + '</option>'; }).join("") + '</select></div>' +
+          (r.listMode === "monitorada" ? '' : '<div class="field"><label for="crmaStatus">Status da Tarefa Criada</label><select id="crmaStatus"' + dis + '>' + crmaStatusOpts(r, cfg.listId, cfg.statusId) + '</select></div>') +
+        '</div>' +
+        '<div class="field-row">' +
+          (r.gat ? '<div class="field"><label for="crmaGat">Status que Dispara</label><select id="crmaGat"' + dis + '>' + crmaGatOpts(r, cfg.gatilho) + '</select></div>' : '') +
           (r.param ? '<div class="field"><label for="crmaDias">' + esc(r.param.label) + '</label><input id="crmaDias" type="text" inputmode="numeric" maxlength="3" placeholder="' + r.param.def + '" value="' + esc(cfg.dias == null ? "" : cfg.dias) + '"' + dis + '></div>' : '') +
         '</div>' +
         (r.motivo ? '<div class="field"><label for="crmaMotivo">Motivo de Perda</label><input id="crmaMotivo" type="text" list="crmaMotList" placeholder="Financeiro" value="' + esc(cfg.motivo || "") + '"' + dis + '><datalist id="crmaMotList">' + CRM_PERDAS.map(function(o){ return '<option value="' + esc(o) + '">'; }).join("") + '</datalist></div>' : '') +
@@ -30167,11 +30195,19 @@ function crmaOpen(id){
     var lid = $("crmaList").value || (r.listMode === "monitorada" ? "" : r.def);
     crmPeopleMenu($("crmaWho"), assignees, {listId: lid || "", onToggle: function(sel){ assignees = sel; whoRender(); }});
   });
+  $("crmaList").addEventListener("change", function(){
+    var st = $("crmaStatus"); if (!st) return;
+    var cur = st.value; st.innerHTML = crmaStatusOpts(r, $("crmaList").value, cur);
+    if (!Array.prototype.some.call(st.options, function(o){ return o.value === cur; })) st.value = "";
+    st.dispatchEvent(new Event("change", {bubbles: true}));
+  });
   $("crmaX").addEventListener("click", close); $("crmaCancel").addEventListener("click", close);
   var sv = $("crmaSave");
   if (sv) sv.addEventListener("click", function(){
     var o = {on: $("crmaOn").checked};
     if ($("crmaList").value) o.listId = $("crmaList").value;
+    if ($("crmaStatus") && $("crmaStatus").value) o.statusId = $("crmaStatus").value;
+    if ($("crmaGat") && $("crmaGat").value) o.gatilho = $("crmaGat").value;
     if (assignees.length) o.assignees = assignees.slice();
     if (r.param){
       var raw = $("crmaDias").value.trim();

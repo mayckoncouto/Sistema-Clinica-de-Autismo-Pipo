@@ -120,7 +120,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (106, '2026-10-12e-rateio-das-contas',                exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_payables' and column_name = 'linhas'), 'Financeiro: rateio das contas em várias subcategorias (linhas) e baixa em vários lançamentos'),
  (107, '2026-10-12f-emprestimos',                    to_regclass('public.finance_loans') is not null, 'Financeiro: empréstimos tomados e concedidos (finance_loans, loan_id nas contas)'),
  (108, '2026-10-12g-conciliacao',                   to_regclass('public.finance_statement_lines') is not null, 'Financeiro: conciliação com o extrato (finance_statement_lines)'),
- (109, '2026-10-12h-crm-automacoes',                  to_regclass('public.crm_auto_log') is not null, 'CRM: automações (crm_auto_log, gatilhos e rotina diária)')
+ (109, '2026-10-12h-crm-automacoes',                  to_regclass('public.crm_auto_log') is not null, 'CRM: automações (crm_auto_log, gatilhos e rotina diária)'),
+ (110, '2026-10-12i-crm-automacoes-status',           exists(select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname = 'crm_auto_make' and prosrc like '%statusId%'), 'CRM: automações com status da tarefa criada e status que dispara')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

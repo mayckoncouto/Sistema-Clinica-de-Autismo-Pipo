@@ -73,6 +73,26 @@ const path = require('path');
   await page.click('.crma-row[data-crma="rodizio_leads"] td:first-child'); await page.waitForSelector('#ovCrma');
   check('rodízio: list label is Aplicar na Lista with "Todas as listas", and the queue label?', /Aplicar na Lista/.test(await page.$eval('label[for="crmaList"]', (e) => e.textContent)) && /Todas as listas/.test(await page.$eval('#crmaList option[value=""]', (e) => e.textContent)) && /Fila do Rodízio/.test(await page.$eval('#ovCrma .modal-body', (e) => e.textContent)));
   await page.click('#crmaCancel');
+  // Status da tarefa criada acompanha a lista escolhida; Status que dispara só nas regras de lead
+  await page.click('.crma-row[data-crma="falta"] td:first-child'); await page.waitForSelector('#ovCrma');
+  check('falta: field Status da Tarefa Criada (padrão + status que não finalizam da lista padrão Agendas); no trigger field?', !!(await page.$('#crmaStatus')) && !(await page.$('#crmaGat')) &&
+    (await page.$$eval('#crmaStatus option', (o) => o.map((x) => x.textContent))).join('|') === 'Padrão (primeiro status)|Em aberto|Em andamento');
+  await setv('#crmaList', 'atendimento');
+  check('changing the list refreshes the statuses (Atendimento has none that finalize beyond its own)?', (await page.$$eval('#crmaStatus option', (o) => o.map((x) => x.textContent))).join('|') === 'Padrão (primeiro status)|Triagem|Avaliação|Pós-avaliação');
+  await setv('#crmaList', 'gestao'); await setv('#crmaStatus', 'andamento'); await page.check('#crmaOn'); await page.click('#crmaSave'); await page.waitForTimeout(250);
+  const rf = JSON.parse(await ev('JSON.stringify(window.__STORE__["config/crm_automations"].rules.falta)'));
+  check('saved: list gestao + statusId andamento?', rf.listId === 'gestao' && rf.statusId === 'andamento' && rf.on === true, rf);
+  check('row shows "Gestão › Em andamento"?', /Gestão › Em andamento/.test(await page.$eval('.crma-row[data-crma="falta"]', (e) => e.textContent)));
+  await page.click('.crma-row[data-crma="contrato_assinado"] td:first-child'); await page.waitForSelector('#ovCrma');
+  check('contrato assinado: Status que Dispara lists only statuses that finalize without loss (Contrato assinado)?', (await page.$$eval('#crmaGat option', (o) => o.map((x) => x.textContent))).join('|') === 'Qualquer status que finaliza|Contrato assinado');
+  await setv('#crmaGat', 'contrato'); await page.click('#crmaSave'); await page.waitForTimeout(200);
+  check('gatilho saved?', JSON.parse(await ev('JSON.stringify(window.__STORE__["config/crm_automations"].rules.contrato_assinado)')).gatilho === 'contrato');
+  await page.click('.crma-row[data-crma="lead_perdido"] td:first-child'); await page.waitForSelector('#ovCrma');
+  check('lead perdido: Status que Dispara lists the loss status (Cancelado)?', (await page.$$eval('#crmaGat option', (o) => o.map((x) => x.textContent))).join('|') === 'Qualquer status de perda|Cancelado');
+  await page.click('#crmaCancel');
+  await page.click('.crma-row[data-crma="rodizio_leads"] td:first-child'); await page.waitForSelector('#ovCrma');
+  check('rodízio (lista vigiada): no Status da Tarefa Criada?', !(await page.$('#crmaStatus')));
+  await page.click('#crmaCancel');
   await page.click('.crma-row[data-crma="faltas_seguidas"] td:first-child'); await page.waitForSelector('#ovCrma');
   await page.fill('#crmaDias', '1'); await page.click('#crmaSave'); await page.waitForTimeout(150);
   check('faltas seguidas: minimum is 2?', !!(await page.$('#ovCrma')));
