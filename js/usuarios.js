@@ -156,7 +156,7 @@
         "#tab-usuarios .pat-toolbar{flex-wrap:wrap}" +
         "#tab-usuarios .pat-toolbar .search-wrap{flex:1 1 100%;max-width:none!important}" +
         ".adm-wrap{padding:0 8px 10px}" +
-        ".adm-users :is(th,td):nth-child(2),.adm-users :is(th,td):nth-child(3){display:none}" +
+        ".adm-users :is(th,td):nth-child(2),.adm-users :is(th,td):nth-child(3),.adm-users.has-unit :is(th,td):nth-child(4){display:none}" +
         ".adm-users td.u-name{overflow-wrap:anywhere}" +
         ".adm-users :is(th,td):last-child{width:1%;white-space:nowrap}" +
         // Níveis de Permissão: só Nível e Usuários (o resumo das permissões aparece ao abrir o nível).
@@ -262,7 +262,7 @@
       document.getElementById("rolesBtn").addEventListener("click", function () { openRolesModal(); });
       document.getElementById("bulkProfBtn").addEventListener("click", function () { openBulkProfModal(); });
     }
-    document.getElementById("rolesBtn").hidden = !auth.isAdmin();
+    document.getElementById("rolesBtn").hidden = !(auth.isManager && auth.isManager());
     document.getElementById("addUserBtn").hidden = !uCan("create");
     // Só aparece enquanto houver profissional sem usuário ligado.
     document.getElementById("bulkProfBtn").hidden = !(uCan("create") && loaded.users && profsWithoutUser().length);
@@ -285,14 +285,16 @@
       host.innerHTML = '<div class="empty-state"><b>Nenhum usuário encontrado</b>Ajuste a busca ou cadastre um novo usuário.</div>';
       return;
     }
+    var showUnit = !!(auth.isManager && auth.isManager() && auth.units && auth.units().length > 1);
     host.innerHTML =
-        '<table class="adm-table adm-users"><thead><tr><th>Nome</th><th>E-mail</th><th>Nível de Permissão</th><th>Situação</th></tr></thead><tbody>' +
+        '<table class="adm-table adm-users' + (showUnit ? " has-unit" : "") + '"><thead><tr><th>Nome</th><th>E-mail</th><th>Nível de Permissão</th>' + (showUnit ? "<th>Unidade</th>" : "") + '<th>Situação</th></tr></thead><tbody>' +
           list.map(function (u) {
             var role = roleById(u.role_id);
             return '<tr data-uid="' + esc(u.id) + '" class="' + (u.active ? "" : "inactive") + '" tabindex="0">' +
               '<td class="u-name">' + esc(u.full_name || "(sem nome)") + (me && me.id === u.id ? ' <span class="u-badge">você</span>' : "") + "</td>" +
               "<td>" + esc(u.email) + "</td>" +
               '<td><span class="u-badge' + (role && role.is_admin ? " admin" : "") + '">' + esc(role ? role.name : u.role_id) + "</span></td>" +
+              (showUnit ? "<td>" + esc(auth.unitName(u.unit_id || "unidade-1")) + "</td>" : "") +
               "<td>" + (u.active ? '<span class="u-badge ok">Ativo</span>' : '<span class="u-badge off">Desativado</span>') + "</td>" +
             "</tr>";
           }).join("") +
@@ -338,7 +340,7 @@
 
   function rolePickerHtml(selectedId, disabled) {
     // Quem não é Administrador não vê (nem escolhe) o nível Administrador.
-    return '<div class="role-pick" id="uRolePick">' + roles.filter(function (r) { return auth.isAdmin() || !r.is_admin || r.id === selectedId; }).map(function (r) {
+    return '<div class="role-pick" id="uRolePick">' + roles.filter(function (r) { return (auth.isManager && auth.isManager()) || !r.is_admin || r.id === selectedId; }).map(function (r) {
       var sum = roleSummary(r);
       return '<label class="' + (disabled ? "disabled" : "") + '" title="' + esc(r.name + " — " + sum) + '">' +
         '<input type="radio" name="uRole" value="' + esc(r.id) + '"' +
@@ -353,8 +355,20 @@
     var isMe = !!(u && me && u.id === me.id);
     var tRole = u ? roleById(u.role_id) : null;
     // Somente leitura: sem "editar" em Usuários, ou conta de administrador vista por quem não é Administrador.
-    var ro = !auth.isAdmin() && !isNew && ((tRole && tRole.is_admin) || !uCan("edit"));
+    var mgr = !!(auth.isManager && auth.isManager());
+    // Gestão altera tudo; Administrador não mexe em conta de Gestão nem em outro Administrador (o banco também recusa).
+    var ro = !isNew && !mgr && ((tRole && (tRole.is_manager || (tRole.is_admin && !isMe))) || (!auth.isAdmin() && !uCan("edit")));
     var canDel = !ro && uCan("delete"), canEd = !ro && uCan("edit");
+    function unitFieldHtml(usr, disabled) {
+      var list = (auth.units && auth.units()) || [];
+      if (!list.length) return "";
+      var cur = usr ? (usr.unit_id || "unidade-1") : ((auth.unit && auth.unit()) || {}).id;
+      if (!mgr || disabled) return '<div class="field"><label>Unidade</label><div class="pat-count" style="font-size:13.5px">' + esc(auth.unitName(cur)) + "</div></div>";
+      return '<div class="field"><label for="uUnit">Unidade</label><select id="uUnit">' + list.map(function (x) {
+        return '<option value="' + esc(x.id) + '"' + (x.id === cur ? " selected" : "") + ">" + esc(x.name) + "</option>";
+      }).join("") + "</select>" +
+        '<div class="pat-count" style="margin-top:6px">Só a Gestão escolhe a unidade do usuário.</div></div>';
+    }
     var defaultRole = roleById("secretaria") ? "secretaria" : (roles.filter(function (x) { return !x.is_admin; })[0] || {}).id;
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
@@ -376,7 +390,8 @@
             : "") +
           '<div class="field"><label>Nível de Permissão</label>' + rolePickerHtml(isNew ? defaultRole : u.role_id, isMe || ro) +
             (isMe ? '<div class="pat-count" style="margin-top:6px">Você não pode mudar o seu próprio nível.</div>' :
-              (ro && tRole && tRole.is_admin ? '<div class="pat-count" style="margin-top:6px">Conta de administrador: só o Administrador altera.</div>' : "")) + "</div>" +
+              (ro && tRole && tRole.is_admin ? '<div class="pat-count" style="margin-top:6px">Conta de Administrador ou Gestão: só a Gestão altera.</div>' : "")) + "</div>" +
+          unitFieldHtml(u, ro) +
           (!isNew && canEd
             ? '<div class="field" style="margin-top:4px"><label>Senha e Acesso</label><div class="u-actions">' +
                 '<div class="field"><input id="uNewPass" type="text" placeholder="Nova senha (mín. 8)" autocomplete="off"></div>' +
@@ -418,11 +433,14 @@
           email: document.getElementById("uEmail").value.trim(),
           password: document.getElementById("uPass").value,
           full_name: name,
-          role_id: roleId
+          role_id: roleId,
+          unit_id: (document.getElementById("uUnit") || {}).value || ((auth.unit && auth.unit()) || {}).id || undefined
         }).then(function () { toast("Usuário criado."); });
       } else {
         var patch = u.professional_id ? {} : { full_name: name };
         if (!isMe) patch.role_id = roleId;
+        var uSel = document.getElementById("uUnit");
+        if (uSel && uSel.value && uSel.value !== (u.unit_id || "unidade-1")) patch.unit_id = uSel.value;
         p = !Object.keys(patch).length ? Promise.resolve(toast("Nada para salvar: o nome vem do cadastro do profissional.")) :
           auth.client.from("profiles").update(patch).eq("id", u.id).then(function (r) {
           if (r.error) throw new Error(friendlyDbError(r.error));
@@ -531,7 +549,7 @@
   // Janela "Níveis de Permissão" (aberta pelo botão na tela de Usuários, como
   // "Especialidades" em Pacientes): lista dos níveis + "Novo nível".
   function openRolesModal() {
-    if (!auth.isAdmin()) return;   // Níveis de Permissão: só o Administrador
+    if (!(auth.isManager && auth.isManager())) return;   // Níveis de Permissão: só a Gestão (valem para todas as unidades)
     var counts = {};
     users.forEach(function (u) { counts[u.role_id] = (counts[u.role_id] || 0) + 1; });
     var mh = document.getElementById("modalHost");
@@ -819,7 +837,7 @@
           var email = tr.querySelector(".bk-email").value.trim().toLowerCase();
           var st = tr.querySelector(".bk-status");
           st.textContent = "criando…";
-          var body = { action: "create", email: email, password: pass, full_name: r.prof.nome || r.prof.name, role_id: "profissional", professional_id: r.prof.id };
+          var body = { action: "create", email: email, password: pass, full_name: r.prof.nome || r.prof.name, role_id: "profissional", professional_id: r.prof.id, unit_id: ((auth.unit && auth.unit()) || {}).id };
           if (r.staffId) body.staff_id = r.staffId;
           return adminApi(body)
             .then(function () { ok++; tr.setAttribute("data-done", "1"); st.innerHTML = '<span class="u-badge ok">Criado</span>'; tr.querySelector(".bk-on").disabled = true; })

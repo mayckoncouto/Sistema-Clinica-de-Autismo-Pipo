@@ -211,6 +211,11 @@ alter policy profiles_update on public.profiles
   with check (public.is_manager()
          or ((public.is_admin() or public.has_perm('usuarios', 'edit')) and unit_id = public.my_unit()));
 
+-- 8b. Níveis de permissão valem para todas as unidades: só a Gestão cria, edita e exclui nível
+alter policy roles_insert on public.roles with check (public.is_manager());
+alter policy roles_update on public.roles using (public.is_manager()) with check (public.is_manager());
+alter policy roles_delete on public.roles using (public.is_manager());
+
 -- 9. O Administrador mais antigo passa a ser Gestão (só se ainda não houver nenhuma Gestão ativa)
 update public.profiles
    set role_id = 'gestao'

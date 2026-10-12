@@ -6,7 +6,7 @@ global.fetch = async (url, opts) => {
   calls.push({ url, opts });
   let body = null;
   if (url.endsWith("/auth/v1/user")) body = { id: "u-admin" };
-  else if (url.includes("/rest/v1/profiles?select=id,active")) body = [{ id: "u-admin", active: true, role: { is_admin: true } }];
+  else if (url.includes("/rest/v1/profiles?select=id,active")) body = [{ id: "u-admin", active: true, role: { is_admin: true, is_manager: global.__mgr !== false } }];
   else if (url.includes("/rest/v1/profiles?select=id")) body = [{ id: "u-admin" }, { id: "u-ok" }];
   else if (url.includes("/rpc/backup_restore_crm")) body = 2;
   else body = null;
@@ -38,6 +38,9 @@ function run(payload) {
   check("appointments still use upsert?", r2.code === 200 && calls.some((c) => c.url.includes("/rest/v1/appointments?on_conflict=id")));
   const r3 = await run({ action: "restore", table: "profiles", rows: [{ id: "x" }] });
   check("profiles cannot be restored?", r3.code === 400);
+  global.__mgr = false;
+  const r4 = await run({ action: "restore", table: "tasks", rows: [{ id: "t9", list_id: "a", status: "s", title: "T" }] });
+  check("Administrador (not Gestão) cannot restore?", r4.code === 403);
   console.log("no JS errors?", true);
   process.exit(ok ? 0 : 1);
 })();

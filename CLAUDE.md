@@ -4296,3 +4296,27 @@ Pedido do usuário: gerenciar várias unidades; os dados atuais são da **Unidad
   2) coluna de unidade nas tabelas + regras do banco + carga/tempo real filtrados; 3) Salas, Planner, Agenda, Clínica; 4) pessoas e clínico (pacientes, tratamentos,
   prontuário, planos, colaboradores, transferência entre unidades); 5) Financeiro por unidade + visão consolidada; 6) CRM, automações (rotinas diárias por unidade), link de
   cadastro, notificações, conector Claude, backup por unidade, Relatórios; 7) comparativo entre unidades, conferência de integridade, revisão de segurança.
+
+### Unidades — Fase 1 FEITA (2026-10-12): base, sem separar dados ainda
+Respostas finais do usuário: o **nome na lista do login** é editável no cadastro de Unidades (`config/units.list[].name`); "Todas as unidades" abrirá menus
+novos no lugar dos outros (a desenhar na fase do Financeiro/Relatórios, "mais adiante"); o Administrador vincula usuários só à sua unidade, a Gestão a qualquer uma;
+**Dados da Clínica inteiros por unidade** (duas unidades com o mesmo nome fantasia e CNPJs diferentes).
+- Banco (migração `supabase/2026-10-12k-unidades-fase1.sql`, rodada em produção pelo conector, testada no PGlite; linha 112 da conferência de migrações; `schema.sql` e
+  `conferencia-geral.sql` atualizados): cadastro de unidades em `config/units {list:[{id, name, fantasia, cnpj, telefone, email, endereco, cidade, inativo}]}`
+  (módulo `unidades`, nenhum nível tem; gatilho `documents_a_units_guard`/`units_guard`: só a Gestão grava, a Unidade 1 e unidade com usuários não saem);
+  `roles.is_manager`; nível **Gestão** (`gestao`, `is_admin` + `is_manager`, travado como o Administrador; o Administrador mais antigo foi promovido a Gestão);
+  `profiles.unit_id` (padrão `unidade-1`, todos os usuários atuais nela); funções `is_manager()`, `my_unit()`, `unit_exists()`, `login_units()` (id + nome das unidades
+  ativas, aberta ao anon para a lista do login); gatilho `profiles_unit_guard` (Administrador não muda unidade, não mexe em Gestão/outro Administrador, não dá nível
+  Administrador/Gestão); políticas `profiles_select/update` por unidade (Gestão vê todos); `roles_insert/update/delete` só `is_manager()`.
+- Gestão = `is_admin` + `is_manager`: todo `is_admin()` antigo continua valendo para ela. O que ficou SÓ da Gestão: Cadastros → Unidades, Níveis de Permissão, Acesso → Sistema,
+  restaurar o Backup (`api/admin-backup.js` exige `is_manager`), dar nível Administrador/Gestão e escolher a unidade do usuário.
+- `js/pipo-supabase.js`: `pipoAuth.isManager()`, `unit()`, `units()`, `unitName()`; `can("unidades")` só para a Gestão (Administrador não); lista **Unidade** na tela de login
+  (`login_units()`, última escolha em `agendaPipo:unit`; sem unidades no banco o campo some e o login segue como antes); `resolveUnit`: nível comum com unidade diferente da
+  dele é recusado ("Você não tem acesso a esta unidade."); Gestão usa a escolhida; seletor `select[data-unit-switch]` no topo (Gestão; troca grava e recarrega a página) ou
+  etiqueta `.user-unit` (demais); no celular o mesmo no ☰ (`.mnav-unit`). **A unidade ainda não filtra nenhum dado** (Fase 2 em diante).
+- `api/admin-users.js`: `currentActor` traz `isManager` e `unit`; criar usuário aceita `unit_id` (Gestão escolhe, demais = a própria); recusa mexer em usuário de outra unidade e em
+  Gestão/outro Administrador. `js/usuarios.js`: campo Unidade (Gestão edita; demais veem), coluna Unidade na lista para a Gestão, Níveis de Permissão só pela Gestão.
+- App (`index.html`): `REG_CFG.unidades` (cadastro genérico, CNPJ único, Inativar se há usuários), tópico de Ajuda `unidades`.
+- Testes: `tests/run_unidades.js` (cadastro) e `tests/run_login_units.js` (login com Supabase simulado: lista, recusa, Gestão, seletor).
+- Próximas fases (ver plano acima): 2) coluna de unidade nas tabelas + regras do banco + carga/tempo real filtrados; 3) salas/Planner/Agenda/Clínica; 4) pessoas e clínico;
+  5) Financeiro + visão consolidada; 6) CRM, automações, link de cadastro, notificações, conector, backup por unidade; 7) comparativo e revisão.

@@ -44,11 +44,11 @@ async function currentAdmin(req) {
   });
   if (!me.ok || !me.body || !me.body.id) return null;
   var prof = await call(
-    "/rest/v1/profiles?select=id,active,role:roles(is_admin)&id=eq." + encodeURIComponent(me.body.id),
+    "/rest/v1/profiles?select=id,active,role:roles(is_admin,is_manager)&id=eq." + encodeURIComponent(me.body.id),
     { headers: adminHeaders() }
   );
   var row = prof.ok && Array.isArray(prof.body) ? prof.body[0] : null;
-  if (!row || !row.active || !row.role || !row.role.is_admin) return null;
+  if (!row || !row.active || !row.role || !row.role.is_manager) return null;
   return row;
 }
 

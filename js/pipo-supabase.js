@@ -273,8 +273,13 @@
   function isAdmin() {
     return !!(profile && profile.active && profile.role && profile.role.is_admin);
   }
+  // Gestão: nível acima do Administrador, vê e cadastra todas as unidades.
+  function isManager() {
+    return !!(profile && profile.active && profile.role && profile.role.is_manager);
+  }
   function can(module, action) {
     if (!profile || !profile.active || !profile.role) return false;
+    if (module === "unidades") return isManager();   // cadastro de Unidades: só a Gestão
     if (profile.role.is_admin) return true;
     var p = permsUpgrade(profile.role.permissions);
     return !!(p[module] && p[module][action]);
@@ -283,6 +288,7 @@
   // (ex.: Ajuda e Trocar senha valem para todos até o Administrador desmarcar).
   function canDefault(module, action, dflt) {
     if (!profile || !profile.active || !profile.role) return false;
+    if (module === "unidades") return isManager();
     if (profile.role.is_admin) return true;
     var p = permsUpgrade(profile.role.permissions);
     return p[module] ? !!p[module][action] : !!dflt;
@@ -314,6 +320,61 @@
     loadProfile().then(setProfile).catch(function () {});
   }
 
+  /* ---------------- unidades ---------------- */
+  // Lista de unidades ativas (id, nome) vinda de login_units(), que também funciona antes do login.
+  // Unidade da sessão: a escolhida na tela de login (Gestão pode trocar depois, no topo).
+  var UNIT_KEY = "agendaPipo:unit", LOGIN_MSG_KEY = "agendaPipo:loginMsg";
+  var units = [];
+  var currentUnit = null;      // {id, name}
+  var pendingUnit = null;      // unidade escolhida na tela de login, ainda não conferida
+  function lsGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { window.localStorage.setItem(k, v); } catch (e) {} }
+  function ssGet(k) { try { return window.sessionStorage.getItem(k); } catch (e) { return null; } }
+  function ssSet(k, v) { try { if (v == null) window.sessionStorage.removeItem(k); else window.sessionStorage.setItem(k, v); } catch (e) {} }
+  function loadUnits() {
+    if (!client) return Promise.resolve(units);
+    return Promise.resolve(client.rpc("login_units")).then(function (r) {
+      if (r && !r.error && Array.isArray(r.data)) units = r.data.map(function (u) { return { id: u.id, name: u.name }; });
+      return units;
+    }, function () { return units; });
+  }
+  function unitName(id) {
+    for (var i = 0; i < units.length; i++) if (units[i].id === id) return units[i].name;
+    return id === "unidade-1" ? "Unidade 1" : (id || "");
+  }
+  // Qual unidade vale nesta sessão? Quem não é da Gestão fica na própria unidade; se escolheu outra
+  // na tela de login, volta {erro}. A Gestão usa a escolhida no login ou a última que usou.
+  function resolveUnit(p) {
+    var mgr = !!(p.role && p.role.is_manager);
+    var own = p.unit_id || "unidade-1";
+    var want = pendingUnit || (mgr ? lsGet(UNIT_KEY) : null);
+    pendingUnit = null;
+    if (!mgr) return want && want !== own ? { erro: true } : { id: own };
+    var ok = units.some(function (u) { return u.id === want; });
+    return { id: ok ? want : (units.some(function (u) { return u.id === own; }) ? own : (units[0] ? units[0].id : own)) };
+  }
+  function setCurrentUnit(id) {
+    currentUnit = { id: id, name: unitName(id) };
+    lsSet(UNIT_KEY, id);
+  }
+  function unitHtml() {
+    if (!currentUnit) return "";
+    if (isManager() && units.length) {
+      return '<select class="unit-switch" data-unit-switch aria-label="Unidade">' + units.map(function (u) {
+        return '<option value="' + escapeHtml(u.id) + '"' + (u.id === currentUnit.id ? " selected" : "") + ">" + escapeHtml(u.name) + "</option>";
+      }).join("") + "</select>";
+    }
+    return '<span class="user-unit" title="Unidade">' + escapeHtml(currentUnit.name) + "</span>";
+  }
+  document.addEventListener("change", function (e) {
+    var sel = e.target.closest && e.target.closest("[data-unit-switch]");
+    if (!sel || !isManager()) return;
+    if (sel.value && (!currentUnit || sel.value !== currentUnit.id)) {
+      lsSet(UNIT_KEY, sel.value);
+      location.reload();
+    }
+  });
+
   /* ---------------- login ---------------- */
   var loginEl = null;
 
@@ -332,6 +393,9 @@
       ".pipo-login .err{min-height:18px;font-size:13px;color:var(--danger,#b6403a)}" +
       ".pipo-login .brand{display:flex;align-items:center;gap:12px;margin-bottom:10px}" +
       ".pipo-login .brand img{width:40px;height:40px}" +
+      ".pipo-login select{font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line-strong,#c7cfcc);border-radius:8px;background:var(--surface,#fff);color:var(--ink,#182523)}" +
+      ".pipo-login label[hidden]{display:none}" +
+      ".user-unit{font-size:12px;font-weight:700;color:var(--accent,#2c7a72);background:var(--accent-weak,#e2f0ee);border-radius:999px;padding:3px 10px;white-space:nowrap}" +
       ".user-pill{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2,#465350)}" +
       ".user-pill[hidden]{display:none}" +
       ".user-pill .user-name{font-weight:700;color:var(--ink,#182523);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
@@ -365,6 +429,7 @@
             '<p class="sub">' + escapeHtml(loginBrand.sub) + '</p></div></div>' +
           '<label>E-mail<input type="email" name="email" autocomplete="username" required></label>' +
           '<label>Senha<input type="password" name="password" autocomplete="current-password" required></label>' +
+          '<label class="unit-field" hidden>Unidade<select name="unit"></select></label>' +
           '<div class="err" role="alert"></div>' +
           '<button type="submit">Entrar</button>' +
         "</form>";
@@ -377,6 +442,8 @@
         errEl.textContent = "";
         btn.disabled = true;
         btn.textContent = "Entrando…";
+        pendingUnit = form.unit && form.unit.value ? form.unit.value : null;
+        if (pendingUnit) lsSet(UNIT_KEY, pendingUnit);
         client.auth.signInWithPassword({
           email: form.email.value.trim(),
           password: form.password.value
@@ -398,8 +465,24 @@
     }
     loginEl.querySelector(".err").textContent = message || "";
     loginEl.hidden = false;
+    fillLoginUnits();
     var em = loginEl.querySelector('input[name="email"]');
     if (em) setTimeout(function () { em.focus(); }, 0);
+  }
+
+  // Lista "Unidade" da tela de login: só aparece quando o banco devolve unidades (sem a migração, o login segue como antes).
+  function fillLoginUnits() {
+    if (!loginEl) return;
+    loadUnits().then(function (list) {
+      var lab = loginEl.querySelector(".unit-field"), sel = lab && lab.querySelector("select");
+      if (!sel) return;
+      if (!list.length) { lab.hidden = true; sel.innerHTML = ""; return; }
+      var last = lsGet(UNIT_KEY);
+      sel.innerHTML = list.map(function (u) {
+        return '<option value="' + escapeHtml(u.id) + '"' + (u.id === last ? " selected" : "") + ">" + escapeHtml(u.name) + "</option>";
+      }).join("");
+      lab.hidden = false;
+    });
   }
 
   function hideLogin() {
@@ -416,6 +499,7 @@
       return groups.map(function(g){ return g.join(""); }).filter(Boolean).join('<div class="acc-sep" role="separator"></div>');
     }
     host.innerHTML =
+      unitHtml() +
       '<span class="user-name" title="' + escapeHtml(profile.email) + '">' +
         escapeHtml(profile.full_name || profile.email) + "</span>" +
       (profile.role ? '<span class="user-role">' + escapeHtml(profile.role.name) + "</span>" : "") +
@@ -428,7 +512,7 @@
             [((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : ""),
              ((isAdmin() || can("usuarios", "view")) ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : ""),
              ((isAdmin() || can("backup", "view")) ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : ""),
-             (isAdmin() ? '<button type="button" role="menuitem" data-act="sistema">Sistema</button>' : "")],
+             (isManager() ? '<button type="button" role="menuitem" data-act="sistema">Sistema</button>' : "")],
             // Pessoal
             [(canDefault("senha", "view", true) ? '<button type="button" role="menuitem" data-act="senha">Senha</button>' : ""),
              ((window.pipoNotifAvailable && window.pipoNotifAvailable()) ? '<button type="button" role="menuitem" data-act="notificacoes">Notificações</button>' : ""),
@@ -559,9 +643,19 @@
         showLogin("Seu acesso foi desativado. Fale com o administrador da clínica.");
         return;
       }
-      hideLogin();
-      setProfile(p);
-      readyResolve(true);
+      return loadUnits().then(function () {
+        var u = resolveUnit(p);
+        if (u.erro) {
+          ssSet(LOGIN_MSG_KEY, "Você não tem acesso a esta unidade.");
+          (window.pipoNotifSignOut ? window.pipoNotifSignOut() : Promise.resolve()).then(function () { return client.auth.signOut(); });
+          showLogin("Você não tem acesso a esta unidade.");
+          return;
+        }
+        setCurrentUnit(u.id);
+        hideLogin();
+        setProfile(p);
+        readyResolve(true);
+      });
     }).catch(function (e) {
       showLogin("Não foi possível carregar seu perfil: " + (e.message || e));
     });
@@ -603,7 +697,7 @@
         }
       });
       return client.auth.getSession().then(function (r) {
-        if (!r.data.session) showLogin("");
+        if (!r.data.session) { var m = ssGet(LOGIN_MSG_KEY); ssSet(LOGIN_MSG_KEY, null); showLogin(m || ""); }
       });
     }).catch(function (e) {
       showLogin("Sistema não configurado corretamente (" + (e.message || e) + "). Avise o administrador.");
@@ -620,6 +714,11 @@
     can: can,
     canDefault: canDefault,
     isAdmin: isAdmin,
+    isManager: isManager,
+    unit: function () { return currentUnit; },
+    units: function () { return units.slice(); },
+    unitName: unitName,
+    reloadUnits: function () { return loadUnits(); },
     onRoleChange: function (fn) { roleListeners.push(fn); },
     // Chamada às funções /api/admin-* (só funcionam para Administrador).
     adminApi: function (payload, path) {
