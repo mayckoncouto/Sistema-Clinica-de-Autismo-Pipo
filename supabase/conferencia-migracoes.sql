@@ -122,7 +122,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (108, '2026-10-12g-conciliacao',                   to_regclass('public.finance_statement_lines') is not null, 'Financeiro: conciliação com o extrato (finance_statement_lines)'),
  (109, '2026-10-12h-crm-automacoes',                  to_regclass('public.crm_auto_log') is not null, 'CRM: automações (crm_auto_log, gatilhos e rotina diária)'),
  (110, '2026-10-12i-crm-automacoes-status',           exists(select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname = 'crm_auto_make' and prosrc like '%statusId%'), 'CRM: automações com status da tarefa criada e status que dispara'),
- (111, '2026-10-12j-sala-aba',                         not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') r where d.path = 'config/rooms' and not coalesce((r ->> 'group')::boolean, false) and not (r ? 'aba')), 'Sala com campo ABA (Sim/Não)')
+ (111, '2026-10-12j-sala-aba',                         not exists(select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') r where d.path = 'config/rooms' and not coalesce((r ->> 'group')::boolean, false) and not (r ? 'aba')), 'Sala com campo ABA (Sim/Não)'),
+ (112, '2026-10-12k-unidades-fase1',                  exists(select 1 from public.roles where id = 'gestao' and is_manager) and exists(select 1 from fx where proname = 'login_units'), 'Unidades — Fase 1 (nível Gestão, config/units, profiles.unit_id)')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,
