@@ -43,8 +43,8 @@ const path = require('path');
     }
     return {tested, bad};
   }
-  const tabs = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'escolas', 'colaboradores', 'tiposcolab', 'especialidades', 'servicos', 'cbo', 'conselhos', 'fornecedores', 'catfornecedor', 'contas', 'planocontas', 'lancamentos', 'pagar', 'feriados', 'status'];
-  const addBtn = {pacientes: '#addPatientBtn', tratamentos: '#trAdd', colaboradores: '#staffAddBtn', lancamentos: '#flAdd', pagar: '#fpAdd'};
+  const tabs = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'escolas', 'colaboradores', 'tiposcolab', 'especialidades', 'servicos', 'cbo', 'conselhos', 'fornecedores', 'catfornecedor', 'contas', 'planocontas', 'lancamentos', 'pagar', 'receber', 'feriados', 'status'];
+  const addBtn = {pacientes: '#addPatientBtn', tratamentos: '#trAdd', colaboradores: '#staffAddBtn', lancamentos: '#flAdd', pagar: '#fpAdd', receber: '#frAdd'};
   for (const t of tabs){
     await page.evaluate((t) => { document.querySelector('#mainTabs button[data-tab="' + t + '"]').click(); }, t);
     await page.waitForTimeout(250);

@@ -4105,3 +4105,11 @@ recorrência mensal + parcelas; previsão = contas cadastradas e, onde faltar, a
 - Conta bancária e subcategoria que têm contas a pagar/receber viram **Inativar** (`USAGE.contas`, `USAGE.planocontas`). Ajuda: tópico
   `contas-pagar-receber`. Teste `tests/run_pagar.js` (no `npm test`); `run_cad_titles`, `run_toolbar_rows`, `run_sticky_headers` e `run_cad_sheets` incluem a tela.
 - Fornecedor apagado deixa a conta com o fornecedor em branco (`fpSupName`); ainda não há Inativar para fornecedor.
+- (2026-10-12, pedido do usuário) **Duas telas, uma tabela**: Financeiro ▾ tem **Contas a pagar** (`#tab-pagar`, ids `fp*`) e **Contas a receber**
+  (`#tab-receber`, ids `fr*`), ambas sobre `finance_payables` (sem mudança no banco). A tela vem do tipo da subcategoria (`fpKind`): Despesa/Saída = pagar,
+  Receita/Entrada = receber. `FP.f[pagar|receber]` guarda situação/mês/busca de cada tela; `fpScr()` = tela aberta, `fpId(k, nome)` = id do elemento,
+  `renderContas(k)` (`renderPagar()` = a da tela aberta). Pagar: coluna Fornecedor, botão “Pagar”, cartões A pagar/Vencidas/Vence em 7 dias; subcategorias
+  só despesas e saídas. Receber: coluna Convênio (o convênio ligado à subcategoria no Plano de contas, `fpConvName`), botão “Receber”, cartões
+  A receber/Atrasadas/Vence em 7 dias, subcategorias só receitas e entradas, sem campo Fornecedor. Saiu o filtro de tipo e o cartão “Resultado previsto”,
+  que foi para o Fluxo de caixa (cartão “Contas em aberto: resultado”). Alertas do Fluxo separados (vencidas a pagar / atrasadas a receber), cada um leva
+  à sua tela com o filtro Vencidas/Atrasadas. Mesma permissão **Financeiro** nas duas; permissão separada por tela só se pedirem.

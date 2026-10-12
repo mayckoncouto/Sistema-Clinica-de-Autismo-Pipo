@@ -32,10 +32,10 @@ const fs = require('fs');
 
   // ---- menu e tela ----
   await page.click('#finBtn');
-  check('Financeiro menu lists Contas a pagar e receber after Lançamentos?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,demonstrativos,fornecedores,catfornecedor,contas,planocontas');
+  check('Financeiro menu lists Contas a pagar e receber after Lançamentos?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,demonstrativos,fornecedores,catfornecedor,contas,planocontas');
   await page.click('#finMenu [data-nav="pagar"]'); await page.waitForTimeout(300);
-  check('screen opens with title?', await page.$eval('#tab-pagar', (e) => !e.hidden) && /Contas a pagar e receber/.test(await page.$eval('#tab-pagar .cad-title', (e) => e.textContent)));
-  check('empty state?', /Nenhuma conta cadastrada/.test(await page.textContent('#reg-pagar-host')));
+  check('screen opens with title?', await page.$eval('#tab-pagar', (e) => !e.hidden) && /Contas a pagar/.test(await page.$eval('#tab-pagar .cad-title', (e) => e.textContent)));
+  check('empty state?', /Nenhuma conta a pagar cadastrada/.test(await page.textContent('#reg-pagar-host')));
   check('hash is #pagar?', (await page.evaluate(() => location.hash)) === '#pagar');
 
   // ---- incluir ----
@@ -44,6 +44,7 @@ const fs = require('fs');
   check('empty form refused?', !!(await page.$('#ovFp')));
   await page.fill('#fpDesc', 'Aluguel sede'); await setSel('#fpSub', 'alu'); await setSel('#fpVenc', '2099-01-10'); await page.fill('#fpValor', '3.000,00');
   await setSel('#fpForn', 'imob'); await setSel('#fpConta', 'viacredi');
+  check('Contas a pagar lists only despesa/saída subcategories?', (await page.$$eval('#fpSub option', (o) => o.map((x) => x.value).filter(Boolean))).join() === 'agua,alu');
   check('subcategory hint says a pagar?', /conta a pagar/.test(await page.textContent('#fpSubHint')));
   check('repeat count disabled until repeating?', await page.$eval('#fpRepN', (e) => e.disabled));
   await setSel('#fpRep', '1'); await page.fill('#fpRepN', '3');
@@ -55,20 +56,30 @@ const fs = require('fs');
   check('value shown negative (a pagar)?', /−R\$\s?3\.000,00/.test(r[0]));
   // dia 31 -> último dia do mês
   check('fpAddMonths clamps to the last day?', (await ev('fpAddMonths("2026-01-31", 1)')) === '2026-02-28' && (await ev('fpAddMonths("2026-11-30", 3)')) === '2027-02-28' && (await ev('fpAddMonths("2026-12-15", 2)')) === '2027-02-15');
-  // conta a receber avulsa e vencida
-  await page.click('#fpAdd'); await page.waitForSelector('#ovFp');
+  // conta a receber avulsa e vencida: na tela Contas a receber
+  let r2 = await rows();
+  check('Contas a pagar has the 3 rent accounts only', r2.length === 3);
+  let sum = await page.textContent('#fpSum');
+  check('pagar summary: 9.000 em aberto, nenhuma vencida?', /A pagar \(em aberto\)\s*R\$\s?9\.000,00/.test(sum) && /VencidasNenhuma/.test(sum), sum);
+  await page.click('#finBtn'); await page.click('#finMenu [data-nav="receber"]'); await page.waitForTimeout(300);
+  check('Contas a receber screen with its title and empty state?', /Contas a receber/.test(await page.$eval('#tab-receber .cad-title', (e) => e.textContent)) && /Nenhuma conta a receber cadastrada/.test(await page.textContent('#reg-receber-host')));
+  await page.click('#frAdd'); await page.waitForSelector('#ovFp');
+  check('receber lists only receita/entrada subcategories and has no supplier field?', (await page.$$eval('#fpSub option', (o) => o.map((x) => x.value).filter(Boolean))).join() === 'conv' && !(await page.$('#fpForn')));
   await page.fill('#fpDesc', 'Repasse convênio X'); await setSel('#fpSub', 'conv'); await setSel('#fpVenc', '2020-02-10'); await page.fill('#fpValor', '5000');
   await page.click('#fpSave'); await page.waitForTimeout(250);
-  r = await rows();
-  check('open list has 4 (3 + the overdue)?', r.length === 4, r.length);
-  check('overdue one marked "Vencida" and positive?', r.some((x) => /Repasse convênio X/.test(x) && /Vencida há/.test(x) && /R\$\s?5\.000,00/.test(x) && !/−R\$\s?5/.test(x)), r);
-  const sum = await page.textContent('#fpSum');
-  check('summary: a pagar 9.000, a receber 5.000, resultado −4.000, 1 vencida?', /A pagar \(em aberto\)\s*R\$\s?9\.000,00/.test(sum) && /A receber \(em aberto\)\s*R\$\s?5\.000,00/.test(sum) && /Resultado previsto\s*−R\$\s?4\.000,00/.test(sum) && /Vencidas\s*1 conta/.test(sum), sum);
-  await setSel('#fpSt', 'vencida');
-  check('Vencidas filter shows only the overdue?', (await rows()).length === 1);
-  await setSel('#fpSt', 'aberta'); await setSel('#fpTipo', 'receber');
-  check('tipo a receber shows 1?', (await rows()).length === 1);
-  await setSel('#fpTipo', ''); await setSel('#fpMonth', '2099-02');
+  const rr = await page.$$eval('#reg-receber-host tbody tr', (r) => r.map((x) => x.textContent.replace(/\s+/g, ' ')));
+  check('receber list: overdue marked Atrasada, positive, button Receber?', rr.length === 1 && /Atrasada há/.test(rr[0]) && /R\$\s?5\.000,00/.test(rr[0]) && !/−R\$\s?5/.test(rr[0]) && /Receber$/.test(rr[0]), rr);
+  const sumR = await page.textContent('#frSum');
+  check('receber summary: 5.000 a receber, 1 atrasada?', /A receber \(em aberto\)\s*R\$\s?5\.000,00/.test(sumR) && /Atrasadas\s*R\$\s?5\.000,00 \(1 conta\)/.test(sumR), sumR);
+  check('pagar list does not show the receivable', true);
+  await setSel('#frSt', 'vencida');
+  check('Atrasadas filter shows it', (await page.$$eval('#reg-receber-host tbody tr', (r) => r.length)) === 1);
+  await setSel('#frSt', 'paga');
+  check('Recebidas filter empty', /Nada encontrado/.test(await page.textContent('#reg-receber-host')));
+  await setSel('#frSt', 'aberta');
+  await page.click('#finBtn'); await page.click('#finMenu [data-nav="pagar"]'); await page.waitForTimeout(300);
+  check('pagar list still 3 (receivable not mixed in)?', (await rows()).length === 3);
+  await setSel('#fpMonth', '2099-02');
   check('month filter shows Feb only?', (await rows()).length === 1 && /\(2\/3\)/.test((await rows())[0]));
   await setSel('#fpMonth', '');
   await page.fill('#fpSearch', 'IMOBILIARIA'); await page.waitForTimeout(150);
@@ -97,7 +108,7 @@ const fs = require('fs');
   await page.click('#fpbOk'); await page.waitForTimeout(300);
   check('lançamento created with the paid value, subcategory and label?', (await ev('FL.rows.length')) === 1 && (await ev('FL.rows[0].valor')) === 3250 && (await ev('FL.rows[0].plan')) === 'alu' && /Aluguel sede \(1\/3\)/.test(await ev('FL.rows[0].desc')) && (await ev('FL.rows[0].date')) === '2026-03-15');
   check('account is now paid and linked?', !!(await ev('FP.rows.filter(function(x){return x.parcela===1})[0].entry')));
-  check('open list lost it (3 left)?', (await rows()).length === 3);
+  check('open list lost it (2 left)?', (await rows()).length === 2);
   await setSel('#fpSt', 'paga');
   check('Pagas filter shows it with "Paga em 15/03"?', (await rows()).length === 1 && /Paga em 15\/03/.test((await rows())[0]), await rows());
   await page.click('#reg-pagar-host tbody tr'); await page.waitForSelector('#ovFp');
@@ -105,7 +116,7 @@ const fs = require('fs');
   await page.click('#fpUndo'); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(300);
   check('undo deletes the lançamento and reopens the account?', (await ev('FL.rows.length')) === 0 && !(await ev('FP.rows.filter(function(x){return x.parcela===1})[0].entry')));
   await setSel('#fpSt', 'aberta');
-  check('back to 4 open?', (await rows()).length === 4);
+  check('back to 3 open?', (await rows()).length === 3);
   // apagar o lançamento direto reabre
   await ev('openBaixa(FP.rows.filter(function(x){return x.parcela===2})[0])'); await page.waitForSelector('#ovFpb');
   await setSel('#fpbData', '2026-03-16'); await page.click('#fpbOk'); await page.waitForTimeout(300);
@@ -151,7 +162,7 @@ const fs = require('fs');
   check('saídas of the previsto month = 2000 + 120?', Math.abs(sai - 2120) < 0.01, sai);
   const body = await page.textContent('#demBody');
   check('note explains the forecast source (2 contas cadastradas)?', /2 contas a pagar\/receber cadastradas/.test(body), body.slice(body.indexOf('previsto') - 40, body.indexOf('previsto') + 160));
-  check('overdue accounts raise the alert chip?', /conta a pagar\/receber vencida em aberto|contas a pagar\/receber vencidas em aberto/.test(body));
+  check('overdue payables raise their alert and the open-accounts result card shows?', /3 contas a pagar vencidas em aberto/.test(body) && /Contas em aberto: resultado/.test(body), body.slice(0, 400));
   const hasChart = await page.$('#demBody svg.dem-chart');
   check('balance chart still draws?', !!hasChart);
   // a conta bancária filtrada exclui só as com conta diferente
