@@ -5,7 +5,6 @@ with
 exp_tab(t) as (values
   ('finance_closings'),
   ('finance_closing_log'),
-  ('finance_notes'),
   ('appointments'),
   ('bank_account_finance'),
   ('clinical_records'),
@@ -39,12 +38,6 @@ exp_col(t, c) as (values
   ('finance_closing_log', 'por'),
   ('finance_closing_log', 'por_nome'),
   ('finance_closing_log', 'motivo'),
-  ('finance_notes', 'chave'),
-  ('finance_notes', 'rotulo'),
-  ('finance_notes', 'texto'),
-  ('finance_notes', 'autor'),
-  ('finance_notes', 'autor_nome'),
-  ('finance_notes', 'atualizado_em'),
   ('appointments', 'blocked'),
   ('appointments', 'created_at'),
   ('appointments', 'created_by'),
@@ -235,7 +228,6 @@ exp_col(t, c) as (values
   ('treatment_finance', 'updated_by'),
   ('treatment_finance', 'valor')),
 exp_fn(n, h) as (values
-  ('finance_notes_stamp', '81c19b2fc47045b5313bb5802c9cbf50'),
   ('finance_close_month', '9d2f9fadff24b74e7e814ef0857c2949'),
   ('finance_reopen_month', '1be10f84f20ee0beb5a4c21a3e72eb2b'),
   ('finance_entries_lock', 'c913118bb749b26e6e7aed7801b66a1e'),
@@ -339,7 +331,6 @@ exp_fn(n, h) as (values
   ('treatments_one_active', '33366ead76f798d9f13d206f54f40959')),
 exp_trg(t, n) as (values
   ('finance_entries', 'finance_entries_lock'),
-  ('finance_notes', 'finance_notes_stamp'),
   ('appointments', 'appointments_delete_guard'),
   ('appointments', 'appointments_done_guard'),
   ('appointments', 'appointments_refs'),
@@ -388,10 +379,6 @@ exp_trg(t, n) as (values
 exp_pol(t, n) as (values
   ('finance_closings', 'finance_closings_select'),
   ('finance_closing_log', 'finance_closing_log_select'),
-  ('finance_notes', 'finance_notes_select'),
-  ('finance_notes', 'finance_notes_insert'),
-  ('finance_notes', 'finance_notes_update'),
-  ('finance_notes', 'finance_notes_delete'),
   ('appointments', 'appointments_delete'),
   ('appointments', 'appointments_insert'),
   ('appointments', 'appointments_select'),
@@ -462,7 +449,6 @@ exp_pol(t, n) as (values
 exp_idx(n) as (values
   ('finance_closings_pkey'),
   ('finance_closing_log_pkey'),
-  ('finance_notes_pkey'),
   ('appointments_date_idx'),
   ('appointments_group_id_idx'),
   ('appointments_patient_id_idx'),
@@ -511,7 +497,6 @@ exp_idx(n) as (values
   ('treatment_finance_pkey')),
 exp_pub(t) as (values
   ('finance_closings'),
-  ('finance_notes'),
   ('appointments'),
   ('documents'),
   ('finance_entries'),

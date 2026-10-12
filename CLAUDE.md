@@ -4018,7 +4018,7 @@ filtrado (faixa + Voltar); comparação com o mês anterior ou com um mês de re
   linha 102 de `conferencia-migracoes.sql`; `schema.sql` e `conferencia-geral.sql` atualizados). SQL rodado em produção pelo conector em 2026-10-12, a pedido do usuário (caminho aceito = true, função = true).
 - Teste `tests/run_demonstrativos.js` (no `npm test`); `run_lancamentos.js` passa pelo botão Lançamentos. Ajuda: tópico `lancamentos` (Demonstrativos).
 - Próximas etapas combinadas: **E2** fechamento de mês (permissão "Fechamento de mês"; reabrir qualquer mês com aviso de que o saldo dos meses
-  seguintes muda; mês reaberto edita todos os campos), anotações nas células, resumo mensal em PDF; **E3** custo e receita por atendimento.
+  seguintes muda; mês reaberto edita todos os campos), resumo mensal em PDF; **E3** custo e receita por atendimento.
 - Regras de custo por atendimento decididas (E3, ainda não construída): custo do slot = remuneração mensal ÷ slots disponíveis do mês (13 por dia útil);
   custo de equipe por atendimento = custo do slot do terapeuta ÷ pacientes DELE no horário + custo do slot do apoio (coordenador/aplicador ABA) ÷ todos os
   pacientes das salas que ele cobre; demais custos (fixos, variáveis, não profissionais, impostos — vindos dos Lançamentos — e outros) por hora de sala ocupada,
@@ -4041,23 +4041,22 @@ filtrado (faixa + Voltar); comparação com o mês anterior ou com um mês de re
   `--df + n × 104px + 120px` (abaixo disso rola para o lado).
 - Ajuda: tópicos `lancamentos` e `demonstrativos`. Testes: `run_demonstrativos.js`, `run_lancamentos.js` (cada um abre a sua tela).
 
-## Financeiro — Demonstrativos, Etapa 2: Fechamento de mês, anotações e Resumo mensal (2026-10-12)
+## Financeiro — Demonstrativos, Etapa 2: Fechamento de mês e Resumo mensal (2026-10-12)
 Decisões do usuário: mês fechado trava incluir/editar/excluir/importar lançamentos (vale para todos, inclusive Administrador); **qualquer mês** pode
 ser reaberto, com aviso de que o saldo dos meses seguintes muda (e confirmação); mês reaberto edita todos os campos (sem lançamento de ajuste);
-fechar/reabrir por permissão em Níveis de permissão; anotações nas células; resumo mensal em PDF.
+fechar/reabrir por permissão em Níveis de permissão; resumo mensal em PDF. **Anotações (comentários) nas células foram pedidas e DEPOIS REMOVIDAS pelo usuário (2026-10-12): não existem no Fluxo nem no DRE.**
 - Permissão **Fechamento de mês** (`fechamento_mes`, grupo Financeiro; ver = histórico, incluir = fechar, excluir = reabrir; `MODULES` nos dois js e
   `PERM_MODULE_LABELS`). Nenhum nível recebe: só o Administrador até liberar. Quem vê o Financeiro vê os meses fechados (cadeado).
 - Banco (migração `supabase/2026-10-12b-fechamento-de-mes.sql`; linha 103 de `conferencia-migracoes.sql`; `schema.sql` e `conferencia-geral.sql` atualizados):
   `finance_closings (ym pk, closed_at, closed_by, closed_by_name)` (só leitura direta; escrita pelas funções `finance_close_month(p_ym)` e
   `finance_reopen_month(p_ym, p_motivo)`, que conferem a permissão), `finance_closing_log` (histórico: fechou/reabriu, quem, quando, motivo),
-  `finance_notes (chave pk "tela|linha|aaaa-mm", rotulo, texto ≤1000, autor, autor_nome, atualizado_em)` (lê quem vê Financeiro; grava quem edita Financeiro)
   e o gatilho `finance_entries_lock` (recusa insert/update/delete — e mudar a data para dentro — de lançamento em mês fechado com
   `PIPO_MES_FECHADO:aaaa-mm`; restauração sem usuário passa). `fcErrMsg` traduz o erro.
 - App (bloco "Demonstrativos, etapa 2" depois do bloco de Demonstrativos): `FC` (estado), `fcLoad`, `fcCan`, `fcIsClosed`, `fcDateClosed`, `openFechamento(ym)`
   (janela: mês, situação, pendências = valor ≠ extrato com "estou ciente", aviso de saldo ao reabrir com saldo inicial dos meses seguintes, motivo, histórico),
   cadeado (`DEM_LK`) no cabeçalho do mês e na data dos lançamentos, janela do lançamento em leitura quando o mês é fechado, salvar/importar recusam mês fechado,
-  alerta "mês ainda não foi fechado" (só para quem pode fechar). Anotações: balão `.dem-nt` por célula de um mês (`fcNoteBtn`, `fcOpenNote`, linhas com `nk`).
+  alerta "mês ainda não foi fechado" (só para quem pode fechar).
   Resumo mensal: `openResumoMensal` → `fcFigures` (todas as contas) + `fcResumoHtml` + `demPrintFrame` (KPIs com variação, gráfico 6 meses, DRE resumido,
-  fluxo e saldo por conta, o que mais mudou, anotações do mês, pendências, situação do mês).
-- Teste: `tests/run_demonstrativos.js` (fechar, reabrir com aviso, histórico, trava no app, importação, anotações, resumo, permissões).
-- Produção: SQL ainda NÃO rodado (aguarda autorização do usuário).
+  fluxo e saldo por conta, o que mais mudou, pendências, situação do mês).
+- Teste: `tests/run_demonstrativos.js` (fechar, reabrir com aviso, histórico, trava no app, importação, resumo, permissões; sem campos de anotação).
+- Produção (2026-10-12): rodado pelo conector, a pedido do usuário, em partes — tabelas, políticas, `finance_close_month`, `finance_entries_lock`, publicação; FALTAM (o conector trava em comando com `delete`/`drop`; o usuário roda no SQL Editor): função `finance_reopen_month`, trocar o gatilho `finance_entries_lock` para incluir `delete`, e apagar a tabela `finance_notes` (anotações removidas) com `finance_notes_stamp`.

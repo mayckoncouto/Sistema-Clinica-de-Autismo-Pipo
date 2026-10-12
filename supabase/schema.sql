@@ -6707,13 +6707,12 @@ $function$;
 
 -- Conferência: caminho aceito | função conhece o caminho
 
--- ===== Demonstrativos: fechamento de mês e anotações (2026-10-12b) =====
--- Financeiro — Fechamento de mês e anotações do Demonstrativo (2026-10-12)
+-- ===== Demonstrativos: fechamento de mês (2026-10-12b) =====
+-- Financeiro — Fechamento de mês (2026-10-12)
 --   Mês fechado trava incluir, editar, excluir e importar lançamentos dele (para todos, inclusive o Administrador).
 --   Fechar / reabrir: funções finance_close_month / finance_reopen_month, conforme a permissão "Fechamento de mês"
 --   (fechamento_mes: incluir = fechar, excluir = reabrir, ver = histórico). Nenhum nível recebe: só o Administrador
 --   até você liberar em Níveis de permissão. Quem vê o Financeiro vê os meses fechados.
---   Anotações nas células do Fluxo de caixa e do DRE: quem vê o Financeiro lê; quem edita lançamentos escreve.
 -- Pode rodar de novo.
 
 create table if not exists public.finance_closings (
@@ -6731,20 +6730,9 @@ create table if not exists public.finance_closing_log (
   por_nome text,
   motivo   text
 );
-create table if not exists public.finance_notes (
-  chave         text primary key,                        -- tela|linha|aaaa-mm
-  rotulo        text,                                    -- nome da linha, para o resumo em PDF
-  texto         text not null check (length(btrim(texto)) > 0 and length(texto) <= 1000),
-  autor         uuid references auth.users(id) on delete set null,
-  autor_nome    text,
-  atualizado_em timestamptz not null default now()
-);
-
 alter table public.finance_closings enable row level security;
 alter table public.finance_closing_log enable row level security;
-alter table public.finance_notes enable row level security;
 grant select on public.finance_closings, public.finance_closing_log to authenticated;
-grant select, insert, update, delete on public.finance_notes to authenticated;
 
 drop policy if exists finance_closings_select on public.finance_closings;
 create policy finance_closings_select on public.finance_closings
@@ -6752,34 +6740,6 @@ create policy finance_closings_select on public.finance_closings
 drop policy if exists finance_closing_log_select on public.finance_closing_log;
 create policy finance_closing_log_select on public.finance_closing_log
   for select to authenticated using (public.has_perm('fechamento_mes', 'view'));
-drop policy if exists finance_notes_select on public.finance_notes;
-create policy finance_notes_select on public.finance_notes
-  for select to authenticated using (public.has_perm('financeiro', 'view'));
-drop policy if exists finance_notes_insert on public.finance_notes;
-create policy finance_notes_insert on public.finance_notes
-  for insert to authenticated with check (public.has_perm('financeiro', 'edit'));
-drop policy if exists finance_notes_update on public.finance_notes;
-create policy finance_notes_update on public.finance_notes
-  for update to authenticated using (public.has_perm('financeiro', 'edit')) with check (public.has_perm('financeiro', 'edit'));
-drop policy if exists finance_notes_delete on public.finance_notes;
-create policy finance_notes_delete on public.finance_notes
-  for delete to authenticated using (public.has_perm('financeiro', 'edit'));
-
-create or replace function public.finance_notes_stamp()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  if auth.uid() is null then return new; end if;
-  new.autor := auth.uid();
-  new.autor_nome := (select full_name from public.profiles where id = auth.uid());
-  new.atualizado_em := now();
-  return new;
-end $$;
-drop trigger if exists finance_notes_stamp on public.finance_notes;
-create trigger finance_notes_stamp
-  before insert or update on public.finance_notes
-  for each row execute function public.finance_notes_stamp();
-
--- Fechar e reabrir (única forma de mudar finance_closings)
 create or replace function public.finance_close_month(p_ym text)
 returns void language plpgsql security definer set search_path = public as $$
 declare nm text;
@@ -6830,6 +6790,4 @@ create trigger finance_entries_lock
   for each row execute function public.finance_entries_lock();
 
 do $$ begin alter publication supabase_realtime add table public.finance_closings;
-exception when duplicate_object or undefined_object then null; end $$;
-do $$ begin alter publication supabase_realtime add table public.finance_notes;
 exception when duplicate_object or undefined_object then null; end $$;

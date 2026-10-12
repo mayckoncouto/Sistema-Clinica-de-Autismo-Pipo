@@ -193,29 +193,21 @@ const fs = require('fs');
   const plan = await ev(`(function(){ return JSON.stringify(ioFlPlan([{conta:'Viacredi', descricao:'Imp jan', data:'20/01/2026', valor:'10', sub:'Aluguel', _line:2}, {conta:'Viacredi', descricao:'Imp fev', data:'20/02/2026', valor:'10', sub:'Aluguel', _line:3}]).items.map(function(i){ return i.st; })); })()`);
   check('import: closed month row is a problem, open month row is new', plan === '["problema","novo"]', plan);
 
-  // ---- anotações ----
+  // ---- sem campos de anotação; resumo mensal ----
   await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="demonstrativos"]').click()); await page.waitForTimeout(200);
   await page.click('#demSeg [data-dv="dre"]'); await page.waitForTimeout(200);
-  await page.evaluate(() => { const r = Array.from(document.querySelectorAll('#demBody .dem-table tbody tr')).find((x) => x.cells[0].textContent.trim() === 'Receita total'); r.cells[3].querySelector('.dem-nt').click(); });
-  await page.waitForSelector('#demNotePop');
-  await page.fill('#demNtx', 'Inclui repasse extra'); await page.click('#demNsv'); await page.waitForTimeout(250);
-  check('note saved and flagged on the cell', await page.$$eval('#demBody .dem-nt.has', (b) => b.length) === 1 && (await ev('Object.keys(FC.notes).join()')) === 'dre|rec|2026-03');
-  check('note text in the cell tooltip', /Inclui repasse extra/.test(await page.$eval('#demBody .dem-nt.has', (b) => b.title)));
-  const rs = await ev(`(function(){ return fcResumoHtml(fcFigures('2026-03'), {g:1,d:1,f:1,a:1,n:1}); })()`);
-  check('resumo has title, KPIs, DRE, fluxo, mudou, anotação, fechado', /Resumo financeiro de Março de 2026/.test(rs) && /R\$ 12\.000/.test(rs) && /DRE resumido/.test(rs) && /Fluxo de caixa/.test(rs) && /O que mais mudou/.test(rs) && /Inclui repasse extra/.test(rs) && /Mês fechado por/.test(rs));
+  check('no comment/note buttons in the DRE or Fluxo cells', !(await page.$('#demBody .dem-nt')) && !(await page.$('#demNotePop')));
+  const rs = await ev(`(function(){ return fcResumoHtml(fcFigures('2026-03'), {g:1,d:1,f:1,a:1}); })()`);
+  check('resumo has title, KPIs, DRE, fluxo, mudou, fechado and no notes', /Resumo financeiro de Março de 2026/.test(rs) && /R\$ 12\.000/.test(rs) && /DRE resumido/.test(rs) && /Fluxo de caixa/.test(rs) && /O que mais mudou/.test(rs) && /Mês fechado por/.test(rs) && !/Anotaç/.test(rs));
   await openMenu(); await page.click('#demMenu [data-dact="resumo"]'); await page.waitForSelector('#ovRm');
-  check('Resumo mensal window lists months and 5 options', (await page.$$eval('#rmMes option', (o) => o.length)) === 3 && (await page.$$eval('#ovRm [data-ro]', (o) => o.length)) === 5);
+  check('Resumo mensal window lists months and 4 options', (await page.$$eval('#rmMes option', (o) => o.length)) === 3 && (await page.$$eval('#ovRm [data-ro]', (o) => o.length)) === 4);
   await page.click('#rmCancel'); await page.waitForTimeout(100);
-  // excluir anotação
-  await page.evaluate(() => document.querySelector('#demBody .dem-nt.has').click()); await page.waitForSelector('#demNrm');
-  await page.click('#demNrm'); await page.waitForTimeout(250);
-  check('note deleted', (await ev('Object.keys(FC.notes).length')) === 0);
 
   // ---- permissões do fechamento ----
   await page.evaluate(() => { window.pipoAuth = { can: (m, a) => m === 'financeiro' && a === 'view', canDefault: () => true, isAdmin: () => false, onProfile: () => {} }; });
   await ev('renderDemonstrativos()'); await page.waitForTimeout(150);
   await openMenu();
-  check('without fechamento_mes: no Fechamento item; no alert; no note button', !(await page.$('#demMenu [data-dact="fech"]')) && !/ainda não foi fechado/.test(await page.$eval('#demBody', (e) => e.textContent)) && !(await page.$('#demBody .dem-nt')));
+  check('without fechamento_mes: no Fechamento item; no alert', !(await page.$('#demMenu [data-dact="fech"]')) && !/ainda não foi fechado/.test(await page.$eval('#demBody', (e) => e.textContent)));
   await page.keyboard.press('Escape');
   await page.evaluate(() => { window.pipoAuth = { can: (m, a) => (m === 'financeiro' && a === 'view') || (m === 'fechamento_mes' && a === 'create'), canDefault: () => true, isAdmin: () => false, onProfile: () => {} }; });
   await ev('renderDemonstrativos()'); await page.waitForTimeout(150);
