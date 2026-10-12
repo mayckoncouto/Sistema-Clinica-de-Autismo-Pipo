@@ -4079,3 +4079,29 @@ especialidades pelas sessões (receita sem convênio ligado e financeira ficam �
   Fechamento de mês. Sem a permissão "Colaboradores – valores" a tela explica e não calcula; para quem só vê a própria agenda os números ficam parciais.
 - Sem SQL. Teste `tests/run_custo.js` (no `npm test`, junto com `run_demonstrativos.js`).
 - (2026-10-12, pedidos do usuário) **Financeiro no celular**: cartões de resumo (Lançamentos e Demonstrativos) numa fileira que desliza com um pedaço do próximo cartão à mostra (escolha B do usuário: `.fl-card` 42% da largura, `scroll-snap`, sem barra de rolagem); barra de Lançamentos em 3 linhas abaixo do título (busca / mês, conta, tipo / contador com "…", + Incluir, "Opções", ?); data curta dd/mm/aa na lista (`.pm-lg`/`.pm-sm` em `#reg-lancamentos-host`); gráficos dos Demonstrativos com desenho mais estreito e letras maiores no celular (`demFz`, `W`/`H`/margens por `isMobileView()`); Plano de contas no celular só Subcategoria e Tipo.
+
+## Financeiro — Contas a pagar e a receber (2026-10-12)
+Pedido do usuário: "Meta e alerta de saldo baixo", "Contas a pagar e a receber", "Empréstimos" e "Conciliação com o extrato", nesta
+ordem de entrega: **2 (contas) → 1 (saldo mínimo) → 3 → 4** (cada um usa o anterior). Este bloco é o item 2.
+Decisões do usuário: cadastro à parte + **Baixar** (a conta vira Lançamento; Lançamentos continuam sendo só o que aconteceu);
+recorrência mensal + parcelas; previsão = contas cadastradas e, onde faltar, a média dos 3 últimos meses; mesma permissão **Financeiro**.
+- Menu Financeiro ▾ → **Contas a pagar e receber** (2º item, `#tab-pagar`, aba `pagar`, endereço `#pagar`, `FIN_ITEMS`/`FIN_TABS`,
+  `tabModule.pagar = "financeiro"`). Bloco "Contas a pagar e a receber" no script, antes de Demonstrativos: `FP` (estado: `rows`, filtros
+  `st` aberta|vencida|paga|"", `tipo`, `ym`, `q`), `fpLoad`, `fpSave`, `fpInsertMany`, `fpDelete`, `fpSettle`, `fpKind` (Receita/Entrada = receber,
+  Despesa/Saída = pagar, pelo tipo da subcategoria), `fpStatus`, `fpLabel` (descrição + “(i/n)”), `fpAddMonths` (mês curto = último dia),
+  `renderPagar`, `openConta`, `openBaixa`, `pagarOnShow`, `wirePagar`. Sem sistema online tudo fica em memória (`FP.rows`, e a baixa cria em `FL.rows`).
+- Tabela `public.finance_payables (id, vencimento, descricao, plan_id, account_id, supplier_id, valor, entry_id → finance_entries on delete set null,
+  grupo, parcela, parcelas, obs, carimbos)` com RLS `has_perm('financeiro', …)`; sem `entry_id` = em aberto. Função **`finance_payable_settle`**
+  (security invoker: cria o lançamento e liga, numa transação; precisa de incluir lançamento e editar conta; mês fechado barra pelo gatilho
+  `finance_entries_lock`). Apagar o lançamento reabre a conta (`flDeleteRow` também zera `entry` em `FP.rows`). Migração
+  `supabase/2026-10-12c-contas-a-pagar-e-receber.sql` (testada no PGlite com RLS e CRLF; linha 104 de `conferencia-migracoes.sql`;
+  `schema.sql` e `conferencia-geral.sql` atualizados). Backup inclui `finance_payables` (`BACKUP_TABLES`, `api/admin-backup.js`).
+- Repetição só ao incluir: “Todo mês” + quantas contas ao todo (2–60), todas com o mesmo `grupo`. Editar/excluir uma conta de grupo: caixa
+  “Aplicar também às próximas contas em aberto” (`#fpNext`). Conta paga é só leitura (**Desfazer baixa** apaga o lançamento).
+- **Previsto do Fluxo de caixa** (`demForecast(col)`, chamado em `demColumns`): por subcategoria, soma das contas em aberto com vencimento até o fim
+  do mês previsto (as vencidas entram nele); sem conta cadastrada na subcategoria, média dos meses-base. O resultado é gravado em `DM.ix.plan` como se
+  fosse um mês real e `demVal` usa `line.fn(col.ms)` quando `col.inj`. Gráfico de saldo: contas no dia do vencimento + média espalhada pelo desenho
+  dos dias do último mês (`demDaily(ym, only)`). Texto: `demForecastText`. Alerta “N contas vencidas em aberto” (leva à tela com o filtro Vencidas).
+- Conta bancária e subcategoria que têm contas a pagar/receber viram **Inativar** (`USAGE.contas`, `USAGE.planocontas`). Ajuda: tópico
+  `contas-pagar-receber`. Teste `tests/run_pagar.js` (no `npm test`); `run_cad_titles`, `run_toolbar_rows`, `run_sticky_headers` e `run_cad_sheets` incluem a tela.
+- Fornecedor apagado deixa a conta com o fornecedor em branco (`fpSupName`); ainda não há Inativar para fornecedor.

@@ -2602,6 +2602,15 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
   #reg-lancamentos-host .pat-table col:nth-child(7){width:112px!important}
   #tab-lancamentos .pat-toolbar > .dp-btn{flex:1 1 30%;min-width:0}
   #tab-lancamentos .pat-toolbar > .dp-btn .dp-txt{overflow:hidden;text-overflow:ellipsis}
+  /* Contas a pagar e receber: título / busca / situação, tipo, mês / contador, + Incluir, ? */
+  #tab-pagar .pat-toolbar > .pat-count{flex:1 1 90px!important;min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #tab-pagar .pat-toolbar > :is(#fpAdd,.help-q){flex:none}
+  #reg-pagar-host .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(6)):not(:nth-child(8)){display:none}
+  #reg-pagar-host .pat-table col:nth-child(1){width:84px!important}
+  #reg-pagar-host .pat-table col:nth-child(6){width:104px!important}
+  #reg-pagar-host .pat-table col:nth-child(8){width:84px!important}
+  #tab-pagar .pat-toolbar > .dp-btn{flex:1 1 30%;min-width:0}
+  #tab-pagar .pat-toolbar > .dp-btn .dp-txt{overflow:hidden;text-overflow:ellipsis}
 }
 </style>
 <!-- APP-HEAD:END -->
@@ -2704,6 +2713,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <button data-tab="crm" hidden>CRM</button>
       <div class="cad-wrap"><button type="button" class="cad-btn" id="finBtn" aria-haspopup="menu" aria-expanded="false">Financeiro <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="finMenu" role="menu" hidden></div></div>
       <button data-tab="lancamentos" hidden>Lançamentos</button>
+      <button data-tab="pagar" hidden>Contas a pagar e receber</button>
       <button data-tab="demonstrativos" hidden>Demonstrativos</button>
       <button data-tab="pacientes" hidden>Pacientes</button>
       <button data-tab="tratamentos" hidden>Tratamentos</button>
@@ -3191,6 +3201,22 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
     <div id="demStrip" class="dem-strip dem-off"></div>
     <div id="flSum" class="fl-sum"></div>
     <div id="reg-lancamentos-host" class="reg-host"></div>
+  </section>
+  <section id="tab-pagar" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="fpSearch" type="text" placeholder="Buscar descrição, fornecedor ou subcategoria…">
+      </div>
+      <select id="fpSt" aria-label="Situação"></select>
+      <select id="fpTipo" aria-label="Tipo"></select>
+      <select id="fpMonth" aria-label="Mês do vencimento"></select>
+      <span class="pat-count" id="fpCount"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="fpAdd">+ Incluir</button>
+    </div>
+    <div id="fpSum" class="fl-sum"></div>
+    <div id="reg-pagar-host" class="reg-host"></div>
   </section>
   <section id="tab-demonstrativos" class="panel reg-panel" hidden>
     <div class="pat-toolbar dem-toolbar">
@@ -4694,7 +4720,7 @@ function permToolClasses(){
 function applyPermissionsUI(){
   if (HEALTH.map === null && healthCanSee()) healthLoad();
   if (!window.pipoAuth) return;
-  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro"};
+  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", pagar:"financeiro"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : k === "crm" ? crmMainCan() : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -4835,12 +4861,12 @@ function cadTitleText(k){
   return ({pacientes: "Pacientes", tratamentos: "Tratamentos", convenios: "Convênios", motivos: "Motivos de cancelamento",
     medicos: "Médicos", escolas: "Escolas", diagnosticos: "Diagnósticos", origens: "Origens", colaboradores: "Colaboradores",
     tiposcolab: "Tipos de colaborador", profissionais: "Profissionais", especialidades: "Especialidades", servicos: "Serviços",
-    cbo: "CBO", conselhos: "Conselhos", fornecedores: "Fornecedores", catfornecedor: "Categorias de fornecedor", contas: "Contas bancárias", planocontas: "Plano de contas", lancamentos: "Lançamentos", demonstrativos: "Demonstrativos", feriados: "Feriados e recessos", status: "Status", objetivos: "Objetivos",
+    cbo: "CBO", conselhos: "Conselhos", fornecedores: "Fornecedores", catfornecedor: "Categorias de fornecedor", contas: "Contas bancárias", planocontas: "Plano de contas", lancamentos: "Lançamentos", pagar: "Contas a pagar e receber", demonstrativos: "Demonstrativos", feriados: "Feriados e recessos", status: "Status", objetivos: "Objetivos",
     escalas: "Escalas", habilidades: "Habilidades"})[k] || "";
 }
 function cadTitlesInit(){
   ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "colaboradores", "tiposcolab",
-   "profissionais", "especialidades", "servicos", "cbo", "conselhos", "fornecedores", "catfornecedor", "contas", "planocontas", "lancamentos", "demonstrativos", "salas", "feriados", "status", "objetivos", "escalas", "habilidades"].forEach(function(k){
+   "profissionais", "especialidades", "servicos", "cbo", "conselhos", "fornecedores", "catfornecedor", "contas", "planocontas", "lancamentos", "pagar", "demonstrativos", "salas", "feriados", "status", "objetivos", "escalas", "habilidades"].forEach(function(k){
     var sec = document.getElementById("tab-" + k), tb = sec && sec.querySelector(".pat-toolbar");
     if (!tb || tb.querySelector(".cad-title")) return;
     tb.insertAdjacentHTML("afterbegin", '<h2 class="cad-title" data-cad-title="' + k + '">' + esc(cadTitleText(k)) + '</h2>');
@@ -8197,6 +8223,7 @@ function wireTabs(){
       else if (state.tab === "relatorios") rpOnShow();
       else if (state.tab === "tratamentos"){ renderTreatmentsTab(); trLoadFinance(); }
       else if (state.tab === "lancamentos") flOnShow();
+      else if (state.tab === "pagar") pagarOnShow();
       else if (state.tab === "demonstrativos") demOnShow();
       else if (state.tab === "ajuda") renderHelp();
       else if (state.tab === "colaboradores") staffOnShow();
@@ -20982,10 +21009,15 @@ var HELP_TOPICS = [
     steps: ["Financeiro → <b>Lançamentos</b>. Escolha o <b>mês</b>, a <b>conta</b> e o <b>tipo</b> para filtrar; a busca procura na descrição, na conta e na subcategoria.", "<b>+ Incluir</b>: escolha a conta, a data, escreva a descrição, escolha a subcategoria e digite o valor (sempre positivo). Se quiser conferir com o banco, preencha a data e o valor do extrato.", "Clique numa linha para editar ou excluir.", "<b>Outras opções ▾</b> exporta e importa os lançamentos por planilha Excel, com as mesmas colunas da aba FLUXO (Conta, Descrição, Data, Valor, Sub-Categoria, Data Extrato, Valor Extrato) e abre o <b>Fechamento de mês</b>."],
     rules: ["O sinal vem da subcategoria: <b>Receita</b> e <b>Entrada</b> somam no saldo; <b>Despesa</b> e <b>Saída</b> diminuem. Só Receita e Despesa entram no resultado (DRE).", "O <b>saldo de cada conta</b> é o saldo inicial (Financeiro → Contas bancárias) mais os lançamentos desde a data desse saldo; ele só aparece para quem tem <b>Financeiro – valores</b>.", "Valor diferente do extrato fica em destaque, para você conferir.", "Importar a mesma planilha de novo não duplica: lançamento igual (conta, data, descrição, valor e subcategoria) aparece como Igual. Conta ou subcategoria que não está cadastrada, ou mês fechado, vira “Com problema” e não é importado.", "Mês fechado mostra um cadeado e não aceita incluir, editar, excluir nem importar lançamentos; reabra o mês em Outras opções → Fechamento de mês.", "Conta ou subcategoria que já tem lançamentos não é excluída: é <b>Inativada</b>. <b>Excluir</b> um lançamento pede sempre uma confirmação."],
     who: "Permissão <b>Financeiro</b> (ver, incluir, editar e excluir) em Níveis de permissão; o saldo das contas, com <b>Financeiro – valores</b>."},
+  {id: "contas-pagar-receber", group: "Financeiro", title: "Contas a pagar e receber", mod: "financeiro", tab: "pagar",
+    purpose: "O que a clínica ainda vai pagar ou receber: aluguel, salários, fornecedores, repasses de convênio. Quando a conta é paga ou recebida, ela vira um lançamento. As contas em aberto alimentam a coluna “previsto” do Fluxo de caixa, que fica mais exata do que só a média dos meses anteriores.",
+    steps: ["Financeiro → <b>Contas a pagar e receber</b>. Os filtros mostram as contas <b>em aberto</b>, <b>vencidas</b>, <b>pagas / recebidas</b> ou todas, a pagar ou a receber, e por mês de vencimento.", "<b>+ Incluir</b>: descrição, subcategoria (o tipo dela diz se é a pagar ou a receber), vencimento, valor, fornecedor e conta bancária prevista. Em <b>Repetição</b>, escolha <b>Todo mês</b> e quantas contas ao todo: o sistema cria uma para cada mês, no mesmo dia.", "Para pagar ou receber, clique em <b>Pagar</b> / <b>Receber</b> na linha: informe a data, a conta bancária e o valor realmente pago (se mudou) e confirme. O lançamento é criado em <b>Lançamentos</b> e a conta passa a <b>paga / recebida</b>.", "Para alterar uma conta que se repete, marque “Aplicar também às próximas contas em aberto” antes de salvar ou de excluir.", "<b>Desfazer baixa</b> (na conta já paga) exclui o lançamento e a conta volta para em aberto. Apagar o lançamento direto em Lançamentos tem o mesmo efeito."],
+    rules: ["O valor é sempre positivo; o sinal vem da subcategoria do Plano de contas (Receita e Entrada = a receber; Despesa e Saída = a pagar).", "Conta paga não é editada nem excluída: desfaça a baixa primeiro. Lançamento em mês fechado não pode ser criado nem apagado (reabra o mês em Demonstrativos).", "No Fluxo de caixa, o <b>previsto</b> usa as contas em aberto de cada subcategoria; onde não há conta cadastrada, vale a média dos últimos 3 meses. Um alerta avisa quando há contas vencidas em aberto.", "Conta bancária e subcategoria que têm contas a pagar ou receber não são excluídas: ficam <b>Inativadas</b>."],
+    who: "Permissão <b>Financeiro</b> (ver, incluir, editar e excluir). Pagar / receber precisa de incluir lançamento e editar contas."},
   {id: "demonstrativos", group: "Financeiro", title: "Demonstrativos", mod: "financeiro", tab: "demonstrativos",
     purpose: "O painel do financeiro, com dois botões: <b>Fluxo de caixa</b> (o que entrou, o que saiu e o saldo) e <b>DRE</b> (receitas, despesas e resultado). Tudo é calculado dos <b>Lançamentos</b>: nada é digitado de novo.",
     steps: ["Financeiro → <b>Demonstrativos</b>. Abre no <b>Fluxo de caixa</b>; troque para o DRE pelos botões no alto.", "Escolha o <b>ano</b>, o <b>período</b> (mês a mês, trimestres ou um mês) e a <b>conta</b>. A busca filtra as linhas.", "<b>Clique em qualquer valor</b> para ver os lançamentos que formam aquele total: abre a tela Lançamentos já filtrada, com uma faixa no alto. <b>Voltar</b> leva de volta ao Fluxo de caixa ou ao DRE; <b>Limpar filtro</b> mostra tudo de novo.", "<b>Comparação:</b> compare cada mês com o mês anterior ou com um mês de referência, mostrando a diferença em %, em R$ ou nos dois.", "No <b>DRE</b>, a lista <b>Visão</b> escolhe quais categorias aparecem. Em <b>Outras opções ▾ → Nova visão…</b> você marca as categorias, dá um nome e salva; a visão vale para todos que veem o Financeiro.", "<b>Outras opções ▾</b> também exporta o quadro para Excel, imprime ou salva em PDF, mostra ou esconde o gráfico e os alertas e oculta as linhas zeradas.", "<b>Outras opções ▾ → Fechamento de mês…</b>: escolha o mês e feche. Mês fechado mostra um cadeado e não aceita incluir, editar, excluir nem importar lançamentos. Para mexer de novo, reabra o mês: informe o motivo e confirme que está ciente de que o saldo dos meses seguintes vai mudar.", "<b>Outras opções ▾ → Resumo mensal em PDF…</b>: escolha o mês e o que entra (gráfico, DRE resumido, fluxo de caixa e saldo por conta, o que mais mudou) e gere uma página pronta para sócios ou contador."],
-    rules: ["<b>Custo por atendimento</b> (terceiro botão): escolha o mês. A equipe paga no mês (Despesas com Funcionários) é dividida pela remuneração cadastrada em Colaboradores; o custo do slot de cada profissional é dividido entre os pacientes dele no horário, e o do coordenador ou aplicador ABA (agendados num Grupo de Suporte) entre todos os pacientes da sala. Fixos, variáveis, impostos, outras despesas e o pessoal que não atende são rateados por hora de sala ocupada. Conta todas as sessões agendadas, qualquer status; a receita vem dos Lançamentos ligados ao convênio no Plano de contas. Mostra por especialidade, por convênio, a matriz convênio × especialidade, o custo por número de pacientes no horário e a ociosidade de equipe. Precisa de “Colaboradores – valores”.", "O sinal vem da subcategoria do Plano de contas: <b>Receita</b> e <b>Entrada</b> somam no saldo; <b>Despesa</b> e <b>Saída</b> diminuem. Só Receita e Despesa entram no resultado (DRE); as outras entram só no Fluxo de caixa.", "O <b>saldo</b> é o saldo inicial das contas (Financeiro → Contas bancárias) mais os lançamentos; ele só aparece para quem tem <b>Financeiro – valores</b>.", "A coluna <b>previsto</b> do Fluxo de caixa usa a média dos últimos 3 meses; o gráfico mostra o saldo dia a dia, com o dia mais apertado marcado.", "Os alertas apontam, por exemplo, categoria de despesa bem acima da média dos meses anteriores e lançamentos com valor diferente do extrato; clique para ver os lançamentos.", "Conta ou subcategoria que já tem lançamentos não é excluída: é <b>Inativada</b>. <b>Excluir</b> um lançamento pede sempre uma confirmação.", "O fechamento vale para todos, inclusive o Administrador; o banco também recusa mexer em mês fechado. Qualquer mês pode ser reaberto, e o histórico mostra quem fechou ou reabriu, quando e por quê. O alerta “mês ainda não foi fechado” aparece para quem pode fechar."],
+    rules: ["<b>Custo por atendimento</b> (terceiro botão): escolha o mês. A equipe paga no mês (Despesas com Funcionários) é dividida pela remuneração cadastrada em Colaboradores; o custo do slot de cada profissional é dividido entre os pacientes dele no horário, e o do coordenador ou aplicador ABA (agendados num Grupo de Suporte) entre todos os pacientes da sala. Fixos, variáveis, impostos, outras despesas e o pessoal que não atende são rateados por hora de sala ocupada. Conta todas as sessões agendadas, qualquer status; a receita vem dos Lançamentos ligados ao convênio no Plano de contas. Mostra por especialidade, por convênio, a matriz convênio × especialidade, o custo por número de pacientes no horário e a ociosidade de equipe. Precisa de “Colaboradores – valores”.", "O sinal vem da subcategoria do Plano de contas: <b>Receita</b> e <b>Entrada</b> somam no saldo; <b>Despesa</b> e <b>Saída</b> diminuem. Só Receita e Despesa entram no resultado (DRE); as outras entram só no Fluxo de caixa.", "O <b>saldo</b> é o saldo inicial das contas (Financeiro → Contas bancárias) mais os lançamentos; ele só aparece para quem tem <b>Financeiro – valores</b>.", "A coluna <b>previsto</b> do Fluxo de caixa usa, em cada subcategoria, as <b>contas a pagar e a receber</b> cadastradas para o mês (as vencidas em aberto entram nele) e, onde não há conta cadastrada, a média dos últimos 3 meses. O gráfico mostra o saldo dia a dia — as contas cadastradas caem no dia do vencimento —, com o dia mais apertado marcado.", "Os alertas apontam, por exemplo, categoria de despesa bem acima da média dos meses anteriores e lançamentos com valor diferente do extrato; clique para ver os lançamentos.", "Conta ou subcategoria que já tem lançamentos não é excluída: é <b>Inativada</b>. <b>Excluir</b> um lançamento pede sempre uma confirmação.", "O fechamento vale para todos, inclusive o Administrador; o banco também recusa mexer em mês fechado. Qualquer mês pode ser reaberto, e o histórico mostra quem fechou ou reabriu, quando e por quê. O alerta “mês ainda não foi fechado” aparece para quem pode fechar."],
     who: "Permissão <b>Financeiro</b> (ver, incluir, editar e excluir) em Níveis de permissão; o saldo das contas, com <b>Financeiro – valores</b>. <b>Fechamento de mês</b> (ver = histórico, incluir = fechar, excluir = reabrir)."},
   {id: "diagnosticos", group: "Cadastros", title: "Diagnósticos", mod: "diagnosticos", tab: "diagnosticos",
     purpose: "Lista de diagnósticos escolhida no cadastro do paciente (grupo Saúde) e nos dados do lead do CRM. Cada diagnóstico tem o nome e, à parte, o código CID.",
@@ -21440,7 +21472,7 @@ var HELP_NEWS = [];
 var HELP = {topic: "inicio", search: ""};
 var HELP_TAB_TOPIC = {crm: "crm", inicio: "inicio", planner: "planner", visaogeral: "visaogeral", resumo: "resumo", disponibilidade: "disponibilidade", agenda: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "colaboradores", convenios: "convenios", servicos: "servicos",
-  especialidades: "especialidades", motivos: "motivos", status: "agenda-status", medicos: "medicos", escolas: "escolas", diagnosticos: "diagnosticos", origens: "origens", cbo: "cbo", conselhos: "conselhos", fornecedores: "fornecedores", catfornecedor: "fornecedores", contas: "contas-bancarias", planocontas: "plano-de-contas", lancamentos: "lancamentos", demonstrativos: "demonstrativos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
+  especialidades: "especialidades", motivos: "motivos", status: "agenda-status", medicos: "medicos", escolas: "escolas", diagnosticos: "diagnosticos", origens: "origens", cbo: "cbo", conselhos: "conselhos", fornecedores: "fornecedores", catfornecedor: "fornecedores", contas: "contas-bancarias", planocontas: "plano-de-contas", lancamentos: "lancamentos", pagar: "contas-pagar-receber", demonstrativos: "demonstrativos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
   planos: "plano-terapeutico", objetivos: "objetivos", escalas: "escalas", habilidades: "habilidades"};
 function helpCan(t){
   if (!t.mod) return true;
@@ -21753,6 +21785,7 @@ var BACKUP_TABLES = [
   {name: "convenio_finance", order: "id", label: "Valores dos convênios", restore: true, optional: true},
   {name: "bank_account_finance", order: "account_id", label: "Saldo inicial das contas", restore: true, optional: true},
   {name: "finance_entries", order: "id", label: "Lançamentos financeiros", restore: true, optional: true},
+  {name: "finance_payables", order: "id", label: "Contas a pagar e a receber", restore: true, optional: true},
   {name: "staff", order: "id", label: "Colaboradores", restore: true, optional: true},
   {name: "staff_pay", order: "staff_id", label: "Remuneração dos colaboradores", restore: true, optional: true},
   {name: "therapy_plans", order: "id", label: "Planos terapêuticos", restore: true, optional: true},
@@ -22641,6 +22674,7 @@ var PR_TABS = ["prontuario", "planos", "objetivos", "escalas", "habilidades"];
 // Financeiro ▾: lançamentos (e, nas próximas fases, fluxo de caixa e DRE).
 var FIN_ITEMS = [
   {key: "lancamentos", label: "Lançamentos", tab: "lancamentos", ok: function(){ return can("financeiro", "view"); }},
+  {key: "pagar", label: "Contas a pagar e receber", tab: "pagar", ok: function(){ return can("financeiro", "view"); }},
   {key: "demonstrativos", label: "Demonstrativos", tab: "demonstrativos", ok: function(){ return can("financeiro", "view"); }},
   // Cadastros que envolvem o financeiro
   {sep: true, key: "fornecedores", label: "Fornecedores", tab: "fornecedores", ok: function(){ return can("fornecedores", "view"); }},
@@ -22648,7 +22682,7 @@ var FIN_ITEMS = [
   {sep: true, key: "contas", label: "Contas bancárias", tab: "contas", ok: function(){ return can("contas_bancarias", "view"); }},
   {key: "planocontas", label: "Plano de contas", tab: "planocontas", ok: function(){ return can("plano_contas", "view"); }}
 ];
-var FIN_TABS = ["lancamentos", "demonstrativos", "fornecedores", "catfornecedor", "contas", "planocontas"];
+var FIN_TABS = ["lancamentos", "pagar", "demonstrativos", "fornecedores", "catfornecedor", "contas", "planocontas"];
 var NAV_MENUS = [
   {btn: "cadBtn", menu: "cadMenu", items: CAD_ITEMS, tabs: CAD_TABS},
   {btn: "plBtn", menu: "plMenu", items: PL_ITEMS, tabs: PL_TABS},
@@ -22843,6 +22877,7 @@ function wireMobileNav(){
       if (state.tab === "crm") crmFillFilters();     // rótulos curtos dos filtros no celular
       if (state.tab === "visaogeral" && typeof vgFillFilters === "function") vgFillFilters();
       if (state.tab === "lancamentos") renderLancamentos();
+      if (state.tab === "pagar") renderPagar();
       if (state.tab === "demonstrativos") renderDemonstrativos();
     };
     if (MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener("change", onMq); else if (MOBILE_MQ.addListener) MOBILE_MQ.addListener(onMq);
@@ -26662,7 +26697,11 @@ function flSaveRow(r, isNew){
 }
 function flDeleteRow(id){
   var c = agdClient();
-  var done = function(){ FL.rows = (FL.rows || []).filter(function(x){ return x.id !== id; }); return true; };
+  var done = function(){
+    FL.rows = (FL.rows || []).filter(function(x){ return x.id !== id; });
+    if (typeof FP !== "undefined" && FP.rows) FP.rows = FP.rows.map(function(p){ return p.entry === id ? Object.assign({}, p, {entry: ""}) : p; });   // a conta a pagar/receber ligada volta a ficar em aberto
+    return true;
+  };
   if (!c) return Promise.resolve(done());
   return c.from("finance_entries").delete().eq("id", id).then(function(res){
     if (res.error){ showToast("Não foi possível excluir o lançamento: " + fcErrMsg(res.error), true); return false; }
@@ -26885,6 +26924,382 @@ function wireLancamentos(){
     h.addEventListener("keydown", function(e){ if (e.key === "Enter") open(e); });
   }
 }
+/* ---------------- Financeiro: Contas a pagar e a receber (2026-10-12) ----------------
+ * Menu Financeiro ▾ → Contas a pagar e receber (#tab-pagar). Contas PREVISTAS (tabela finance_payables, permissão
+ * "Financeiro"): vencimento, descrição, subcategoria do Plano de contas (o tipo dá "a pagar" ou "a receber"),
+ * fornecedor, conta prevista e valor. Baixar = a conta foi paga/recebida: o sistema cria o Lançamento (o dinheiro que
+ * passou) e liga os dois. Apagar o lançamento reabre a conta. Repetição: todo mês, N vezes (mesmo grupo).
+ * Alimenta a coluna “previsto” do Fluxo de caixa (Demonstrativos). Sem o sistema online (testes) fica em memória.
+ */
+var FP = {rows: null, loading: null, st: "aberta", tipo: "", ym: "", q: ""};
+function fpCan(a){ return can("financeiro", a); }
+function fpFromDb(x){
+  return {id: x.id, venc: x.vencimento, desc: x.descricao || "", plan: x.plan_id || "", acc: x.account_id || "", sup: x.supplier_id || "",
+    valor: Number(x.valor) || 0, entry: x.entry_id || "", grupo: x.grupo || "", parcela: x.parcela || 0, parcelas: x.parcelas || 0, obs: x.obs || ""};
+}
+function fpToDb(r){
+  return {vencimento: r.venc, descricao: r.desc, plan_id: r.plan || null, account_id: r.acc || null, supplier_id: r.sup || null, valor: r.valor,
+    grupo: r.grupo || null, parcela: r.parcela || null, parcelas: r.parcelas || null, obs: r.obs || null};
+}
+function fpLoad(force){
+  var c = agdClient();
+  if (!c){ if (!FP.rows) FP.rows = []; return Promise.resolve(); }
+  if (!fpCan("view")){ FP.rows = []; return Promise.resolve(); }
+  if (FP.loading) return FP.loading;
+  if (FP.rows && !force) return Promise.resolve();
+  FP.loading = dbAll(function(){ return c.from("finance_payables").select("*").order("id"); }).then(function(r){
+    FP.loading = null;
+    if (r.error){
+      FP.rows = FP.rows || [];
+      showToast("Não foi possível ler as contas a pagar e receber: " + r.error.message + (/does not exist|relation/i.test(r.error.message || "") ? " (rode o SQL 2026-10-12c)" : ""), true);
+      return;
+    }
+    FP.rows = (r.data || []).map(fpFromDb);
+  }, function(){ FP.loading = null; FP.rows = FP.rows || []; });
+  return FP.loading;
+}
+function fpSave(r, isNew){
+  var c = agdClient();
+  if (!c){
+    FP.rows = FP.rows || [];
+    if (isNew){ r = Object.assign({}, r, {id: r.id || uid("fp")}); FP.rows.push(r); }
+    else FP.rows = FP.rows.map(function(x){ return x.id === r.id ? Object.assign({}, x, r) : x; });
+    return Promise.resolve(r);
+  }
+  var q = isNew ? c.from("finance_payables").insert(fpToDb(r)).select().single() : c.from("finance_payables").update(fpToDb(r)).eq("id", r.id).select().single();
+  return q.then(function(res){
+    if (res.error || !res.data){ showToast("Não foi possível salvar a conta: " + ((res.error && fcErrMsg(res.error)) || "sem permissão"), true); return null; }
+    var n = fpFromDb(res.data);
+    FP.rows = FP.rows || [];
+    if (isNew) FP.rows.push(n); else FP.rows = FP.rows.map(function(x){ return x.id === n.id ? n : x; });
+    return n;
+  });
+}
+// Várias contas de uma vez (repetição). Devolve true se gravou todas.
+function fpInsertMany(list){
+  var c = agdClient();
+  FP.rows = FP.rows || [];
+  if (!c){ list.forEach(function(r){ FP.rows.push(Object.assign({}, r, {id: r.id || uid("fp")})); }); return Promise.resolve(true); }
+  var chain = Promise.resolve(true), i;
+  for (i = 0; i < list.length; i += 100) (function(batch){
+    chain = chain.then(function(ok){
+      if (!ok) return false;
+      return c.from("finance_payables").insert(batch.map(fpToDb)).select().then(function(res){
+        if (res.error){ showToast("Não foi possível salvar as contas: " + fcErrMsg(res.error), true); return false; }
+        (res.data || []).forEach(function(x){ FP.rows.push(fpFromDb(x)); });
+        return true;
+      });
+    });
+  })(list.slice(i, i + 100));
+  return chain;
+}
+function fpDelete(ids){
+  var c = agdClient();
+  var done = function(){ FP.rows = (FP.rows || []).filter(function(x){ return ids.indexOf(x.id) === -1; }); return true; };
+  if (!c) return Promise.resolve(done());
+  var chain = Promise.resolve(true), i;
+  for (i = 0; i < ids.length; i += 100) (function(part){
+    chain = chain.then(function(ok){
+      if (!ok) return false;
+      return c.from("finance_payables").delete().in("id", part).then(function(res){
+        if (res.error){ showToast("Não foi possível excluir: " + fcErrMsg(res.error), true); return false; }
+        return true;
+      });
+    });
+  })(ids.slice(i, i + 100));
+  return chain.then(function(ok){ return ok ? done() : false; });
+}
+// Baixa: cria o lançamento e liga à conta (uma transação no banco).
+function fpSettle(r, o){
+  var c = agdClient();
+  if (!c){
+    var e = {id: uid("fl"), acc: o.acc, date: o.date, desc: o.desc, plan: r.plan, valor: o.valor, extDate: o.extDate || "", extVal: o.extVal == null ? null : o.extVal, obs: o.obs || r.obs || "", key: ""};
+    FL.rows = FL.rows || []; FL.rows.push(e);
+    FP.rows = FP.rows.map(function(x){ return x.id === r.id ? Object.assign({}, x, {entry: e.id, acc: x.acc || o.acc}) : x; });
+    return Promise.resolve(true);
+  }
+  return c.rpc("finance_payable_settle", {p_id: r.id, p_acc: o.acc, p_date: o.date, p_valor: o.valor, p_ext_data: o.extDate || null,
+    p_ext_val: o.extVal == null ? null : o.extVal, p_obs: o.obs || null, p_descricao: o.desc || null}).then(function(res){
+    if (res.error){ showToast("Não foi possível baixar a conta: " + fcErrMsg(res.error), true); return false; }
+    return Promise.all([flLoad(true), fpLoad(true)]).then(function(){ return true; });
+  });
+}
+function fpPlanTipo(r){ var p = flPlanById(r.plan); return p ? p.tipo : ""; }
+// "pagar" (Despesa/Saída), "receber" (Receita/Entrada) ou "" (sem subcategoria)
+function fpKind(r){ var t = fpPlanTipo(r); return (t === "Receita" || t === "Entrada") ? "receber" : (t === "Despesa" || t === "Saída") ? "pagar" : ""; }
+function fpSupName(id){ for (var i = 0; i < state.suppliers.length; i++) if (state.suppliers[i].id === id) return state.suppliers[i].name || ""; return ""; }
+function fpLabel(r){ return r.desc + (r.parcelas > 1 ? " (" + r.parcela + "/" + r.parcelas + ")" : ""); }
+function fpDays(a, b){ return Math.round((Date.parse(a + "T12:00:00") - Date.parse(b + "T12:00:00")) / 86400000); }
+// "paga" | "vencida" | "aberta"
+function fpStatus(r){ return r.entry ? "paga" : (r.venc < trTodayIso() ? "vencida" : "aberta"); }
+function fpAddMonths(iso, k){
+  var y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1 + k, d = +iso.slice(8, 10);
+  y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+  var last = new Date(y, m + 1, 0).getDate();
+  return y + "-" + String(m + 1).padStart(2, "0") + "-" + String(Math.min(d, last)).padStart(2, "0");
+}
+function fpMonths(){
+  var seen = {};
+  (FP.rows || []).forEach(function(r){ if (r.venc) seen[String(r.venc).slice(0, 7)] = 1; });
+  return Object.keys(seen).sort();
+}
+function fpBase(){
+  var q = normText(FP.q || "");
+  return (FP.rows || []).filter(function(r){
+    if (FP.ym && String(r.venc).slice(0, 7) !== FP.ym) return false;
+    if (FP.tipo && fpKind(r) !== FP.tipo) return false;
+    if (!q) return true;
+    var p = flPlanById(r.plan);
+    return normText([r.desc, r.obs, fpSupName(r.sup), p ? p.name + " " + (p.categoria || "") : "", String(r.valor).replace(".", ",")].join(" ")).indexOf(q) !== -1;
+  });
+}
+function fpFiltered(){
+  return fpBase().filter(function(r){
+    var s = fpStatus(r);
+    return !FP.st || (FP.st === "aberta" ? s !== "paga" : s === FP.st);
+  });
+}
+function fpFillFilters(){
+  var mob = isMobileView();
+  var st = document.getElementById("fpSt"), tp = document.getElementById("fpTipo"), m = document.getElementById("fpMonth");
+  if (st){ st.innerHTML = [["aberta", "Em aberto"], ["vencida", "Vencidas"], ["paga", "Pagas / recebidas"], ["", "Todas"]].map(function(o){ return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join(""); st.value = FP.st; }
+  if (tp){ tp.innerHTML = '<option value="">' + (mob ? "Tipo" : "A pagar e a receber") + '</option><option value="pagar">A pagar</option><option value="receber">A receber</option>'; tp.value = FP.tipo; }
+  if (m){ m.innerHTML = '<option value="">' + (mob ? "Mês" : "Todos os meses") + '</option>' + fpMonths().map(function(x){ return '<option value="' + x + '">' + esc(flMonthLabel(x)) + '</option>'; }).join(""); m.value = FP.ym; }
+}
+function fpSummaryHtml(rows){
+  var pg = 0, rc = 0, vc = 0, nvc = 0;
+  rows.forEach(function(r){
+    if (r.entry) return;
+    var k = fpKind(r); if (k === "pagar") pg += r.valor; else if (k === "receber") rc += r.valor;
+    if (r.venc < trTodayIso()){ nvc++; vc += (k === "receber" ? 0 : r.valor); }
+  });
+  function card(label, val, cls, title){ return '<div class="fl-card ' + (cls || "") + '"' + (title ? ' title="' + esc(title) + '"' : '') + '><small>' + esc(label) + '</small><b>' + val + '</b></div>'; }
+  var res = rc - pg;
+  return card("A pagar (em aberto)", fmtMoney(pg), "fl-neg") + card("A receber (em aberto)", fmtMoney(rc), "fl-pos") +
+    card("Resultado previsto", flMoneySigned(res), res < 0 ? "fl-neg" : "fl-pos", "A receber menos a pagar, das contas em aberto desta lista") +
+    (nvc ? card("Vencidas", String(nvc) + (nvc === 1 ? " conta" : " contas"), "fl-warn", "Em aberto com o vencimento já passado. Elas entram no previsto do próximo mês do Fluxo de caixa.") : "");
+}
+function fpStatusChip(r){
+  var s = fpStatus(r), k = fpKind(r), today = trTodayIso();
+  if (s === "paga"){
+    var e = (FL.rows || []).filter(function(x){ return x.id === r.entry; })[0];
+    return '<span class="tr-mchip tr-ok">' + (k === "receber" ? "Recebida" : "Paga") + (e ? " em " + esc(trBr(e.date).slice(0, 5)) : "") + '</span>';
+  }
+  if (s === "vencida"){ var n = fpDays(today, r.venc); return '<span class="tr-mchip tr-falta">Vencida há ' + n + (n === 1 ? " dia" : " dias") + '</span>'; }
+  var d = fpDays(r.venc, today);
+  return '<span class="tr-mchip">' + (d === 0 ? "Vence hoje" : d === 1 ? "Vence amanhã" : "Vence em " + d + " dias") + '</span>';
+}
+function renderPagar(){
+  var host = document.getElementById("reg-pagar-host"); if (!host) return;
+  var addBtn = document.getElementById("fpAdd"); if (addBtn) addBtn.hidden = !fpCan("create");
+  if (!FP.rows){
+    host.innerHTML = '<div class="empty-state"><b>Carregando contas…</b></div>'; fpLoad().then(function(){ if (state.tab === "pagar") renderPagar(); }); return; }
+  if (!FL.rows) flLoad().then(function(){ if (state.tab === "pagar") renderPagar(); });
+  fpFillFilters();
+  var rows = fpFiltered(), base = fpBase();
+  var cnt = document.getElementById("fpCount");
+  if (cnt) cnt.textContent = rows.length + " de " + FP.rows.length + (FP.rows.length === 1 ? " conta" : " contas");
+  var sum = document.getElementById("fpSum"); if (sum) sum.innerHTML = fpSummaryHtml(base);
+  if (!FP.rows.length){ host.innerHTML = '<div class="empty-state"><b>Nenhuma conta cadastrada</b>Use “+ Incluir” para cadastrar o que vai pagar ou receber. Contas que se repetem (aluguel, salários) podem ser criadas de uma vez.</div>'; return; }
+  if (!rows.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca ou os filtros.</div>'; return; }
+  var cols = [
+    {key: "venc", label: "Vencimento", width: 110}, {key: "desc", label: "Descrição", width: 300, min: 140, cls: "pt-nome"},
+    {key: "forn", label: "Fornecedor", width: 170, cls: "pt-muted"}, {key: "sub", label: "Subcategoria", width: 190, cls: "pt-muted"},
+    {key: "tipo", label: "Tipo", width: 100}, {key: "valor", label: "Valor", width: 130}, {key: "sit", label: "Situação", width: 160},
+    {key: "acao", label: "", width: 100}
+  ];
+  var canPay = fpCan("edit") && flCan("create");
+  gtRender(host, "pagar", cols, rows.map(function(r){
+    var p = flPlanById(r.plan), k = fpKind(r), sg = (k === "receber" ? 1 : k === "pagar" ? -1 : 0) * r.valor, s = fpStatus(r);
+    return {attrs: 'class="pr-row" data-fp-id="' + esc(r.id) + '" tabindex="0"',
+      cells: [esc(trBr(r.venc)), '<b>' + esc(fpLabel(r)) + '</b>', esc(fpSupName(r.sup) || "—"), esc(p ? p.name : "—"),
+        k ? '<span class="tr-mchip">' + (k === "pagar" ? "A pagar" : "A receber") + '</span>' : "—",
+        '<span class="' + (sg < 0 ? "fl-neg" : sg > 0 ? "fl-pos" : "") + '">' + esc(flMoneySigned(sg)) + '</span>',
+        fpStatusChip(r),
+        (s !== "paga" && canPay) ? '<button type="button" class="btn ghost fp-pay" data-fp-pay="' + esc(r.id) + '">' + (k === "receber" ? "Receber" : "Pagar") + '</button>' : ""],
+      vals: [r.venc, normText(fpLabel(r)), normText(fpSupName(r.sup)), p ? p.name : "", k, sg, s === "paga" ? 2 : s === "vencida" ? 0 : 1, ""]};
+  }), renderPagar, "reg-table");
+}
+function fpHints(){
+  var p = flPlanById(document.getElementById("fpSub").value), h = document.getElementById("fpSubHint");
+  var t = p ? p.tipo : "";
+  h.textContent = p ? p.tipo + " · " + (p.categoria || "") + ((t === "Receita" || t === "Entrada") ? " — conta a receber" : " — conta a pagar") : "";
+}
+function fpSupOptions(keep){
+  return '<option value="">Nenhum</option>' + activeOnly(state.suppliers, keep).slice().sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); })
+    .map(function(f){ return '<option value="' + esc(f.id) + '"' + (f.id === keep ? ' selected' : '') + '>' + esc(f.name) + '</option>'; }).join("");
+}
+function openConta(row){
+  var isNew = !row;
+  if (isNew && !fpCan("create")){ showToast(permDeniedMsg("financeiro", "create"), true); return; }
+  var r = row || {venc: trTodayIso(), desc: "", plan: "", acc: "", sup: "", valor: null, obs: "", entry: "", grupo: "", parcela: 0, parcelas: 0};
+  var paid = !!r.entry, canSave = isNew || fpCan("edit");
+  var later = (!isNew && r.grupo) ? (FP.rows || []).filter(function(x){ return x.grupo === r.grupo && !x.entry && x.id !== r.id && x.venc > r.venc; }) : [];
+  var host = document.getElementById("modalHost");
+  host.innerHTML =
+    '<div class="overlay" id="ovFp"><div class="modal" style="max-width:600px">' +
+      '<div class="modal-head"><div><h3>' + (isNew ? "Nova conta" : paid ? "Conta baixada" : canSave ? "Editar conta" : "Conta") + '</h3>' +
+        '<div class="modal-sub">Conta prevista a pagar ou a receber. Ao pagar ou receber, use Baixar: o sistema cria o lançamento.</div></div>' +
+        '<button class="modal-close" id="fpClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="tr-sec tr-sec-top">Conta</div>' +
+        '<div class="field"><label for="fpDesc">Descrição</label><input id="fpDesc" type="text" maxlength="200" value="' + esc(r.desc) + '" placeholder="O que será pago ou recebido"></div>' +
+        '<div class="field"><label for="fpSub">Subcategoria</label><select id="fpSub" data-combo data-reg-add="planocontas">' + flPlanOptions(r.plan) + '</select><div class="field-hint" id="fpSubHint"></div></div>' +
+        '<div class="field-row"><div class="field"><label for="fpVenc">Vencimento</label><input id="fpVenc" type="date" value="' + esc(r.venc || "") + '"></div>' +
+          '<div class="field"><label for="fpValor">Valor (R$)</label><input id="fpValor" type="text" inputmode="decimal" value="' + (r.valor == null ? "" : esc(fmtMoney(r.valor).replace("R$ ", ""))) + '" placeholder="0,00"></div></div>' +
+        '<div class="field-row"><div class="field"><label for="fpForn">Fornecedor</label><select id="fpForn" data-combo data-reg-add="fornecedores">' + fpSupOptions(r.sup) + '</select></div>' +
+          '<div class="field"><label for="fpConta">Conta bancária prevista</label><select id="fpConta" data-combo data-reg-add="contas">' + flAccOptions(r.acc) + '</select></div></div>' +
+        '<div class="field"><label for="fpObs">Observações</label><textarea id="fpObs" rows="2" maxlength="500">' + esc(r.obs || "") + '</textarea></div>' +
+        (isNew ? '<div class="tr-sec">Repetição</div>' +
+          '<div class="field-row"><div class="field"><label for="fpRep">Repetir</label><select id="fpRep"><option value="">Não repete</option><option value="1">Todo mês</option></select></div>' +
+          '<div class="field"><label for="fpRepN">Quantas contas ao todo</label><input id="fpRepN" type="number" min="2" max="60" value="12" disabled></div></div>' +
+          '<div class="field-hint" id="fpRepHint">A conta é criada uma vez para cada mês, no mesmo dia (mês mais curto usa o último dia). Cada uma pode ser alterada ou excluída depois.</div>' : "") +
+        (later.length ? '<label class="kind-opt fp-next"><input type="checkbox" id="fpNext"> Aplicar também às ' + later.length + (later.length === 1 ? ' próxima conta em aberto' : ' próximas contas em aberto') + ' deste grupo (valor, subcategoria, fornecedor, conta e observações)</label>' : "") +
+      '</div>' +
+      '<div class="modal-foot">' + ((!isNew && !paid) ? '<button class="btn danger" id="fpDel">Excluir</button>' : '<span></span>') +
+        '<div class="spacer"></div><button class="btn ghost" id="fpCancel">Cancelar</button>' +
+        (paid ? (fpCan("edit") && flCan("delete") ? '<button class="btn primary" id="fpUndo">Desfazer baixa</button>' : "")
+          : (!isNew && fpCan("edit") && flCan("create") ? '<button class="btn ghost" id="fpPay">' + (fpKind(r) === "receber" ? "Receber" : "Pagar") + '…</button>' : "") + '<button class="btn primary" id="fpSave">Salvar</button>') + '</div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovFp");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("fpClose").addEventListener("click", close);
+  document.getElementById("fpCancel").addEventListener("click", close);
+  modalApplyPerms("financeiro", isNew, {ov: "ovFp", save: "fpSave", del: "fpDel", cancel: "fpCancel"});
+  if (paid){
+    modalReadOnly("ovFp");
+    var e0 = (FL.rows || []).filter(function(x){ return x.id === r.entry; })[0];
+    ov.querySelector(".modal-body").insertAdjacentHTML("afterbegin", '<div class="dem-warn">' + (fpKind(r) === "receber" ? "Recebida" : "Paga") + (e0 ? " em " + esc(trBr(e0.date)) + " (" + esc(fmtMoney(e0.valor)) + ")" : "") + '. O lançamento foi criado em Financeiro → Lançamentos. Para alterar a conta, desfaça a baixa.</div>');
+    var un = document.getElementById("fpUndo");
+    if (un){ un.disabled = false; un.addEventListener("click", function(){
+      confirmDialog({title: "Desfazer a baixa", message: 'O lançamento <b>' + esc(e0 ? e0.desc : "") + '</b> será excluído e a conta <b>' + esc(fpLabel(r)) + '</b> volta para “em aberto”. Continuar?', confirmLabel: "Desfazer baixa"}).then(function(ok){
+        if (!ok) return;
+        flDeleteRow(r.entry).then(function(done){
+          if (!done) return;
+          fpLoad(true).then(function(){ close(); showToast("Baixa desfeita: a conta voltou para em aberto."); renderPagar(); });
+        });
+      });
+    }); }
+  }
+  document.getElementById("fpSub").addEventListener("change", fpHints); fpHints();
+  var vEl = document.getElementById("fpValor");
+  vEl.addEventListener("blur", function(){ if (vEl.value.trim()) vEl.value = fmtMoney(parseMoney(vEl.value)).replace("R$ ", ""); });
+  var rep = document.getElementById("fpRep");
+  if (rep) rep.addEventListener("change", function(){ document.getElementById("fpRepN").disabled = !rep.value; });
+  var pay = document.getElementById("fpPay");
+  if (pay) pay.addEventListener("click", function(){ close(); openBaixa(r); });
+  var sv = document.getElementById("fpSave");
+  if (sv) sv.addEventListener("click", function(){
+    var desc = document.getElementById("fpDesc").value.trim(), plan = document.getElementById("fpSub").value, venc = document.getElementById("fpVenc").value;
+    var valor = parseMoney(document.getElementById("fpValor").value);
+    if (!desc){ showToast("Preencha a descrição.", true); document.getElementById("fpDesc").focus(); return; }
+    if (!plan){ showToast("Escolha a subcategoria.", true); return; }
+    if (!venc){ showToast("Preencha o vencimento.", true); return; }
+    if (!(valor > 0)){ showToast("O valor precisa ser maior que zero (o sinal vem da subcategoria).", true); document.getElementById("fpValor").focus(); return; }
+    var rec = Object.assign({}, r, {desc: desc, plan: plan, venc: venc, valor: valor, sup: document.getElementById("fpForn").value, acc: document.getElementById("fpConta").value, obs: document.getElementById("fpObs").value.trim()});
+    sv.disabled = true;
+    var fin = function(msg){ sv.disabled = false; close(); showToast(msg); renderPagar(); };
+    if (isNew){
+      var n = rep && rep.value ? Math.max(2, Math.min(60, parseInt(document.getElementById("fpRepN").value, 10) || 0)) : 1;
+      if (n > 1 && !(parseInt(document.getElementById("fpRepN").value, 10) >= 2)){ sv.disabled = false; showToast("Informe quantas contas ao todo (de 2 a 60).", true); return; }
+      var grupo = n > 1 ? uid("fpg") : "", list = [], i;
+      for (i = 0; i < n; i++) list.push(Object.assign({}, rec, {venc: i ? fpAddMonths(venc, i) : venc, grupo: grupo, parcela: n > 1 ? i + 1 : 0, parcelas: n > 1 ? n : 0}));
+      fpInsertMany(list).then(function(ok){ if (!ok){ sv.disabled = false; return; } fin(n > 1 ? n + " contas incluídas." : "Conta incluída."); });
+      return;
+    }
+    var nx = document.getElementById("fpNext"), ups = [rec];
+    if (nx && nx.checked) later.forEach(function(x){ ups.push(Object.assign({}, x, {desc: desc, plan: plan, valor: valor, sup: rec.sup, acc: rec.acc, obs: rec.obs})); });
+    ups.reduce(function(p, u){ return p.then(function(ok){ return ok ? fpSave(u, false).then(function(res){ return !!res; }) : false; }); }, Promise.resolve(true)).then(function(ok){
+      if (!ok){ sv.disabled = false; return; }
+      fin(ups.length > 1 ? ups.length + " contas alteradas." : "Conta alterada.");
+    });
+  });
+  var del = document.getElementById("fpDel");
+  if (del) del.addEventListener("click", function(){
+    var nx = document.getElementById("fpNext"), ids = [r.id];
+    if (nx && nx.checked) later.forEach(function(x){ ids.push(x.id); });
+    confirmDialog({title: "Confirmar exclusão", message: ids.length > 1 ? 'Excluir <b>' + ids.length + ' contas</b> (esta e as próximas em aberto de <b>' + esc(r.desc) + '</b>)?' : 'Excluir a conta <b>' + esc(fpLabel(r)) + '</b> de ' + esc(trBr(r.venc)) + ' (' + esc(fmtMoney(r.valor)) + ')?', confirmLabel: "Confirmar exclusão"}).then(function(ok){
+      if (!ok) return;
+      fpDelete(ids).then(function(done){ if (!done) return; close(); showToast(ids.length > 1 ? "Contas excluídas." : "Conta excluída."); renderPagar(); });
+    });
+  });
+  setTimeout(function(){ var nn = document.getElementById(isNew ? "fpDesc" : "fpDesc"); if (nn && !nn.disabled) nn.focus(); }, 0);
+}
+function openBaixa(r){
+  if (!(fpCan("edit") && flCan("create"))){ showToast("Seu nível não pode baixar contas (precisa incluir lançamentos e editar contas).", true); return; }
+  var k = fpKind(r), verbo = k === "receber" ? "recebimento" : "pagamento", host = document.getElementById("modalHost");
+  var today = trTodayIso();
+  host.innerHTML =
+    '<div class="overlay" id="ovFpb"><div class="modal" style="max-width:560px">' +
+      '<div class="modal-head"><div><h3>' + (k === "receber" ? "Receber conta" : "Pagar conta") + '</h3>' +
+        '<div class="modal-sub">' + esc(fpLabel(r)) + ' · vencimento ' + esc(trBr(r.venc)) + '. Será criado o lançamento do ' + verbo + '.</div></div>' +
+        '<button class="modal-close" id="fpbClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="tr-sec tr-sec-top">Lançamento</div>' +
+        '<div class="field-row"><div class="field"><label for="fpbData">Data do ' + verbo + '</label><input id="fpbData" type="date" value="' + esc(today) + '"></div>' +
+          '<div class="field"><label for="fpbConta">Conta bancária</label><select id="fpbConta" data-combo data-reg-add="contas">' + flAccOptions(r.acc) + '</select></div></div>' +
+        '<div class="field"><label for="fpbValor">Valor (R$)</label><input id="fpbValor" type="text" inputmode="decimal" value="' + esc(fmtMoney(r.valor).replace("R$ ", "")) + '"><div class="field-hint">Mude se foi pago ou recebido um valor diferente do previsto (juros, desconto).</div></div>' +
+        '<div class="field"><label for="fpbDesc">Descrição do lançamento</label><input id="fpbDesc" type="text" maxlength="200" value="' + esc(fpLabel(r)) + '"></div>' +
+        '<div class="tr-sec">Extrato do banco (opcional)</div>' +
+        '<div class="field-row"><div class="field"><label for="fpbExtData">Data no extrato</label><input id="fpbExtData" type="date"></div>' +
+          '<div class="field"><label for="fpbExtVal">Valor no extrato (R$)</label><input id="fpbExtVal" type="text" inputmode="decimal" placeholder="0,00"></div></div>' +
+      '</div>' +
+      '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="fpbCancel">Cancelar</button><button class="btn primary" id="fpbOk">' + (k === "receber" ? "Confirmar recebimento" : "Confirmar pagamento") + '</button></div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovFpb");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("fpbClose").addEventListener("click", close);
+  document.getElementById("fpbCancel").addEventListener("click", close);
+  ["fpbValor", "fpbExtVal"].forEach(function(id){
+    var el = document.getElementById(id);
+    el.addEventListener("blur", function(){ if (el.value.trim()) el.value = fmtMoney(parseMoney(el.value)).replace("R$ ", ""); });
+  });
+  var ok = document.getElementById("fpbOk");
+  ok.addEventListener("click", function(){
+    var date = document.getElementById("fpbData").value, acc = document.getElementById("fpbConta").value, valor = parseMoney(document.getElementById("fpbValor").value);
+    var extTxt = document.getElementById("fpbExtVal").value.trim();
+    if (!date){ showToast("Preencha a data.", true); return; }
+    if (!acc){ showToast("Escolha a conta bancária.", true); return; }
+    if (!(valor > 0)){ showToast("O valor precisa ser maior que zero.", true); return; }
+    if (fcDateClosed(date)){ showToast("O mês de " + flMonthLabel(date.slice(0, 7)) + " está fechado. Reabra o mês para lançar nele.", true); return; }
+    ok.disabled = true;
+    fpSettle(r, {acc: acc, date: date, valor: valor, desc: document.getElementById("fpbDesc").value.trim(), extDate: document.getElementById("fpbExtData").value, extVal: extTxt ? parseMoney(extTxt) : null}).then(function(done){
+      ok.disabled = false;
+      if (!done) return;
+      close(); showToast(k === "receber" ? "Conta recebida: lançamento criado." : "Conta paga: lançamento criado."); renderPagar();
+    });
+  });
+  setTimeout(function(){ var n = document.getElementById("fpbConta"); var t = document.getElementById(r.acc ? "fpbValor" : "fpbConta"); if (t && !t.disabled) t.focus(); }, 0);
+}
+function pagarOnShow(){
+  renderPagar();
+  if (agdClient() && fpCan("view")){
+    fpLoad(true).then(function(){ if (state.tab === "pagar") renderPagar(); });
+    flLoad(true).then(function(){ if (state.tab === "pagar") renderPagar(); });
+    fcLoad(true).then(function(){ });
+  }
+}
+function wirePagar(){
+  var s = document.getElementById("fpSearch"); if (s) s.addEventListener("input", function(){ FP.q = s.value; renderPagar(); });
+  [["fpSt", "st"], ["fpTipo", "tipo"], ["fpMonth", "ym"]].forEach(function(p){
+    var el = document.getElementById(p[0]); if (el) el.addEventListener("change", function(){ FP[p[1]] = el.value; renderPagar(); });
+  });
+  var a = document.getElementById("fpAdd"); if (a) a.addEventListener("click", function(){ openConta(null); });
+  var h = document.getElementById("reg-pagar-host");
+  if (h){
+    var find = function(id){ return (FP.rows || []).filter(function(x){ return x.id === id; })[0]; };
+    var open = function(e){
+      var pb = e.target.closest("[data-fp-pay]");
+      if (pb){ var rr = find(pb.getAttribute("data-fp-pay")); if (rr) openBaixa(rr); return; }
+      var tr = e.target.closest("tr[data-fp-id]"); if (!tr) return;
+      var it = find(tr.getAttribute("data-fp-id")); if (it) openConta(it);
+    };
+    h.addEventListener("click", open);
+    h.addEventListener("keydown", function(e){ if (e.key === "Enter" && !e.target.closest("[data-fp-pay]")) open(e); });
+  }
+}
 /* ---------------- Financeiro: Demonstrativos (Fluxo de caixa, DRE e Lançamentos) — 2026-10-12 ----------------
  * Menu Financeiro ▾ → Demonstrativos (#tab-lancamentos; a chave da aba continua "lancamentos").
  * Três botões: Fluxo de caixa (abre por aqui), DRE e Lançamentos (a lista de antes). Tudo é calculado
@@ -26986,21 +27401,55 @@ function demColumns(){
   if (DM.view === "flu" && DM.per === "ano" && last < 12 && last >= 1){
     var base = [];
     for (m = Math.max(1, last - 2); m <= last; m++) base.push(demYm(y, m));
-    cols.push({n: demMonthName(demYm(y, last + 1)), ms: [demYm(y, last + 1)], prev: true, base: base});
+    var pcol = {n: demMonthName(demYm(y, last + 1)), ms: [demYm(y, last + 1)], prev: true, base: base};
+    demForecast(pcol);
+    cols.push(pcol);
   }
   return cols;
+}
+// Previsto do mês seguinte: por subcategoria, as contas a pagar/receber em aberto (vencidas entram no 1º mês previsto);
+// onde não há conta cadastrada, a média dos meses-base. O resultado vai para o índice como se fosse um mês real.
+function demForecast(col){
+  col.inj = false;
+  if (!FP.rows) return;
+  var ym = col.ms[0], end = ym + "-31", nd = demDaysIn(ym), pay = {}, n = 0, ix = DM.ix, payDay = {ent: [], sai: []}, d;
+  for (d = 0; d <= 31; d++){ payDay.ent.push(0); payDay.sai.push(0); }
+  FP.rows.forEach(function(r){
+    if (r.entry || !r.plan || r.venc > end) return;
+    if (FL.acc && r.acc && r.acc !== FL.acc) return;
+    var p = flPlanById(r.plan); if (!p) return;
+    pay[r.plan] = (pay[r.plan] || 0) + r.valor; n++;
+    var dd = r.venc < ym + "-01" ? 1 : Math.min(+r.venc.slice(8, 10), nd);
+    if (p.tipo === "Receita" || p.tipo === "Entrada") payDay.ent[dd] += r.valor; else if (p.tipo === "Despesa" || p.tipo === "Saída") payDay.sai[dd] += r.valor;
+  });
+  var avgPlans = {}, avgEnt = 0, avgSai = 0;
+  state.chartAccounts.forEach(function(p){
+    var v;
+    if (pay[p.id] != null) v = pay[p.id];
+    else {
+      var t = 0; col.base.forEach(function(m){ t += (ix.plan[p.id] && ix.plan[p.id][m]) || 0; });
+      v = col.base.length ? t / col.base.length : 0;
+      if (v){ avgPlans[p.id] = 1; if (p.tipo === "Receita" || p.tipo === "Entrada") avgEnt += v; else if (p.tipo === "Despesa" || p.tipo === "Saída") avgSai += v; }
+    }
+    if (v) (ix.plan[p.id] || (ix.plan[p.id] = {}))[ym] = v;
+  });
+  col.inj = true; col.fpN = n; col.payDay = payDay; col.avgPlans = avgPlans; col.avgEnt = avgEnt; col.avgSai = avgSai;
 }
 function demReal(cols){ return cols.filter(function(c){ return !c.prev; }); }
 function demAllMs(cols){ var o = []; demReal(cols).forEach(function(c){ c.ms.forEach(function(m){ o.push(m); }); }); return o; }
 function demPerLabel(cols){ var r = demReal(cols); return r.length > 1 ? r[0].n + " a " + r[r.length - 1].n : (r[0] ? r[0].n : ""); }
 function demVal(line, col){
   if (line.cellVal) return line.cellVal(col);
-  if (!col.prev) return line.fn(col.ms);
+  if (!col.prev || col.inj) return line.fn(col.ms);
   var t = 0; col.base.forEach(function(m){ t += line.fn([m]); });
   return col.base.length ? t / col.base.length : 0;
 }
 
 /* ----- comparação ----- */
+function demForecastText(col){
+  if (col && col.inj && col.fpN) return "A coluna “previsto” usa as " + col.fpN + (col.fpN === 1 ? " conta a pagar/receber cadastrada" : " contas a pagar/receber cadastradas") + " (as vencidas em aberto entram aqui) e, nas subcategorias sem conta cadastrada, a média dos últimos 3 meses.";
+  return "A coluna “previsto” usa a média dos últimos 3 meses (nenhuma conta a pagar/receber cadastrada para esse mês).";
+}
 function demNote(line, v, col, ci, cols){
   if (DM.cmp === "off" || col.prev || line.fmt === "pct" || line.nocmp) return "";
   var base;
@@ -27050,7 +27499,7 @@ function demRowHtml(line, cols){
   return h;
 }
 function demHead(cols){
-  return '<thead><tr><th>Linha</th>' + cols.map(function(c){ return '<th class="' + (c.prev ? "dem-prv" : "") + '">' + esc(c.n) + (c.prev ? '<span class="dem-tagp">previsto</span>' : (c.ms.every(fcIsClosed) ? " " + DEM_LK : "")) + '</th>'; }).join("") + '<th class="dem-tot">Total</th><th>Tendência</th></tr></thead>';
+  return '<thead><tr><th>Linha</th>' + cols.map(function(c){ return '<th class="' + (c.prev ? "dem-prv" : "") + '">' + esc(c.n) + (c.prev ? '<span class="dem-tagp" title="' + esc(demForecastText(c)) + '">previsto</span>' : (c.ms.every(fcIsClosed) ? " " + DEM_LK : "")) + '</th>'; }).join("") + '<th class="dem-tot">Total</th><th>Tendência</th></tr></thead>';
 }
 function demVisoes(){
   var list = [{id: "completo", name: "Completo", fixa: true}, {id: "resumo", name: "Resumo (categorias fechadas)", fixa: true, resumo: true}];
@@ -27124,7 +27573,7 @@ function demSummary(cols){
       var fin = demIni(real[0].ms[0]) + e - s;
       h += demCard("Saldo no fim do período", demR(fin), fin < 0 ? "fl-neg" : "");
       var pv = cols.filter(function(c){ return c.prev; })[0];
-      if (pv) h += demCard("Saldo previsto em " + pv.n, demR(demIni(pv.ms[0]) + demVal(DM.varLine, pv)), "", "Usa a média dos últimos 3 meses");
+      if (pv) h += demCard("Saldo previsto em " + pv.n, demR(demIni(pv.ms[0]) + demVal(DM.varLine, pv)), "", demForecastText(pv));
       var end = lastMs.length ? lastMs[lastMs.length - 1] + "-31" : "";
       flBalances(end).forEach(function(b){ if (!FL.acc || b.acc.id === FL.acc) h += demCard("Saldo " + b.acc.name, demR(b.saldo), b.saldo < 0 ? "fl-neg" : ""); });
     }
@@ -27151,6 +27600,10 @@ function demAlerts(cols){
   if (fcCan("create") && FC.closed){
     var todayYm = trTodayIso().slice(0, 7), op = Object.keys(DM.ix.months).sort().filter(function(m){ return m < todayYm && !fcIsClosed(m); })[0];
     if (op) out.unshift({t: demMonthName(op) + " ainda não foi fechado", fech: op});
+  }
+  if (DM.view === "flu" && FP.rows){
+    var od = FP.rows.filter(function(r){ return !r.entry && r.venc < trTodayIso() && (!FL.acc || !r.acc || r.acc === FL.acc); });
+    if (od.length) out.splice(Math.min(1, out.length), 0, {t: od.length + (od.length === 1 ? " conta a pagar/receber vencida em aberto" : " contas a pagar/receber vencidas em aberto"), pagar: true});
   }
   return out.slice(0, 4);
 }
@@ -27191,12 +27644,13 @@ function demChartDre(cols){
   data.forEach(function(x, i){ s += '<circle cx="' + pts[i][0] + '" cy="' + pts[i][1] + '" r="4" fill="var(--ink)" stroke="var(--surface)" stroke-width="2"><title>' + esc(x.n) + ' · Resultado ' + demR(x.x) + '</title></circle>'; });
   return '<div class="dem-card"><div class="dem-ch"><b>Receita, despesa e resultado</b><div class="dem-leg"><span><i style="background:var(--viz-3)"></i>Receita</span><span><i style="background:var(--viz-2)"></i>Despesa</span><span><i class="ln" style="background:var(--ink)"></i>Resultado</span></div></div>' + s + '</svg></div>';
 }
-function demDaily(ym){
+function demDaily(ym, only){
   var ent = [], sai = [], d;
   for (d = 0; d <= 31; d++){ ent.push(0); sai.push(0); }
   (FL.rows || []).forEach(function(r){
     if (String(r.date).slice(0, 7) !== ym || (FL.acc && r.acc !== FL.acc)) return;
     var p = flPlanById(r.plan); if (!p) return;
+    if (only && !only(r.plan)) return;
     var dd = +String(r.date).slice(8, 10), sg = flSign(r);
     if (sg > 0) ent[dd] += r.valor; else if (sg < 0) sai[dd] += r.valor;
   });
@@ -27208,7 +27662,16 @@ function demChartSaldo(cols){
   var lc = real[real.length - 1], ym = lc.ms[lc.ms.length - 1], a = demDaily(ym), pts = [], bal = demIni(ym), d, nd = demDaysIn(ym);
   for (d = 1; d <= nd; d++){ bal += a.ent[d] - a.sai[d]; pts.push({lab: (d < 10 ? "0" : "") + d + "/" + ym.slice(5) , v: bal, prev: false}); }
   var pv = cols.filter(function(c){ return c.prev; })[0], nReal = pts.length;
-  if (pv){
+  if (pv && pv.inj){
+    // contas cadastradas no dia do vencimento; o que é estimado pela média segue o desenho dos dias do último mês
+    var nn2 = demDaysIn(pv.ms[0]), sh = demDaily(ym, function(id){ return pv.avgPlans[id]; }), se = 0, ss = 0, e2, s2;
+    for (d = 1; d <= 31; d++){ se += sh.ent[d]; ss += sh.sai[d]; }
+    for (d = 1; d <= nn2; d++){
+      e2 = pv.payDay.ent[d] + (se ? sh.ent[d] / se * pv.avgEnt : pv.avgEnt / nn2);
+      s2 = pv.payDay.sai[d] + (ss ? sh.sai[d] / ss * pv.avgSai : pv.avgSai / nn2);
+      bal += e2 - s2; pts.push({lab: (d < 10 ? "0" : "") + d + "/" + pv.ms[0].slice(5), v: bal, prev: true});
+    }
+  } else if (pv){
     var realE = DM.ENT([ym]), realS = DM.SAI([ym]), kE = realE ? demVal({fn: DM.ENT}, pv) / realE : 1, kS = realS ? demVal({fn: DM.SAI}, pv) / realS : 1, nn = demDaysIn(pv.ms[0]);
     for (d = 1; d <= nn; d++){ bal += a.ent[Math.min(d, 31)] * kE - a.sai[Math.min(d, 31)] * kS; pts.push({lab: (d < 10 ? "0" : "") + d + "/" + pv.ms[0].slice(5), v: bal, prev: true}); }
   }
@@ -27275,7 +27738,7 @@ function demRender(){
   }
   body.innerHTML = demSummary(cols) + (DM.alertas ? demAlertsHtml(cols) : "") + charts +
     '<div class="dem-tbwrap">' + table + '</div>' +
-    '<div class="dem-note">Clique em qualquer valor para ver os lançamentos que formam o total.' + (DM.view === "flu" && cols.some(function(c){ return c.prev; }) ? " A coluna “previsto” usa a média dos últimos 3 meses." : "") + (notes.length ? " " + esc(notes.join(" ")) : "") + ' A tendência mostra o ano todo.</div>';
+    '<div class="dem-note">Clique em qualquer valor para ver os lançamentos que formam o total.' + (DM.view === "flu" && cols.some(function(c){ return c.prev; }) ? " " + demForecastText(cols.filter(function(c){ return c.prev; })[0]) : "") + (notes.length ? " " + esc(notes.join(" ")) : "") + ' A tendência mostra o ano todo.</div>';
 }
 function demFillBar(){
   var ys = demYears(), y = demYear(), months = Object.keys(DM.ix.months).sort();
@@ -27350,6 +27813,7 @@ function renderDemonstrativos(){
   if (!FL.rows){ body.innerHTML = '<div class="empty-state"><b>Carregando lançamentos…</b></div>'; flLoad().then(function(){ if (state.tab === "demonstrativos") renderDemonstrativos(); }); return; }
   if (bankCanSee() && !FIN.acc && agdClient()) finLoadAccounts().then(function(){ if (state.tab === "demonstrativos") renderDemonstrativos(); });
   if (!FC.closed && !FC.loading) fcLoad().then(function(){ if (state.tab === "demonstrativos") renderDemonstrativos(); });
+  if (!FP.rows && !FP.loading) fpLoad().then(function(){ if (state.tab === "demonstrativos") renderDemonstrativos(); });
   DM.ix = demBuildIndex();
   demSyncBar();
   if (DM.view === "cus"){ demEditorRender(); cuRender(body); return; }
@@ -27360,6 +27824,7 @@ function demOnShow(){
   if (agdClient() && flCan("view")){
     flLoad(true).then(function(){ if (state.tab === "demonstrativos") renderDemonstrativos(); });
     fcLoad(true).then(function(){ if (state.tab === "demonstrativos") renderDemonstrativos(); });
+    fpLoad(true).then(function(){ if (state.tab === "demonstrativos") renderDemonstrativos(); });
   }
 }
 
@@ -27496,7 +27961,7 @@ function wireDem(){
   body.addEventListener("click", function(e){
     var c = e.target.closest("[data-ck]"); if (c){ demOpenFilter(c.getAttribute("data-ck"), c.getAttribute("data-cc")); return; }
     var t = e.target.closest("[data-dtg]"); if (t){ var k = t.getAttribute("data-dtg"), open = t.getAttribute("aria-expanded") === "true"; DM.open[k] = !open; renderDemonstrativos(); return; }
-    var al = e.target.closest("[data-dal]"); if (al){ var x = (DM.alerts || [])[+al.getAttribute("data-dal")]; if (x){ if (x.fech) openFechamento(x.fech); else demGo(x.f); } return; }
+    var al = e.target.closest("[data-dal]"); if (al){ var x = (DM.alerts || [])[+al.getAttribute("data-dal")]; if (x){ if (x.fech) openFechamento(x.fech); else if (x.pagar){ FP.st = "vencida"; FP.tipo = ""; FP.ym = ""; FP.q = ""; var sq = document.getElementById("fpSearch"); if (sq) sq.value = ""; demGoTab("pagar"); } else demGo(x.f); } return; }
     var v = e.target.closest("[data-dvr]"); if (v && DM.changes){ var f = DM.changes[+v.getAttribute("data-dvr")]; if (f) demGo(f); }
   });
   body.addEventListener("keydown", function(e){ if (e.key !== "Enter" && e.key !== " ") return; var c = e.target.closest && e.target.closest(".dem-cell"); if (c){ e.preventDefault(); demOpenFilter(c.getAttribute("data-ck"), c.getAttribute("data-cc")); } });
@@ -28006,8 +28471,8 @@ function cuPrint(){
 }
 
 // Conta e subcategoria em uso por lançamentos: Inativar em vez de Excluir.
-USAGE.contas = function(c){ return rowUseCount("finance_entries", "account_id", c.id, function(){ return (FL.rows || []).filter(function(r){ return r.acc === c.id; }).length; }).then(function(n){ return [useTxt(n, "lançamento", "lançamentos")].filter(Boolean); }); };
-USAGE.planocontas = function(p){ return rowUseCount("finance_entries", "plan_id", p.id, function(){ return (FL.rows || []).filter(function(r){ return r.plan === p.id; }).length; }).then(function(n){ return [useTxt(n, "lançamento", "lançamentos")].filter(Boolean); }); };
+USAGE.contas = function(c){ return rowUseCount("finance_entries", "account_id", c.id, function(){ return (FL.rows || []).filter(function(r){ return r.acc === c.id; }).length; }).then(function(n){ return [useTxt(n, "lançamento", "lançamentos"), useTxt((FP.rows || []).filter(function(r){ return r.acc === c.id; }).length, "conta a pagar/receber", "contas a pagar/receber")].filter(Boolean); }); };
+USAGE.planocontas = function(p){ return rowUseCount("finance_entries", "plan_id", p.id, function(){ return (FL.rows || []).filter(function(r){ return r.plan === p.id; }).length; }).then(function(n){ return [useTxt(n, "lançamento", "lançamentos"), useTxt((FP.rows || []).filter(function(r){ return r.plan === p.id; }).length, "conta a pagar/receber", "contas a pagar/receber")].filter(Boolean); }); };
 
 /* ---- Planilha de lançamentos: mesmas colunas da aba FLUXO ----
    Conta, Descrição, Data, Valor, (Tipo, Categoria), Sub-Categoria, Data Extrato, Valor Extrato, Observações.
@@ -28113,6 +28578,7 @@ IO_KINDS.lancamentos = {label: "Lançamentos", file: "lancamentos", mod: "financ
 (function(){
   var add = document.getElementById("flAdd"); if (!add) return;
   wireLancamentos();
+  wirePagar();
   wireLancamentosExtra();
   wireDem();
 })();
