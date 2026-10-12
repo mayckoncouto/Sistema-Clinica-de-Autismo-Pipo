@@ -4141,8 +4141,22 @@ subcategorias (ex.: parcela = principal "Pagamento de Empréstimos" Saída + jur
   Desfazer baixa (`fpUndoSettle`) apaga todos os lançamentos com `pay === conta` (ou o ligado). `fpUsedEntries` conta os `pay`; conta com rateio não oferece vínculo com lançamento. Previsto do Fluxo
   e `USAGE.planocontas` leem as partes. Lista mostra "Rateio (N)". Migração `supabase/2026-10-12e-rateio-das-contas.sql` (testada no PGlite; linha 106 da conferência; `schema.sql` e
   `conferencia-geral.sql` atualizados). Backup: `linhas` entra; `finance_entries.payable_id` NÃO é restaurado (evita chave estrangeira circular). Testes no fim de `tests/run_pagar.js`.
-- **Entrega 2 (a fazer): Empréstimos.** Ver o que ficou combinado acima; antes de construir, mostrar a prévia das parcelas e criar no Plano de contas "Pagamento de Empréstimos" (Saída),
-  "Recebimento de Empréstimos" (Entrada) e "Juros de Empréstimos Concedidos" (Receita Financeira). Já existem "Empréstimos Recebidos"/"Concedidos" (categoria Empréstimos) e "Juros" (Despesas Financeiras).
+- **Entrega 2 (feita, 2026-10-12): Empréstimos.** Menu Financeiro ▾ → **Empréstimos tomados** (`#tab-emptomados`, aba `emptomados`, ids `lt*`) e
+  **Empréstimos concedidos** (`#tab-empconcedidos`, aba `empconcedidos`, ids `lc*`), logo depois de Contas a receber (`FIN_ITEMS`/`FIN_TABS`, `tabModule`
+  = `financeiro`, `cadTitleText`, ajuda `emprestimos`). Tabela única `public.finance_loans` (sentido tomado|concedido, descricao, contraparte, account_id, valor,
+  tipo simples|composto|price|sac, taxa ao MÊS em %, parcelas, liberacao, primeiro_venc, obs; RLS `financeiro`) e `finance_payables.loan_id`. Migração
+  `supabase/2026-10-12f-emprestimos.sql` (também semeia no Plano de contas “Pagamento de Empréstimos” Saída, “Recebimento de Empréstimos” Entrada e “Juros de
+  Empréstimos Concedidos” Receita/Receita Financeira; testada no PGlite; linha 107 da conferência de migrações; schema e conferência geral atualizados; backup
+  inclui `finance_loans` e `loan_id`). Bloco “Financeiro: Empréstimos” antes de Demonstrativos: `LN`, `lnSchedule(tipo, P, taxa%, n, venc1)` (simples = flat; composto
+  = montante P(1+i)ⁿ em parcelas iguais; price = PMT; sac = amortização constante; centavos fecham na última parcela), `lnBuildPayables` (liberação = parcela 0 sem
+  “i/n”; parcela k com rateio principal + juros), `openEmprestimo` (prévia de parcelas EDITÁVEL antes de salvar — vencimento/principal/juros —, aviso se o principal
+  não soma o valor), `lnStats`/`lnTotalBalance` (saldo devedor = principal da 1ª linha do rateio das parcelas em aberto), `lnDeleteLoan` (recusa se há conta
+  baixada; apaga as abertas). Empréstimo salvo: valor/juros/parcelas travados (só descrição, credor/tomador, conta e observações mudam). Tomado: liberação = conta a
+  RECEBER em Empréstimos Recebidos (Entrada, não é receita), parcelas a PAGAR (Pagamento de Empréstimos + Juros); concedido: o inverso. O Fluxo de caixa ganhou os
+  cartões “Saldo devedor de empréstimos” e “Empréstimos a receber”. Ao procurar um input melhorado (data) pela classe, usar `input.<classe>`. Teste
+  `tests/run_emprestimos.js` (no `npm test`).
+- Produção (2026-10-12): `2026-10-12f-emprestimos` rodada pelo conector (tabela | RLS | 4 políticas | loan_id | 3 subcategorias = true | true | 4 | true | 3).
+- Próximos: **Conciliação com o extrato** e a revisão de capitalização (“Contas a Receber”) em todo o sistema.
 
 ## Autorização permanente para rodar SQL (2026-10-12)
 Pedido do usuário: "A partir de agora não me pergunte mais, pode rodar os SQL". SQL de migração que altera dados ou

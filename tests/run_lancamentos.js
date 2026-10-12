@@ -35,7 +35,7 @@ const fs = require('fs');
 
   // ---- menu e tela ----
   await page.click('#finBtn');
-  check('Financeiro menu lists Lançamentos, Demonstrativos and the financial registries?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,demonstrativos,fornecedores,catfornecedor,contas,planocontas');
+  check('Financeiro menu lists Lançamentos, Demonstrativos and the financial registries?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,demonstrativos,fornecedores,catfornecedor,contas,planocontas');
   check('Cadastros menu no longer lists them?', !(await page.$('#cadMenu [data-nav="contas"]')) && !(await page.$('#cadMenu [data-nav="fornecedores"]')));
   await page.keyboard.press('Escape');
   await page.click('#finBtn'); await page.click('#finMenu [data-nav="lancamentos"]'); await page.waitForTimeout(300);
