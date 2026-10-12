@@ -4015,7 +4015,7 @@ filtrado (faixa + Voltar); comparação com o mês anterior ou com um mês de re
 - Receita/Despesa entram no DRE; Receita/Entrada e Despesa/Saída no Fluxo de caixa (mesma regra do saldo das contas).
 - Visões do DRE: `config/dre_views {list:[{id, name, cats:[“categoria|tipo”], open}]}` (`SIMPLE_LISTS.visoesdre`, `state.dreViews`); salvar/excluir
   segue a permissão Financeiro (incluir/editar/excluir). Migração `supabase/2026-10-12-demonstrativos.sql` (caminho permitido + `module_for_path`;
-  linha 102 de `conferencia-migracoes.sql`; `schema.sql` e `conferencia-geral.sql` atualizados). SQL ainda NÃO rodado em produção.
+  linha 102 de `conferencia-migracoes.sql`; `schema.sql` e `conferencia-geral.sql` atualizados). SQL rodado em produção pelo conector em 2026-10-12, a pedido do usuário (caminho aceito = true, função = true).
 - Teste `tests/run_demonstrativos.js` (no `npm test`); `run_lancamentos.js` passa pelo botão Lançamentos. Ajuda: tópico `lancamentos` (Demonstrativos).
 - Próximas etapas combinadas: **E2** fechamento de mês (permissão "Fechamento de mês"; reabrir qualquer mês com aviso de que o saldo dos meses
   seguintes muda; mês reaberto edita todos os campos), anotações nas células, resumo mensal em PDF; **E3** custo e receita por atendimento.
