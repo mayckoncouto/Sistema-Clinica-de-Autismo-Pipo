@@ -4244,3 +4244,4 @@ especialidades do tratamento (Especialidade + Quantidade Semanal).
 - **Fora do link de cadastro** (decisão: documento clínico entregue à clínica): `LINK_OF_FIELD` não tem o campo e `tests/run_intake.js`
   confere os demais campos, exceto `encaminhamento`.
 - Teste `tests/run_encaminhamento.js` (no `npm test`).
+- Produção (2026-10-12): `2026-10-12h-crm-automacoes` rodada pelo conector, em 6 partes (sem `drop trigger`/`unschedule`, porque tudo era novo): caminho aceito, 31 funções, 5 gatilhos, cron `pipo-crm-automacoes` (1), só `crm_auto_run_now` aberta para usuários logados. Todas as automações começam desligadas; nada é criado até o usuário ligar em CRM ▾ → Automações.
