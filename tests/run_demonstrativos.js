@@ -51,7 +51,7 @@ const fs = require('fs');
   // ---- abre em Fluxo de caixa ----
   await page.click('#finBtn'); await page.click('#finMenu [data-nav="demonstrativos"]'); await page.waitForTimeout(300);
   check('opens on Fluxo de caixa', await page.$eval('#demSeg [data-dv="flu"]', (b) => b.classList.contains('active')));
-  check('two buttons in order (Lançamentos is its own screen)', (await page.$$eval('#demSeg button', (b) => b.map((x) => x.textContent.trim()))).join('|') === 'Fluxo de caixa|DRE');
+  check('three buttons in order (Lançamentos is its own screen)', (await page.$$eval('#demSeg button', (b) => b.map((x) => x.textContent.trim()))).join('|') === 'Fluxo de caixa|DRE|Custo por atendimento');
   check('no "Valores em" selector', !(await page.$('#demValores')) && !/Valores em/.test(await text('#tab-lancamentos')));
   const ini = await rowTxt('Saldo inicial');
   check('Saldo inicial jan = 12.000, fev = 14.000 (10k+2k, +10k-... )', ini && /12\.000/.test(ini[1]), JSON.stringify(ini));
