@@ -9210,7 +9210,8 @@ begin
   where n <> '';
   return jsonb_build_object('ok', true, 'kind', l.kind, 'nome', l.nome, 'prefill', l.prefill,
     'clinica', jsonb_build_object('nome', coalesce(c ->> 'nome', ''), 'subtitulo', coalesce(c ->> 'subtitulo', ''), 'logo', coalesce(c ->> 'logo', ''),
-                                  'telefone', coalesce(c ->> 'telefone', ''), 'cor', coalesce(c ->> 'corBotoes', ''), 'corTexto', coalesce(c ->> 'corTexto', '')),
+                                  'telefone', coalesce(c ->> 'telefone', ''), 'cor', coalesce(c ->> 'corBotoes', ''), 'corTexto', coalesce(c ->> 'corTexto', ''),
+                                  'redes', case when jsonb_typeof(c -> 'redes') = 'array' then c -> 'redes' else '[]'::jsonb end),
     'convenios', public.intake_names('config/convenios'), 'origens', org, 'diagnosticos', dg, 'escolas', public.intake_names('config/schools'), 'medicos', public.intake_names('config/doctors'), 'campos', coalesce(cf, '{}'::jsonb));
 end $function$;
 

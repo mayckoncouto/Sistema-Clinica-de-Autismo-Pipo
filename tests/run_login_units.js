@@ -42,7 +42,7 @@ const path = require('path');
     const errors = []; page.on('pageerror', (e) => errors.push(e.message));
     await page.route('http://pipo.test/**', (route) => {
       const u = route.request().url();
-      if (u.endsWith('/api/config')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ supabaseUrl: 'http://x', supabaseAnonKey: 'k' }) });
+      if (u.endsWith('/api/config')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ supabaseUrl: 'http://x', supabaseAnonKey: 'k', clinica: { nome: 'Clínica Pipo', subtitulo: 'Matriz' }, unidades: { 'unidade-1': { theme: null, clinica: { nome: 'Clínica Pipo', subtitulo: 'Matriz' } }, 'unidade-2': { theme: { corBotoes: '#aa3355', corTexto: null }, clinica: { nome: 'Pipo Joinville', subtitulo: 'Filial' } } } }) });
       return route.fulfill({ contentType: 'text/html', body: html });
     });
     await page.addInitScript(stub(cfg));
@@ -61,6 +61,11 @@ const path = require('path');
   let s = await open({ units, profile: profile(role({}), 'unidade-1') });
   check('login shows the Unidade list with both units?', (await s.page.$$eval('select[name=unit] option', (o) => o.map((x) => x.textContent))).join() === 'Unidade 1 – Blumenau,Unidade 2 – Joinville');
   check('Unidade field is visible?', await s.page.$eval('.unit-field', (e) => !e.hidden));
+  check('login starts with the first unit brand?', (await s.page.$eval('.pipo-login .brand h2', (e) => e.textContent)) === 'Clínica Pipo');
+  await s.page.selectOption('select[name=unit]', 'unidade-2');
+  check('picking another unit swaps name and subtitle?', (await s.page.$eval('.pipo-login .brand h2', (e) => e.textContent)) === 'Pipo Joinville' && (await s.page.$eval('.pipo-login .brand .sub', (e) => e.textContent)) === 'Filial');
+  await s.page.selectOption('select[name=unit]', 'unidade-1');
+  check('going back restores the first unit brand?', (await s.page.$eval('.pipo-login .brand h2', (e) => e.textContent)) === 'Clínica Pipo');
   await s.ctx.close();
 
   // 2) nível comum escolhendo outra unidade: recusado, com a mensagem

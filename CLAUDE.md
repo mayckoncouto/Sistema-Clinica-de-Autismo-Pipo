@@ -4334,3 +4334,12 @@ Migrações (rodadas em produção pelo conector, testadas no PGlite com 2 unida
   lê a Clínica da `unidade-1` (marca por unidade vem na Fase 3); `api/admin-backup.js` leva/restaura `unit_id` (documentos por `path,unit_id`). Testes: `run_login_units.js`, `run_backup_api.js`.
 - Etapa final (2D): `supabase/2026-10-12o-unidades-fase2d-chave-final.sql` troca a PK de `documents` para `(path, unit_id)` (linha 116 da conferência; tem `drop constraint`, então roda no SQL Editor; `schema.sql` já nasce com a chave final). Só depois dela uma segunda unidade pode ter o mesmo caminho.
 - Próximas fases: 3) Salas/Planner/Agenda/Clínica por unidade (marca no login por unidade); 4) pessoas e clínico; 5) Financeiro; 6) CRM e demais; 7) revisão.
+
+### Unidades — Fase 3 (2026-10-12): Clínica, Salas, Planner e Agenda por unidade
+- Os dados já eram separados pelo banco na Fase 2 (`doc_scope`: `config/clinic`, `config/rooms`, `config/planner_blocks`, `schedule/*` e a tabela `appointments` são da unidade); a Fase 3 fecha a parte visível. Chave final de `documents` = `(path, unit_id)` (migração 2D, rodada em produção).
+- `api/config.js` devolve a marca pública de CADA unidade (`unidades: {id: {theme, redes, clinica}}`, lida de `config/clinic` com a service role) e, no nível de cima, a da Unidade 1 (compatibilidade e página do link).
+- Tela de login (`js/pipo-supabase.js`): `applyLoginBrand(unitId)` troca nome, subtítulo e cor dos botões ao escolher a unidade; unidade sem Clínica cadastrada usa o nome padrão e as cores do sistema.
+- Link de cadastro: `intake_form` devolve também `clinica.redes` da unidade do link (migração `supabase/2026-10-12p-unidades-fase3a-link-redes.sql`, linha 117; rodada em produção); `cadastro.html` usa essas redes.
+- Testes: `tests/run_login_units.js` (marca por unidade) e `tests/run_config_api.js` (API, no `npm test`).
+- Falta nesta fase: nada de código; conferir com a primeira Unidade 2 real (cadastrar em Cadastros → Unidades, trocar pelo seletor da Gestão, preencher Clínica, Salas e Colaboradores).
+- Próximas: 4) pessoas e clínico (pacientes, tratamentos, prontuário, planos, colaboradores, transferência entre unidades); 5) Financeiro; 6) CRM e demais; 7) revisão.

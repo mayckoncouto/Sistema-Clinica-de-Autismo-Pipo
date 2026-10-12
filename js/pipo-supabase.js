@@ -439,6 +439,22 @@
 
   // Nome e subtítulo da tela de login: os do cadastro da Clínica (vindos de /api/config), senão o padrão.
   var loginBrand = { nome: "Clínica de Autismo Pipo", sub: "Clínica Multidisciplinar" };
+  var loginBrandDefault = null;   // marca da Unidade 1 (vinda de /api/config sem unidade escolhida)
+  var unitBrands = {};            // marca pública de cada unidade: { id: { theme, clinica } }
+  // Troca nome, subtítulo e cor da tela de login pela marca da unidade escolhida (sem marca cadastrada = a padrão).
+  function applyLoginBrand(unitId) {
+    var b = unitBrands[unitId];
+    var c = (b && b.clinica) || {};
+    var base = loginBrandDefault || { nome: loginBrand.nome, sub: loginBrand.sub };
+    loginBrand.nome = c.nome || base.nome;
+    loginBrand.sub = c.subtitulo || base.sub;
+    if (loginEl) {
+      var h = loginEl.querySelector(".brand h2"), sb = loginEl.querySelector(".brand .sub");
+      if (h) h.textContent = loginBrand.nome;
+      if (sb) sb.textContent = loginBrand.sub;
+    }
+    if (window.pipoTheme) window.pipoTheme(b && b.theme && b.theme.corBotoes, b && b.theme && b.theme.corTexto);
+  }
   function showLogin(message) {
     if (!loginEl) {
       var logo = document.querySelector(".brand-mark");
@@ -504,6 +520,11 @@
         return '<option value="' + escapeHtml(u.id) + '"' + (u.id === last ? " selected" : "") + ">" + escapeHtml(u.name) + "</option>";
       }).join("");
       lab.hidden = false;
+      if (!sel.__brandWired) {
+        sel.__brandWired = true;
+        sel.addEventListener("change", function () { applyLoginBrand(sel.value); });
+      }
+      applyLoginBrand(sel.value);
     });
   }
 
@@ -697,6 +718,8 @@
         if (cfg.clinica.nome) loginBrand.nome = cfg.clinica.nome;
         if (cfg.clinica.subtitulo) loginBrand.sub = cfg.clinica.subtitulo;
       }
+      loginBrandDefault = { nome: loginBrand.nome, sub: loginBrand.sub };
+      unitBrands = cfg.unidades || {};
       if (cfg.theme !== undefined && window.pipoTheme) window.pipoTheme(cfg.theme && cfg.theme.corBotoes, cfg.theme && cfg.theme.corTexto);
       if (!window.supabase || !window.supabase.createClient) throw new Error("biblioteca do Supabase não carregou");
       client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {

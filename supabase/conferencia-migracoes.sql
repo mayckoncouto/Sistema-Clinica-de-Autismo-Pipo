@@ -127,7 +127,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (113, '2026-10-12l-unidades-fase2a-documentos',        exists(select 1 from col where table_name = 'documents' and column_name = 'unit_id') and exists(select 1 from fx where proname = 'active_unit'), 'Unidades — Fase 2A (documentos por unidade; a chave antiga é trocada na 2D)'),
  (114, '2026-10-12m-unidades-fase2b-tabelas',          exists(select 1 from col where table_name = 'appointments' and column_name = 'unit_id') and exists(select 1 from fx where proname = 'unit_stamp'), 'Unidades — Fase 2B (unit_id nas tabelas)'),
  (115, '2026-10-12n-unidades-fase2c-funcoes',          to_regclass('public.documents_u') is not null, 'Unidades — Fase 2C (funções leem a unidade ativa)'),
- (116, '2026-10-12o-unidades-fase2d-chave-final',        exists(select 1 from pg_constraint where conrelid = 'public.documents'::regclass and contype = 'p' and pg_get_constraintdef(oid) = 'PRIMARY KEY (path, unit_id)'), 'Unidades — Fase 2D (chave final de documents)')
+ (116, '2026-10-12o-unidades-fase2d-chave-final',        exists(select 1 from pg_constraint where conrelid = 'public.documents'::regclass and contype = 'p' and pg_get_constraintdef(oid) = 'PRIMARY KEY (path, unit_id)'), 'Unidades — Fase 2D (chave final de documents)'),
+ (117, '2026-10-12p-unidades-fase3a-link-redes',       exists(select 1 from fx where proname = 'intake_form' and prosrc like '%''redes''%'), 'Unidades — Fase 3A (link de cadastro devolve as redes da unidade)')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

@@ -17,6 +17,17 @@ function cleanRedes(list) {
   }).filter(Boolean);
 }
 
+// Marca pública de uma unidade (cor, redes, nome e subtítulo), a partir do documento config/clinic dela.
+function brandOf(d) {
+  d = d || {};
+  var c = HEX.test(String(d.corBotoes || "").trim()) ? String(d.corBotoes).trim() : null;
+  var t = HEX.test(String(d.corTexto || "").trim()) ? String(d.corTexto).trim() : null;
+  var txt = function (v) { v = String(v == null ? "" : v).trim(); return v ? v.slice(0, 120) : null; };
+  return { theme: c ? { corBotoes: c, corTexto: t } : null, redes: cleanRedes(d.redes),
+    clinica: { nome: txt(d.nome), subtitulo: txt(d.subtitulo) } };
+}
+
+// Lê a Clínica de cada unidade (a chave de serviço ignora o RLS). Devolve { unidades: {id: marca}, padrao: marca da Unidade 1 }.
 async function clinicInfo(url) {
   var key = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
   if (!key) return undefined;
@@ -25,15 +36,15 @@ async function clinicInfo(url) {
   var ctrl = typeof AbortController === "function" ? new AbortController() : null;
   var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 2500) : null;
   try {
-    var r = await fetch(url + "/rest/v1/documents?path=eq.config%2Fclinic&unit_id=eq.unidade-1&select=data", { headers: h, signal: ctrl ? ctrl.signal : undefined });
+    var r = await fetch(url + "/rest/v1/documents?path=eq.config%2Fclinic&select=unit_id,data", { headers: h, signal: ctrl ? ctrl.signal : undefined });
     if (!r.ok) return undefined;
     var rows = await r.json();
-    var d = (rows && rows[0] && rows[0].data) || {};
-    var c = HEX.test(String(d.corBotoes || "").trim()) ? String(d.corBotoes).trim() : null;
-    var t = HEX.test(String(d.corTexto || "").trim()) ? String(d.corTexto).trim() : null;
-    var txt = function (v) { v = String(v == null ? "" : v).trim(); return v ? v.slice(0, 120) : null; };
-    return { theme: c ? { corBotoes: c, corTexto: t } : null, redes: cleanRedes(d.redes),
-      clinica: { nome: txt(d.nome), subtitulo: txt(d.subtitulo) } };
+    var unidades = {};
+    (Array.isArray(rows) ? rows : []).forEach(function (row) {
+      if (row && row.unit_id) unidades[String(row.unit_id)] = brandOf(row.data);
+    });
+    var padrao = unidades["unidade-1"] || brandOf({});
+    return { padrao: padrao, unidades: unidades };
   } catch (e) {
     return undefined;
   } finally {
@@ -51,7 +62,11 @@ module.exports = async function handler(req, res) {
   }
   var out = { supabaseUrl: url, supabaseAnonKey: anonKey };
   var info = await clinicInfo(url);
-  if (info !== undefined) { out.theme = info.theme; out.redes = info.redes; out.clinica = info.clinica; }
+  if (info !== undefined) {
+    // Sem unidade escolhida (página do link, versões antigas) vale a Unidade 1; a tela de login troca pela marca da unidade escolhida.
+    out.theme = info.padrao.theme; out.redes = info.padrao.redes; out.clinica = info.padrao.clinica;
+    out.unidades = info.unidades;
+  }
   res.setHeader("Cache-Control", "public, max-age=60");
   res.status(200).json(out);
 };
