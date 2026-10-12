@@ -7,7 +7,7 @@
 // usuário logado — ver supabase/2026-10-03-copia-de-seguranca.sql).
 //
 // POST /api/admin-backup   Authorization: Bearer <access_token do usuário>
-//   { action: "restore", table: "documents" | "appointments" | "clinical_records" | "patient_health" | "treatment_finance" | "convenio_finance" | "bank_account_finance" | "finance_entries" | "finance_loans" | "finance_payables" | "staff" | "staff_pay" | "therapy_plans" | "tasks" | "task_events" | "intake_links" | "intake_submissions", rows: [...] }
+//   { action: "restore", table: "documents" | "appointments" | "clinical_records" | "patient_health" | "treatment_finance" | "convenio_finance" | "bank_account_finance" | "finance_entries" | "finance_statement_lines" | "finance_loans" | "finance_payables" | "staff" | "staff_pay" | "therapy_plans" | "tasks" | "task_events" | "intake_links" | "intake_submissions", rows: [...] }
 //
 // Só acrescenta ou sobrescreve (upsert): nada que foi criado depois da cópia
 // é apagado. O app manda as linhas em lotes pequenos (limite de 4,5 MB da Vercel).
@@ -97,6 +97,11 @@ var TABLES = {
     cols: ["id", "account_id", "data", "descricao", "plan_id", "valor", "data_extrato", "valor_extrato", "obs", "origem_key",
            "created_at", "created_by", "updated_at", "updated_by"],
     users: ["created_by", "updated_by"]
+  },
+  finance_statement_lines: {
+    key: "id",
+    cols: ["id", "account_id", "data", "descricao", "valor", "doc", "key", "entry_id", "matched_at", "matched_by", "created_at", "created_by"],
+    users: ["matched_by", "created_by"]
   },
   finance_loans: {
     key: "id",

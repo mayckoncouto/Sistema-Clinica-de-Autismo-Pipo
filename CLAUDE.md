@@ -4172,3 +4172,23 @@ ficam minúsculas; a primeira palavra sempre maiúscula. Ex.: “Contas a Recebe
 Empréstimos”. Frases, dicas, mensagens, placeholders e textos de Ajuda continuam em frase normal; nomes de telas citados na Ajuda
 (`<b>…</b>` e “…”) seguem o padrão. Helper `ttl(s)` (perto de `normText`) para montar títulos a partir de texto dinâmico. Texto novo de
 interface: já escrever assim (aplicado em index.html, js/, cadastro.html e oauth-consent.html).
+
+## Financeiro — Conciliação com o extrato (2026-10-12)
+Decisões do usuário: o extrato entra por **arquivo (OFX, Excel ou CSV)**; o sistema **sugere e a pessoa confirma**; lançamento conciliado só ganha a
+marca (continua editável, com aviso). Menu Financeiro ▾ → **Conciliação** (`#tab-conciliacao`, aba `conciliacao`, ids `cn*`, depois de Empréstimos
+Concedidos), permissão **Financeiro** (ver, editar = conciliar/desfazer, incluir = importar/criar lançamento, excluir = apagar linhas pendentes).
+- Tabela `public.finance_statement_lines (id, account_id, data, descricao, valor COM SINAL, doc, key, entry_id → finance_entries on delete set null,
+  matched_at/by, created_at/by)`; `unique (account_id, key)` (importar de novo não duplica) e índice único parcial em `entry_id` (um lançamento, uma
+  linha). Migração `supabase/2026-10-12g-conciliacao.sql` (testada no PGlite; linha 108 da conferência; schema e conferência geral atualizados; backup
+  inclui `finance_statement_lines`). Apagar o lançamento solta a linha (FK) e `flDeleteRow` atualiza `CN.rows`.
+- Bloco “Financeiro: Conciliação” antes de Demonstrativos: `CN` (estado: acc, ym, st pend|conc|sem|"", q), `cnLoad`, `cnParseOfx`, `cnParseRows`
+  (acha Data / Descrição ou Histórico / Valor ou Crédito+Débito), `cnReadFile` (OFX direto; Excel/CSV por `xlReadFile`), `cnKeys` (FITID → `id:<doc>`;
+  senão data|valor|descrição + nº da repetição), `cnCandidates`/`cnSuggest` (mesma conta, valor do extrato do lançamento — `extVal` se houver, senão
+  `valor`, com sinal pela subcategoria — e data até 10 dias; melhor = menor diferença de dias + palavras em comum), `cnAutoConfirm` (só um candidato,
+  até 2 dias), `cnPickModal`, `cnCreateFrom(line)` (abre `openLancamento(null, {pre, onSaved})` preenchido; só liga se a subcategoria tem o mesmo sentido
+  da linha), `cnOpenImport` (prévia: lidas / novas / já importadas), `cnWireMenu` (Importar Extrato, Excluir Linhas Pendentes do Período).
+  `openLancamento(row, opts)` ganhou `opts.pre` e `opts.onSaved`. Lançamentos: ✓ (`cnMatched`) na coluna Extrato e aviso “Lançamento Conciliado” ao
+  mudar valor, data ou conta. Cartões: Linhas do Extrato, Conciliadas, Pendentes (soma com sinal), Lançamentos sem Extrato (`cnEntriesWithoutLine`).
+- Ajuda: tópico `conciliacao`. Teste `tests/run_conciliacao.js` (no `npm test`).
+- Produção (2026-10-12): `2026-10-12g-conciliacao` rodada pelo conector (tabela | RLS | 4 políticas | gatilho | índice = true | true | 4 | true | true).
+- Próximos (aguardando o usuário): Unidades (dois CNPJs), metas e orçamento, Guia/autorização do convênio, Planner montado pelos tratamentos.
