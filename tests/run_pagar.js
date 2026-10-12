@@ -268,6 +268,70 @@ const fs = require('fs');
   check('closed month: no link/unlink buttons', !(await page.$('#flLinkBtn')) && !(await page.$('#flUnlinkBtn')));
   await ev('FC.closed = {}; document.getElementById("modalHost").innerHTML = ""; 1');
 
+  // ---- rateio: uma conta, várias subcategorias, vários lançamentos ----
+  await page.evaluate(async () => {
+    const db = await window.claude.use('db');
+    await db.doc('config/chart_accounts').set({ list: [
+      { id: 'alu', name: 'Aluguel', categoria: 'Despesas Fixas', tipo: 'Despesa' },
+      { id: 'agua', name: 'Água', categoria: 'Despesas Fixas', tipo: 'Despesa' },
+      { id: 'conv', name: 'Convênio X', categoria: 'Receita Operacional', tipo: 'Receita' },
+      { id: 'pagto', name: 'Pagamento de Empréstimos', categoria: 'Empréstimos', tipo: 'Saída' },
+      { id: 'juros', name: 'Juros', categoria: 'Despesas Financeiras', tipo: 'Despesa' }] });
+  });
+  await page.waitForTimeout(300);
+  await ev('FL.rows = []; FP.rows = []; FP.f.pagar.st = "aberta"; 1');
+  await page.click('#finBtn'); await page.click('#finMenu [data-nav="pagar"]'); await page.waitForTimeout(300);
+  await ev('renderPagar(); 1');
+  await page.click('#fpAdd'); await page.waitForSelector('#ovFp');
+  check('new account offers "Dividir em subcategorias"', !!(await page.$('#fpSplitOn')));
+  await page.fill('#fpDesc', 'Parcela empréstimo 1/12'); await setSel('#fpVenc', '2026-03-10'); await page.fill('#fpValor', '1000');
+  await page.click('#fpSplitOn');
+  check('splitting creates two parts, the main subcategory field is locked and the total follows', (await page.$$('#fpSplitBox .fp-ln')).length === 2 && await page.$eval('#fpValor', (e) => e.readOnly));
+  await setSel('#fpSplitBox .fp-ln:nth-child(1) select', 'pagto'); await page.fill('#fpSplitBox .fp-ln:nth-child(1) .fp-ln-val', '800');
+  await setSel('#fpSplitBox .fp-ln:nth-child(2) select', 'juros'); await page.fill('#fpSplitBox .fp-ln:nth-child(2) .fp-ln-val', '200');
+  check('total shows R$ 1.000,00 and the value field matches', /R\$\s?1\.000,00/.test(await page.textContent('#fpSplitSum')) && (await page.inputValue('#fpValor')) === '1.000,00');
+  await page.click('#fpSplitAdd'); await setSel('#fpSplitBox .fp-ln:nth-child(3) select', 'conv'); await page.fill('#fpSplitBox .fp-ln:nth-child(3) .fp-ln-val', '5');
+  await page.click('#fpSave'); await page.waitForTimeout(200);
+  check('a part with a different direction (receita in a pagar account) is refused', !!(await page.$('#ovFp')) && (await ev('FP.rows.length')) === 0);
+  await page.click('#fpSplitBox .fp-ln:nth-child(3) .fp-ln-rm');
+  check('removing the part brings the total back', /R\$\s?1\.000,00/.test(await page.textContent('#fpSplitSum')));
+  await page.click('#fpSave'); await page.waitForTimeout(300);
+  check('saved with 2 lines, total 1.000 and main subcategory = first part', (await ev('FP.rows[0].linhas.length')) === 2 && (await ev('FP.rows[0].valor')) === 1000 && (await ev('FP.rows[0].plan')) === 'pagto');
+  check('list shows "Rateio (2)"', /Rateio \(2\)/.test((await rows())[0]));
+  await page.click('#reg-pagar-host tbody tr'); await page.waitForSelector('#ovFp');
+  check('editing shows the saved parts (800 and 200)', (await page.inputValue('#fpSplitBox .fp-ln:nth-child(2) .fp-ln-val')) === '200,00' && !(await page.$('#fpLink')));
+  await page.click('#fpCancel');
+  // baixa com valores diferentes (juros maiores)
+  await ev('openBaixa(FP.rows[0]); 1'); await page.waitForSelector('#ovFpb');
+  check('payment window lists the parts, total read-only, no extrato fields', (await page.$$('#ovFpb .fpb-ln-val')).length === 2 && await page.$eval('#fpbValor', (e) => e.readOnly) && !(await page.$('#fpbExtVal')));
+  await page.fill('#ovFpb .fpb-ln-val[data-i="1"]', '250');
+  check('total follows the parts (1.050,00)', (await page.inputValue('#fpbValor')) === '1.050,00');
+  await setSel('#fpbData', '2026-03-16'); await setSel('#fpbConta', 'viacredi');
+  await page.click('#fpbOk'); await page.waitForTimeout(300);
+  const ent = JSON.parse(await ev('JSON.stringify(FL.rows.map(function(e){ return {p: e.plan, v: e.valor, d: e.desc, l: e.pay === FP.rows[0].id, dt: e.date}; }))'));
+  check('two entries were created: principal 800 (Saída) and juros 250 (Despesa), both linked and dated', ent.length === 2 && ent[0].p === 'pagto' && ent[0].v === 800 && ent[1].p === 'juros' && ent[1].v === 250 && ent.every((e) => e.l && e.dt === '2026-03-16'), JSON.stringify(ent));
+  check('descriptions say which part', /Principal|Pagamento de Empréstimos/.test(ent[0].d) && /Juros/.test(ent[1].d), JSON.stringify(ent.map((e) => e.d)));
+  check('the account is paid and points to the first entry', !!(await ev('FP.rows[0].entry')) && (await ev('FP.rows[0].entry')) === (await ev('FL.rows[0].id')));
+  check('signs: Saída and Despesa both subtract (−1.050 on the account)', (await ev('FL.rows.reduce(function(t, e){ return t + flSign(e) * e.valor; }, 0)')) === -1050);
+  // lançamento mostra de onde veio
+  await ev('openLancamento(FL.rows[1]); 1'); await page.waitForSelector('#flLinkBox');
+  check('the second entry says it came from paying that account, without link buttons', /Criado ao pagar a conta/.test(await page.textContent('#flLinkBox')) && !(await page.$('#flUnlinkBtn')));
+  await ev('document.getElementById("modalHost").innerHTML = ""; 1');
+  // desfazer baixa apaga todos
+  await setSel('#fpSt', 'paga');
+  await page.click('#reg-pagar-host tbody tr'); await page.waitForSelector('#fpUndo');
+  await page.click('#fpUndo'); await page.waitForSelector('#cfOk');
+  check('undo warns that 2 entries go away', /2 lançamentos/.test(await page.textContent('.confirm-overlay')));
+  await page.click('#cfOk'); await page.waitForTimeout(300);
+  check('undo deletes both entries and reopens the account', (await ev('FL.rows.length')) === 0 && !(await ev('FP.rows[0].entry')));
+  // subcategoria usada no rateio conta como em uso e o previsto usa as linhas
+  const useJ = await ev('USAGE.planocontas({id: "juros"})');
+  check('a subcategory used only inside a split counts as in use', useJ.some((t) => /conta a pagar/.test(t)), useJ);
+  await ev(`FP.rows[0].venc = '2026-04-10'; FL.rows = [{id:'zz', acc:'viacredi', date:'2026-03-05', desc:'x', plan:'juros', valor:10, extDate:'', extVal:null, obs:'', key:''}]; DM.view='flu'; DM.per='ano'; 1`);
+  await page.click('#finBtn'); await page.click('#finMenu [data-nav="demonstrativos"]'); await page.waitForTimeout(400);
+  await ev('renderDemonstrativos(); 1');
+  check('the forecast spreads the split over its own subcategories (principal 800, juros 200)', (await ev('DM.ix.plan.pagto && DM.ix.plan.pagto["2026-04"]')) === 800 && (await ev('DM.ix.plan.juros["2026-04"]')) === 200);
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

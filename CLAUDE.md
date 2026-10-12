@@ -4129,3 +4129,17 @@ recorrência mensal + parcelas; previsão = contas cadastradas e, onde faltar, a
   `fpSuggest(p)` (≥6 e ≤15 dias: banner `.fp-sugg` "Parece que esta conta já foi paga" com `#fpSugg`), `fpLinkSet(payId, entryId|"")` (recusa lançamento já ligado). Mês fechado
   não vincula/desvincula pelo lançamento. Migração `supabase/2026-10-12d-um-lancamento-uma-conta.sql` (índice único parcial em `entry_id`; linha 105 da conferência de migrações; schema
   atualizado; o app funciona antes dela).
+
+## Financeiro — Rateio das contas e Empréstimos (2026-10-12, pedido do usuário)
+Decisões do usuário: **Empréstimos** = tabela única e duas telas (tomados / concedidos), igual a Contas a pagar/receber; tipos de juros **Simples, Composto, Price e SAC**; **Composto** = montante
+capital × (1 + taxa)ⁿ dividido em n parcelas IGUAIS; **taxa ao mês**; o cadastro gera as parcelas como contas (com prévia editável). **Rateio**: uma conta a pagar/receber pode ter várias
+subcategorias (ex.: parcela = principal "Pagamento de Empréstimos" Saída + juros "Juros" Despesa financeira; liberação do tomado = "Empréstimos Recebidos" Entrada, sem ser receita). Em duas entregas:
+- **Entrega 1 (feita): rateio.** `finance_payables.linhas` jsonb `[{plan, valor}]` (≥2 partes; vazio = subcategoria única `plan_id`; `plan_id` = 1ª parte, `valor` = soma; todas as partes na mesma direção:
+  pagar = Despesa/Saída, receber = Receita/Entrada). `fpLines(r)` devolve sempre a composição. Janela da conta: grupo "Composição do valor" (`#fpSplitBox`, "Dividir em subcategorias…" `#fpSplitOn`, linhas
+  `.fp-ln`, "+ Parte" `#fpSplitAdd`, "Voltar para uma subcategoria só"); valor = soma, subcategoria única travada. Baixa (`openBaixa`): valor por parte (`.fpb-ln-val`), sem extrato →
+  `fpSettleSplit` → RPC `finance_payable_settle_split(p_id, p_acc, p_date, p_linhas [{plan, valor, desc}], p_obs)` (um lançamento por parte, todos com `finance_entries.payable_id`; `entry_id` = 1º).
+  Desfazer baixa (`fpUndoSettle`) apaga todos os lançamentos com `pay === conta` (ou o ligado). `fpUsedEntries` conta os `pay`; conta com rateio não oferece vínculo com lançamento. Previsto do Fluxo
+  e `USAGE.planocontas` leem as partes. Lista mostra "Rateio (N)". Migração `supabase/2026-10-12e-rateio-das-contas.sql` (testada no PGlite; linha 106 da conferência; `schema.sql` e
+  `conferencia-geral.sql` atualizados). Backup: `linhas` entra; `finance_entries.payable_id` NÃO é restaurado (evita chave estrangeira circular). Testes no fim de `tests/run_pagar.js`.
+- **Entrega 2 (a fazer): Empréstimos.** Ver o que ficou combinado acima; antes de construir, mostrar a prévia das parcelas e criar no Plano de contas "Pagamento de Empréstimos" (Saída),
+  "Recebimento de Empréstimos" (Entrada) e "Juros de Empréstimos Concedidos" (Receita Financeira). Já existem "Empréstimos Recebidos"/"Concedidos" (categoria Empréstimos) e "Juros" (Despesas Financeiras).

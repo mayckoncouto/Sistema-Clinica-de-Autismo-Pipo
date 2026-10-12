@@ -101,7 +101,7 @@ var TABLES = {
   finance_payables: {
     key: "id",
     cols: ["id", "vencimento", "descricao", "plan_id", "account_id", "supplier_id", "valor", "entry_id", "grupo", "parcela", "parcelas",
-           "obs", "created_at", "created_by", "updated_at", "updated_by"],
+           "obs", "linhas", "created_at", "created_by", "updated_at", "updated_by"],
     users: ["created_by", "updated_by"]
   },
   staff: {

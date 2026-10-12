@@ -116,7 +116,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (102, '2026-10-12-demonstrativos',                 exists(select 1 from pg_constraint where conname = 'documents_path_valid' and pg_get_constraintdef(oid) like '%dre_views%'), 'Demonstrativos: visões salvas do DRE (caminho permitido e módulo)'),
  (103, '2026-10-12b-fechamento-de-mes',              exists(select 1 from pg_tables where schemaname = 'public' and tablename = 'finance_closings'), 'Demonstrativos: fechamento de mês (trava dos lançamentos) e histórico'),
  (104, '2026-10-12c-contas-a-pagar-e-receber',       exists(select 1 from pg_tables where schemaname = 'public' and tablename = 'finance_payables'), 'Financeiro: contas a pagar e a receber (previsto) e baixa em lançamento'),
- (105, '2026-10-12d-um-lancamento-uma-conta',         exists(select 1 from pg_indexes where schemaname = 'public' and indexname = 'finance_payables_entry_uni'), 'Financeiro: um lançamento só em uma conta a pagar/receber')
+ (105, '2026-10-12d-um-lancamento-uma-conta',         exists(select 1 from pg_indexes where schemaname = 'public' and indexname = 'finance_payables_entry_uni'), 'Financeiro: um lançamento só em uma conta a pagar/receber'),
+ (106, '2026-10-12e-rateio-das-contas',                exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_payables' and column_name = 'linhas'), 'Financeiro: rateio das contas em várias subcategorias (linhas) e baixa em vários lançamentos')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,
