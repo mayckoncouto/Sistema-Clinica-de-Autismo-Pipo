@@ -276,6 +276,20 @@ div.ag-obj-head{cursor:default}
 /* Cartões compactos (computador e celular): legenda com espaço fixo de 2 linhas; no funil a linha de
    leads/contratos ocupa o lugar da 2ª linha da legenda. Os cartões dividem toda a largura. */
 .crm-home-grid .crm-home-card{padding:12px 14px;gap:6px;justify-content:flex-start}
+.crm-home-day{grid-column:1/-1;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.crm-home-day h4{margin:0;font-size:13px;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+.crm-day-rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px}
+.crm-day-row{display:flex;align-items:center;gap:8px;border:0;background:none;padding:5px 6px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px;color:var(--ink);text-align:left}
+.crm-day-row:hover{background:var(--accent-weak)}
+.crm-day-row b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.crm-day-row .late{color:#b42318;font-weight:700}
+.crm-day-row .today{color:#b45309;font-weight:700}
+.crm-day-row .zero{opacity:.35}
+.crm-day-list{display:flex;flex-direction:column}
+.crm-day-item{display:flex;gap:8px;align-items:center;border:0;border-bottom:1px solid var(--line);background:none;padding:8px 4px;cursor:pointer;font:inherit;font-size:13px;text-align:left;color:var(--ink)}
+.crm-day-item:hover{background:var(--accent-weak)}
+.crm-day-item span{color:var(--ink-3,#64748b);font-size:12px;white-space:nowrap}
+.crm-day-item b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .crm-home-grid .crm-home-leg{height:34px}
 .crm-home-grid .crm-home-card:has(.crm-home-extra) .crm-home-leg{height:16px;max-height:16px}
 .crm-home-grid .crm-home-extra{border-top:0;padding-top:0;margin-top:-4px;line-height:20px;height:20px;font-size:12px}
@@ -283,6 +297,7 @@ div.ag-obj-head{cursor:default}
   .crm-home-h{padding:12px 12px 0}
   .crm-home-grid{display:flex;overflow-x:auto;padding:10px 12px 12px;gap:12px;scroll-snap-type:x mandatory;scroll-padding:0 12px}
   .crm-home-grid{align-items:flex-start}
+  .crm-home-grid .crm-home-day{flex:0 0 100%;scroll-snap-align:start;max-height:var(--crm-card-h,none);overflow:auto}
   .crm-home-grid .crm-home-card{flex:0 0 100%;max-width:none;scroll-snap-align:start;height:var(--crm-card-h,auto);overflow:hidden}
   .crm-home-grid .crm-home-nums{font-size:14px}
 }
@@ -6650,6 +6665,54 @@ function subscribeTaskLists(){
   }, function(){ CRM.listsLoaded = true; crmRebuildNav(); });
 }
 // CRM ▾ → CRM: um cartão por lista que a pessoa vê (abertas, vencidas, minhas); clicar abre a lista.
+// Resumo do Dia: por pessoa, quantas tarefas abertas vencidas e quantas vencem hoje (só nas listas que a pessoa vê).
+function crmDayPeople(all){
+  var today = crmToday(), by = {};
+  all.forEach(function(x){
+    if (!crmCan(x.list_id, "view") || crmIsDone(x) || !x.due_date || x.due_date > today) return;
+    var as = (x.assignees || []).length ? x.assignees : ["__none"];
+    as.forEach(function(a){ var r = by[a] || (by[a] = {id: a, late: 0, today: 0, tasks: []}); if (x.due_date < today) r.late++; else r.today++; r.tasks.push(x); });
+  });
+  var me = crmMe();
+  return Object.keys(by).map(function(k){ return by[k]; }).sort(function(a, b){
+    return (a.id === me ? -1 : b.id === me ? 1 : 0) || (a.id === "__none" ? 1 : b.id === "__none" ? -1 : 0) || (b.late - a.late) || (b.today - a.today);
+  });
+}
+function crmDayHtml(all){
+  var rows = crmDayPeople(all), d = crmToday().split("-");
+  var h = '<div class="crm-home-day"><h4>Resumo do Dia · ' + d[2] + '/' + d[1] + '</h4>';
+  if (!rows.length) return h + '<div class="pat-count">Nenhuma tarefa vencida ou vencendo hoje. Bom trabalho!</div></div>';
+  h += '<div class="crm-day-rows">' + rows.map(function(r){
+    var nm = r.id === "__none" ? "Sem responsável" : (r.id === crmMe() ? "Eu" : crmPersonName(r.id));
+    return '<button type="button" class="crm-day-row" data-crm-day="' + esc(r.id) + '"><b>' + esc(nm) + '</b>' +
+      '<span class="' + (r.late ? "late" : "zero") + '">' + r.late + (r.late === 1 ? " vencida" : " vencidas") + '</span>' +
+      '<span class="' + (r.today ? "today" : "zero") + '">' + r.today + ' hoje</span></button>';
+  }).join("") + '</div></div>';
+  return h;
+}
+function crmDayOpen(personId, all){
+  var r = crmDayPeople(all).filter(function(x){ return x.id === personId; })[0]; if (!r) return;
+  var today = crmToday(), nm = personId === "__none" ? "Sem responsável" : crmPersonName(personId);
+  var host = document.getElementById("confirmHost");
+  if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
+  var tasks = r.tasks.slice().sort(function(a, b){ return String(a.due_date).localeCompare(String(b.due_date)); });
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovDay" role="dialog" aria-modal="true"><div class="modal" style="max-width:560px">' +
+    '<div class="modal-head"><div><h3>Resumo do Dia: ' + esc(nm) + '</h3><div class="modal-sub">' + r.late + (r.late === 1 ? ' vencida' : ' vencidas') + ' · ' + r.today + ' vencem hoje</div></div><button class="modal-close" id="dayClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="crm-day-list">' + tasks.map(function(x){
+      var l = crmListById(x.list_id), dd = String(x.due_date).split("-");
+      return '<button type="button" class="crm-day-item" data-day-task="' + esc(x.id) + '"><b>' + esc(x.title) + '</b><span>' + esc(l ? l.name : "") + '</span><span class="' + (x.due_date < today ? "crm-day-late" : "") + '" style="' + (x.due_date < today ? "color:#b42318;font-weight:700" : "") + '">' + dd[2] + '/' + dd[1] + '</span></button>'; }).join("") + '</div></div>' +
+    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="dayOk">Fechar</button></div></div></div>';
+  function done(){ document.removeEventListener("keydown", onKey, true); host.innerHTML = ""; }
+  function onKey(e){ if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); done(); } }
+  document.addEventListener("keydown", onKey, true);
+  var ov = document.getElementById("ovDay");
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) done(); });
+  document.getElementById("dayClose").addEventListener("click", done);
+  document.getElementById("dayOk").addEventListener("click", done);
+  Array.prototype.forEach.call(ov.querySelectorAll("[data-day-task]"), function(b){
+    b.addEventListener("click", function(){ var t = CRM.tasks[b.getAttribute("data-day-task")]; done(); if (t) crmOpenTask(t); });
+  });
+}
 function crmHomeRender(host){
   if (!host) return;
   if (!CRM.loaded){ host.innerHTML = ''; return; }
@@ -6684,7 +6747,7 @@ function crmHomeRender(host){
     return '<button type="button" class="crm-home-card" data-crm-home="' + esc(id) + '"' + (color ? ' style="--lc:' + esc(swatchVar(color)) + '"' : '') + '><b>' + esc(name) + '</b>' + h + '</button>';
   }
   var mineTasks = all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(me) !== -1; });
-  host.innerHTML = card("__mine", "Minhas Tarefas", "", mineTasks) +
+  host.innerHTML = crmDayHtml(all) + card("__mine", "Minhas Tarefas", "", mineTasks) +
     vis.map(function(l){ return card(l.id, l.name, l.color, all.filter(function(x){ return x.list_id === l.id; })); }).join("");
   // Celular: todos os cartões com a mesma altura fixa = a do cartão de conteúdo mais alto (sem sobra).
   host.style.removeProperty("--crm-card-h");
@@ -6692,6 +6755,9 @@ function crmHomeRender(host){
     var hmax = 0; Array.prototype.forEach.call(host.querySelectorAll(".crm-home-card"), function(b){ hmax = Math.max(hmax, b.scrollHeight); });
     if (hmax) host.style.setProperty("--crm-card-h", (hmax + 2) + "px");
   }
+  Array.prototype.forEach.call(host.querySelectorAll("[data-crm-day]"), function(b){
+    b.addEventListener("click", function(){ crmDayOpen(b.getAttribute("data-crm-day"), all); });
+  });
   Array.prototype.forEach.call(host.querySelectorAll("[data-crm-home]"), function(b){
     b.addEventListener("click", function(){ CRM.list = b.getAttribute("data-crm-home"); crmFillFilters(); crmRender(); if (typeof renderNavMenus === "function") renderNavMenus(); });
   });
@@ -6986,6 +7052,18 @@ function crmMoveDialog(task){
     });
     fill(); selL.focus();
   });
+}
+// Seguir / deixar de seguir a tarefa (quem vê a lista; o banco confere pelo RPC task_follow).
+function crmFollow(task, on){
+  var me = crmMe(), c = crmClient();
+  function local(){
+    var cur = CRM.tasks[task.id] || task, f = (cur.followers || []).filter(function(x){ return x !== me; });
+    if (on) f.push(me);
+    cur.followers = f; CRM.tasks[task.id] = cur;
+    var m = CRM.mem && CRM.mem.tasks.filter(function(y){ return y.id === task.id; })[0]; if (m) m.followers = f;
+  }
+  if (!c){ local(); return Promise.resolve(); }
+  return c.rpc("task_follow", {p_task: task.id, p_on: on}).then(function(r){ if (r.error) throw r.error; local(); });
 }
 function crmGenDests(){ return crmVisibleLists().filter(function(l){ return crmCan(l.id, "create"); }); }
 // Gerar Tarefa a Partir Desta: nova tarefa com título, descrição, prioridade e paciente/lead da original; escolhe lista, status e responsáveis.
@@ -7792,8 +7870,9 @@ function crmOpenTask(task, opts){
   var lossHtml = list.lead ? prop('<span>Motivo de Perda</span>', '<input id="crmLPerda" type="text" list="crmPerdaList" value="' + esc(lead.motivoPerda || "") + '"' + dis + '><datalist id="crmPerdaList">' + CRM_PERDAS.map(function(o){ return '<option value="' + esc(o) + '">'; }).join("") + '</datalist>', true, "crmLossBox") : '';
   // Outras Opções (canto superior direito): Mover tarefa para outra lista (tarefa já salva, com permissão de editar e outra lista disponível).
   var topMoves = !isNew && canEdit && crmMoveDests(listId).length, topGen = !isNew && crmGenDests().length, topPat = !isNew && task && task.patient_id && can("pacientes", "view") && !!findPatientById(task.patient_id);
+  var topDup = !isNew && crmCan(listId, "create"), topFollow = !isNew && crmCan(listId, "view"), topIsFol = !isNew && task && (task.followers || []).indexOf(crmMe()) !== -1;
   var topMoreHtml = !isNew ? '<div class="cad-wrap pl-tools-wrap crm-top-more"><button type="button" class="btn ghost" id="crmTopBtn" aria-haspopup="menu" aria-expanded="false">Outras Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
-    '<div class="cad-menu pl-tools-menu" id="crmTopMenu" role="menu" hidden>' + (topPat ? '<button type="button" class="btn ghost" id="crmPatBtn">Cadastro do Paciente</button>' : '') + '<button type="button" class="btn ghost" id="crmLinkBtn">Copiar Link da Tarefa</button>' + (topGen ? '<button type="button" class="btn ghost" id="crmGenBtn">Gerar Tarefa a Partir Desta</button>' : '') + (topMoves ? '<button type="button" class="btn ghost" id="crmMoveBtn">Mover Tarefa</button>' : '') + '</div></div>' : '';
+    '<div class="cad-menu pl-tools-menu" id="crmTopMenu" role="menu" hidden>' + (topPat ? '<button type="button" class="btn ghost" id="crmPatBtn">Cadastro do Paciente</button>' : '') + (topFollow ? '<button type="button" class="btn ghost" id="crmFolBtn">' + (topIsFol ? 'Deixar de Seguir' : 'Seguir Tarefa') + '</button>' : '') + (topDup ? '<button type="button" class="btn ghost" id="crmDupBtn">Duplicar Tarefa</button>' : '') + '<button type="button" class="btn ghost" id="crmLinkBtn">Copiar Link da Tarefa</button>' + (topGen ? '<button type="button" class="btn ghost" id="crmGenBtn">Gerar Tarefa a Partir Desta</button>' : '') + (topMoves ? '<button type="button" class="btn ghost" id="crmMoveBtn">Mover Tarefa</button>' : '') + '</div></div>' : '';
   var sideHtml = '<aside class="crm-side" id="crmSide"' + (side ? '' : ' hidden') + '>' +
     '<div class="crm-side-head"><b>Atividade</b></div>' +
     '<div class="crm-side-body"><div class="crm-feed" id="crmFeed"><div class="pat-count">' + (isNew ? 'A criação e as alterações aparecem aqui depois de salvar. Comentários escritos agora são enviados junto com a tarefa.' : 'Carregando…') + '</div></div></div>' +
@@ -7869,6 +7948,26 @@ function crmOpenTask(task, opts){
       topOpen(false);
       var url = location.origin + "/?tarefa=" + encodeURIComponent(task.id) + "#crm";
       (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(url) : Promise.reject()).then(function(){ showToast("Link da tarefa copiado."); }, function(){ window.prompt("Copie o link da tarefa:", url); });
+    });
+    var folB = document.getElementById("crmFolBtn");
+    if (folB) folB.addEventListener("click", function(){
+      topOpen(false);
+      var cur = CRM.tasks[task.id] || task, on = (cur.followers || []).indexOf(crmMe()) === -1;
+      crmFollow(cur, on).then(function(){
+        folB.textContent = on ? "Deixar de Seguir" : "Seguir Tarefa";
+        showToast(on ? "Você vai receber avisos desta tarefa." : "Você deixou de seguir a tarefa.");
+      }, function(e){ showToast("Não foi possível alterar: " + ((e && e.message) || e), true); });
+    });
+    var dupB = document.getElementById("crmDupBtn");
+    if (dupB) dupB.addEventListener("click", function(){
+      topOpen(false);
+      var cur = CRM.tasks[task.id] || task;
+      crmInsert({list_id: cur.list_id, status: cur.status, title: cur.title, description: cur.description || "", priority: cur.priority || "normal", due_date: cur.due_date || null,
+        assignees: (cur.assignees || []).slice(), tags: (cur.tags || []).slice(), patient_id: cur.patient_id || null, lead: JSON.parse(JSON.stringify(cur.lead || {}))}).then(function(nt){
+        crmRender(); crmBadgeRender();
+        showToast("Tarefa duplicada.");
+        close(); crmOpenTask(nt);
+      }, function(e){ showToast("Não foi possível duplicar: " + ((e && e.message) || e), true); });
     });
     var patB = document.getElementById("crmPatBtn");
     if (patB) patB.addEventListener("click", function(){
@@ -21999,10 +22098,11 @@ var HELP_TOPICS = [
       "<b>Outras Opções ▾</b> na barra do CRM: <b>Exportar Planilha</b> baixa um Excel com as tarefas da tela aberta (a lista, Minhas Tarefas ou a tela CRM, com a busca, os filtros e “Finalizados”), com a coluna <b>Código</b> de cada tarefa. <b>Importar Planilha</b>: linha com Código atualiza aquela tarefa; sem Código vira tarefa nova (sem Lista, vai para a lista aberta). Status pelo nome do status da lista; Prioridade Urgente, Alta ou Normal; Responsáveis pelos nomes (só quem tem acesso ao CRM e à lista); nome que não é paciente cadastrado vira lead. Dados do lead só nas listas com Funil de contatos. A prévia mostra Novo, Atualizar, Igual e Com problema antes de gravar, e o sistema baixa uma cópia antes de importar. Célula vazia não apaga; comentários e histórico não entram; não dá para mudar a tarefa de lista pela planilha.",
       "<b>CRM ▾ → Listas e Status</b>: uma linha por lista com as setas (ordem no menu), a bolinha da cor, os status e as opções; as setas gravam na hora. <b>Editar</b> abre a janela da lista: nome, cor, opções (<b>Funil de contatos</b>, <b>Recorrência</b>) e os status (setas, cor, nome, Finalizado, Perda, ✕ e + status); <b>Salvar</b> grava e volta para as listas. <b>+ Incluir</b> cria uma lista; <b>Excluir</b> só funciona se a lista não tem tarefas.",
       "<b>Configurar recorrência</b> (no pé dos atalhos): escolha Diariamente, Semanalmente (marque os dias da semana), Mensalmente ou Anualmente, se cria uma <b>nova tarefa</b> ou reabre a mesma, <b>Repetir para sempre</b> ou até uma data, e o status da próxima. O calendário pinta as próximas datas. Tarefa recorrente mostra ↻ ao lado da data; <b>Remover</b> tira a recorrência.",
-      "<b>Outras Opções ▾</b> no canto superior direito da janela da tarefa (tarefa já salva): <b>Cadastro do Paciente</b> (tarefa com paciente cadastrado) abre o cadastro dele. <b>Copiar Link da Tarefa</b> copia o endereço que abre direto esta tarefa. <b>Gerar Tarefa a Partir Desta</b> cria uma nova tarefa (título, descrição, prioridade e paciente ou lead da original) na lista, no status e com os responsáveis que você escolher; as duas registram um comentário uma da outra. <b>Mover Tarefa</b> leva a tarefa para outra lista em que você pode editar. Se a lista de destino não tem o status atual (pelo mesmo nome), o aviso mostra isso e você escolhe o status da tarefa nela (já vem sugerido o equivalente). Responsáveis sem acesso à lista nova saem da tarefa, e a recorrência é retirada se a lista nova não a permite. A mudança de lista fica na Atividade da tarefa.",
+      "<b>Outras Opções ▾</b> no canto superior direito da janela da tarefa (tarefa já salva): <b>Cadastro do Paciente</b> (tarefa com paciente cadastrado) abre o cadastro dele. <b>Seguir Tarefa</b> faz você receber aviso (no celular ou no computador, se as notificações estiverem ligadas) quando alguém comentar ou alterar a tarefa — serve para quem não é responsável; <b>Deixar de Seguir</b> desfaz. <b>Duplicar Tarefa</b> cria uma cópia na mesma lista (mesmo status, título, descrição, prioridade, vencimento, responsáveis e paciente ou lead; sem comentários e sem recorrência) e abre a cópia. <b>Copiar Link da Tarefa</b> copia o endereço que abre direto esta tarefa. <b>Gerar Tarefa a Partir Desta</b> cria uma nova tarefa (título, descrição, prioridade e paciente ou lead da original) na lista, no status e com os responsáveis que você escolher; as duas registram um comentário uma da outra. <b>Mover Tarefa</b> leva a tarefa para outra lista em que você pode editar. Se a lista de destino não tem o status atual (pelo mesmo nome), o aviso mostra isso e você escolhe o status da tarefa nela (já vem sugerido o equivalente). Responsáveis sem acesso à lista nova saem da tarefa, e a recorrência é retirada se a lista nova não a permite. A mudança de lista fica na Atividade da tarefa.",
       "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para ver os nomes (↑ ↓ andam, Tab ou Enter escolhem, Esc fecha) e mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],
     rules: [
+      "Na tela <b>CRM</b>, o cartão <b>Resumo do Dia</b> mostra, por pessoa, quantas tarefas abertas estão vencidas e quantas vencem hoje (só das listas que você vê; “Sem responsável” junta as que ninguém assumiu); clique numa pessoa para ver as tarefas e abrir uma delas.",
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
       "Vencimento passado fica em vermelho (menos nos status que encerram a tarefa).",
       "Recorrência: a próxima é gerada quando a tarefa vai para um status finalizado. Sem “Criar nova tarefa”, a mesma tarefa volta para o status escolhido com a próxima data; com “Criar nova tarefa”, a finalizada fica como histórico e nasce uma igual com a próxima data (a recorrência passa para ela). A próxima data conta a partir do vencimento (sem vencimento, de hoje); mês sem o dia (ex.: 31) usa o último dia. Passou do “até”, não repete mais. O histórico mostra “finalizou a tarefa recorrente”.",
@@ -22254,16 +22354,17 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Backup</b> para baixar; restaurar, só o <b>Administrador</b>."},
   {id: "notificacoes", group: "Acesso", title: "Notificações", mod: null,
-    purpose: "Receber avisos no celular ou no computador, mesmo com o sistema fechado: tarefas vencidas do CRM e menções (@nome) nos comentários.",
+    purpose: "Receber avisos no celular ou no computador, mesmo com o sistema fechado: tarefas vencidas do CRM, menções (@nome) nos comentários e tarefas que você segue.",
     steps: [
       "Abra Acesso → <b>Notificações</b> no aparelho que vai receber os avisos e toque em <b>Ligar Neste Aparelho</b>.",
       "O navegador pergunta se pode mostrar notificações: responda <b>Permitir</b>.",
-      "Escolha os avisos: <b>Tarefas Vencidas</b> e/ou <b>Menções (@nome)</b>.",
+      "Escolha os avisos: <b>Tarefas Vencidas</b>, <b>Menções (@nome)</b> e/ou <b>Tarefas que Sigo</b>.",
       "Toque em <b>Enviar Teste</b> para conferir se o aviso aparece.",
       "Tocar no aviso de menção abre a tarefa no CRM; o de vencidas abre o CRM."
     ],
     rules: [
       "<b>Tarefas Vencidas:</b> um resumo por dia, às 8h de segunda a sexta, para cada responsável, com quantas tarefas abertas dele passaram do vencimento (só das listas em que a pessoa tem acesso).",
+      "<b>Tarefas que Sigo:</b> na hora, quando outra pessoa comenta ou altera (status, responsáveis, vencimento, prioridade…) uma tarefa que você segue pelo menu Outras Opções da tarefa; quem foi mencionado recebe só o aviso de menção.",
       "<b>Menções:</b> na hora, só para quem foi mencionado com @nome no comentário (quem escreveu não recebe) e que tem acesso à lista da tarefa.",
       "Cada aparelho liga e escolhe os avisos separadamente. Ao <b>Sair</b> do sistema, o aparelho para de receber.",
       "<b>iPhone:</b> as notificações só funcionam com o sistema instalado na tela inicial (veja “Instalar no Celular”) e aberto pelo ícone <b>Pipo</b>.",
@@ -22388,7 +22489,8 @@ window.pipoOpenHelpTopic = function(id){ openHelp(id); };
  * Cada pessoa liga no PRÓPRIO aparelho; a inscrição fica em public.push_subscriptions. */
 var NOTIF_PREFS = [
   {k: "vencidas", label: "Tarefas Vencidas", desc: "Resumo às 8h, de segunda a sexta, com quantas tarefas suas estão vencidas no CRM."},
-  {k: "mencoes", label: "Menções (@nome)", desc: "Na hora, quando alguém menciona você num comentário de tarefa."}
+  {k: "mencoes", label: "Menções (@nome)", desc: "Na hora, quando alguém menciona você num comentário de tarefa."},
+  {k: "seguindo", label: "Tarefas que Sigo", desc: "Na hora, quando alguém comenta ou altera uma tarefa que você segue."}
 ];
 function notifSupported(){ return ("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window); }
 function notifIsIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }

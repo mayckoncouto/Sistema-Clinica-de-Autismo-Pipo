@@ -3,6 +3,7 @@
 //   {acao: "chave"}                         → chave pública VAPID (cria o par no primeiro uso)
 //   {acao: "teste"} + login da pessoa       → aviso de teste para os aparelhos dela
 //   {tipo: "mencao", evento} + x-pipo-push  → @menção num comentário (chamado pelo gatilho do banco)
+//   {tipo: "seguindo", evento} + x-pipo-push → comentário/mudança em tarefa que a pessoa segue (gatilho do banco)
 //   {tipo: "vencidas"}       + x-pipo-push  → resumo diário das vencidas (chamado pelo agendamento)
 import { sendPush, vapidGenerate, type PushSub } from "./webpush.ts";
 
@@ -13,6 +14,7 @@ export type Db = {
   userFromToken(token: string): Promise<string | null>;
   subsFor(userIds: string[]): Promise<Sub[]>;
   mentionTargets(eventId: string): Promise<{ user_id: string; task_id: string; title: string; author: string }[]>;
+  followTargets(eventId: string): Promise<{ user_id: string; task_id: string; title: string; author: string; acao: string }[]>;
   overdue(): Promise<{ user_id: string; n: number }[]>;
   deleteSub(id: string): Promise<void>;
   markSub(id: string, ok: boolean): Promise<void>;
@@ -81,6 +83,11 @@ export function createHandler(o: Opts) {
         const t = await o.db.mentionTargets(body.evento);
         return json(await deliver(t.map((x) => ({ user_id: x.user_id, pref: "mencoes", data: {
           title: x.author + " mencionou você", body: x.title, url: "/?tarefa=" + x.task_id + "#crm", tag: "mencao-" + body.evento } }))));
+      }
+      if (body.tipo === "seguindo" && typeof body.evento === "string") {
+        const t = await o.db.followTargets(body.evento);
+        return json(await deliver(t.map((x) => ({ user_id: x.user_id, pref: "seguindo", data: {
+          title: x.author + " " + x.acao, body: x.title, url: "/?tarefa=" + x.task_id + "#crm", tag: "seguindo-" + x.task_id } }))));
       }
       if (body.tipo === "vencidas") {
         const t = await o.db.overdue();

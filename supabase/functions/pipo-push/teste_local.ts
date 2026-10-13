@@ -36,6 +36,7 @@ const db: Db = {
   async saveVapid(p, k) { if (!cfg.vapid_public) { cfg.vapid_public = p; cfg.vapid_private = k; created++; } },
   async userFromToken(t) { return t === "tok-ana" ? "ana" : null; },
   async subsFor(ids) { return subs.filter((s) => ids.includes(s.user_id)); },
+  async followTargets(ev) { return ev === "ev2" ? [{ user_id: "ana", task_id: "t1", title: "Ligar para a família", author: "Bia", acao: "comentou" }] : []; },
   async mentionTargets(ev) { return ev === "ev1" ? [{ user_id: "ana", task_id: "t1", title: "Ligar para a família", author: "Bia" }, { user_id: "caio", task_id: "t1", title: "Ligar para a família", author: "Bia" }] : []; },
   async overdue() { return [{ user_id: "ana", n: 3 }, { user_id: "bia", n: 1 }, { user_id: "zé", n: 0 }]; },
   async deleteSub(id) { subs = subs.filter((s) => s.id !== id); },
@@ -61,6 +62,9 @@ const v = await (await call({ tipo: "vencidas" }, { "x-pipo-push": "s3gr3d0" }))
 const va = JSON.parse(got.a2[1] || "{}"), vb = JSON.parse(got.b1[0] || "{}");
 check("vencidas: 1 resumo por aparelho, texto com a quantidade?", v.enviados === 3 && va.body === "Você tem 3 tarefas vencidas no CRM." && vb.body === "Você tem 1 tarefa vencida no CRM." && va.url === "/#crm", { v, va, vb });
 check("quem tem 0 vencidas não recebe?", !got["zé"]);
+const sg = await (await call({ tipo: "seguindo", evento: "ev2" }, { "x-pipo-push": "s3gr3d0" })).json();
+const sga = got.a2.map((x: string) => JSON.parse(x)).filter((x: { tag?: string }) => x.tag === "seguindo-t1")[0];
+check("seguindo: quem segue recebe 'Bia comentou' no aparelho que aceita?", sg.enviados >= 1 && sga && sga.title === "Bia comentou" && sga.url === "/?tarefa=t1#crm", { sg, sga });
 check("pedido desconhecido = 400?", (await call({ tipo: "x" }, { "x-pipo-push": "s3gr3d0" })).status === 400);
 await srv.shutdown();
 console.log(fails ? fails + " FAILED" : "ALL PASS");

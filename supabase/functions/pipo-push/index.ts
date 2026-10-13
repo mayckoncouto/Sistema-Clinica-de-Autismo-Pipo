@@ -36,6 +36,9 @@ const db = {
   async mentionTargets(ev: string) {
     return must(await sb.rpc("push_mention_targets", { p_event: ev })) || [];
   },
+  async followTargets(ev: string) {
+    return must(await sb.rpc("push_follow_targets", { p_event: ev })) || [];
+  },
   async overdue() {
     return must(await sb.rpc("push_overdue_counts")) || [];
   },
