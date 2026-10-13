@@ -982,7 +982,7 @@ div.ag-obj-head{cursor:default}
 .cad-menu .cad-sep{flex:none;height:5px;background:var(--surface-2);border-bottom:1px solid var(--line)}
 .cad-menu button{border:0;background:transparent;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 .cad-menu button:hover,.cad-menu button:focus{background:var(--accent-weak);outline:none}
-.panel.reg-panel,#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-diagnosticos,#tab-origens,#tab-cbo,#tab-conselhos,#tab-fornecedores,#tab-catfornecedor,#tab-contas,#tab-planocontas,#tab-feriados,#tab-status,#tab-unidades{flex:1;min-height:0;display:flex;flex-direction:column}
+.panel.reg-panel,#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-diagnosticos,#tab-origens,#tab-motivosbloq,#tab-cbo,#tab-conselhos,#tab-fornecedores,#tab-catfornecedor,#tab-contas,#tab-planocontas,#tab-feriados,#tab-status,#tab-unidades{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-host{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-table tbody tr{cursor:pointer}
 .reg-table tbody tr:hover td{background:var(--accent-weak)}
@@ -2823,6 +2823,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <button data-tab="escolas" hidden>Escolas</button>
       <button data-tab="diagnosticos" hidden>Diagnósticos</button>
       <button data-tab="origens" hidden>Origens</button>
+      <button data-tab="motivosbloq" hidden>Motivos de Bloqueio</button>
       <button data-tab="cbo" hidden>CBO</button>
       <button data-tab="conselhos" hidden>Conselhos</button>
       <button data-tab="fornecedores" hidden>Fornecedores</button>
@@ -3208,6 +3209,18 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <button class="btn primary" id="reg-origens-add">+ Incluir</button>
     </div>
     <div id="reg-origens-host" class="reg-host"></div>
+  </section>
+  <section id="tab-motivosbloq" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-motivosbloq-search" type="text" placeholder="Buscar motivo…">
+      </div>
+      <span class="pat-count" id="reg-motivosbloq-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-motivosbloq-add">+ Incluir</button>
+    </div>
+    <div id="reg-motivosbloq-host" class="reg-host"></div>
   </section>
   <section id="tab-cbo" class="panel reg-panel" hidden>
     <div class="pat-toolbar">
@@ -4771,6 +4784,7 @@ var state = {
   convenios: [],         // convênio registry [{id,name}], from db
   doctors: [],           // médicos [{id,name,especialidade,crm,telefone}] (config/doctors)
   diagnoses: [],         // diagnósticos [{id,code,name}] (config/diagnoses)
+  blockReasons: [],      // motivos de bloqueio do paciente [{id,name}] (config/block_reasons)
   origins: [],           // origens / como conheceu a clínica [{id,name}] (config/origins)
   schools: [],           // escolas [{id,name,telefone,contato}] (config/schools)
   units: [],             // unidades [{id,name,fantasia,cnpj,telefone,email,endereco,cidade,inativo}] (config/units)
@@ -4819,7 +4833,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {unidades:"Unidades", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", agenda:"Agenda", visao_geral:"Visão Geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
+var PERM_MODULE_LABELS = {unidades:"Unidades", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", agenda:"Agenda", visao_geral:"Visão Geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -4916,7 +4930,7 @@ function permToolClasses(){
 function applyPermissionsUI(){
   if (HEALTH.map === null && healthCanSee()) healthLoad();
   if (!window.pipoAuth) return;
-  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", unidades:"unidades", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", emptomados:"financeiro", empconcedidos:"financeiro", conciliacao:"financeiro", pagar:"financeiro", receber:"financeiro", automacoes:"crm_listas"};
+  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", motivosbloq:"motivos_bloqueio", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", unidades:"unidades", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", emptomados:"financeiro", empconcedidos:"financeiro", conciliacao:"financeiro", pagar:"financeiro", receber:"financeiro", automacoes:"crm_listas"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : (k === "crm" || k === "automacoes") ? crmMainCan() : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -5056,13 +5070,13 @@ function restorePlannerView(){
 function cadTitleText(k){
   if (k === "salas") return state.salasView === "grupos" ? "Grupos de Suporte" : "Salas";
   return ({pacientes: "Pacientes", tratamentos: "Tratamentos", convenios: "Convênios", motivos: "Motivos de Cancelamento",
-    medicos: "Médicos", escolas: "Escolas", diagnosticos: "Diagnósticos", origens: "Origens", colaboradores: "Colaboradores",
+    medicos: "Médicos", escolas: "Escolas", diagnosticos: "Diagnósticos", origens: "Origens", motivosbloq: "Motivos de Bloqueio", colaboradores: "Colaboradores",
     tiposcolab: "Tipos de Colaborador", profissionais: "Profissionais", especialidades: "Especialidades", servicos: "Serviços",
     cbo: "CBO", conselhos: "Conselhos", fornecedores: "Fornecedores", catfornecedor: "Categorias de Fornecedor", unidades: "Unidades", contas: "Contas Bancárias", planocontas: "Plano de Contas", lancamentos: "Lançamentos", pagar: "Contas a Pagar", receber: "Contas a Receber", emptomados: "Empréstimos Tomados", empconcedidos: "Empréstimos Concedidos", conciliacao: "Conciliação", automacoes: "Automações", demonstrativos: "Demonstrativos", feriados: "Feriados e Recessos", status: "Status", objetivos: "Objetivos",
     escalas: "Escalas", habilidades: "Habilidades"})[k] || "";
 }
 function cadTitlesInit(){
-  ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "colaboradores", "tiposcolab",
+  ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab",
    "profissionais", "especialidades", "servicos", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contas", "planocontas", "lancamentos", "pagar", "receber", "emptomados", "empconcedidos", "conciliacao", "automacoes", "demonstrativos", "salas", "feriados", "status", "objetivos", "escalas", "habilidades"].forEach(function(k){
     var sec = document.getElementById("tab-" + k), tb = sec && sec.querySelector(".pat-toolbar");
     if (!tb || tb.querySelector(".cad-title")) return;
@@ -5278,6 +5292,7 @@ var USAGE = {
   escolas: function(e){ return Promise.resolve([useTxt(patientsUsing("escolaId", e.id), "paciente", "pacientes")].filter(Boolean)); },
   diagnosticos: function(d){ return Promise.resolve([useTxt(diagUseCount(d), "paciente", "pacientes")].filter(Boolean)); },
   origens: function(o){ return Promise.resolve([useTxt(originUseCount(o), "paciente", "pacientes")].filter(Boolean)); },
+  motivosbloq: function(o){ return Promise.resolve([useTxt(blockReasonUse(o), "paciente", "pacientes")].filter(Boolean)); },
   catfornecedor: function(c){ return Promise.resolve([useTxt(supplierCatUse(c), "fornecedor", "fornecedores")].filter(Boolean)); },
   unidades: function(u){
     return rowUseCount("profiles", "unit_id", u.id, function(){ return 0; }).then(function(n){
@@ -5503,6 +5518,7 @@ var SYS_RULES = [
   {id: "pl_pac_servico", g: "planner", label: "Paciente com o mesmo serviço em dois lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
   {id: "pl_fora_prof", g: "planner", label: "Fora do horário de trabalho do profissional", desc: "Célula fora do horário de trabalho do profissional da coluna fica cinza e não aceita agendamento.", def: "block", modes: ["block", "off"]},
   {id: "pl_sala_max", g: "planner", label: "Máximo de 4 Pacientes por Sala no Mesmo Horário", desc: "Agendar o 5º paciente numa sala no mesmo horário (Planner). Em Avisar, pede confirmação; o Auto Planner nunca passa de 4.", def: "warn", modes: BWO},
+  {id: "pl_paciente_bloqueado", g: "planner", label: "Paciente Bloqueado", desc: "Agendar um paciente com o cadastro Bloqueado. Quem já está na célula pode ser editado; mover ou colar em outra célula é recusado.", def: "block", modes: BWO},
   {id: "pl_rotina", g: "planner", label: "Rotina Atual do Paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "pl_fora_paciente", g: "planner", label: "Fora do Horário do Paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
   {id: "pl_terapeuta", g: "planner", label: "Terapeuta Diferente do Tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
@@ -5515,6 +5531,7 @@ var SYS_RULES = [
   {id: "ag_pac_servico", g: "agenda", label: "Paciente com o mesmo serviço em dois lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
   {id: "ag_fora_trabalho", g: "agenda", label: "Fora do horário de trabalho do profissional", desc: "Horário fora do expediente do profissional fica hachurado e não aceita agendamento.", def: "block", modes: ["block", "off"]},
   {id: "ag_feriado", g: "agenda", label: "Feriado ou Recesso", desc: "Agendar em data cadastrada em Feriados e Recessos.", def: "warn", modes: BWO},
+  {id: "ag_paciente_bloqueado", g: "agenda", label: "Paciente Bloqueado", desc: "Agendar um paciente com o cadastro Bloqueado. Quem já tem o atendimento pode ser editado; marcar um novo horário é recusado.", def: "block", modes: BWO},
   {id: "ag_rotina", g: "agenda", label: "Rotina Atual do Paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "ag_fora_paciente", g: "agenda", label: "Fora do Horário do Paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
   {id: "ag_terapeuta", g: "agenda", label: "Terapeuta Diferente do Tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
@@ -5865,6 +5882,7 @@ var SIMPLE_LISTS = {
   planocontas: {path: "config/chart_accounts", key: "chartAccounts", module: "plano_contas", label: "plano de contas"},
   diagnosticos: {path: "config/diagnoses", key: "diagnoses", module: "diagnosticos", label: "diagnósticos"},
   origens: {path: "config/origins", key: "origins", module: "origens", label: "origens"},
+  motivosbloq: {path: "config/block_reasons", key: "blockReasons", module: "motivos_bloqueio", label: "motivos de bloqueio"},
   cbo: {path: "config/cbo", key: "cbos", module: "cbo", label: "CBO"},
   conselhos: {path: "config/councils", key: "councils", module: "conselhos", label: "conselhos"},
   feriados: {path: "config/holidays", key: "holidays", module: "feriados", label: "feriados"},
@@ -9230,6 +9248,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
               '<span class="pname">'+esc(b.patient)+'</span>' +
               (bookingServiceName(b) ? '<span class="pserv">'+esc(bookingServiceName(b))+'</span>' : '') +
               (b.note ? '<span class="pnote">'+esc(b.note)+'</span>' : '') +
+              (pRec && patBlocked(pRec) ? blockTagHtml(pRec) : '') +
             '</button>' +
             (can("planner","delete") ? '<button type="button" class="book-del" title="Excluir Agendamento" aria-label="Excluir Agendamento"></button>' : "") +
             '<button type="button" class="book-move" title="Mover paciente" aria-label="Mover paciente"></button>' +
@@ -10060,6 +10079,12 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
     return msg;
   }
   var x;
+  // Paciente com cadastro Bloqueado: não entra em célula nova (a célula que já o tem continua editável).
+  var blkP = patientRule ? findPatientByName(rec) : null;
+  if (blkP && patBlocked(blkP)){
+    var cur = bookings[key], same = cur && typeof cur === "object" && cur.patient && samePatient(cur, rec);
+    if (!same){ x = hit("pl_paciente_bloqueado", "<b>" + esc(blkP.nome) + "</b> está com o cadastro <b>" + esc(patBlockText(blkP)) + "</b>. Não pode ser agendado."); if (x) return x; }
+  }
   // No máximo 4 pacientes por sala no mesmo horário (Acesso → Sistema: Avisar pede confirmação).
   if (!isGroup(room) && !bookingKind(rec)){
     var inRoom = 0;
@@ -11192,7 +11217,7 @@ function renderPatientsTab(){
       cellTxt(patFirstPhone(p)) + cellTxt(patFirstEmail(p)) +
       cellTxt(p.escolaId ? patRegName("escolas", p.escolaId) : "") +
       cellTxt(p.medicoId ? patRegName("medicos", p.medicoId) : "") +
-      '<td>'+(isActive(p) ? '<span class="tr-chip st-ativo">Ativo</span>' : '<span class="tr-chip st-inativo">Inativo</span>')+'</td>' +
+      '<td>'+(isActive(p) ? '<span class="tr-chip st-ativo">Ativo</span>' : '<span class="tr-chip st-inativo">Inativo</span>')+(patBlocked(p) ? ' <span class="tr-chip st-cancelado" title="' + esc(patBlockText(p)) + '">Bloqueado</span>' : '')+'</td>' +
       '<td class="pt-trat">'+trTxt+'</td>' +
     '</tr>';
   }).join("");
@@ -11832,7 +11857,7 @@ var PAT_SECTIONS = [
   {id: "ident", label: "Identificação"}, {id: "endereco", label: "Endereço"},
   {id: "filiacao", label: "Filiação"}, {id: "rotina", label: "Responsáveis pela Retirada"}, {id: "protetiva", label: "Medida Protetiva"},
   {id: "contato", label: "Contato"}, {id: "financeiro", label: "Responsável Financeiro"},
-  {id: "convenio", label: "Convênio"},
+  {id: "convenio", label: "Convênio"}, {id: "bloqueio", label: "Bloqueio de Agendamento"},
   {id: "saude", label: "Saúde"}, {id: "escola", label: "Escola"}, {id: "rotinaatual", label: "Rotina Atual"}, {id: "admin", label: "Administrativo"}
 ];
 var CID_SUGGESTIONS = [
@@ -11900,6 +11925,9 @@ var PAT_FIELDS = [
   {key: "planoPadrao", label: "Plano", sec: "convenio"},
   {key: "carteirinha", label: "Nº da Carteirinha", sec: "convenio"},
   {key: "carteirinhaValidade", label: "Validade da Carteirinha", sec: "convenio", type: "date"},
+  {key: "bloqueado", label: "Bloqueado", sec: "bloqueio", type: "check", hint: "não pode ser agendado"},
+  {key: "bloqueioMotivo", label: "Motivo do Bloqueio", sec: "bloqueio", type: "reg", reg: "motivosbloq"},
+  {key: "bloqueioObs", label: "Observação do Bloqueio", sec: "bloqueio", type: "line", span2: true},
   {key: "escolaId", label: "Escola", sec: "escola", type: "reg", reg: "escolas", span2: true},
   {key: "escolaSerie", label: "Série / Ano", sec: "escola"},
   {key: "escolaTurno", label: "Turno da Escola", sec: "escola", type: "select", opts: ["Manhã", "Tarde", "Integral", "Noite"]},
@@ -12225,6 +12253,18 @@ function patValueEmpty(f, d){
   if (f.type === "check") return false;
   return v == null || String(v).trim() === "";
 }
+// Paciente bloqueado: não pode ser agendado (Planner e Agenda). Todos veem o motivo.
+// Tarja "Bloqueado" nas células do Planner e da Agenda (mesmo visual da etiqueta de status).
+function blockTagHtml(p){ return '<span class="agd-status" style="background:var(--danger);bottom:auto;top:3px" title="' + esc(patBlockNote(p)) + '">Bloqueado</span>'; }
+function patBlocked(p){ return !!p && String(p.bloqueado) === "Sim"; }
+function patBlockText(p){
+  var m = blockReasonName(p && p.bloqueioMotivo);
+  return "Bloqueado" + (m ? " — " + m : "") + (p && p.bloqueioObs ? " (" + p.bloqueioObs + ")" : "");
+}
+function patBlockNote(p){
+  if (!patBlocked(p)) return "Marque Bloqueado para impedir novos agendamentos deste paciente no Planner e na Agenda. Quem já está marcado continua.";
+  return patBlockText(p) + (p.bloqueioDesde ? ". Desde " + trBr(p.bloqueioDesde) : "") + (p.bloqueioPor ? " por " + p.bloqueioPor : "") + ".";
+}
 function patFieldInputHtml(f, v){
   var id = f.key === "nome" ? "pNome" : f.key === "nascimento" ? "pNasc" : "pf-" + f.key, val = v[f.key];
   var lab = '<label for="' + id + '">' + esc(f.label) + '</label>';
@@ -12433,6 +12473,7 @@ function openPatientModal(p, opts){
         return cell;
       }).join("") + '</div>';
       if (sec.id === "saude" && fs.some(function(f){ return f.type === "referral"; })) html += encHtml(v.encaminhamento);
+      if (sec.id === "bloqueio") html += '<div class="pat-count" id="pBloqNote">' + esc(patBlockNote(v)) + '</div>';
       if (sec.id === "ident"){
         if (!patFieldCfg("nascimento").show) html += '<div class="pm-grid"><div class="field" id="pIdadeField"></div></div>';
         html += '<div class="pm-note" data-note="cpf" hidden></div>';
@@ -12804,6 +12845,7 @@ function openPatientModal(p, opts){
     if (badPar){ focusSec("filiacao"); showToast("CPF " + (badPar === "mae" ? "da mãe" : "do pai") + " inválido.", true); return; }
     var mailsAll = (d.emails || []).map(function(m){ return m.email; }).concat(d.financeiro ? [d.financeiro.email] : []).filter(Boolean);
     if (mailsAll.some(function(m){ return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m); })){ focusSec("contato"); showToast("Confira os e-mails: há um e-mail inválido.", true); return; }
+    if (d.bloqueado === "Sim" && !d.bloqueioMotivo){ focusSec("bloqueio"); showToast("Escolha o motivo do bloqueio.", true); return; }
     var firstTr = !isNew ? patFirstTreatmentStart(v.id) : "";
     if (d.entrada && firstTr && d.entrada > firstTr && !sysSaveGate($("pSave"), "pac_entrada", "Data de Entrada", "Este paciente tem tratamento desde " + trBr(firstTr) + ": a data de entrada precisa ser até essa data.", function(){ focusSec("ident"); })) return;
     var nascVal = d.nascimento !== undefined ? d.nascimento : (v.nascimento || "");
@@ -12817,6 +12859,19 @@ function openPatientModal(p, opts){
     PAT_LEGACY_KEYS.forEach(function(k){ delete rec[k]; });
     if (nascVal) delete rec.idade;
     if (isNew) rec.criadoEm = new Date().toISOString();
+    // Bloqueio: carimba quem/quando e guarda o histórico; desbloquear limpa o motivo.
+    var wasBlocked = !isNew && patBlocked(p || v);
+    if (rec.bloqueado === "Sim" || wasBlocked){
+      var iso = new Date().toISOString(), hist = (rec.bloqueioHist || []).slice(-49);
+      if (rec.bloqueado === "Sim" && !wasBlocked){
+        rec.bloqueioDesde = trTodayIso(); rec.bloqueioPor = trWho();
+        hist.push({em: iso, por: trWho(), acao: "bloqueou", motivo: blockReasonName(rec.bloqueioMotivo), obs: rec.bloqueioObs || ""});
+      } else if (rec.bloqueado !== "Sim"){
+        hist.push({em: iso, por: trWho(), acao: "desbloqueou"});
+        delete rec.bloqueioMotivo; delete rec.bloqueioObs; delete rec.bloqueioDesde; delete rec.bloqueioPor;
+      }
+      rec.bloqueioHist = hist;
+    }
     // "Outras pessoas" da retirada não podem ser a Mãe nem o Pai (eles vêm da Filiação).
     var parNames = ["mae", "pai"].map(function(r){ return normText(String((rec[r] || {}).nome || "").trim()); }).filter(Boolean);
     var parDup = (rec.rotina || []).filter(function(r){ var k = normText(String(r.rel || "").trim()); return k === "mae" || k === "pai" || parNames.indexOf(normText(r.nome)) !== -1; });
@@ -12853,6 +12908,9 @@ function openPatientModal(p, opts){
       return Promise.all([h, rn]);
     }).then(function(){
       return isNew ? null : offerApplyConvenio(rawOld, rec);
+    }).then(function(){
+      // Acabou de bloquear: oferece tirar os atendimentos futuros da Agenda (o Planner continua como está).
+      if (!isNew && !wasBlocked && patBlocked(rec)) trOfferRemoveBookings(rec.id, {agendaOnly: true});
     }).then(function(){
       close();
       if (opts.onSaved) opts.onSaved(rec);
@@ -14727,6 +14785,14 @@ function originOptionsHtml(cur){
   return '<option value="">Não informado</option>' + (has ? '' : '<option value="' + esc(cur) + '" selected>' + esc(cur) + '</option>') +
     list.map(function(o){ return '<option value="' + esc(o.name) + '"' + (cur && normText(o.name) === normText(cur) ? ' selected' : '') + '>' + esc(o.name) + '</option>'; }).join("");
 }
+// Motivos de bloqueio do paciente (config/block_reasons). O paciente guarda o ID (bloqueioMotivo).
+var DEFAULT_BLOCK_REASONS = ["Financeiro", "Documentação pendente", "Aguardando laudo ou encaminhamento", "Decisão da família", "Outro"];
+function blockReasonsList(){
+  if (state.blockReasons && state.blockReasons.length) return state.blockReasons.slice();
+  return DEFAULT_BLOCK_REASONS.map(function(n){ return {id: slugify(n), name: n}; });
+}
+function blockReasonName(id){ var r = blockReasonsList().filter(function(x){ return x.id === id; })[0]; return r ? r.name : ""; }
+function blockReasonUse(o){ return (state.patientsRaw || state.patients || []).filter(function(p){ return p.bloqueado === "Sim" && p.bloqueioMotivo === o.id; }).length; }
 function cboList(){
   if (state.cbos && state.cbos.length) return state.cbos.slice();
   var out = CBOS_SUGGESTIONS.map(function(c){ return {id: cboKey(c[0]), code: c[0], name: c[1]}; });
@@ -15824,6 +15890,7 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
       ' title="'+esc(name + (sub ? " — " + sub : "") + (protAlert ? " — Medida protetiva: confira quem vai retirar" : ""))+'">' +
       '<span class="pname">'+(protAlert ? protShieldHtml() : '')+esc(name)+'</span>' + (serv ? '<span class="pserv">'+esc(serv)+'</span>' : '') + (sub ? '<span class="pnote">'+esc(sub)+'</span>' : '') +
       (st ? '<span class="agd-status" style="background:'+esc(st.color || "#5b6b68")+'" title="Status: '+esc(st.name)+'">'+esc(st.name)+'</span>' : '') +
+      (!kind && pRec && patBlocked(pRec) ? blockTagHtml(pRec) : '') +
     '</button>' +
     (can("agenda","delete") ? '<button type="button" class="book-del" title="Excluir Agendamento" aria-label="Excluir Agendamento"></button>' : "") +
     '<button type="button" class="book-move" title="Mover" aria-label="Mover"></button>' +
@@ -16677,7 +16744,7 @@ function agdGoalsCheck(pairs){
 }
 // Agenda: regras de horário (ver profBusyMsg / patientBusyMsg). rows = outras linhas
 // (do banco e/ou da mesma operação); rec = a linha que vai ser gravada.
-function agdConflictIn(rows, rec){
+function agdConflictIn(rows, rec, held){
   if (!rec || !rec.patient) return null;
   var recMeet = roomMeetingKind(rec);
   if (bookingKind(rec) && !recMeet) return null;
@@ -16693,6 +16760,8 @@ function agdConflictIn(rows, rec){
     if (m === "warn"){ if (!warned) warned = {warn: true, rule: id, msg: msg}; return null; }
     return msg;
   }
+  var blkA = isPatient ? findPatientByName(rec) : null;
+  if (blkA && patBlocked(blkA) && !held){ x = hit("ag_paciente_bloqueado", blkA.nome + " está com o cadastro " + patBlockText(blkA) + ". Não pode ser agendado."); if (x) return x; }
   for (var i=0;i<rows.length;i++){
     var o = rows[i];
     if (!o || o === rec || !o.patient || o.date !== rec.date || o.time !== rec.time) continue;
@@ -16732,10 +16801,12 @@ function agdConflictsFor(recs, ignoreIds){
   return Promise.all(dates.map(function(d){ return agdClient().from("appointments").select("*").eq("date", d); })).then(function(rs){
     var err = rs.filter(function(r){ return r.error; })[0];
     if (err) throw err.error;
-    var rows = [].concat.apply([], rs.map(function(r){ return r.data || []; })).filter(function(o){ return ign.indexOf(String(o.id)) === -1; });
+    var all = [].concat.apply([], rs.map(function(r){ return r.data || []; }));
+    var rows = all.filter(function(o){ return ign.indexOf(String(o.id)) === -1; });
     var warn = null;
     for (var i=0;i<recs.length;i++){
-      var msg = agdConflictIn(rows.concat(recs.filter(function(x, j){ return j !== i; })), recs[i]);
+      var held = all.some(function(o){ return ign.indexOf(String(o.id)) !== -1 && o.date === recs[i].date && String(o.time).slice(0,5) === String(recs[i].time).slice(0,5) && samePatient(o, recs[i]); });
+      var msg = agdConflictIn(rows.concat(recs.filter(function(x, j){ return j !== i; })), recs[i], held);
       if (typeof msg === "string" && msg) return msg;
       if (msg && !warn) warn = msg;
     }
@@ -17909,6 +17980,7 @@ function openFreeSlotModal(){
     if (!loaded) return;
     var p = state.patients.filter(function(x){ return x.id === patSel.value; })[0];
     if (!p){ out.innerHTML = '<div class="pat-count">Escolha um paciente.</div>'; return; }
+    if (patBlocked(p)){ out.innerHTML = '<div class="pat-count">Paciente com cadastro ' + esc(patBlockText(p)) + ': não pode ser agendado.</div>'; return; }
     var sp = specSel.value, pf = profSel.value;
     var rec = {patient: p.nome, note: "", service: DEFAULT_SERVICE_ID};
     found = [];
@@ -18304,7 +18376,8 @@ function openAutoPlannerModal(){
     out.innerHTML = '<div class="pat-count">Lendo o Planner e calculando…</div>';
     plannerLoadDocs().then(function(){
       var sel = document.getElementById("apPat").value;
-      var list = sel ? pats.filter(function(p){ return p.id === sel; }) : pats;
+      var list = (sel ? pats.filter(function(p){ return p.id === sel; }) : pats).filter(function(p){ return !patBlocked(p); });
+      if (!list.length){ out.innerHTML = '<div class="pat-count">Paciente Bloqueado: não entra no Auto Planner.</div>'; return; }
       plan = apBuild(list);
       render();
     }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o Planner.</div>'; });
@@ -18379,6 +18452,7 @@ var SEND_SKIP_LABELS = {
   conflict: "Profissional ou paciente já ocupado nesse horário",
   off: "Fora do horário do profissional",
   noProf: "Coluna sem profissional",
+  blockedPat: "Paciente Bloqueado",
   holiday: "Feriado ou Recesso"
 };
 function plannerSendPlan(dayKey, week, dateIso, skipTime){
@@ -18404,6 +18478,7 @@ function plannerSendPlan(dayKey, week, dateIso, skipTime){
           var shown = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : b.patient;
           var info = {time: time, what: shown, where: room.name, who: prof ? profNome(prof) : therapistDisplayName(t)};
           if (!prof){ plan.skipped.push(Object.assign(info, {why: "noProf"})); return; }
+          if (!kind && !isGroup(room)){ var bq = findPatientRef(b); if (bq && patBlocked(bq)){ plan.skipped.push(Object.assign(info, {why: "blockedPat"})); return; } }
           var rec = {date: dateIso, time: time, professional_id: prof.id, note: b.note || "", source: "planner"};
           if (kind){
             rec.patient = slotKindRecord(kind).patient; rec.blocked = kind === "bloqueado"; rec.service = null;
@@ -21711,12 +21786,13 @@ function trInactivatePatient(patId, list){
 // Ao cancelar ou renegociar: pergunta se remove os agendamentos do paciente no Planner
 // (as 4 semanas) e na Agenda a partir de uma data escolhida. Atendimentos com evolução
 // no prontuário ficam (regra da Agenda). As duas remoções entram no desfazer.
-function trOfferRemoveBookings(patId){
+function trOfferRemoveBookings(patId, opts){
+  opts = opts || {};
   var p = rawPatient(patId); if (!p || !p.nome || !db) return;
-  var canPl = can("planner", "delete"), cli = agdClient(), canAg = !!cli && can("agenda", "delete");
+  var canPl = !opts.agendaOnly && can("planner", "delete"), cli = agdClient(), canAg = !!cli && can("agenda", "delete");
   if (!canPl && !canAg) return;
   var plChanges = {}, plN = 0;
-  currentBookingsFor(plannerAllDocIds()).then(function(all){
+  (opts.agendaOnly ? Promise.resolve({}) : currentBookingsFor(plannerAllDocIds())).then(function(all){
     Object.keys(all).forEach(function(docId){
       var bk = all[docId] || {}, dayKey = docId.split("-")[0];
       Object.keys(bk).forEach(function(k){
@@ -21733,10 +21809,11 @@ function trOfferRemoveBookings(patId){
     var host = document.getElementById("confirmHost");
     if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
     host.innerHTML = '<div class="overlay confirm-overlay" id="ovRmBk" role="alertdialog" aria-modal="true" aria-labelledby="rbTitle"><div class="modal" style="max-width:460px">' +
-      '<div class="modal-head"><div><h3 id="rbTitle">Remover agendamentos?</h3><div class="modal-sub">' + esc(p.nome) + '</div></div></div>' +
+      '<div class="modal-head"><div><h3 id="rbTitle">' + (opts.agendaOnly ? 'Paciente Bloqueado: Remover da Agenda?' : 'Remover agendamentos?') + '</h3><div class="modal-sub">' + esc(p.nome) + '</div></div></div>' +
       '<div class="modal-body">' +
+        (opts.agendaOnly ? '<div class="pat-count">Os agendamentos do Planner continuam como estão. Aqui você escolhe se tira os atendimentos futuros da Agenda.</div>' :
         '<label class="rb-opt"><input type="checkbox" id="rbPl"' + (canPl && plN ? '' : ' disabled') + '> <span>Remover do <b>Planner</b> ' +
-          (plN ? '(' + plN + (plN === 1 ? ' agendamento' : ' agendamentos') + ' nas 4 semanas)' : '— nenhum agendamento') + (canPl ? '' : ' — sem permissão') + '</span></label>' +
+          (plN ? '(' + plN + (plN === 1 ? ' agendamento' : ' agendamentos') + ' nas 4 semanas)' : '— nenhum agendamento') + (canPl ? '' : ' — sem permissão') + '</span></label>') +
         (cli ? '<label class="rb-opt"><input type="checkbox" id="rbAg"' + (canAg ? '' : ' disabled') + '> <span>Remover da <b>Agenda</b>' + (canAg ? '' : ' — sem permissão') + '</span></label>' +
           '<div class="rb-date" id="rbAgBox" hidden><div class="field"><label for="rbFrom">Remover os Atendimentos a Partir de</label><input type="date" id="rbFrom" value="' + trTodayIso() + '"></div>' +
           '<div class="pat-count" id="rbAgCount">Contando…</div></div>' : '<div class="pat-count">Agenda indisponível neste momento.</div>') +
@@ -21804,7 +21881,7 @@ function trReactivatePatient(patId){
   addInactiveToggle("tab-pacientes", "pacientes", function(){ renderPatientsTab(); });
   addInactiveToggle("tab-profissionais", "profissionais", function(){ renderProfissionaisTab(); });
   addInactiveToggle("tab-salas", "salas", function(){ renderSalasTab(); });
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "cbo", "conselhos", "objetivos", "escalas", "habilidades"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "cbo", "conselhos", "objetivos", "escalas", "habilidades"].forEach(function(k){
     addInactiveToggle("tab-" + k, k, function(){ renderRegistryTab(k); });
   });
 })();
@@ -21947,6 +22024,7 @@ var HELP_TOPICS = [
       "No <b>Responsável Financeiro</b>, os botões <b>Copiar Telefone</b> e <b>Copiar E-mail</b> trazem um dos contatos já cadastrados (com mais de um, escolha na lista); <b>Copiar Endereço</b> traz o endereço do paciente. Se o campo já tiver outro valor, o sistema pergunta antes de trocar.",
       "Diagnóstico, Médico, Escola e Como conheceu a clínica são escolhidos na lista do cadastro (digite para buscar). No fim da lista, <b>+ Incluir</b> cadastra um novo sem sair da janela (só para quem pode incluir naquele cadastro).",
       "O título de cada grupo mostra quantos campos obrigatórios ainda faltam (ex.: \"2 faltando\").",
+      "<b>Bloqueio de Agendamento</b>: marque <b>Bloqueado</b> e escolha o <b>Motivo</b> (cadastro de Motivos de Bloqueio, com <b>+ Incluir</b> no fim da lista). Paciente bloqueado não pode ser agendado no Planner nem na Agenda (a regra <b>Paciente Bloqueado</b> fica em Acesso → Sistema), não é enviado do Planner para a Agenda e não entra no Auto Planner nem no Horário Livre. Os atendimentos que ele já tem continuam, com a tarja <b>Bloqueado</b>; ao bloquear, o sistema oferece remover os da Agenda a partir de uma data. Todos os usuários veem o bloqueio e o motivo. Desmarcar libera o paciente.",
       "A data de entrada começa com a data do cadastro e pode ser alterada.",
       "O grupo <b>Saúde</b> (médico, CID, data do diagnóstico, nível de suporte, comunicação, alergias, medicações, restrições e encaminhamento) só aparece para quem tem a permissão <b>Pacientes – Saúde</b>: com \"ver\" os campos aparecem travados; com \"editar\" dá para alterar. Sem a permissão, esses dados também não aparecem nos Detalhes do Agendamento, na ficha impressa nem no quadro clínico do Plano Terapêutico.",
       "Salve. Paciente novo: em seguida o sistema abre o tratamento dele. No resumo do tratamento aparece o horário de atendimento, só com os dias e períodos em que o paciente vem.",
@@ -22219,6 +22297,11 @@ var HELP_TOPICS = [
     steps: ["Cadastros → <b>Origens</b> → <b>+ Incluir</b>: nome da origem.", "No paciente (Como conheceu a clínica), o <b>+ Incluir</b> no fim da lista cadastra uma origem nova sem sair da janela."],
     rules: ["A lista mostra quantos pacientes vieram de cada origem.", "Origem usada por paciente não é excluída: é <b>Inativada</b>.", "Corrigir o nome troca o texto também nos pacientes que usavam o nome anterior."],
     who: "Permissão <b>Origens</b>."},
+  {id: "motivosbloq", group: "Cadastros", title: "Motivos de Bloqueio", mod: "motivos_bloqueio", tab: "motivosbloq",
+    purpose: "Motivos para bloquear um paciente (Financeiro, Documentação pendente, Aguardando laudo…). Usados no grupo <b>Bloqueio de Agendamento</b> do cadastro do paciente.",
+    steps: ["Cadastros → <b>Motivos de Bloqueio</b> → <b>+ Incluir</b>: nome do motivo.", "No paciente, o <b>+ Incluir</b> no fim da lista de motivos cadastra um motivo novo sem sair da janela."],
+    rules: ["A lista mostra quantos pacientes estão bloqueados com cada motivo.", "Motivo usado por paciente não é excluído: é <b>Inativado</b>."],
+    who: "Permissão <b>Motivos de Bloqueio</b>."},
   {id: "feriados", group: "Cadastros", title: "Feriados e Recessos", mod: "feriados", tab: "feriados",
     purpose: "Datas em que a clínica não atende (ou atende só meio período): feriados nacionais, municipais e recessos.",
     steps: [
@@ -22687,7 +22770,7 @@ var HELP_NEWS = [];
 var HELP = {topic: "inicio", search: ""};
 var HELP_TAB_TOPIC = {crm: "crm", inicio: "inicio", planner: "planner", visaogeral: "visaogeral", resumo: "resumo", disponibilidade: "disponibilidade", agenda: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "colaboradores", convenios: "convenios", servicos: "servicos",
-  especialidades: "especialidades", motivos: "motivos", status: "agenda-status", medicos: "medicos", escolas: "escolas", diagnosticos: "diagnosticos", origens: "origens", cbo: "cbo", conselhos: "conselhos", fornecedores: "fornecedores", catfornecedor: "fornecedores", unidades: "unidades", contas: "contas-bancarias", planocontas: "plano-de-contas", lancamentos: "lancamentos", pagar: "contas-pagar-receber", receber: "contas-pagar-receber", emptomados: "emprestimos", empconcedidos: "emprestimos", conciliacao: "conciliacao", automacoes: "crm-automacoes", demonstrativos: "demonstrativos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
+  especialidades: "especialidades", motivos: "motivos", status: "agenda-status", medicos: "medicos", escolas: "escolas", diagnosticos: "diagnosticos", origens: "origens", motivosbloq: "motivosbloq", cbo: "cbo", conselhos: "conselhos", fornecedores: "fornecedores", catfornecedor: "fornecedores", unidades: "unidades", contas: "contas-bancarias", planocontas: "plano-de-contas", lancamentos: "lancamentos", pagar: "contas-pagar-receber", receber: "contas-pagar-receber", emptomados: "emprestimos", empconcedidos: "emprestimos", conciliacao: "conciliacao", automacoes: "crm-automacoes", demonstrativos: "demonstrativos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
   planos: "plano-terapeutico", objetivos: "objetivos", escalas: "escalas", habilidades: "habilidades"};
 function helpCan(t){
   if (!t.mod) return true;
@@ -23468,6 +23551,15 @@ var REG_CFG = {
     row: function(o){ return ['<b>' + esc(o.name) + '</b>', originUseCount(o)]; },
     vals: function(o){ return [o.name, originUseCount(o)]; }
   },
+  motivosbloq: {
+    title: "motivo de bloqueio", plural: "motivos de bloqueio", module: "motivos_bloqueio", newLabel: "+ Incluir",
+    list: function(){ return blockReasonsList(); },
+    write: function(l){ return writeSimpleList("motivosbloq", l); },
+    pickValue: function(x){ return x.id; },
+    cols: ["Nome", "Pacientes Bloqueados"],
+    row: function(o){ return ['<b>' + esc(o.name) + '</b>', blockReasonUse(o)]; },
+    vals: function(o){ return [o.name, blockReasonUse(o)]; }
+  },
   cbo: {
     title: "CBO", plural: "CBO", module: "cbo", newLabel: "+ Incluir", nameLabel: "Descrição", male: true,
     list: function(){ return cboList(); },
@@ -23872,6 +23964,7 @@ var CAD_ITEMS = [
   {key: "escolas", label: "Escolas", tab: "escolas", ok: function(){ return can("escolas", "view"); }},
   {key: "diagnosticos", label: "Diagnósticos", tab: "diagnosticos", ok: function(){ return can("diagnosticos", "view"); }},
   {key: "origens", label: "Origens", tab: "origens", ok: function(){ return can("origens", "view"); }},
+  {key: "motivosbloq", label: "Motivos de Bloqueio", tab: "motivosbloq", ok: function(){ return can("motivos_bloqueio", "view"); }},
   {sep: true, key: "colaboradores", label: "Colaboradores", tab: "colaboradores", ok: function(){ return can("colaboradores", "view"); }},
   {key: "tiposcolab", label: "Tipos de Colaborador", tab: "tiposcolab", ok: function(){ return can("colaboradores", "view"); }},
   {key: "especialidades", label: "Especialidades", tab: "especialidades", ok: function(){ return can("especialidades", "view"); }},
@@ -23887,7 +23980,7 @@ var CAD_ITEMS = [
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
-var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "colaboradores", "tiposcolab", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados", "status", "unidades"];
+var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados", "status", "unidades"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "planner", ok: function(){ return can("planner", "view"); }},
   {key: "resumo", label: "Resumo", tab: "resumo", ok: function(){ return can("resumo", "view"); }},
@@ -24178,7 +24271,7 @@ function wireMobileNav(){
   setTimeout(openNavFromHash, 0);
   wireMobileNav();
   wirePlansTab();
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contas", "planocontas", "feriados", "tiposcolab", "objetivos", "escalas", "habilidades", "status"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contas", "planocontas", "feriados", "tiposcolab", "objetivos", "escalas", "habilidades", "status"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
     var a = document.getElementById("reg-" + k + "-add");

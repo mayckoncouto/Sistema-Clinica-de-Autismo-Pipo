@@ -28,6 +28,7 @@
     { key: "escolas", label: "Escolas", hint: "escolas dos pacientes" },
     { key: "diagnosticos", label: "Diagnósticos", hint: "lista de diagnósticos (CID) do paciente e do lead do CRM" },
     { key: "origens", label: "Origens", hint: "como o paciente conheceu a clínica (paciente e lead do CRM)" },
+    { key: "motivos_bloqueio", label: "Motivos de Bloqueio", hint: "motivos para bloquear o agendamento de um paciente" },
     { key: "colaboradores", label: "Colaboradores", hint: "cadastro de todas as pessoas, inclusive os profissionais (atendimento e horário)" },
     { key: "colaboradores_valores", label: "Colaboradores – Valores", hint: "ver/editar a Remuneração: valor contratado, formas de pagamento, PIX e dados bancários", actions: ["view", "edit"] },
     { key: "especialidades", label: "Especialidades", hint: "" },
