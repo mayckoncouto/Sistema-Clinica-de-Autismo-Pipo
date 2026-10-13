@@ -44,11 +44,11 @@ const up = (typed, kind = "relatorios", filename = "scan.PDF", size = 100) => ru
   headers: { "x-task-id": "t1", "x-kind": kind, "x-name": encodeURIComponent(typed), "x-filename": encodeURIComponent(filename), "x-mime": "application/pdf" } });
 (async () => {
   let ok = true; const check = (l, v) => { console.log(l, v); if (!v) ok = false; };
-  check("nome final = digitado + primeiro nome + extensão?", handler.finalName("Carteirinha", "João da Silva", "foto.JPG") === "Carteirinha João.jpg");
-  check("não repete o nome se já está no texto?", handler.finalName("Carteirinha João", "João da Silva", "a.pdf") === "Carteirinha João.pdf");
+  check("nome final = digitado + nome completo + extensão?", handler.finalName("Carteirinha", "João da Silva", "foto.JPG") === "Carteirinha João da Silva.jpg");
+  check("não repete o nome se já está no texto?", handler.finalName("Carteirinha João da Silva", "João da Silva", "a.pdf") === "Carteirinha João da Silva.pdf");
   check("caracteres proibidos saem?", handler.cleanName('Laudo: a/b*c?') === "Laudo a b c");
   const r1 = await up("Carteirinha", "documentos");
-  check("upload em Documentos ok e com o nome certo?", r1.code === 200 && r1.body.attachment.name === "Carteirinha João.pdf" && r1.body.attachment.kind === "documentos");
+  check("upload em Documentos ok e com o nome certo?", r1.code === 200 && r1.body.attachment.name === "Carteirinha João da Silva.pdf" && r1.body.attachment.kind === "documentos");
   check("criou a pasta do paciente com 2 subpastas?", db.folders.length === 1 && Object.values(db.gfiles).filter((f) => f.folder).map((f) => f.name).sort().join("|") === "Documentos|João da Silva|Relatórios");
   const docsId = db.folders[0].documentos_id, relId = db.folders[0].relatorios_id;
   const gUp = calls.filter((c) => String(c.url).includes("/upload/drive/v3/files")).pop();
@@ -71,9 +71,9 @@ const up = (typed, kind = "relatorios", filename = "scan.PDF", size = 100) => ru
   check("pasta inválida recusada?", r7.code === 400);
   const id1 = r2.body.attachment.id;
   const rn = await run({ method: "POST", query: { action: "rename" }, body: { id: id1, name: "Relatório de outubro" } });
-  check("renomear mantém a regra do nome e a extensão?", rn.code === 200 && rn.body.attachment.name === "Relatório de outubro João.docx");
+  check("renomear mantém a regra do nome e a extensão?", rn.code === 200 && rn.body.attachment.name === "Relatório de outubro João da Silva.docx");
   const rn2 = await run({ method: "POST", query: { action: "rename" }, body: { id: id1, name: "Carteirinha" } });
-  check("mesmo nome mas outra extensão não conflita?", rn2.code === 200 && rn2.body.attachment.name === "Carteirinha João.docx");
+  check("mesmo nome mas outra extensão não conflita?", rn2.code === 200 && rn2.body.attachment.name === "Carteirinha João da Silva.docx");
   const dlr = await run({ method: "GET", query: { action: "download", id: id1 } });
   check("baixar entrega o arquivo com o nome?", dlr.code === 200 && /filename\*=UTF-8''/.test(dlr.headers["Content-Disposition"]));
   const driveId = db.atts.find((a) => a.id === id1).drive_file_id;

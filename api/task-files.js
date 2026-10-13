@@ -14,7 +14,7 @@
 // GET  /api/task-files?action=download&id=<anexo>
 // Todos com   Authorization: Bearer <access_token do usuário>.
 //
-// Nome final do arquivo: "<nome digitado> <primeiro nome do paciente>.<extensão original>".
+// Nome final do arquivo: "<nome digitado> <nome completo do paciente>.<extensão original>".
 // Nunca sobrescreve: nome repetido na pasta devolve 409 (code "exists").
 // Variáveis: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_ID.
 
@@ -32,16 +32,17 @@ function readEnv(name) { return (process.env[name] || "").trim(); }
 function cleanName(s) {
   return String(s == null ? "" : s).replace(/[\u0000-\u001f\u007f\/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim();
 }
+function norm(s) { return String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
 function firstName(full) { return cleanName(full).split(" ")[0] || ""; }
 function extOf(filename) {
   var m = /\.([A-Za-z0-9]{1,8})$/.exec(String(filename || "").trim());
   return m ? "." + m[1].toLowerCase() : "";
 }
-// "Carteirinha" + paciente "João da Silva" + "foto.PDF"  ->  "Carteirinha João.pdf"
+// "Carteirinha" + paciente "João da Silva" + "foto.PDF"  ->  "Carteirinha João da Silva.pdf"
 function finalName(typed, patientName, filename) {
   var base = cleanName(typed).slice(0, 120);
-  var first = firstName(patientName);
-  if (first && base.toLowerCase().split(" ").indexOf(first.toLowerCase()) < 0) base = (base + " " + first).trim();
+  var full = cleanName(patientName);
+  if (full && norm(base).indexOf(norm(full)) < 0) base = (base + " " + full).trim();
   return base + extOf(filename);
 }
 

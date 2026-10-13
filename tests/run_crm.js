@@ -506,7 +506,7 @@ const path = require('path');
   check('anexos: Enviar começa desativado?', await page.$eval('#atOk', (b) => b.disabled));
   await page.setInputFiles('#atFile', {name: 'foto.PDF', mimeType: 'application/pdf', buffer: Buffer.from('abc')});
   await page.fill('#atName', 'Carteirinha');
-  const first = apat.nome.split(' ')[0];
+  const first = apat.nome;
   check('anexos: prévia mostra "Carteirinha <primeiro nome>.pdf"?', (await page.textContent('#atPrev')).indexOf('Carteirinha ' + first + '.pdf') !== -1, await page.textContent('#atPrev'));
   await page.evaluate(() => { var s = document.getElementById('atKind'); s.value = 'documentos'; s.dispatchEvent(new Event('change')); });
   await page.click('#atOk'); await page.waitForTimeout(400);
