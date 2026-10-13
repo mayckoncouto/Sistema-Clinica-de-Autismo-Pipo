@@ -4390,3 +4390,5 @@ Atualização (2026-10-13): Sim/Não de ligar/desligar agora são caixas — Int
 
 ### REGRA FIXA: estilo novo só com confirmação (pedido do usuário, 2026-10-13)
 Todo campo, título, janela ou tela nova segue o "Padrão de campos" e os "Padrões obrigatórios para elementos novos" acima, reaproveitando classes que já existem. Se for preciso um estilo que NÃO existe (cor, tipo de campo, componente ou layout novo), parar e perguntar ao usuário ANTES de criar, mostrando a opção (prévia ou descrição) e esperando a escolha.
+
+- (2026-10-13, pedido do usuário) Celular: o seletor de unidade (Gestão) ou o nome da unidade fica DENTRO do grupo **Acesso** do ☰ (primeiro item, `mnavRender` → `unitHtml`), não mais no topo do painel.
