@@ -37,7 +37,7 @@ const path = require('path');
   const menus = await ev(`(function(){ renderNavMenus(); return {
     pr: Array.prototype.map.call(document.querySelectorAll("#prMenu [data-nav]"), function(b){ return b.textContent; }),
     cad: Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav"); }) }; })()`);
-  console.log('Prontuário menu has Prontuário, Plano terapêutico and its registries?', JSON.stringify(menus.pr) === '["Prontuário","Plano Terapêutico","Objetivos","Escalas","Habilidades"]', JSON.stringify(menus.pr));
+  console.log('Prontuário menu has Prontuário, Plano terapêutico and its registries?', JSON.stringify(menus.pr) === '["Prontuário","Plano Terapêutico","Objetivos","Atividades","Escalas","Habilidades"]', JSON.stringify(menus.pr));
   console.log('Escalas and Habilidades left Cadastros?', menus.cad.indexOf('escalas') === -1 && menus.cad.indexOf('habilidades') === -1);
 
   // Escalas: Likert e ABA pré-cadastradas, com cor; habilidades pré-cadastradas.

@@ -1,0 +1,71 @@
+// Cadastro de Atividades (Prontuário ▾ → Atividades): lista, janela, objetivos ligados, busca, excluir, Inativar do objetivo. Dados fictícios.
+const { chromium } = require('playwright');
+const path = require('path');
+const fs = require('fs');
+(async () => {
+  const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
+  const i = src.indexOf('"use strict";');
+  const evPage = path.join(__dirname, 'page_act.html');
+  fs.writeFileSync(evPage, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
+  const browser = await chromium.launch(require('./launch-opts'));
+  const page = await browser.newPage({ viewport: { width: 1300, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + evPage);
+  const ev = (c) => page.evaluate((x) => window.__ev(x), c);
+  await page.waitForSelector('td.slotcell');
+  let fails = 0;
+  const check = (label, ok, extra) => { console.log(label, !!ok, extra === undefined ? '' : extra); if (!ok) fails++; };
+  // dois objetivos no Banco de objetivos (direto no estado)
+  await ev("state.goalBank = [{id: 'g1', name: 'Pedir ajuda', areaId: '', faixas: [], specIds: []}, {id: 'g2', name: 'Imitar gestos', areaId: '', faixas: [], specIds: []}]");
+  await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="atividades"]').click());
+  await page.waitForTimeout(250);
+  check('Atividades screen opens with its title?', !(await page.$eval('#tab-atividades', (e) => e.hidden)) && /Atividades/.test(await page.textContent('#tab-atividades .cad-title')));
+  await page.click('#reg-atividades-add'); await page.waitForSelector('#ovAct');
+  check('window title "Nova Atividade"?', /Nova Atividade/.test(await page.textContent('#ovAct h3')));
+  await page.click('#acSave'); await page.waitForTimeout(100);
+  check('empty name refused (window stays)?', !!(await page.$('#ovAct')));
+  await page.fill('#acName', 'Caixa Surpresa');
+  await page.fill('#acDesc', 'A criança tira objetos de uma caixa.');
+  await page.fill('#acMat', 'caixa, brinquedos');
+  await page.fill('#acDur', '15x');
+  check('duration keeps only digits on save (checked below)', true);
+  // ligar objetivos pelo combo
+  await page.evaluate(() => { const s = document.getElementById('acGoalAdd'); s.value = 'g1'; s.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.waitForTimeout(100);
+  await page.evaluate(() => { const s = document.getElementById('acGoalAdd'); s.value = 'g2'; s.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.waitForTimeout(100);
+  check('two goals listed as linked?', (await page.$$eval('#acGoals input:checked', (c) => c.length)) === 2);
+  await page.click('#acGoals input[value="g2"]'); await page.waitForTimeout(100);
+  check('unchecking removes the goal?', (await page.$$eval('#acGoals input:checked', (c) => c.length)) === 1);
+  await page.click('#acSave'); await page.waitForTimeout(300);
+  const saved = await ev("state.activities.map(function(a){ return {n: a.name, d: a.duracao, g: a.goalIds.join(',')}; })");
+  check('saved with duration number and 1 goal?', saved.length === 1 && saved[0].d === 15 && saved[0].g === 'g1', JSON.stringify(saved));
+  const row = await page.textContent('#reg-atividades-host tbody tr');
+  check('list row shows name, 1 goal and 15 min?', /Caixa Surpresa/.test(row) && /15 min/.test(row), row.replace(/\s+/g, ' '));
+  // duplicado
+  await page.click('#reg-atividades-add'); await page.waitForSelector('#ovAct');
+  await page.fill('#acName', 'caixa surpresa'); await page.click('#acSave'); await page.waitForTimeout(150);
+  check('duplicate name refused?', !!(await page.$('#ovAct')) && (await ev('state.activities.length')) === 1);
+  await page.click('#acCancel'); await page.waitForTimeout(100);
+  // busca pelo objetivo
+  await page.fill('#reg-atividades-search', 'pedir ajuda'); await page.waitForTimeout(150);
+  check('search finds by linked goal?', (await page.$$eval('#reg-atividades-host tbody tr', (r) => r.length)) === 1);
+  await page.fill('#reg-atividades-search', 'zzz'); await page.waitForTimeout(150);
+  check('search with no match?', /Nada encontrado/.test(await page.textContent('#reg-atividades-host')));
+  await page.fill('#reg-atividades-search', ''); await page.waitForTimeout(150);
+  // helper: atividades de um objetivo
+  check('activitiesForGoal finds it?', (await ev("activitiesForGoal('g1').length + '|' + activitiesForGoal('g2').length")) === '1|0');
+  // objetivo com atividade: em uso
+  const use = await ev("USAGE.objetivos({id: 'g1', name: 'Pedir ajuda'})");
+  check('goal with activity counts as in use?', use.some((t) => /atividade/.test(t)), JSON.stringify(use));
+  // editar e excluir
+  await page.click('#reg-atividades-host tbody tr'); await page.waitForSelector('#ovAct');
+  check('edit window opens with the linked goal?', (await page.$$eval('#acGoals input:checked', (c) => c.length)) === 1 && (await page.inputValue('#acName')) === 'Caixa Surpresa');
+  await page.click('#acDel'); await page.waitForSelector('#ovConfirm'); await page.click('#cfOk'); await page.waitForTimeout(300);
+  check('delete removes it?', (await ev('state.activities.length')) === 0);
+  console.log('no JS errors?', errors.length === 0, errors.slice(0, 3));
+  await browser.close();
+  try { fs.unlinkSync(evPage); } catch (e) {}
+  process.exit(fails || errors.length ? 1 : 0);
+})();

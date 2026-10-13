@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var MODULES = ["agenda", "visao_geral", "planner", "bloqueio_horario", "resumo", "disponibilidade", "pacientes", "saude_paciente", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "diagnosticos", "origens", "motivos_bloqueio", "cbo", "conselhos", "fornecedores", "categorias_fornecedor", "contas_bancarias", "plano_contas", "financeiro_valores", "feriados", "campos_paciente", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "objetivos", "escalas", "habilidades", "colaboradores", "colaboradores_valores", "financeiro", "fechamento_mes", "conector_claude"];
+  var MODULES = ["agenda", "visao_geral", "planner", "bloqueio_horario", "resumo", "disponibilidade", "pacientes", "saude_paciente", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "diagnosticos", "origens", "motivos_bloqueio", "cbo", "conselhos", "fornecedores", "categorias_fornecedor", "contas_bancarias", "plano_contas", "financeiro_valores", "feriados", "campos_paciente", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "objetivos", "atividades", "escalas", "habilidades", "colaboradores", "colaboradores_valores", "financeiro", "fechamento_mes", "conector_claude"];
   var ACTIONS = ["view", "create", "edit", "delete"];
 
   var client = null;
