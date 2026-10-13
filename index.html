@@ -7172,20 +7172,28 @@ function crmEditDialog(old){
         '<div class="modal-head"><div><h3 id="ceTitle">Editar Mensagem</h3></div><button class="modal-close" id="ceClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body"><div class="crm-compose"><textarea id="ceText" rows="4" aria-label="Mensagem"></textarea>' +
           '<div class="crm-compose-bar"><div class="crm-compose-tools">' + CRM_FMT_TOOLS + '</div><button type="button" class="crm-send" id="ceSend" title="Salvar (Ctrl+Enter) · Enter quebra a linha" aria-label="Salvar mensagem">' +
-          '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13.5l12-5.5L2 2.5l1.8 5.5z" fill="currentColor"/><path d="M3.8 8H9" stroke="var(--surface)" stroke-width="1.3" stroke-linecap="round"/></svg></button></div></div></div>' +
+          '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13.5l12-5.5L2 2.5l1.8 5.5z" fill="currentColor"/><path d="M3.8 8H9" stroke="var(--surface)" stroke-width="1.3" stroke-linecap="round"/></svg></button></div>' +
+          '<div class="crm-mention-pop" id="ceMentionPop" hidden></div></div></div>' +
       '</div></div>';
     var ov = document.getElementById("ovCmtEdit"), ta = document.getElementById("ceText"), send = document.getElementById("ceSend");
     ta.value = old || "";
     function state(){ send.disabled = !ta.value.trim(); }
     function done(v){ document.removeEventListener("keydown", onKey, true); host.innerHTML = ""; resolve(v); }
     function save(){ var v = ta.value.trim(); if (v) done(v); }
-    function onKey(e){ if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); done(null); } }
+    var mpop = document.getElementById("ceMentionPop");
+    function onKey(e){ if (e.key === "Escape"){ if (!mpop.hidden) return; e.preventDefault(); e.stopPropagation(); done(null); } }
     document.addEventListener("keydown", onKey, true);
+    crmMentionWire(ta, mpop);
     ov.addEventListener("mousedown", function(e){ if (e.target === ov) done(null); });
     document.getElementById("ceClose").addEventListener("click", function(){ done(null); });
     send.addEventListener("click", save);
     ta.addEventListener("input", state);
-    ta.addEventListener("keydown", function(e){ if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing){ e.preventDefault(); save(); } });
+    ta.addEventListener("keydown", function(e){
+      if (e.key !== "Enter" || e.isComposing) return;
+      var first = !mpop.hidden && (mpop.querySelector("[data-mention].kb") || mpop.querySelector("[data-mention]"));
+      if (first && !e.ctrlKey && !e.metaKey){ e.preventDefault(); first.dispatchEvent(new MouseEvent("mousedown", {bubbles: true})); state(); return; }
+      if (e.ctrlKey || e.metaKey){ e.preventDefault(); save(); }
+    });
     state(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
   });
 }
@@ -8533,8 +8541,8 @@ function crmActivityLoad(taskId){
   }, function(){ var b3 = document.getElementById("crmFeed"); if (b3) b3.innerHTML = '<div class="pat-count">Não foi possível carregar a atividade.</div>'; });
 }
 // @menção: digitar "@" mostra a lista de pessoas; escolher escreve "@Nome ".
-function crmMentionWire(){
-  var ta = document.getElementById("crmCommentIn"), pop = document.getElementById("crmMentionPop"); if (!ta || !pop) return;
+function crmMentionWire(ta, pop){
+  ta = ta || document.getElementById("crmCommentIn"); pop = pop || document.getElementById("crmMentionPop"); if (!ta || !pop) return;
   function hide(){ pop.hidden = true; pop.innerHTML = ""; }
   function query(){ var v = ta.value.slice(0, ta.selectionStart), m = /(^|\s)@([^@\n]{0,30})$/.exec(v); return m ? {q: m[2], at: v.length - m[2].length - 1} : null; }
   ta.addEventListener("input", function(){
@@ -22297,7 +22305,7 @@ var HELP_TOPICS = [
       "<b>Configurar recorrência</b> (no pé dos atalhos): escolha Diariamente, Semanalmente (marque os dias da semana), Mensalmente ou Anualmente, se cria uma <b>nova tarefa</b> ou reabre a mesma, <b>Repetir para sempre</b> ou até uma data, e o status da próxima. O calendário pinta as próximas datas. Tarefa recorrente mostra ↻ ao lado da data; <b>Remover</b> tira a recorrência.",
       "<b>Outras Opções ▾</b> no canto superior direito da janela da tarefa (tarefa já salva): <b>Cadastro do Paciente</b> (tarefa com paciente cadastrado) abre o cadastro dele. <b>Seguir Tarefa</b> faz você receber aviso (no celular ou no computador, se as notificações estiverem ligadas) quando alguém comentar ou alterar a tarefa — serve para quem não é responsável; <b>Deixar de Seguir</b> desfaz. <b>Duplicar Tarefa</b> cria uma cópia na mesma lista (mesmo status, título, descrição, prioridade, vencimento, responsáveis e paciente ou lead; sem comentários e sem recorrência) e abre a cópia. <b>Copiar Link da Tarefa</b> copia o endereço que abre direto esta tarefa. <b>Gerar Tarefa a Partir Desta</b> cria uma nova tarefa (título, descrição, prioridade e paciente ou lead da original) na lista, no status, com o vencimento e os responsáveis que você escolher; as duas registram um comentário uma da outra. <b>Mover Tarefa</b> leva a tarefa para outra lista em que você pode editar. Se a lista de destino não tem o status atual (pelo mesmo nome), o aviso mostra isso e você escolhe o status da tarefa nela (já vem sugerido o equivalente). Responsáveis sem acesso à lista nova saem da tarefa, e a recorrência é retirada se a lista nova não a permite. A mudança de lista fica na Atividade da tarefa.",
       "<b>Anexos</b> (tarefa já salva, com paciente cadastrado): o botão <b>+ Anexar</b> abre a janela para escolher o arquivo (até 4 MB), a <b>Pasta</b> (<b>Documentos</b> ou <b>Relatórios</b>) e o <b>Nome do Arquivo</b>. O arquivo é guardado no Google Drive da clínica, na pasta do paciente, dentro da subpasta escolhida (as pastas são criadas sozinhas no primeiro anexo). O nome final é o nome que você digitou mais o primeiro nome do paciente: digitar “Carteirinha” para o paciente João gera “Carteirinha João”, mantendo o tipo do arquivo; a janela mostra como ficará antes do envio. O grupo começa recolhido: a seta ao lado de <b>Anexos</b> mostra ou esconde a lista, com a quantidade ao lado do título. Cada anexo tem duas linhas: o nome (clique para abrir) com <b>Renomear</b> e <b>Excluir</b> (para quem pode editar a lista) e, embaixo, pasta, tamanho, quem enviou e quando. Ao excluir, o sistema pergunta se o arquivo também deve ser excluído no Drive (vai para a lixeira), se deve continuar no Drive (só sai da tarefa) ou se cancela. Mudar o nome do arquivo direto no Drive não atrapalha: a tarefa o encontra pelo código dele, mas continua mostrando o nome de quando foi anexado (use <b>Renomear</b> aqui para acertar); se o arquivo for para a lixeira do Drive, não abre mais. Anexar, renomear e excluir entram no histórico da tarefa.",
-      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para ver os nomes (↑ ↓ andam, Tab ou Enter escolhem, Esc fecha) e mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
+      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para ver os nomes (↑ ↓ andam, Tab ou Enter escolhem, Esc fecha) e mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem, onde o @ também lista as pessoas: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],
     rules: [
       "Anexos: a pasta <b>Documentos</b> (laudos, encaminhamentos…) só aparece para quem também pode ver a saúde do paciente; <b>Relatórios</b> segue a permissão da lista. Dois arquivos com o mesmo nome na mesma pasta não são aceitos (o sistema pede outro nome, nunca sobrescreve). Tarefa sem paciente cadastrado não recebe anexo.",
