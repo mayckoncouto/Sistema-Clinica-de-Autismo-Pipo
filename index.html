@@ -661,6 +661,9 @@ div.ag-obj-head{cursor:default}
   #crmHost .pat-table.crm-main td{white-space:nowrap;line-height:1.3}
   #crmHost .pat-table.crm-main th .th-label{font-size:11px}
   #crmHost .pat-table .sort-btn{margin-left:2px}
+  /* Todos os cadastros no celular: o seletor de ordem (▲▼) aparece em toda coluna; se faltar espaço, o título encurta */
+  .pat-table thead th{padding-left:6px;padding-right:4px;overflow:visible}
+  .pat-table thead th .sort-btn{margin-left:2px}
   #crmHost .pat-table.crm-main td{text-overflow:ellipsis}
   #crmHost .pat-table th{text-overflow:clip}
   #crmHost .crm-prio-name{display:none}
@@ -1805,8 +1808,8 @@ table.pat-table{border-collapse:collapse;table-layout:fixed;width:100%}
 .sort-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0;margin-left:3px;border-radius:4px;vertical-align:middle}
 .sort-btn svg{width:10px;height:10px;display:block}
 /* CRM: o botão de ordenar (crescente/decrescente) fica sempre visível em todas as colunas; se faltar espaço, o texto do título é que encurta */
-#crmHost .pat-table thead th .th-label{display:inline-block;max-width:calc(100% - 22px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
-#crmHost .pat-table thead th .sort-btn{flex:none;visibility:visible;opacity:1}
+.pat-table thead th .th-label{display:inline-block;max-width:calc(100% - 22px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+.pat-table thead th .sort-btn{flex:none;visibility:visible;opacity:1}
 .sort-btn:hover{background:var(--surface-2);color:var(--ink-2)}
 .sort-btn.active{color:var(--accent)}
 /* Sits fully inside the header cell's own box (never overhanging into the next
@@ -1924,7 +1927,7 @@ input[readonly]:not(.dp-in):focus,textarea[readonly]:focus{outline:none;box-shad
 .intake-n{font-weight:800}
 .mnav-n{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d64545;color:#fff;font-size:10.5px;font-weight:800;align-items:center;justify-content:center;margin-left:6px}
 #mnavBtn.has-badge{position:relative}
-#mnavBtn.has-badge::after{content:"";position:absolute;top:4px;right:4px;width:9px;height:9px;border-radius:50%;background:#d64545}
+#mnavBtn.has-badge::after{content:attr(data-n);position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d64545;color:#fff;font-size:10.5px;font-weight:800;line-height:18px;text-align:center;box-sizing:border-box}
 .pm-ret{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:10px;padding:8px}
 .pm-retira{margin:6px 0 0;font-size:12.5px}
 .pm-retira-prot,.pm-no-ret{color:var(--danger);font-weight:600}
@@ -7411,14 +7414,24 @@ function crmLoadUnread(){
   }, function(){});
 }
 // Contador no CRM ▾: tarefas minhas abertas e vencidas + menções não lidas.
-function crmBadgeRender(){
-  var el = document.getElementById("crmBadge"); if (!el) return;
+function crmBadgeCount(){
   var me = crmMe(), n = 0;
   Object.keys(CRM.tasks).forEach(function(id){ var x = CRM.tasks[id]; if ((x.assignees || []).indexOf(me) !== -1 && crmOverdue(x)) n++; });
   Object.keys(CRM.unread).forEach(function(k){ n += CRM.unread[k]; });
-  var btn = document.getElementById("crmBtn");
-  el.hidden = !n || !btn || btn.hidden;
-  el.textContent = n > 99 ? "99+" : String(n);
+  return n;
+}
+function crmBadgeRender(){
+  var n = crmBadgeCount(), btn = document.getElementById("crmBtn");
+  var vis = !!btn && !btn.hidden;
+  var el = document.getElementById("crmBadge");
+  if (el){ el.hidden = !n || !vis; el.textContent = n > 99 ? "99+" : String(n); }
+  // Número no ícone do app instalado (iPhone e Android), como nos outros aplicativos.
+  try {
+    if (navigator.setAppBadge){ if (n && vis) navigator.setAppBadge(n).catch(function(){}); else if (navigator.clearAppBadge) navigator.clearAppBadge().catch(function(){}); }
+  } catch (e) {}
+  // Número no botão ☰ do celular.
+  var mb = document.getElementById("mnavBtn");
+  if (mb){ var tot = (vis ? n : 0) + ((typeof INTAKE !== "undefined" && INTAKE && intakeCan()) ? (INTAKE.subs || []).length : 0); mb.classList.toggle("has-badge", !!tot); mb.setAttribute("data-n", tot > 99 ? "99+" : String(tot)); }
 }
 
 // ----- tela -----
@@ -22611,7 +22624,8 @@ var HELP_TOPICS = [
       "O navegador pergunta se pode mostrar notificações: responda <b>Permitir</b>.",
       "Escolha os avisos: <b>Tarefas Vencidas</b>, <b>Menções (@nome)</b> e/ou <b>Tarefas que Sigo</b>.",
       "Toque em <b>Enviar Teste</b> para conferir se o aviso aparece.",
-      "Tocar no aviso de menção abre a tarefa no CRM; o de vencidas abre o CRM."
+      "Tocar no aviso de menção abre a tarefa no CRM; o de vencidas abre o CRM.",
+      "O número de tarefas vencidas e menções não lidas aparece ao lado de CRM no menu, no botão ☰ do celular e, com o sistema instalado, no ícone do aplicativo."
     ],
     rules: [
       "<b>Tarefas Vencidas:</b> um resumo por dia, às 8h de segunda a sexta, para cada responsável, com quantas tarefas abertas dele passaram do vencimento (só das listas em que a pessoa tem acesso).",
@@ -24066,7 +24080,8 @@ function mnavRender(){
   // Ordem (pedido do usuário): Cadastros, Agenda, Prontuário, CRM, Relatórios — igual ao topo do computador.
   var prGrp = group("Prontuário", PR_ITEMS);
   if (prGrp) h += '<div class="mnav-sep"></div>' + prGrp;
-  var crmGrp = group("CRM", CRM_ITEMS);
+  var crmN = crmBadgeCount();
+  var crmGrp = group("CRM" + (crmN ? ' <span class="mnav-n" title="Tarefas vencidas e menções não lidas">' + (crmN > 99 ? "99+" : crmN) + '</span>' : ''), CRM_ITEMS);
   if (crmGrp) h += '<div class="mnav-sep"></div>' + crmGrp;
   var finGrp = group("Financeiro", FIN_ITEMS);
   if (finGrp) h += '<div class="mnav-sep"></div>' + finGrp;
@@ -27533,7 +27548,7 @@ function intakeBadge(){
   if (b){ b.hidden = !n || !cb || cb.hidden; b.textContent = txt; }
   var rb = document.getElementById("intakeRevBtn"), rn = document.getElementById("intakeRevN");
   if (rb) rb.hidden = !n; if (rn) rn.textContent = n > 1 ? "(" + txt + ")" : "";
-  var mb = document.getElementById("mnavBtn"); if (mb) mb.classList.toggle("has-badge", !!n);
+  if (typeof crmBadgeRender === "function") crmBadgeRender();
 }
 // ---- Criar, cancelar e enviar links ----
 function intakeCreate(o){

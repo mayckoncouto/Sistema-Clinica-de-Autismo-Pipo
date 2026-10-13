@@ -15,6 +15,7 @@ const path = require('path');
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message + ' @ ' + String(e.stack).split(/\n/).slice(1, 3).join(' | ')));
+  await page.addInitScript(() => { window.__badge = []; navigator.setAppBadge = (n) => { window.__badge.push(n); return Promise.resolve(); }; navigator.clearAppBadge = () => { window.__badge.push(0); return Promise.resolve(); }; });
   await page.goto('file://' + evPage);
   await page.waitForSelector('td.slotcell');
   const ev = (c) => page.evaluate((x) => window.__ev(x), c);
@@ -162,6 +163,9 @@ const path = require('path');
   check('list: comment counter on the task?', /1/.test(await page.$eval(`#crmHost tr[data-crm-id="${tid}"] .crm-com-n`, (e) => e.textContent)));
   await ev(`(CRM.mem.events = CRM.mem.events.filter(function(e){ return e.id !== "cx"; }), crmLoadComCount(), true)`);
   check('counter on CRM: 1 (my overdue open task)?', (await page.$eval('#crmBadge', (e) => !e.hidden && e.textContent)) === '1');
+  check('mobile menu button carries the same number (☰ badge)?', (await page.$eval('#mnavBtn', (e) => e.classList.contains('has-badge') && e.getAttribute('data-n'))) === '1');
+  check('mobile menu: CRM group title shows the number?', await ev('(mnavRender(), true)') && (await page.$eval('#mnavPanel [data-mnav-grp] .mnav-n', (e) => e.textContent)) === '1');
+  check('app icon badge asked for 1 (setAppBadge)?', (await page.evaluate(() => (window.__badge || []).slice(-1)[0])) === 1);
 
   // Quadro + arrastar
   await page.click('#crmViewSeg [data-cv="quadro"]');

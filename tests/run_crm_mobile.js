@@ -55,7 +55,7 @@ const path = require('path');
   const mn = await page.evaluate(() => ({on: [...document.querySelectorAll('#mnavPanel button.on')].map((b) => b.textContent.trim()),
     grp: [...document.querySelectorAll('#mnavPanel .mnav-grp.has-on')].map((b) => b.textContent.trim() + ':' + b.getAttribute('aria-expanded')),
     open: [...document.querySelectorAll('#mnavPanel .mnav-items')].filter((x) => !x.hidden).length}));
-  check('mobile menu: all groups collapsed, CRM title highlighted, only the open list marked?', mn.on.join() === 'Atendimento' && mn.grp.join() === 'CRM:false' && mn.open === 0, JSON.stringify(mn));
+  check('mobile menu: all groups collapsed, CRM title highlighted, only the open list marked?', mn.on.join() === 'Atendimento' && /^CRM( \d+)?:false$/.test(mn.grp.join()) && mn.open === 0, JSON.stringify(mn));
   await page.click('#mnavBtn');
   // filtro
   await page.click('[data-dp-for="crmFPrio"]');
