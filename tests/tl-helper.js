@@ -12,7 +12,7 @@ exports.addLine = async function(page, o, editIndex){
       set('tlSpec', op ? op.value : '');
     }
     if (o.hours != null && !document.getElementById('tlHours').disabled) document.getElementById('tlHours').value = String(o.hours);
-    set('tlSvc', o.svc); set('tlProf', o.prof); set('tlAba', o.aba); set('tlDia', o.dia); set('tlHora', o.hora);
+    set('tlSvc', o.svc); set('tlProf', o.prof); if (o.aba != null){ var ab = document.getElementById('tlAba'); ab.checked = (o.aba === 'Sim'); ab.dispatchEvent(new Event('change', {bubbles: true})); } set('tlDia', o.dia); set('tlHora', o.hora);
     set('tlSem', o.semanas); set('tlRoom', o.room); set('tlSeg', o.seguidas == null ? null : String(o.seguidas));
     if (o.obs != null) document.getElementById('tlObs').value = o.obs;
   }, o);

@@ -59,7 +59,7 @@ const TL = require('./tl-helper');
   await page.$eval('#pPac', (x) => { x.value = '2'; x.dispatchEvent(new Event('input', {bubbles: true})); });
   await page.click('#specRowAdd'); await page.waitForSelector('#ovTLine');
   const labels = await page.$$eval('#ovTLine .field label', (a) => a.filter((l) => l.offsetParent).map((l) => l.textContent.trim()));
-  check('card window: all fields, Observação hidden with Sessão?', labels.join('|') === 'Especialidade|Sessões/Mês|Serviço|Profissional|ABA|Sala|Dia|Horário de Início|Semanas|Sessões Seguidas', labels.join('|'));
+  check('card window: all fields, Observação hidden with Sessão?', labels.join('|') === 'Especialidade|Sessões/Mês|Serviço|Profissional|Intervenção ABA|Sala|Dia|Horário de Início|Semanas|Sessões Seguidas', labels.join('|'));
   await page.$eval('#tlSvc', (x) => { x.value = 'acolh'; x.dispatchEvent(new Event('change', {bubbles: true})); });
   check('Observação appears for another service?', await page.$eval('#tlObsBox', (b) => !b.hidden));
   await page.click('#tlCancel');

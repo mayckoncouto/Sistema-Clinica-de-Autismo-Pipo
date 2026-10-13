@@ -73,14 +73,14 @@ const path = require('path');
   const abaOf = async () => (await TL.lines(page)).map((r) => (/ABA (Sim|Não)/.exec(r.sum) || [])[1]).join(',');
   ed.lineDefault = await abaOf();
   await page.click('#specRowAdd'); await page.waitForSelector('#ovTLine');
-  ed.lineOpts = await page.$$eval('#tlAba option', (a) => a.map((o) => o.value).join(','));
+  ed.lineOpts = await page.$eval('#tlAba', (a) => a.type + ':' + a.checked);
   await page.click('#tlCancel');
   await TL.addLine(page, {aba: 'Não'}, 0);
   ed.after = await abaOf();
   check('Vencimento por defaults to Sem vencimento, date box hidden?', ed.vencDefault === 'sem' && ed.dateHidden === true, ed.vencDefault);
   check('label Descontos?', ed.desc === 'Descontos', ed.desc);
   check('no ABA field outside the quadros?', ed.noTop);
-  check('card ABA only Sim/Não, new cards = automatic rule (6 anos = Sim)?', ed.lineOpts === 'Sim,Não' && ed.lineDefault === 'Sim,Sim', ed.lineOpts + ' ' + ed.lineDefault);
+  check('card ABA only Sim/Não, new cards = automatic rule (6 anos = Sim)?', ed.lineOpts === 'checkbox:true' && ed.lineDefault === 'Sim,Sim', ed.lineOpts + ' ' + ed.lineDefault);
   check('one card changes alone?', ed.after === 'Não,Sim', ed.after);
 
   const btnVisible = await page.$eval('#trOpenPat', (b) => !b.hidden).catch(() => false);

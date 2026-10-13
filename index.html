@@ -1910,6 +1910,8 @@ body.pat-col-resizing *{user-select:none}
 .pm-row .dp-btn{flex:0 0 130px}
 .pm-row .rm{flex:none;width:30px;height:30px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--danger);cursor:pointer}
 .pm-row input[readonly]{background:var(--surface-2)}
+input[readonly]:not(.dp-in),textarea[readonly],input:disabled,textarea:disabled{background:var(--surface-2);color:var(--ink-2)}
+input[readonly]:not(.dp-in):focus,textarea[readonly]:focus{outline:none;box-shadow:none;border-color:var(--line)}
 .pm-rel{flex:0 0 150px!important}
 .pm-prot{display:flex;flex-direction:column;gap:6px;border:1px solid color-mix(in srgb,var(--danger) 35%,var(--line));border-radius:10px;padding:8px;background:color-mix(in srgb,var(--danger) 5%,transparent)}
 /* Link de cadastro rápido: aviso da revisão, campos diferentes do envio, botões */
@@ -5777,6 +5779,8 @@ window.showToast = function(msg, isErr){ showToast(msg, isErr); }; // usado por 
 function showToast(msg, isErr){
   var el = document.getElementById("toastHost");
   if (!el) return;
+  msg = String(msg == null ? "" : msg);
+  if (msg && !/[.!?:…”"')\]]$/.test(msg.trim())) msg = msg.trim() + ".";
   el.textContent = msg;
   el.className = "toast show" + (isErr ? " err" : "");
   if (toastTimer) clearTimeout(toastTimer);
@@ -11508,7 +11512,7 @@ function openTreatLineModal(ctx){
           '<div class="field"><label for="tlSvc">Serviço</label><select id="tlSvc"' + dis + '>' + svcs.map(function(s){ return opt(s.id, s.name, r.service); }).join("") + '</select></div>' +
           '<div class="field"><label for="tlProf">Profissional</label><select id="tlProf" data-combo>' + specProfOptions(r.specId, r.profId) + '</select></div>' +
         '</div><div class="field-row">' +
-          '<div class="field"><label for="tlAba">ABA</label><select id="tlAba">' + ["Sim", "Não"].map(function(o){ return opt(o, o, abaYesNo(r.aba)); }).join("") + '</select></div>' +
+          '<div class="field"><label class="chk-line"><input type="checkbox" id="tlAba"' + (abaYesNo(r.aba) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
           '<div class="field"><label for="tlRoom">Sala</label><select id="tlRoom" data-combo>' + opt("", "Qualquer sala", r.roomId) + rooms.map(function(x){ return opt(x.id, x.name, r.roomId); }).join("") + '</select></div>' +
         '</div><div class="field-row">' +
           '<div class="field"><label for="tlDia">Dia</label><select id="tlDia">' + opt("", "Qualquer dia", r.dia) +
@@ -11551,7 +11555,7 @@ function openTreatLineModal(ctx){
       .then(function(ok){ if (ok){ close(); ctx.onDelete(); } });
   });
   function read(){
-    var o = {id: r.id || uid("tl"), specId: $("tlSpec").value, hours: $("tlHours").value.trim(), profId: $("tlProf").value, aba: $("tlAba").value,
+    var o = {id: r.id || uid("tl"), specId: $("tlSpec").value, hours: $("tlHours").value.trim(), profId: $("tlProf").value, aba: $("tlAba").checked ? "Sim" : "Não",
       service: $("tlSvc").value || DEFAULT_SERVICE_ID, dia: $("tlDia").value, hora: $("tlHora").value, semanas: $("tlSem").value,
       roomId: $("tlRoom").value, seguidas: $("tlSeg").value, obs: $("tlSvc").value === DEFAULT_SERVICE_ID ? "" : $("tlObs").value.trim()};
     if (lk){ o.specId = r.specId; o.service = r.service; }
@@ -11876,7 +11880,7 @@ var PAT_FIELDS = [
   {key: "escolaSerie", label: "Série / Ano", sec: "escola"},
   {key: "escolaTurno", label: "Turno da Escola", sec: "escola", type: "select", opts: ["Manhã", "Tarde", "Integral", "Noite"]},
   {key: "professor", label: "Professor(a)", sec: "escola"},
-  {key: "mediador", label: "Tem Mediador / AT", sec: "escola", type: "select", opts: ["Sim", "Não"]},
+  {key: "mediador", label: "Tem Mediador / AT", sec: "escola", type: "check"},
   {key: "rotinaAtual", label: "Rotina Atual", sec: "rotinaatual", type: "weekroutine", hint: "pelo menos um período"},
   {key: "medicoId", label: "Médico", sec: "saude", type: "reg", reg: "medicos", span2: true},
   {key: "cid", label: "Diagnóstico (CID)", sec: "saude", type: "regtext", reg: "diagnosticos"},
@@ -12194,6 +12198,7 @@ function patValueEmpty(f, d){
   if (f.type === "phones") return !(v || []).some(function(t){ return digitsOnly(t.numero).length >= 8; });
   if (f.type === "emails") return !(v || []).some(function(m){ return String(m.email || "").trim(); });
   if (f.type === "fin") return !(v && String(v.nome || "").trim() && digitsOnly(v.doc));
+  if (f.type === "check") return false;
   return v == null || String(v).trim() === "";
 }
 function patFieldInputHtml(f, v){
@@ -12201,6 +12206,7 @@ function patFieldInputHtml(f, v){
   var lab = '<label for="' + id + '">' + esc(f.label) + '</label>';
   var t = f.type || "text";
   if (t === "date") return lab + '<input id="' + id + '" type="date" value="' + esc(val || "") + '">';
+  if (t === "check") return '<label class="chk-line"><input type="checkbox" id="' + id + '"' + (val === "Sim" ? ' checked' : '') + '> <span>' + esc(f.label) + '</span></label>';
   if (t === "select") return lab + '<select id="' + id + '"><option value="">Não informado</option>' + f.opts.map(function(o){ return '<option' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join("") +
     (val && f.opts.indexOf(val) === -1 ? '<option selected>' + esc(val) + '</option>' : '') + '</select>';
   if (t === "area") return lab + '<textarea id="' + id + '" rows="' + (f.rows || 3) + '">' + esc(val || "") + '</textarea>';
@@ -12354,7 +12360,8 @@ function openPatientModal(p, opts){
   }
   if (!phones.length) phones.push({numero: "", nome: "", via: "whatsapp"});
   if (!mails.length) mails.push({email: "", nome: ""});
-  function reqMark(key){ return patFieldCfg(key).req ? ' <span class="pm-req" title="Obrigatório">*</span>' : ''; }
+  var optMode = false;   // grupo em que a maioria é obrigatória: os demais ganham "(Opcional)"
+  function reqMark(key){ return patFieldCfg(key).req ? ' <span class="pm-req" title="Obrigatório">*</span>' : (optMode ? ' <span class="hint">(Opcional)</span>' : ''); }
   function secHead(sec){ return '<div class="pm-sec-head"><span class="tr-sec tr-sec-in">' + esc(sec.label) + '</span><span class="pm-pend" data-pend="' + sec.id + '" hidden></span></div>'; }
   function parentHtml(role, label){
     var x = v[role] || {};
@@ -12395,6 +12402,7 @@ function openPatientModal(p, opts){
         fi("email", "E-mail", ' inputmode="email"', '<button type="button" class="btn ghost pm-copy" data-copy="email">Copiar E-mail</button>', 'pm-span2') +
         fi("endereco", "Endereço (para nota fiscal)", '', '<button type="button" class="btn ghost pm-copy" data-copy="endereco">Copiar Endereço</button>', 'pm-wide') + '</div>';
     } else {
+      optMode = fs.length > 1 && fs.filter(function(f){ return patFieldCfg(f.key).req; }).length * 2 > fs.length;
       html = '<div class="pm-grid">' + fs.filter(function(f){ return f.type !== "referral"; }).map(function(f){
         var cell = '<div class="field' + (f.wide || f.type === "area" || f.type === "line" ? ' pm-wide' : f.span2 ? ' pm-span2' : '') + '" data-pf="' + f.key + '">' + patFieldInputHtml(f, v).replace('</label>', reqMark(f.key) + '</label>') + '</div>';
         if (f.key === "nascimento") cell += '<div class="field" id="pIdadeField"></div>';
@@ -12677,7 +12685,7 @@ function openPatientModal(p, opts){
       }
       var el = $(f.key === "nome" ? "pNome" : f.key === "nascimento" ? "pNasc" : "pf-" + f.key);
       if (!el) return;
-      out[f.key] = t === "cpf" ? digitsOnly(el.value) : el.value.trim();
+      out[f.key] = t === "check" ? (el.checked ? "Sim" : "Não") : t === "cpf" ? digitsOnly(el.value) : el.value.trim();
     });
     return out;
   }
@@ -14886,7 +14894,7 @@ function openRoomModal(r, asGroup){
       '<div class="modal-body">' +
         '<div class="tr-sec tr-sec-top">'+(grp ? "Grupo" : "Sala")+'</div>' +
         '<div class="field"><label for="rmName">Nome '+(grp ? "do grupo" : "da sala")+'</label><input id="rmName" type="text" placeholder="'+(grp ? "ex: Coordenador" : "ex: Fonoaudiologia")+'" value="'+esc(draftName)+'"></div>' +
-        (grp ? '' : '<div class="field"><label for="rmAba">ABA</label><select id="rmAba"><option value="Sim"'+(draftAba ? ' selected' : '')+'>Sim</option><option value="Não"'+(draftAba ? '' : ' selected')+'>Não</option></select><div class="color-hex-label" style="margin-top:6px">Sala ABA recebe de 2 a 4 pacientes ABA Sim no mesmo horário e aparece com “ABA” no nome (ex.: Fonoaudiologia ABA). O Auto Planner prioriza essas salas para os grupos.</div></div>') +
+        (grp ? '' : '<div class="field"><label class="chk-line"><input type="checkbox" id="rmAba"'+(draftAba ? ' checked' : '')+'> <span>Sala Intervenção ABA</span></label><div class="color-hex-label" style="margin-top:6px">Sala ABA recebe de 2 a 4 pacientes ABA Sim no mesmo horário e aparece com “ABA” no nome (ex.: Fonoaudiologia ABA). O Auto Planner prioriza essas salas para os grupos.</div></div>') +
         '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="rmColorBtn" title="Escolher cor" aria-label="Escolher cor"></button><span class="color-pick-code mono" id="rmColorCode"></span><span class="color-hex-label">clique na bolinha para escolher</span></div></div>' +
         '<div class="tr-sec">Terapeutas (Colunas na Grade)</div>' +
         '<div class="field"><div class="therapist-rows" id="rmTherapists"></div>' +
@@ -14988,7 +14996,7 @@ function openRoomModal(r, asGroup){
     syncFromDom();
     var name = document.getElementById("rmName").value.trim();
     if (!name){ document.getElementById("rmName").focus(); return; }
-    var abaSel = document.getElementById("rmAba"), roomAbaOn = !grp && !!abaSel && abaSel.value === "Sim";
+    var abaSel = document.getElementById("rmAba"), roomAbaOn = !grp && !!abaSel && abaSel.checked;
     if (!grp){ name = name.replace(/\s*\bABA\s*$/i, "").trim() || name; if (roomAbaOn) name += " ABA"; }
     var cleanTherapists = draftTherapists.filter(function(t){ return t.professionalId; });
     if (!cleanTherapists.length){ showToast("Selecione ao menos um profissional para "+(grp ? "o grupo." : "a sala."), true); return; }
@@ -19744,7 +19752,7 @@ function prOpenEditor(opts){
           '<button type="button" data-cmd="insertUnorderedList" title="Lista com marcadores">• Lista</button>' +
           '<button type="button" data-cmd="insertOrderedList" title="Lista numerada">1. Lista</button>' +
           '<span class="sep"></span>' +
-          '<span class="pr-table-pop">Tabela <input type="number" id="prRows" min="1" max="30" value="3" title="Linhas"> × <input type="number" id="prCols" min="1" max="10" value="3" title="Colunas"><button type="button" id="prInsTable">Inserir</button></span>' +
+          '<span class="pr-table-pop">Tabela <input type="number" inputmode="numeric" id="prRows" min="1" max="30" value="3" title="Linhas"> × <input type="number" inputmode="numeric" id="prCols" min="1" max="10" value="3" title="Colunas"><button type="button" id="prInsTable">Inserir</button></span>' +
           '<button type="button" id="prAddRow" title="Adicionar linha na tabela onde está o cursor">+ linha</button>' +
           '<button type="button" id="prAddCol" title="Adicionar coluna na tabela onde está o cursor">+ coluna</button>' +
           '<span class="sep"></span>' +
@@ -20577,6 +20585,13 @@ function parseMoney(v){
   if (t.indexOf(",") !== -1) t = t.replace(/\./g, "").replace(",", ".");
   var n = parseFloat(t); return isFinite(n) ? Math.round(n * 100) / 100 : 0;
 }
+// Campos de dinheiro (data-money): ao sair do campo, ficam no formato 0,00.
+document.addEventListener("focusout", function(e){
+  var t = e.target;
+  if (!t || !t.hasAttribute || !t.hasAttribute("data-money") || !String(t.value).trim()) return;
+  var n = parseMoney(t.value);
+  if (isFinite(n)) t.value = fmtMoney(n).replace("R$ ", "");
+});
 function fmtMoney(n){ return "R$ " + Number(n || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 // Valores (Etapa 1): ficam em treatment_finance, que o banco só libera para quem tem
 // "Tratamentos – Valores" (tratamentos_valores: ver/editar). TR.fin = {id: {valor, descontos}}.
@@ -21820,6 +21835,8 @@ var HELP_TOPICS = [
       "Use o menu do topo: <b>Cadastros ▾</b>, <b>Planner ▾</b> (Planner e Resumo), <b>Agenda</b>, <b>Prontuário</b> e <b>Relatórios</b>. Cada pessoa vê só as telas do nível dela: quando o nível permite uma única opção de um menu (ex.: só Pacientes em Cadastros), o botão aparece direto com o nome dessa opção, sem menu; com duas ou mais, aparece o menu com elas.",
       "O botão <b>Acesso ▾</b>, ao lado do seu nome, tem Senha, Ajuda e Sair. Para o Administrador, também Clínica, Usuários e Backup.",
       "Em cada tela, o botão <b>?</b> abre este guia direto no assunto daquela tela.",
+      "Campos de horário (Clínica e horário do paciente) são digitados em HH:MM, ex.: 0830 vira 08:30. Campos de dinheiro ficam no formato 0,00 ao sair do campo. Itens de ligar e desligar, como a Intervenção ABA, são caixas de marcar. Campo cinza não pode ser editado.",
+      "No calendário, clique no mês e ano para escolher o ano e use <b>Limpar</b> para esvaziar a data.",
       "Nos campos de data, digite a data (só os números, ex.: 15032026 vira 15/03/2026) e tecle Enter, ou clique no ícone do calendário para escolher.",
       "Nos campos que escolhem um item de cadastro (paciente, profissional, especialidade, serviço, convênio, sala, status, motivo), digite parte do nome direto no campo: a lista abaixo mostra só os que combinam (sem diferenciar acento e maiúscula). Escolha com as setas ↑ ↓ e Enter, ou clique. Se o texto não combinar com nenhum item, o campo volta ao que estava.",
       "Ctrl+clique (ou o botão do meio do mouse) numa aba abre a tela em outra aba do navegador. Atualizar a página (F5) mantém a tela aberta."
@@ -27807,12 +27824,14 @@ function intakeApplyReview(overlay, info, isNew, added){
   function get(path){ return path.split(".").reduce(function(o, k){ return o == null ? undefined : o[k]; }, p); }
   function setVal(el, v){
     if (el.tagName === "SELECT" && v && !Array.prototype.some.call(el.options, function(o){ return o.value === v; })) el.insertAdjacentHTML("beforeend", '<option value="' + esc(v) + '">' + esc(v) + '</option>');
+    if (el.type === "checkbox"){ el.checked = (v === "Sim" || v === true); el.dispatchEvent(new Event("change", {bubbles: true})); return; }
     el.value = v; el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input", {bubbles: true})); if (el.tagName !== "SELECT") el.dispatchEvent(new Event("change", {bubbles: true}));
   }
   function show(el, v){
     if (el.getAttribute("data-mask") === "cpf" || el.id === "pf-cpf") return formatCpf(v);
     if (el.id === "pNasc" || el.type === "date" || /^\d{4}-\d{2}-\d{2}$/.test(v)) return trBr(v);
     if (el.id === "fi-telefone") return formatPhone(v);
+    if (el.type === "checkbox") return v === "Sim" ? "Sim" : "Não";
     if (el.tagName === "SELECT"){ var o = Array.prototype.filter.call(el.options, function(x){ return x.value === v; })[0]; return o ? o.textContent : v; }
     return v;
   }
@@ -28070,10 +28089,10 @@ function openLancamento(row, opts){
           '<div class="field"><label for="flData">Data</label><input id="flData" type="date" value="' + esc(r.date || "") + '"></div></div>' +
         '<div class="field"><label for="flDesc">Descrição</label><input id="flDesc" type="text" maxlength="200" value="' + esc(r.desc) + '" placeholder="Como aparece no extrato ou o que foi pago"></div>' +
         '<div class="field"><label for="flSub">Subcategoria</label><select id="flSub" data-combo data-reg-add="planocontas">' + flPlanOptions(r.plan) + '</select><div class="field-hint" id="flSubHint"></div></div>' +
-        '<div class="field"><label for="flValor">Valor (R$)</label><input id="flValor" type="text" inputmode="decimal" value="' + (r.valor == null ? "" : esc(fmtMoney(r.valor).replace("R$ ", ""))) + '" placeholder="0,00"></div>' +
+        '<div class="field"><label for="flValor">Valor (R$)</label><input id="flValor" data-money type="text" inputmode="decimal" value="' + (r.valor == null ? "" : esc(fmtMoney(r.valor).replace("R$ ", ""))) + '" placeholder="0,00"></div>' +
         '<div class="tr-sec">Extrato do Banco</div>' +
         '<div class="field-row"><div class="field"><label for="flExtData">Data no Extrato</label><input id="flExtData" type="date" value="' + esc(r.extDate || "") + '"></div>' +
-          '<div class="field"><label for="flExtVal">Valor no Extrato (R$)</label><input id="flExtVal" type="text" inputmode="decimal" value="' + (r.extVal == null ? "" : esc(fmtMoney(r.extVal).replace("R$ ", ""))) + '" placeholder="0,00"></div></div>' +
+          '<div class="field"><label for="flExtVal">Valor no Extrato (R$)</label><input id="flExtVal" data-money type="text" inputmode="decimal" value="' + (r.extVal == null ? "" : esc(fmtMoney(r.extVal).replace("R$ ", ""))) + '" placeholder="0,00"></div></div>' +
         '<div class="field"><label for="flObs">Observações</label><textarea id="flObs" rows="5" maxlength="500">' + esc(r.obs || "") + '</textarea></div>' +
         (isNew ? "" : '<div class="tr-sec">Conta a Pagar / a Receber</div><div class="fl-linkbox" id="flLinkBox"></div>') +
       '</div>' +
@@ -28616,14 +28635,14 @@ function openConta(row){
         '<div class="field"><label for="fpDesc">Descrição</label><input id="fpDesc" type="text" maxlength="200" value="' + esc(r.desc) + '" placeholder="' + (rc ? "O que será recebido" : "O que será pago") + '"></div>' +
         '<div class="field"><label for="fpSub">Subcategoria</label><select id="fpSub" data-combo data-reg-add="planocontas">' + fpPlanOptions(r.plan, mk) + '</select><div class="field-hint" id="fpSubHint"></div></div>' +
         '<div class="field-row"><div class="field"><label for="fpVenc">Vencimento</label><input id="fpVenc" type="date" value="' + esc(r.venc || "") + '"></div>' +
-          '<div class="field"><label for="fpValor">Valor (R$)</label><input id="fpValor" type="text" inputmode="decimal" value="' + (r.valor == null ? "" : esc(fmtMoney(r.valor).replace("R$ ", ""))) + '" placeholder="0,00"></div></div>' +
+          '<div class="field"><label for="fpValor">Valor (R$)</label><input id="fpValor" data-money type="text" inputmode="decimal" value="' + (r.valor == null ? "" : esc(fmtMoney(r.valor).replace("R$ ", ""))) + '" placeholder="0,00"></div></div>' +
         '<div class="tr-sec">Composição do Valor</div><div id="fpSplitBox" class="fp-split"></div>' +
         (rc ? '' : '<div class="field"><label for="fpForn">Fornecedor</label><select id="fpForn" data-combo data-reg-add="fornecedores">' + fpSupOptions(r.sup) + '</select></div>') +
         '<div class="field"><label for="fpConta">Conta Bancária Prevista</label><select id="fpConta" data-combo data-reg-add="contas">' + flAccOptions(r.acc) + '</select></div>' +
         '<div class="field"><label for="fpObs">Observações</label><textarea id="fpObs" rows="5" maxlength="500">' + esc(r.obs || "") + '</textarea></div>' +
         (isNew ? '<div class="tr-sec">Repetição</div>' +
           '<div class="field-row"><div class="field"><label for="fpRep">Repetir</label><select id="fpRep"><option value="">Não repete</option><option value="1">Todo mês</option></select></div>' +
-          '<div class="field"><label for="fpRepN">Quantas Contas ao Todo</label><input id="fpRepN" type="number" min="2" max="60" value="12" disabled></div></div>' +
+          '<div class="field"><label for="fpRepN">Quantas Contas ao Todo</label><input id="fpRepN" type="number" inputmode="numeric" min="2" max="60" value="12" disabled></div></div>' +
           '<div class="field-hint" id="fpRepHint">A conta é criada uma vez para cada mês, no mesmo dia (mês mais curto usa o último dia). Cada uma pode ser alterada ou excluída depois.</div>' : "") +
         (later.length ? '<label class="kind-opt fp-next"><input type="checkbox" id="fpNext"> Aplicar também às ' + later.length + (later.length === 1 ? ' próxima conta em aberto' : ' próximas contas em aberto') + ' deste grupo (valor, subcategoria, fornecedor, conta e observações)</label>' : "") +
       '</div>' +
@@ -28690,7 +28709,7 @@ function openConta(row){
     subEl.disabled = true; vEl.readOnly = true;
     box.innerHTML = lines.map(function(l, i){
       return '<div class="fp-ln"><select data-combo aria-label="Subcategoria da parte ' + (i + 1) + '">' + fpPlanOptions(l.plan, mk) + '</select>' +
-        '<input class="fp-ln-val" type="text" inputmode="decimal" placeholder="0,00" value="' + (l.valor ? esc(fmtMoney(l.valor).replace("R$ ", "")) : "") + '" aria-label="Valor da parte ' + (i + 1) + '">' +
+        '<input class="fp-ln-val" data-money type="text" inputmode="decimal" placeholder="0,00" value="' + (l.valor ? esc(fmtMoney(l.valor).replace("R$ ", "")) : "") + '" aria-label="Valor da parte ' + (i + 1) + '">' +
         (ro ? '' : '<button type="button" class="btn ghost fp-ln-rm" data-fp-rm="' + i + '" aria-label="Tirar esta parte">✕</button>') + '</div>';
     }).join("") + '<div class="fp-ln-foot"><b>Total: <span id="fpSplitSum">' + esc(fmtMoney(sumLines())) + '</span></b>' +
       (ro ? '' : '<button type="button" class="btn ghost" id="fpSplitAdd">+ Parte</button><button type="button" class="btn ghost" id="fpSplitOff">Voltar para uma Subcategoria Só</button>') + '</div>';
@@ -28791,12 +28810,12 @@ function openBaixa(r){
         '<div class="tr-sec tr-sec-top">Lançamento</div>' +
         '<div class="field-row"><div class="field"><label for="fpbData">Data do ' + verbo + '</label><input id="fpbData" type="date" value="' + esc(today) + '"></div>' +
           '<div class="field"><label for="fpbConta">Conta Bancária</label><select id="fpbConta" data-combo data-reg-add="contas">' + flAccOptions(r.acc) + '</select></div></div>' +
-        (hasLn ? '<div class="field"><label>Partes do ' + verbo + '</label>' + r.linhas.map(function(l, i){ var q = flPlanById(l.plan); return '<div class="fp-ln fpb-ln"><span class="fpb-ln-n">' + esc(q ? q.name : "?") + (q ? ' <small>(' + esc(q.tipo) + ')</small>' : '') + '</span><input class="fpb-ln-val" data-i="' + i + '" type="text" inputmode="decimal" value="' + esc(fmtMoney(l.valor).replace("R$ ", "")) + '" aria-label="Valor: ' + esc(q ? q.name : "") + '"></div>'; }).join("") + '<div class="field-hint">Mude o valor de cada parte se o ' + verbo + ' foi diferente do previsto (por exemplo, juros maiores). Será criado um lançamento por parte.</div></div>' : "") +
-        '<div class="field"><label for="fpbValor">Valor (R$)</label><input id="fpbValor" type="text" inputmode="decimal" value="' + esc(fmtMoney(r.valor).replace("R$ ", "")) + '"><div class="field-hint">Mude se foi pago ou recebido um valor diferente do previsto (juros, desconto).</div></div>' +
+        (hasLn ? '<div class="field"><label>Partes do ' + verbo + '</label>' + r.linhas.map(function(l, i){ var q = flPlanById(l.plan); return '<div class="fp-ln fpb-ln"><span class="fpb-ln-n">' + esc(q ? q.name : "?") + (q ? ' <small>(' + esc(q.tipo) + ')</small>' : '') + '</span><input class="fpb-ln-val" data-money data-i="' + i + '" type="text" inputmode="decimal" value="' + esc(fmtMoney(l.valor).replace("R$ ", "")) + '" aria-label="Valor: ' + esc(q ? q.name : "") + '"></div>'; }).join("") + '<div class="field-hint">Mude o valor de cada parte se o ' + verbo + ' foi diferente do previsto (por exemplo, juros maiores). Será criado um lançamento por parte.</div></div>' : "") +
+        '<div class="field"><label for="fpbValor">Valor (R$)</label><input id="fpbValor" data-money type="text" inputmode="decimal" value="' + esc(fmtMoney(r.valor).replace("R$ ", "")) + '"><div class="field-hint">Mude se foi pago ou recebido um valor diferente do previsto (juros, desconto).</div></div>' +
         '<div class="field"><label for="fpbDesc">Descrição do Lançamento</label><input id="fpbDesc" type="text" maxlength="200" value="' + esc(fpLabel(r)) + '"></div>' +
         (hasLn ? '' : '<div class="tr-sec">Extrato do Banco (Opcional)</div>' +
         '<div class="field-row"><div class="field"><label for="fpbExtData">Data no Extrato</label><input id="fpbExtData" type="date"></div>' +
-          '<div class="field"><label for="fpbExtVal">Valor no Extrato (R$)</label><input id="fpbExtVal" type="text" inputmode="decimal" placeholder="0,00"></div></div>') +
+          '<div class="field"><label for="fpbExtVal">Valor no Extrato (R$)</label><input id="fpbExtVal" data-money type="text" inputmode="decimal" placeholder="0,00"></div></div>') +
       '</div>' +
       '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="fpbCancel">Cancelar</button><button class="btn primary" id="fpbOk">' + (k === "receber" ? "Confirmar Recebimento" : "Confirmar Pagamento") + '</button></div>' +
     '</div></div>';
@@ -29072,10 +29091,10 @@ function openEmprestimo(loan, k){
         '<div class="field-row"><div class="field"><label for="lnParte">' + (tom ? "Credor (Banco ou Pessoa)" : "Tomador") + '</label><input id="lnParte" type="text" maxlength="160" value="' + esc(l.parte) + '"></div>' +
           '<div class="field"><label for="lnConta">Conta Bancária</label><select id="lnConta" data-combo data-reg-add="contas">' + flAccOptions(l.acc) + '</select></div></div>' +
         '<div class="tr-sec">Valores e Juros</div>' +
-        '<div class="field-row"><div class="field"><label for="lnValor">Valor ' + (tom ? "recebido" : "emprestado") + ' (R$)</label><input id="lnValor" type="text" inputmode="decimal" value="' + (l.valor == null ? "" : esc(fmtMoney(l.valor).replace("R$ ", ""))) + '" placeholder="0,00"></div>' +
+        '<div class="field-row"><div class="field"><label for="lnValor">Valor ' + (tom ? "recebido" : "emprestado") + ' (R$)</label><input id="lnValor" data-money type="text" inputmode="decimal" value="' + (l.valor == null ? "" : esc(fmtMoney(l.valor).replace("R$ ", ""))) + '" placeholder="0,00"></div>' +
           '<div class="field"><label for="lnTipo">Tipo de Juros</label><select id="lnTipo">' + LN_TIPOS.map(function(t){ return '<option value="' + t[0] + '"' + (t[0] === l.tipo ? ' selected' : '') + '>' + t[1] + '</option>'; }).join("") + '</select></div></div>' +
         '<div class="field-row"><div class="field"><label for="lnTaxa">Taxa de Juros ao Mês (%)</label><input id="lnTaxa" type="text" inputmode="decimal" value="' + esc(String(l.taxa).replace(".", ",")) + '"></div>' +
-          '<div class="field"><label for="lnN">Número de Parcelas</label><input id="lnN" type="number" min="1" max="600" value="' + esc(l.parcelas) + '"></div></div>' +
+          '<div class="field"><label for="lnN">Número de Parcelas</label><input id="lnN" type="number" inputmode="numeric" min="1" max="600" value="' + esc(l.parcelas) + '"></div></div>' +
         '<div class="field-row"><div class="field"><label for="lnLib">Data da Liberação</label><input id="lnLib" type="date" value="' + esc(l.lib || "") + '"></div>' +
           '<div class="field"><label for="lnV1">Vencimento da 1ª Parcela</label><input id="lnV1" type="date" value="' + esc(l.venc1 || "") + '"></div></div>' +
         '<div class="tr-sec">Parcelas</div><div id="lnParc"></div>' +

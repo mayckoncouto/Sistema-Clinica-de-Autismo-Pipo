@@ -18,15 +18,15 @@ const path = require('path');
 
   await ev(`openRoomModal(state.rooms[0])`);
   await page.waitForSelector('#rmAba', { state: 'attached' });
-  check('room window has the ABA field (default Não)?', (await page.$eval('#rmAba', (s) => s.value)) === 'Não');
-  await page.$eval('#rmAba', (s) => { s.value = 'Sim'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+  check('room window has the ABA field (default Não)?', (await page.$eval('#rmAba', (s) => s.checked)) === false);
+  await page.$eval('#rmAba', (s) => { s.checked = true; s.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.click('#rmSave');
   await page.waitForTimeout(500);
   const r = await ev(`JSON.stringify({n: state.rooms[0].name, a: state.rooms[0].aba, ok: roomAba(state.rooms[0])})`);
   check('saving ABA Sim stores aba:true and shows "… ABA" in the name?', /ABA"/.test(r) && /"a":true/.test(r), r);
   await ev(`openRoomModal(state.rooms[0])`);
   await page.waitForSelector('#rmAba', { state: 'attached' });
-  check('editing shows the base name without ABA and ABA = Sim?', (await page.inputValue('#rmName')) === 'Sala Teste' && (await page.$eval('#rmAba', (s) => s.value)) === 'Sim');
+  check('editing shows the base name without ABA and ABA = Sim?', (await page.inputValue('#rmName')) === 'Sala Teste' && (await page.$eval('#rmAba', (s) => s.checked)) === true);
   await page.click('#rmCancel');
   check('rules read the field, not the name?', await ev(`roomAba({name: "Fono ABA"}) === false && roomAba({name: "Fono", aba: true}) === true`));
 

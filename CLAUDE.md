@@ -4385,3 +4385,8 @@ excluir manda o arquivo para a lixeira do Drive.
 Título de grupo: sempre `.tr-sec` (`.tr-sec-top` no 1º da janela, `.tr-sec-in` dentro de caixas), Title Case; saíram `.pm-sec-title`, `.prof-access-title`, `.crm-sec-t`. Texto longo: 3 linhas, 5 em Observações
 (CRM Descrição segue `fitDesc`). Hora: digitável HH:MM (`input.cl-time` texto + `staffTime` ao sair do campo; Clínica e Horário do paciente; a Agenda `#agdHora` continua lista).
 Calendário padrão: título clicável abre lista de anos; "Limpar" em campo não obrigatório. Sim/Não: caixa de marcar para ligar/desligar; `.kind-opt` só para 2+ opções excludentes.
+
+Atualização (2026-10-13): Sim/Não de ligar/desligar agora são caixas — Intervenção ABA (quadro do tratamento, `#tlAba`), Sala Intervenção ABA (`#rmAba`) e Tem Mediador / AT (campo `type: "check"` em `PAT_FIELDS`, grava "Sim"/"Não"). Dinheiro: `data-money` no input (teclado decimal, vira 0,00 ao sair); quantidade: `inputmode="numeric"`. Campo somente leitura/desativado: fundo cinza, sem foco. "(Opcional)": só em grupo do cadastro do paciente em que a maioria dos campos é obrigatória (`optMode`). `showToast` termina a frase com ponto quando falta.
+
+### REGRA FIXA: estilo novo só com confirmação (pedido do usuário, 2026-10-13)
+Todo campo, título, janela ou tela nova segue o "Padrão de campos" e os "Padrões obrigatórios para elementos novos" acima, reaproveitando classes que já existem. Se for preciso um estilo que NÃO existe (cor, tipo de campo, componente ou layout novo), parar e perguntar ao usuário ANTES de criar, mostrando a opção (prévia ou descrição) e esperando a escolha.
