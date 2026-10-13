@@ -5652,6 +5652,28 @@ var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf",
     e.preventDefault(); e.stopImmediatePropagation();
     guard(ov, function(){ document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true})); });
   }, true);
+  /* Esc fecha a janela de cima, pelo mesmo caminho do ✕ / Cancelar (a pergunta de salvar já foi tratada acima).
+   * Só age se nenhum outro tratador de Esc da janela/lista/menu resolveu a tecla. */
+  var escTop = null;
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Escape" || asking) return;
+    var all = Array.prototype.filter.call(document.querySelectorAll(".overlay"), function(o){ return !o.hidden && o.id !== "ovConfirm" && o.id !== "ovGuard" && o.getClientRects().length > 0; });
+    escTop = all.length ? all[all.length - 1] : null;
+  }, true);
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Escape" || asking || e.defaultPrevented || !escTop) return;
+    var ov = escTop; escTop = null;
+    if (!ov.isConnected || ov.hidden || document.getElementById("ovConfirm") || document.getElementById("ovGuard")) return;
+    if (document.querySelector("#dpPop, #cpPop, #crmPop, .autolist:not([hidden]), .pl-goal-pop:not([hidden]), .pl-specs-pop:not([hidden]), .ms-panel:not([hidden]), .pl-tools-menu:not([hidden]), .cad-menu:not([hidden])")) return;
+    var b = ov.querySelector(".modal-head .modal-close, .modal-close");
+    if (!b || b.disabled){
+      var foot = ov.querySelectorAll(".modal-foot .btn.ghost");
+      for (var i = 0; i < foot.length; i++){ if (/^(cancelar|fechar|voltar)$/i.test((foot[i].textContent || "").trim()) && !foot[i].disabled && !foot[i].hidden){ b = foot[i]; break; } }
+    }
+    if (!b) return;
+    e.preventDefault();
+    b.click();
+  });
 })();
 /* ---------------- Sistema: regras com chave (Acesso → Sistema, só Administrador) ----------------
  * Documento config/system {rules: {id: "block"|"warn"|"off"}, historico: [{em, por, id, de, para}]}.
@@ -22176,6 +22198,7 @@ var HELP_TOPICS = [
     rules: [
       "Você só vê as telas e os botões que o seu nível de permissão libera. Se faltar algo, fale com o Administrador.",
       "Toda exclusão pede confirmação.",
+      "A tecla <b>Esc</b> fecha a janela aberta (a de cima, quando há várias) do mesmo jeito que o ✕ ou o Cancelar: se a janela tem alterações, o sistema pergunta se deseja salvar. Com uma lista ou menu aberto, o Esc fecha primeiro a lista.",
       "Ao sair de uma janela de cadastro depois de mudar algum campo (pelo ✕, Cancelar, Fechar, clique fora ou Esc), o sistema pergunta: <b>Salvar</b>, <b>Sair sem Salvar</b> ou <b>Continuar Editando</b>.",
       "Nas janelas de Paciente, Tratamento, Lançamento e Conta a Pagar ou a Receber já salvos, <b>Outras Opções ▾ → Criar Tarefa</b> escolhe a lista do CRM e abre a janela da tarefa já preenchida (título e paciente); ajuste e salve.",
       "Duas pessoas podem mexer nos cadastros ao mesmo tempo: cada uma grava só o que alterou. Se outra pessoa alterou o mesmo cadastro depois que você o abriu, ao salvar aparece o aviso “Alterado Enquanto Você Editava”, com quem alterou e a hora: <b>Salvar Assim Mesmo</b> grava a sua versão por cima; <b>Recarregar</b> descarta a sua e mostra a versão atual.",

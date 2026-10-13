@@ -42,6 +42,9 @@ const path = require('path');
   await open(); await page.fill('#stiName', 'Guarda Salva'); await page.click('#ovStItem .modal-close'); await page.waitForTimeout(100);
   await page.click('#gdSave'); await page.waitForTimeout(300);
   check('Salvar saves and closes?', !(await page.$('#ovStItem')) && (await page.$$eval('#reg-status-host tbody tr', (r) => r.map((x) => x.textContent))).some((t) => /Guarda Salva/.test(t)));
+  // Esc sem alteração fecha; Esc com alteração pergunta
+  await open(); await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  check('Esc on an unchanged window closes it?', !(await page.$('#ovStItem')) && !(await page.$('#ovGuard')));
   // Criar Tarefa a partir do paciente
   await page.click('#mainTabs [data-tab="pacientes"]', { force: true }).catch(() => {});
   await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="pacientes"]').click());
@@ -52,6 +55,10 @@ const path = require('path');
   const pick = await page.$('#ovTaskPick');
   if (pick) { await page.click('#tpOk'); await page.waitForTimeout(300); }
   check('task window opens over the patient window, prefilled?', !!(await page.$('#quickHost #ovCrm')) && !!(await page.$('#ovPat')) && /Paciente: Ana Azul/.test(await page.inputValue('#ovCrm input').catch(() => '')) && /Ana Azul/.test(await page.inputValue('#crmWho').catch(() => '')) , await page.inputValue('#ovCrm input').catch(() => ''));
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  check('Esc closes the stacked task window first?', !(await page.$('#ovCrm')) && !!(await page.$('#ovPat')));
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  check('Esc then closes the patient window?', !(await page.$('#ovPat')));
   console.log('no JS errors?', errors.length === 0, errors.slice(0, 3));
   await browser.close();
   process.exit(fails || errors.length ? 1 : 0);
