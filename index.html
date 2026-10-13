@@ -22255,7 +22255,7 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Tratamentos</b>. Os valores dependem de <b>Tratamentos – Valores</b>."},
   {id: "planilhas", group: "Cadastros", title: "Planilhas: Exportar e Importar", mod: null,
-    purpose: "Levar dados do sistema para o Excel e trazer do Excel para o sistema, em Tratamentos, Pacientes, Objetivos, Habilidades e Escalas.",
+    purpose: "Levar dados do sistema para o Excel e trazer do Excel para o sistema, em Tratamentos, Pacientes, Objetivos, Atividades, Habilidades e Escalas.",
     steps: [
       "Na tela do cadastro, abra <b>Outras Opções ▾</b> → <b>Exportar Planilha</b>: baixa um arquivo do Excel (.xlsx) com os dados da tela e uma aba <b>Instruções</b>. Esse arquivo é também o <b>modelo</b> para importar.",
       "Para importar: <b>Outras Opções ▾</b> → <b>Importar Planilha</b>. Baixe o modelo (com os dados atuais ou vazio), preencha no Excel e escolha o arquivo — ou copie as linhas no Excel (com a linha dos títulos) e cole no quadro.",
@@ -22267,6 +22267,7 @@ var HELP_TOPICS = [
       "Os nomes das colunas são reconhecidos sem acento e sem maiúsculas (ex.: \"Data Início\", \"Pacote\", \"Despesas\"). Colunas que o sistema calcula (Tipo, Valor final, Idade, Retenção, Agenda) são ignoradas.",
       "<b>Tratamentos</b>: o paciente precisa estar cadastrado (quem não está aparece na lista e fica de fora). Mesmo paciente e mesma data de início = atualiza o tratamento (especialidades, terapeutas e horários do sistema ficam); outro início = tratamento novo. O tratamento criado automaticamente na implantação é substituído pelo histórico da planilha e passa as especialidades e horários para o tratamento Ativo (e também o Valor e os Descontos, quando a planilha não traz valor). Tipo é calculado; Cancelado sem motivo fica com o motivo pendente. Suporte 1, 2 ou 3 vai para o Nível de suporte; texto vai para o Diagnóstico (só se estiverem vazios).",
       "<b>Pacientes</b>: o mesmo paciente (mesmo CPF; sem CPF, mesmo nome e nascimento) só tem os campos vazios completados. Paciente novo entra sem exigir o CPF (ele é pedido ao editar o cadastro).",
+      "<b>Atividades</b>: mesmo nome = atualiza. A coluna Objetivos usa <b>Habilidade: Objetivo</b> separados por ponto e vírgula; preenchida, substitui os objetivos ligados.",
       "<b>Objetivos</b>: mesmo texto na mesma habilidade = atualiza. <b>Habilidades</b> e <b>Escalas</b>: mesmo nome = atualiza. Escalas: uma linha por nível, do primeiro ao final; nível que já existe não sai pela importação.",
       "Valores e dados de saúde só entram e saem para quem tem <b>Tratamentos – Valores</b> e <b>Pacientes – Saúde</b>."
     ],
@@ -22500,6 +22501,7 @@ var HELP_TOPICS = [
     purpose: "Banco de atividades que o profissional pode aplicar para trabalhar os objetivos do Plano terapêutico.",
     steps: ["Prontuário ▾ → <b>Atividades</b> → <b>+ Incluir</b>: nome da atividade, descrição, materiais, duração em minutos, faixas etárias e especialidades (nenhuma marcada = todas).",
       "Em <b>Objetivos que Esta Atividade Trabalha</b>, escolha os objetivos do Banco de objetivos (digite para buscar). Uma atividade pode servir a vários objetivos, e um objetivo pode ter várias atividades. Desmarque um objetivo para tirá-lo da atividade.",
+      "<b>Outras Opções ▾</b>: <b>Exportar Planilha</b> e <b>Importar Planilha</b> (veja o tópico Planilhas).",
       "A lista mostra quantos objetivos cada atividade trabalha; a busca encontra pelo nome, descrição, materiais, objetivo ou especialidade."],
     rules: ["Não pode haver duas atividades com o mesmo nome.", "Objetivo que tem atividades ligadas não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>Atividades</b>."},
@@ -27528,6 +27530,67 @@ function ioGoalApply(plan){
 }
 
 
+// ---- Planilhas: Atividades ----
+// Chave = nome da atividade. Objetivos: "Habilidade: Objetivo" separados por ponto e vírgula (a habilidade é opcional quando
+// o objetivo só existe numa habilidade). Célula vazia não muda o que está no sistema; Objetivos preenchido substitui a lista.
+function ioActGoalRefs(txt, warn){
+  var ids = [];
+  String(txt || "").split(/[;\n]+/).map(function(x){ return x.trim(); }).filter(Boolean).forEach(function(part){
+    var hab = "", nome = part, m = part.match(/^([^:]+):\s*(.+)$/);
+    if (m && skillAreasList().some(function(a){ return ioKey(a.name) === ioKey(m[1]); })){ hab = m[1]; nome = m[2]; }
+    var pre = goalNamePrefix(nome); nome = pre.name;
+    var hits = goalBankList().filter(function(g){
+      if (ioKey(goalNamePrefix(g.name).name) !== ioKey(nome)) return false;
+      return !hab || ioKey(skillAreaName(g.areaId)) === ioKey(hab);
+    });
+    if (!hits.length) warn.push("Objetivo não cadastrado: <b>" + esc(part) + "</b> (ignorado).");
+    else if (hits.length > 1 && !hab) warn.push("Objetivo em mais de uma habilidade: <b>" + esc(part) + "</b> (use <i>Habilidade: Objetivo</i>; ignorado).");
+    else if (ids.indexOf(hits[0].id) === -1) ids.push(hits[0].id);
+  });
+  return ids;
+}
+function ioActPlan(recs){
+  var items = [], base = activitiesList(), seen = {}, canNew = can("atividades", "create"), canEdit = can("atividades", "edit");
+  recs.forEach(function(r){
+    var it = {line: r._line, msgs: [], warn: []}, nome = ioText(r.atividade);
+    it.label = esc(nome || "(sem nome)");
+    if (!nome){ it.st = "problema"; it.msgs.push("Falta o nome da atividade."); return items.push(it); }
+    var key = ioKey(nome);
+    if (seen[key]){ it.st = "problema"; it.msgs.push("Repetida na planilha (linha " + seen[key] + ")."); return items.push(it); }
+    seen[key] = r._line;
+    var v = {name: nome};
+    if (ioText(r.descricao)) v.descricao = ioText(r.descricao);
+    if (ioText(r.materiais)) v.materiais = ioText(r.materiais);
+    var dur = ioText(r.duracao).replace(/\D/g, "");
+    if (ioText(r.duracao)){ if (dur) v.duracao = +dur; else it.warn.push("Duração inválida: <b>" + esc(ioText(r.duracao)) + "</b> (ignorada)."); }
+    if (ioText(r.faixas)) v.faixas = ioAgeBands(r.faixas, it.warn);
+    if (ioText(r.specs)) v.specIds = ioSpecIds(r.specs, it.warn);
+    if (ioText(r.objetivos)) v.goalIds = ioActGoalRefs(r.objetivos, it.warn);
+    var cur = base.filter(function(a){ return ioKey(a.name) === key; })[0];
+    it.vals = v; it.cur = cur;
+    if (!cur){ it.st = canNew ? "novo" : "problema"; if (!canNew) it.msgs.push("Seu nível não pode incluir atividades."); return items.push(it); }
+    var ch = [];
+    if (v.descricao && v.descricao !== (cur.descricao || "")) ch.push(ioDiff("Descrição", cur.descricao, v.descricao));
+    if (v.materiais && v.materiais !== (cur.materiais || "")) ch.push(ioDiff("Materiais", cur.materiais, v.materiais));
+    if (v.duracao && v.duracao !== (cur.duracao || 0)) ch.push(ioDiff("Duração", cur.duracao ? cur.duracao + " min" : "", v.duracao + " min"));
+    if (v.faixas && ageBandIds(cur.faixas).slice().sort().join() !== v.faixas.slice().sort().join()) ch.push(ioDiff("Faixas Etárias", ageBandText(cur.faixas), ageBandText(v.faixas)));
+    if (v.specIds && v.specIds.slice().sort().join() !== (cur.specIds || []).slice().sort().join()) ch.push(ioDiff("Especialidades", planSpecNames(cur.specIds || []) || "Todas", planSpecNames(v.specIds) || "Todas"));
+    if (v.goalIds && v.goalIds.slice().sort().join() !== actGoalIds(cur).slice().sort().join()) ch.push(ioDiff("Objetivos", actGoalIds(cur).length + " ligado(s)", v.goalIds.length + " ligado(s)"));
+    if (!ch.length){ it.st = "igual"; return items.push(it); }
+    it.st = canEdit ? "atualizar" : "problema"; it.msgs = canEdit ? ch : ["Seu nível não pode alterar atividades."];
+    items.push(it);
+  });
+  return {items: items, notes: ["A mesma atividade (mesmo nome) é atualizada; as outras entram como novas."], itemLabel: "Atividade"};
+}
+function ioActApply(plan){
+  var list = activitiesList();
+  plan.items.forEach(function(it){
+    if (it.st === "novo") list.push(Object.assign({id: uid("act"), descricao: "", materiais: "", duracao: "", faixas: [], specIds: [], goalIds: []}, it.vals));
+    else if (it.st === "atualizar") list = list.map(function(a){ return a.id === it.cur.id ? Object.assign({}, a, it.vals) : a; });
+  });
+  return writeSimpleList("atividades", list).then(function(ok){ return ok === false ? false : "Atividades importadas."; });
+}
+
 // ---- Planilhas: Plano de Contas e Fornecedores (cadastros em lista) ----
 // Mesma ideia das Habilidades: a chave decide "novo" ou "atualizar"; célula vazia nunca apaga.
 function ioListPlan(recs, o){
@@ -27684,6 +27747,21 @@ var IO_KINDS = {
     ],
     exportRows: function(){ return goalBankList().map(function(g){ var sc = scaleById(g.scaleId); return {objetivo: g.name, habilidade: g.areaId ? skillAreaName(g.areaId) : "", faixas: ageBandText(g.faixas), criterio: g.criterio || "", escala: sc ? sc.name : "", specs: planSpecNames(goalSpecIds(g))}; }); },
     plan: ioGoalPlan, apply: ioGoalApply},
+  atividades: {label: "Atividades", file: "atividades", mod: "atividades",
+    sub: "Mesmo nome = atualiza a atividade.",
+    help: ["Uma linha por atividade. Objetivos: <b>Habilidade: Objetivo</b> separados por ponto e vírgula (a habilidade é opcional quando o objetivo só existe numa habilidade); os objetivos precisam estar no Banco de objetivos.",
+      "Faixas Etárias: " + AGE_BANDS.map(function(b){ return b.label; }).join(", ") + " separadas por vírgula, ou \"Todas as idades\". Especialidades: nomes ou siglas separados por vírgula; vazio = todas. Duração em minutos.",
+      "Célula vazia não muda o que está no sistema. Objetivos preenchido substitui a lista de objetivos da atividade."],
+    cols: [
+      {k: "atividade", h: "Atividade", alias: ["nome"], w: 34, req: true}, {k: "descricao", h: "Descrição", alias: ["descricao"], w: 50},
+      {k: "materiais", h: "Materiais", w: 30}, {k: "duracao", h: "Duração (Min)", alias: ["duracao", "duracao min", "duracao (minutos)", "minutos"], w: 14},
+      {k: "faixas", h: "Faixas Etárias", alias: ["faixa etaria", "faixas", "idades"], w: 18, note: AGE_BANDS.map(function(b){ return b.label; }).join(", ") + " separadas por vírgula, ou Todas as idades"},
+      {k: "specs", h: "Especialidades", alias: ["especialidade"], w: 26, note: "nomes ou siglas separados por vírgula; vazio = todas"},
+      {k: "objetivos", h: "Objetivos", alias: ["objetivo"], w: 60, note: "Habilidade: Objetivo; outro objetivo (separados por ponto e vírgula)"}
+    ],
+    exportRows: function(){ return activitiesList().map(function(a){ return {atividade: a.name, descricao: a.descricao || "", materiais: a.materiais || "", duracao: a.duracao || "", faixas: ageBandText(a.faixas), specs: planSpecNames(a.specIds || []),
+      objetivos: actGoalIds(a).map(function(id){ var g = goalById(id); return (g.areaId ? skillAreaName(g.areaId) + ": " : "") + g.name; }).join("; ")}; }); },
+    plan: ioActPlan, apply: ioActApply},
   habilidades: {label: "Habilidades", file: "habilidades", mod: "habilidades",
     sub: "Mesmo nome = atualiza escopo, faixas etárias e especialidades sugeridas.",
     help: ["Uma linha por habilidade. Especialidades sugeridas: nomes ou siglas separados por vírgula.",
@@ -27722,7 +27800,7 @@ var IO_KINDS = {
 };
 (function(){
   // Botões "Outras Opções ▾" com Exportar/Importar nas barras de Tratamentos, Objetivos, Escalas e Habilidades.
-  ["tratamentos", "objetivos", "escalas", "habilidades", "planocontas", "fornecedores"].forEach(function(k){
+  ["tratamentos", "objetivos", "atividades", "escalas", "habilidades", "planocontas", "fornecedores"].forEach(function(k){
     var add = document.getElementById(k === "tratamentos" ? "trAdd" : "reg-" + k + "-add"); if (!add) return;
     add.insertAdjacentHTML("beforebegin", ioToolsMenuHtml(k));
     ioWireMenu(add.parentNode.querySelector('[data-io-wrap="' + k + '"]'));

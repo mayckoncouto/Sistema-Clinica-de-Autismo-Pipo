@@ -44,6 +44,12 @@ const fs = require('fs');
   check('saved with duration number and 1 goal?', saved.length === 1 && saved[0].d === 15 && saved[0].g === 'g1', JSON.stringify(saved));
   const row = await page.textContent('#reg-atividades-host tbody tr');
   check('list row shows name, 1 goal and 15 min?', /Caixa Surpresa/.test(row) && /15 min/.test(row), row.replace(/\s+/g, ' '));
+  // planilha: Outras Opções ▾ → exportar / importar
+  check('Outras Opções menu has export and import?', (await page.$$eval('#tab-atividades [data-io-wrap] [data-io-act]', (b) => b.map((x) => x.getAttribute('data-io-act')))).join() === 'export,import');
+  const exp = await ev("IO_KINDS.atividades.exportRows()");
+  check('export row has name, 15 and the goal as "Habilidade: Objetivo"?', exp.length === 1 && exp[0].atividade === 'Caixa Surpresa' && exp[0].duracao === 15 && /Pedir ajuda/.test(exp[0].objetivos), JSON.stringify(exp));
+  const pl = await ev(`(function(){ var r = ioRecords("atividades", xlParseText("Atividade\\tDuração (Min)\\tObjetivos\\nCaixa Surpresa\\t20\\tPedir ajuda; Imitar gestos\\nBolhas de Sabão\\t10\\tObjetivo Que Não Existe\\n")).recs; var p = ioActPlan(r); return p.items.map(function(i){ return i.st + ':' + (i.vals.goalIds || []).join('+') + ':' + i.warn.length; }); })()`);
+  check('import plan: existing updates (2 goals), new one warns about unknown goal?', pl.join('|') === 'atualizar:g1+g2:0|novo::1', pl.join('|'));
   // duplicado
   await page.click('#reg-atividades-add'); await page.waitForSelector('#ovAct');
   await page.fill('#acName', 'caixa surpresa'); await page.click('#acSave'); await page.waitForTimeout(150);
