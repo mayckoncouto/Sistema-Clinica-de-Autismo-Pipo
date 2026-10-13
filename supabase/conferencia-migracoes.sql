@@ -128,7 +128,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (114, '2026-10-12m-unidades-fase2b-tabelas',          exists(select 1 from col where table_name = 'appointments' and column_name = 'unit_id') and exists(select 1 from fx where proname = 'unit_stamp'), 'Unidades — Fase 2B (unit_id nas tabelas)'),
  (115, '2026-10-12n-unidades-fase2c-funcoes',          to_regclass('public.documents_u') is not null, 'Unidades — Fase 2C (funções leem a unidade ativa)'),
  (116, '2026-10-12o-unidades-fase2d-chave-final',        exists(select 1 from pg_constraint where conrelid = 'public.documents'::regclass and contype = 'p' and pg_get_constraintdef(oid) = 'PRIMARY KEY (path, unit_id)'), 'Unidades — Fase 2D (chave final de documents)'),
- (117, '2026-10-12p-unidades-fase3a-link-redes',       exists(select 1 from fx where proname = 'intake_form' and prosrc like '%''redes''%'), 'Unidades — Fase 3A (link de cadastro devolve as redes da unidade)')
+ (117, '2026-10-12p-unidades-fase3a-link-redes',       exists(select 1 from fx where proname = 'intake_form' and prosrc like '%''redes''%'), 'Unidades — Fase 3A (link de cadastro devolve as redes da unidade)'),
+ (118, '2026-10-12q-unidades-login-sem-lista',       not has_function_privilege('anon', 'public.login_units()', 'execute'), 'Unidades — login sem lista (nomes das unidades não são públicos)')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

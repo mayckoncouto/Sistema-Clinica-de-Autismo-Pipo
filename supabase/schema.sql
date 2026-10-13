@@ -8110,7 +8110,8 @@ returns table (id text, name text) language sql stable security definer set sear
    order by n;
 $$;
 revoke all on function public.login_units() from public;
-grant execute on function public.login_units() to anon, authenticated;
+revoke execute on function public.login_units() from anon;   -- o login não lista unidades (só quem já entrou)
+grant execute on function public.login_units() to authenticated;
 
 -- 6. Só a Gestão altera o cadastro de unidades; a Unidade 1 e unidade com usuários não saem
 create or replace function public.units_guard()

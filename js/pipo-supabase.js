@@ -322,11 +322,10 @@
 
   /* ---------------- unidades ---------------- */
   // Lista de unidades ativas (id, nome) vinda de login_units(), que também funciona antes do login.
-  // Unidade da sessão: a escolhida na tela de login (Gestão pode trocar depois, no topo).
+  // Unidade da sessão: a do perfil de cada pessoa; só a Gestão escolhe (seletor no topo, depois de entrar).
   var UNIT_KEY = "agendaPipo:unit", LOGIN_MSG_KEY = "agendaPipo:loginMsg";
   var units = [];
   var currentUnit = null;      // {id, name}
-  var pendingUnit = null;      // unidade escolhida na tela de login, ainda não conferida
   function lsGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { window.localStorage.setItem(k, v); } catch (e) {} }
   function ssGet(k) { try { return window.sessionStorage.getItem(k); } catch (e) { return null; } }
@@ -342,14 +341,13 @@
     for (var i = 0; i < units.length; i++) if (units[i].id === id) return units[i].name;
     return id === "unidade-1" ? "Unidade 1" : (id || "");
   }
-  // Qual unidade vale nesta sessão? Quem não é da Gestão fica na própria unidade; se escolheu outra
-  // na tela de login, volta {erro}. A Gestão usa a escolhida no login ou a última que usou.
+  // Qual unidade vale nesta sessão? Quem não é da Gestão fica sempre na própria unidade (a tela de login não
+  // tem escolha de unidade). A Gestão volta para a última que usou, senão a própria.
   function resolveUnit(p) {
     var mgr = !!(p.role && p.role.is_manager);
     var own = p.unit_id || "unidade-1";
-    var want = pendingUnit || (mgr ? lsGet(UNIT_KEY) : null);
-    pendingUnit = null;
-    if (!mgr) return want && want !== own ? { erro: true } : { id: own };
+    if (!mgr) return { id: own };
+    var want = lsGet(UNIT_KEY);
     var ok = units.some(function (u) { return u.id === want; });
     return { id: ok ? want : (units.some(function (u) { return u.id === own; }) ? own : (units[0] ? units[0].id : own)) };
   }
@@ -439,22 +437,6 @@
 
   // Nome e subtítulo da tela de login: os do cadastro da Clínica (vindos de /api/config), senão o padrão.
   var loginBrand = { nome: "Clínica de Autismo Pipo", sub: "Clínica Multidisciplinar" };
-  var loginBrandDefault = null;   // marca da Unidade 1 (vinda de /api/config sem unidade escolhida)
-  var unitBrands = {};            // marca pública de cada unidade: { id: { theme, clinica } }
-  // Troca nome, subtítulo e cor da tela de login pela marca da unidade escolhida (sem marca cadastrada = a padrão).
-  function applyLoginBrand(unitId) {
-    var b = unitBrands[unitId];
-    var c = (b && b.clinica) || {};
-    var base = loginBrandDefault || { nome: loginBrand.nome, sub: loginBrand.sub };
-    loginBrand.nome = c.nome || base.nome;
-    loginBrand.sub = c.subtitulo || base.sub;
-    if (loginEl) {
-      var h = loginEl.querySelector(".brand h2"), sb = loginEl.querySelector(".brand .sub");
-      if (h) h.textContent = loginBrand.nome;
-      if (sb) sb.textContent = loginBrand.sub;
-    }
-    if (window.pipoTheme) window.pipoTheme(b && b.theme && b.theme.corBotoes, b && b.theme && b.theme.corTexto);
-  }
   function showLogin(message) {
     if (!loginEl) {
       var logo = document.querySelector(".brand-mark");
@@ -467,7 +449,6 @@
             '<p class="sub">' + escapeHtml(loginBrand.sub) + '</p></div></div>' +
           '<label>E-mail<input type="email" name="email" autocomplete="username" required></label>' +
           '<label>Senha<input type="password" name="password" autocomplete="current-password" required></label>' +
-          '<label class="unit-field" hidden>Unidade<select name="unit"></select></label>' +
           '<div class="err" role="alert"></div>' +
           '<button type="submit">Entrar</button>' +
         "</form>";
@@ -480,8 +461,6 @@
         errEl.textContent = "";
         btn.disabled = true;
         btn.textContent = "Entrando…";
-        pendingUnit = form.unit && form.unit.value ? form.unit.value : null;
-        if (pendingUnit) lsSet(UNIT_KEY, pendingUnit);
         client.auth.signInWithPassword({
           email: form.email.value.trim(),
           password: form.password.value
@@ -503,29 +482,8 @@
     }
     loginEl.querySelector(".err").textContent = message || "";
     loginEl.hidden = false;
-    fillLoginUnits();
     var em = loginEl.querySelector('input[name="email"]');
     if (em) setTimeout(function () { em.focus(); }, 0);
-  }
-
-  // Lista "Unidade" da tela de login: só aparece quando o banco devolve unidades (sem a migração, o login segue como antes).
-  function fillLoginUnits() {
-    if (!loginEl) return;
-    loadUnits().then(function (list) {
-      var lab = loginEl.querySelector(".unit-field"), sel = lab && lab.querySelector("select");
-      if (!sel) return;
-      if (!list.length) { lab.hidden = true; sel.innerHTML = ""; return; }
-      var last = lsGet(UNIT_KEY);
-      sel.innerHTML = list.map(function (u) {
-        return '<option value="' + escapeHtml(u.id) + '"' + (u.id === last ? " selected" : "") + ">" + escapeHtml(u.name) + "</option>";
-      }).join("");
-      lab.hidden = false;
-      if (!sel.__brandWired) {
-        sel.__brandWired = true;
-        sel.addEventListener("change", function () { applyLoginBrand(sel.value); });
-      }
-      applyLoginBrand(sel.value);
-    });
   }
 
   function hideLogin() {
@@ -722,8 +680,6 @@
         if (cfg.clinica.nome) loginBrand.nome = cfg.clinica.nome;
         if (cfg.clinica.subtitulo) loginBrand.sub = cfg.clinica.subtitulo;
       }
-      loginBrandDefault = { nome: loginBrand.nome, sub: loginBrand.sub };
-      unitBrands = cfg.unidades || {};
       if (cfg.theme !== undefined && window.pipoTheme) window.pipoTheme(cfg.theme && cfg.theme.corBotoes, cfg.theme && cfg.theme.corTexto);
       if (!window.supabase || !window.supabase.createClient) throw new Error("biblioteca do Supabase não carregou");
       client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {

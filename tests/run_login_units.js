@@ -53,33 +53,26 @@ const path = require('path');
   }
   const login = async (page, unit) => {
     await page.fill('input[name=email]', 'x@y.com'); await page.fill('input[name=password]', 'senha1234');
-    if (unit) await page.selectOption('select[name=unit]', unit);
     await page.click('.pipo-login button[type=submit]');
   };
 
-  // 1) a lista aparece com as unidades e lembra a última
+  // 1) a tela de login não tem escolha de unidade (nem lista pública)
   let s = await open({ units, profile: profile(role({}), 'unidade-1') });
-  check('login shows the Unidade list with both units?', (await s.page.$$eval('select[name=unit] option', (o) => o.map((x) => x.textContent))).join() === 'Unidade 1 – Blumenau,Unidade 2 – Joinville');
-  check('Unidade field is visible?', await s.page.$eval('.unit-field', (e) => !e.hidden));
-  check('login starts with the first unit brand?', (await s.page.$eval('.pipo-login .brand h2', (e) => e.textContent)) === 'Clínica Pipo');
-  await s.page.selectOption('select[name=unit]', 'unidade-2');
-  check('picking another unit swaps name and subtitle?', (await s.page.$eval('.pipo-login .brand h2', (e) => e.textContent)) === 'Pipo Joinville' && (await s.page.$eval('.pipo-login .brand .sub', (e) => e.textContent)) === 'Filial');
-  await s.page.selectOption('select[name=unit]', 'unidade-1');
-  check('going back restores the first unit brand?', (await s.page.$eval('.pipo-login .brand h2', (e) => e.textContent)) === 'Clínica Pipo');
+  check('login has no Unidade field?', !(await s.page.$('select[name=unit]')) && !(await s.page.$('.unit-field')));
+  check('login shows the default brand?', (await s.page.$eval('.pipo-login .brand h2', (e) => e.textContent)) === 'Clínica Pipo');
   await s.ctx.close();
 
-  // 2) nível comum escolhendo outra unidade: recusado, com a mensagem
-  s = await open({ units, profile: profile(role({}), 'unidade-1') });
-  await login(s.page, 'unidade-2');
-  await s.page.waitForSelector('.pipo-login:not([hidden]) .err:not(:empty)', { timeout: 4000 });
-  await s.page.waitForTimeout(300);
-  const errTxt = await s.page.$eval('.pipo-login .err', (e) => e.textContent); check('wrong unit refused with a message?', /não tem acesso a esta unidade/i.test(errTxt), errTxt);
-  check('no user pill after the refusal?', await s.page.$eval('#userPill', (e) => e.hidden));
+  // 2) nível comum de OUTRA unidade entra na unidade dele, sem recusa e sem escolha
+  s = await open({ units, profile: profile(role({}), 'unidade-2') });
+  await login(s.page, null);
+  await s.page.waitForSelector('#userPill .user-name');
+  check('common level enters its own unit (unidade-2) and sees no selector?', (await s.page.evaluate(() => window.pipoAuth.unit().id)) === 'unidade-2' && !(await s.page.$('#userPill select[data-unit-switch]')));
+  check('the saved last unit never moves a common level to another unit?', await s.page.evaluate(() => { localStorage.setItem('agendaPipo:unit', 'unidade-1'); return true; }));
   await s.ctx.close();
 
   // 3) nível comum na própria unidade: entra e vê o nome fixo, sem seletor
   s = await open({ units, profile: profile(role({}), 'unidade-1') });
-  await login(s.page, 'unidade-1');
+  await login(s.page, null);
   await s.page.waitForSelector('#userPill .user-name');
   check('own unit enters with fixed unit name?', (await s.page.$eval('#userPill .user-unit', (e) => e.textContent)) === 'Unidade 1 – Blumenau' && !(await s.page.$('#userPill select[data-unit-switch]')));
   check('common level cannot see Unidades?', (await s.page.evaluate(() => window.pipoAuth.can('unidades', 'view'))) === false);
@@ -87,7 +80,7 @@ const path = require('path');
 
   // 4) Administrador (não Gestão): acesso total, mas Unidades não
   s = await open({ units, profile: profile(role({ id: 'administrador', name: 'Administrador', is_admin: true }), 'unidade-1') });
-  await login(s.page, 'unidade-1');
+  await login(s.page, null);
   await s.page.waitForSelector('#userPill .user-name');
   check('non-manager never changes the token unit?', (await s.page.evaluate(() => (window.__upd || []).length)) === 0);
   check('Administrador has no unit switch?', !(await s.page.$('#userPill select[data-unit-switch]')));
@@ -96,9 +89,10 @@ const path = require('path');
 
   // 5) Gestão: entra em qualquer unidade, tem o seletor no topo e a troca é lembrada
   s = await open({ units, profile: profile(role({ id: 'gestao', name: 'Gestão', is_admin: true, is_manager: true }), 'unidade-1') });
-  await login(s.page, 'unidade-2');
+  await s.page.evaluate(() => localStorage.setItem('agendaPipo:unit', 'unidade-2'));
+  await login(s.page, null);
   await s.page.waitForSelector('#userPill select[data-unit-switch]');
-  check('Gestão enters the chosen unit?', (await s.page.$eval('#userPill select[data-unit-switch]', (e) => e.value)) === 'unidade-2' && (await s.page.evaluate(() => window.pipoAuth.unit().id)) === 'unidade-2');
+  check('Gestão enters the last unit it used?', (await s.page.$eval('#userPill select[data-unit-switch]', (e) => e.value)) === 'unidade-2' && (await s.page.evaluate(() => window.pipoAuth.unit().id)) === 'unidade-2');
   check('Gestão in another unit asks the token to carry the active unit?', (await s.page.evaluate(() => (window.__upd || []).join())) === 'unidade-2');
   const acts = await s.page.evaluate(() => Array.from(document.querySelectorAll('#acessoMenu button')).map((b) => b.getAttribute('data-act')));
   check('Acesso menu: Unidades before Clinica, Ajuda last before Sair?', acts.indexOf('unidades') >= 0 && acts.indexOf('unidades') < acts.indexOf('clinica') && acts[acts.length - 2] === 'ajuda' && acts[acts.length - 1] === 'sair', acts.join());
@@ -112,7 +106,6 @@ const path = require('path');
 
   // 6) sem unidades no banco (migração ainda não rodada): o login segue como antes
   s = await open({ units: [], profile: profile(role({}), 'unidade-1') });
-  check('without units the Unidade field stays hidden?', await s.page.$eval('.unit-field', (e) => e.hidden));
   await login(s.page, null);
   await s.page.waitForSelector('#userPill .user-name');
   check('login still works without units?', !!(await s.page.$('#userPill .user-name')));
