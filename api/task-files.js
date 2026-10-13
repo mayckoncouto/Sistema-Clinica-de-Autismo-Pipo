@@ -151,8 +151,13 @@ async function patientFolders(patientId, unitId, patientName) {
   try { main = await createFolder(cleanName(patientName) || "Paciente", root); }
   catch (e) {
     if (/not found|insufficient|forbidden|permission/i.test(String(e.message))) {
-      var sa = serviceAccount();
-      throw new Error("A conta de serviço" + (sa ? " (" + sa.client_email + ")" : "") + " não tem acesso ao Drive compartilhado. No Google Drive, abra o Drive compartilhado → Gerenciar membros e adicione esse e-mail como Gerenciador de conteúdo. Confira também se GOOGLE_DRIVE_ID é o código do Drive compartilhado.");
+      var sa = serviceAccount(), seen = "";
+      try {
+        var dl = await gd("/drive/v3/drives?pageSize=50&fields=drives(id,name)");
+        var arr = (dl && dl.drives) || [];
+        seen = arr.length ? " Drives compartilhados que a conta enxerga agora: " + arr.map(function (d) { return d.name + " (" + d.id + ")"; }).join("; ") + "." : " A conta não enxerga nenhum Drive compartilhado.";
+      } catch (e2) { seen = ""; }
+      throw new Error("O Google não achou o Drive " + root + " para a conta de serviço" + (sa ? " (" + sa.client_email + ")" : "") + "." + seen + " Confira se esse código é o do Drive compartilhado (variável GOOGLE_DRIVE_ID na Vercel) e se a conta é membro dele em Gerenciar membros.");
     }
     throw e;
   }
