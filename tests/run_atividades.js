@@ -77,6 +77,21 @@ const fs = require('fs');
   check('window closes and the plan stays open?', !(await page.$('#ovPlActs')) && !!(await page.$('#modalHost [data-acts]')));
   await page.keyboard.press('Escape'); await page.waitForTimeout(150);
   await ev('document.getElementById("modalHost").innerHTML = ""');
+  // Detalhes do Agendamento: dica de atividades sugeridas
+  check('agenda details hint "1 atividade sugerida" with a registered click target?', (await ev(`(function(){ var h = agdActsHint({goalId: "g1", specIds: []}, null, "Fulano"); return /1 atividade sugerida/.test(h) && /data-ag-acts="\\d+"/.test(h) && agdActsHint({goalId: "g2"}, null, "") === ""; })()`)) === true);
+  // Evolução: atividades realizadas por objetivo
+  const evo = await ev(`(function(){ var p = state.patients[0], today = new Date().toISOString().slice(0, 10), sc = scalesList()[0];
+    PLAN.rows = [{id: "pp9", patient_id: p.id, version: 1, status: "vigente", plan_date: today, review_date: null, summary: "",
+      sections: [{areaId: "a1", objectives: [{id: "o9", goalId: "g1", specIds: [], scaleId: sc.id, levelId: sc.levels[0].id, prazo: 3, status: "ativo"}]}]}];
+    var data = planEvoGoalsFor(p.id, null, []), div = document.createElement("div"); div.id = "tmpEvo"; div.innerHTML = planEvoGoalsHtml(data); document.body.appendChild(div);
+    var box = div.querySelector("[data-act-on]"); var had = !!box; if (box){ box.checked = true; div.querySelector("[data-goal-on]").checked = true; }
+    var rd = planEvoGoalsRead(div, data); div.remove();
+    var worked = prGoalsWorkedHtml({plan_goals: [{planId: "pp9", specId: "", objId: "o9", scaleId: sc.id, levelId: sc.levels[0].id, acts: [state.activities[0].id]}]});
+    return JSON.stringify({had: had, acts: rd.length ? rd[0].acts : null, show: /Atividades: Caixa Surpresa/.test(worked)}); })()`);
+  check('evolution: suggested activity box is read into plan_goals.acts and shown in the timeline?', evo === JSON.stringify({had: true, acts: [await ev('state.activities[0].id')], show: true}), evo);
+  // Síntese
+  const syn = await ev(`(function(){ var p = state.patients[0]; return planSynthesis(p, [{areaId: "a1", objectives: [{id: "o1", goalId: "g1", specIds: [state.specialties[0].id], status: "ativo"}, {id: "o2", goalId: "g2", specIds: [state.specialties[0].id], status: "atingido"}]}], [state.specialties[0].id]); })()`);
+  check('synthesis text has the name, 1 active and 1 achieved objective?', syn.indexOf(await ev('state.patients[0].nome')) === 0 && /1 objetivo ativo, 1 atingido/.test(syn), syn);
   // objetivo com atividade: em uso
   const use = await ev("USAGE.objetivos({id: 'g1', name: 'Pedir ajuda'})");
   check('goal with activity counts as in use?', use.some((t) => /atividade/.test(t)), JSON.stringify(use));

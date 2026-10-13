@@ -219,11 +219,12 @@ div.ag-obj-head{cursor:default}
 .pr-goal-toggle{width:100%;background:none;border:0;cursor:pointer;text-align:left;font:inherit;font-size:13px;color:var(--ink);padding:4px 0}
 .pr-goal-toggle:hover b{color:var(--accent)}.pr-goal-toggle .pl-area-caret{color:var(--muted);width:12px}
 .pr-goal-count{margin-left:auto;font-size:12px;color:var(--muted);font-weight:500}
-.pr-goal{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+.pr-goal{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
 .pr-goal-main{flex:1;min-width:0;display:flex;align-items:flex-start;gap:10px;cursor:pointer}
 .pr-goal input[type=checkbox]{margin-top:3px;flex:none;width:16px;height:16px}
 .pr-goal-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .pr-goal-lv{flex:none;display:flex;align-items:center;gap:6px;width:240px}
+.pr-goal-acts{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding-left:26px}
 .pr-goal-lv .dp-btn,.pr-goal-lv select{flex:1;min-width:0}
 .pv-host{display:flex;flex-direction:column;gap:14px;margin-top:8px}
 .pv-fig{margin:0;border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--surface)}
@@ -19942,7 +19943,8 @@ function prGoalsWorkedHtml(r){
       '<span>' + (area ? '<span class="pt-muted">' + esc(area) + ' · </span>' : '') + (n ? '<b>' + n + '.</b> ' : '') +
       esc(o ? planObjLabel(o) : "Objetivo que não está mais no plano") +
       ' — <b>' + esc(lv ? lv.name : "—") + '</b>' +
-      (g.specId ? ' <span class="autolist-kind" title="' + esc(specialtyName(g.specId)) + '">' + esc(specialtySigla(g.specId)) + '</span>' : '') + '</span></li>';
+      (g.specId ? ' <span class="autolist-kind" title="' + esc(specialtyName(g.specId)) + '">' + esc(specialtySigla(g.specId)) + '</span>' : '') +
+      (Array.isArray(g.acts) && g.acts.length ? '<span class="pt-muted"><br>Atividades: ' + esc(g.acts.map(function(id){ var a = activityById(id); return a ? a.name : "Atividade removida"; }).join(", ")) + '</span>' : '') + '</span></li>';
   });
   return '<div class="pr-goals"><div class="pr-goals-t">Objetivos trabalhados</div><ul>' + items.join("") + '</ul></div>';
 }
@@ -22795,6 +22797,7 @@ var HELP_TOPICS = [
       "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>. Ao lado do nome, o seletor troca o quadro de informações: <b>Agendamento</b> (serviço, sala, data/hora, observação), <b>Saúde</b> (diagnóstico, alergias, medicações e restrições alimentares do cadastro do paciente) e <b>Tratamento</b> (plano, ABA e horários). Acima do nome aparece quem <b>pode retirar</b> o paciente; abaixo do quadro, quando há medida protetiva, um quadro vermelho com quem <b>não pode retirar</b>. Depois ficam os <b>Objetivos</b> e o <b>Status</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar Agendamento</b>.",
       "Num agendamento de <b>grupo de suporte</b>, o seletor tem <b>Agendamento</b> e <b>Pacientes</b>: a lista dos pacientes agendados na mesma sala, dia e horário (cor, nome e idade; tocar no paciente abre os detalhes dele). Os <b>Objetivos</b> mostram primeiro os objetivos em comum entre esses pacientes e depois um quadro de cada paciente com os objetivos só dele, considerando o profissional com quem cada paciente está agendado.",
       "<b>Objetivos</b>: mostra o resumo; a seta ▾ abre o quadro clínico do plano terapêutico e os objetivos ativos do paciente, organizados por habilidade, que o profissional pode trabalhar (alguma especialidade marcada no objetivo é a principal ou uma área complementar dele): número e objetivo; critério e escala; status e situação; as especialidades do objetivo (e as outras que também trabalham) e a última avaliação de cada especialidade. Se outros pacientes do mesmo profissional estão no mesmo horário, esse quadro traz os objetivos em comum e os demais ficam no quadro <b>Objetivos do paciente ▾</b>, também fechado. Pacientes sem plano terapêutico vigente não entram nessa conta.",
+      "Em cada objetivo dos Detalhes aparece <b>N atividades sugeridas</b> quando o Banco de Atividades tem atividades ligadas àquele objetivo que servem à idade do paciente e à especialidade do objetivo; clique para ver nome, descrição, materiais e duração.",
       "Ao marcar um paciente no mesmo horário e com o mesmo profissional de outro, se os dois têm plano terapêutico vigente e nenhum objetivo em comum, aparece o aviso <b>Sem Objetivos em Comum</b> (dá para agendar assim mesmo). Paciente sem plano vigente não gera aviso.",
       "Copiar, mover e arrastar funcionam como no Planner. Desfazer: Ctrl+Z / Ctrl+Y.",
       "Busca: destaca o paciente na tela e mostra quantos há na semana.",
@@ -22836,7 +22839,8 @@ var HELP_TOPICS = [
       "<b>+ Incluir</b> para escrever (negrito, títulos, listas, tabelas). Ou marque o atendimento como Finalizado na Agenda.",
       "O ícone de agenda antes da data leva ao atendimento ligado à evolução.",
       "Antes das <b>Observações</b> ficam os <b>Objetivos do plano terapêutico</b> ativos que o profissional do atendimento pode trabalhar (alguma especialidade marcada no objetivo é a principal ou uma área complementar dele), organizados por habilidade (cada habilidade começa fechada: clique na seta ao lado do nome para abrir; o título mostra quantos objetivos e quantos estão marcados), com as últimas avaliações de cada especialidade: marque os trabalhados e escolha o nível alcançado (escolher o nível já marca o objetivo).",
-      "Na linha do tempo, cada evolução mostra o quadro <b>Objetivos trabalhados</b>: habilidade, objetivo, nível alcançado (com a cor) e a especialidade que avaliou."
+      "Em cada objetivo, <b>Atividades realizadas</b> lista as atividades do Banco de Atividades sugeridas para ele (idade do paciente e especialidade); marque as que foram aplicadas no atendimento. Marcar uma atividade já marca o objetivo como trabalhado.",
+      "Na linha do tempo, cada evolução mostra o quadro <b>Objetivos trabalhados</b>: habilidade, objetivo, nível alcançado (com a cor) a especialidade que avaliou e as atividades realizadas."
     ],
     rules: [
       "Só o autor edita a própria evolução; excluir: autor com permissão ou Administrador.",
@@ -22852,6 +22856,7 @@ var HELP_TOPICS = [
       "<b>+ Incluir</b>: escolha o paciente. Também dá para abrir pela janela do Tratamento: <b>Outras Opções ▾ → Abrir plano terapêutico</b>.",
       "O título mostra o nome e a idade do paciente.",
       "<b>Quadro Clínico</b>: os dados da seção Saúde do cadastro do paciente aparecem sozinhos e sempre atualizados; escreva o <b>Resumo do Quadro Clínico</b> no campo abaixo deles.",
+      "<b>Gerar Síntese</b> (ao lado de Quadro Clínico, só para quem edita o plano) monta o resumo sozinho com o que o sistema já sabe: idade, diagnóstico, nível de suporte, comunicação, alergias, medicações, restrições, escola, especialidades do tratamento e, por especialidade, quantos objetivos ativos e atingidos. Se o campo já tem texto, pergunta antes de substituir; revise e ajuste antes de salvar.",
       "Cada <b>habilidade</b> é um quadro: use <b>Incluir habilidade…</b> no fim da lista e, dentro do quadro, <b>+ Inserir objetivo</b>. Preencha: <b>Objetivo</b> (lista do cadastro de Objetivos), <b>Especialidades</b> (as que podem trabalhar o objetivo; as do tratamento aparecem primeiro e as outras como apoio), Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
       "O objetivo novo já vem com as <b>especialidades sugeridas</b> da habilidade (cadastro de Habilidades) que estão no tratamento.",
       "O campo <b>Objetivo</b> abre a lista dos objetivos cadastrados nesta habilidade, com a faixa etária antes do nome (ex.: [0–4] Objetivo): os da faixa do paciente primeiro, depois <b>Outras faixas etárias</b>. Digite no topo da lista para buscar. Escolher um traz a escala e as especialidades do cadastro. <b>+ Incluir objetivo</b>, no fim da lista, cadastra um objetivo novo sem sair do plano.",
@@ -25325,6 +25330,45 @@ function planObjCounts(plan){
   return {n: n, at: at, ativos: n - at};
 }
 function planPatient(pid){ return state.patientsRaw.filter(function(p){ return p.id === pid; })[0] || state.patients.filter(function(p){ return p.id === pid; })[0] || null; }
+// Síntese do quadro clínico montada por regras (sem inventar nada): identificação, dados de saúde que o nível pode ver, escola,
+// especialidades do tratamento e, por especialidade, os objetivos do plano (ativos, atingidos e a situação atual de cada um).
+function planSynthesis(p, sections, treatSpecs){
+  if (!p) return "";
+  var parts = [], age = patientAgeYears(p), L = function(a){ return (Array.isArray(a) ? a.join(", ") : String(a || "")).trim(); };
+  var id = (p.nome || "Paciente") + (age != null && isFinite(age) ? ", " + Math.floor(age) + (Math.floor(age) === 1 ? " ano" : " anos") : "");
+  var cid = healthCanSee() ? L(p.cid) : "";
+  parts.push(id + (cid ? ", com diagnóstico de " + cid + (p.diagData ? " (desde " + trBr(p.diagData) + ")" : "") : "") + ".");
+  if (healthCanSee()){
+    var cl = [];
+    if (p.suporte) cl.push("nível de suporte " + L(p.suporte));
+    if (p.comunicacao) cl.push("comunicação: " + L(p.comunicacao));
+    if (cl.length) parts.push(cl.join("; ").replace(/^./, function(c){ return c.toUpperCase(); }) + ".");
+    var at = [];
+    if (p.alergias) at.push("alergias: " + L(p.alergias));
+    if (p.medicacoes) at.push("medicações em uso: " + L(p.medicacoes));
+    if (p.restricoes) at.push("restrições alimentares: " + L(p.restricoes));
+    if (at.length) parts.push(at.join("; ").replace(/^./, function(c){ return c.toUpperCase(); }) + ".");
+  }
+  if (p.escolaId){
+    var es = patRegName("escolas", p.escolaId);
+    if (es) parts.push("Frequenta " + es + [p.escolaSerie ? ", " + p.escolaSerie : "", p.escolaTurno ? " (" + p.escolaTurno + ")" : ""].join("") + (p.mediador === "Sim" ? ", com mediador/AT" : "") + ".");
+  }
+  if (treatSpecs && treatSpecs.length) parts.push("Em acompanhamento em " + planSpecNames(treatSpecs) + ".");
+  // objetivos por especialidade
+  var by = {}, tot = {act: 0, ok: 0, sus: 0};
+  (sections || []).forEach(function(s){ (s.objectives || []).forEach(function(o){
+    var st = o.status || "ativo"; if (st === "ativo") tot.act++; else if (st === "atingido") tot.ok++; else tot.sus++;
+    planObjSpecs(o).forEach(function(sp){ var b = by[sp] = by[sp] || {act: 0, ok: 0, areas: {}}; if (st === "ativo"){ b.act++; b.areas[skillAreaName(s.areaId)] = 1; } else if (st === "atingido") b.ok++; });
+  }); });
+  if (tot.act + tot.ok + tot.sus){
+    parts.push("O plano terapêutico tem " + tot.act + (tot.act === 1 ? " objetivo ativo" : " objetivos ativos") + (tot.ok ? ", " + tot.ok + (tot.ok === 1 ? " atingido" : " atingidos") : "") + (tot.sus ? " e " + tot.sus + (tot.sus === 1 ? " suspenso" : " suspensos") : "") + ".");
+    Object.keys(by).forEach(function(sp){
+      var b = by[sp], ar = Object.keys(b.areas);
+      parts.push(specialtyName(sp) + ": " + b.act + (b.act === 1 ? " objetivo ativo" : " objetivos ativos") + (ar.length ? " (" + ar.join(", ") + ")" : "") + (b.ok ? "; " + b.ok + (b.ok === 1 ? " atingido" : " atingidos") : "") + ".");
+    });
+  }
+  return parts.join("\n");
+}
 function planClinicalHtml(p){
   if (!p) return '';
   if (!healthCanSee()) return '<div class="pat-count">Seu nível não tem permissão para ver os dados de saúde do paciente.</div>';
@@ -25553,7 +25597,7 @@ function openPlanModal(plan, opts){
         '<div class="field"><label for="plReview">Revisão até (Validade 6 Meses)</label><input id="plReview" type="date" value="' + esc(d.review_date || "") + '"' + (full ? '' : ' disabled') + '></div>' +
         '<div class="field"><label>Situação da Revisão</label><div class="pl-rev-chip" id="plRevChip">' + planReviewChip({review_date: d.review_date}) + '</div></div>' +
       '</div>' +
-      '<div class="tr-sec pl-sec-row pl-sec-inline"><span>Quadro Clínico</span><span class="pl-sec-note">Dados da seção Saúde do cadastro do paciente (atualizam sozinhos).</span></div>' + planClinicalHtml(p) +
+      '<div class="tr-sec pl-sec-row pl-sec-inline"><span>Quadro Clínico</span><span class="pl-sec-note">Dados da seção Saúde do cadastro do paciente (atualizam sozinhos).</span>' + (full ? '<button type="button" class="btn ghost" id="plSynth" title="Monta o resumo a partir do cadastro, do tratamento e dos objetivos do plano">Gerar Síntese</button>' : '') + '</div>' + planClinicalHtml(p) +
       '<div class="field"><label for="plSummary">Resumo do Quadro Clínico</label><textarea id="plSummary" rows="3"' + (full ? '' : ' disabled') + ' placeholder="Resumo do quadro clínico do paciente">' + esc(d.summary) + '</textarea></div>' +
       '<div class="tr-sec pl-sec-row pl-sec-inline"><span>Objetivos por habilidade</span><div id="plCover"></div>' +
         (meSpecs.main && !isNew ? '<label class="pl-mine"><input type="checkbox" id="plOnlyMine"> Só as minhas especialidades</label>' : '') + '</div>' +
@@ -25835,6 +25879,13 @@ function openPlanModal(plan, opts){
   Array.prototype.forEach.call(ov.querySelectorAll("[data-ver]"), function(b){
     b.addEventListener("click", function(){ var r = (PLAN.rows || []).filter(function(x){ return x.id === b.getAttribute("data-ver"); })[0]; if (r) openPlanModal(r); });
   });
+  if ($("plSynth")) $("plSynth").addEventListener("click", function(){
+    var ta = $("plSummary"), txt = planSynthesis(p, d.sections, treatSpecs);
+    if (!txt){ showToast("Não há dados para montar a síntese.", true); return; }
+    function put(){ ta.value = txt; ta.dispatchEvent(new Event("input", {bubbles: true})); showToast("Síntese gerada. Revise e ajuste o texto antes de salvar."); }
+    if (!ta.value.trim()){ put(); return; }
+    confirmDialog({title: "Substituir o Resumo?", message: "O campo já tem um texto. A síntese gerada vai <b>substituir</b> o que está escrito.", confirmLabel: "Substituir"}).then(function(ok){ if (ok) put(); });
+  });
   if ($("plPrint")) $("plPrint").addEventListener("click", function(){ planPrint(Object.assign({}, plan, {summary: $("plSummary").value, sections: d.sections})); });
 
   // Quadros que vão para o banco: os que têm objetivo ou já estavam salvos.
@@ -25926,7 +25977,8 @@ function planEvoGoalsFor(pid, profId, picked, records){
     return {areaId: s.areaId, items: s.objectives.map(function(o, i){ return {o: o, n: i + 1, pick: pk[o.id] || null, spec: (pk[o.id] && pk[o.id].specId) || planWorkSpec(o, prof)}; })
       .filter(function(x){ return x.pick || ((x.o.status || "ativo") === "ativo" && planProfWorks(x.o, areas)); })};
   }).filter(function(s){ return s.items.length; });
-  return {plan: plan, secs: secs, last: planLastBySpec(records)};
+  var pat = findPatientById(pid);
+  return {plan: plan, secs: secs, last: planLastBySpec(records), band: pat ? ageBandOf(patientAgeYears(pat)) : null};
 }
 function planEvoGoalsHtml(data){
   if (!data) return '<div class="pl-hint">Paciente sem plano terapêutico vigente.</div>';
@@ -25950,9 +26002,20 @@ function planEvoGoalsHtml(data){
             planLastHtml(x.o, data.last).replace('class="ag-obj-meta"', 'class="pl-hint"') + '</span></label>' +
           '<span class="pr-goal-lv"><span class="pl-lv-dot" style="background:' + esc(((lv.filter(function(l){ return l.id === cur; })[0]) || {}).color || "transparent") + '"></span>' +
             '<select data-goal-level aria-label="Nível alcançado">' + lv.map(function(l){ return '<option value="' + esc(l.id) + '"' + (l.id === cur ? ' selected' : '') + '>' + esc(l.name) + '</option>'; }).join("") + '</select></span>' +
+          planEvoActsHtml(x, data) +
         '</div>';
       }).join("") + '</div></div>';
   }).join("");
+}
+// Atividades do Banco sugeridas para o objetivo (e as já marcadas nesta evolução): caixas "realizada".
+function planEvoActsHtml(x, data){
+  var picked = (x.pick && Array.isArray(x.pick.acts)) ? x.pick.acts : [];
+  var list = planObjActs(x.o, data.band), ids = list.map(function(a){ return a.id; });
+  picked.forEach(function(id){ if (ids.indexOf(id) === -1 && activityById(id)){ list.push(activityById(id)); ids.push(id); } });
+  if (!list.length) return '';
+  return '<div class="pr-goal-acts"><span class="pl-hint">Atividades realizadas:</span>' + list.map(function(a){
+    return '<label class="lib-opt" title="' + esc((a.descricao || "") + (a.duracao ? " · " + actDurText(a) : "")) + '"><input type="checkbox" data-act-on value="' + esc(a.id) + '"' + (picked.indexOf(a.id) !== -1 ? ' checked' : '') + '> ' + esc(a.name) + '</label>';
+  }).join("") + '</div>';
 }
 function prGoalCountText(n, m){ return n + (n === 1 ? " objetivo" : " objetivos") + (m ? " · " + m + (m === 1 ? " marcado" : " marcados") : ""); }
 // Seta dos grupos e contador de marcados (janela da evolução).
@@ -25965,6 +26028,7 @@ function prGoalsWire(body){
   });
   body.addEventListener("change", function(e){
     var sec = e.target.closest(".pr-goal-sec"); if (!sec) return;
+    if (e.target.matches && e.target.matches("[data-act-on]") && e.target.checked){ var on = e.target.closest("[data-goal-obj]").querySelector("[data-goal-on]"); if (on) on.checked = true; }
     // Depois do ouvinte da janela (escolher o nível marca o objetivo).
     setTimeout(function(){
       var n = sec.querySelectorAll("[data-goal-obj]").length, m = sec.querySelectorAll("[data-goal-on]:checked").length;
@@ -25979,7 +26043,10 @@ function planEvoGoalsRead(root, data){
     if (!el.querySelector("[data-goal-on]").checked) return;
     var objId = el.getAttribute("data-goal-obj"), o = planObjById(data.plan, objId);
     if (!o) return;
-    out.push({planId: data.plan.id, specId: el.getAttribute("data-goal-spec") || "", objId: objId, scaleId: o.scaleId, levelId: el.querySelector("[data-goal-level]").value});
+    var g = {planId: data.plan.id, specId: el.getAttribute("data-goal-spec") || "", objId: objId, scaleId: o.scaleId, levelId: el.querySelector("[data-goal-level]").value};
+    var acts = Array.prototype.map.call(el.querySelectorAll("[data-act-on]:checked"), function(c){ return c.value; });
+    if (acts.length) g.acts = acts;
+    out.push(g);
   });
   return out;
 }
@@ -26165,7 +26232,20 @@ function agdGoalsData(row, records){
 }
 // Linha do objetivo: número, objetivo | critério, escala | status, situação | especialidades (outras
 // que também trabalham) e a última avaliação de cada especialidade. x.with = pacientes que também têm.
-function agdObjLine(x, mySpec, last){
+var AGD_ACTS = [];
+// "N atividades sugeridas" de um objetivo (clique abre a janela com as atividades do Banco). band = faixa do paciente (ou null).
+function agdActsHint(o, band, patName){
+  if (!o || !o.goalId) return '';
+  var n = planObjActs(o, band).length; if (!n) return '';
+  AGD_ACTS.push({o: o, band: band, name: patName || ""});
+  return '<div class="ag-obj-meta pl-acts-link" role="button" tabindex="0" data-ag-acts="' + (AGD_ACTS.length - 1) + '" title="Ver as atividades do Banco de Atividades para este objetivo">' + n + (n === 1 ? ' atividade sugerida' : ' atividades sugeridas') + '</div>';
+}
+function agdActsClick(e){
+  var b = e.target.closest("[data-ag-acts]"); if (!b) return false;
+  var it = AGD_ACTS[Number(b.getAttribute("data-ag-acts"))]; if (it) planActsModal(it.o, it.band, it.name);
+  return true;
+}
+function agdObjLine(x, mySpec, last, band, patName){
   var o = x.o, sc = scaleById(o.scaleId), lv = scaleLevel(o.scaleId, o.levelId);
   var st = PLAN_STATUS.filter(function(z){ return z.id === (o.status || "ativo"); })[0];
   var also = x.specIds.filter(function(sid){ return sid !== mySpec; });
@@ -26175,14 +26255,15 @@ function agdObjLine(x, mySpec, last){
     '<div class="ag-obj-meta">Critério: ' + esc(planObjCrit(o) || "—") + ' · Escala: ' + esc(sc ? sc.name : "—") + '</div>' +
     '<div class="ag-obj-meta">Status: ' + esc(st ? st.name : "—") + ' · Situação: ' + (lv ? '<span class="pl-lv-dot" style="background:' + esc(lv.color || "transparent") + '"></span>' + esc(lv.name) : '—') + '</div>' +
     '<div class="ag-obj-meta">Especialidades: ' + esc(planSpecNames(x.specIds) || "—") + (also.length && mySpec && x.specIds.indexOf(mySpec) !== -1 ? ' <span class="ag-obj-with">(também ' + esc(planSpecSiglas(also)) + ')</span>' : '') + '</div>' +
+    agdActsHint(o, band, patName) +
     (x.pats ? '' : planLastHtml(o, last)) +
   '</div>';
 }
 // Agrupa por habilidade, na ordem do plano.
-function agdObjGrouped(list, mySpec, last){
+function agdObjGrouped(list, mySpec, last, band, patName){
   var order = [], by = {};
   list.forEach(function(x){ if (!by[x.areaId]){ by[x.areaId] = []; order.push(x.areaId); } by[x.areaId].push(x); });
-  return order.map(function(a){ return '<div class="ag-obj-area">' + esc(skillAreaName(a)) + '</div>' + by[a].map(function(x){ return agdObjLine(x, mySpec, last); }).join(""); }).join("");
+  return order.map(function(a){ return '<div class="ag-obj-area">' + esc(skillAreaName(a)) + '</div>' + by[a].map(function(x){ return agdObjLine(x, mySpec, last, band, patName); }).join(""); }).join("");
 }
 function agdObjBox(title, sum, inner, key){
   return '<div class="ag-obj-box" data-ag-box="' + key + '">' +
@@ -26202,7 +26283,7 @@ function agdGoalsBoxHtml(d){
   function plain(title, msg){ return '<div class="ag-obj-box"><div class="ag-obj-head"><span class="ag-obj-title">' + title + '</span></div><div class="pl-hint">' + msg + '</div></div>'; }
   if (!d.plan) return plain("Objetivos", "Paciente sem plano terapêutico vigente.");
   var mySpec = d.prof ? d.prof.specialtyId : null;
-  function grouped(list){ return agdObjGrouped(list, mySpec, d.last); }
+  function grouped(list){ return agdObjGrouped(list, mySpec, d.last, ageBandOf(patientAgeYears(d.pat)), d.pat.nome); }
   if (!d.mine.length) return plain("Objetivos", "Nenhum objetivo ativo nas especialidades deste profissional.");
   var sum = '<b>Resumo:</b> ' + d.mine.length + (d.mine.length === 1 ? ' objetivo ativo' : ' objetivos ativos') +
     (d.others.length ? ' · ' + d.common.length + ' em comum com ' + esc(d.others.map(function(o){ return o.p.nome; }).join(", ")) : '');
@@ -26220,6 +26301,7 @@ function agdGoalsFill(host, row){
     if (!document.body.contains(host)) return;
     host.innerHTML = agdGoalsBoxHtml(agdGoalsData(row, res[1]));
     host.addEventListener("click", function(e){
+      if (agdActsClick(e)) return;
       var b = e.target.closest("[data-ag-toggle]"); if (!b) return;
       var list = b.parentNode.querySelector(".ag-obj-list"), open = list.hidden;
       list.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
@@ -26276,10 +26358,10 @@ function agdGroupGoalsBoxHtml(items, lasts){
   var common = [], done = {};
   per.forEach(function(x){ x.objs.forEach(function(o){ var k = planObjKey(o.o); if (k && cnt[k].length > 1 && !done[k]){ done[k] = 1; common.push(Object.assign({pats: cnt[k]}, o)); } }); });
   var sum = '<b>Resumo:</b> ' + per.length + (per.length === 1 ? ' paciente com plano' : ' pacientes com plano') + ' · ' + common.length + ' em comum';
-  var out = agdObjBox("Objetivos em comum", sum, common.length ? agdObjGrouped(common, null, null) : '<div class="pl-hint">Nenhum objetivo em comum entre os pacientes deste horário.</div>', "common");
+  var out = agdObjBox("Objetivos em comum", sum, common.length ? agdObjGrouped(common, null, null, null, "") : '<div class="pl-hint">Nenhum objetivo em comum entre os pacientes deste horário.</div>', "common");
   per.forEach(function(x){
     var own = x.objs.filter(function(o){ var k = planObjKey(o.o); return !k || cnt[k].length < 2; });
-    if (own.length) out += agdObjBox("Objetivos de " + esc(x.p.nome) + " (" + own.length + ")", "", agdObjGrouped(own, null, lasts[x.p.id]), "own");
+    if (own.length) out += agdObjBox("Objetivos de " + esc(x.p.nome) + " (" + own.length + ")", "", agdObjGrouped(own, null, lasts[x.p.id], ageBandOf(patientAgeYears(x.p)), x.p.nome), "own");
   });
   return out;
 }
@@ -26292,6 +26374,7 @@ function agdGroupGoalsFill(host, items){
     items.forEach(function(it, i){ lasts[it.p.id] = planLastBySpec(res[i + 1]); });
     host.innerHTML = agdGroupGoalsBoxHtml(items, lasts);
     host.addEventListener("click", function(e){
+      if (agdActsClick(e)) return;
       var b = e.target.closest("[data-ag-toggle]"); if (!b) return;
       var list = b.parentNode.querySelector(".ag-obj-list"), open = list.hidden;
       list.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
