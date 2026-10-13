@@ -432,6 +432,7 @@ const path = require('path');
   await page.click('#crmTopBtn'); await page.waitForTimeout(100);
   check('menu has "Mover Tarefa"?', /Mover Tarefa/.test(await page.textContent('#crmTopMenu')));
   check('menu has "Gerar Tarefa a Partir Desta"?', /Gerar Tarefa a Partir Desta/.test(await page.textContent('#crmTopMenu')));
+  check('no registered patient: no "Cadastro do Paciente" in the menu?', !(await page.$('#crmPatBtn')));
   await page.click('#crmGenBtn'); await page.waitForSelector('#ovGen');
   await page.$eval('#gnList', (e) => { e.value = 'agendas'; e.dispatchEvent(new Event('change', {bubbles: true})); });
   await page.$eval('#gnTitleIn', (e) => { e.value = 'Tarefa gerada'; });
