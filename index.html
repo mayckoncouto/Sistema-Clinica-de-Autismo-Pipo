@@ -224,7 +224,10 @@ div.ag-obj-head{cursor:default}
 .pr-goal input[type=checkbox]{margin-top:3px;flex:none;width:16px;height:16px}
 .pr-goal-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .pr-goal-lv{flex:none;display:flex;align-items:center;gap:6px;width:240px}
-.pr-goal-acts{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding-left:26px}
+.pr-goal-acts{flex:1 1 100%;padding-left:26px}
+.pr-acts-toggle{padding-left:0}
+.pr-acts-list{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:4px 0 2px}
+@media (max-width:760px){ .pr-goal-acts{padding-left:0} .pr-acts-list{flex-direction:column;align-items:stretch;gap:0} .pr-acts-list .lib-opt{padding:10px 4px;border-top:1px solid var(--line)} }
 .pr-goal-lv .dp-btn,.pr-goal-lv select{flex:1;min-width:0}
 .pv-host{display:flex;flex-direction:column;gap:14px;margin-top:8px}
 .pv-fig{margin:0;border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--surface)}
@@ -5364,7 +5367,7 @@ function useTxt(n, one, many){ return n ? n + " " + (n === 1 ? one : many) : nul
 var USAGE = {
   escalas: function(sc){ return planUseCount("scaleId", sc.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos"), useTxt(goalBankUseCount("scaleId", sc.id), "objetivo no Banco de objetivos", "objetivos no Banco de objetivos")].filter(Boolean); }); },
   objetivos: function(g){ return planUseCount("goalId", g.id).then(function(n){ var nAct = activitiesList().filter(function(a){ return (a.goalIds || []).indexOf(g.id) !== -1; }).length; return [n ? n + (n === 1 ? " objetivo em plano terapêutico" : " objetivos em planos terapêuticos") : "", nAct ? nAct + (nAct === 1 ? " atividade" : " atividades") : ""].filter(Boolean); }); },
-  atividades: function(){ return Promise.resolve([]); },
+  atividades: function(a){ return actUseCount(a.id).then(function(n){ return [useTxt(n, "evolução com esta atividade", "evoluções com esta atividade")].filter(Boolean); }); },
   habilidades: function(a){ return planUseCount("areaId", a.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos"), useTxt(goalBankUseCount("areaId", a.id), "objetivo no Banco de objetivos", "objetivos no Banco de objetivos")].filter(Boolean); }); },
   tiposcolab: function(t){ return Promise.resolve([useTxt(staffTypeUseCount(t.id), "pessoa", "pessoas")].filter(Boolean)); },
   medicos: function(m){ return Promise.resolve([useTxt(patientsUsing("medicoId", m.id), "paciente", "pacientes")].filter(Boolean)); },
@@ -22565,7 +22568,7 @@ var HELP_TOPICS = [
       "Em <b>Objetivos que Esta Atividade Trabalha</b>, escolha os objetivos do Banco de objetivos (digite para buscar). Uma atividade pode servir a vários objetivos, e um objetivo pode ter várias atividades. Desmarque um objetivo para tirá-lo da atividade.",
       "<b>Outras Opções ▾</b>: <b>Exportar Planilha</b> e <b>Importar Planilha</b> (veja o tópico Planilhas).",
       "A lista mostra quantos objetivos cada atividade trabalha; a busca encontra pelo nome, descrição, materiais, objetivo ou especialidade."],
-    rules: ["Não pode haver duas atividades com o mesmo nome.", "Objetivo que tem atividades ligadas não é excluído: é <b>Inativado</b>."],
+    rules: ["Não pode haver duas atividades com o mesmo nome.", "Objetivo que tem atividades ligadas não é excluído: é <b>Inativado</b>.", "Atividade marcada como realizada em alguma evolução <b>não pode ser alterada nem excluída</b>: a janela abre só para leitura e o botão vira <b>Inativar</b> (a atividade some das sugestões novas e o histórico continua). A importação de planilha também não altera essas atividades."],
     who: "Permissão <b>Atividades</b>."},
   {id: "escalas", group: "Prontuário", title: "Escalas", mod: "escalas", tab: "escalas",
     purpose: "Escalas usadas na Situação dos objetivos do Plano terapêutico (ex.: Likert de 0 a 5, ABA).",
@@ -22839,7 +22842,7 @@ var HELP_TOPICS = [
       "<b>+ Incluir</b> para escrever (negrito, títulos, listas, tabelas). Ou marque o atendimento como Finalizado na Agenda.",
       "O ícone de agenda antes da data leva ao atendimento ligado à evolução.",
       "Antes das <b>Observações</b> ficam os <b>Objetivos do plano terapêutico</b> ativos que o profissional do atendimento pode trabalhar (alguma especialidade marcada no objetivo é a principal ou uma área complementar dele), organizados por habilidade (cada habilidade começa fechada: clique na seta ao lado do nome para abrir; o título mostra quantos objetivos e quantos estão marcados), com as últimas avaliações de cada especialidade: marque os trabalhados e escolha o nível alcançado (escolher o nível já marca o objetivo).",
-      "Em cada objetivo, <b>Atividades realizadas</b> lista as atividades do Banco de Atividades sugeridas para ele (idade do paciente e especialidade); marque as que foram aplicadas no atendimento. Marcar uma atividade já marca o objetivo como trabalhado.",
+      "Em cada objetivo, <b>Atividades Realizadas</b> fica recolhida (a seta abre; mostra quantas atividades e quantas foram marcadas) e lista as atividades do Banco de Atividades sugeridas para ele (idade do paciente e especialidade); marque as que foram aplicadas no atendimento. Marcar uma atividade já marca o objetivo como trabalhado. No celular a lista é uma atividade por linha.",
       "Na linha do tempo, cada evolução mostra o quadro <b>Objetivos trabalhados</b>: habilidade, objetivo, nível alcançado (com a cor) a especialidade que avaliou e as atividades realizadas."
     ],
     rules: [
@@ -26013,14 +26016,20 @@ function planEvoActsHtml(x, data){
   var list = planObjActs(x.o, data.band), ids = list.map(function(a){ return a.id; });
   picked.forEach(function(id){ if (ids.indexOf(id) === -1 && activityById(id)){ list.push(activityById(id)); ids.push(id); } });
   if (!list.length) return '';
-  return '<div class="pr-goal-acts"><span class="pl-hint">Atividades realizadas:</span>' + list.map(function(a){
-    return '<label class="lib-opt" title="' + esc((a.descricao || "") + (a.duracao ? " · " + actDurText(a) : "")) + '"><input type="checkbox" data-act-on value="' + esc(a.id) + '"' + (picked.indexOf(a.id) !== -1 ? ' checked' : '') + '> ' + esc(a.name) + '</label>';
-  }).join("") + '</div>';
+  var m = ids.filter(function(id){ return picked.indexOf(id) !== -1; }).length;
+  return '<div class="pr-goal-acts"><button type="button" class="pr-goal-spec pr-acts-toggle" data-acts-toggle aria-expanded="' + (m ? "true" : "false") + '">' +
+      '<span class="pl-area-caret" aria-hidden="true">' + (m ? "▾" : "▸") + '</span>Atividades Realizadas <span class="pr-goal-count" data-acts-count>' + prActsCountText(list.length, m) + '</span></button>' +
+    '<div class="pr-acts-list"' + (m ? '' : ' hidden') + '>' + list.map(function(a){
+      return '<label class="lib-opt" title="' + esc((a.descricao || "") + (a.duracao ? " · " + actDurText(a) : "")) + '"><input type="checkbox" data-act-on value="' + esc(a.id) + '"' + (picked.indexOf(a.id) !== -1 ? ' checked' : '') + '> ' + esc(a.name) + '</label>';
+    }).join("") + '</div></div>';
 }
+function prActsCountText(n, m){ return n + (n === 1 ? " atividade" : " atividades") + (m ? " · " + m + (m === 1 ? " realizada" : " realizadas") : ""); }
 function prGoalCountText(n, m){ return n + (n === 1 ? " objetivo" : " objetivos") + (m ? " · " + m + (m === 1 ? " marcado" : " marcados") : ""); }
 // Seta dos grupos e contador de marcados (janela da evolução).
 function prGoalsWire(body){
   body.addEventListener("click", function(e){
+    var ta = e.target.closest("[data-acts-toggle]");
+    if (ta){ var lst = ta.nextElementSibling, op = lst.hidden; lst.hidden = !op; ta.setAttribute("aria-expanded", op ? "true" : "false"); ta.querySelector(".pl-area-caret").textContent = op ? "▾" : "▸"; return; }
     var b = e.target.closest("[data-goal-toggle]"); if (!b) return;
     var box = b.nextElementSibling, open = box.hidden;
     box.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
@@ -26028,6 +26037,10 @@ function prGoalsWire(body){
   });
   body.addEventListener("change", function(e){
     var sec = e.target.closest(".pr-goal-sec"); if (!sec) return;
+    if (e.target.matches && e.target.matches("[data-act-on]")){
+      var box = e.target.closest(".pr-goal-acts"), cEl = box.querySelector("[data-acts-count]");
+      cEl.textContent = prActsCountText(box.querySelectorAll("[data-act-on]").length, box.querySelectorAll("[data-act-on]:checked").length);
+    }
     if (e.target.matches && e.target.matches("[data-act-on]") && e.target.checked){ var on = e.target.closest("[data-goal-obj]").querySelector("[data-goal-on]"); if (on) on.checked = true; }
     // Depois do ouvinte da janela (escolher o nível marca o objetivo).
     setTimeout(function(){
@@ -26700,6 +26713,23 @@ function activityById(id){ return id ? activitiesList().filter(function(a){ retu
 function actGoalIds(a){ return (Array.isArray(a && a.goalIds) ? a.goalIds : []).filter(function(id){ return !!goalById(id); }); }
 function actGoalText(g){ return goalLabel(g) + (g.areaId ? " · " + skillAreaName(g.areaId) : ""); }
 // Atividades ativas ligadas a um objetivo (para o plano, a evolução e a agenda).
+// Evoluções que marcaram a atividade como realizada (plan_goals[].acts). Com registro, a atividade não é apagada nem alterada: só inativada.
+function actUseCount(id){
+  var c = agdClient();
+  if (!c) return Promise.resolve((PLAN.evoMem || []).filter(function(r){ return (r.plan_goals || []).some(function(g){ return (g.acts || []).indexOf(id) !== -1; }); }).length);
+  return c.from("clinical_records").select("id", {count: "exact", head: true}).contains("plan_goals", [{acts: [id]}])
+    .then(function(r){ return r.error ? 0 : (r.count || 0); }, function(){ return 0; });
+}
+// Ids de atividades com registro (para a importação de planilha). Carregado por actUsedLoad.
+var ACT_USED = {};
+function actUsedLoad(){
+  var c = agdClient(), out = {};
+  if (!c){ (PLAN.evoMem || []).forEach(function(r){ (r.plan_goals || []).forEach(function(g){ (g.acts || []).forEach(function(i){ out[i] = 1; }); }); }); ACT_USED = out; return Promise.resolve(); }
+  return dbAll(function(){ return c.from("clinical_records").select("id,plan_goals").contains("plan_goals", [{}]).order("id"); }).then(function(r){
+    (r.data || []).forEach(function(x){ (x.plan_goals || []).forEach(function(g){ (g.acts || []).forEach(function(i){ out[i] = 1; }); }); });
+    ACT_USED = out;
+  });
+}
 function activitiesForGoal(goalId){ return activeOnly(activitiesList()).filter(function(a){ return (a.goalIds || []).indexOf(goalId) !== -1; }); }
 // Atividades sugeridas para um objetivo do plano: as do Banco ligadas ao objetivo, que servem à faixa etária do paciente
 // (sem faixa = todas) e a alguma especialidade do objetivo (sem especialidade = todas).
@@ -26756,7 +26786,7 @@ function openActivityModal(item, opts){
       (canSave ? '<div class="field"><label for="acGoalAdd">Incluir Objetivo</label><select id="acGoalAdd" data-combo><option value="">Escolha o objetivo…</option></select></div>' : '') +
       '<div class="field"><div class="lib-grid" id="acGoals" style="grid-template-columns:1fr" role="group" aria-label="Objetivos ligados"></div></div>' +
     '</div>' +
-    '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="acDel">Excluir</button>' : '') +
+    '<div class="modal-foot">' + (!isNew && (canDel || canSave) ? '<button class="btn danger" id="acDel">Excluir</button>' : '') +
       '<div class="spacer"></div><button class="btn ghost" id="acCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
       (canSave ? '<button class="btn primary" id="acSave">Salvar</button>' : '') + '</div></div></div>';
   var ov = document.getElementById("ovAct");
@@ -26809,7 +26839,20 @@ function openActivityModal(item, opts){
     if (isNew) rec.id = uid("act");
     save(isNew ? list.concat([rec]) : list.map(function(a){ return a.id === rec.id ? rec : a; }), rec);
   });
+  if (!isNew) setupInactivate({btn: "acDel", mod: "atividades", item: item, name: item.name, usage: USAGE.atividades,
+    save: function(rec){ return writeSimpleList("atividades", activitiesList().map(function(a){ return a.id === rec.id ? rec : a; })); },
+    close: function(){ close(); if (state.tab === "atividades") renderRegistryTab("atividades"); }});
+  // Com registro em evolução: nada se altera (só Inativar / Reativar).
+  if (!isNew) actUseCount(item.id).then(function(n){
+    if (!n || !document.body.contains(ov)) return;
+    modalReadOnly("ovAct");
+    if ($("acSave")) $("acSave").hidden = true;
+    $("acCancel").textContent = "Fechar";
+    var sub = ov.querySelector(".modal-sub"); if (sub) sub.textContent = "Esta atividade tem " + n + (n === 1 ? " registro" : " registros") + " em evoluções: não pode ser alterada nem excluída, só inativada.";
+  });
   if ($("acDel")) $("acDel").addEventListener("click", function(){
+    if (delBlocked(this)) return;
+    if (!canDel){ showToast(permDeniedMsg("atividades", "delete"), true); return; }
     confirmDialog({title: "Confirmar Exclusão", message: "Excluir a atividade <b>" + esc(item.name) + "</b> do cadastro de Atividades?", confirmLabel: "Confirmar Exclusão"}).then(function(ok){
       if (ok) save(activitiesList().filter(function(a){ return a.id !== item.id; }));
     });
@@ -27776,6 +27819,7 @@ function ioActPlan(recs){
     if (v.specIds && v.specIds.slice().sort().join() !== (cur.specIds || []).slice().sort().join()) ch.push(ioDiff("Especialidades", planSpecNames(cur.specIds || []) || "Todas", planSpecNames(v.specIds) || "Todas"));
     if (v.goalIds && v.goalIds.slice().sort().join() !== actGoalIds(cur).slice().sort().join()) ch.push(ioDiff("Objetivos", actGoalIds(cur).length + " ligado(s)", v.goalIds.length + " ligado(s)"));
     if (!ch.length){ it.st = "igual"; return items.push(it); }
+    if (ACT_USED[cur.id]){ it.st = "problema"; it.msgs = ["Atividade com registro em evolução: não pode ser alterada (só inativada)."]; return items.push(it); }
     it.st = canEdit ? "atualizar" : "problema"; it.msgs = canEdit ? ch : ["Seu nível não pode alterar atividades."];
     items.push(it);
   });
@@ -28091,7 +28135,7 @@ var IO_KINDS = {
     ],
     exportRows: function(){ return activitiesList().map(function(a){ return {atividade: a.name, descricao: a.descricao || "", materiais: a.materiais || "", duracao: a.duracao || "", faixas: ageBandText(a.faixas), specs: planSpecNames(a.specIds || []),
       objetivos: actGoalIds(a).map(function(id){ var g = goalById(id); return (g.areaId ? skillAreaName(g.areaId) + ": " : "") + g.name; }).join("; ")}; }); },
-    plan: ioActPlan, apply: ioActApply},
+    prepare: actUsedLoad, plan: ioActPlan, apply: ioActApply},
   planos: {label: "Plano Terapêutico", file: "planos-terapeuticos", mod: "plano_terapeutico",
     sub: "Uma linha por objetivo do plano vigente. O paciente é a chave: com plano vigente atualiza; sem plano, cria.",
     canImport: function(){ return planCan("create") || planFull(); },

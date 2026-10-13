@@ -92,6 +92,26 @@ const fs = require('fs');
   // Síntese
   const syn = await ev(`(function(){ var p = state.patients[0]; return planSynthesis(p, [{areaId: "a1", objectives: [{id: "o1", goalId: "g1", specIds: [state.specialties[0].id], status: "ativo"}, {id: "o2", goalId: "g2", specIds: [state.specialties[0].id], status: "atingido"}]}], [state.specialties[0].id]); })()`);
   check('synthesis text has the name, 1 active and 1 achieved objective?', syn.indexOf(await ev('state.patients[0].nome')) === 0 && /1 objetivo ativo, 1 atingido/.test(syn), syn);
+  // Atividade com registro em evolução: não altera, não exclui, só inativa
+  await ev('PLAN.evoMem = [{patient_id: "x", plan_goals: [{objId: "o1", acts: [state.activities[0].id]}]}]');
+  check('actUseCount counts the evolution?', (await ev('actUseCount(state.activities[0].id)')) === 1);
+  await ev('openActivityModal(state.activities[0])'); await page.waitForSelector('#ovAct'); await page.waitForTimeout(250);
+  check('used activity: fields locked, no Salvar, button says Inativar?', (await page.$eval('#acName', (e) => e.disabled)) && (await page.$eval('#acSave', (e) => e.hidden)) && (await page.textContent('#acDel')) === 'Inativar' && /não pode ser alterada/.test(await page.textContent('#ovAct .modal-sub')));
+  await page.click('#acDel'); await page.waitForSelector('#ovConfirm'); await page.click('#cfOk'); await page.waitForTimeout(300);
+  check('inactivating works and keeps the activity?', (await ev('state.activities.length')) === 1 && (await ev('state.activities[0].inativo')) === true);
+  await ev('writeSimpleList("atividades", activitiesList().map(function(a){ return Object.assign({}, a, {inativo: false}); }))'); await page.waitForTimeout(200);
+  await ev('actUsedLoad()');
+  const impUsed = await ev(`(function(){ var r = ioRecords("atividades", xlParseText("Atividade\\tDuração (Min)\\nCaixa Surpresa\\t30")).recs; var pl = ioActPlan(r); return pl.items[0].st + ":" + pl.items[0].msgs.join(); })()`);
+  check('spreadsheet cannot change an activity with a record?', /^problema:.*não pode ser alterada/.test(impUsed), impUsed);
+  await ev('PLAN.evoMem = []; ACT_USED = {}');
+  // Evolução: atividades recolhidas
+  const col = await ev(`(function(){ var p = state.patients[0], sc = scalesList()[0], today = new Date().toISOString().slice(0, 10);
+    PLAN.rows = [{id: "pp8", patient_id: p.id, version: 1, status: "vigente", plan_date: today, review_date: null, summary: "", sections: [{areaId: "a1", objectives: [{id: "o8", goalId: "g1", specIds: [], scaleId: sc.id, levelId: sc.levels[0].id, prazo: 3, status: "ativo"}]}]}];
+    var data = planEvoGoalsFor(p.id, null, []), div = document.createElement("div"); div.innerHTML = planEvoGoalsHtml(data);
+    var h = div.querySelector(".pr-acts-list"), t = div.querySelector("[data-acts-toggle]");
+    var data2 = planEvoGoalsFor(p.id, null, [{objId: "o8", planId: "pp8", acts: [state.activities[0].id], levelId: sc.levels[0].id, scaleId: sc.id}]), d2 = document.createElement("div"); d2.innerHTML = planEvoGoalsHtml(data2);
+    return JSON.stringify([!!h && h.hidden, t.getAttribute("aria-expanded"), /1 atividade$/.test(t.textContent.trim()), !d2.querySelector(".pr-acts-list").hidden, /1 realizada/.test(d2.querySelector("[data-acts-count]").textContent)]); })()`);
+  check('evolution: activities start collapsed; open when one is marked, with counter?', col === '[true,"false",true,true,true]', col);
   // objetivo com atividade: em uso
   const use = await ev("USAGE.objetivos({id: 'g1', name: 'Pedir ajuda'})");
   check('goal with activity counts as in use?', use.some((t) => /atividade/.test(t)), JSON.stringify(use));
