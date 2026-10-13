@@ -8,6 +8,7 @@ const path = require('path');
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('file://' + path.resolve(__dirname, 'page.html'));
   await page.waitForSelector('td.slotcell');
+  await page.evaluate(() => { window.__PIPO_NOGUARD = false; });
   let fails = 0;
   const check = (label, ok, extra) => { console.log(label, !!ok, extra === undefined ? '' : extra); if (!ok) fails++; };
   await page.click('#cadBtn');
