@@ -43,7 +43,7 @@ const path = require('path');
   // 1º tratamento: Novo; campos vêm do cadastro antigo; valor final automático.
   await openNew('duda-vermelho');
   console.log('first treatment is "novo" and the type field is locked?', await page.$eval('#trTipo', (s) => s.value === 'novo' && s.disabled));
-  console.log('treatment window has no ABA field?', (await page.$('#pAba')) === null);
+  console.log('treatment window has the general ABA checkbox?', (await page.$('#pAba')) !== null);
   await page.fill('#trVal', '1.500,00'); await page.fill('#trDesp', '200');
   console.log('final value = valor - descontos?', (await page.inputValue('#trFinal')) === 'R$ 1.300,00');
   await save();

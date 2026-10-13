@@ -33,7 +33,7 @@ const path = require('path');
   await page.click('#pNewTreat');
   await page.waitForSelector('#ovTreat');
   console.log('label "Sessão/Mês"?', (await page.locator('label[for="pPac"]').innerText()) === 'Sessão/Mês');
-  console.log('treatment window has no ABA field (ABA only in the quadros)?', (await page.$('#pAba')) === null);
+  console.log('treatment window has the general ABA checkbox?', (await page.$('#pAba')) !== null);
   console.log('group title "Especialidades e serviços"?', (await page.locator('#ovTreat .tr-sec.spec-sum-label').textContent()).includes('Especialidades e serviços'));
   console.log('treatment window in groups like the patient form?', (await page.$$eval('#ovTreat .tr-sec', (a) => a.map((x) => x.textContent.split(' ')[0]))).slice(0, 5).join('|') === 'Tratamento|Convênio|Pacote|Especialidades|Observações');
 

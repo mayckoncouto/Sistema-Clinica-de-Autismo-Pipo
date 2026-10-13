@@ -4265,7 +4265,7 @@ function abaAuto(p){
   return age != null && age >= 17 ? "Não" : "Sim";
 }
 // ABA antigo (o campo único do tratamento que saiu da tela, guardado em abaAntigo; "aba" = dado antigo
-// ainda não convertido). Vale só enquanto o tratamento não tem quadros e é o padrão do 1º quadro.
+// ainda não convertido). É o ABA geral do tratamento (caixa Intervenção ABA): vale quando não há quadro para o atendimento e é o padrão do quadro novo.
 function abaLegacy(t){
   var v = t && (t.abaAntigo != null && t.abaAntigo !== "" ? t.abaAntigo : t.aba);
   return v ? abaYesNo(v) : "";
@@ -4282,13 +4282,13 @@ function patientAba(p){
 function patientIsNaoABA(p){ return !!p && patientAba(p) === "Não"; }
 // ABA do paciente num atendimento: o quadro do tratamento do atendimento (principal do profissional
 // ou complementar; serviço diferente de Sessão = o quadro do serviço) manda; sem quadro para o
-// atendimento, a regra automática; tratamento ainda sem nenhum quadro, o ABA antigo (ou a automática).
+// atendimento (ou tratamento sem quadros), o ABA geral do tratamento (abaAntigo) ou, sem ele, a regra automática.
 function bookingAbaOf(p, profId, service){
   if (!p) return "";
   var rows = treatLines(p.specHours);
   if (!rows.length) return abaFallback(p);
   var line = treatLineFor(rows, profId, service);
-  return line ? abaYesNo(line.aba || abaFallback(p)) : abaAuto(p);
+  return line ? abaYesNo(line.aba || abaFallback(p)) : abaFallback(p);
 }
 // Paciente com o ABA do atendimento (para a cor e as regras "não ABA").
 function bookingPatient(p, b, profId){
@@ -11642,6 +11642,7 @@ function treatFieldsEditor(v, opts){
         '<div class="tr-sec">Pacote</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="pPac">Sessão/Mês</label><input id="pPac" type="text" value="'+esc(v.sessoesMes == null ? "" : v.sessoesMes)+'"></div>' +
+          '<div class="field"><label class="chk-line"><input type="checkbox" id="pAba"' + (abaYesNo(abaLegacy(v) || abaAuto((v.patientId && findPatientById(v.patientId)) || v)) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
         '</div>' +
         '<div class="tr-sec spec-sum-label">Especialidades e Serviços <span class="spec-sum" id="specSum" hidden></span></div>' +
         '<div class="field">' +
@@ -11699,8 +11700,17 @@ function treatFieldsEditor(v, opts){
     // ABA do quadro novo: o ABA antigo do tratamento (enquanto existir) ou a regra automática do paciente.
     function abaNewLine(){
       var sel = document.getElementById("trPat"), pid = (sel && sel.value) || v.patientId || "";
-      return abaLegacy(v) || abaAuto((pid && findPatientById(pid)) || v);
+      var cb = document.getElementById("pAba");
+      return cb ? (cb.checked ? "Sim" : "Não") : (abaLegacy(v) || abaAuto((pid && findPatientById(pid)) || v));
     }
+    // Sem ABA antigo gravado, o padrão do campo acompanha o paciente escolhido até a pessoa mexer nele.
+    (function(){
+      var cb = document.getElementById("pAba"), sel = document.getElementById("trPat");
+      if (!cb || !sel || abaLegacy(v)) return;
+      var touched = false;
+      cb.addEventListener("change", function(){ touched = true; });
+      sel.addEventListener("change", function(){ if (!touched && sel.value) cb.checked = abaAuto(findPatientById(sel.value) || v) === "Sim"; });
+    })();
     render();
 
     // Convênio picker: search+select+"cadastrar novo".
@@ -11795,8 +11805,8 @@ function treatFieldsEditor(v, opts){
         convenio: "",
         plano: document.getElementById("pPlano").value.trim(),
         sessoesMes: document.getElementById("pPac").value.trim(),
-        aba: undefined,                              // ABA só nos quadros (o antigo fica em abaAntigo)
-        abaAntigo: abaLegacy(v) || undefined,
+        aba: undefined,                              // o ABA geral fica em abaAntigo; cada quadro pode ter o seu
+        abaAntigo: (function(){ var cb = document.getElementById("pAba"); return cb ? (cb.checked ? "Sim" : "Não") : (abaLegacy(v) || undefined); })(),
         horarios: readPatHours(),
         specHours: specHoursOut
       },
@@ -21337,6 +21347,7 @@ function openTreatmentModal(t, opts){
   var base = src || (pid ? (rawPatient(pid) || {}) : {});
   var v = {};
   TREAT_FIELDS.forEach(function(k){ if (base[k] !== undefined) v[k] = base[k]; });
+  if (pid) v.patientId = pid;
   // Tratamento novo (sem copiar outro): convênio e plano do cadastro do paciente, se o tratamento ainda não tem.
   if (!src && pid){
     var pcd = patConvDefault(rawPatient(pid));
@@ -21965,7 +21976,7 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir). Campos obrigatórios: permissão <b>Pacientes – Campos</b>. Mesclar cadastros: só Administrador."},
   {id: "tratamentos", group: "Cadastros", title: "Tratamentos", mod: "tratamentos", tab: "tratamentos",
-    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, as especialidades em quadros (cada um com o seu ABA) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras Opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
+    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, a caixa <b>Intervenção ABA</b> do tratamento (vale para o paciente todo e é o padrão dos quadros novos), as especialidades em quadros (cada um pode ter o seu ABA, que manda nos atendimentos dele) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras Opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio e o plano do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",

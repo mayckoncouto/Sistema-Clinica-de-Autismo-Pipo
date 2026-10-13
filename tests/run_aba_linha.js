@@ -29,7 +29,7 @@ const path = require('path');
     out.psico = bookingAbaOf(p, "ana-terapeuta", "sessao");      // principal psico -> Não
     out.fono = bookingAbaOf(p, "bia-terapeuta", "sessao");       // principal fono -> Sim
     out.svc = bookingAbaOf(p, "bia-terapeuta", "triagem");       // serviço -> Não
-    out.outside = bookingAbaOf(p, "bia-terapeuta", "avaliacao"); // serviço sem quadro -> regra automática (6 anos = Sim)
+    out.outside = bookingAbaOf(p, "bia-terapeuta", "avaliacao"); // serviço sem quadro -> ABA geral do tratamento (ta tem aba antiga Sim)
     out.naoAna = isNaoABABooking({patient: pat.nome}, "ana-terapeuta");
     out.naoBia = isNaoABABooking({patient: pat.nome}, "bia-terapeuta");
     out.colorDiffers = patientColor(bookingPatient(p, {}, "ana-terapeuta")) !== patientColor(bookingPatient(p, {}, "bia-terapeuta"));
@@ -38,7 +38,7 @@ const path = require('path');
     state.treatments[0].specHours = [];
     state.treatments[0].abaAntigo = "Não"; delete state.treatments[0].aba; rebuildPatients();
     out.noLines = isNaoABABooking({patient: pat.nome}, "bia-terapeuta");
-    // com quadros, atendimento sem quadro usa a regra automática (não o ABA antigo)
+    // com quadros, atendimento sem quadro usa o ABA geral do tratamento (abaAntigo = Não)
     state.treatments[0].specHours = [{specId: "psico", hours: 4, aba: "Sim"}]; rebuildPatients();
     out.autoNotLegacy = bookingAbaOf(findPatientByName(pat.nome), "bia-terapeuta", "avaliacao");
     // regra automática: Não com nível de suporte 3 ou 17 anos ou mais
@@ -49,7 +49,7 @@ const path = require('path');
   check('psico line ABA Não?', r.psico === 'Não', r.psico);
   check('fono line ABA Sim?', r.fono === 'Sim', r.fono);
   check('service line ABA Não?', r.svc === 'Não', r.svc);
-  check('booking without quadro uses the automatic rule?', r.outside === 'Sim' && r.autoNotLegacy === 'Sim', r.outside + ' ' + r.autoNotLegacy);
+  check('booking without quadro uses the general ABA of the treatment?', r.outside === 'Sim' && r.autoNotLegacy === 'Não', r.outside + ' ' + r.autoNotLegacy);
   check('automatic rule: 16 Sim, 17 Não, suporte 3 Não, suporte 2 Sim, no age Sim?', r.auto === 'Sim,Não,Não,Sim,Sim', r.auto);
   check('não ABA only with psico professional?', r.naoAna === true && r.naoBia === false);
   check('color follows the line?', r.colorDiffers);
@@ -64,7 +64,7 @@ const path = require('path');
     var out = {};
     out.vencDefault = document.getElementById("trVencPor").value;
     out.dateHidden = document.getElementById("trDateBox").hidden;
-    out.noTop = !document.getElementById("pAba");
+    out.noTop = !!document.getElementById("pAba") && document.getElementById("pAba").type === "checkbox";
     out.desc = !!document.querySelector('label[for="trDesp"]') && document.querySelector('label[for="trDesp"]').textContent;
     return out;
   })()`);
@@ -79,7 +79,7 @@ const path = require('path');
   ed.after = await abaOf();
   check('Vencimento por defaults to Sem vencimento, date box hidden?', ed.vencDefault === 'sem' && ed.dateHidden === true, ed.vencDefault);
   check('label Descontos?', ed.desc === 'Descontos', ed.desc);
-  check('no ABA field outside the quadros?', ed.noTop);
+  check('general ABA checkbox is in the treatment window?', ed.noTop);
   check('card ABA only Sim/Não, new cards = automatic rule (6 anos = Sim)?', ed.lineOpts === 'checkbox:true' && ed.lineDefault === 'Sim,Sim', ed.lineOpts + ' ' + ed.lineDefault);
   check('one card changes alone?', ed.after === 'Não,Sim', ed.after);
 

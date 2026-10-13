@@ -84,7 +84,7 @@ const path = require('path');
   await page.click('#pSave');
   await page.waitForSelector('#ovTreat');
   console.log('new patient opens its treatment right away?', (await page.$eval('#trPat', s => s.options[s.selectedIndex].text)) === 'Novo Paciente Teste');
-  console.log('treatment window has no ABA field (ABA only in the quadros)?', (await page.$('#pAba')) === null);
+  console.log('treatment window has the general ABA checkbox?', (await page.$('#pAba')) !== null);
   // dois quadros: o 1º com o ABA automático (6 anos = Sim), o 2º trocado à mão para Não
   const TL = require('./tl-helper');
   await TL.addLine(page, {spec: 'Fonoaudiologia', hours: 3});
