@@ -781,7 +781,9 @@ div.ag-obj-head{cursor:default}
 .crm-cmt-meta{float:right;display:inline-flex;gap:8px;margin:3px 0 0 14px;line-height:1.55}
 .crm-mention-pop{position:absolute;left:0;bottom:100%;margin-bottom:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);z-index:5;min-width:220px;max-height:220px;overflow:auto}
 .crm-mention-pop button{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px;text-align:left}
-.crm-mention-pop button:hover{background:var(--accent-weak)}
+.crm-mention-pop button:hover,.crm-mention-pop button.kb{background:var(--accent-weak)}
+.crm-modal .modal-head>div:first-child{flex:1;min-width:0}
+.crm-modal .modal-head-acts{margin-left:auto}
 .crm-sts{margin:0}
 .crm-sts .add-row-btn{align-self:flex-start;margin-top:2px}
 @media (max-width:760px){.crm-c-prio,.crm-c-st{display:none}.crm-c-who{width:64px}.crm-c-due{width:78px}}
@@ -6985,6 +6987,53 @@ function crmMoveDialog(task){
     fill(); selL.focus();
   });
 }
+function crmGenDests(){ return crmVisibleLists().filter(function(l){ return crmCan(l.id, "create"); }); }
+// Gerar Tarefa a Partir Desta: nova tarefa com título, descrição, prioridade e paciente/lead da original; escolhe lista, status e responsáveis.
+function crmGenDialog(task){
+  return new Promise(function(resolve){
+    var dests = crmGenDests(), src = crmListById(task.list_id);
+    var host = document.getElementById("confirmHost");
+    if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
+    var first = dests.filter(function(l){ return l.id === task.list_id; })[0] || dests[0];
+    host.innerHTML = '<div class="overlay confirm-overlay" id="ovGen" role="dialog" aria-modal="true" aria-labelledby="gnTitle">' +
+      '<div class="modal" style="max-width:480px">' +
+        '<div class="modal-head"><div><h3 id="gnTitle">Gerar Tarefa a Partir Desta</h3><div class="modal-sub">Origem: ' + esc(task.title) + (src ? ' · ' + esc(src.name) : '') + '</div></div><button class="modal-close" id="gnClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-body">' +
+          '<div class="field"><label for="gnTitleIn">Tarefa</label><input id="gnTitleIn" type="text" value="' + esc(task.title) + '"></div>' +
+          '<div class="field"><label for="gnList">Lista</label><select id="gnList">' + dests.map(function(l){ return '<option value="' + esc(l.id) + '"' + (l === first ? " selected" : "") + '>' + esc(l.name) + '</option>'; }).join("") + '</select></div>' +
+          '<div class="field"><label for="gnSt">Status</label><select id="gnSt"></select></div>' +
+          '<div class="field"><label>Responsáveis</label><div class="crm-gn-ppl" id="gnPpl"></div></div>' +
+          '<div class="pat-count">Leva a descrição, a prioridade e o paciente ou lead da tarefa original. As duas tarefas registram um comentário uma da outra.</div>' +
+        '</div>' +
+        '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="gnCancel">Cancelar</button><button class="btn primary" id="gnOk">Criar Tarefa</button></div>' +
+      '</div></div>';
+    var ov = document.getElementById("ovGen"), selL = document.getElementById("gnList"), selS = document.getElementById("gnSt"), ppl = document.getElementById("gnPpl");
+    function fill(){
+      var d = crmListById(selL.value), sts = d.statuses || [];
+      var def = sts.filter(function(s){ return !s.done && !s.lost; })[0] || sts[0];
+      selS.innerHTML = sts.map(function(s){ return '<option value="' + esc(s.id) + '"' + (def && s.id === def.id ? " selected" : "") + '>' + esc(s.name) + (s.done ? " (encerra)" : "") + '</option>'; }).join("");
+      if (def) selS.value = def.id; selS.dispatchEvent(new Event("change", {bubbles: true}));
+      var me = crmMe();
+      ppl.innerHTML = crmAssignable(d.id).sort(function(a, b){ return (a.id === me ? -1 : b.id === me ? 1 : 0) || String(a.full_name).localeCompare(String(b.full_name), "pt-BR"); }).map(function(p){
+        return '<label class="kind-opt"><input type="checkbox" value="' + esc(p.id) + '"> ' + esc(p.full_name) + '</label>'; }).join("") || '<div class="pat-count">Ninguém com acesso a esta lista.</div>';
+    }
+    function done(v){ document.removeEventListener("keydown", onKey, true); host.innerHTML = ""; resolve(v); }
+    function onKey(e){ if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); done(null); } }
+    document.addEventListener("keydown", onKey, true);
+    ov.addEventListener("mousedown", function(e){ if (e.target === ov) done(null); });
+    document.getElementById("gnClose").addEventListener("click", function(){ done(null); });
+    document.getElementById("gnCancel").addEventListener("click", function(){ done(null); });
+    selL.addEventListener("change", fill);
+    document.getElementById("gnOk").addEventListener("click", function(){
+      var t = document.getElementById("gnTitleIn").value.trim(); if (!t){ showToast("Informe o título da tarefa.", true); return; }
+      var d = crmListById(selL.value);
+      var as = Array.prototype.map.call(ppl.querySelectorAll("input:checked"), function(c){ return c.value; });
+      var rec = {list_id: d.id, status: selS.value, title: t, description: task.description || "", priority: task.priority || "normal", assignees: as, tags: [], patient_id: task.patient_id || null, lead: JSON.parse(JSON.stringify(task.lead || {}))};
+      done({rec: rec, listName: d.name});
+    });
+    fill(); document.getElementById("gnTitleIn").select();
+  });
+}
 function crmMentionsOf(body){ return CRM.people.filter(function(p){ return body.indexOf("@" + p.full_name) !== -1; }).map(function(p){ return p.id; }); }
 // Liga os botões Editar / Excluir dos comentários do feed. `pending` = lista da tarefa nova
 // (comentários ainda não enviados: muda só na memória).
@@ -7742,8 +7791,9 @@ function crmOpenTask(task, opts){
     '</div></div>';
   var lossHtml = list.lead ? prop('<span>Motivo de Perda</span>', '<input id="crmLPerda" type="text" list="crmPerdaList" value="' + esc(lead.motivoPerda || "") + '"' + dis + '><datalist id="crmPerdaList">' + CRM_PERDAS.map(function(o){ return '<option value="' + esc(o) + '">'; }).join("") + '</datalist>', true, "crmLossBox") : '';
   // Outras Opções (canto superior direito): Mover tarefa para outra lista (tarefa já salva, com permissão de editar e outra lista disponível).
-  var topMoreHtml = !isNew && canEdit && crmMoveDests(listId).length ? '<div class="cad-wrap pl-tools-wrap crm-top-more"><button type="button" class="btn ghost" id="crmTopBtn" aria-haspopup="menu" aria-expanded="false">Outras Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
-    '<div class="cad-menu pl-tools-menu" id="crmTopMenu" role="menu" hidden><button type="button" class="btn ghost" id="crmMoveBtn">Mover Tarefa</button></div></div>' : '';
+  var topMoves = !isNew && canEdit && crmMoveDests(listId).length, topGen = !isNew && crmGenDests().length;
+  var topMoreHtml = topMoves || topGen ? '<div class="cad-wrap pl-tools-wrap crm-top-more"><button type="button" class="btn ghost" id="crmTopBtn" aria-haspopup="menu" aria-expanded="false">Outras Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+    '<div class="cad-menu pl-tools-menu" id="crmTopMenu" role="menu" hidden>' + (topGen ? '<button type="button" class="btn ghost" id="crmGenBtn">Gerar Tarefa a Partir Desta</button>' : '') + (topMoves ? '<button type="button" class="btn ghost" id="crmMoveBtn">Mover Tarefa</button>' : '') + '</div></div>' : '';
   var sideHtml = '<aside class="crm-side" id="crmSide"' + (side ? '' : ' hidden') + '>' +
     '<div class="crm-side-head"><b>Atividade</b></div>' +
     '<div class="crm-side-body"><div class="crm-feed" id="crmFeed"><div class="pat-count">' + (isNew ? 'A criação e as alterações aparecem aqui depois de salvar. Comentários escritos agora são enviados junto com a tarefa.' : 'Carregando…') + '</div></div></div>' +
@@ -7815,7 +7865,22 @@ function crmOpenTask(task, opts){
     topBtn.addEventListener("click", function(e){ e.stopPropagation(); topOpen(topMenu.hidden); });
     ov.addEventListener("mousedown", function(e){ if (!e.target.closest(".crm-top-more")) topOpen(false); });
     topMenu.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); topOpen(false); topBtn.focus(); } });
-    document.getElementById("crmMoveBtn").addEventListener("click", function(){
+    var genB = document.getElementById("crmGenBtn");
+    if (genB) genB.addEventListener("click", function(){
+      topOpen(false);
+      var cur = CRM.tasks[task.id] || task;
+      crmGenDialog(cur).then(function(r){
+        if (!r) return;
+        crmInsert(r.rec).then(function(nt){
+          crmComment(nt.id, "Tarefa gerada a partir de “" + cur.title + "”.", []).catch(function(){});
+          crmComment(cur.id, "Gerada a tarefa “" + nt.title + "” na lista " + r.listName + ".", []).catch(function(){});
+          crmRender(); crmBadgeRender();
+          showToast("Tarefa criada na lista " + r.listName + ".");
+        }, function(e){ showToast("Não foi possível criar: " + ((e && e.message) || e), true); });
+      });
+    });
+    var mvB = document.getElementById("crmMoveBtn");
+    if (mvB) mvB.addEventListener("click", function(){
       topOpen(false);
       var cur = CRM.tasks[task.id] || task;
       crmMoveDialog(cur).then(function(r){
@@ -7972,7 +8037,7 @@ function crmOpenTask(task, opts){
     // Enter quebra a linha; Ctrl+Enter (Cmd+Enter no Mac) envia; com a lista de @menção aberta, Enter escolhe a primeira pessoa.
     cIn.addEventListener("keydown", function(e){
       if (e.key !== "Enter" || e.isComposing) return;
-      var mp = document.getElementById("crmMentionPop"), first = mp && !mp.hidden && mp.querySelector("[data-mention]");
+      var mp = document.getElementById("crmMentionPop"), first = mp && !mp.hidden && (mp.querySelector("[data-mention].kb") || mp.querySelector("[data-mention]"));
       if (first && !e.ctrlKey && !e.metaKey){ e.preventDefault(); first.dispatchEvent(new MouseEvent("mousedown", {bubbles: true})); return; }
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
@@ -8168,8 +8233,19 @@ function crmMentionWire(){
     var q = query(); if (!q){ hide(); return; }
     var nq = normText(q.q), list = CRM.people.filter(function(p){ return !nq || normText(p.full_name).indexOf(nq) !== -1; }).slice(0, 8);
     if (!list.length){ hide(); return; }
-    pop.innerHTML = list.map(function(p){ return '<button type="button" data-mention="' + esc(p.full_name) + '">' + esc(p.full_name) + '</button>'; }).join("");
+    pop.innerHTML = list.map(function(p, i){ return '<button type="button" data-mention="' + esc(p.full_name) + '"' + (i ? '' : ' class="kb"') + '>' + esc(p.full_name) + '</button>'; }).join("");
     pop.hidden = false;
+  });
+  // ↑ ↓ andam pela lista, Tab escolhe, Esc fecha.
+  ta.addEventListener("keydown", function(e){
+    if (pop.hidden) return;
+    var bs = Array.prototype.slice.call(pop.querySelectorAll("[data-mention]")), cur = bs.findIndex(function(b){ return b.classList.contains("kb"); });
+    if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault(); var n = (cur + (e.key === "ArrowDown" ? 1 : bs.length - 1)) % bs.length;
+      bs.forEach(function(b, i){ b.classList.toggle("kb", i === n); }); bs[n].scrollIntoView({block: "nearest"});
+    } else if (e.key === "Tab" && bs.length){
+      e.preventDefault(); (bs[cur] || bs[0]).dispatchEvent(new MouseEvent("mousedown", {bubbles: true}));
+    } else if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); hide(); }
   });
   pop.addEventListener("mousedown", function(e){
     var b = e.target.closest("[data-mention]"); if (!b) return; e.preventDefault();
@@ -21911,8 +21987,8 @@ var HELP_TOPICS = [
       "<b>Outras Opções ▾</b> na barra do CRM: <b>Exportar Planilha</b> baixa um Excel com as tarefas da tela aberta (a lista, Minhas Tarefas ou a tela CRM, com a busca, os filtros e “Finalizados”), com a coluna <b>Código</b> de cada tarefa. <b>Importar Planilha</b>: linha com Código atualiza aquela tarefa; sem Código vira tarefa nova (sem Lista, vai para a lista aberta). Status pelo nome do status da lista; Prioridade Urgente, Alta ou Normal; Responsáveis pelos nomes (só quem tem acesso ao CRM e à lista); nome que não é paciente cadastrado vira lead. Dados do lead só nas listas com Funil de contatos. A prévia mostra Novo, Atualizar, Igual e Com problema antes de gravar, e o sistema baixa uma cópia antes de importar. Célula vazia não apaga; comentários e histórico não entram; não dá para mudar a tarefa de lista pela planilha.",
       "<b>CRM ▾ → Listas e Status</b>: uma linha por lista com as setas (ordem no menu), a bolinha da cor, os status e as opções; as setas gravam na hora. <b>Editar</b> abre a janela da lista: nome, cor, opções (<b>Funil de contatos</b>, <b>Recorrência</b>) e os status (setas, cor, nome, Finalizado, Perda, ✕ e + status); <b>Salvar</b> grava e volta para as listas. <b>+ Incluir</b> cria uma lista; <b>Excluir</b> só funciona se a lista não tem tarefas.",
       "<b>Configurar recorrência</b> (no pé dos atalhos): escolha Diariamente, Semanalmente (marque os dias da semana), Mensalmente ou Anualmente, se cria uma <b>nova tarefa</b> ou reabre a mesma, <b>Repetir para sempre</b> ou até uma data, e o status da próxima. O calendário pinta as próximas datas. Tarefa recorrente mostra ↻ ao lado da data; <b>Remover</b> tira a recorrência.",
-      "<b>Outras Opções ▾</b> no canto superior direito da janela da tarefa (tarefa já salva): <b>Mover Tarefa</b> leva a tarefa para outra lista em que você pode editar. Se a lista de destino não tem o status atual (pelo mesmo nome), o aviso mostra isso e você escolhe o status da tarefa nela (já vem sugerido o equivalente). Responsáveis sem acesso à lista nova saem da tarefa, e a recorrência é retirada se a lista nova não a permite. A mudança de lista fica na Atividade da tarefa.",
-      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
+      "<b>Outras Opções ▾</b> no canto superior direito da janela da tarefa (tarefa já salva): <b>Gerar Tarefa a Partir Desta</b> cria uma nova tarefa (título, descrição, prioridade e paciente ou lead da original) na lista, no status e com os responsáveis que você escolher; as duas registram um comentário uma da outra. <b>Mover Tarefa</b> leva a tarefa para outra lista em que você pode editar. Se a lista de destino não tem o status atual (pelo mesmo nome), o aviso mostra isso e você escolhe o status da tarefa nela (já vem sugerido o equivalente). Responsáveis sem acesso à lista nova saem da tarefa, e a recorrência é retirada se a lista nova não a permite. A mudança de lista fica na Atividade da tarefa.",
+      "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para ver os nomes (↑ ↓ andam, Tab ou Enter escolhem, Esc fecha) e mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],
     rules: [
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
