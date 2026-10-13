@@ -22782,7 +22782,8 @@ var HELP_TOPICS = [
       "Ao lado do título \"Objetivos por habilidade\", a conferência avisa as <b>especialidades do tratamento sem objetivo ativo</b> e as <b>habilidades sem objetivo ativo</b>.",
       "Para quem é profissional, <b>Só as minhas especialidades</b> esconde os objetivos que ele não trabalha.",
       "<b>Revisar (Nova Versão)</b>: cria a versão seguinte a partir de hoje, copiando o resumo e os objetivos; a versão anterior fica guardada e abre pela lista <b>Versões Anteriores</b> (só leitura).",
-      "<b>Imprimir</b> gera o plano em PDF com a logo da clínica e espaço para as assinaturas."
+      "<b>Imprimir</b> gera o plano em PDF com a logo da clínica e espaço para as assinaturas.",
+      "<b>Outras Opções ▾ → Exportar Planilha / Importar Planilha</b>: a planilha tem uma linha por objetivo do plano vigente (paciente, data do plano, revisão, resumo, habilidade, objetivo, especialidades, prazo, escala, situação e status). Na importação, paciente com plano vigente é atualizado (objetivos novos entram, os existentes mudam só o que veio preenchido); paciente sem plano ganha um plano novo. O objetivo precisa estar em <b>Prontuário ▾ → Objetivos</b>. Há uma prévia antes de gravar."
     ],
     rules: [
       "Ao escolher o último nível da escala, o objetivo fica <b>Atingido</b> sozinho e continua no plano.",
@@ -27680,6 +27681,137 @@ var IO_FORNEC = {
     return add ? writeSimpleList("catfornecedor", list) : true;
   }
 };
+// ---- Planilhas: Plano Terapêutico (2026-10-13) ----
+// Uma linha por objetivo do plano VIGENTE. Paciente = chave: com plano vigente atualiza (objetivos novos entram, os existentes
+// mudam só o que veio preenchido); sem plano cria o plano. Objetivos só do Banco de Objetivos. Célula vazia nunca apaga.
+function ioPlanScale(txt){ var k = ioKey(txt); return k ? (scalesList().filter(function(s){ return ioKey(s.name) === k; })[0] || null) : null; }
+function ioPlanGoal(hab, nome, it){
+  var k = ioKey(goalNamePrefix(nome).name), hk = ioKey(hab), area = null;
+  if (hk){
+    area = skillAreasList().filter(function(a){ return ioKey(a.name) === hk; })[0];
+    if (!area){ it.warn.push("Habilidade não cadastrada: <b>" + esc(hab) + "</b> (linha ignorada)."); return null; }
+  }
+  var hits = goalBankList().filter(function(g){ return ioKey(goalNamePrefix(g.name).name) === k && (!area || g.areaId === area.id); });
+  if (!hits.length){ it.warn.push("Objetivo não cadastrado no Banco de Objetivos: <b>" + esc(nome) + "</b> (linha ignorada)."); return null; }
+  if (hits.length > 1){ it.warn.push("Objetivo em mais de uma habilidade: <b>" + esc(nome) + "</b> (preencha a Habilidade; linha ignorada)."); return null; }
+  return hits[0];
+}
+function ioPlanExportRows(){
+  var out = [];
+  (PLAN.rows || []).filter(function(r){ return r.status === "vigente"; }).sort(function(a, b){
+    var pa = planPatient(a.patient_id), pb = planPatient(b.patient_id);
+    return String(pa ? pa.nome : a.patient_name).localeCompare(String(pb ? pb.nome : b.patient_name), "pt-BR");
+  }).forEach(function(r){
+    var p = planPatient(r.patient_id), base = {paciente: p ? p.nome : r.patient_name, nascimento: p && p.nascimento ? trBr(p.nascimento) : "", data: trBr(r.plan_date), validade: r.review_date ? trBr(r.review_date) : "", resumo: r.summary || ""};
+    var n = 0;
+    (r.sections || []).forEach(function(s){ (s.objectives || []).forEach(function(o){
+      var sc = scaleById(o.scaleId), lv = scaleLevel(o.scaleId, o.levelId), st = PLAN_STATUS.filter(function(x){ return x.id === o.status; })[0];
+      out.push(Object.assign({}, n++ ? {paciente: base.paciente, nascimento: base.nascimento} : base, {habilidade: skillAreaName(s.areaId), objetivo: planObjLabel(o), specs: planSpecNames(planObjSpecs(o)),
+        prazo: o.prazo || "", escala: sc ? sc.name : "", situacao: lv ? lv.name : "", status: st ? st.name : ""}));
+    }); });
+    if (!n) out.push(base);
+  });
+  return out;
+}
+function ioPlanPlan(recs){
+  var items = [], today = trTodayIso(), groups = [], byKey = {};
+  recs.forEach(function(r){
+    var nome = ioText(r.paciente), nasc = ioDate(r.nascimento) || "", k = ioKey(nome) + "|" + nasc;
+    if (!byKey[k]){ byKey[k] = {nome: nome, nasc: nasc, line: r._line, rows: []}; groups.push(byKey[k]); }
+    byKey[k].rows.push(r);
+  });
+  groups.forEach(function(g){
+    var it = {line: g.line, msgs: [], warn: [], label: esc(g.nome || "(sem paciente)")};
+    items.push(it);
+    if (!g.nome){ it.st = "problema"; it.msgs.push("Falta o nome do paciente."); return; }
+    var p = ioFindPatient(g.nome, g.nasc);
+    if (!p){ it.st = "problema"; it.msgs.push("Paciente não cadastrado."); return; }
+    if (p.ambiguous){ it.st = "problema"; it.msgs.push("Mais de um paciente com esse nome (preencha a Data de Nascimento)."); return; }
+    var cur = planVigente(p.id), isNew = !cur;
+    if (isNew ? !planCan("create") : !planFull()){ it.st = "problema"; it.msgs.push(isNew ? "Seu nível não pode incluir planos terapêuticos." : "Seu nível não pode alterar planos terapêuticos."); return; }
+    var sections = ((cur && cur.sections) || []).map(function(s){ return {areaId: s.areaId, objectives: (s.objectives || []).map(function(o){ return Object.assign({}, o); })}; });
+    var rec = {}, ch = [], seenGoal = {};
+    // dados do plano (primeira linha preenchida de cada campo)
+    function first(k){ for (var i = 0; i < g.rows.length; i++){ if (!ioBlank(g.rows[i][k])) return g.rows[i][k]; } return ""; }
+    var dt = first("data"), vl = first("validade"), rs = ioText(first("resumo"));
+    var dI = ioDate(dt), vI = ioDate(vl);
+    if (dt && dI === null) it.warn.push("Data do plano inválida: <b>" + esc(ioText(dt)) + "</b> (ignorada).");
+    if (vl && vI === null) it.warn.push("Revisão até inválida: <b>" + esc(ioText(vl)) + "</b> (ignorada).");
+    if (isNew){
+      rec.plan_date = dI || today; rec.review_date = vI || trAddMonths(rec.plan_date, PLAN_VALID_MONTHS); rec.summary = rs || "";
+    } else {
+      if (dI && dI !== cur.plan_date){ rec.plan_date = dI; ch.push(ioDiff("Data do Plano", trBr(cur.plan_date), trBr(dI))); }
+      if (vI && vI !== cur.review_date){ rec.review_date = vI; ch.push(ioDiff("Revisão até", cur.review_date ? trBr(cur.review_date) : "", trBr(vI))); }
+      if (rs && rs !== (cur.summary || "")){ rec.summary = rs; ch.push(ioDiff("Resumo do Quadro Clínico", cur.summary ? "…" : "", "atualizado")); }
+    }
+    g.rows.forEach(function(r){
+      var obj = ioText(r.objetivo); if (!obj) return;
+      var gl = ioPlanGoal(ioText(r.habilidade), obj, it); if (!gl) return;
+      if (seenGoal[gl.id]){ it.warn.push("Objetivo repetido na planilha: <b>" + esc(obj) + "</b> (linha " + r._line + " ignorada)."); return; }
+      seenGoal[gl.id] = 1;
+      var sec = sections.filter(function(s){ return s.areaId === gl.areaId; })[0], o = sec && sec.objectives.filter(function(x){ return x.goalId === gl.id || (!x.goalId && planObjKey(x) === ioKey(goalNamePrefix(gl.name).name)); })[0];
+      var specs = ioText(r.specs) ? ioSpecIds(r.specs, it.warn, "do objetivo") : null;
+      var prazoTxt = ioText(r.prazo).replace(/\D/g, ""), prazo = prazoTxt ? +prazoTxt : 0;
+      if (prazo && !PLAN_PRAZOS.some(function(x){ return x.id === prazo; })){ it.warn.push("Prazo inválido (use 3, 6 ou 12): <b>" + esc(ioText(r.prazo)) + "</b> (ignorado)."); prazo = 0; }
+      var sc = ioText(r.escala) ? ioPlanScale(r.escala) : null;
+      if (ioText(r.escala) && !sc){ it.warn.push("Escala não cadastrada: <b>" + esc(ioText(r.escala)) + "</b> (ignorada)."); }
+      var scId = sc ? sc.id : (o ? o.scaleId : (gl.scaleId || (scalesList()[0] || {}).id || ""));
+      var scale = scaleById(scId), lvTxt = ioText(r.situacao), lv = null;
+      if (lvTxt){
+        lv = scale && scale.levels.filter(function(l){ return ioKey(l.name) === ioKey(lvTxt); })[0];
+        if (!lv){ it.warn.push("Nível não existe na escala" + (scale ? " <b>" + esc(scale.name) + "</b>" : "") + ": <b>" + esc(lvTxt) + "</b> (ignorado)."); }
+      }
+      var stTxt = ioText(r.status), st = stTxt ? PLAN_STATUS.filter(function(x){ return ioKey(x.name) === ioKey(stTxt); })[0] : null;
+      if (stTxt && !st) it.warn.push("Status desconhecido (use Ativo, Atingido ou Suspenso): <b>" + esc(stTxt) + "</b> (ignorado).");
+      if (!o){
+        var ids = specs && specs.length ? specs : (goalSpecIds(gl).length ? goalSpecIds(gl) : planSkillSpecs(gl.areaId));
+        if (!ids.length){ it.warn.push("Informe as Especialidades do objetivo <b>" + esc(obj) + "</b> (linha ignorada)."); return; }
+        var lvl = lv || (scale && scale.levels[0]) || null;
+        var no = {id: uid("obj"), goalId: gl.id, objetivo: gl.name, criterio: gl.criterio || "", specIds: ids, prazo: prazo || 3, scaleId: scId, levelId: lvl ? lvl.id : "", status: st ? st.id : "ativo", statusEm: today, criadoEm: today};
+        if (lv) no.levelEm = today;
+        if (lvl && scaleIsFinal(scId, lvl.id)) no.status = "atingido";
+        if (!sec){ sec = {areaId: gl.areaId, objectives: []}; sections.push(sec); }
+        sec.objectives.push(no);
+        ch.push('<span class="io-diff">Novo objetivo: <b>' + esc(skillAreaName(gl.areaId) + " — " + gl.name) + '</b></span>');
+        return;
+      }
+      var me = [];
+      if (specs && specs.length && specs.slice().sort().join() !== planObjSpecs(o).slice().sort().join()){ me.push(ioDiff("Especialidades", planSpecNames(planObjSpecs(o)), planSpecNames(specs))); o.specIds = specs; }
+      if (prazo && prazo !== Number(o.prazo)){ me.push(ioDiff("Prazo", (o.prazo || "") + (o.prazo ? " meses" : ""), prazo + " meses")); o.prazo = prazo; }
+      if (sc && sc.id !== o.scaleId){
+        me.push(ioDiff("Escala", (scaleById(o.scaleId) || {}).name || "", sc.name)); o.scaleId = sc.id;
+        if (!scaleLevel(sc.id, o.levelId)){ o.levelId = sc.levels.length ? sc.levels[0].id : ""; o.levelEm = today; }
+      }
+      if (lv && lv.id !== o.levelId){
+        me.push(ioDiff("Situação", (scaleLevel(o.scaleId, o.levelId) || {}).name || "", lv.name)); o.levelId = lv.id; o.levelEm = today;
+        if (scaleIsFinal(o.scaleId, lv.id) && o.status !== "atingido"){ o.status = "atingido"; o.statusEm = today; }
+        else if (!scaleIsFinal(o.scaleId, lv.id) && o.status === "atingido" && !st){ o.status = "ativo"; o.statusEm = today; }
+      }
+      if (st && st.id !== o.status){ me.push(ioDiff("Status", (PLAN_STATUS.filter(function(x){ return x.id === o.status; })[0] || {}).name || "", st.name)); o.status = st.id; o.statusEm = today; }
+      if (me.length) ch.push('<span class="io-diff"><b>' + esc(gl.name) + '</b></span> ' + me.join(" · "));
+    });
+    rec.sections = sections;
+    var anyObj = sections.some(function(s){ return (s.objectives || []).length; });
+    it.vals = {pid: p.id, pname: p.nome, rec: rec, isNew: isNew}; it.cur = cur;
+    if (isNew){
+      it.st = "novo"; it.msgs.push("Plano novo: " + sections.reduce(function(n, s){ return n + s.objectives.length; }, 0) + " objetivo(s).");
+      if (!anyObj) it.msgs.push("Sem objetivos (só o plano e o resumo).");
+      it.msgs = it.msgs.concat(ch);
+    } else if (!ch.length){ it.st = "igual"; }
+    else { it.st = "atualizar"; it.msgs = ch; }
+  });
+  return {items: items, notes: ["Cada paciente é um plano: quem já tem plano vigente é atualizado (objetivos novos entram); quem não tem ganha um plano novo."], itemLabel: "Paciente"};
+}
+function ioPlanApply(plan){
+  var go = plan.items.filter(function(it){ return it.st === "novo" || it.st === "atualizar"; }), chain = Promise.resolve();
+  go.forEach(function(it){
+    chain = chain.then(function(){
+      return it.vals.isNew ? planInsert(Object.assign({patient_id: it.vals.pid, patient_name: it.vals.pname, version: 1, status: "vigente"}, it.vals.rec)) : planUpdate(it.cur.id, it.vals.rec);
+    });
+  });
+  return chain.then(function(){ return planLoadAll(true); }).then(function(){ if (state.tab === "planos") renderPlansTab(); return "Planos terapêuticos importados."; })
+    .catch(function(e){ planLoadAll(true); throw new Error("Não foi possível importar: " + planErr(e)); });
+}
 var IO_KINDS = {
   tratamentos: {label: "Tratamentos", file: "tratamentos", mod: "tratamentos",
     sub: "Mesmo paciente e mesma data de início = atualiza; outro início = novo tratamento.",
@@ -27762,6 +27894,29 @@ var IO_KINDS = {
     exportRows: function(){ return activitiesList().map(function(a){ return {atividade: a.name, descricao: a.descricao || "", materiais: a.materiais || "", duracao: a.duracao || "", faixas: ageBandText(a.faixas), specs: planSpecNames(a.specIds || []),
       objetivos: actGoalIds(a).map(function(id){ var g = goalById(id); return (g.areaId ? skillAreaName(g.areaId) + ": " : "") + g.name; }).join("; ")}; }); },
     plan: ioActPlan, apply: ioActApply},
+  planos: {label: "Plano Terapêutico", file: "planos-terapeuticos", mod: "plano_terapeutico",
+    sub: "Uma linha por objetivo do plano vigente. O paciente é a chave: com plano vigente atualiza; sem plano, cria.",
+    canImport: function(){ return planCan("create") || planFull(); },
+    prepare: function(){ return planLoadAll(); },
+    help: ["Uma linha por objetivo. Repita o nome do paciente em cada linha do mesmo plano (com homônimos, preencha a Data de Nascimento).",
+      "O objetivo precisa estar no Banco de Objetivos (Habilidade: ajuda a separar objetivos com o mesmo nome). Data do Plano, Revisão até e Resumo do Quadro Clínico valem pela primeira linha preenchida do paciente.",
+      "Prazo: 3, 6 ou 12 (meses). Especialidades: nomes ou siglas separados por vírgula (vazio = as do Banco de Objetivos). Escala e Situação (nível) precisam existir em Escalas; Status: Ativo, Atingido ou Suspenso.",
+      "Paciente com plano vigente: os objetivos novos entram e os que já existem mudam só o que veio preenchido. Nenhum objetivo sai pela importação."],
+    cols: [
+      {k: "paciente", h: "Paciente", alias: ["nome", "nome do paciente"], w: 34, req: true},
+      {k: "nascimento", h: "Data de Nascimento", alias: ["nascimento"], w: 14, note: "ajuda a separar homônimos"},
+      {k: "data", h: "Data do Plano", alias: ["data plano", "data"], w: 14},
+      {k: "validade", h: "Revisão Até", alias: ["revisao", "validade", "revisao ate"], w: 14},
+      {k: "resumo", h: "Resumo do Quadro Clínico", alias: ["resumo", "quadro clinico"], w: 50},
+      {k: "habilidade", h: "Habilidade", w: 26},
+      {k: "objetivo", h: "Objetivo", w: 56},
+      {k: "specs", h: "Especialidades", alias: ["especialidade"], w: 36},
+      {k: "prazo", h: "Prazo (Meses)", alias: ["prazo"], w: 12, note: "3, 6 ou 12"},
+      {k: "escala", h: "Escala", w: 18},
+      {k: "situacao", h: "Situação", alias: ["nivel", "situacao atual"], w: 22, note: "nível da escala"},
+      {k: "status", h: "Status", w: 12, note: "Ativo, Atingido ou Suspenso"}
+    ],
+    exportRows: ioPlanExportRows, plan: ioPlanPlan, apply: ioPlanApply},
   habilidades: {label: "Habilidades", file: "habilidades", mod: "habilidades",
     sub: "Mesmo nome = atualiza escopo, faixas etárias e especialidades sugeridas.",
     help: ["Uma linha por habilidade. Especialidades sugeridas: nomes ou siglas separados por vírgula.",
@@ -27800,8 +27955,8 @@ var IO_KINDS = {
 };
 (function(){
   // Botões "Outras Opções ▾" com Exportar/Importar nas barras de Tratamentos, Objetivos, Escalas e Habilidades.
-  ["tratamentos", "objetivos", "atividades", "escalas", "habilidades", "planocontas", "fornecedores"].forEach(function(k){
-    var add = document.getElementById(k === "tratamentos" ? "trAdd" : "reg-" + k + "-add"); if (!add) return;
+  ["tratamentos", "planos", "objetivos", "atividades", "escalas", "habilidades", "planocontas", "fornecedores"].forEach(function(k){
+    var add = document.getElementById(k === "tratamentos" ? "trAdd" : k === "planos" ? "planAdd" : "reg-" + k + "-add"); if (!add) return;
     add.insertAdjacentHTML("beforebegin", ioToolsMenuHtml(k));
     ioWireMenu(add.parentNode.querySelector('[data-io-wrap="' + k + '"]'));
   });
