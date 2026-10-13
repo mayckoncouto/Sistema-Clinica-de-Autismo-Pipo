@@ -63,6 +63,20 @@ const fs = require('fs');
   await page.fill('#reg-atividades-search', ''); await page.waitForTimeout(150);
   // helper: atividades de um objetivo
   check('activitiesForGoal finds it?', (await ev("activitiesForGoal('g1').length + '|' + activitiesForGoal('g2').length")) === '1|0');
+  // plano: atividades sugeridas no objetivo (faixa etária e especialidades)
+  check('planObjActs: matches by goal, band and specialty?', (await ev(`(function(){ var a = state.activities[0]; a.faixas = ["0-4"]; a.specIds = ["fono"];
+    var o = {goalId: "g1", specIds: ["fono"]};
+    return [planObjActs(o, AGE_BANDS[0]).length, planObjActs(o, AGE_BANDS[2]).length, planObjActs({goalId: "g1", specIds: ["to"]}, AGE_BANDS[0]).length, planObjActs({goalId: "g2", specIds: []}, null).length].join("|"); })()`)) === '1|0|0|0');
+  await ev(`(function(){ var a = state.activities[0]; a.faixas = []; a.specIds = []; var p = state.patients[0];
+    openPlanModal({id: "pp1", patient_id: p.id, version: 1, status: "vigente", plan_date: new Date().toISOString().slice(0, 10), review_date: null, summary: "", sections: [{areaId: "a1", objectives: [{id: "o1", goalId: "g1", specIds: [], prazo: 3, status: "ativo"}]}]}, {patientId: p.id}); return 1; })()`);
+  await page.waitForSelector('#modalHost [data-acts]');
+  check('plan objective shows "1 atividade sugerida"?', /1 atividade sugerida/.test(await page.textContent('#modalHost [data-acts]')));
+  await page.click('#modalHost [data-acts]'); await page.waitForSelector('#ovPlActs');
+  check('suggested activities window lists it with the duration?', /Caixa Surpresa/.test(await page.textContent('#ovPlActs')) && /15 min/.test(await page.textContent('#ovPlActs')));
+  await page.click('#ovPlActs .modal-foot [data-acclose]'); await page.waitForTimeout(150);
+  check('window closes and the plan stays open?', !(await page.$('#ovPlActs')) && !!(await page.$('#modalHost [data-acts]')));
+  await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  await ev('document.getElementById("modalHost").innerHTML = ""');
   // objetivo com atividade: em uso
   const use = await ev("USAGE.objetivos({id: 'g1', name: 'Pedir ajuda'})");
   check('goal with activity counts as in use?', use.some((t) => /atividade/.test(t)), JSON.stringify(use));

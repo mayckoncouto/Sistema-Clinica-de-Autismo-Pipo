@@ -179,6 +179,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 .pl-clin{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px 14px;margin:6px 0 10px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px}
 .pl-clin-it span{display:block;font-size:11px;color:var(--muted)}.pl-clin-it b{font-weight:600;font-size:13px;white-space:pre-line}
 .pl-hint{font-size:11.5px;color:var(--muted)}
+.pl-acts-link{cursor:pointer;text-decoration:underline dotted}.pl-acts-link:hover{color:var(--accent)}
 .pl-spec{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--surface)}
 .pl-spec-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}.pl-spec-head b{font-size:14px}
 .pl-spec-count{margin-left:auto;font-size:12px;color:var(--muted)}
@@ -22854,6 +22855,7 @@ var HELP_TOPICS = [
       "Cada <b>habilidade</b> é um quadro: use <b>Incluir habilidade…</b> no fim da lista e, dentro do quadro, <b>+ Inserir objetivo</b>. Preencha: <b>Objetivo</b> (lista do cadastro de Objetivos), <b>Especialidades</b> (as que podem trabalhar o objetivo; as do tratamento aparecem primeiro e as outras como apoio), Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
       "O objetivo novo já vem com as <b>especialidades sugeridas</b> da habilidade (cadastro de Habilidades) que estão no tratamento.",
       "O campo <b>Objetivo</b> abre a lista dos objetivos cadastrados nesta habilidade, com a faixa etária antes do nome (ex.: [0–4] Objetivo): os da faixa do paciente primeiro, depois <b>Outras faixas etárias</b>. Digite no topo da lista para buscar. Escolher um traz a escala e as especialidades do cadastro. <b>+ Incluir objetivo</b>, no fim da lista, cadastra um objetivo novo sem sair do plano.",
+      "Embaixo do objetivo aparece <b>N atividades sugeridas</b> quando o Banco de Atividades (<b>Prontuário ▾ → Atividades</b>) tem atividades ligadas àquele objetivo que servem à faixa etária do paciente e a alguma especialidade do objetivo. Clique no texto para ver o nome, a descrição, os materiais e a duração de cada uma.",
       "O <b>Critério de Sucesso</b> vem do cadastro do objetivo e aparece só para leitura (o texto inteiro ao passar o mouse); para mudar, altere o objetivo em <b>Prontuário ▾ → Objetivos</b>.",
       "O <b>Nº</b> é a prioridade dentro da habilidade: use ▲▼ na própria linha para subir ou descer; os números se ajustam sozinhos. Clique no nome da habilidade para recolher ou abrir o quadro; o título mostra quantos objetivos, ativos e atingidos.",
       "Ao lado do título \"Objetivos por habilidade\", a conferência avisa as <b>especialidades do tratamento sem objetivo ativo</b> e as <b>habilidades sem objetivo ativo</b>.",
@@ -25478,7 +25480,12 @@ function openPlanModal(plan, opts){
   function goalCell(o, dis){
     var t = planObjLabel(o);
     return '<button type="button" class="pl-specs-btn pl-goal-btn' + (t ? '' : ' empty') + '" data-goal-pick' + dis + ' title="' + esc(t || "Escolha o objetivo") + '">' +
-      '<span class="pl-specs-txt">' + esc(t || "Escolha o objetivo…") + '</span><span class="pl-specs-caret" aria-hidden="true">▾</span></button>';
+      '<span class="pl-specs-txt">' + esc(t || "Escolha o objetivo…") + '</span><span class="pl-specs-caret" aria-hidden="true">▾</span></button>' + actsHint(o);
+  }
+  function actsHint(o){
+    if (!o.goalId) return '';
+    var n = planObjActs(o, pBand).length;
+    return n ? '<div class="pl-hint pl-acts-link" role="button" tabindex="0" data-acts title="Ver as atividades do Banco de Atividades para este objetivo">' + n + (n === 1 ? ' atividade sugerida' : ' atividades sugeridas') + '</div>' : '';
   }
   function objRow(s, o, i, n){
     var editAll = canFull(o), editSt = canSt(o);
@@ -25779,6 +25786,8 @@ function openPlanModal(plan, opts){
     if (tg){ var aid = tg.closest("[data-area]").getAttribute("data-area"); collapsed[aid] = !collapsed[aid]; render(); return; }
     var sb = e.target.closest("[data-specs]");
     if (sb){ if (specFor && specFor.btn === sb){ specHide(); return; } specOpen(sb); return; }
+    var ab = e.target.closest("[data-acts]");
+    if (ab){ var ox = findObj(ab); if (ox) planActsModal(ox.o, pBand, p ? p.name : ""); return; }
     var gb = e.target.closest("[data-goal-pick]");
     if (gb){ if (goalFor && goalFor.btn === gb){ goalHide(); return; } goalOpen(gb); return; }
     var mv = e.target.closest("[data-mv]");
@@ -26609,6 +26618,34 @@ function actGoalIds(a){ return (Array.isArray(a && a.goalIds) ? a.goalIds : []).
 function actGoalText(g){ return goalLabel(g) + (g.areaId ? " · " + skillAreaName(g.areaId) : ""); }
 // Atividades ativas ligadas a um objetivo (para o plano, a evolução e a agenda).
 function activitiesForGoal(goalId){ return activeOnly(activitiesList()).filter(function(a){ return (a.goalIds || []).indexOf(goalId) !== -1; }); }
+// Atividades sugeridas para um objetivo do plano: as do Banco ligadas ao objetivo, que servem à faixa etária do paciente
+// (sem faixa = todas) e a alguma especialidade do objetivo (sem especialidade = todas).
+function planObjActs(o, band){
+  var specs = typeof planObjSpecs === "function" ? planObjSpecs(o) : [];
+  return o && o.goalId ? activitiesForGoal(o.goalId).filter(function(a){
+    var f = ageBandIds(a.faixas), sp = Array.isArray(a.specIds) ? a.specIds : [];
+    return (!band || !f.length || f.indexOf(band.id) !== -1) && (!specs.length || !sp.length || sp.some(function(x){ return specs.indexOf(x) !== -1; }));
+  }) : [];
+}
+function planActsModal(o, band, patientName){
+  var list = planObjActs(o, band), host = regQuickHost();
+  host.innerHTML = '<div class="overlay" id="ovPlActs"><div class="modal wide" style="max-width:620px">' +
+    '<div class="modal-head"><div><h3>Atividades Sugeridas</h3><div class="modal-sub">' + esc(planObjLabel(o)) + (patientName ? ' · ' + esc(patientName) : '') + '</div></div>' +
+    '<button class="modal-close" data-acclose aria-label="Fechar">✕</button></div><div class="modal-body">' +
+    (list.length ? list.map(function(a){
+      return '<div class="room-row"><div class="room-row-main"><b>' + esc(a.name) + '</b>' + (a.duracao ? ' <span class="pl-hint">· ' + esc(actDurText(a)) + '</span>' : '') +
+        (a.descricao ? '<div>' + esc(a.descricao) + '</div>' : '') +
+        (a.materiais ? '<div class="pl-hint"><b>Materiais:</b> ' + esc(a.materiais) + '</div>' : '') +
+        '<div class="pl-hint">' + esc((ageBandText(a.faixas) || "Todas as idades") + ' · ' + (Array.isArray(a.specIds) && a.specIds.length ? planSpecNames(a.specIds) : "Todas as especialidades")) + '</div></div></div>';
+    }).join("") : '<div class="pl-empty">Nenhuma atividade do Banco de Atividades combina com este objetivo, a faixa etária e as especialidades.</div>') +
+    '</div><div class="modal-foot"><div class="spacer"></div><button class="btn ghost" data-acclose>Fechar</button></div></div></div>';
+  var ov = document.getElementById("ovPlActs");
+  function close(){ host.innerHTML = ""; document.removeEventListener("keydown", onKey, true); }
+  function onKey(e){ if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); close(); } }
+  document.addEventListener("keydown", onKey, true);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  Array.prototype.forEach.call(ov.querySelectorAll("[data-acclose]"), function(b){ b.addEventListener("click", close); });
+}
 function actDurText(a){ return a && a.duracao ? a.duracao + " min" : ""; }
 function openActivityModal(item, opts){
   opts = opts || {};
