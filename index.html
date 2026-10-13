@@ -5499,6 +5499,86 @@ function confirmDialog(opts){
     document.getElementById("cfCancel").focus();
   });
 }
+/* ---------------- Aviso ao sair de janela de cadastro com campo alterado ----------------
+ * Vale para as janelas listadas em GUARD_IDS. Campo mudado pela pessoa (evento de verdade) marca a janela;
+ * ✕, Cancelar/Fechar, clique fora e Esc perguntam: Salvar | Sair sem Salvar | Continuar Editando.
+ * "Salvar" aciona o botão Salvar da própria janela (se ela recusar, continua aberta). */
+var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf","ovRoom","ovScale","ovGoal","ovClinic","ovFl","ovFp","ovLn","ovCrm","ovCrmL","ovPlan","ovPr","ovTLine","ovEncLine","ovQuick","ovBook","ovAgd","ovServ","ovSpec","ovStatus","ovUser","ovRole"];
+(function(){
+  var asking = false;
+  function guardOv(el){
+    var ov = el && el.closest ? el.closest(".overlay") : null;
+    return ov && GUARD_IDS.indexOf(ov.id) !== -1 ? ov : null;
+  }
+  function topOv(){
+    var all = Array.prototype.filter.call(document.querySelectorAll(".overlay"), function(o){ return !o.hidden && o.id !== "ovConfirm" && o.id !== "ovGuard"; });
+    return all.length ? all[all.length - 1] : null;
+  }
+  function mark(e){
+    if (!e.isTrusted) return;
+    var t = e.target, ov = guardOv(t);
+    if (!ov || !t.closest) return;
+    if (t.closest(".crm-compose, .dp-filter, .pl-goal-pop, .autolist") || t.type === "search" || t.hasAttribute("data-noguard")) return;
+    ov.__dirty = true;
+  }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("change", mark, true);
+  function ask(){
+    return new Promise(function(resolve){
+      asking = true;
+      var host = document.getElementById("guardHost");
+      if (!host){ host = document.createElement("div"); host.id = "guardHost"; document.body.appendChild(host); }
+      host.innerHTML = '<div class="overlay confirm-overlay" id="ovGuard" role="alertdialog" aria-modal="true" aria-labelledby="gdTitle" style="z-index:200">' +
+        '<div class="modal" style="max-width:440px"><div class="modal-head"><div><h3 id="gdTitle">Alterações Não Salvas</h3></div></div>' +
+        '<div class="modal-body"><div class="confirm-msg">Você alterou algum campo. Deseja salvar antes de sair?</div></div>' +
+        '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="gdSair">Sair sem Salvar</button>' +
+        '<button class="btn ghost" id="gdCont">Continuar Editando</button><button class="btn primary" id="gdSave">Salvar</button></div></div></div>';
+      function done(v){ document.removeEventListener("keydown", onKey, true); host.innerHTML = ""; asking = false; resolve(v); }
+      function onKey(e){ if (e.key === "Escape"){ e.preventDefault(); e.stopImmediatePropagation(); done("cont"); } }
+      document.addEventListener("keydown", onKey, true);
+      document.getElementById("gdSair").onclick = function(){ done("sair"); };
+      document.getElementById("gdCont").onclick = function(){ done("cont"); };
+      document.getElementById("gdSave").onclick = function(){ done("save"); };
+      document.getElementById("gdSave").focus();
+    });
+  }
+  function guard(ov, redo){
+    if (asking) return;
+    ask().then(function(r){
+      if (r === "save"){
+        var sv = ov.querySelector(".modal-foot .btn.primary:not([disabled]):not([hidden])");
+        if (sv) sv.click(); else showToast("Não há como salvar esta janela.", true);
+      } else if (r === "sair"){
+        ov.__noGuard = true;
+        try { redo(); } finally { setTimeout(function(){ ov.__noGuard = false; }, 0); }
+      }
+    });
+  }
+  function blocked(ov){ return ov && ov.__dirty && !ov.__noGuard && ov.isConnected; }
+  document.addEventListener("click", function(e){
+    if (!e.isTrusted) return;
+    var b = e.target.closest && e.target.closest("button"); if (!b) return;
+    var ov = guardOv(b); if (!blocked(ov)) return;
+    var isClose = b.classList.contains("modal-close") ||
+      (b.closest(".modal-foot") && b.classList.contains("ghost") && /^(cancelar|fechar)$/i.test((b.textContent || "").trim()));
+    if (!isClose) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    guard(ov, function(){ b.click(); });
+  }, true);
+  document.addEventListener("mousedown", function(e){
+    if (!e.isTrusted || !e.target.classList || !e.target.classList.contains("overlay")) return;
+    var ov = e.target; if (GUARD_IDS.indexOf(ov.id) === -1 || !blocked(ov)) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    guard(ov, function(){ ov.dispatchEvent(new MouseEvent("mousedown", {bubbles: true})); });
+  }, true);
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Escape" || !e.isTrusted || asking) return;
+    if (document.getElementById("dpPop") || document.getElementById("crmPop") || document.getElementById("cpPop")) return;
+    var ov = topOv(); if (!ov || GUARD_IDS.indexOf(ov.id) === -1 || !blocked(ov)) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    guard(ov, function(){ document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true})); });
+  }, true);
+})();
 /* ---------------- Sistema: regras com chave (Acesso → Sistema, só Administrador) ----------------
  * Documento config/system {rules: {id: "block"|"warn"|"off"}, historico: [{em, por, id, de, para}]}.
  * Cada regra tem um modo padrão (def) e os modos permitidos (modes). "locked" = regra de
@@ -7324,6 +7404,44 @@ function crmFollow(task, on){
   if (!c){ local(); return Promise.resolve(); }
   return c.rpc("task_follow", {p_task: task.id, p_on: on}).then(function(r){ if (r.error) throw r.error; local(); });
 }
+// "Criar Tarefa" nas janelas de cadastro (Paciente, Tratamento, Lançamento, Contas): escolhe a lista (onde a pessoa pode incluir)
+// e abre a janela da tarefa por cima, já preenchida; a pessoa ajusta e salva.
+function crmCreateFrom(pre){
+  var dests = crmGenDests();
+  if (!dests.length){ showToast("Você não pode incluir tarefas em nenhuma lista.", true); return; }
+  function open(listId){ crmOpenTask(null, Object.assign({listId: listId, stack: true}, pre)); }
+  if (dests.length === 1){ open(dests[0].id); return; }
+  var host = document.getElementById("quickHost");
+  if (!host){ host = document.createElement("div"); host.id = "quickHost"; document.body.appendChild(host); }
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovTaskPick" role="dialog" aria-modal="true" aria-labelledby="tpTitle"><div class="modal" style="max-width:420px">' +
+    '<div class="modal-head"><div><h3 id="tpTitle">Criar Tarefa</h3></div><button class="modal-close" id="tpClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="field"><label for="tpList">Lista</label><select id="tpList">' + dests.map(function(l){ return '<option value="' + esc(l.id) + '">' + esc(l.name) + '</option>'; }).join("") + '</select></div></div>' +
+    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="tpCancel">Cancelar</button><button class="btn primary" id="tpOk">Continuar</button></div></div></div>';
+  function done(){ document.removeEventListener("keydown", onKey, true); host.innerHTML = ""; }
+  function onKey(e){ if (e.key === "Escape" && !document.getElementById("dpPop")){ e.preventDefault(); e.stopImmediatePropagation(); done(); } }
+  document.addEventListener("keydown", onKey, true);
+  var ov = document.getElementById("ovTaskPick");
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) done(); });
+  document.getElementById("tpClose").onclick = done; document.getElementById("tpCancel").onclick = done;
+  document.getElementById("tpOk").onclick = function(){ var id = document.getElementById("tpList").value; done(); open(id); };
+}
+// Menu "Outras Opções" do cabeçalho das janelas de cadastro. items = [{id, label}]; mmWire liga abrir/fechar.
+function mmHtml(id, items){
+  items = items.filter(Boolean);
+  if (!items.length) return "";
+  return '<div class="cad-wrap pl-tools-wrap tr-more-wrap mm-wrap"><button type="button" class="btn ghost" id="' + id + '" data-ro-ok aria-haspopup="menu" aria-expanded="false">Outras Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+    '<div class="cad-menu pl-tools-menu" role="menu" hidden>' + items.map(function(it){ return '<button type="button" class="btn ghost" id="' + it.id + '" data-ro-ok>' + esc(it.label) + '</button>'; }).join("") + '</div></div>';
+}
+function mmWire(overlay){
+  var wrap = overlay && overlay.querySelector(".mm-wrap"); if (!wrap) return;
+  var mb = wrap.querySelector("button"), mm = wrap.querySelector(".cad-menu");
+  function setOpen(o){ mm.hidden = !o; mb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ placeToolsMenu(mb, mm); var f = mm.querySelector("button"); if (f) f.focus(); } }
+  mb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(mm.hidden); });
+  mm.addEventListener("click", function(e){ if (e.target.closest("button")) setOpen(false); });
+  overlay.addEventListener("mousedown", function(e){ if (!e.target.closest(".mm-wrap")) setOpen(false); });
+  mm.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); setOpen(false); mb.focus(); } });
+}
+function mmTaskItem(){ return (crmMainCan() && crmGenDests().length) ? {id: "mmCreateTask", label: "Criar Tarefa"} : null; }
 function crmGenDests(){ return crmVisibleLists().filter(function(l){ return crmCan(l.id, "create"); }); }
 // Gerar Tarefa a Partir Desta: nova tarefa com título, descrição, prioridade e paciente/lead da original; escolhe lista, status e responsáveis.
 function crmGenDialog(task){
@@ -8106,9 +8224,14 @@ function crmOpenTask(task, opts){
   var x = task ? JSON.parse(JSON.stringify(task)) : {list_id: listId, status: opts.status || (list.statuses[0] || {}).id, title: "", description: "", priority: "normal", assignees: [], tags: [], lead: {}, due_date: null, patient_id: null};
   if (opts.status) x.status = opts.status;
   if (opts.due) x.due_date = opts.due;
+  if (isNew && opts.title) x.title = opts.title;
+  if (isNew && opts.description) x.description = opts.description;
+  if (isNew && opts.patient_id) x.patient_id = opts.patient_id;
+  if (isNew && opts.leadNome && !opts.patient_id) x.lead = {nome: opts.leadNome};
   var lead = x.lead || {}, dis = canEdit ? "" : " disabled", lay = "modal", side = true;
   var pat = x.patient_id ? findPatientById(x.patient_id) : null;
   var host = document.getElementById("modalHost");
+  if (opts.stack){ host = document.getElementById("quickHost"); if (!host){ host = document.createElement("div"); host.id = "quickHost"; document.body.appendChild(host); } }
   function opt(v, label, cur){ return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + '>' + esc(label) + '</option>'; }
   function prop(label, inner, wide, id){ return '<div class="field crm-prop' + (wide ? ' wide' : '') + '"' + (id ? ' id="' + id + '"' : '') + '><label' + (id ? '' : '') + '>' + label + '</label><div class="crm-pv">' + inner + '</div></div>'; }
   var peopleMs = '<div class="ms" id="crmPeopleMs"><button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Responsáveis"' + dis + '><span class="crm-pp-avs"></span><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
@@ -8152,7 +8275,7 @@ function crmOpenTask(task, opts){
       '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13.5l12-5.5L2 2.5l1.8 5.5z" fill="currentColor"/><path d="M3.8 8H9" stroke="var(--surface)" stroke-width="1.3" stroke-linecap="round"/></svg></button></div>' +
       '<div class="crm-mention-pop" id="crmMentionPop" hidden></div></div></div></aside>';
   host.innerHTML =
-    '<div class="overlay crm-ov lay-' + lay + '" id="ovCrm"><div class="modal crm-modal lay-' + lay + (side ? ' with-side' : '') + '">' +
+    '<div class="overlay crm-ov' + (opts.stack ? ' confirm-overlay' : '') + ' lay-' + lay + '" id="ovCrm"><div class="modal crm-modal lay-' + lay + (side ? ' with-side' : '') + '">' +
       '<div class="modal-head"><div><h3>' + (isNew ? "Nova Tarefa" : canEdit ? "Editar Tarefa" : "Tarefa") + '</h3>' +
         '<div class="modal-sub"><span class="crm-chip sm" style="--st:' + esc(list.color || "#64748b") + '">' + esc(list.name) + '</span>' +
         (task && task.created_by_name ? ' · criada por ' + esc(task.created_by_name) + (task.created_at ? ' em ' + esc(agdBrDate(String(task.created_at).slice(0, 10))) : '') : '') + '</div></div>' +
@@ -12497,6 +12620,7 @@ function openPatientModal(p, opts){
   host.innerHTML =
     '<div class="overlay" id="ovPat"><div class="modal wide pm-modal">' +
       '<div class="modal-head"><div><h3>'+(isNew?"Novo Paciente":"Editar Paciente")+'</h3></div><div class="modal-head-acts">' +
+        (!isNew ? mmHtml("pMoreBtn", [mmTaskItem()]) : "") +
         (!isNew && !opts.intake && intakeCan() ? '<button type="button" class="btn ghost" id="pAskUpd" data-ro-ok>Pedir Atualização</button>' : '') +
         (!isNew && !opts.intake && intakePendingFor(v.id) ? '<button type="button" class="btn primary" id="pReview" data-ro-ok>Revisar Cadastro</button>' : '') +
         '<button class="modal-close" id="closePat" aria-label="Fechar">✕</button></div></div>' +
@@ -12513,6 +12637,12 @@ function openPatientModal(p, opts){
     '</div></div>';
 
   var overlay = document.getElementById("ovPat");
+  mmWire(overlay);
+  var mmT = document.getElementById("mmCreateTask");
+  if (mmT) mmT.addEventListener("click", function(){
+    var nm = ((document.getElementById("pNome") || {}).value || v.nome || "").trim();
+    crmCreateFrom({title: "Paciente: " + nm, patient_id: v.id});
+  });
   routineWire(overlay);
   var encApi = patFieldShown("encaminhamento") ? encWire(overlay, v.encaminhamento, v.nome) : null;
   function $(id){ return document.getElementById(id); }
@@ -21488,6 +21618,7 @@ function openTreatmentModal(t, opts){
             '<div class="cad-menu pl-tools-menu" id="trMoreMenu" role="menu" hidden>' +
               (can("pacientes", "view") ? '<button type="button" class="btn ghost" id="trOpenPat" data-ro-ok>Cadastro do Paciente</button>' : '') +
               (!isNew && can("plano_terapeutico", "view") ? '<button type="button" class="btn ghost" id="trOpenPlan" data-ro-ok>Abrir Plano Terapêutico</button>' : '') +
+              (!isNew && mmTaskItem() ? '<button type="button" class="btn ghost" id="trCreateTask" data-ro-ok>Criar Tarefa</button>' : '') +
             '</div></div>' : '') +
         '<button class="modal-close" id="trClose" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' +
@@ -21583,6 +21714,11 @@ function openTreatmentModal(t, opts){
   overlay.addEventListener("input", function(e){ if (e.target.id === "pConv") trConvHint(); });
   overlay.addEventListener("click", function(){ setTimeout(trConvHint, 160); });
   overlay.addEventListener("focusout", function(e){ if (e.target.id === "pConv") setTimeout(trConvHint, 200); });
+  var trTaskBtn = document.getElementById("trCreateTask");
+  if (trTaskBtn) trTaskBtn.addEventListener("click", function(){
+    var ps = document.getElementById("trPat"), pidNow = (ps && ps.value) || t.patientId, pr = pidNow ? rawPatient(pidNow) : null;
+    crmCreateFrom({title: "Tratamento de " + (pr ? pr.nome : "paciente"), patient_id: pidNow || null});
+  });
   var trPlanBtn = document.getElementById("trOpenPlan");
   if (trPlanBtn) trPlanBtn.addEventListener("click", function(){ var pid = t.patientId; close(); planFromTreatment(pid); });
   function upFinal(){
@@ -21958,6 +22094,8 @@ var HELP_TOPICS = [
     rules: [
       "Você só vê as telas e os botões que o seu nível de permissão libera. Se faltar algo, fale com o Administrador.",
       "Toda exclusão pede confirmação.",
+      "Ao sair de uma janela de cadastro depois de mudar algum campo (pelo ✕, Cancelar, Fechar, clique fora ou Esc), o sistema pergunta: <b>Salvar</b>, <b>Sair sem Salvar</b> ou <b>Continuar Editando</b>.",
+      "Nas janelas de Paciente, Tratamento, Lançamento e Conta a Pagar ou a Receber já salvos, <b>Outras Opções ▾ → Criar Tarefa</b> escolhe a lista do CRM e abre a janela da tarefa já preenchida (título e paciente); ajuste e salve.",
       "Duas pessoas podem mexer nos cadastros ao mesmo tempo: cada uma grava só o que alterou. Se outra pessoa alterou o mesmo cadastro depois que você o abriu, ao salvar aparece o aviso “Alterado Enquanto Você Editava”, com quem alterou e a hora: <b>Salvar Assim Mesmo</b> grava a sua versão por cima; <b>Recarregar</b> descarta a sua e mostra a versão atual.",
       "No celular, o menu fica no botão ☰ do canto superior. Planner e Resumo não aparecem no celular.",
       "A barra de cada tela (busca, filtros e botões) fica numa linha só no computador; quando falta espaço, a busca e os filtros encolhem e o texto termina em “…”. No celular ela ocupa no máximo 3 linhas abaixo do título, e a caixa “Inativos” fica ao lado do título."
@@ -28215,7 +28353,7 @@ function openLancamento(row, opts){
     '<div class="overlay" id="ovFl"><div class="modal" style="max-width:600px">' +
       '<div class="modal-head"><div><h3>' + (isNew ? "Novo Lançamento" : (canSave ? "Editar Lançamento" : "Lançamento")) + '</h3>' +
         '<div class="modal-sub">O valor entra no saldo e na DRE; o do extrato serve para conferir com o banco.</div></div>' +
-        '<button class="modal-close" id="flClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-head-acts">' + (!isNew ? mmHtml("flMoreBtn", [mmTaskItem()]) : "") + '<button class="modal-close" id="flClose" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' +
         '<div class="tr-sec tr-sec-top">Lançamento</div>' +
         '<div class="field-row"><div class="field"><label for="flConta">Conta</label><select id="flConta" data-combo data-reg-add="contas">' + flAccOptions(r.acc) + '</select></div>' +
@@ -28236,6 +28374,12 @@ function openLancamento(row, opts){
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("flClose").addEventListener("click", close);
+  mmWire(document.getElementById("ovFl"));
+  var flT = document.getElementById("mmCreateTask");
+  if (flT) flT.addEventListener("click", function(){
+    var ds = (document.getElementById("flDesc") || {}).value || r.desc || "", vl = Number(r.valor || 0);
+    crmCreateFrom({title: "Lançamento: " + ds + " (" + fmtMoney(vl) + ")", description: "Lançamento de " + ((r.date || "").split("-").reverse().join("/")) + " — " + ds + " — " + fmtMoney(vl) + "."});
+  });
   document.getElementById("flCancel").addEventListener("click", close);
   modalApplyPerms("financeiro", isNew, {ov: "ovFl", save: "flSave", del: "flDel", cancel: "flCancel"});
   if (!isNew && fcDateClosed(r.date)){
@@ -28761,7 +28905,7 @@ function openConta(row){
     '<div class="overlay" id="ovFp"><div class="modal" style="max-width:600px">' +
       '<div class="modal-head"><div><h3>' + (isNew ? "Nova Conta a " + (rc ? "Receber" : "Pagar") : paid ? (rc ? "Conta Recebida" : "Conta Paga") : canSave ? "Editar Conta a " + (rc ? "Receber" : "Pagar") : "Conta a " + (rc ? "Receber" : "Pagar")) + '</h3>' +
         '<div class="modal-sub">' + (rc ? "Conta prevista a receber. Ao receber, use o botão Receber: o sistema cria o lançamento." : "Conta prevista a pagar. Ao pagar, use o botão Pagar: o sistema cria o lançamento.") + '</div></div>' +
-        '<button class="modal-close" id="fpClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-head-acts">' + (!isNew ? mmHtml("fpMoreBtn", [mmTaskItem()]) : "") + '<button class="modal-close" id="fpClose" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' +
         (sugg ? '<div class="dem-warn fp-sugg">Parece que esta conta já foi ' + (rc ? "recebida" : "paga") + ': lançamento <b>' + esc(sugg.desc || "—") + '</b> de ' + esc(trBr(sugg.date)) + ' (' + esc(fmtMoney(sugg.valor)) + '). <button type="button" class="btn ghost" id="fpSugg">Vincular a Ele</button></div>' : "") +
         '<div class="tr-sec tr-sec-top">Conta</div>' +
@@ -28788,6 +28932,12 @@ function openConta(row){
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("fpClose").addEventListener("click", close);
+  mmWire(document.getElementById("ovFp"));
+  var fpT = document.getElementById("mmCreateTask");
+  if (fpT) fpT.addEventListener("click", function(){
+    var ds = (document.getElementById("fpDesc") || {}).value || r.desc || "", vl = Number(r.valor || 0);
+    crmCreateFrom({title: (rc ? "Conta a receber: " : "Conta a pagar: ") + ds + " (" + fmtMoney(vl) + ")", description: (rc ? "Conta a receber" : "Conta a pagar") + " com vencimento em " + ((r.venc || "").split("-").reverse().join("/")) + " — " + ds + " — " + fmtMoney(vl) + "."});
+  });
   document.getElementById("fpCancel").addEventListener("click", close);
   modalApplyPerms("financeiro", isNew, {ov: "ovFp", save: "fpSave", del: "fpDel", cancel: "fpCancel"});
   if (paid){
