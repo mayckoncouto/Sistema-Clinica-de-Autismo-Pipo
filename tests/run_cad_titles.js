@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const TABS = {pacientes: 'Pacientes', tratamentos: 'Tratamentos', convenios: 'Convênios', motivos: 'Motivos de Cancelamento', medicos: 'Médicos',
   escolas: 'Escolas', diagnosticos: 'Diagnósticos', origens: 'Origens', motivosbloq: 'Motivos de Bloqueio', colaboradores: 'Colaboradores', tiposcolab: 'Tipos de Colaborador',
-  especialidades: 'Especialidades', servicos: 'Serviços', cbo: 'CBO', conselhos: 'Conselhos', fornecedores: 'Fornecedores', catfornecedor: 'Categorias de Fornecedor', unidades: 'Unidades', contas: 'Contas Bancárias', planocontas: 'Plano de Contas', lancamentos: 'Lançamentos', conciliacao: 'Conciliação', automacoes: 'Automações', emptomados: 'Empréstimos Tomados', empconcedidos: 'Empréstimos Concedidos', pagar: 'Contas a Pagar', receber: 'Contas a Receber', demonstrativos: 'Demonstrativos', salas: 'Salas', feriados: 'Feriados e Recessos',
+  especialidades: 'Especialidades', servicos: 'Serviços', cbo: 'CBO', conselhos: 'Conselhos', fornecedores: 'Fornecedores', catfornecedor: 'Categorias de Fornecedor', unidades: 'Unidades', contas: 'Contas Bancárias', planocontas: 'Plano de Contas', lancamentos: 'Lançamentos', conciliacao: 'Conciliação', automacoes: 'Automações', caixa: 'Caixa de Entrada', emptomados: 'Empréstimos Tomados', empconcedidos: 'Empréstimos Concedidos', pagar: 'Contas a Pagar', receber: 'Contas a Receber', demonstrativos: 'Demonstrativos', salas: 'Salas', feriados: 'Feriados e Recessos',
   status: 'Status', objetivos: 'Objetivos', atividades: 'Atividades', escalas: 'Escalas', habilidades: 'Habilidades'};
 (async () => {
   const browser = await chromium.launch(require('./launch-opts'));

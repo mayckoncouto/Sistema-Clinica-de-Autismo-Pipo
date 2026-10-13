@@ -4425,3 +4425,19 @@ Primeiro passo do projeto "Síntese do plano": Prontuário ▾ → **Atividades*
 
 ## Banco de Atividades: planilhas geradas (2026-10-13)
 Planilhas de objetivos (especialidades ampliadas, Aplicador ABA em todos) e de atividades (666, 10–20 por objetivo) foram geradas FORA do repositório e entregues ao usuário; importar objetivos antes das atividades.
+
+## CRM: Caixa de Entrada (2026-10-13)
+Pedido do usuário: CRM ▾ → **Caixa de Entrada** logo depois de Minhas Tarefas (`#tab-caixa`, aba `caixa`, endereço `#caixa`, `CRM_ITEMS` `crm-caixa`, `CRM_TABS`).
+Abas **Principal | Histórico de Movimentações | Lidas**, busca, filtros de tipo e de lista, linhas agrupadas por data (`.cx-grp`), uma linha por tarefa com o resumo das últimas
+movimentações e os botões **Limpar** / **Adiar** / **Marcar como não lida** no fim. Visual do próprio sistema (`.pat-toolbar`, `.seg`, `.pat-table`, `.btn`).
+- Entram tarefas em que a pessoa é responsável, segue, foi @mencionada ou criou. Movimento próprio nunca cria novidade. Tipos (`cxType`): mencao, comentario, status,
+  prazo, responsavel, anexo, outro; Preferências (Opções ▾) escolhem tipos e período (`agendaPipo:cxPrefs`, padrão 30 dias).
+- Estado por pessoa em `public.task_inbox` (`cleared_at` = hora do último evento quando limpou, `snoozed_until`, `mark_unread`, RLS `task_inbox_own`); função `crm_inbox(p_days)`
+  (security invoker) devolve por tarefa último movimento, total, novidades, não vistas, mencionada e os 5 últimos eventos. Evento novo depois de limpar devolve a linha à Principal sozinho.
+- Atalhos: **E** limpa a linha marcada, **Shift+E** limpa tudo (Limpar Tudo com confirmação); Desfazer logo após limpar (`cxUndoRun`); abrir a linha abre a tarefa na Atividade com
+  os comentários novos destacados (`.crm-cmt.cx-new`). Contador na Principal, no botão CRM, no ☰ e no ícone do app (`cxPrincipalCount` dentro de `crmBadgeCount`).
+- Permissão **CRM – Caixa de Entrada** (`crmcaixa`, só ver; níveis começam com o que tinham em `crm_listas.view`); `cxCan()`.
+- Migração `supabase/2026-10-13f-caixa-de-entrada.sql` (linha 124 da conferência; `schema.sql` atualizado; `conferencia-geral.sql` NÃO regerado). Rodada em produção pelo conector
+  (tabela 1 | função 1 | níveis 6 | política 1). Sem sistema online (testes) a Caixa lê `CRM.mem` (`cxMemRows`).
+- NÃO feito: aviso de celular apontando para a linha da Caixa (o push abre a tarefa por `/?tarefa=<id>#crm`; mudar o link exige publicar de novo a função `pipo-push`).
+- Teste `tests/run_caixa.js` (no `npm test`); a aba `caixa` entra nas listas de `run_toolbar_rows`, `run_sticky_headers` e `run_cad_titles`. Ajuda: tópico `crm-caixa`.

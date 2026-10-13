@@ -27,7 +27,7 @@ const path = require('path');
   // Menu CRM ▾
   await page.click('#crmBtn');
   const items = await page.$$eval('#crmMenu [data-nav]', (r) => r.map((x) => x.textContent));
-  check('CRM menu: Minhas Tarefas, the 4 lists and Listas e Status?', items.join('|') === 'CRM|Minhas Tarefas|Atendimento|Agendas|Fature|Gestão|Listas e Status|Automações', items);
+  check('CRM menu: Minhas Tarefas, the 4 lists and Listas e Status?', items.join('|') === 'CRM|Minhas Tarefas|Caixa de Entrada|Atendimento|Agendas|Fature|Gestão|Listas e Status|Automações', items);
   await page.click('#crmMenu [data-nav="crm-atendimento"]');
   await page.waitForTimeout(200);
 
@@ -326,7 +326,7 @@ const path = require('path');
   await page.click('#crmBtn'); await page.click('#crmMenu [data-nav="crm-agendas"]'); await page.waitForTimeout(150);
 
   const mods = await ev('window.pipoCrmModules().map(function(m){ return m.key + "|" + (m.group || ""); }).join(",")');
-  check('Níveis de Permissão: CRM group = CRM (view only), Listas e Status, Automações, then one row per list?', /^crm_listas\|CRM,crmlistas\|,crmautomacoes\|,crm_atendimento\|,crm_agendas\|/.test(mods), mods);
+  check('Níveis de Permissão: CRM group = CRM (view only), Listas e Status, Automações, Caixa de Entrada, then one row per list?', /^crm_listas\|CRM,crmlistas\|,crmautomacoes\|,crmcaixa\|,crm_atendimento\|,crm_agendas\|/.test(mods), mods);
   // Listas e Status: visual de Cadastros → Grupos (linhas com setas, bolinha, resumo e Editar; janela própria por lista)
   await ev('crmOpenListsModal()');
   await page.waitForSelector('#ovCrmL');
@@ -354,7 +354,7 @@ const path = require('path');
   check('new list "Compras" in the menu?', items2.indexOf('Compras') !== -1 && !!(await ev('crmListById("compras")')), items2);
   await page.keyboard.press('Escape');
   const mods2 = await ev('window.pipoCrmModules().map(function(m){ return m.key; })');
-  check('permission modules: Listas e Status first, then one per list (new list included)?', mods2[0] === 'crm_listas' && mods2[1] === 'crmlistas' && mods2[2] === 'crmautomacoes' && mods2[3] === 'crm_atendimento' && mods2.indexOf('crm_compras') !== -1, mods2);
+  check('permission modules: Listas e Status first, then one per list (new list included)?', mods2[0] === 'crm_listas' && mods2[1] === 'crmlistas' && mods2[2] === "crmautomacoes" && mods2[3] === "crmcaixa" && mods2[4] === "crm_atendimento" && mods2.indexOf('crm_compras') !== -1, mods2);
 
   // Velocidade: com o tempo real conectado, abrir o CRM de novo não relê tudo do banco
   const cache = await ev(`(async function(){
