@@ -29,6 +29,8 @@ const fs = require('fs');
   check('sem colunas conhecidas: erro claro?', /Não encontrei as colunas/.test((await ev('cnParseRows([["a","b"]])')).error || ''));
   const ks = await ev('cnKeys([{date:"2026-10-01",valor:-5,desc:"A",doc:""},{date:"2026-10-01",valor:-5,desc:"A",doc:""},{date:"2026-10-01",valor:-5,desc:"B",doc:"Z9"}]).map(function(l){ return l.key; })');
   check('chaves: repetidas ganham nº e documento vale por si?', ks[0] !== ks[1] && ks[2] === 'id:Z9', JSON.stringify(ks));
+  const kz = await ev('cnKeys(cnParseOfx("<OFX><STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260914030000.000<TRNAMT>53085.72<FITID>000000<MEMO>SAUDE CAIXA PGTO CREDENC</STMTTRN><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260925030000.000<TRNAMT>-73.0<FITID>000000<MEMO>TARIFA MANUTENCAO CONTA A</STMTTRN></OFX>")).map(function(l){ return l.key; })');
+  check('OFX da Caixa (FITID 000000 em tudo): chaves diferentes?', kz.length === 2 && kz[0] !== kz[1] && !/^id:/.test(kz[0]), JSON.stringify(kz));
 
   // ---- dados ----
   await page.evaluate(async () => {

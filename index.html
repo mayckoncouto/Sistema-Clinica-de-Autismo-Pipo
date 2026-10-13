@@ -29494,9 +29494,11 @@ function cnReadFile(file){
 }
 // chave de cada linha: número do documento (FITID) ou data|valor|descrição + nº da repetição
 function cnKeys(lines){
-  var seen = {};
+  var seen = {}, docN = {};
+  lines.forEach(function(l){ if (l.doc) docN[l.doc] = (docN[l.doc] || 0) + 1; });
   lines.forEach(function(l){
-    if (l.doc){ l.key = "id:" + l.doc; return; }
+    // Alguns bancos (ex.: Caixa) mandam o mesmo FITID (000000) em todas as linhas: não serve de identidade.
+    if (l.doc && !/^0+$/.test(l.doc) && docN[l.doc] === 1){ l.key = "id:" + l.doc; return; }
     var base = l.date + "|" + l.valor.toFixed(2) + "|" + normText(l.desc);
     seen[base] = (seen[base] || 0) + 1;
     l.key = base + "|" + seen[base];
