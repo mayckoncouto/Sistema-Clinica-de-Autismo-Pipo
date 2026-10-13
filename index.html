@@ -755,6 +755,9 @@ div.ag-obj-head{cursor:default}
 .crm-att-name:hover{text-decoration:underline}
 .crm-att-meta{font-size:12px;color:var(--muted);min-width:0}
 .crm-att-acts{display:flex;gap:2px}
+.crm-att-drop{border:1.5px dashed var(--line-strong,var(--line));border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.crm-att-drop.over,.crm-modal.att-over{border-color:var(--accent);background:var(--accent-weak)}
+.crm-modal.att-over{outline:2px dashed var(--accent);outline-offset:-6px}
 .crm-att-pick{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .crm-sec-t{font-size:13px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 .crm-sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
@@ -7065,7 +7068,7 @@ function crmAttOpen(att){
     }, function(e){ if (w) w.close(); showToast("Não foi possível abrir: " + ((e && e.message) || e), true); });
 }
 // Janela de enviar (sem att) ou renomear (com att).
-function crmAttDialog(task, att){
+function crmAttDialog(task, att, dropFile){
   return new Promise(function(resolve){
     var host = document.getElementById("confirmHost");
     if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
@@ -7079,7 +7082,7 @@ function crmAttDialog(task, att){
       '<div class="modal" style="max-width:520px">' +
         '<div class="modal-head"><div><h3 id="atTitle">' + (att ? "Renomear Anexo" : "Anexar Arquivo") + '</h3></div><button class="modal-close" id="atClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
-          (att ? '' : '<div class="field"><label>Arquivo</label><div class="crm-att-pick"><input type="file" id="atFile" hidden><button type="button" class="btn ghost" id="atPick">Escolher Arquivo</button><span class="pat-count" id="atFileName">Nenhum arquivo escolhido (até 4 MB)</span></div></div>' +
+          (att ? '' : '<div class="field"><label>Arquivo</label><div class="crm-att-drop" id="atDrop"><input type="file" id="atFile" hidden><div class="crm-att-pick"><button type="button" class="btn ghost" id="atPick">Escolher Arquivo</button><span class="pat-count" id="atFileName">Nenhum arquivo escolhido (até 4 MB)</span></div><div class="pat-count">ou arraste e solte o arquivo aqui</div></div></div>' +
             '<div class="field"><label for="atKind">Pasta</label><select id="atKind">' + kinds.map(function(k){ return '<option value="' + k + '">' + CRM_ATT_KINDS[k] + '</option>'; }).join("") + '</select></div>') +
           '<div class="field"><label for="atName">Nome do Arquivo</label><input id="atName" type="text" maxlength="120" autocomplete="off" value="' + esc(initial) + '"></div>' +
           '<div class="pat-count" id="atPrev"></div><div class="pat-count" id="atErr" style="color:var(--danger,#c0392b)" hidden></div>' +
@@ -7105,13 +7108,19 @@ function crmAttDialog(task, att){
     var fileIn = document.getElementById("atFile");
     if (fileIn){
       document.getElementById("atPick").addEventListener("click", function(){ fileIn.click(); });
-      fileIn.addEventListener("change", function(){
-        var f = fileIn.files && fileIn.files[0]; file = null;
+      function setFile(f){
+        file = null;
         if (f && f.size > CRM_ATT_MAX){ showToast("O arquivo passa de 4 MB.", true); fileIn.value = ""; f = null; }
         if (f){ file = f; if (!crmAttClean(nameIn.value)) nameIn.value = f.name.replace(/\.[A-Za-z0-9]{1,8}$/, ""); }
         document.getElementById("atFileName").textContent = f ? f.name + " (" + crmAttSize(f.size) + ")" : "Nenhum arquivo escolhido (até 4 MB)";
         refresh();
-      });
+      }
+      fileIn.addEventListener("change", function(){ setFile(fileIn.files && fileIn.files[0]); });
+      var dz = document.getElementById("atDrop");
+      ["dragenter", "dragover"].forEach(function(n){ dz.addEventListener(n, function(e){ e.preventDefault(); dz.classList.add("over"); }); });
+      dz.addEventListener("dragleave", function(){ dz.classList.remove("over"); });
+      dz.addEventListener("drop", function(e){ e.preventDefault(); dz.classList.remove("over"); var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) setFile(f); });
+      if (dropFile) setFile(dropFile);
     }
     ok.addEventListener("click", function(){
       if (ok.disabled) return;
@@ -7150,6 +7159,17 @@ function crmAttWire(task, canEdit){
   var tog = document.getElementById("crmAttTog");
   if (tog) tog.addEventListener("click", function(){ var open = box.hidden; box.hidden = !open; tog.setAttribute("aria-expanded", String(open)); });
   function reload(){ crmAttRender(task, canEdit); if (CRM.openId === task.id) crmActivityLoad(task.id); }
+  var modal = box.closest(".crm-modal");
+  if (modal && canEdit && task.patient_id){
+    var hasFiles = function(e){ return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") !== -1; };
+    modal.addEventListener("dragover", function(e){ if (!hasFiles(e)) return; e.preventDefault(); modal.classList.add("att-over"); });
+    modal.addEventListener("dragleave", function(e){ if (e.target === modal) modal.classList.remove("att-over"); });
+    modal.addEventListener("drop", function(e){
+      if (!hasFiles(e)) return; e.preventDefault(); modal.classList.remove("att-over");
+      var f = e.dataTransfer.files[0]; if (!f || document.getElementById("ovAtt")) return;
+      crmAttDialog(task, null, f).then(function(r){ if (r){ showToast("Arquivo anexado."); reload(); } });
+    });
+  }
   if (add) add.addEventListener("click", function(){ crmAttDialog(task).then(function(r){ if (r){ showToast("Arquivo anexado."); reload(); } }); });
   box.addEventListener("click", function(e){
     var row = e.target.closest("[data-att]"); if (!row) return;
@@ -22304,7 +22324,7 @@ var HELP_TOPICS = [
       "<b>CRM ▾ → Listas e Status</b>: uma linha por lista com as setas (ordem no menu), a bolinha da cor, os status e as opções; as setas gravam na hora. <b>Editar</b> abre a janela da lista: nome, cor, opções (<b>Funil de contatos</b>, <b>Recorrência</b>) e os status (setas, cor, nome, Finalizado, Perda, ✕ e + status); <b>Salvar</b> grava e volta para as listas. <b>+ Incluir</b> cria uma lista; <b>Excluir</b> só funciona se a lista não tem tarefas.",
       "<b>Configurar recorrência</b> (no pé dos atalhos): escolha Diariamente, Semanalmente (marque os dias da semana), Mensalmente ou Anualmente, se cria uma <b>nova tarefa</b> ou reabre a mesma, <b>Repetir para sempre</b> ou até uma data, e o status da próxima. O calendário pinta as próximas datas. Tarefa recorrente mostra ↻ ao lado da data; <b>Remover</b> tira a recorrência.",
       "<b>Outras Opções ▾</b> no canto superior direito da janela da tarefa (tarefa já salva): <b>Cadastro do Paciente</b> (tarefa com paciente cadastrado) abre o cadastro dele. <b>Seguir Tarefa</b> faz você receber aviso (no celular ou no computador, se as notificações estiverem ligadas) quando alguém comentar ou alterar a tarefa — serve para quem não é responsável; <b>Deixar de Seguir</b> desfaz. <b>Duplicar Tarefa</b> cria uma cópia na mesma lista (mesmo status, título, descrição, prioridade, vencimento, responsáveis e paciente ou lead; sem comentários e sem recorrência) e abre a cópia. <b>Copiar Link da Tarefa</b> copia o endereço que abre direto esta tarefa. <b>Gerar Tarefa a Partir Desta</b> cria uma nova tarefa (título, descrição, prioridade e paciente ou lead da original) na lista, no status, com o vencimento e os responsáveis que você escolher; as duas registram um comentário uma da outra. <b>Mover Tarefa</b> leva a tarefa para outra lista em que você pode editar. Se a lista de destino não tem o status atual (pelo mesmo nome), o aviso mostra isso e você escolhe o status da tarefa nela (já vem sugerido o equivalente). Responsáveis sem acesso à lista nova saem da tarefa, e a recorrência é retirada se a lista nova não a permite. A mudança de lista fica na Atividade da tarefa.",
-      "<b>Anexos</b> (tarefa já salva, com paciente cadastrado): o botão <b>+ Anexar</b> abre a janela para escolher o arquivo (até 4 MB), a <b>Pasta</b> (<b>Documentos</b> ou <b>Relatórios</b>) e o <b>Nome do Arquivo</b>. O arquivo é guardado no Google Drive da clínica, na pasta do paciente, dentro da subpasta escolhida (as pastas são criadas sozinhas no primeiro anexo). O nome final é o nome que você digitou mais o primeiro nome do paciente: digitar “Carteirinha” para o paciente João gera “Carteirinha João”, mantendo o tipo do arquivo; a janela mostra como ficará antes do envio. O grupo começa recolhido: a seta ao lado de <b>Anexos</b> mostra ou esconde a lista, com a quantidade ao lado do título. Cada anexo tem duas linhas: o nome (clique para abrir) com <b>Renomear</b> e <b>Excluir</b> (para quem pode editar a lista) e, embaixo, pasta, tamanho, quem enviou e quando. Ao excluir, o sistema pergunta se o arquivo também deve ser excluído no Drive (vai para a lixeira), se deve continuar no Drive (só sai da tarefa) ou se cancela. Mudar o nome do arquivo direto no Drive não atrapalha: a tarefa o encontra pelo código dele, mas continua mostrando o nome de quando foi anexado (use <b>Renomear</b> aqui para acertar); se o arquivo for para a lixeira do Drive, não abre mais. Anexar, renomear e excluir entram no histórico da tarefa.",
+      "<b>Anexos</b> (tarefa já salva, com paciente cadastrado): o botão <b>+ Anexar</b> abre a janela para escolher o arquivo (até 4 MB); também dá para <b>arrastar e soltar</b> o arquivo sobre a janela da tarefa ou sobre a área tracejada da janela de anexar, a <b>Pasta</b> (<b>Documentos</b> ou <b>Relatórios</b>) e o <b>Nome do Arquivo</b>. O arquivo é guardado no Google Drive da clínica, na pasta do paciente, dentro da subpasta escolhida (as pastas são criadas sozinhas no primeiro anexo). O nome final é o nome que você digitou mais o primeiro nome do paciente: digitar “Carteirinha” para o paciente João gera “Carteirinha João”, mantendo o tipo do arquivo; a janela mostra como ficará antes do envio. O grupo começa recolhido: a seta ao lado de <b>Anexos</b> mostra ou esconde a lista, com a quantidade ao lado do título. Cada anexo tem duas linhas: o nome (clique para abrir) com <b>Renomear</b> e <b>Excluir</b> (para quem pode editar a lista) e, embaixo, pasta, tamanho, quem enviou e quando. Ao excluir, o sistema pergunta se o arquivo também deve ser excluído no Drive (vai para a lixeira), se deve continuar no Drive (só sai da tarefa) ou se cancela. Mudar o nome do arquivo direto no Drive não atrapalha: a tarefa o encontra pelo código dele, mas continua mostrando o nome de quando foi anexado (use <b>Renomear</b> aqui para acertar); se o arquivo for para a lixeira do Drive, não abre mais. Anexar, renomear e excluir entram no histórico da tarefa.",
       "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para ver os nomes (↑ ↓ andam, Tab ou Enter escolhem, Esc fecha) e mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem, onde o @ também lista as pessoas: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],
     rules: [
