@@ -552,16 +552,17 @@
         '<div class="acesso-menu" id="acessoMenu" role="menu" hidden>' +
           accGroups([
             // Configuração do sistema
-            [((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : ""),
+            [(can("unidades", "view") ? '<button type="button" role="menuitem" data-act="unidades">Unidades</button>' : ""),
+             ((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : ""),
              ((isAdmin() || can("usuarios", "view")) ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : ""),
              ((isAdmin() || can("backup", "view")) ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : ""),
              (isManager() ? '<button type="button" role="menuitem" data-act="sistema">Sistema</button>' : "")],
             // Pessoal
             [(canDefault("senha", "view", true) ? '<button type="button" role="menuitem" data-act="senha">Senha</button>' : ""),
              ((window.pipoNotifAvailable && window.pipoNotifAvailable()) ? '<button type="button" role="menuitem" data-act="notificacoes">Notificações</button>' : ""),
-             (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : ""),
              // App instalável: some quando o sistema já está aberto pelo ícone da tela inicial.
-             ((window.pipoInstallApp && !(window.pipoIsInstalled && window.pipoIsInstalled())) ? '<button type="button" role="menuitem" data-act="instalar">Instalar App</button>' : "")],
+             ((window.pipoInstallApp && !(window.pipoIsInstalled && window.pipoIsInstalled())) ? '<button type="button" role="menuitem" data-act="instalar">Instalar App</button>' : ""),
+             (canDefault("ajuda", "view", true) ? '<button type="button" role="menuitem" data-act="ajuda">Ajuda</button>' : "")],
             ['<button type="button" role="menuitem" data-act="sair">Sair</button>']
           ]) +
         "</div>" +
@@ -608,6 +609,9 @@
         if (window.pipoOpenBackup) window.pipoOpenBackup();
       } else if (act === "status") {
         if (window.pipoOpenStatuses) window.pipoOpenStatuses();
+      } else if (act === "unidades") {
+        var unBtn = document.querySelector('#mainTabs button[data-tab="unidades"]');
+        if (unBtn) unBtn.click();
       } else if (act === "usuarios") {
         var tabBtn = document.querySelector('#mainTabs button[data-tab="usuarios"]');
         if (tabBtn) tabBtn.click();

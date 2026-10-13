@@ -15,7 +15,7 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab="unidades"]', (b) => b.click());
   await page.waitForTimeout(200);
   check('Unidades screen opens with title?', await page.$eval('#tab-unidades', (e) => !e.hidden) && /Unidades/.test(await page.$eval('#tab-unidades .cad-title', (e) => e.textContent)));
-  check('Cadastros menu lists Unidades?', await (async () => { await page.click('#cadBtn'); const ok = !!(await page.$('#cadMenu [data-nav="unidades"]')); await page.keyboard.press('Escape'); return ok; })());
+  check('Cadastros menu no longer lists Unidades (it lives in Acesso)?', await (async () => { await page.click('#cadBtn'); const ok = !(await page.$('#cadMenu [data-nav="unidades"]')); await page.keyboard.press('Escape'); return ok; })());
   // incluir
   await page.click('#reg-unidades-add'); await page.waitForSelector('#ovReg');
   check('window labels: Nome na Tela de Login + fields?', (await page.$eval('#ovReg label[for="regName"]', (e) => e.textContent)) === 'Nome na Tela de Login'
