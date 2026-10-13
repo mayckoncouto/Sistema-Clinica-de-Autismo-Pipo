@@ -147,7 +147,15 @@ async function patientFolders(patientId, unitId, patientName) {
   if (got.ok && Array.isArray(got.body) && got.body[0]) return got.body[0];
   var root = readEnv("GOOGLE_DRIVE_ID");
   if (!root) throw new Error("O Google Drive ainda não está configurado (falta GOOGLE_DRIVE_ID na Vercel).");
-  var main = await createFolder(cleanName(patientName) || "Paciente", root);
+  var main;
+  try { main = await createFolder(cleanName(patientName) || "Paciente", root); }
+  catch (e) {
+    if (/not found|insufficient|forbidden|permission/i.test(String(e.message))) {
+      var sa = serviceAccount();
+      throw new Error("A conta de serviço" + (sa ? " (" + sa.client_email + ")" : "") + " não tem acesso ao Drive compartilhado. No Google Drive, abra o Drive compartilhado → Gerenciar membros e adicione esse e-mail como Gerenciador de conteúdo. Confira também se GOOGLE_DRIVE_ID é o código do Drive compartilhado.");
+    }
+    throw e;
+  }
   var docs = await createFolder(KINDS.documentos, main.id);
   var rel = await createFolder(KINDS.relatorios, main.id);
   var row = { patient_id: patientId, unit_id: unitId, folder_id: main.id, documentos_id: docs.id, relatorios_id: rel.id };

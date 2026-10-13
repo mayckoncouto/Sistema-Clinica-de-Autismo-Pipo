@@ -25,6 +25,7 @@ global.fetch = async (url, opts = {}) => {
   }
   if (u.startsWith("https://oauth2.googleapis.com/token")) return J({ access_token: "gtoken", expires_in: 3600 });
   if (u.includes("/upload/drive/v3/files")) { const id = "F" + db.nextId++; const name = /"name":"([^"]+)"/.exec(opts.body.toString())[1]; db.gfiles[id] = { name, trashed: false }; return J({ id, name }); }
+  if (u.includes("/drive/v3/files?") && m === "POST" && db.failRoot) return J({ error: { message: "File not found: DRIVE123." } }, 404);
   if (u.includes("/drive/v3/files?") && m === "POST") { const id = "D" + db.nextId++; const b = JSON.parse(opts.body); db.gfiles[id] = { name: b.name, folder: true, parent: b.parents[0] }; return J({ id }); }
   if (u.includes("/drive/v3/files?") && m === "GET") { const q = decodeURIComponent(/q=([^&]+)/.exec(u)[1]); const nm = /name = '([^']+)'/.exec(q)[1]; return J({ files: Object.entries(db.gfiles).filter(([, f]) => f.name === nm && !f.trashed && !f.folder).map(([id]) => ({ id })) }); }
   if (u.includes("/drive/v3/files/") && m === "PATCH") { const id = /files\/([^?]+)/.exec(u)[1]; Object.assign(db.gfiles[id], JSON.parse(opts.body)); return J({ id }); }
@@ -83,6 +84,9 @@ const up = (typed, kind = "relatorios", filename = "scan.PDF", size = 100) => ru
   check("sem permissão de editar não renomeia?", rn3.code === 403);
   const nl = await run({ method: "POST", query: { action: "upload" }, headers: { authorization: "" }, body: Buffer.alloc(3) });
   check("sem login recusado?", nl.code === 401);
+  db.folders = []; db.failRoot = true;
+  const r8 = await up("Teste", "relatorios");
+  check("sem acesso ao Drive: mensagem explica o que fazer (e não o 'File not found')?", r8.code === 500 && /Gerenciar membros/.test(r8.body.error) && /sa@p\.iam/.test(r8.body.error), r8.body.error);
   console.log("no JS errors?", true);
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.log("ERRO", e); process.exit(1); });
