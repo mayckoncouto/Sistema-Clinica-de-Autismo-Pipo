@@ -4406,3 +4406,4 @@ Pedido do usuário. Decisões: todos veem o bloqueio e o motivo; agendamento man
 - Tarja vermelha "Bloqueado" no canto inferior direito das células do Planner e da Agenda (igual ao status; com status na Agenda fica logo acima dele) e etiqueta na coluna Status da lista de Pacientes.
 - Ao bloquear um paciente que já tinha atendimentos, abre `trOfferRemoveBookings(id, {agendaOnly: true})` (só Agenda, a partir da data; o Planner fica).
 - Teste `tests/run_bloqueio_paciente.js`.
+- (2026-10-13, pedido do usuário) **Inativar paciente também pergunta se remove os agendamentos**: depois de inativar (e da pergunta de cancelar o tratamento ativo), abre `trOfferRemoveBookings(id)` — remover do Planner (4 semanas) e/ou da Agenda a partir de uma data. Cancelar tratamento já perguntava. Sem SQL. Teste em `run_perm_buttons.js`.
