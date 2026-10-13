@@ -294,7 +294,11 @@
     return p[module] ? !!p[module][action] : !!dflt;
   }
   function canWriteAnything() {
-    return MODULES.some(function (m) { return can(m, "create") || can(m, "edit") || can(m, "delete"); });
+    if (MODULES.some(function (m) { return can(m, "create") || can(m, "edit") || can(m, "delete"); })) return true;
+    // Módulos que não estão na lista fixa (ex.: uma linha por lista do CRM, crm_<lista>).
+    if (!profile || !profile.active || !profile.role) return false;
+    var p = permsUpgrade(profile.role.permissions) || {};
+    return Object.keys(p).some(function (m) { return can(m, "create") || can(m, "edit") || can(m, "delete"); });
   }
 
   function setProfile(p) {
