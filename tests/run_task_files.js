@@ -80,6 +80,10 @@ const up = (typed, kind = "relatorios", filename = "scan.PDF", size = 100) => ru
   const dl = await run({ method: "POST", query: { action: "delete" }, body: { id: id1 } });
   const gid = db.gfiles[driveId];
   check("excluir tira do banco e manda o arquivo para a lixeira do Drive?", dl.code === 200 && !db.atts.find((a) => a.id === id1) && gid.trashed === true);
+  const rk = await up("Manter", "relatorios");
+  const kd = db.atts.find((a) => a.id === rk.body.attachment.id).drive_file_id;
+  const dk = await run({ method: "POST", query: { action: "delete" }, body: { id: rk.body.attachment.id, keep: true } });
+  check("excluir com 'manter no Drive' tira da tarefa mas não manda para a lixeira?", dk.code === 200 && !db.atts.find((a) => a.id === rk.body.attachment.id) && !db.gfiles[kd].trashed);
   db.perm.edit = false;
   const rn3 = await run({ method: "POST", query: { action: "rename" }, body: { id: db.atts[0].id, name: "X" } });
   check("sem permissão de editar não renomeia?", rn3.code === 403);

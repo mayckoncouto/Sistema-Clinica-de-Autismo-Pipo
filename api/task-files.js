@@ -10,7 +10,7 @@
 //                                       (documentos | relatorios), x-name (nome digitado, com encodeURIComponent),
 //                                       x-filename (nome original, com encodeURIComponent), x-mime.
 // POST /api/task-files?action=rename    JSON { id, name }
-// POST /api/task-files?action=delete    JSON { id }            (o arquivo vai para a lixeira do Drive)
+// POST /api/task-files?action=delete    JSON { id, keep? }     (o arquivo vai para a lixeira do Drive, salvo keep:true)
 // GET  /api/task-files?action=download&id=<anexo>
 // Todos com   Authorization: Bearer <access_token do usuário>.
 //
@@ -293,6 +293,7 @@ module.exports = async function handler(req, res) {
       var del = await sb("/rest/v1/task_attachments?id=eq." + encodeURIComponent(d.id), { method: "DELETE", headers: userHeaders(token) });
       if (!del.ok) { fail(res, 400, errMsg(del, "Não foi possível excluir.")); return; }
       var warn = "";
+      if (body.keep) { res.status(200).json({ ok: true, kept: true }); return; }
       try { await trash(d.drive_file_id); } catch (e) { warn = "O anexo saiu da tarefa, mas o arquivo continua no Drive: " + e.message; }
       res.status(200).json({ ok: true, warning: warn || undefined });
       return;
