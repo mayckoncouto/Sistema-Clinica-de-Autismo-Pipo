@@ -727,6 +727,8 @@
     unitName: unitName,
     reloadUnits: function () { return loadUnits(); },
     onRoleChange: function (fn) { roleListeners.push(fn); },
+    // Token de acesso da pessoa logada (para as funções /api/* que conferem o login, como os anexos do CRM).
+    token: function () { return session ? session.access_token : ""; },
     // Chamada às funções /api/admin-* (só funcionam para Administrador).
     adminApi: function (payload, path) {
       return fetch(path || "/api/admin-users", {

@@ -4348,3 +4348,28 @@ Migrações (rodadas em produção pelo conector, testadas no PGlite com 2 unida
 - (2026-10-13, pedido do usuário) **A tela de login NÃO tem mais a lista "Unidade"** (nem pública): cada pessoa entra na unidade do próprio perfil (`profiles.unit_id`) e só a Gestão escolhe, depois de entrar, no seletor do topo (a última escolha fica em `agendaPipo:unit`). `resolveUnit` não tem mais recusa por unidade errada; `applyLoginBrand`/marca por unidade no login saíram (o login mostra a marca da Unidade 1; `api/config.js` ainda devolve `unidades` — sem uso no login). Migração `supabase/2026-10-12q-unidades-login-sem-lista.sql` (linha 118) tira o acesso de `anon` a `login_units()`: o nome das unidades deixa de ser público.
 - (2026-10-13, pedido do usuário) **CRM, janela da tarefa:** "Outras Opções ▾" no canto superior direito (`.crm-modal .modal-head-acts{margin-left:auto}`) com **Gerar Tarefa a Partir Desta** (`crmGenDialog`, `crmGenDests`: lista onde pode incluir, status, responsáveis com acesso; leva título, descrição, prioridade e paciente/lead; as duas tarefas ganham comentário uma da outra) e **Mover Tarefa**. @menção na caixa de comentário: ↑ ↓ andam, Tab/Enter escolhem, Esc fecha (`crmMentionWire`). Sem SQL. Teste em `run_crm.js`.
 - (2026-10-13, pedido do usuário) **CRM: Duplicar, Seguir e Resumo do Dia.** Menu Outras Opções da tarefa ganhou **Seguir Tarefa / Deixar de Seguir** (`crmFollow` → RPC `task_follow(p_task, p_on)`, `tasks.followers uuid[]`; quem vê a lista pode seguir, mesmo sem editar), **Duplicar Tarefa** (cópia na mesma lista: status, título, descrição, prioridade, vencimento, responsáveis, paciente/lead; sem comentários nem recorrência; abre a cópia) e, antes, Cadastro do Paciente / Gerar Tarefa / Mover / Copiar Link. Aviso aos seguidores: gatilho `task_events_push` chama a função `pipo-push` com `tipo: "seguindo"` (comentário, status ou campo alterado; autor e mencionados não recebem; `push_follow_targets`), preferência nova **Tarefas que Sigo** (`seguindo`) em Acesso → Notificações. Tela CRM: cartão **Resumo do Dia** (`crmDayHtml`/`crmDayPeople`/`crmDayOpen`, por pessoa: vencidas e vencem hoje, "Sem responsável" junta as sem dono; clicar lista as tarefas). Migração `supabase/2026-10-13-seguir-tarefa.sql` (linha 119 da conferência; schema e conferência geral atualizados; função `pipo-push` precisa ser publicada de novo). Teste em `run_crm.js`.
+
+## CRM: anexos das tarefas no Google Drive (2026-10-13)
+Decisões do usuário: **Drive compartilhado** do Google Workspace (código `0AG9M-7u7X14uUk9PVA`, guardado na variável da Vercel
+`GOOGLE_DRIVE_ID`); **uma pasta por paciente** com as subpastas **Documentos** e **Relatórios**, criadas sozinhas no primeiro anexo; na janela de
+anexar há o seletor **Pasta** (Documentos / Relatórios) e o campo **Nome do Arquivo**: o nome final é o digitado + **primeiro nome do paciente** +
+extensão original ("Carteirinha" para João = "Carteirinha João.pdf"; não repete o nome se já está no texto); renomear depois do envio incluído;
+limite 4 MB (limite de corpo da Vercel); tarefa sem paciente cadastrado não anexa (pede cadastrar antes); **Documentos** só para quem também tem
+"Pacientes – Saúde" (ver); anexar/renomear/excluir exigem poder editar a lista da tarefa; nome repetido na pasta = recusa (nunca sobrescreve);
+excluir manda o arquivo para a lixeira do Drive.
+- O navegador nunca fala com o Google. `api/task-files.js` (`upload`, `rename`, `delete`, `download`) confere o login e as permissões pelo banco com o
+  token DA PESSOA (RPC `task_attachment_can` e `task_attachment_ctx`, RLS) e usa a **conta de serviço** do Google (`GOOGLE_SERVICE_ACCOUNT_JSON`, só no
+  servidor; JWT RS256 assinado com `crypto`, sem biblioteca). A conta de serviço é membro do Drive compartilhado (Gerenciador de conteúdo). Abrir o
+  arquivo = o servidor baixa e entrega (`crmAttOpen`), então quem usa o sistema não precisa ter acesso ao Drive.
+- Banco (migração `supabase/2026-10-13b-anexos-de-tarefas.sql`, rodada em produção pelo conector; linha 120 da conferência de migrações; `schema.sql` e
+  `conferencia-geral.sql` atualizados): `task_attachments` (task_id, patient_id, kind, drive_file_id, name, mime, size, autor, `unit_id`; RLS por
+  `task_attachment_can`), `patient_drive_folders` (pastas já criadas por paciente/unidade; só a service role mexe), gatilhos de carimbo, unidade e
+  **histórico da tarefa** (`campo: "anexo"`, `acao: anexou|renomeou|excluiu`, texto em `crmEventTextBase`). Apagar a tarefa apaga os registros dos
+  anexos (os arquivos ficam no Drive, na pasta do paciente). O Backup NÃO leva `task_attachments` (os arquivos estão no Drive).
+- App (bloco "CRM: anexos no Drive" antes de `crmEditDialog`): seção **Anexos** na janela da tarefa salva (`#crmAttBox`, `#crmAttAdd`, `#crmAttList`),
+  `crmAttDialog(task, att)` (enviar ou renomear, com prévia "Será salvo como: …"), `crmAttFinal` (mesma regra do servidor: se mudar uma, mudar a outra),
+  `crmAttRender`/`crmAttWire`. `pipoAuth.token()` entrega o token. Sem sistema online (testes) tudo fica em `CRM.mem.att`.
+- Variáveis na Vercel: `GOOGLE_SERVICE_ACCOUNT_JSON` (arquivo JSON da conta de serviço inteiro) e `GOOGLE_DRIVE_ID`. NUNCA colocar o JSON no repositório
+  nem no chat. Sem elas, anexar devolve "O Google Drive ainda não está configurado".
+- Testes: `tests/run_task_files.js` (servidor com Supabase e Google simulados, no `npm test`) e o bloco "anexos" em `tests/run_crm.js`. Ajuda: tópico
+  "CRM: Listas e Tarefas".

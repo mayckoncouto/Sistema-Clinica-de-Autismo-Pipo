@@ -744,6 +744,14 @@ div.ag-obj-head{cursor:default}
 .crm-person.on{border-color:var(--accent);background:var(--accent-weak);color:var(--ink)}
 .crm-person.on .crm-av{background:var(--accent);color:var(--accent-ink,#fff)}
 .crm-sec{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.crm-att-list{display:flex;flex-direction:column;gap:2px}
+.crm-att{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line)}
+.crm-att:last-child{border-bottom:0}
+.crm-att-name{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:600;color:var(--accent);cursor:pointer;text-align:left;min-width:0;overflow-wrap:anywhere}
+.crm-att-name:hover{text-decoration:underline}
+.crm-att-meta{font-size:12px;color:var(--muted);flex:1 1 200px;min-width:0}
+.crm-att-acts{display:flex;gap:2px}
+.crm-att-pick{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .crm-sec-t{font-size:13px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 .crm-sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
 .crm-sec-h .crm-sec-t{margin-bottom:0}
@@ -6613,7 +6621,7 @@ var CRM_PRIOS = [{id: "urgente", name: "Urgente", color: "#d64545"}, {id: "alta"
 var CRM_ORIGENS = ["Indicação médica", "Indicação de outro paciente", "Escola", "Convênio", "Internet / redes sociais", "Outro"];   // = "Como Conheceu a Clínica" do paciente
 var CRM_PERDAS = ["Financeiro", "Não respondeu", "Escolheu outra clínica", "Sem vaga no horário", "Convênio não cobre", "Outro"];
 var CRM = {lists: CRM_DEFAULT_LISTS, listsLoaded: false, tasks: {}, people: [], loaded: false, error: "", list: "", view: "lista", collapsed: {},
-  unread: {}, comCount: {}, reads: {}, channel: null, mem: {tasks: [], events: [], reads: {}, seq: 0}};
+  unread: {}, comCount: {}, reads: {}, channel: null, mem: {tasks: [], events: [], reads: {}, att: [], seq: 0}};
 function crmClient(){ return agdClient(); }
 function crmMe(){ var p = window.pipoAuth && window.pipoAuth.profile && window.pipoAuth.profile(); return p ? p.id : "local-me"; }
 function crmIsAdmin(){ return !window.pipoAuth || (window.pipoAuth.isAdmin && window.pipoAuth.isAdmin()); }
@@ -6970,6 +6978,165 @@ document.addEventListener("keydown", function(e){
   var k = {b: "b", i: "i", u: "u"}[String(e.key).toLowerCase()]; if (!k) return;
   e.preventDefault(); crmFmtApply(ta, k);
 });
+// ---------- CRM: anexos no Drive ----------
+// O arquivo vai para o Google Drive da clínica, numa pasta por paciente com as subpastas Documentos e Relatórios
+// (api/task-files.js); aqui ficam só o nome e o código. Nome final = nome digitado + primeiro nome do paciente + extensão.
+var CRM_ATT_MAX = 4 * 1024 * 1024;
+var CRM_ATT_KINDS = {documentos: "Documentos", relatorios: "Relatórios"};
+function crmAttClean(s){ return String(s == null ? "" : s).replace(/[\u0000-\u001f\u007f\/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim(); }
+function crmAttExt(fn){ var m = /\.([A-Za-z0-9]{1,8})$/.exec(String(fn || "").trim()); return m ? "." + m[1].toLowerCase() : ""; }
+function crmAttFinal(typed, patientName, filename){
+  var base = crmAttClean(typed).slice(0, 120), first = crmAttClean(patientName).split(" ")[0] || "";
+  if (first && base.toLowerCase().split(" ").indexOf(first.toLowerCase()) < 0) base = (base + " " + first).trim();
+  return base + crmAttExt(filename);
+}
+function crmAttSize(n){ n = +n || 0; return n >= 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+function crmAttKinds(){ return healthCanSee() ? ["relatorios", "documentos"] : ["relatorios"]; }
+function crmAttToken(){ return window.pipoAuth && window.pipoAuth.token ? window.pipoAuth.token() : ""; }
+function crmAttPatientName(task){ var p = task && task.patient_id ? findPatientById(task.patient_id) : null; return p ? p.nome : ""; }
+function crmAttFail(r, j){ var e = new Error((j && j.error) || ("Erro " + r.status)); e.code = j && j.code; return e; }
+function crmAttList(taskId){
+  var c = crmClient();
+  if (!c) return Promise.resolve((CRM.mem.att || []).filter(function(a){ return a.task_id === taskId && (a.kind !== "documentos" || healthCanSee()); }));
+  return c.from("task_attachments").select("*").eq("task_id", taskId).order("created_at").then(function(r){ if (r.error) throw r.error; return r.data || []; });
+}
+function crmAttUpload(task, kind, typed, file){
+  var name = crmAttFinal(typed, crmAttPatientName(task), file.name);
+  if (!crmAttToken()){
+    CRM.mem.att = CRM.mem.att || [];
+    if (CRM.mem.att.some(function(a){ return a.task_id === task.id && a.kind === kind && a.name === name; })){ var e = new Error("Já existe um arquivo chamado “" + name + "” nesta pasta. Escolha outro nome."); e.code = "exists"; return Promise.reject(e); }
+    var row = {id: "att" + (++CRM.mem.seq), task_id: task.id, patient_id: task.patient_id, kind: kind, name: name, mime: file.type, size: file.size, created_by: crmMe(), created_by_name: crmPersonName(crmMe()), created_at: new Date().toISOString()};
+    CRM.mem.att.push(row); return Promise.resolve(row);
+  }
+  return fetch("/api/task-files?action=upload", {method: "POST", body: file, headers: {
+    Authorization: "Bearer " + crmAttToken(), "Content-Type": "application/octet-stream", "x-task-id": task.id, "x-kind": kind,
+    "x-name": encodeURIComponent(typed), "x-filename": encodeURIComponent(file.name), "x-mime": file.type || "application/octet-stream"}
+  }).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw crmAttFail(r, j); return j.attachment; }); });
+}
+function crmAttPost(action, payload){
+  return fetch("/api/task-files?action=" + action, {method: "POST", headers: {Authorization: "Bearer " + crmAttToken(), "Content-Type": "application/json"}, body: JSON.stringify(payload)})
+    .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw crmAttFail(r, j); return j; }); });
+}
+function crmAttRename(att, typed, patientName){
+  if (!crmAttToken()){
+    var nn = crmAttFinal(typed, patientName, att.name);
+    if ((CRM.mem.att || []).some(function(a){ return a.id !== att.id && a.task_id === att.task_id && a.kind === att.kind && a.name === nn; })){ var e = new Error("Já existe um arquivo chamado “" + nn + "” nesta pasta. Escolha outro nome."); e.code = "exists"; return Promise.reject(e); }
+    att.name = nn; return Promise.resolve(att);
+  }
+  return crmAttPost("rename", {id: att.id, name: typed}).then(function(j){ return j.attachment; });
+}
+function crmAttDelete(att){
+  if (!crmAttToken()){ CRM.mem.att = (CRM.mem.att || []).filter(function(a){ return a.id !== att.id; }); return Promise.resolve({}); }
+  return crmAttPost("delete", {id: att.id});
+}
+// Abre o arquivo numa aba nova (baixado pelo servidor com o login da pessoa; o Drive não precisa estar compartilhado com ela).
+function crmAttOpen(att){
+  if (!crmAttToken()){ showToast("Abrir o arquivo só funciona no sistema online.", true); return; }
+  var w = window.open("", "_blank");
+  fetch("/api/task-files?action=download&id=" + encodeURIComponent(att.id), {headers: {Authorization: "Bearer " + crmAttToken()}})
+    .then(function(r){ if (!r.ok) return r.json().catch(function(){ return {}; }).then(function(j){ throw crmAttFail(r, j); }); return r.blob(); })
+    .then(function(b){
+      var url = URL.createObjectURL(new Blob([b], {type: att.mime || b.type || "application/octet-stream"}));
+      if (w) w.location = url; else { var a = document.createElement("a"); a.href = url; a.download = att.name; a.click(); }
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+    }, function(e){ if (w) w.close(); showToast("Não foi possível abrir: " + ((e && e.message) || e), true); });
+}
+// Janela de enviar (sem att) ou renomear (com att).
+function crmAttDialog(task, att){
+  return new Promise(function(resolve){
+    var host = document.getElementById("confirmHost");
+    if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
+    var pname = crmAttPatientName(task), first = crmAttClean(pname).split(" ")[0] || "", kinds = crmAttKinds(), file = null;
+    var initial = "";
+    if (att){
+      initial = att.name.replace(/\.[A-Za-z0-9]{1,8}$/, "");
+      if (first && initial.toLowerCase().slice(-first.length - 1) === (" " + first).toLowerCase()) initial = initial.slice(0, -first.length - 1);
+    }
+    host.innerHTML = '<div class="overlay confirm-overlay" id="ovAtt" role="dialog" aria-modal="true" aria-labelledby="atTitle">' +
+      '<div class="modal" style="max-width:520px">' +
+        '<div class="modal-head"><div><h3 id="atTitle">' + (att ? "Renomear Anexo" : "Anexar Arquivo") + '</h3></div><button class="modal-close" id="atClose" aria-label="Fechar">✕</button></div>' +
+        '<div class="modal-body">' +
+          (att ? '' : '<div class="field"><label>Arquivo</label><div class="crm-att-pick"><input type="file" id="atFile" hidden><button type="button" class="btn ghost" id="atPick">Escolher Arquivo</button><span class="pat-count" id="atFileName">Nenhum arquivo escolhido (até 4 MB)</span></div></div>' +
+            '<div class="field"><label for="atKind">Pasta</label><select id="atKind">' + kinds.map(function(k){ return '<option value="' + k + '">' + CRM_ATT_KINDS[k] + '</option>'; }).join("") + '</select></div>') +
+          '<div class="field"><label for="atName">Nome do Arquivo</label><input id="atName" type="text" maxlength="120" autocomplete="off" value="' + esc(initial) + '"></div>' +
+          '<div class="pat-count" id="atPrev"></div><div class="pat-count" id="atErr" style="color:var(--danger,#c0392b)" hidden></div>' +
+        '</div>' +
+        '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="atCancel">Cancelar</button><button class="btn primary" id="atOk" disabled>' + (att ? "Salvar" : "Enviar") + '</button></div>' +
+      '</div></div>';
+    var ov = document.getElementById("ovAtt"), nameIn = document.getElementById("atName"), ok = document.getElementById("atOk"), err = document.getElementById("atErr"), prev = document.getElementById("atPrev"), busy = false;
+    function fileName(){ return att ? att.name : (file ? file.name : ""); }
+    function refresh(){
+      var final = crmAttClean(nameIn.value) ? crmAttFinal(nameIn.value, pname, fileName()) : "";
+      prev.textContent = final ? "Será salvo como: " + final : "";
+      ok.disabled = busy || !final || (!att && !file);
+      err.hidden = true;
+    }
+    function done(v){ document.removeEventListener("keydown", onKey, true); host.innerHTML = ""; resolve(v); }
+    function onKey(e){ if (e.key === "Escape" && !busy){ e.preventDefault(); e.stopPropagation(); done(null); } }
+    document.addEventListener("keydown", onKey, true);
+    ov.addEventListener("mousedown", function(e){ if (e.target === ov && !busy) done(null); });
+    document.getElementById("atClose").addEventListener("click", function(){ if (!busy) done(null); });
+    document.getElementById("atCancel").addEventListener("click", function(){ if (!busy) done(null); });
+    nameIn.addEventListener("input", refresh);
+    nameIn.addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); if (!ok.disabled) ok.click(); } });
+    var fileIn = document.getElementById("atFile");
+    if (fileIn){
+      document.getElementById("atPick").addEventListener("click", function(){ fileIn.click(); });
+      fileIn.addEventListener("change", function(){
+        var f = fileIn.files && fileIn.files[0]; file = null;
+        if (f && f.size > CRM_ATT_MAX){ showToast("O arquivo passa de 4 MB.", true); fileIn.value = ""; f = null; }
+        if (f){ file = f; if (!crmAttClean(nameIn.value)) nameIn.value = f.name.replace(/\.[A-Za-z0-9]{1,8}$/, ""); }
+        document.getElementById("atFileName").textContent = f ? f.name + " (" + crmAttSize(f.size) + ")" : "Nenhum arquivo escolhido (até 4 MB)";
+        refresh();
+      });
+    }
+    ok.addEventListener("click", function(){
+      if (ok.disabled) return;
+      busy = true; ok.disabled = true; ok.textContent = att ? "Salvando…" : "Enviando…";
+      var p = att ? crmAttRename(att, nameIn.value, pname) : crmAttUpload(task, document.getElementById("atKind").value, nameIn.value, file);
+      p.then(function(row){ done(row || true); }, function(e){
+        busy = false; ok.textContent = att ? "Salvar" : "Enviar"; refresh();
+        err.textContent = (e && e.message) || "Não foi possível concluir."; err.hidden = false;
+      });
+    });
+    refresh(); (att ? nameIn : document.getElementById("atPick")).focus();
+  });
+}
+// Seção "Anexos" da janela da tarefa.
+function crmAttRender(task, canEdit){
+  var box = document.getElementById("crmAttList"); if (!box) return;
+  var add = document.getElementById("crmAttAdd");
+  function note(t){ box.innerHTML = '<div class="pat-count">' + t + '</div>'; }
+  if (!task.patient_id){ if (add) add.hidden = true; note("Para anexar arquivos, a tarefa precisa ter um paciente cadastrado (veja “Dados do Paciente/Lead”)."); return; }
+  if (add) add.hidden = !canEdit;
+  crmAttList(task.id).then(function(rows){
+    if (CRM.openId !== task.id) return;
+    box = document.getElementById("crmAttList"); if (!box) return;
+    if (!rows.length){ note("Nenhum anexo."); return; }
+    box.innerHTML = rows.map(function(a){
+      return '<div class="crm-att" data-att="' + esc(a.id) + '"><button type="button" class="crm-att-name" data-att-open title="Abrir">' + esc(a.name) + '</button>' +
+        '<span class="crm-att-meta">' + esc(CRM_ATT_KINDS[a.kind] || a.kind) + ' · ' + esc(crmAttSize(a.size)) + ' · ' + esc(a.created_by_name || "") + ' · ' + esc(crmWhen(a.created_at)) + '</span>' +
+        (canEdit ? '<span class="crm-att-acts"><button type="button" class="crm-cmt-act" data-att-ren>Renomear</button><button type="button" class="crm-cmt-act del" data-att-del>Excluir</button></span>' : '') + '</div>';
+    }).join("");
+    box.__rows = rows;
+  }, function(e){ note("Não foi possível carregar os anexos: " + esc((e && e.message) || e)); });
+}
+function crmAttWire(task, canEdit){
+  var box = document.getElementById("crmAttList"), add = document.getElementById("crmAttAdd"); if (!box) return;
+  function reload(){ crmAttRender(task, canEdit); if (CRM.openId === task.id) crmActivityLoad(task.id); }
+  if (add) add.addEventListener("click", function(){ crmAttDialog(task).then(function(r){ if (r){ showToast("Arquivo anexado."); reload(); } }); });
+  box.addEventListener("click", function(e){
+    var row = e.target.closest("[data-att]"); if (!row) return;
+    var att = (box.__rows || []).filter(function(a){ return a.id === row.getAttribute("data-att"); })[0]; if (!att) return;
+    if (e.target.closest("[data-att-open]")) crmAttOpen(att);
+    else if (e.target.closest("[data-att-ren]")) crmAttDialog(task, att).then(function(r){ if (r){ showToast("Anexo renomeado."); reload(); } });
+    else if (e.target.closest("[data-att-del]")) confirmDialog({title: "Excluir Anexo", message: "Excluir o anexo <b>" + esc(att.name) + "</b>? O arquivo vai para a lixeira do Drive.", confirmLabel: "Confirmar Exclusão"}).then(function(ok){
+      if (!ok) return;
+      crmAttDelete(att).then(function(j){ showToast(j && j.warning ? j.warning : "Anexo excluído.", !!(j && j.warning)); reload(); }, function(er){ showToast("Não foi possível excluir: " + ((er && er.message) || er), true); });
+    });
+  });
+  crmAttRender(task, canEdit);
+}
 function crmEditDialog(old){
   return new Promise(function(resolve){
     var host = document.getElementById("confirmHost");
@@ -7857,6 +8024,7 @@ function crmOpenTask(task, opts){
       '<button type="button" class="btn ghost" id="crmSendLink" hidden title="A família preenche o cadastro pelo celular; o envio fica esperando revisão">Enviar Link de Cadastro</button>' +
       '<button type="button" class="btn ghost" id="crmRegPat" hidden>Cadastrar Paciente</button>' +
     '</div></div>' : '';
+  var attHtml = isNew ? '' : '<div class="crm-sec" id="crmAttBox"><div class="crm-sec-h"><div class="crm-sec-t">Anexos</div><button type="button" class="btn ghost" id="crmAttAdd" hidden>+ Anexar</button></div><div class="crm-att-list" id="crmAttList"></div></div>';
   var leadHtml = '<div class="crm-sec" id="crmLeadBox"><div class="crm-sec-h"><div class="crm-sec-tw"><div class="crm-sec-t">Dados do Paciente/Lead</div><span class="crm-who-tag" id="crmWhoTag"></span></div>' + moreHtml + '</div>' +
     '<div class="pat-count crm-lead-note" id="crmLeadNote">Sem cadastro de paciente: estes dados passam para o cadastro ao usar "Cadastrar Paciente".</div>' +
     '<div class="pat-count crm-lead-note" id="crmPatNote" hidden>Dados do cadastro do paciente (para mudar, abra o cadastro do paciente).</div>' +
@@ -7903,7 +8071,7 @@ function crmOpenTask(task, opts){
           lossHtml +
           prop('<span>Descrição</span>', '<textarea id="crmDesc" rows="8"' + dis + '>' + esc(x.description || "") + '</textarea>', true, "crmDescBox") +
         '</div>' +
-        leadHtml +
+        leadHtml + attHtml +
       '</div>' + sideHtml + '</div>' +
       '<div class="modal-foot">' + (!isNew && crmCan(listId, "delete") ? '<button class="btn danger" id="crmDel">Excluir</button>' : '<span></span>') +
         '<div class="spacer"></div><button class="btn ghost" id="crmCancel">' + (canEdit ? "Cancelar" : "Fechar") + '</button>' + (canEdit ? '<button class="btn primary" id="crmSave">Salvar</button>' : '') + '</div>' +
@@ -8069,6 +8237,7 @@ function crmOpenTask(task, opts){
   whoSug.addEventListener("mousedown", function(e){ var b = e.target.closest("[data-pid]"); if (!b) return; e.preventDefault(); pid = b.getAttribute("data-pid"); whoIn.value = (findPatientById(pid) || {}).nome || ""; whoSug.hidden = true; whoRefresh(); });
   whoIn.addEventListener("blur", function(){ setTimeout(function(){ whoSug.hidden = true; }, 150); });
   whoRefresh();
+  if (task) crmAttWire(task, canEdit && crmCan(listId, "edit"));
   var prioIn = document.getElementById("crmPrio"), prioBtn = document.getElementById("crmPrioBtn");
   prioIn.addEventListener("change", function(){ var pr = crmPrio(prioIn.value); prioBtn.innerHTML = crmFlagSvg(pr) + esc(pr.name); });
   prioBtn.addEventListener("click", function(){
@@ -8272,6 +8441,7 @@ function crmEventTextBase(e, list){
   if (d.campo === "titulo") return who + " mudou o título para “" + esc(d.para || "") + "”";
   if (d.campo === "recorrencia") return who + " finalizou a tarefa recorrente; " + (d.nova ? "nova tarefa criada para " : "próxima em ") + dt(d.para);
   if (d.campo === "lista") return who + " moveu a tarefa de lista";
+  if (d.campo === "anexo") return who + " " + (d.acao === "excluiu" ? "excluiu o anexo “" + esc(d.de || "") + "”" : d.acao === "renomeou" ? "renomeou o anexo “" + esc(d.de || "") + "” para “" + esc(d.para || "") + "”" : "anexou “" + esc(d.para || "") + "”") + (d.pasta && CRM_ATT_KINDS[d.pasta] ? " em " + CRM_ATT_KINDS[d.pasta] : "");
   if (d.campo === "paciente") return who + (d.de ? " cadastrou o lead “" + esc(d.de) + "” como paciente" : " ligou a tarefa ao paciente " + esc((findPatientById(d.para) || {}).nome || ""));
   return who + " alterou a tarefa";
 }
@@ -22100,9 +22270,11 @@ var HELP_TOPICS = [
       "<b>CRM ▾ → Listas e Status</b>: uma linha por lista com as setas (ordem no menu), a bolinha da cor, os status e as opções; as setas gravam na hora. <b>Editar</b> abre a janela da lista: nome, cor, opções (<b>Funil de contatos</b>, <b>Recorrência</b>) e os status (setas, cor, nome, Finalizado, Perda, ✕ e + status); <b>Salvar</b> grava e volta para as listas. <b>+ Incluir</b> cria uma lista; <b>Excluir</b> só funciona se a lista não tem tarefas.",
       "<b>Configurar recorrência</b> (no pé dos atalhos): escolha Diariamente, Semanalmente (marque os dias da semana), Mensalmente ou Anualmente, se cria uma <b>nova tarefa</b> ou reabre a mesma, <b>Repetir para sempre</b> ou até uma data, e o status da próxima. O calendário pinta as próximas datas. Tarefa recorrente mostra ↻ ao lado da data; <b>Remover</b> tira a recorrência.",
       "<b>Outras Opções ▾</b> no canto superior direito da janela da tarefa (tarefa já salva): <b>Cadastro do Paciente</b> (tarefa com paciente cadastrado) abre o cadastro dele. <b>Seguir Tarefa</b> faz você receber aviso (no celular ou no computador, se as notificações estiverem ligadas) quando alguém comentar ou alterar a tarefa — serve para quem não é responsável; <b>Deixar de Seguir</b> desfaz. <b>Duplicar Tarefa</b> cria uma cópia na mesma lista (mesmo status, título, descrição, prioridade, vencimento, responsáveis e paciente ou lead; sem comentários e sem recorrência) e abre a cópia. <b>Copiar Link da Tarefa</b> copia o endereço que abre direto esta tarefa. <b>Gerar Tarefa a Partir Desta</b> cria uma nova tarefa (título, descrição, prioridade e paciente ou lead da original) na lista, no status, com o vencimento e os responsáveis que você escolher; as duas registram um comentário uma da outra. <b>Mover Tarefa</b> leva a tarefa para outra lista em que você pode editar. Se a lista de destino não tem o status atual (pelo mesmo nome), o aviso mostra isso e você escolhe o status da tarefa nela (já vem sugerido o equivalente). Responsáveis sem acesso à lista nova saem da tarefa, e a recorrência é retirada se a lista nova não a permite. A mudança de lista fica na Atividade da tarefa.",
+      "<b>Anexos</b> (tarefa já salva, com paciente cadastrado): o botão <b>+ Anexar</b> abre a janela para escolher o arquivo (até 4 MB), a <b>Pasta</b> (<b>Documentos</b> ou <b>Relatórios</b>) e o <b>Nome do Arquivo</b>. O arquivo é guardado no Google Drive da clínica, na pasta do paciente, dentro da subpasta escolhida (as pastas são criadas sozinhas no primeiro anexo). O nome final é o nome que você digitou mais o primeiro nome do paciente: digitar “Carteirinha” para o paciente João gera “Carteirinha João”, mantendo o tipo do arquivo; a janela mostra como ficará antes do envio. Clique no nome do anexo para abrir; <b>Renomear</b> e <b>Excluir</b> aparecem para quem pode editar a lista (o arquivo excluído vai para a lixeira do Drive). Anexar, renomear e excluir entram no histórico da tarefa.",
       "No computador, a <b>barra lateral Atividade</b> fica sempre aberta ao lado dos campos, com as alterações e os comentários na ordem em que aconteceram e o campo de comentário (3 linhas) embaixo; duas ou mais alterações seguidas ficam recolhidas em <b>Visualizar alterações</b> (clique para abrir ou fechar); a hora do comentário aparece no fim da mensagem; escreva @ para ver os nomes (↑ ↓ andam, Tab ou Enter escolhem, Esc fecha) e mencionar alguém. <b>Ctrl+Enter</b> envia o comentário (Enter quebra a linha); o botão de enviar fica no canto da caixa. Passe o mouse num comentário seu para <b>Editar</b> (abre a janela Editar mensagem: Ctrl+Enter salva, Enter quebra a linha, Esc cancela; o comentário fica marcado como \"(editado)\") ou <b>Excluir</b> (pede confirmação); o Administrador também pode excluir comentários de outras pessoas. Numa tarefa nova, a atividade aparece depois de salvar; os comentários escritos antes ficam marcados como \"enviado ao salvar\"."
     ],
     rules: [
+      "Anexos: a pasta <b>Documentos</b> (laudos, encaminhamentos…) só aparece para quem também pode ver a saúde do paciente; <b>Relatórios</b> segue a permissão da lista. Dois arquivos com o mesmo nome na mesma pasta não são aceitos (o sistema pede outro nome, nunca sobrescreve). Tarefa sem paciente cadastrado não recebe anexo.",
       "Na tela <b>CRM</b>, o cartão <b>Resumo do Dia</b> mostra, por pessoa, quantas tarefas abertas estão vencidas e quantas vencem hoje (só das listas que você vê; “Sem responsável” junta as que ninguém assumiu); clique numa pessoa para ver as tarefas e abrir uma delas.",
       "O número vermelho no CRM soma as suas tarefas abertas vencidas e as menções que você ainda não viu (some ao abrir a tarefa).",
       "Vencimento passado fica em vermelho (menos nos status que encerram a tarefa).",
