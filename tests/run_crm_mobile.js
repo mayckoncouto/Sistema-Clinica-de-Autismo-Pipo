@@ -93,7 +93,7 @@ const path = require('path');
   check('Detalhes tab shows the fields and hides the activity?', await page.$eval('#crmTitleIn', (e) => e.offsetParent !== null) && await page.$eval('#crmSide', (e) => getComputedStyle(e).display === 'none'));
   // deslizar o dedo para o lado troca Detalhes ↔ Atividade
   const swipe = (dx) => page.evaluate((dx) => {
-    const md = document.querySelector('#ovCrm .crm-modal'), tgt = md.querySelector('.crm-sec-t, h3') || md;
+    const md = document.querySelector('#ovCrm .crm-modal'), tgt = md.querySelector(".crm-sec .tr-sec, h3") || md;
     const mk = (x) => new Touch({identifier: 1, target: tgt, clientX: x, clientY: 400});
     tgt.dispatchEvent(new TouchEvent('touchstart', {bubbles: true, touches: [mk(250)], changedTouches: [mk(250)]}));
     tgt.dispatchEvent(new TouchEvent('touchend', {bubbles: true, touches: [], changedTouches: [mk(250 + dx)]}));

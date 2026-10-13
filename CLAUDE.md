@@ -4380,3 +4380,8 @@ excluir manda o arquivo para a lixeira do Drive.
 - (2026-10-13, correção) Na janela **Editar mensagem** o @ não abria a lista de pessoas: `crmMentionWire(ta, pop)` agora recebe a caixa e a lista (`#ceMentionPop`); Enter escolhe a 1ª pessoa, Esc fecha só a lista. Teste em `run_crm.js`.
 
 - (2026-10-13, pedido do usuário) **Anexar arrastando e soltando**: soltar um arquivo sobre a janela da tarefa (`.crm-modal`, só com paciente cadastrado e permissão de editar a lista) abre a janela Anexar já com o arquivo (`crmAttDialog(task, null, arquivo)`); a janela também tem a área tracejada `#atDrop` para soltar. Limite de 4 MB igual. Sem SQL.
+
+## Padrão de campos (2026-10-13, aprovado pelo usuário)
+Título de grupo: sempre `.tr-sec` (`.tr-sec-top` no 1º da janela, `.tr-sec-in` dentro de caixas), Title Case; saíram `.pm-sec-title`, `.prof-access-title`, `.crm-sec-t`. Texto longo: 3 linhas, 5 em Observações
+(CRM Descrição segue `fitDesc`). Hora: digitável HH:MM (`input.cl-time` texto + `staffTime` ao sair do campo; Clínica e Horário do paciente; a Agenda `#agdHora` continua lista).
+Calendário padrão: título clicável abre lista de anos; "Limpar" em campo não obrigatório. Sim/Não: caixa de marcar para ligar/desligar; `.kind-opt` só para 2+ opções excludentes.
