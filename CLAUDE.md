@@ -4413,3 +4413,5 @@ Pedido do usuário. Decisões: todos veem o bloqueio e o motivo; agendamento man
 - (2026-10-13, correção) **Nível só com permissão de CRM ficava "somente leitura"** (Status e campos travados na tarefa): `canWriteAnything()` em `js/pipo-supabase.js` só olhava os módulos da lista fixa `MODULES`, e as linhas `crm_<lista>` não estão nela, então `state.writable` virava false e `can()` negava incluir/editar/excluir. Agora também confere qualquer chave de permissão do nível. Sem SQL.
 
 - (2026-10-13, correção) **OFX da Caixa na Conciliação**: o banco manda o mesmo FITID `000000` em todas as linhas, e `cnKeys` o usava como identidade (as linhas colidiriam). Agora FITID só de zeros ou repetido no arquivo é ignorado e vale a chave data|valor|descrição + nº da repetição. Sem SQL. Teste em `run_conciliacao.js`.
+
+- (2026-10-13, pedido do usuário) Cadastro do paciente: campo de caixa (`type: "check"`, ex.: Bloqueado, Tem Mediador / AT) mostra a caixa ao LADO do nome, na mesma linha (`.pm-grid .field .chk-line`; antes `.field label{display:block}` e `.field input{width:100%}` deixavam a caixa em cima do texto) e alinhada com os campos da linha. Sem SQL.
