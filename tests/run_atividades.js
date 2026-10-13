@@ -18,6 +18,7 @@ const fs = require('fs');
   const check = (label, ok, extra) => { console.log(label, !!ok, extra === undefined ? '' : extra); if (!ok) fails++; };
   // dois objetivos no Banco de objetivos (direto no estado)
   await ev("state.goalBank = [{id: 'g1', name: 'Pedir ajuda', areaId: '', faixas: [], specIds: []}, {id: 'g2', name: 'Imitar gestos', areaId: '', faixas: [], specIds: []}]");
+  check('no "Erro —" warning at startup?', !/Erro —/.test(await page.evaluate(() => document.body.innerText)));
   await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="atividades"]').click());
   await page.waitForTimeout(250);
   check('Atividades screen opens with its title?', !(await page.$eval('#tab-atividades', (e) => e.hidden)) && /Atividades/.test(await page.textContent('#tab-atividades .cad-title')));
@@ -64,6 +65,7 @@ const fs = require('fs');
   check('edit window opens with the linked goal?', (await page.$$eval('#acGoals input:checked', (c) => c.length)) === 1 && (await page.inputValue('#acName')) === 'Caixa Surpresa');
   await page.click('#acDel'); await page.waitForSelector('#ovConfirm'); await page.click('#cfOk'); await page.waitForTimeout(300);
   check('delete removes it?', (await ev('state.activities.length')) === 0);
+  check('no "Erro —" warning shown on screen?', !/Erro —/.test(await page.evaluate(() => document.body.innerText)));
   console.log('no JS errors?', errors.length === 0, errors.slice(0, 3));
   await browser.close();
   try { fs.unlinkSync(evPage); } catch (e) {}
