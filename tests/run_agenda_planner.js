@@ -88,6 +88,11 @@ const path = require('path');
   // atalhos de destino: mover para outra coluna
   check('apTarget usa profissional da coluna', await ev(`(function(){ var td = document.querySelector('#agpGrid td[data-t="10:00"][data-p="bia-terapeuta"]'); var t = agpTarget(AD.rows["a1"], td); return t.professional_id === "bia-terapeuta" && t.room_id === "r1" && t.time === "10:00"; })()`));
   check('grupo só aceita atendimento de grupo', await ev(`(function(){ var td = document.createElement("td"); td.setAttribute("data-grp", "1"); return !!agpRefuse(AD.rows["a1"], td); })()`));
+  // regras visuais do Planner e sem "+" de mais um atendimento
+  await ev(`(function(){ AD.date = agdParse("2030-01-07"); agdRender(); })()`);
+  check('não existe o botão de marcar mais um atendimento', !(await page.$('#agpGrid .agd-add')));
+  await ev(`(function(){ AD.rows["z1"] = {id: "z1", date: "2030-01-07", time: "09:20", professional_id: "ana-terapeuta", room_id: "r2", patient: "Paciente Um", note: "", blocked: false, service: "sessao", status: null}; agpRender(); })()`);
+  check('profissional atendendo em outra sala: coluna dele fica listrada (prof-busy)', await ev(`!!document.querySelector('#agpGrid td[data-t="09:20"][data-p="ana-terapeuta"][data-rm="r1"].prof-busy')`));
   check('no JS errors?', errors.length === 0, errors.join(' | '));
   fs.unlinkSync(evPage);
   await browser.close();

@@ -1386,7 +1386,7 @@ table.rp-table{border-collapse:collapse;width:100%;font-size:12.5px}
 .agd-multi{display:flex;gap:3px;height:100%}
 .agd-multi > .book{flex:1 1 0;min-width:0}
 .agd-add{flex:none;width:16px;border:1px dashed var(--line);border-radius:6px;background:transparent;color:var(--muted);font:inherit;font-weight:800;cursor:pointer;opacity:0;padding:0}
-td.agd-slot:hover .agd-add,td.agp-slot:hover .agd-add{opacity:1}
+td.agd-slot:hover .agd-add{opacity:1}
 .agd-add:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-weak)}
 .agd-legend{padding:8px 12px;border-top:1px solid var(--line)}
 .agd-off-swatch{background:var(--off-bg)!important;border:1px dashed var(--line-strong)}
@@ -18306,6 +18306,17 @@ function agpRender(){
     return;
   }
   var searching = agpFiltering(), shownHits = 0;
+  // Regras visuais do Planner, pelos atendimentos reais do dia (listras cinza e branco):
+  // profissional em outra sala/grupo ou em reunião/treinamento, e paciente "não ABA" ocupando a sala.
+  var busyAt = {}, meetAt = {}, abaAt = {};
+  Object.keys(AD.rows).forEach(function(id){
+    var r = AD.rows[id]; if (r.date !== iso) return;
+    var rm = agpRoomOfRow(r), rk = rm ? rm.id : "", mk = bookingKind(r);
+    if (mk === "reuniao" || mk === "treinamento"){ meetAt[r.professional_id + "|" + r.time] = {kind: mk, room: rk, name: rm ? rm.name : ""}; return; }
+    if (mk || !r.patient) return;
+    (busyAt[r.professional_id + "|" + r.time] = busyAt[r.professional_id + "|" + r.time] || []).push({room: rk, name: rm ? rm.name : "", grp: !!(rm && isGroup(rm))});
+    if (rm && !isGroup(rm) && isNaoABABooking(r, r.professional_id) && !abaAt[rk + "|" + r.time]) abaAt[rk + "|" + r.time] = r.patient;
+  });
   var html = '<table class="sched agp-table"><thead><tr><th class="corner"></th>';
   B.rooms.forEach(function(g){
     html += '<th class="grouphead" colspan="' + g.cols.length + '"><div class="grouphead-cell" style="background:' + g.color + '"><span class="ghtext">' + esc(g.room.name) + '</span></div></th>';
@@ -18326,12 +18337,21 @@ function agpRender(){
     var closed = slots.indexOf(t) === -1;
     var offHours = prof ? !agdInHours(prof, t, AD.date) : false;
     var inert = c.other || g.room._none;   // sem profissional definido: só mostra o que existe
-    var isOff = !has && (closed || offHours || inert);
+    var lockCls = "", lockTitle = "";
+    if (!has && !closed && !offHours && !inert){
+      var pm = c.profId && sysOn("ag_reuniao_prof") ? meetAt[c.profId + "|" + t] : null;
+      var bz = c.profId && sysOn("ag_prof_dois") ? (busyAt[c.profId + "|" + t] || []).filter(function(x){ return x.room !== g.room.id; })[0] : null;
+      var ab = !isGroup(g.room) && sysOn("ag_nao_aba") ? abaAt[g.room.id + "|" + t] : null;
+      if (pm && pm.room !== g.room.id){ lockCls = " prof-busy"; lockTitle = profMeetingMsg(pm.kind, agpProfName(c.profId), t, pm.name); }
+      else if (bz){ lockCls = " prof-busy"; lockTitle = agpProfName(c.profId) + (bz.grp ? " tem agendamento no grupo " : " está atendendo em ") + bz.name + " neste horário."; }
+      else if (ab){ lockCls = " aba-lock"; lockTitle = abaRoomMsg(ab, g.room.name, t, ""); }
+    }
+    var isOff = !has && (closed || offHours || inert || !!lockCls);
     var hol = !isOff ? holidayAt(iso, t) : null;
     var anyHit = searching && list.some(agpHit);
     if (anyHit) shownHits += list.filter(agpHit).length;
-    var title = isOff ? (closed ? "Clínica fechada neste horário" : offHours ? "Fora do horário do profissional" : "Sem profissional definido nesta coluna") : (hol ? "Feriado: " + hol.name + " (marcar pede confirmação)" : "");
-    var cls = "slotcell agp-slot" + (isOff ? " slot-off" : (AD.clipboard ? " paste-target" : "")) + (hol ? " agd-hol" : "") + (anyHit ? " search-hit" : "") + (!has && !canCreate ? " agd-ro" : "") + (has && !canEdit ? " agd-ro" : "");
+    var title = isOff ? (closed ? "Clínica fechada neste horário" : offHours ? "Fora do horário do profissional" : lockTitle || "Sem profissional definido nesta coluna") : (hol ? "Feriado: " + hol.name + " (marcar pede confirmação)" : "");
+    var cls = "slotcell agp-slot" + (isOff ? " slot-off" + lockCls : (AD.clipboard ? " paste-target" : "")) + (hol ? " agd-hol" : "") + (anyHit ? " search-hit" : "") + (!has && !canCreate ? " agd-ro" : "") + (has && !canEdit ? " agd-ro" : "");
     var items = list.map(function(row){
       var isMoveSource = !!(AD.clipboard && AD.clipboard.mode === "move" && AD.clipboard.id === row.id);
       var m0 = AD.mode; AD.mode = c.other ? "sala" : "prof";   // coluna "Outros" mostra o nome do profissional no lugar da observação
@@ -18341,7 +18361,7 @@ function agpRender(){
       return h1;
     }).join("");
     return '<td class="' + cls + '" data-d="' + iso + '" data-t="' + t + '" data-p="' + esc(c.profId) + '" data-rm="' + esc(g.room.id || "") + '" data-grp="' + (isGroup(g.room) ? "1" : "0") + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' +
-      (has ? '<div class="agd-multi">' + items + (canCreate && !isOff && !closed && !inert ? '<button type="button" class="agd-add" title="Marcar mais um atendimento neste horário" aria-label="Marcar mais um atendimento">+</button>' : '') + '</div>'
+      (has ? '<div class="agd-multi">' + items + '</div>'
            : (isOff ? '<div class="book"><div class="book-main off-box" aria-hidden="true"></div></div>' : '<div class="book"><button type="button" class="book-main"><span class="empty-plus">+</span></button></div>')) + '</td>';
   }
   slots.forEach(function(t){
@@ -18427,7 +18447,7 @@ function wireAgendaPlanner(){
       agdPlace(AD.clipboard.row, td, AD.clipboard.mode);
       return;
     }
-    if (row && !e.target.closest(".agd-add")){ agdOpenDetails(row); return; }
+    if (row){ agdOpenDetails(row); return; }
     if (!can("agenda", "create")) return;
     var grp = td.getAttribute("data-grp") === "1";
     agdOpenModal({date: td.getAttribute("data-d"), time: td.getAttribute("data-t"),
@@ -23898,7 +23918,7 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>Agenda ▾ → Agenda Planner</b>. O primeiro campo da barra é o <b>mês</b>; depois vêm a data, <b>‹ Hoje ›</b> (anda de dia em dia aberto) e os filtros de sala, profissional, especialidade e status.",
       "Digite um nome na busca para destacar em amarelo os atendimentos do paciente ou do grupo; os outros ficam apagados. O filtro de status também só destaca.",
-      "Clique num atendimento para abrir os <b>Detalhes do Agendamento</b> (de lá se edita). Clique numa célula vazia para marcar um atendimento; o <b>+</b> ao lado de um atendimento marca mais um no mesmo horário.",
+      "Clique num atendimento para abrir os <b>Detalhes do Agendamento</b> (de lá se edita). Clique numa célula vazia para marcar um atendimento.",
       "Passe o mouse num atendimento para ver os ícones de <b>excluir</b>, <b>mover</b> e <b>copiar</b>, ou arraste-o para outro horário ou coluna (solto em cima de outro atendimento, os dois trocam de lugar).",
       "<b>Desfazer</b> e <b>refazer</b> (Ctrl+Z / Ctrl+Y) ficam no canto acima dos horários e valem junto com a Agenda."
     ],
@@ -23906,7 +23926,7 @@ var HELP_TOPICS = [
       "É a mesma agenda da tela <b>Agenda</b>: o que se marca aqui aparece lá, e a data aberta é a mesma nas duas telas.",
       "O profissional da coluna e a sala do grupo definem o atendimento. Atendimento de um profissional que não tem coluna naquela sala aparece na coluna <b>Outros</b> da sala; atendimento sem sala fica no grupo <b>Sem Sala</b>.",
       "Atendimento de grupo de suporte só vai para a coluna de um grupo, e atendimento de paciente só para coluna de sala. Bloqueio, reunião e treinamento valem em qualquer coluna.",
-      "Células cinza são fora do horário do profissional ou com a clínica fechada. As mesmas regras da Agenda valem ao marcar (horário do profissional, conflitos, feriado, paciente bloqueado, atendimento realizado protegido).",
+      "Células cinza são fora do horário do profissional ou com a clínica fechada; células <b>listradas</b> (cinza e branco) estão travadas pelas regras do Planner: profissional atendendo em outra sala ou grupo (ou em reunião/treinamento) e paciente que não faz ABA ocupando a sala. As mesmas regras da Agenda valem ao marcar (horário do profissional, conflitos, feriado, paciente bloqueado, atendimento realizado protegido).",
       "Não aparece no celular: use a tela Agenda."
     ],
     who: "Permissão <b>Agenda</b> (ver para consultar; incluir, editar e excluir para marcar, mover/trocar e excluir). Quem só vê a própria agenda enxerga apenas os atendimentos dele."},
