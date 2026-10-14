@@ -4533,3 +4533,15 @@ Menu **Outras Opções ▾** (`#specMoreBtn`) ao lado de "+ Incluir Especialidad
 "Todos") para cada especialidade ATIVA, menos as de nome com "Aplicador" (Aplicador ABA) e as que já têm quadro de Sessão; clicar de novo não duplica. Sem SQL.
 Ajuda: tópico "Tratamento: Terapeuta e Horário do Paciente". Teste `tests/run_tr_incluir_todas.js` (no `npm test`).
 - (2026-10-14, pedido do usuário) Agenda Planner: **sem o "+" de marcar mais um atendimento** na célula e **com as travas visuais do Planner** (`slot-off prof-busy` / `aba-lock`, listras cinza e branco, motivo no `title`, clique mostra o motivo): célula vazia da coluna de um profissional que atende em outra sala/grupo ou está em reunião/treinamento no horário, e salas com paciente "não ABA" (`isNaoABABooking`); calculadas dos atendimentos reais do dia (sem os filtros) e respeitam as regras do Sistema `ag_prof_dois`, `ag_reuniao_prof`, `ag_nao_aba`. Bloqueio de horário (`planner_blocks`) é só do Planner.
+
+## NOMES ANTIGOS SUPERADOS (aviso de leitura, 2026-10-14)
+Este arquivo é um histórico: seções antigas usam nomes que já mudaram. Vale sempre o mais novo:
+- Aba/seção/permissão do Planner = `planner` (`#tab-planner`; antes `agenda`); aba/permissão da Agenda por data = `agenda` (`#tab-agenda`; antes `agendadia`/`agendamentos`); Resumo = `resumo` (antes `relatorio`).
+- Permissões `rh_funcionarios`/`rh_remuneracao` = `colaboradores`/`colaboradores_valores`; abas `funcionarios`/`tiposfunc` = `colaboradores`/`tiposcolab`. O botão/menu **RH** não existe mais (Cadastros → Colaboradores).
+- Tratamento: `pacoteHoras`/`despesas` = `sessoesMes`/`descontos`; profissional: `name` = `nome`. A permissão `profissionais` saiu dos Níveis.
+- Menu Planner ▾ e Agenda ▾ (Agenda, Agenda Planner, Agendamentos, Visão Geral) substituem os botões soltos antigos; Status e Unidades saíram de Acesso/Cadastros para os lugares descritos nas seções mais novas.
+
+## Revisão de títulos e desempenho (2026-10-14)
+- Title Case aplicado em: diálogos de confirmação ("Tem Certeza?", "Mesclar Cadastros?", "Finalizar sem Evolução?", "Descartar Alterações?", "Restaurar o Backup?", "Lançamento Repetido?", "Substituir Agendamento?"), títulos da Disponibilidade, "Contratado × Realizado (Mês a Mês)", "Sessões/Mês", títulos de tarefas criadas por conta, botão "Não Lida" e TODOS os rótulos de `SYS_RULES` (tela Acesso → Sistema).
+- Agenda Planner: `agpRender` monta o HTML sem marcas de busca e aplica com `agdPatchGrid(host, html, "table.agp-table")` (só troca as células que mudaram); busca e status usam `agpApplySearch()` (liga/desliga `search-hit`, `search-dim-item`, `match` sem redesenhar); busca com espera de 150 ms; `agpFillFilters` só refaz as listas quando as opções mudam.
+- Financeiro/CRM: `gtRender` mostra 300 linhas (`GT_PAGE`) nas listas de `GT_PAGED` (lancamentos, conciliacao, pagar, receber, crm-lista, crm-mine, crm-all) com botão "Mostrar Mais" (`data-gt-more`); `GT_MORE`/`gtMoreReset(id)` zeram ao buscar; `debounce150(fn)` nas buscas de Lançamentos, Contas, Conciliação e CRM. Lista nova grande: acrescentar o id em `GT_PAGED`.

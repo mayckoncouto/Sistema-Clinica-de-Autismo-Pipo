@@ -59,6 +59,7 @@ const path = require('path');
   await page.waitForTimeout(200);
   // busca destaca
   await ev(`(function(){ var q = document.getElementById("agpSearch"); q.value = "bruno"; q.dispatchEvent(new Event("input")); })()`);
+  await page.waitForTimeout(300);
   check('busca destaca o paciente', await ev(`!!document.querySelector('#agpGrid .book[data-id="a2"] .book-main.match')`));
   check('busca apaga os outros', await ev(`!!document.querySelector('#agpGrid .book[data-id="a1"].search-dim-item')`));
   await ev(`(function(){ var q = document.getElementById("agpSearch"); q.value = ""; q.dispatchEvent(new Event("input")); })()`);
