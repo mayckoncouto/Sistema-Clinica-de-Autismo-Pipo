@@ -71,7 +71,7 @@ const path = require('path');
       order: all.indexOf("pPlano") < all.indexOf("trVal") && all.indexOf("trVal") < all.indexOf("pPac"), val: document.getElementById("trVal").value, fin: document.getElementById("trFinal").value};
   })()`);
   console.log('Histórico starts hidden?', win.histHidden);
-  console.log('"Outras Opções" has patient and plan, plan link left the body?', win.menu.join('|') === 'Cadastro do Paciente|Abrir Plano Terapêutico' && !win.inBody, win.menu);
+  console.log('"Outras Opções" has patient and plan, plan link left the body?', win.menu.join('|') === 'Cadastro do Paciente|Abrir Plano Terapêutico|Criar Tarefa' && !win.inBody, win.menu);
   console.log('Valor/Descontos/Valor Final after Convênio/Plano, in R$?', win.order && /^R\$ 1\.500,00$/.test(win.val) && /^R\$ 1\.400,00$/.test(win.fin), win.val, win.fin);
   await page.click('#trHistToggle');
   console.log('arrow opens the Histórico?', !(await page.$eval('#trHistBody', (e) => e.hidden)));
