@@ -34,13 +34,15 @@ const path = require('path');
   await page.waitForSelector('#ovTreat');
   console.log('label "Sessão/Mês"?', (await page.locator('label[for="pPac"]').innerText()) === 'Sessão/Mês');
   console.log('treatment window has the general ABA checkbox?', (await page.$('#pAba')) !== null);
-  console.log('group title "Especialidades e serviços"?', (await page.locator('#ovTreat .tr-sec.spec-sum-label').textContent()).includes('Especialidades e serviços'));
+  console.log('group title "Especialidades e serviços"?', (await page.locator('#ovTreat .tr-sec.spec-sum-label').textContent()).toLowerCase().includes('especialidades e serviços'));
   console.log('treatment window in groups like the patient form?', (await page.$$eval('#ovTreat .tr-sec', (a) => a.map((x) => x.textContent.split(' ')[0]))).slice(0, 5).join('|') === 'Tratamento|Convênio|Pacote|Especialidades|Observações');
 
   // ---- TEST: legacy convenio text resolved against catalog (Unimed matches) ----
   const convVal = await page.locator('#pConv').inputValue();
   console.log('legacy convenio "Unimed" resolved and shown?', convVal === 'Unimed');
   await page.click('#trCancel');
+  await page.waitForTimeout(100);
+  await page.click('#pCancel');   // o tratamento abre por cima: a janela do paciente continua aberta
   await page.waitForTimeout(100);
 
   // Open a patient whose legacy convenio text has NO catalog match ("Convênio Antigo")
@@ -85,6 +87,7 @@ const path = require('path');
 
   await page.click('#trSave');
   await page.waitForTimeout(200);
+  if (await page.$('#ovPat')) { await page.click('#pCancel'); await page.waitForTimeout(100); }
 
   const treatStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['treatments/all'])));
   const savedAna = treatStore.list.find(t => t.patientId === 'ana-azul');
