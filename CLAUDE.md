@@ -4497,3 +4497,5 @@ Decisões: lista corrida com busca por paciente e resumo no alto que acompanha b
 
 ## Caixa de Entrada: coluna Responsável (2026-10-14)
 Pedido do usuário: coluna **Responsável** (`.cx-resp`, `crmAvatars(t.assignees)`) logo depois de "O que Mudou". No celular fica oculta (colunas 3 a 5 escondidas).
+
+- (2026-10-14, correção) **Abrir Tratamento / + Incluir na janela do paciente fechava a janela do paciente sem salvar**: `openTreatmentModal(t, {stack: true})` agora abre por cima (`regQuickHost()`, `.confirm-overlay`), como as outras janelas empilhadas; Esc fecha só a do tratamento. Janela aberta a partir de outra janela: usar `stack`. Ainda fecham a janela de origem de propósito (sem aviso de alterações): Tratamento → Cadastro do paciente / Plano Terapêutico, Conta → Pagar/Receber.
