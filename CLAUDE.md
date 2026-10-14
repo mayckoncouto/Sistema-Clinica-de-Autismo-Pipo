@@ -4527,3 +4527,8 @@ na sala vai para a coluna **Outros** da sala. Sem SQL.
 - Grupo de suporte só recebe atendimento de grupo e coluna de sala só de paciente (`agpRefuse`); bloqueio/reunião/treinamento valem em qualquer coluna.
   Não tem os botões liberar/bloquear/limpar por coluna e linha (ficam na Agenda).
 - Ajuda: tópico `agenda-planner`. Teste `tests/run_agenda_planner.js` (no `npm test`); a aba entra em `run_toolbar_rows.js`.
+
+## Tratamento: "+ Incluir Todas" nas Especialidades e Serviços (2026-10-14)
+Menu **Outras Opções ▾** (`#specMoreBtn`) ao lado de "+ Incluir Especialidade" (`treatFieldsEditor`) com **Incluir Todas** (`#specRowAddAll`), **Remover Todas** (`#specRowRemoveAll`, confirma; quadros travados ficam) e **Distribuir** (`#specRowDistribute`: divide o Sessão/Mês inteiro igualmente, resto nos primeiros; total menor que o nº de quadros = avisa e não muda; confirma). Incluir Todas cria um quadro de **1 sessão/mês** (serviço Sessão, ABA padrão do quadro novo, terapeuta
+"Todos") para cada especialidade ATIVA, menos as de nome com "Aplicador" (Aplicador ABA) e as que já têm quadro de Sessão; clicar de novo não duplica. Sem SQL.
+Ajuda: tópico "Tratamento: Terapeuta e Horário do Paciente". Teste `tests/run_tr_incluir_todas.js` (no `npm test`).

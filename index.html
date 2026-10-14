@@ -12320,7 +12320,13 @@ function treatFieldsEditor(v, opts){
         '<div class="tr-sec spec-sum-label">Especialidades e Serviços <span class="spec-sum" id="specSum" hidden></span></div>' +
         '<div class="field">' +
           '<div class="room-list tl-list" id="specRowsHost"></div>' +
-          '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ Incluir Especialidade</button>' +
+          '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ Incluir Especialidade</button> ' +
+          '<div class="cad-wrap pl-tools-wrap tr-more-wrap spec-more-wrap"><button type="button" class="btn ghost" id="specMoreBtn" aria-haspopup="menu" aria-expanded="false">Outras Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+            '<div class="cad-menu pl-tools-menu" id="specMoreMenu" role="menu" hidden>' +
+              '<button type="button" class="btn ghost" id="specRowAddAll" title="Inclui 1 sessão de cada especialidade ativa (menos Aplicador ABA) que ainda não está no tratamento">Incluir Todas</button>' +
+              '<button type="button" class="btn ghost" id="specRowRemoveAll">Remover Todas</button>' +
+              '<button type="button" class="btn ghost" id="specRowDistribute" title="Divide o total de Sessão/Mês igualmente entre todos os quadros">Distribuir</button>' +
+            '</div></div>' +
         '</div>' +
         (opts && opts.beforeHours || "") +
         patHoursSectionHtml(v);
@@ -12370,6 +12376,51 @@ function treatFieldsEditor(v, opts){
     }
     host.addEventListener("click", function(e){ var b = e.target.closest("[data-tl-edit]"); if (b) edit(+b.getAttribute("data-tl-edit")); });
     document.getElementById("specRowAdd").addEventListener("click", function(){ edit(null); });
+    // Incluir Todas: um quadro de 1 sessão/mês por especialidade ativa, menos Aplicador ABA e as que já têm quadro.
+    (function(){
+      var mb = document.getElementById("specMoreBtn"), mm = document.getElementById("specMoreMenu");
+      function setOpen(o){ mm.hidden = !o; mb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ placeToolsMenu(mb, mm); var f = mm.querySelector("button"); if (f) f.focus(); } }
+      mb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(mm.hidden); });
+      mm.addEventListener("click", function(e){ if (e.target.closest("button")) setOpen(false); });
+      document.addEventListener("mousedown", function(e){ if (!mm.hidden && !e.target.closest(".spec-more-wrap")) setOpen(false); });
+      mm.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); setOpen(false); mb.focus(); } });
+    })();
+    // Remover Todas: tira todos os quadros (os travados por atendimento realizado ficam).
+    document.getElementById("specRowRemoveAll").addEventListener("click", function(){
+      var del = draftLines.filter(function(r){ return !(lockedIds && lockedIds.indexOf(r.id) !== -1); });
+      if (!del.length){ showToast(draftLines.length ? "Os quadros restantes estão travados por atendimentos realizados." : "Não há quadros para remover."); return; }
+      var keep = draftLines.length - del.length;
+      confirmDialog({title: "Remover Todas as Especialidades", message: "Tirar <b>" + del.length + (del.length === 1 ? " quadro" : " quadros") + "</b> do tratamento?" + (keep ? "<br>" + keep + " ficam (travados por atendimentos realizados)." : "") + "<br>A remoção vale quando o tratamento for salvo.", confirmLabel: "Remover Todas"}).then(function(ok){
+        if (!ok) return;
+        draftLines = draftLines.filter(function(r){ return lockedIds && lockedIds.indexOf(r.id) !== -1; });
+        render();
+        showToast(del.length + (del.length === 1 ? " quadro removido." : " quadros removidos."));
+      });
+    });
+    // Distribuir: divide o Sessão/Mês igualmente entre todos os quadros (o resto vai para os primeiros).
+    document.getElementById("specRowDistribute").addEventListener("click", function(){
+      var total = specSumNum(document.getElementById("pPac").value), n = draftLines.length;
+      if (!n){ showToast("Inclua as especialidades antes de distribuir."); return; }
+      if (total == null || total <= 0){ showToast("Preencha o Sessão/Mês para distribuir.", true); return; }
+      if (total !== Math.floor(total)){ showToast("O Sessão/Mês precisa ser um número inteiro para distribuir.", true); return; }
+      if (total < n){ showToast("Não dá para dar 1 sessão a cada quadro: são " + total + (total === 1 ? " sessão" : " sessões") + " para " + n + " quadros. Aumente o Sessão/Mês ou remova quadros.", true); return; }
+      var base = Math.floor(total / n), rem = total % n, parts = draftLines.map(function(r, i){ return base + (i < rem ? 1 : 0); });
+      confirmDialog({title: "Distribuir Sessões", message: "Dividir <b>" + total + " sessões/mês</b> entre " + n + " quadros (" + parts.join(", ") + ")?<br>Isso troca as sessões de todos os quadros.", confirmLabel: "Distribuir"}).then(function(ok){
+        if (!ok) return;
+        draftLines.forEach(function(r, i){ r.hours = String(parts[i]); });
+        render();
+        showToast("Sessões distribuídas: " + parts.join(", ") + ".");
+      });
+    });
+    document.getElementById("specRowAddAll").addEventListener("click", function(){
+      var have = {}; draftLines.forEach(function(r){ if (lineSvc(r) === DEFAULT_SERVICE_ID) have[r.specId] = true; });
+      var add = activeOnly(state.specialties).filter(function(sp){ return !/aplicador/.test(normText(sp.name || "")) && !have[sp.id]; });
+      if (!add.length){ showToast("Todas as especialidades (menos Aplicador ABA) já estão no tratamento."); return; }
+      var aba = abaNewLine();
+      add.forEach(function(sp){ draftLines.push({id: uid("tl"), specId: sp.id, hours: "1", profId: "", aba: aba, service: DEFAULT_SERVICE_ID, dia: "", hora: "", semanas: "", roomId: "", seguidas: "", obs: ""}); });
+      render();
+      showToast(add.length + (add.length === 1 ? " especialidade incluída" : " especialidades incluídas") + " com 1 sessão/mês cada. Ajuste as sessões em Editar.");
+    });
     // ABA do quadro novo: o ABA antigo do tratamento (enquanto existir) ou a regra automática do paciente.
     function abaNewLine(){
       var sel = document.getElementById("trPat"), pid = (sel && sel.value) || v.patientId || "";
@@ -23424,6 +23475,7 @@ var HELP_TOPICS = [
     purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido.",
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
+      "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre todos os quadros; o resto vai para os primeiros; se o total for menor que o número de quadros, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
       "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava."
     ],
     rules: [

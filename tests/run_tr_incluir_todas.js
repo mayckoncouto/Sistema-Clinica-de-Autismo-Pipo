@@ -1,0 +1,46 @@
+// Tratamento: "+ Incluir Todas" cria 1 sessão/mês por especialidade ativa, menos Aplicador ABA e as já incluídas.
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+const TL = require('./tl-helper');
+(async () => {
+  const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
+  const i = src.indexOf('"use strict";');
+  const evPage = path.join(__dirname, 'page_trall.html');
+  fs.writeFileSync(evPage, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
+  const browser = await chromium.launch(require('./launch-opts'));
+  const page = await browser.newPage({ viewport: { width: 1300, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + evPage);
+  await page.waitForTimeout(800);
+  const ev = (code) => page.evaluate((c) => window.__ev(c), code);
+  let fails = 0;
+  const check = (label, ok, extra) => { console.log(label, ok, extra === undefined ? '' : extra); if (!ok) fails++; };
+  await ev(`(function(){ state.specialties = state.specialties.concat([{id: "aplic", name: "Aplicador ABA"}, {id: "velha", name: "Antiga", inativo: true}]);
+    state.treatments = []; rebuildPatients(); openTreatmentModal(null, {patientId: state.patientsRaw[0].id}); })()`);
+  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(200);
+  await TL.addLine(page, {spec: 'Psicologia', hours: '4'});
+  await page.click('#specMoreBtn'); await page.click('#specRowAddAll'); await page.waitForTimeout(150);
+  const ls = await TL.lines(page);
+  check('Fonoaudiologia incluída com 1 sessão', ls.some((l) => /Fonoaudiologia/.test(l.name) && l.hours === '1'), JSON.stringify(ls));
+  check('Psicologia já existia e não duplicou (continua com 4)', ls.filter((l) => /Psicologia/.test(l.name)).length === 1 && ls.find((l) => /Psicologia/.test(l.name)).hours === '4');
+  check('Aplicador ABA fica de fora', !ls.some((l) => /Aplicador/.test(l.name)));
+  check('especialidade inativa fica de fora', !ls.some((l) => /Antiga/.test(l.name)));
+  await page.click('#specMoreBtn'); await page.click('#specRowAddAll'); await page.waitForTimeout(150);
+  check('clicar de novo não duplica', (await TL.lines(page)).length === ls.length);
+  const menu = async (id) => { await page.click('#specMoreBtn'); await page.click(id); await page.waitForTimeout(200); };
+  // Distribuir: total 5 em 2 quadros = 3 e 2
+  await page.$eval('#pPac', (x) => { x.value = '5'; x.dispatchEvent(new Event('input', {bubbles: true})); });
+  await menu('#specRowDistribute'); await page.click('#cfOk'); await page.waitForTimeout(150);
+  check('Distribuir 5 em 2 quadros = 3 e 2', (await TL.lines(page)).map((l) => l.hours).join(',') === '3,2', (await TL.lines(page)).map((l) => l.hours).join(','));
+  await page.$eval('#pPac', (x) => { x.value = '1'; x.dispatchEvent(new Event('input', {bubbles: true})); });
+  await menu('#specRowDistribute');
+  check('total menor que os quadros: avisa e não muda', !(await page.$('#ovConfirm')) && (await TL.lines(page)).map((l) => l.hours).join(',') === '3,2');
+  await menu('#specRowRemoveAll'); await page.click('#cfOk'); await page.waitForTimeout(150);
+  check('Remover Todas esvazia os quadros', (await TL.lines(page)).length === 0);
+  check('no JS errors?', errors.length === 0, errors.join(' | '));
+  fs.unlinkSync(evPage);
+  await browser.close();
+  process.exit(fails ? 1 : 0);
+})();
