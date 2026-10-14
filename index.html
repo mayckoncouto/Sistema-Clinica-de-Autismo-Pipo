@@ -22882,8 +22882,7 @@ var HELP_TOPICS = [
       "<b>+ Incluir</b>: escolha o paciente. Também dá para abrir pela janela do Tratamento: <b>Outras Opções ▾ → Abrir plano terapêutico</b>.",
       "O título mostra o nome e a idade do paciente.",
       "<b>Quadro Clínico</b>: os dados da seção Saúde do cadastro do paciente aparecem sozinhos e sempre atualizados; escreva o <b>Resumo do Quadro Clínico</b> no campo abaixo deles.",
-      "<b>Gerar Síntese</b> (ao lado de Quadro Clínico, só para quem edita o plano) monta o resumo num parágrafo corrido com o que o sistema já sabe: nome, idade, diagnóstico e as até cinco habilidades com mais objetivos ativos (“plano terapêutico com prioridade nas áreas de…”), seguidas das especialidades do acompanhamento, comunicação, nível de suporte, escola e, só para quem vê os dados de saúde, alergias, medicações e restrições. Quando há objetivos atingidos, fecha com o total de ativos e atingidos. Se o campo já tem texto, pergunta antes de substituir; revise e ajuste antes de salvar.",,
-      "Cada <b>habilidade</b> é um quadro: use <b>Incluir habilidade…</b> no fim da lista e, dentro do quadro, <b>+ Inserir objetivo</b>. Preencha: <b>Objetivo</b> (lista do cadastro de Objetivos), <b>Especialidades</b> (as que podem trabalhar o objetivo; as do tratamento aparecem primeiro e as outras como apoio), Prazo (3, 6 ou 12 meses a partir da data do plano), Escala, Situação (os níveis da escala) e Status (Ativo, Atingido, Suspenso).",
+      "<b>Gerar Síntese</b> (ao lado de Quadro Clínico, só para quem edita o plano) monta o resumo em frases curtas com o que o sistema já sabe: nome, idade e as até cinco habilidades com mais objetivos ativos (“com prioridade nas áreas de…”), diagnóstico, nível de suporte, comunicação, acompanhamento (as especialidades do tratamento, quando há) e alergias, medicações e restrições alimentares. Diagnóstico, nível de suporte, comunicação e os dados de saúde só aparecem para quem pode ver Saúde; item sem informação não aparece. Se o campo já tem texto, pergunta antes de substituir; revise e ajuste antes de salvar.",,
       "O objetivo novo já vem com as <b>especialidades sugeridas</b> da habilidade (cadastro de Habilidades) que estão no tratamento.",
       "O campo <b>Objetivo</b> abre a lista dos objetivos cadastrados nesta habilidade, com a faixa etária antes do nome (ex.: [0–4] Objetivo): os da faixa do paciente primeiro, depois <b>Outras faixas etárias</b>. Digite no topo da lista para buscar. Escolher um traz a escala e as especialidades do cadastro. <b>+ Incluir objetivo</b>, no fim da lista, cadastra um objetivo novo sem sair do plano.",
       "Embaixo do objetivo aparece <b>N atividades sugeridas</b> quando o Banco de Atividades (<b>Prontuário ▾ → Atividades</b>) tem atividades ligadas àquele objetivo que servem à faixa etária do paciente e a alguma especialidade do objetivo. Clique no texto para ver o nome, a descrição, os materiais e a duração de cada uma.",
@@ -25361,47 +25360,33 @@ function planPatient(pid){ return state.patientsRaw.filter(function(p){ return p
 function planSynthesis(p, sections, treatSpecs){
   if (!p) return "";
   var L = function(a){ return (Array.isArray(a) ? a.join(", ") : String(a || "")).trim(); };
-  var cap = function(t){ return t.replace(/^./, function(c){ return c.toUpperCase(); }); };
   var low = function(t){ return /^[A-ZÀ-Ý]{2,}/.test(t) ? t : t.replace(/^./, function(c){ return c.toLowerCase(); }); };
   var join = function(a){ return a.length < 2 ? (a[0] || "") : a.slice(0, -1).join(", ") + " e " + a[a.length - 1]; };
   var age = patientAgeYears(p), sees = healthCanSee();
   var id = (p.nome || "Paciente") + (age != null && isFinite(age) ? ", " + Math.floor(age) + (Math.floor(age) === 1 ? " ano" : " anos") : "");
-  var cid = sees ? L(p.cid) : "";
-  if (cid) id += ", com diagnóstico de " + cid + (p.diagData ? " (desde " + trBr(p.diagData) + ")" : "");
   // habilidades com mais objetivos ativos (até 5); empate = ordem do plano
-  var tot = {act: 0, ok: 0, sus: 0}, areas = [];
+  var areas = [];
   (sections || []).forEach(function(sec, i){
     var n = 0;
-    (sec.objectives || []).forEach(function(o){
-      var st = o.status || "ativo";
-      if (st === "ativo"){ tot.act++; n++; } else if (st === "atingido") tot.ok++; else tot.sus++;
-    });
+    (sec.objectives || []).forEach(function(o){ if ((o.status || "ativo") === "ativo") n++; });
     if (n) areas.push({name: skillAreaName(sec.areaId), n: n, i: i});
   });
   areas.sort(function(x, y){ return y.n - x.n || x.i - y.i; });
   var top = areas.slice(0, 5).map(function(x){ return low(x.name); });
-  var parts = [];
-  if (top.length) parts.push(id + ", apresenta plano terapêutico com prioridade " + (top.length === 1 ? "na área de " : "nas áreas de ") + join(top) + ".");
-  else parts.push(id + ".");
-  if (treatSpecs && treatSpecs.length) parts.push("O acompanhamento é realizado por " + join(treatSpecs.map(specialtyName)) + ".");
+  var parts = [top.length ? id + ", com prioridade " + (top.length === 1 ? "na área de " : "nas áreas de ") + join(top) + "." : id + "."];
   if (sees){
-    var cl = [];
-    if (p.comunicacao) cl.push("comunicação: " + low(L(p.comunicacao)));
-    if (p.suporte) cl.push("nível de suporte " + L(p.suporte));
-    if (cl.length) parts.push(cap(cl.join("; ")) + ".");
+    var dx = [], cid = L(p.cid);
+    if (cid) dx.push("Diagnóstico: " + cid + (p.diagData ? " (desde " + trBr(p.diagData) + ")" : ""));
+    if (p.suporte) dx.push((dx.length ? "nível" : "Nível") + " de suporte " + L(p.suporte));
+    if (dx.length) parts.push(dx.join(", ") + ".");
+    if (p.comunicacao) parts.push("Comunicação: " + low(L(p.comunicacao)) + ".");
   }
-  if (p.escolaId){
-    var es = patRegName("escolas", p.escolaId);
-    if (es) parts.push("Frequenta " + es + [p.escolaSerie ? ", " + p.escolaSerie : "", p.escolaTurno ? " (" + p.escolaTurno + ")" : ""].join("") + (p.mediador === "Sim" ? ", com mediador/AT" : "") + ".");
-  }
+  if (treatSpecs && treatSpecs.length) parts.push("Acompanhamento: " + join(treatSpecs.map(specialtyName)) + ".");
   if (sees){
-    var at = [];
-    if (p.alergias) at.push("alergias: " + L(p.alergias));
-    if (p.medicacoes) at.push("medicações em uso: " + L(p.medicacoes));
-    if (p.restricoes) at.push("restrições alimentares: " + L(p.restricoes));
-    if (at.length) parts.push(cap(at.join("; ")) + ".");
+    if (p.alergias) parts.push("Alergias: " + low(L(p.alergias)) + ".");
+    if (p.medicacoes) parts.push("Medicações em uso: " + low(L(p.medicacoes)) + ".");
+    if (p.restricoes) parts.push("Restrições alimentares: " + low(L(p.restricoes)) + ".");
   }
-  if (tot.ok) parts.push("O plano soma " + tot.act + (tot.act === 1 ? " objetivo ativo" : " objetivos ativos") + " e " + tot.ok + (tot.ok === 1 ? " já atingido" : " já atingidos") + ".");
   return parts.join(" ");
 }
 function planClinicalHtml(p){
