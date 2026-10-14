@@ -19453,7 +19453,6 @@ var CONTRACT_TIPOS = [
   {id: "confissao-divida", name: "Confissão de Dívida (Pacientes e Colaboradores)"},
   {id: "locacao", name: "Locação (Colaboradores: Aluguel de Sala e Prestação de Serviços)"},
   {id: "servicos", name: "Serviços (Colaboradores)"},
-  {id: "visita-tecnica", name: "Termo de Visita Técnica"},
   {id: "patrocinio-educacional", name: "Patrocínio Educacional (Colaboradores)"},
   {id: "capacitacao", name: "Termo de Capacitação (Colaboradores)"},
   {id: "compromisso", name: "Termo de Compromisso (Colaboradores)"},
@@ -19462,14 +19461,61 @@ var CONTRACT_TIPOS = [
   {id: "visita-observacao", name: "Termo de Visita Técnica e Observação Profissional (Colaboradores)"},
   {id: "geral", name: "Geral"}
 ];
-var CONTRACT_VARS = [
-  {g: "Clínica", items: [["clinica_nome", "Nome da clínica"], ["clinica_cnpj", "CNPJ"], ["clinica_endereco", "Endereço"], ["clinica_cidade", "Cidade"]]},
-  {g: "Tomador", items: [["tomador_nome", "Nome do tomador"], ["tomador_cpf", "CPF do tomador"], ["tomador_cargo", "Cargo do tomador"]]},
-  {g: "Empréstimo", items: [["emprestimo_descricao", "Descrição"], ["emprestimo_valor", "Valor (R$)"], ["emprestimo_valor_extenso", "Valor por extenso"], ["emprestimo_data", "Data da liberação"],
+// Variáveis por tipo de contrato: cada tipo mostra só as informações dos cadastros que ele usa.
+// "manual" = informação que não está em nenhum cadastro (a pessoa preenche na hora de gerar o termo, quando a tela do tipo existir).
+var CV = {
+  clinica: {g: "Clínica", items: [["clinica_nome", "Nome da clínica"], ["clinica_cnpj", "CNPJ"], ["clinica_endereco", "Endereço"], ["clinica_cidade", "Cidade"], ["clinica_telefone", "Telefone"]]},
+  data: {g: "Data", items: [["data_hoje", "Data de hoje"], ["data_hoje_extenso", "Data de hoje por extenso"]]},
+  tomador: {g: "Tomador", items: [["tomador_nome", "Nome do tomador"], ["tomador_cpf", "CPF do tomador"], ["tomador_cargo", "Cargo do tomador"]]},
+  emprestimo: {g: "Empréstimo", items: [["emprestimo_descricao", "Descrição"], ["emprestimo_valor", "Valor (R$)"], ["emprestimo_valor_extenso", "Valor por extenso"], ["emprestimo_data", "Data da liberação"],
     ["emprestimo_tipo", "Tipo de juros"], ["emprestimo_taxa", "Taxa ao mês"], ["emprestimo_parcelas", "Número de parcelas"], ["emprestimo_primeiro_vencimento", "1º vencimento"],
     ["emprestimo_valor_parcela", "Valor da 1ª parcela"], ["emprestimo_total_juros", "Total de juros"], ["emprestimo_total_pagar", "Total a devolver"], ["tabela_parcelas", "Tabela de parcelas"]]},
-  {g: "Data", items: [["data_hoje", "Data de hoje"], ["data_hoje_extenso", "Data de hoje por extenso"]]}
-];
+  colaborador: {g: "Colaborador", items: [["colaborador_nome", "Nome"], ["colaborador_cpf", "CPF"], ["colaborador_cargo", "Cargo"], ["colaborador_vinculo", "Vínculo"], ["colaborador_admissao", "Data de admissão"],
+    ["colaborador_registro", "Conselho e registro"], ["colaborador_endereco", "Endereço"], ["colaborador_telefone", "Telefone"], ["colaborador_email", "E-mail"]]},
+  paciente: {g: "Paciente", items: [["paciente_nome", "Nome"], ["paciente_cpf", "CPF"], ["paciente_nascimento", "Data de nascimento"], ["paciente_idade", "Idade"], ["paciente_endereco", "Endereço"]]},
+  responsavel: {g: "Responsável Financeiro", items: [["responsavel_nome", "Nome"], ["responsavel_cpf", "CPF"], ["responsavel_telefone", "Telefone"], ["responsavel_endereco", "Endereço"]]},
+  tratamento: {g: "Tratamento", items: [["tratamento_inicio", "Início"], ["tratamento_termino", "Término"], ["tratamento_valor", "Valor mensal (R$)"], ["tratamento_valor_extenso", "Valor mensal por extenso"],
+    ["tratamento_sessoes_mes", "Sessões por mês"], ["tratamento_convenio", "Convênio"], ["tratamento_plano", "Plano"], ["tratamento_especialidades", "Especialidades"], ["tratamento_validade", "Válido até"]]},
+  devedor: {g: "Devedor", manual: false, items: [["devedor_nome", "Nome"], ["devedor_cpf", "CPF"], ["devedor_endereco", "Endereço"]]},
+  divida: {g: "Dívida", manual: true, items: [["divida_descricao", "Origem da dívida"], ["divida_valor", "Valor (R$)"], ["divida_valor_extenso", "Valor por extenso"], ["divida_data", "Data da confissão"],
+    ["divida_parcelas", "Número de parcelas"], ["divida_valor_parcela", "Valor da parcela"], ["divida_primeiro_vencimento", "1º vencimento"], ["divida_juros", "Juros ao mês"]]},
+  locacao: {g: "Locação", manual: true, items: [["locacao_objeto", "Sala ou espaço locado"], ["locacao_valor", "Valor mensal (R$)"], ["locacao_valor_extenso", "Valor mensal por extenso"], ["locacao_inicio", "Início da vigência"],
+    ["locacao_termino", "Término da vigência"], ["locacao_dia_vencimento", "Dia do vencimento"], ["locacao_horarios", "Dias e horários de uso"]]},
+  servico: {g: "Serviço", manual: true, items: [["servico_descricao", "Descrição dos serviços"], ["servico_valor", "Valor (R$)"], ["servico_valor_extenso", "Valor por extenso"], ["servico_forma_pagamento", "Forma de pagamento"],
+    ["servico_inicio", "Início"], ["servico_termino", "Término"]]},
+  visita: {g: "Visita", manual: true, items: [["visita_data", "Data da visita"], ["visita_local", "Local"], ["visita_objetivo", "Objetivo"], ["visita_responsavel", "Responsável pelo acompanhamento"], ["visita_observacoes", "Observações"]]},
+  patrocinio: {g: "Patrocínio", manual: true, items: [["patrocinio_curso", "Curso"], ["patrocinio_instituicao", "Instituição"], ["patrocinio_valor", "Valor patrocinado (R$)"], ["patrocinio_valor_extenso", "Valor por extenso"],
+    ["patrocinio_percentual", "Percentual coberto"], ["patrocinio_inicio", "Início do curso"], ["patrocinio_termino", "Término do curso"], ["patrocinio_permanencia", "Permanência mínima (meses)"]]},
+  capacitacao: {g: "Capacitação", manual: true, items: [["capacitacao_nome", "Capacitação"], ["capacitacao_instituicao", "Instituição"], ["capacitacao_carga", "Carga horária"], ["capacitacao_data", "Data"], ["capacitacao_valor", "Valor (R$)"]]},
+  compromisso: {g: "Compromisso", manual: true, items: [["compromisso_objeto", "Objeto do compromisso"], ["compromisso_data", "Data"], ["compromisso_prazo", "Prazo"]]},
+  interrupcao: {g: "Interrupção", manual: true, items: [["interrupcao_data", "Data da interrupção"], ["interrupcao_motivo", "Motivo"], ["interrupcao_observacoes", "Observações"]]},
+  material: {g: "Material", manual: true, items: [["material_descricao", "Descrição do material"], ["material_quantidade", "Quantidade"], ["material_valor", "Valor (R$)"], ["material_data", "Data da entrega"], ["material_devolucao", "Data da devolução"]]}
+};
+// grupos de cada tipo (Clínica e Data valem para todos)
+var CONTRACT_VARS_BY = {
+  emprestimo: ["tomador", "emprestimo"],
+  tratamento: ["paciente", "responsavel", "tratamento"],
+  "confissao-divida": ["devedor", "divida"],
+  locacao: ["colaborador", "locacao"],
+  servicos: ["colaborador", "servico"],
+  "patrocinio-educacional": ["colaborador", "patrocinio"],
+  capacitacao: ["colaborador", "capacitacao"],
+  compromisso: ["colaborador", "compromisso"],
+  interrupcao: ["paciente", "responsavel", "tratamento", "interrupcao"],
+  material: ["colaborador", "material"],
+  "visita-observacao": ["colaborador", "visita"],
+  geral: ["colaborador", "paciente", "responsavel", "tratamento"]
+};
+function contractVarsFor(tipo){
+  var ids = ["clinica"].concat(CONTRACT_VARS_BY[tipo] || CONTRACT_VARS_BY.geral, ["data"]);
+  return ids.map(function(k){ return CV[k]; });
+}
+function contractVarKeys(){ var out = []; Object.keys(CV).forEach(function(k){ CV[k].items.forEach(function(it){ out.push(it[0]); }); }); return out; }
+function contractVarsHtml(tipo){
+  return contractVarsFor(tipo).map(function(g){
+    return '<span class="pl-hint">' + esc(g.g) + (g.manual ? ' (Preencher ao Gerar)' : '') + ':</span>' + g.items.map(function(it){ return '<button type="button" data-var="' + it[0] + '" title="Insere {{' + it[0] + '}}">' + esc(it[1]) + '</button>'; }).join("");
+  }).join('<span class="sep"></span>');
+}
 var CONTRACT_DEFAULT = {id: "termo-emprestimo-padrao", name: "Termo de Empréstimo a Colaborador", tipo: "emprestimo", content:
   "<h3>TERMO DE EMPRÉSTIMO E AUTORIZAÇÃO DE DESCONTO</h3>" +
   "<p><b>CREDORA:</b> {{clinica_nome}}, CNPJ {{clinica_cnpj}}, com sede em {{clinica_endereco}}, {{clinica_cidade}}.</p>" +
@@ -19517,12 +19563,31 @@ function contractTodayExtenso(){
 function contractContext(loan, sample){
   var cl = state.clinic || {}, tom = null, cpf = "", cargo = "", parcs = [], tj = 0, tp = 0;
   if (sample){
-    return {clinica_nome: clinicName(), clinica_cnpj: cl.cnpj || "00.000.000/0001-00", clinica_endereco: cl.endereco || "Rua Exemplo, 100", clinica_cidade: cl.cidade || "Blumenau",
+    var out = {clinica_nome: clinicName(), clinica_cnpj: cl.cnpj || "00.000.000/0001-00", clinica_endereco: cl.endereco || "Rua Exemplo, 100", clinica_cidade: cl.cidade || "Blumenau",
       tomador_nome: "Maria Exemplo", tomador_cpf: "000.000.000-00", tomador_cargo: "Terapeuta", emprestimo_descricao: "Adiantamento",
       emprestimo_valor: fmtMoney(1200), emprestimo_valor_extenso: numExtenso(1200), emprestimo_data: trBr(trTodayIso()), emprestimo_tipo: "simples", emprestimo_taxa: "1% ",
       emprestimo_parcelas: "4", emprestimo_primeiro_vencimento: trBr(fpAddMonths(trTodayIso(), 1)), emprestimo_valor_parcela: fmtMoney(312), emprestimo_total_juros: fmtMoney(48), emprestimo_total_pagar: fmtMoney(1248),
-      data_hoje: trBr(trTodayIso()), data_hoje_extenso: contractTodayExtenso(),
+      data_hoje: trBr(trTodayIso()), data_hoje_extenso: contractTodayExtenso(), clinica_telefone: cl.telefone || "(47) 0000-0000",
       tabela_parcelas: contractParcelasHtml([1, 2, 3, 4].map(function(n){ return {n: n, venc: fpAddMonths(trTodayIso(), n), principal: 300, juros: 12}; }))};
+    var smp = {colaborador_nome: "Maria Exemplo", colaborador_cpf: "000.000.000-00", colaborador_cargo: "Terapeuta", colaborador_vinculo: "CLT", colaborador_admissao: "01/02/2024", colaborador_registro: "CRP 12/34567",
+      colaborador_endereco: "Rua Exemplo, 100, Centro, Blumenau/SC", colaborador_telefone: "(47) 90000-0000", colaborador_email: "maria@exemplo.com",
+      paciente_nome: "Paciente Exemplo", paciente_cpf: "000.000.000-00", paciente_nascimento: "01/01/2020", paciente_idade: "6 anos", paciente_endereco: "Rua Exemplo, 100, Centro, Blumenau/SC",
+      responsavel_nome: "Responsável Exemplo", responsavel_cpf: "000.000.000-00", responsavel_telefone: "(47) 90000-0000", responsavel_endereco: "Rua Exemplo, 100, Centro, Blumenau/SC",
+      tratamento_inicio: "01/01/2026", tratamento_termino: "31/12/2026", tratamento_valor: fmtMoney(2400), tratamento_valor_extenso: numExtenso(2400), tratamento_sessoes_mes: "16",
+      tratamento_convenio: "Particular", tratamento_plano: "Plano Exemplo", tratamento_especialidades: "Fonoaudiologia, Psicologia", tratamento_validade: "31/12/2026",
+      devedor_nome: "Maria Exemplo", devedor_cpf: "000.000.000-00", devedor_endereco: "Rua Exemplo, 100, Centro, Blumenau/SC", divida_descricao: "Mensalidades em atraso", divida_valor: fmtMoney(3000),
+      divida_valor_extenso: numExtenso(3000), divida_data: trBr(trTodayIso()), divida_parcelas: "6", divida_valor_parcela: fmtMoney(500), divida_primeiro_vencimento: trBr(fpAddMonths(trTodayIso(), 1)), divida_juros: "1%",
+      locacao_objeto: "Sala 3", locacao_valor: fmtMoney(1200), locacao_valor_extenso: numExtenso(1200), locacao_inicio: "01/01/2026", locacao_termino: "31/12/2026", locacao_dia_vencimento: "10", locacao_horarios: "Segundas e quartas, 8h às 12h",
+      servico_descricao: "Atendimento terapêutico", servico_valor: fmtMoney(80), servico_valor_extenso: numExtenso(80), servico_forma_pagamento: "Por sessão realizada, até o dia 10", servico_inicio: "01/01/2026", servico_termino: "31/12/2026",
+      visita_data: trBr(trTodayIso()), visita_local: "Escola Exemplo", visita_objetivo: "Observação do paciente em sala de aula", visita_responsavel: "Maria Exemplo", visita_observacoes: "—",
+      patrocinio_curso: "Pós-graduação em Análise do Comportamento", patrocinio_instituicao: "Instituição Exemplo", patrocinio_valor: fmtMoney(6000), patrocinio_valor_extenso: numExtenso(6000), patrocinio_percentual: "50%",
+      patrocinio_inicio: "01/03/2026", patrocinio_termino: "01/03/2027", patrocinio_permanencia: "12",
+      capacitacao_nome: "Capacitação em ABA", capacitacao_instituicao: "Instituição Exemplo", capacitacao_carga: "40 horas", capacitacao_data: trBr(trTodayIso()), capacitacao_valor: fmtMoney(900),
+      compromisso_objeto: "Cumprimento das rotinas da clínica", compromisso_data: trBr(trTodayIso()), compromisso_prazo: "12 meses",
+      interrupcao_data: trBr(trTodayIso()), interrupcao_motivo: "Mudança de cidade", interrupcao_observacoes: "—",
+      material_descricao: "Kit de materiais pedagógicos", material_quantidade: "1", material_valor: fmtMoney(350), material_data: trBr(trTodayIso()), material_devolucao: trBr(fpAddMonths(trTodayIso(), 6))};
+    Object.keys(smp).forEach(function(k){ out[k] = smp[k]; });
+    return out;
   }
   if (loan.staff){
     var ent = staffEntries().filter(function(e){ return (e.row ? e.row.id : (e.prof ? "prof-" + e.prof.id : "")) === loan.staff; })[0];
@@ -19531,7 +19596,7 @@ function contractContext(loan, sample){
   lnPayables(loan.id).filter(function(r){ return r.parcela > 0; }).sort(function(a, b){ return a.parcela - b.parcela; }).forEach(function(r){
     var ln = fpLines(r), j = lnRound(r.valor - ln[0].valor); parcs.push({n: r.parcela, venc: r.venc, principal: ln[0].valor, juros: j}); tj += j; tp += r.valor;
   });
-  return {clinica_nome: clinicName(), clinica_cnpj: cl.cnpj || "", clinica_endereco: cl.endereco || "", clinica_cidade: cl.cidade || "",
+  return {clinica_nome: clinicName(), clinica_cnpj: cl.cnpj || "", clinica_endereco: cl.endereco || "", clinica_cidade: cl.cidade || "", clinica_telefone: cl.telefone || "",
     tomador_nome: tom || loan.parte || "", tomador_cpf: cpf, tomador_cargo: cargo, emprestimo_descricao: loan.desc,
     emprestimo_valor: fmtMoney(loan.valor), emprestimo_valor_extenso: numExtenso(loan.valor), emprestimo_data: trBr(loan.lib), emprestimo_tipo: lnTypeName(loan.tipo).toLowerCase(),
     emprestimo_taxa: String(loan.taxa).replace(".", ",") + "%", emprestimo_parcelas: String(parcs.length || loan.parcelas), emprestimo_primeiro_vencimento: trBr(parcs.length ? parcs[0].venc : loan.venc1),
@@ -19604,7 +19669,7 @@ function openContractModal(item){
         '<button type="button" data-block="H3" title="Título">Título</button><button type="button" data-block="P" title="Texto normal">Texto</button>' +
         '<button type="button" data-cmd="insertUnorderedList" title="Lista com marcadores">• Lista</button><button type="button" data-cmd="insertOrderedList" title="Lista numerada">1. Lista</button><span class="sep"></span>' +
         '<button type="button" data-cmd="undo" title="Desfazer (Ctrl+Z)">↶</button><button type="button" data-cmd="redo" title="Refazer (Ctrl+Y)">↷</button></div>' +
-        '<div class="pr-toolbar" id="ctVars">' + CONTRACT_VARS.map(function(g){ return '<span class="pl-hint">' + esc(g.g) + ':</span>' + g.items.map(function(it){ return '<button type="button" data-var="' + it[0] + '" title="Insere {{' + it[0] + '}}">' + esc(it[1]) + '</button>'; }).join(""); }).join('<span class="sep"></span>') + '</div>' : '') +
+        '<div class="pr-toolbar" id="ctVars">' + contractVarsHtml(v.tipo) + '</div>' : '') +
       '<div class="pr-editor pr-content" id="ctEditor" contenteditable="' + (canSave ? "true" : "false") + '" spellcheck="true"></div>' +
     '</div>' +
     '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="ctDel">Excluir</button>' : '<span></span>') +
@@ -19635,6 +19700,7 @@ function openContractModal(item){
       else if (b.getAttribute("data-block")) document.execCommand("formatBlock", false, b.getAttribute("data-block"));
     });
   });
+  if ($("ctTipo") && $("ctVars")) $("ctTipo").addEventListener("change", function(){ $("ctVars").innerHTML = contractVarsHtml($("ctTipo").value); });
   $("ctPreview").addEventListener("click", function(){
     var r = contractRender(prSanitize(ed.innerHTML), contractContext(null, true)), ph = regQuickHost();
     ph.innerHTML = '<div class="overlay" id="ovCtPrev"><div class="modal" style="max-width:860px"><div class="modal-head"><div><h3>Pré-Visualização</h3><div class="modal-sub">Com informações de exemplo.</div></div><button class="modal-close" id="cpClose" aria-label="Fechar">✕</button></div>' +
@@ -23107,7 +23173,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Fornecedores</b> (ver, incluir, editar e excluir) em Níveis de Permissão."},
   {id: "contratos", group: "Acesso", title: "Contratos", mod: "contratos", tab: "contratos",
     purpose: "Cadastro dos <b>modelos de contrato e de termo</b> usados pelo sistema. Você escreve o texto uma vez, com <b>variáveis</b> (nome do tomador, valor, parcelas…), e na hora de gerar o termo o sistema troca pelas informações reais. Hoje o modelo é usado no <b>Termo do Empréstimo</b> (Financeiro → Empréstimos Concedidos). Futuramente os contratos poderão ser assinados digitalmente.",
-    steps: ["Abra <b>Acesso → Contratos</b>. A lista mostra os modelos; sem nenhum cadastrado vale o modelo padrão do sistema (Termo de Empréstimo a Colaborador).", "<b>+ Incluir</b> (ou clique num modelo): informe o <b>Nome</b> e o <b>Tipo</b> (Empréstimo, Tratamento, Confissão de Dívida, Locação, Serviços, Termos de Visita Técnica, Capacitação, Compromisso, Interrupção Contratual, Responsabilidade de Material, Patrocínio Educacional ou Geral) e escreva o texto. Use <b>Negrito, Itálico, Alinhamento (Esquerda, Centro, Direita, Justificar), Título e Listas</b> na barra.", "Para inserir uma informação automática, clique no botão da variável (por exemplo <b>Nome do tomador</b> ou <b>Valor por extenso</b>): entra no texto como {{tomador_nome}}. <b>Tabela de parcelas</b> insere a tabela completa do empréstimo.", "<b>Pré-Visualizar</b> mostra o contrato com informações de exemplo e permite imprimir. <b>Salvar</b> guarda o modelo.", "No empréstimo concedido, abra o contrato e clique em <b>Termo em PDF…</b>: escolha o modelo, confira a prévia e use <b>Imprimir / PDF</b> (no diálogo de impressão, escolha “Salvar como PDF”)."],
+    steps: ["Abra <b>Acesso → Contratos</b>. A lista mostra os modelos; sem nenhum cadastrado vale o modelo padrão do sistema (Termo de Empréstimo a Colaborador).", "<b>+ Incluir</b> (ou clique num modelo): informe o <b>Nome</b> e o <b>Tipo</b> (Empréstimo, Tratamento, Confissão de Dívida, Locação, Serviços, Termo de Visita Técnica e Observação Profissional, Capacitação, Compromisso, Interrupção Contratual, Responsabilidade de Material, Patrocínio Educacional ou Geral) e escreva o texto. Use <b>Negrito, Itálico, Alinhamento (Esquerda, Centro, Direita, Justificar), Título e Listas</b> na barra.", "Para inserir uma informação automática, clique no botão da variável (por exemplo <b>Nome do tomador</b> ou <b>Valor por extenso</b>): entra no texto como {{tomador_nome}}. <b>Tabela de parcelas</b> insere a tabela completa do empréstimo.", "<b>Pré-Visualizar</b> mostra o contrato com informações de exemplo e permite imprimir. <b>Salvar</b> guarda o modelo.", "No empréstimo concedido, abra o contrato e clique em <b>Termo em PDF…</b>: escolha o modelo, confira a prévia e use <b>Imprimir / PDF</b> (no diálogo de impressão, escolha “Salvar como PDF”)."],
     rules: ["Modelo marcado como <b>Inativo</b> não aparece ao gerar o termo. Modelos do tipo <b>Geral</b> aparecem em qualquer geração.", "Variável que o sistema não conhece não é trocada e fica no texto; a prévia avisa.", "As variáveis do tomador (CPF e cargo) vêm do cadastro do colaborador; empréstimo a uma pessoa digitada à mão leva só o nome."],
     who: "Permissão <b>Contratos</b> em Níveis de Permissão (ver, incluir, editar, excluir)."},
   {id: "unidades", group: "Acesso", title: "Unidades", mod: null, tab: "unidades",

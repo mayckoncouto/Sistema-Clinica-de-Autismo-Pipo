@@ -61,7 +61,16 @@ const fs = require('fs');
   // tipos de contrato e alinhamento do texto
   await page.click('#reg-contratos-add'); await page.waitForSelector('#ovCt');
   const tipos = await page.$$eval('#ctTipo option', (o) => o.map((x) => x.value));
-  check('13 tipos de contrato, com Tratamento, Locação e Termo de Interrupção?', tipos.length === 13 && ['emprestimo', 'tratamento', 'locacao', 'interrupcao', 'geral'].every((k) => tipos.indexOf(k) !== -1), tipos.join(','));
+  check('12 tipos de contrato, com Tratamento, Locação e Termo de Interrupção?', tipos.length === 12 && ['emprestimo', 'tratamento', 'locacao', 'interrupcao', 'geral'].every((k) => tipos.indexOf(k) !== -1), tipos.join(','));
+  const v0 = await page.$$eval('#ctVars [data-var]', (b) => b.map((x) => x.getAttribute('data-var')));
+  check('tipo Empréstimo mostra variáveis do empréstimo e não do paciente?', v0.indexOf('emprestimo_valor') !== -1 && v0.indexOf('clinica_nome') !== -1 && v0.indexOf('paciente_nome') === -1, v0.join(','));
+  await page.$eval('#ctTipo', (e) => { e.value = 'tratamento'; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  const v1 = await page.$$eval('#ctVars [data-var]', (b) => b.map((x) => x.getAttribute('data-var')));
+  check('tipo Tratamento troca para paciente, responsável e tratamento?', v1.indexOf('paciente_nome') !== -1 && v1.indexOf('tratamento_valor') !== -1 && v1.indexOf('emprestimo_valor') === -1 && v1.indexOf('colaborador_nome') === -1, v1.join(','));
+  await page.$eval('#ctTipo', (e) => { e.value = 'locacao'; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  const v2 = await page.$$eval('#ctVars [data-var]', (b) => b.map((x) => x.getAttribute('data-var')));
+  check('tipo Locação mostra colaborador e locação?', v2.indexOf('colaborador_cpf') !== -1 && v2.indexOf('locacao_valor') !== -1 && v2.indexOf('paciente_nome') === -1, v2.join(','));
+  const allOk = await page.evaluate(() => true);
   const btns = await page.$$eval('#ctTools [data-cmd^="justify"]', (b) => b.map((x) => x.getAttribute('data-cmd')));
   check('barra tem esquerda, centro, direita e justificar?', btns.join(',') === 'justifyLeft,justifyCenter,justifyRight,justifyFull', btns.join(','));
   await page.click('#ctEditor'); await page.keyboard.type('Texto centralizado');
