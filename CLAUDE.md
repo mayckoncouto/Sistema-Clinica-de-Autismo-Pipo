@@ -4453,3 +4453,19 @@ movimentações e os botões **Limpar** / **Adiar** / **Marcar como não lida** 
 - (2026-10-14, pedido do usuário) **Gerar Síntese** (`#plSynth`) fica no canto direito da mesma linha do rótulo “Resumo do Quadro Clínico” (`.pl-sum-head`), não mais no título “Quadro Clínico”. Sem SQL.
 
 - (2026-10-14, pedido do usuário) **Caixa de Entrada avisa quando a tarefa vence.** Tarefa em aberto (status que não finaliza) da qual a pessoa é responsável ou seguidora, com `due_date` chegando (8h de Brasília do dia), vira uma movimentação "Vencimento" na Principal ("Venceu em dd/mm/aaaa"); finalizada não avisa; nova data = novo aviso; tipo `vencimento` em `CX_TYPES` (Preferências, 8 tipos). Feito DENTRO de `crm_inbox` (união com eventos sintéticos, `data.due = true`; `cxMemRows` faz igual nos testes). O resumo diário por push das vencidas (8h) já existia. Migração `supabase/2026-10-14-caixa-vencimento.sql` (rodada em produção pelo conector; linha 125 da conferência; `schema.sql` atualizado). Teste em `tests/run_caixa.js`.
+
+## Empréstimo a colaborador e abatimento (2026-10-14, etapa 1 de 3)
+Pedido do usuário: no empréstimo CONCEDIDO o **Tomador** aceita um colaborador (lista) ou qualquer nome digitado; cada parcela pode virar **Lançamento** (Receber…) ou
+**Abatimento** (desconto numa conta a pagar do MESMO colaborador). Decisões: abatimento = desconto na conta a pagar escolhida; Tomador = colaborador ou texto livre.
+Etapas combinadas depois: (2) saldo devedor por colaborador + margem de desconto, quitação antecipada, rescisão; (3) Acesso → **Contratos** (modelos de termo editáveis com
+variáveis, assinatura digital no futuro) e Termo do empréstimo em PDF.
+- Banco (migração `supabase/2026-10-14b-emprestimo-colaborador.sql`, rodada em produção pelo conector; linha 126 da conferência; `schema.sql` atualizado):
+  `finance_loans.staff_id`, `finance_payables.staff_id` (colaborador da conta) e `finance_payables.abate_id` (na PARCELA: conta a pagar onde ela é descontada, `on delete set null`);
+  gatilho `finance_payables_abate_guard`: só parcela de empréstimo, não baixada, conta escolhida em aberto, sem ser de empréstimo e do mesmo colaborador.
+- App: `fpDone(r)` = baixada OU abatida (as contagens de "em aberto" usam ele); `fpAbatidas(r)`, `fpDisc(r)`, `fpNet(r)` (valor − descontos), `fpAllLines(r)` (previsto do Fluxo),
+  `fpStaffList()` (colaboradores ativos; id = linha do RH `prof-…`), `fpStaffName`, `fpWho` (coluna Fornecedor/Colaborador/Tomador). Conta a pagar ganhou o campo **Colaborador** e o quadro
+  **Descontos de Empréstimo** (com Desfazer Abatimento). **Baixa** com abatimento (`openBaixa`): vira rateio — linhas do bruto + linhas fixas da parcela (principal “Entrada”, juros “Receita”),
+  valor líquido no campo; `finance_payable_settle_split` já aceita partes de direções diferentes (o sinal vem da subcategoria). Parcela abatida fica com status “Abatida” (conta como paga no saldo
+  do empréstimo, `lnStats`) e sai da lista de em aberto. `lnAbaterDialog(parcela, loan, done)` escolhe a conta (só do mesmo colaborador, líquido ≥ parcela). Janela do empréstimo salvo com
+  botões Receber… / Abater… / Desfazer Abatimento por parcela. Tomador: input + `.autolist` (`#lnParteSug`), nome escolhido grava `staff`; texto livre grava só `parte`.
+- Teste `tests/run_emprestimo_colab.js` (no `npm test`). Ajuda: tópico “Empréstimos Tomados e Concedidos”.

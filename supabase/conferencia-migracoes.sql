@@ -136,7 +136,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (122, '2026-10-13d-permissoes-crm-separadas',                exists(select 1 from pg_proc where proname = 'crm_auto_run_now' and prosrc like '%crmautomacoes%'), 'permissões separadas: CRM, Listas e Status, Automações'),
  (123, '2026-10-13e-atividades',                exists(select 1 from pathdef where d like '%activities%'), 'cadastro de Atividades (caminho, módulo e permissão nos níveis)'),
  (124, '2026-10-13f-caixa-de-entrada',          exists(select 1 from pg_proc where proname = 'crm_inbox'), 'CRM Caixa de Entrada (task_inbox, crm_inbox e permissão crmcaixa)'),
- (125, '2026-10-14-caixa-vencimento', exists(select 1 from pg_proc where proname = 'crm_inbox' and prosrc like '%Vencimento%'), 'Caixa de Entrada: aviso de vencimento')
+ (125, '2026-10-14-caixa-vencimento', exists(select 1 from pg_proc where proname = 'crm_inbox' and prosrc like '%Vencimento%'), 'Caixa de Entrada: aviso de vencimento'),
+ (126, '2026-10-14b-emprestimo-colaborador', exists(select 1 from information_schema.columns where table_name = 'finance_payables' and column_name = 'abate_id'), 'Empréstimo a colaborador (staff_id e abate_id)')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,
