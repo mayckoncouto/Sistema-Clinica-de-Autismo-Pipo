@@ -3179,6 +3179,8 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <option value="semmotivo">Cancelados sem motivo</option>
         <option value="vencendo">Vencendo (próximos 30 dias)</option>
         <option value="vencidos">Vencidos</option>
+        <option value="abavencendo">Revisão ABA vencendo (próximos 30 dias)</option>
+        <option value="abavencida">Revisão ABA vencida</option>
         <option value="abaixo">Abaixo do contratado</option>
         <option value="sem">Pacientes ativos sem tratamento</option>
       </select>
@@ -22095,10 +22097,14 @@ function renderTreatmentsTab(){
     : '';
   var dueN = state.treatments.filter(function(t){ var d = trDue(t); return d && d.state === "vencendo"; }).length;
   var overN = state.treatments.filter(function(t){ var d = trDue(t); return d && d.state === "vencido"; }).length;
+  var abaSoon = state.treatments.filter(function(t){ return trAbaRevState(t) === "vencendo"; }).length;
+  var abaOver = state.treatments.filter(function(t){ return trAbaRevState(t) === "vencida"; }).length;
   var due = document.getElementById("trDue");
   if (due) due.innerHTML =
     (dueN ? '<button type="button" class="btn ghost tr-due-btn" data-tr-due="vencendo">' + dueN + (dueN === 1 ? ' vence' : ' vencem') + ' nos próximos ' + TR_DUE_DAYS + ' dias</button>' : '') +
-    (overN ? '<button type="button" class="btn ghost tr-missing-btn" data-tr-due="vencidos">' + overN + (overN === 1 ? ' vencido' : ' vencidos') + '</button>' : '');
+    (overN ? '<button type="button" class="btn ghost tr-missing-btn" data-tr-due="vencidos">' + overN + (overN === 1 ? ' vencido' : ' vencidos') + '</button>' : '') +
+    (abaSoon ? '<button type="button" class="btn ghost tr-due-btn" data-tr-due="abavencendo">' + abaSoon + (abaSoon === 1 ? ' revisão ABA vence' : ' revisões ABA vencem') + ' nos próximos ' + TR_DUE_DAYS + ' dias</button>' : '') +
+    (abaOver ? '<button type="button" class="btn ghost tr-missing-btn" data-tr-due="abavencida">' + abaOver + (abaOver === 1 ? ' revisão ABA vencida' : ' revisões ABA vencidas') + '</button>' : '');
   Array.prototype.forEach.call(due ? due.querySelectorAll("[data-tr-due]") : [], function(b){
     b.onclick = function(){ var f = document.getElementById("trFilter"); f.value = b.getAttribute("data-tr-due"); f.dispatchEvent(new Event("change", {bubbles: true})); };
   });
@@ -22132,6 +22138,7 @@ function renderTreatmentsTab(){
     if (t.status === "renegociado" && !showReneg) return false;
     if (filter === "abaixo"){ if (t.status !== "ativo") return false; var ms = trMonthSummary(t); if (!ms || !ms.below) return false; }
     else if (filter === "vencendo" || filter === "vencidos"){ var dd = trDue(t); if (!dd || dd.state !== (filter === "vencidos" ? "vencido" : "vencendo")) return false; }
+    else if (filter === "abavencendo" || filter === "abavencida"){ if (trAbaRevState(t) !== (filter === "abavencida" ? "vencida" : "vencendo")) return false; }
     else if (filter === "semmotivo"){ if (t.status !== "cancelado" || t.motivoCancel) return false; }
     else if (filter && t.status !== filter) return false;
     if (!q) return true;
@@ -22194,6 +22201,12 @@ function trAbaText(t){
   return k.length ? k[0] : abaFallback(trPatObj(t) || t);
 }
 // Data de revisão da Intervenção ABA: vencida (passou de hoje) aparece em vermelho com "(Vencida)".
+// Revisão da Intervenção ABA do tratamento ativo: "vencida" (data passou) ou "vencendo" (até 30 dias).
+function trAbaRevState(t){
+  if (!t || t.status !== "ativo" || !t.abaRevisao) return "";
+  var d = Math.round((new Date(t.abaRevisao + "T00:00:00") - new Date(trTodayIso() + "T00:00:00")) / 86400000);
+  return d < 0 ? "vencida" : d <= TR_DUE_DAYS ? "vencendo" : "";
+}
 function trAbaRevCell(t){
   if (!t.abaRevisao) return '<span class="pt-muted">—</span>';
   var venc = t.abaRevisao < trTodayIso() && t.status === "ativo";
@@ -22954,7 +22967,7 @@ var HELP_TOPICS = [
     purpose: "Avisa quando o tratamento está perto de acabar, por data ou por quantidade de sessões.",
     steps: [
       "Na janela, escolha <b>Vencimento por</b>: <b>Sem vencimento</b> (o padrão; não pede duração nem data), <b>Data</b> (digite a duração em meses; o \"Válido até\" é calculado e pode ser ajustado) ou <b>Quantidade de sessões</b> (digite o total contratado).",
-      "Na tela de Tratamentos, os botões \"N vencem nos próximos 30 dias\" e \"N vencidos\" filtram a lista."
+      "Na tela de Tratamentos, os botões \"N vencem nos próximos 30 dias\", \"N vencidos\" e os de revisão da Intervenção ABA (vencendo e vencida) filtram a lista."
     ],
     rules: [
       "Por data: aviso 30 dias antes. Depois da data aparece \"Vencido\", mas o tratamento continua Ativo até ser renegociado ou cancelado.",
@@ -33065,6 +33078,8 @@ var CRMA_RULES = [
     desc: "Paciente com menos sessões agendadas no mês do que o Sessão/Mês do tratamento ativo: cria a tarefa “Encaixar sessões de [paciente]”."},
   {id: "carteirinha_vencendo", group: 1, name: "Carteirinha do Convênio Vencendo", when: "Todo dia", def: "agendas", param: {label: "Avisar quantos dias antes", def: 30},
     desc: "Paciente ativo com a validade da carteirinha perto de vencer (ou vencida): cria a tarefa de pedir a carteirinha nova."},
+  {id: "aba_revisao_vencendo", group: 1, name: "Revisão da Intervenção ABA Vencendo", when: "Todo dia", def: "atendimento", param: {label: "Avisar quantos dias antes", def: 30},
+    desc: "Tratamento ativo com a data de revisão da Intervenção ABA perto de vencer (ou vencida): cria a tarefa “Revisar a Intervenção ABA de [paciente]”."},
   {id: "encaminhamento_vencendo", group: 1, name: "Encaminhamento Vencendo", when: "Todo dia", def: "atendimento", param: {label: "Avisar quantos dias antes", def: 30},
     desc: "Encaminhamento médico (grupo Saúde do paciente) perto de vencer ou vencido: cria a tarefa de pedir um novo à família."},
   {id: "sem_tratamento", group: 1, name: "Pacientes sem Tratamento Ativo", when: "Toda segunda-feira", def: "gestao",

@@ -101,7 +101,11 @@ const path = require('path');
   console.log('cancelled/renegotiated hidden until checked (status filter still finds them)?', JSON.stringify(list.slice(0, 4)) === '[1,2,3,1]', JSON.stringify(list));
   console.log('Vencimento shows "Sem vencimento"?', list[4]);
 
-  console.log('no JS errors?', errors.length === 0, errors);
+    const abaSt = await ev(`(function(){ var d = function(n){ var x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+    return [trAbaRevState({status: "ativo", abaRevisao: d(-1)}), trAbaRevState({status: "ativo", abaRevisao: d(10)}), trAbaRevState({status: "ativo", abaRevisao: d(90)}), trAbaRevState({status: "cancelado", abaRevisao: d(-1)}), trAbaRevState({status: "ativo"})].join("|"); })()`);
+  console.log('ABA revision state: vencida, vencendo, none, cancelled none, empty none?', abaSt === 'vencida|vencendo|||', abaSt);
+
+console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
 })();

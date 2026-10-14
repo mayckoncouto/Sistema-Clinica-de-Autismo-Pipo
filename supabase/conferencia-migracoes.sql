@@ -138,6 +138,7 @@ chk (ordem, migracao, aplicada, obs) as (values
  (124, '2026-10-13f-caixa-de-entrada',          exists(select 1 from pg_proc where proname = 'crm_inbox'), 'CRM Caixa de Entrada (task_inbox, crm_inbox e permissão crmcaixa)'),
  (125, '2026-10-14-caixa-vencimento', exists(select 1 from pg_proc where proname = 'crm_inbox' and prosrc like '%Vencimento%'), 'Caixa de Entrada: aviso de vencimento'),
  (126, '2026-10-14b-emprestimo-colaborador', exists(select 1 from information_schema.columns where table_name = 'finance_payables' and column_name = 'abate_id'), 'Empréstimo a colaborador (staff_id e abate_id)'),
+ (128, '2026-10-14d-crm-aba-revisao', exists(select 1 from pg_proc where proname = 'crm_auto_r_aba_revisao'), 'CRM: automação Revisão da Intervenção ABA Vencendo'),
  (127, '2026-10-14c-contratos', exists(select 1 from pg_constraint where conname = 'documents_path_valid' and pg_get_constraintdef(oid) like '%contract_templates%'), 'Contratos: modelos de termo (config/contract_templates, permissão contratos)')
 )
 select ordem, migracao,
