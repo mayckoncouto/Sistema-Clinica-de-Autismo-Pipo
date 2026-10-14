@@ -88,7 +88,7 @@ const path = require('path');
   // abrir Preferências pela janela
   await page.click('#cxMenuBtn'); await page.click('#crmPop [data-pick="prefs"]');
   await page.waitForSelector('#ovCx');
-  check('Preferências window has 7 types and the period?', (await page.$$eval('#ovCx [data-cx-type]', (c) => c.length)) === 7 && !!(await page.$('#cxDays')));
+  check('Preferências window has 8 types and the period?', (await page.$$eval('#ovCx [data-cx-type]', (c) => c.length)) === 8 && !!(await page.$('#cxDays')));
   await page.click('#ovCx [data-tclose]');
   // atalhos
   await page.click('#cxHost tr[data-cx-id="t2"] .cx-t'); await page.waitForSelector('#ovCrm');
@@ -104,6 +104,17 @@ const path = require('path');
   // permissão
   const can = await ev('(function(){ var a = window.pipoAuth; window.pipoAuth = {isAdmin: function(){ return false; }, canDefault: function(m){ return m === "crm_listas"; }, can: function(){ return false; }, profile: function(){ return {id: "local-me"}; }}; var r = cxCan(); window.pipoAuth = a; return r; })()');
   check('level without crmcaixa.view cannot use it (CRM view alone is not enough)?', can === false || can === undefined, can);
+  // vencimento: tarefa minha vencida entra na Principal; finalizada ou de outra pessoa não
+  await ev(`(function(){
+    var y = new Date(Date.now() - 864e5), iso = y.getFullYear() + "-" + String(y.getMonth() + 1).padStart(2, "0") + "-" + String(y.getDate()).padStart(2, "0");
+    var base = {list_id: "atendimento", status: "novo", description: "", priority: "normal", tags: [], lead: {nome: "Lead Venc"}, followers: [], created_by: "u2", created_at: "${iso(900)}"};
+    CRM.mem.tasks.push(Object.assign({}, base, {id: "t4", title: "Vence ontem", assignees: ["local-me"], due_date: iso}),
+      Object.assign({}, base, {id: "t5", title: "Vence ontem de outra pessoa", assignees: ["u2"], due_date: iso}));
+    cxPrefsSave({off: [], days: 30}); return true; })()`);
+  await ev('cxLoad(true)'); await page.waitForTimeout(250);
+  const ids = await ev('CX.rows.map(function(r){ return r.task_id; }).join()');
+  check('overdue task of mine shows up in the Caixa; someone else\'s does not?', /t4/.test(ids) && !/t5/.test(ids), ids);
+  check('its type is Vencimento and the line says it expired?', (await ev('cxType(cxRow("t4").events[0])')) === 'vencimento' && /Venceu/.test(await ev('cxEventLine(cxRow("t4").events[0])')));
   check('no JS errors?', errors.length === 0, errors.join(' | '));
   await browser.close(); fs.unlinkSync(evPage);
   process.exit(fails ? 1 : 0);

@@ -10063,8 +10063,20 @@ language sql stable security invoker set search_path = public as $$
         or exists (select 1 from public.task_events m where m.task_id = t.id and me.u = any(m.mentions))
   ),
   ev as (
-    select e.* from public.task_events e
+    select e.id, e.task_id, e.kind, e.body, e.data, e.mentions, e.author_id, e.author_name, e.created_at
+      from public.task_events e
      where e.task_id in (select id from mine) and e.created_at > now() - make_interval(days => greatest(p_days, 1))
+    union all
+    -- Vencimento: tarefa em aberto que a pessoa responde ou segue e que chegou na data (às 8h de Brasília do dia).
+    select null::uuid, t.id, 'field', '', jsonb_build_object('campo', 'vencimento', 'due', true, 'due_date', t.due_date),
+           '{}'::uuid[], null::uuid, 'Vencimento',
+           ((t.due_date::timestamp + interval '8 hours') at time zone 'America/Sao_Paulo')
+      from public.tasks t, me
+     where t.due_date is not null
+       and (me.u = any(t.assignees) or me.u = any(t.followers))
+       and not public.crm_status_done(t.list_id, t.status)
+       and ((t.due_date::timestamp + interval '8 hours') at time zone 'America/Sao_Paulo') <= now()
+       and ((t.due_date::timestamp + interval '8 hours') at time zone 'America/Sao_Paulo') > now() - make_interval(days => greatest(p_days, 1))
   )
   select t.id,
          max(e.created_at),
@@ -10076,7 +10088,7 @@ language sql stable security invoker set search_path = public as $$
          (select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'kind', x.kind, 'body', x.body, 'data', x.data, 'author_id', x.author_id,
                   'author_name', x.author_name, 'created_at', x.created_at, 'mine', x.author_id = (select u from me),
                   'mention', (select u from me) = any(x.mentions)) order by x.created_at desc), '[]'::jsonb)
-            from (select * from ev y where y.task_id = t.id order by y.created_at desc limit 5) x)
+            from (select y.* from ev y where y.task_id = t.id order by y.created_at desc limit 5) x)
     from public.tasks t
     join ev e on e.task_id = t.id
     left join public.task_inbox i on i.task_id = t.id and i.user_id = (select u from me)

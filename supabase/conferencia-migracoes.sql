@@ -135,7 +135,8 @@ chk (ordem, migracao, aplicada, obs) as (values
  (121, '2026-10-13c-motivos-de-bloqueio',                exists(select 1 from pathdef where d like '%block_reasons%'), 'cadastro de Motivos de Bloqueio (caminho, módulo e permissão nos níveis)'),
  (122, '2026-10-13d-permissoes-crm-separadas',                exists(select 1 from pg_proc where proname = 'crm_auto_run_now' and prosrc like '%crmautomacoes%'), 'permissões separadas: CRM, Listas e Status, Automações'),
  (123, '2026-10-13e-atividades',                exists(select 1 from pathdef where d like '%activities%'), 'cadastro de Atividades (caminho, módulo e permissão nos níveis)'),
- (124, '2026-10-13f-caixa-de-entrada',          exists(select 1 from pg_proc where proname = 'crm_inbox'), 'CRM Caixa de Entrada (task_inbox, crm_inbox e permissão crmcaixa)')
+ (124, '2026-10-13f-caixa-de-entrada',          exists(select 1 from pg_proc where proname = 'crm_inbox'), 'CRM Caixa de Entrada (task_inbox, crm_inbox e permissão crmcaixa)'),
+ (125, '2026-10-14-caixa-vencimento', exists(select 1 from pg_proc where proname = 'crm_inbox' and prosrc like '%Vencimento%'), 'Caixa de Entrada: aviso de vencimento')
 )
 select ordem, migracao,
        case when aplicada is null then '—' when aplicada then 'SIM' else 'NÃO' end as rodada,

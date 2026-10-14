@@ -22741,12 +22741,13 @@ var HELP_TOPICS = [
     ],
     who: "Permissão de cada lista do CRM."},
   {id: "crm-caixa", group: "CRM", title: "CRM: Caixa de Entrada", mod: "crmcaixa", tab: "caixa",
-    purpose: "Ver, em um só lugar, o que mudou nas tarefas que você acompanha (em que é responsável, segue, criou ou foi mencionado): comentários, menções, status, prazo, responsáveis e anexos, com o resumo por tarefa e um botão Limpar, como numa caixa de entrada.",
+    purpose: "Ver, em um só lugar, o que mudou nas tarefas que você acompanha (em que é responsável, segue, criou ou foi mencionado): comentários, menções, status, vencimento, prazo, responsáveis e anexos, com o resumo por tarefa e um botão Limpar, como numa caixa de entrada.",
     steps: [
       "Abra <b>CRM ▾ → Caixa de Entrada</b> (logo depois de Minhas Tarefas). O botão CRM do topo mostra quantas tarefas estão na Principal.",
       "<b>Principal</b>: tarefas com movimentação nova desde a última vez que você limpou. Cada linha mostra a tarefa, o paciente ou lead, o resumo das últimas movimentações, o número de novidades e a hora. Clique na linha para abrir a tarefa (os comentários novos ficam destacados na atividade).",
       "<b>Limpar</b> (botão no fim da linha ou tecla <b>E</b>) tira a linha da Principal e leva para <b>Lidas</b>. Logo depois aparece <b>Desfazer</b>. Se a tarefa tiver movimentação nova depois, a linha volta sozinha para a Principal.",
       "<b>Não lida</b> (ou <b>U</b>) traz a linha de volta; <b>Adiar</b> esconde por 1 hora, até amanhã ou até segunda-feira às 8h e a linha volta sozinha (a tela mostra quantas estão adiadas).",
+      "<b>Vencimento</b>: quando uma tarefa em aberto da qual você é responsável ou seguidor chega na data de vencimento (às 8h), ela entra na Principal com “Venceu em dd/mm/aaaa”. Tarefa finalizada não avisa; trocar a data de vencimento gera um novo aviso no novo dia. O tipo pode ser desligado em Preferências.",
       "<b>Histórico de Movimentações</b>: todas as tarefas que você acompanha com movimentação no período, limpas ou não. <b>Lidas</b>: as que você limpou.",
       "No topo: <b>Pesquisar</b> (tarefa, paciente, pessoa ou texto do comentário), filtro por <b>Tipo</b> e por <b>Lista</b>. As linhas ficam agrupadas por data.",
       "<b>Opções ▾</b>: <b>Limpar Tudo da Principal</b> (também Shift+E; respeita a pesquisa e os filtros), <b>Preferências…</b> (quais tipos entram na Principal e o período mostrado, de 15 a 90 dias; ficam neste navegador) e <b>Atualizar</b>.",
@@ -28235,7 +28236,7 @@ var IO_KINDS = {
  * task_inbox (o que cada pessoa limpou). Abas: Principal (movimentação nova), Histórico de Movimentações (tudo) e Lidas (limpas).
  * Permissão própria "CRM – Caixa de Entrada" (crmcaixa, ver). Preferências (tipos e período) ficam neste navegador. */
 var CX = {rows: null, loading: null, tab: "principal", q: "", type: "", list: "", sel: "", undo: null, undoT: null, mem: {}, dirtyT: null};
-var CX_TYPES = [{id: "mencao", name: "Menções"}, {id: "comentario", name: "Comentários"}, {id: "status", name: "Status"}, {id: "prazo", name: "Prazo e Prioridade"},
+var CX_TYPES = [{id: "mencao", name: "Menções"}, {id: "comentario", name: "Comentários"}, {id: "status", name: "Status"}, {id: "vencimento", name: "Vencimento"}, {id: "prazo", name: "Prazo e Prioridade"},
   {id: "responsavel", name: "Responsáveis"}, {id: "anexo", name: "Anexos"}, {id: "outro", name: "Outras Alterações"}];
 function cxCan(){
   if (!crmMainCan()) return false;
@@ -28252,6 +28253,7 @@ function cxType(e){
   var d = e.data || {};
   if (e.kind === "comment") return e.mention ? "mencao" : "comentario";
   if (e.kind === "status") return "status";
+  if (d.due) return "vencimento";
   if (d.campo === "vencimento" || d.campo === "prioridade") return "prazo";
   if (d.campo === "responsaveis") return "responsavel";
   if (d.campo === "anexo") return "anexo";
@@ -28277,6 +28279,10 @@ function cxMemRows(){
   var me = crmMe(), days = cxPrefs().days, since = new Date(Date.now() - days * 864e5).toISOString(), out = [];
   CRM.mem.tasks.forEach(function(t){
     var evs = CRM.mem.events.filter(function(e){ return e.task_id === t.id && String(e.created_at) > since; });
+    if (t.due_date && t.due_date <= crmToday() && !crmIsDone(t) && ((t.assignees || []).indexOf(me) !== -1 || (t.followers || []).indexOf(me) !== -1)){
+      var dueAt = new Date(t.due_date + "T08:00:00").toISOString();
+      if (dueAt <= new Date().toISOString() && dueAt > since) evs = evs.concat([{id: null, task_id: t.id, kind: "field", body: "", data: {campo: "vencimento", due: true, due_date: t.due_date}, mentions: [], author_id: null, author_name: "Vencimento", created_at: dueAt}]);
+    }
     var mentioned = CRM.mem.events.some(function(e){ return e.task_id === t.id && (e.mentions || []).indexOf(me) !== -1; });
     if (!((t.assignees || []).indexOf(me) !== -1 || (t.followers || []).indexOf(me) !== -1 || t.created_by === me || mentioned) || !evs.length) return;
     var st = CX.mem[t.id] || {}, seen = CRM.mem.reads[t.id] || "", ours = evs.filter(function(e){ return e.author_id !== me; });
@@ -28380,6 +28386,7 @@ function cxEventLine(e, list){
     var t = String(e.body || "").replace(/\s+/g, " ").trim(); if (t.length > 110) t = t.slice(0, 110) + "…";
     return '<b>' + esc(e.author_name || "") + '</b> ' + (e.mention ? "mencionou você: " : "comentou: ") + '“' + esc(t) + '”';
   }
+  if ((e.data || {}).due) return '<b>Venceu</b> em ' + esc(trBr((e.data || {}).due_date || "")) + (String((e.data || {}).due_date || "") < crmToday() ? " (em atraso)" : " (hoje)");
   return crmEventTextBase(e, list);
 }
 function cxMatches(r){
