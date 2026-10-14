@@ -4509,3 +4509,21 @@ Pedido do usuário: coluna **Responsável** (`.cx-resp`, `crmAvatars(t.assignees
 - (2026-10-14, pedido do usuário) **Contratos: as variáveis mudam conforme o Tipo.** `CV` (catálogo por assunto: clínica, data, tomador, empréstimo, colaborador, paciente, responsável, tratamento, devedor, dívida, locação, serviço, visita, patrocínio, capacitação, compromisso, interrupção, material) e `CONTRACT_VARS_BY[tipo]` (quais grupos cada tipo usa; Clínica e Data valem para todos); `contractVarsFor(tipo)`/`contractVarsHtml(tipo)` montam a barra `#ctVars`, que se refaz ao trocar o Tipo. Grupos com `manual: true` (dívida, locação, serviço, visita, patrocínio, capacitação, compromisso, interrupção, material) não vêm de cadastro: o título mostra “(Preencher ao Gerar)”, a tela de cada tipo vai pedir esses dados. Pré-visualização usa dados de exemplo de todas as variáveis (`contractContext(null, true)`). Só o contexto real do Empréstimo (`contractContext(loan)`) existe; contextos de paciente/tratamento/colaborador entram quando cada tipo ganhar a sua tela. Tipo “Termo de Visita Técnica” (simples) removido a pedido do usuário: ficou só “Visita Técnica e Observação Profissional” (12 tipos).
 
 - (2026-10-14, pedido do usuário) Contratos: barra de variáveis (`#ctVars`) organizada em UMA LINHA POR GRUPO (`.ct-vgrp`: nome do grupo + botões, alinhados à ESQUERDA e centralizados na vertical, divisória entre os grupos); sem os separadores verticais de antes. Sem SQL.
+
+## Agenda ▾ Agenda Planner (2026-10-14)
+Pedido do usuário: a agenda REAL (por data) no visual do Planner, com o mês no primeiro campo da barra. Decisões: **um dia por vez** (mês · data · ‹ Hoje › ·
+filtros de sala, profissional, especialidade e status · busca · tela cheia · + Incluir · ?); **visualizar e editar**; atendimento de profissional sem coluna
+na sala vai para a coluna **Outros** da sala. Sem SQL.
+- Menu Agenda ▾ (ordem): Agenda, **Agenda Planner**, Agendamentos, Visão Geral (`AG_ITEMS`/`AG_TABS`); aba `agendaplanner`, `#tab-agendaplanner`, grade `#agpGrid`
+  (tabela `table.sched.agp-table`, cabeçalhos `.grouphead`/`.seathead`, células `td.slotcell.agp-slot` com `data-d/t/p/rm/grp`); permissão = a da Agenda
+  (`tabModule.agendaplanner = "agenda"`); fora do celular (`MOBILE_HIDDEN_TABS`); endereço `#agendaplanner`.
+- Bloco "Agenda ▾ Agenda Planner" antes de "Planner: Limpar Semana": prefixo **`agp`** (o `ap*` é do Auto Planner — nunca reutilizar: funções com o mesmo nome se
+  sobrescrevem). `AGP` (filtros), `agpOnShow`, `agpBuild` (sala/grupo → colunas por terapeuta; `agpRoomOfRow`; profissional com 2+ colunas na sala recebe um
+  atendimento por coluna no mesmo horário; "Outros" e "Sem Sala" só aparecem quando há atendimento), `agpRender`, `agpFillFilters`, `agpTarget`, `agpRefuse`,
+  `wireAgendaPlanner`.
+- Usa os MESMOS dados e regras da Agenda: `AD.rows` (semana da data aberta; a data `AD.date` é compartilhada), `agdLoadWeek`, `agdEventHtml`, `agdOpenDetails`,
+  `agdOpenModal`, `agdPlace` (ganhou o ramo `fromAp`: a coluna define profissional e sala; no grupo a sala marcada não muda), `agdDeleteRow`, desfazer/refazer,
+  barra de copiar/mover (`agdRenderClipboardBar` desenha nas duas telas) e Ctrl+Z/Y/Esc. `agdRender()` redireciona para `agpRender()` quando a aba aberta é a Agenda Planner.
+- Grupo de suporte só recebe atendimento de grupo e coluna de sala só de paciente (`agpRefuse`); bloqueio/reunião/treinamento valem em qualquer coluna.
+  Não tem os botões liberar/bloquear/limpar por coluna e linha (ficam na Agenda).
+- Ajuda: tópico `agenda-planner`. Teste `tests/run_agenda_planner.js` (no `npm test`); a aba entra em `run_toolbar_rows.js`.
