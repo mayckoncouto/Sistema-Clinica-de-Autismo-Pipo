@@ -4469,3 +4469,19 @@ variáveis, assinatura digital no futuro) e Termo do empréstimo em PDF.
   do empréstimo, `lnStats`) e sai da lista de em aberto. `lnAbaterDialog(parcela, loan, done)` escolhe a conta (só do mesmo colaborador, líquido ≥ parcela). Janela do empréstimo salvo com
   botões Receber… / Abater… / Desfazer Abatimento por parcela. Tomador: input + `.autolist` (`#lnParteSug`), nome escolhido grava `staff`; texto livre grava só `parte`.
 - Teste `tests/run_emprestimo_colab.js` (no `npm test`). Ajuda: tópico “Empréstimos Tomados e Concedidos”.
+- (2026-10-14, etapa 2 de 3) **Margem, quitação, refazer, saldo por colaborador e rescisão.** `config/clinic.margemDesconto` (% máximo de desconto de empréstimo numa conta a pagar de colaborador, padrão 30; `clinicMargem()`; campo no cartão **Financeiro** da janela Clínica): `lnAbaterDialog` mostra o % e pede confirmação “Acima da Margem de Desconto”. Contrato salvo: **Quitar Antecipadamente…** (`lnQuitarDialog`: principal das abertas + juros só das já vencidas até a data) e **Refazer Parcelas em Aberto…** (`lnRefazerDialog`, usa `lnSchedule`); ambos trocam as parcelas abertas por novas via `lnReplaceOpen` (apaga as abertas, cria as novas numeradas depois da maior parcela que sobrou e acerta `parcelas` do contrato; abatidas/baixadas ficam). Empréstimos Concedidos: botão **Por Colaborador** (`openSaldoColaboradores`, `lnStaffBalance(sid)`: saldo, abatido aguardando pagamento, parcelas em aberto, próximo vencimento, já devolvido). Desligamento de colaborador (`openStaffModal`): a confirmação cita o saldo de empréstimo (`lnRescisaoMsg`) e depois oferece criar a conta a pagar da rescisão (`lnRescisaoOffer` → `openConta(null, {pre})`; `openConta` ganhou o 2º parâmetro). Sem SQL. Testes no fim de `tests/run_emprestimo_colab.js`.
+
+## Contratos e Termo do empréstimo (2026-10-14, etapa 3 de 3)
+Pedido do usuário: Acesso → **Contratos**, onde se cria e edita um termo para usar no sistema (futuramente com assinatura digital), e o **Termo em PDF** do empréstimo.
+- Cadastro da EMPRESA `config/contract_templates {list:[{id, name, tipo ("emprestimo"|"geral"), content (HTML sanitizado por `prSanitize`), inativo, _upd}]}`
+  (`SIMPLE_LISTS.contratos` → `state.contracts`, `REG_CFG.contratos`, permissão **Contratos** `contratos` ver/incluir/editar/excluir no grupo Menu Acesso; menu Acesso → Contratos
+  clica no botão oculto `#mainTabs [data-tab="contratos"]`, tela `#tab-contratos` como Unidades). Sem modelo cadastrado vale `CONTRACT_DEFAULT` (Termo de Empréstimo a Colaborador);
+  salvar o padrão cria o modelo do usuário (`contractsList()`).
+- Janela `openContractModal`: Nome, Tipo, Inativo, barra de formatação (mesma do Prontuário: `.pr-toolbar`/`.pr-editor`) e segunda barra com botões de VARIÁVEIS (`CONTRACT_VARS`,
+  texto `{{nome}}` inserido no cursor), Pré-Visualizar (dados de exemplo, `contractContext(null, true)`) e Imprimir/PDF.
+- `contractRender(html, ctx)` troca `{{var}}` (texto escapado; `tabela_parcelas` já é HTML; desconhecida fica e é avisada), `contractContext(loan, sample)` monta as informações
+  (clínica = `state.clinic`; tomador = colaborador do `loan.staff` — CPF/cargo — ou o nome digitado; parcelas de `lnPayables`), `numExtenso(v)` (reais por extenso), `contractPrint` →
+  `demPrintFrame` (CSS `CONTRACT_PRINT_CSS`; `prSanitize` tira classes, então a tabela usa o estilo de `table`). Variável nova: acrescentar em `CONTRACT_VARS` e em `contractContext`.
+- Empréstimo concedido salvo: botão **Termo em PDF…** (`lnTermoDialog`: escolhe o modelo — tipo Empréstimo ou Geral, ativos —, prévia, Imprimir / PDF).
+- Migração `supabase/2026-10-14c-contratos.sql` (caminho em `documents_path_valid` e `module_for_path`; tem `drop constraint`, então roda no SQL Editor; linha 127 da conferência;
+  `schema.sql` atualizado). Nenhum nível recebe a permissão: o Administrador libera. Ajuda: tópico “Contratos”. Teste `tests/run_contratos.js` (no `npm test`).

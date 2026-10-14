@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var MODULES = ["agenda", "visao_geral", "planner", "bloqueio_horario", "resumo", "disponibilidade", "pacientes", "saude_paciente", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "diagnosticos", "origens", "motivos_bloqueio", "cbo", "conselhos", "fornecedores", "categorias_fornecedor", "contas_bancarias", "plano_contas", "financeiro_valores", "feriados", "campos_paciente", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "objetivos", "atividades", "escalas", "habilidades", "colaboradores", "colaboradores_valores", "financeiro", "fechamento_mes", "conector_claude"];
+  var MODULES = ["agenda", "visao_geral", "planner", "bloqueio_horario", "resumo", "disponibilidade", "pacientes", "saude_paciente", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "diagnosticos", "origens", "motivos_bloqueio", "cbo", "conselhos", "fornecedores", "categorias_fornecedor", "contas_bancarias", "plano_contas", "financeiro_valores", "feriados", "campos_paciente", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "objetivos", "atividades", "escalas", "habilidades", "colaboradores", "colaboradores_valores", "financeiro", "fechamento_mes", "contratos", "conector_claude"];
   var ACTIONS = ["view", "create", "edit", "delete"];
 
   var client = null;
@@ -517,6 +517,7 @@
             [(can("unidades", "view") ? '<button type="button" role="menuitem" data-act="unidades">Unidades</button>' : ""),
              ((isAdmin() || can("clinica", "view")) ? '<button type="button" role="menuitem" data-act="clinica">Clínica</button>' : ""),
              ((isAdmin() || can("usuarios", "view")) ? '<button type="button" role="menuitem" data-act="usuarios">Usuários</button>' : ""),
+             ((isAdmin() || can("contratos", "view")) ? '<button type="button" role="menuitem" data-act="contratos">Contratos</button>' : ""),
              ((isAdmin() || can("backup", "view")) ? '<button type="button" role="menuitem" data-act="backup">Backup</button>' : ""),
              (isManager() ? '<button type="button" role="menuitem" data-act="sistema">Sistema</button>' : "")],
             // Pessoal
@@ -574,6 +575,9 @@
       } else if (act === "unidades") {
         var unBtn = document.querySelector('#mainTabs button[data-tab="unidades"]');
         if (unBtn) unBtn.click();
+      } else if (act === "contratos") {
+        var ctBtn = document.querySelector('#mainTabs button[data-tab="contratos"]');
+        if (ctBtn) ctBtn.click();
       } else if (act === "usuarios") {
         var tabBtn = document.querySelector('#mainTabs button[data-tab="usuarios"]');
         if (tabBtn) tabBtn.click();

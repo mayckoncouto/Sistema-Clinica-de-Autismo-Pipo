@@ -101,6 +101,51 @@ const fs = require('fs');
   check('baixa criou o lançamento do bruto + o(s) da parcela?', ents.length === (liq > p1.linhas[0].valor + 0.001 ? 3 : 2), ents.length + ' lançamentos');
   check('efeito no caixa = −(bruto − parcela)?', near(signed, -(3000 - liq)), signed);
   check('parcela segue abatida e conta como paga no saldo do empréstimo?', (await ev('FP.rows.filter(function(r){ return r.loan && r.parcela === 1; })[0].abate')) === 'folha1' && near(await ev('lnStats(LN.rows.filter(function(l){ return l.id === "' + loan.id + '"; })[0]).pagas'), 1));
+
+  // ---- margem de desconto, quitação antecipada, refazer parcelas, saldo por colaborador, rescisão ----
+  await ev(`(function(){ state.clinic = Object.assign({}, state.clinic || {}, {margemDesconto: 5}); FP.rows.push({id: "folha3", venc: "2027-01-05", desc: "Folha janeiro", plan: "salarios", acc: "viacredi", sup: "", staff: "${ana.id}", valor: 3000, entry: "", grupo: "", parcela: 0, parcelas: 0, obs: "", linhas: [], loan: "", abate: ""}); return clinicMargem(); })()`);
+  check('margem da clínica lida (5%)?', (await ev('clinicMargem()')) === 5);
+  await ev('renderEmprestimos("concedido")');
+  await page.click('#reg-empconcedidos-host tbody tr[data-ln-id="' + loan.id + '"]'); await page.waitForSelector('#ovLn');
+  await page.click('#lnParc [data-ln-abate]'); await page.waitForSelector('#ovAbate');
+  check('abater mostra o % do desconto e avisa que passou da margem?', /Acima da margem/.test(await page.textContent('#abHint')), await page.textContent('#abHint'));
+  await page.click('#abOk'); await page.waitForSelector('#cfOk');
+  check('acima da margem pede confirmação?', /Acima da Margem/.test(await page.textContent('#ovConfirm')));
+  await page.click('#cfOk'); await page.waitForTimeout(500);
+  check('confirmando, a parcela 2 fica abatida na folha de janeiro?', (await ev('FP.rows.filter(function(r){ return r.loan === "' + loan.id + '" && r.parcela === 2; })[0].abate')) === 'folha3');
+  await page.waitForSelector('#ovLn');
+  check('janela do contrato oferece quitar e refazer?', !!(await page.$('#lnPayoff')) && !!(await page.$('#lnResched')));
+  await page.click('#lnPayoff'); await page.waitForSelector('#ovQuit');
+  check('quitação mostra principal, juros vencidos e juros futuros abatidos?', /Principal em aberto/.test(await page.textContent('#qtHint')) && /Juros futuros abatidos/.test(await page.textContent('#qtHint')), await page.textContent('#qtHint'));
+  await page.click('#qtOk'); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(600);
+  const rest = await ev('FP.rows.filter(function(r){ return r.loan === "' + loan.id + '" && r.parcela > 0; }).map(function(r){ return [r.parcela, r.parcelas, r.valor, r.entry || r.abate ? 1 : 0]; })');
+  check('parcelas em aberto viraram uma só (quitação) e as abatidas ficaram?', rest.length === 3 && rest.filter((r) => !r[3]).length === 1, JSON.stringify(rest));
+  const q = (await ev('FP.rows.filter(function(r){ return r.loan === "' + loan.id + '" && r.parcela > 0 && !r.abate && !r.entry; })'))[0];
+  check('quitação = principal 600 (sem juros futuros), parcela 3 de 3?', q && near(q.valor, 600) && q.parcela === 3 && q.parcelas === 3 && /Quitação/.test(q.desc), JSON.stringify(q && [q.valor, q.parcela, q.desc]));
+  check('contrato passou a ter 3 parcelas?', (await ev('LN.rows.filter(function(l){ return l.id === "' + loan.id + '"; })[0].parcelas')) === 3);
+  // refazer o empréstimo avulso (500, 2 parcelas) em 3 parcelas
+  await page.waitForSelector('#ovLn'); await page.click('#lnCancel');
+  await ev('renderEmprestimos("concedido")');
+  await page.click('#reg-empconcedidos-host tbody tr[data-ln-id="' + avulso.id + '"]'); await page.waitForSelector('#ovLn');
+  await page.click('#lnResched'); await page.waitForSelector('#ovRef');
+  await page.fill('#rfN', '3'); await page.dispatchEvent('#rfN', 'input'); await page.waitForTimeout(150);
+  check('prévia de refazer mostra 3 parcelas somando 500?', (await page.$$('#rfPrev tbody tr')).length === 3);
+  await page.click('#rfOk'); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(600);
+  const av = await ev('FP.rows.filter(function(r){ return r.loan === "' + avulso.id + '" && r.parcela > 0; }).map(function(r){ return [r.parcela, r.parcelas, r.valor]; })');
+  check('empréstimo avulso refeito em 3 parcelas?', av.length === 3 && av[0][1] === 3 && near(av.reduce((t, r) => t + r[2], 0), 500), JSON.stringify(av));
+  // saldo por colaborador
+  if (await page.$('#ovLn')) await page.click('#lnCancel');
+  await page.click('#lcSaldo'); await page.waitForSelector('#ovSaldoCol');
+  check('saldo por colaborador lista só quem tem empréstimo cadastrado como colaborador?', (await page.$$('#ovSaldoCol tbody tr')).length === 1 && new RegExp(ana.nome).test(await page.textContent('#ovSaldoCol tbody')), await page.textContent('#ovSaldoCol tbody'));
+  check('abatido a descontar aparece (parcela 2 na folha de janeiro)?', /312,00/.test(await page.textContent('#ovSaldoCol tbody')), await page.textContent('#ovSaldoCol tbody'));
+  await page.click('#scOk');
+  // rescisão
+  const bal = await ev('lnStaffBalance("' + ana.id + '")');
+  check('saldo do colaborador para a rescisão (principal da quitação em aberto)?', near(bal.saldo, 600), JSON.stringify(bal));
+  check('aviso de rescisão cita o saldo?', /empréstimo em aberto/.test(await ev('lnRescisaoMsg(lnStaffBalance("' + ana.id + '"))')));
+  await ev('lnRescisaoOffer(lnStaffBalance("' + ana.id + '"), "Ana", "2026-12-31", "' + ana.id + '")'); await page.waitForSelector('#cfOk');
+  await page.click('#cfOk'); await page.waitForSelector('#ovFp');
+  check('criar conta da rescisão abre a conta a pagar já com colaborador e descrição?', (await page.inputValue('#fpDesc')) === 'Rescisão — Ana' && (await page.inputValue('#fpStaff')) === ana.id);
   check('no JS errors?', errors.length === 0, errors.join(' | '));
   await browser.close(); fs.unlinkSync(evPage);
   process.exit(fails ? 1 : 0);

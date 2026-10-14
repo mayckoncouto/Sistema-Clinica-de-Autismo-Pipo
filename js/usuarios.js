@@ -60,6 +60,7 @@
     { key: "fechamento_mes", label: "Fechamento de Mês", hint: "incluir = fechar o mês; excluir = reabrir; ver = histórico dos fechamentos", actions: ["view", "create", "delete"] },
     { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"], group: "Menu Acesso" },
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de Permissão e administradores: só o Administrador)" },
+    { key: "contratos", label: "Contratos", hint: "modelos de termo e contrato (empréstimo a colaborador e outros)" },
     { key: "backup", label: "Backup", hint: "baixar o backup (restaurar: só o Administrador)", actions: ["view"] },
     { key: "conector_claude", label: "Conector Claude", hint: "usar o sistema pelo Claude (conector MCP); lá vale o mesmo que o nível já pode no sistema", actions: ["view"] },
     { key: "senha", label: "Senha", hint: "trocar a própria senha", actions: ["view"], dflt: true },
