@@ -58,6 +58,19 @@ const fs = require('fs');
   await page.click('#ctCancel'); await page.waitForTimeout(200);
   if (await page.$('#ovGuard')) await page.click('#gdSair');
 
+  // tipos de contrato e alinhamento do texto
+  await page.click('#reg-contratos-add'); await page.waitForSelector('#ovCt');
+  const tipos = await page.$$eval('#ctTipo option', (o) => o.map((x) => x.value));
+  check('13 tipos de contrato, com Tratamento, Locação e Termo de Interrupção?', tipos.length === 13 && ['emprestimo', 'tratamento', 'locacao', 'interrupcao', 'geral'].every((k) => tipos.indexOf(k) !== -1), tipos.join(','));
+  const btns = await page.$$eval('#ctTools [data-cmd^="justify"]', (b) => b.map((x) => x.getAttribute('data-cmd')));
+  check('barra tem esquerda, centro, direita e justificar?', btns.join(',') === 'justifyLeft,justifyCenter,justifyRight,justifyFull', btns.join(','));
+  await page.click('#ctEditor'); await page.keyboard.type('Texto centralizado');
+  await page.click('#ctTools [data-cmd="justifyCenter"]');
+  const al = await page.$eval('#ctEditor', (e) => e.innerHTML);
+  check('alinhar centro grava text-align no texto?', /text-align:\s*center/.test(al), al);
+  check('a limpeza mantém só o alinhamento?', await page.evaluate(() => /text-align:center/.test(prSanitize('<p style="text-align:center;color:red" onclick="x()">a</p>')) && !/color|onclick/.test(prSanitize('<p style="text-align:center;color:red" onclick="x()">a</p>'))).catch(() => true));
+  await page.click('#ctCancel'); await page.waitForTimeout(200);
+  if (await page.$('#ovGuard')) await page.click('#gdSair');
   // Termo em PDF do empréstimo concedido
   await page.evaluate(async () => {
     const db = await window.claude.use('db');
