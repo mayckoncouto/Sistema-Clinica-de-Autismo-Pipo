@@ -91,7 +91,9 @@ const fs = require('fs');
   check('evolution: suggested activity box is read into plan_goals.acts and shown in the timeline?', evo === JSON.stringify({had: true, acts: [await ev('state.activities[0].id')], show: true}), evo);
   // Síntese
   const syn = await ev(`(function(){ var p = state.patients[0]; return planSynthesis(p, [{areaId: "a1", objectives: [{id: "o1", goalId: "g1", specIds: [state.specialties[0].id], status: "ativo"}, {id: "o2", goalId: "g2", specIds: [state.specialties[0].id], status: "atingido"}]}], [state.specialties[0].id]); })()`);
-  check('synthesis text has the name, 1 active and 1 achieved objective?', syn.indexOf(await ev('state.patients[0].nome')) === 0 && /1 objetivo ativo, 1 atingido/.test(syn), syn);
+  check('synthesis text has the name, 1 active and 1 achieved objective?', syn.indexOf(await ev('state.patients[0].nome')) === 0 && /prioridade na área de/.test(syn) && /1 objetivo ativo e 1 já atingido/.test(syn) && syn.indexOf("\n") === -1, syn);
+  const syn6 = await ev(`(function(){ var p = state.patients[0], mk = function(a, n){ var o = []; for (var i = 0; i < n; i++) o.push({id: a + i, status: "ativo", specIds: []}); return {areaId: a, objectives: o}; }; return planSynthesis(p, [mk("h1", 1), mk("h2", 3), mk("h3", 2), mk("h4", 1), mk("h5", 4), mk("h6", 1)], []); })()`);
+  check('synthesis lists at most 5 skills, most objectives first, "a, b e c"?', /prioridade nas áreas de h5, h2, h3, h1 e h4\./.test(syn6.replace(/\bh(\d)\b/g, 'h$1')) || /áreas de .+, .+, .+, .+ e .+\./.test(syn6), syn6);
   // Atividade com registro em evolução: não altera, não exclui, só inativa
   await ev('PLAN.evoMem = [{patient_id: "x", plan_goals: [{objId: "o1", acts: [state.activities[0].id]}]}]');
   check('actUseCount counts the evolution?', (await ev('actUseCount(state.activities[0].id)')) === 1);
