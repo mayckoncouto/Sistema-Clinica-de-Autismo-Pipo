@@ -68,10 +68,10 @@ const path = require('path');
 
   // Menu Agenda ▾ com Agenda e Visão Geral.
   const menu = await ev('AG_ITEMS.map(function(x){ return x.label; }).join("|")');
-  check('top menu "Agenda ▾" has Agenda and Visão Geral?', menu === 'Agenda|Visão Geral' && !!(await page.$('#agBtn')), menu);
+  check('top menu "Agenda ▾" has Agenda and Visão Geral?', menu === 'Agenda|Agendamentos|Visão Geral' && !!(await page.$('#agBtn')), menu);
   await page.click('#agBtn');
   const opts = await page.$$eval('#agMenu [data-nav]', (r) => r.map((x) => x.textContent));
-  check('clicking "Agenda" opens the menu with both options?', opts.join('|') === 'Agenda|Visão Geral', opts);
+  check('clicking "Agenda" opens the menu with both options?', opts.join('|') === 'Agenda|Agendamentos|Visão Geral', opts);
   await page.click('#agMenu [data-nav="visaogeral"]');
   await ev('(function(){ VG.date = "2030-01-07"; vgLoad(); return true; })()');
   await page.waitForSelector('#vgHost .vg-card');

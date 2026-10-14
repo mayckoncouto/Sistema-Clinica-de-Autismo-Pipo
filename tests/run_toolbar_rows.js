@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 // Barras das telas (regra do usuário, 2026-10-10): computador numa linha só (1280px ou mais; mais estreito nunca passa
 // da tela, no máximo 2 linhas); celular no máximo 3 linhas abaixo do título.
-const TABS = ["pacientes","tratamentos","convenios","motivos","medicos","escolas","diagnosticos","origens","motivosbloq","colaboradores","tiposcolab","especialidades","servicos","cbo","conselhos","fornecedores","catfornecedor","unidades","contratos","contas","planocontas","lancamentos","pagar","receber","emptomados","empconcedidos","conciliacao","automacoes","caixa","demonstrativos","salas","feriados","status","planner","resumo","disponibilidade","agenda","visaogeral","prontuario","planos","objetivos","atividades","escalas","habilidades","crm"];
+const TABS = ["pacientes","tratamentos","convenios","motivos","medicos","escolas","diagnosticos","origens","motivosbloq","colaboradores","tiposcolab","especialidades","servicos","cbo","conselhos","fornecedores","catfornecedor","unidades","contratos","contas","planocontas","lancamentos","pagar","receber","emptomados","empconcedidos","conciliacao","automacoes","caixa","demonstrativos","agendamentos","salas","feriados","status","planner","resumo","disponibilidade","agenda","visaogeral","prontuario","planos","objetivos","atividades","escalas","habilidades","crm"];
 (async () => {
   const browser = await chromium.launch(require('./launch-opts'));
   const widths = (process.argv[2] || "1280,1440,1024,390").split(",").map(Number);

@@ -4485,3 +4485,15 @@ Pedido do usuário: Acesso → **Contratos**, onde se cria e edita um termo para
 - Empréstimo concedido salvo: botão **Termo em PDF…** (`lnTermoDialog`: escolhe o modelo — tipo Empréstimo ou Geral, ativos —, prévia, Imprimir / PDF).
 - Migração `supabase/2026-10-14c-contratos.sql` (caminho em `documents_path_valid` e `module_for_path`; tem `drop constraint`, então roda no SQL Editor; linha 127 da conferência;
   `schema.sql` atualizado). Nenhum nível recebe a permissão: o Administrador libera. Ajuda: tópico “Contratos”. Teste `tests/run_contratos.js` (no `npm test`).
+
+## Agenda ▾ Agendamentos (2026-10-14)
+Pedido do usuário: lista de todos os agendamentos dos pacientes na Agenda; clicar abre os Detalhes do Agendamento, com botão **Ver na Agenda**.
+Decisões: lista corrida com busca por paciente e resumo no alto que acompanha busca/filtros; extras: filtros e período, resumo e alertas por paciente, exportar/imprimir, ações rápidas.
+- Menu Agenda ▾ → **Agendamentos** (`#tab-agendamentos`, aba `agendamentos`, endereço `#agendamentos`, `AG_ITEMS`/`AG_TABS`; permissão = a da Agenda, ver; `tabModule.agendamentos = "agenda"`; sem SQL). Bloco "Agenda ▾ → Agendamentos" depois da Visão Geral: `LG` (estado), `lgPeriod` (Hoje, Esta Semana, Este Mês [padrão], Próximos/Últimos 30 Dias, Mês Passado, Personalizado + De/Até, máx. 13 meses), `lgLoad` (`agdFetchRange`), `lgOnRealtime` (canal da Agenda), `lgShown`, `lgAnalyse`, `lgRender`, `lgExportCsv`, `lgPrint`, `wireAgendamentos`.
+- Só atendimentos de PACIENTES (sem bloqueio/reunião/treinamento/grupo). Colunas: Data, Hora, Paciente, Profissional, Especialidade, Serviço, Sala, Status, Ações (Status ▾ e Ver na Agenda); até 1500 linhas na tela (CSV leva todas). Celular: Data, Hora, Paciente, Status.
+- Resumo (`.fl-card`): Pacientes, Agendamentos, Realizados (Finalizado), Faltas (`LG_ABSENT`), Próximos; com um paciente só: Paciente (idade), Próximo e Último atendimento. Alertas (botões `.tr-due-btn` que filtram; só computador): sem status já passado, 2+ faltas, sem próximo atendimento (período que chega a hoje), paciente bloqueado.
+- `agdOpenDetails` mostra **Ver na Agenda** (`#agdDetGo`) quando a tela aberta não é a Agenda; `prGoToAppointment(rec, noDetails)` vai à Agenda no dia/profissional e destaca a célula. `agdSetStatus` chama `lgPatch`.
+- Teste `tests/run_agendamentos.js` (no `npm test`); a aba entra em `run_toolbar_rows`, `run_sticky_headers`, `run_cad_titles`. Ajuda: tópico `agendamentos`.
+
+## Caixa de Entrada: coluna Responsável (2026-10-14)
+Pedido do usuário: coluna **Responsável** (`.cx-resp`, `crmAvatars(t.assignees)`) logo depois de "O que Mudou". No celular fica oculta (colunas 3 a 5 escondidas).
