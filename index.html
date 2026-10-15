@@ -23051,6 +23051,7 @@ function openTreatmentModal(t, opts){
         (canDel ? '<button class="btn danger" id="trDel">Excluir</button>' : '') +
         (!isNew && t.status === "ativo" && can("tratamentos", "create") ? '<button class="btn ghost" id="trReneg">Renegociar</button>' : '') +
         '<div class="spacer"></div>' +
+        (!isNew && t.status === "ativo" && slCan("create") && (agdClient() || window.__pipoSales) ? '<button class="btn ghost" id="trGenSale" data-ro-ok>Gerar Venda</button>' : '') +
         '<button class="btn ghost" id="trCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
         (canSave ? '<button class="btn primary" id="trSave">Salvar</button>' : '') +
       '</div>' +
@@ -23147,6 +23148,16 @@ function openTreatmentModal(t, opts){
     document.getElementById("trSalesList").addEventListener("click", function(e){
       var b = e.target.closest("[data-sale-ct]"); if (!b) return;
       var sale = (SALES.rows || []).filter(function(x){ return x.id === b.getAttribute("data-sale-ct"); })[0]; if (sale) slContratoDialog(sale);
+    });
+  }
+  var genSaleBtn = document.getElementById("trGenSale");
+  if (genSaleBtn){
+    Promise.all([slLoad(), fpLoad()]).then(function(){ if (slHasSale(t.id)) genSaleBtn.hidden = true; });
+    genSaleBtn.addEventListener("click", function(){
+      slManualSale(t, function(){
+        if (slHasSale(t.id)) genSaleBtn.hidden = true;
+        var el = document.getElementById("trSalesList"); if (el) el.innerHTML = trSalesHtml(t);
+      });
     });
   }
   if (!isNew && (trUsedCount(t) === null || !TR.appts) && agdClient()) trLoadLast(false).then(function(){
@@ -23320,10 +23331,10 @@ function openTreatmentModal(t, opts){
           showToast("Tratamento salvo.");
           // Venda (2026-10-15): tratamento novo ou alterado vira venda; cancelado pergunta das parcelas.
           var vMes = canEditVal ? newVal : money.valor, vDesc = canEditVal ? newDesp : money.descontos;
-          var rgPrev = isNew && opts && opts.renegotiateFrom ? (state.treatments || []).filter(function(x){ return x.id === opts.renegotiateFrom; })[0] : null;
-          var salePromise = slOnTreatmentSaved({t: t, rec: rec, isNew: isNew, opts: opts, st: st, others: others, reneg: !!rgPrev,
-            oldKey: rgPrev ? slKeyQty(rgPrev, trMoney(rgPrev)) : (isNew ? "" : slKey(t, money)),
-            newKey: rgPrev ? slKeyQty(rec, {valor: vMes, descontos: vDesc}) : slKey(rec, {valor: vMes, descontos: vDesc}), valorFinal: Math.round((vMes - vDesc) * 100) / 100});
+          // Tratamento novo = valor integral; renegociado = só a diferença para o tratamento anterior (e só se aumentou).
+          var salePlan = slPlan(rec, vMes, vDesc, opts && opts.renegotiateFrom, others);
+          var salePromise = slOnTreatmentSaved({t: t, rec: rec, isNew: isNew, opts: opts, st: st, others: others, plan: salePlan,
+            oldKey: isNew ? "" : slKey(t, money), newKey: slKey(rec, {valor: vMes, descontos: vDesc}), valorFinal: salePlan.valorFinal});
           var after = function(){
             // Cancelou ou renegociou (este ou o ativo anterior): pergunta se remove os agendamentos.
             var cancelNow = st === "cancelado" && (isNew || t.status !== "cancelado");
@@ -23537,18 +23548,52 @@ function slOnTreatmentSaved(ctx){
     return slCancelFlow(ctx.rec);
   }
   if (!slCan("create") || ctx.st !== "ativo") return null;
-  if ((!ctx.isNew || ctx.reneg) && ctx.oldKey === ctx.newKey) return null;
-  return slLoad().then(function(){ return fpLoad(); }).then(function(){ return slSaleDialog(ctx); });
+  if (!ctx.isNew && ctx.oldKey === ctx.newKey) return null;
+  return slLoad().then(function(){ return fpLoad(); }).then(function(){
+    if (slHasSale(ctx.rec.id)) return;   // só uma venda por tratamento
+    if (ctx.plan && ctx.plan.skip){ showToast("Sem venda: o valor do tratamento renegociado (" + fmtMoney(ctx.plan.valorFinal) + ") não é maior que o do anterior (" + fmtMoney(ctx.plan.prevFinal) + ")."); return; }
+    return slSaleDialog(ctx);
+  });
+}
+function slHasSale(treatmentId){ return (SALES.rows || []).some(function(s){ return s.treatment === treatmentId && s.status !== "cancelada"; }); }
+// Anterior = o tratamento de onde se renegociou, o ativo que acabou de virar Renegociado ou o mais recente do paciente que começou antes.
+function slPrevTreatment(rec, renegId, others){
+  var all = state.treatments || [], c = renegId ? all.filter(function(x){ return x.id === renegId; })[0] : null;
+  if (!c && others && others.length) c = others[0];
+  if (!c) c = all.filter(function(x){ return x.patientId === rec.patientId && x.id !== rec.id && x.status !== "cancelado" && String(x.inicio || "") <= String(rec.inicio || ""); })
+    .sort(function(a, b){ return String(b.inicio || "").localeCompare(String(a.inicio || "")) || String(b.criadoEm || "").localeCompare(String(a.criadoEm || "")); })[0];
+  return c || null;
+}
+// Valor da venda: tratamento novo = valor final integral (Nova); renegociado = diferença para o anterior (Aditivo), sem venda se não aumentou.
+function slPlan(rec, vMes, vDesc, renegId, others){
+  var final = Math.round((vMes - vDesc) * 100) / 100;
+  if (rec.tipo !== "renegociado") return {valorFinal: final, tipo: "nova"};
+  var prev = slPrevTreatment(rec, renegId, others);
+  if (!prev) return {valorFinal: final, tipo: "nova"};
+  var pm = trMoney(prev), pf = Math.round((pm.valor - pm.descontos) * 100) / 100, diff = Math.round((final - pf) * 100) / 100;
+  if (diff <= 0) return {skip: true, valorFinal: final, prevFinal: pf, tipo: "aditivo"};
+  return {valorFinal: diff, tipo: "aditivo", prevFinal: pf, full: final};
+}
+// Botão "Gerar Venda" da janela do tratamento (já salvo): usa os valores salvos.
+function slManualSale(t, done){
+  if (!agdClient() && !window.__pipoSales) return;
+  slLoad().then(function(){ return fpLoad(); }).then(function(){
+    if (slHasSale(t.id)){ showToast("Este tratamento já tem uma venda.", true); return; }
+    var m = trMoney(t), pl = slPlan(t, m.valor, m.descontos, "", []);
+    if (pl.skip){ showToast("Sem venda: o valor do tratamento (" + fmtMoney(pl.valorFinal) + ") não é maior que o do anterior (" + fmtMoney(pl.prevFinal) + ").", true); return; }
+    if (!(pl.valorFinal > 0)){ showToast("Informe o valor do tratamento antes de gerar a venda.", true); return; }
+    return slSaleDialog({t: t, rec: t, isNew: false, opts: {}, st: t.status, others: [], plan: pl, valorFinal: pl.valorFinal}).then(done);
+  });
 }
 function slSaleDialog(ctx){
   return new Promise(function(resolve){
     var rec = ctx.rec, p = rawPatient(rec.patientId) || {}, host = slDlgHost();
     var prevTr = [rec.id]; if (ctx.opts && ctx.opts.renegotiateFrom) prevTr.push(ctx.opts.renegotiateFrom);
     (ctx.others || []).forEach(function(o){ prevTr.push(o.id); });
-    var prevSales = (SALES.rows || []).filter(function(s){ return prevTr.indexOf(s.treatment) !== -1 && s.status === "ativa"; });
-    var prev = prevSales.slice().sort(function(a, b){ return String(b.data).localeCompare(String(a.data)); })[0];
-    var prevOpen = slParcels(prevSales.map(function(s){ return s.id; })).filter(function(x){ return !fpDone(x); });
-    var tipo = ctx.isNew && !ctx.reneg ? "nova" : "aditivo";
+    var prevAll = (SALES.rows || []).filter(function(s){ return prevTr.indexOf(s.treatment) !== -1 && s.status === "ativa"; });
+    var prev = prevAll.slice().sort(function(a, b){ return String(b.data).localeCompare(String(a.data)); })[0];
+    var prevSales = [], prevOpen = [];   // a venda é só a diferença: a anterior continua valendo
+    var tipo = (ctx.plan && ctx.plan.tipo) || (ctx.isNew ? "nova" : "aditivo");
     var meses = prev ? prev.meses : (rec.duracaoMeses > 0 ? rec.duracaoMeses : 1);
     var valor = ctx.valorFinal;
     var staff = fpStaffList();
@@ -23557,7 +23602,7 @@ function slSaleDialog(ctx){
     var accs = activeOnly(state.bankAccounts, "").slice().sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
     var canFp = fpCan("create");
     host.innerHTML = '<div class="overlay confirm-overlay" id="ovSale" role="dialog" aria-modal="true" aria-labelledby="slTitle"><div class="modal" style="max-width:640px">' +
-      '<div class="modal-head"><div><h3 id="slTitle">Registrar Venda</h3><div class="modal-sub">' + esc(p.nome || "") + ' · ' + (ctx.isNew ? "Tratamento novo" : "Tratamento alterado") + ' · já salvo</div></div></div>' +
+      '<div class="modal-head"><div><h3 id="slTitle">Registrar Venda</h3><div class="modal-sub">' + esc(p.nome || "") + ' · ' + (tipo === "aditivo" ? "Tratamento renegociado: diferença de " + fmtMoney(ctx.plan && ctx.plan.prevFinal || 0) + " para " + fmtMoney(ctx.plan && ctx.plan.full || 0) : ctx.isNew ? "Tratamento novo" : "Tratamento") + ' · já salvo</div></div></div>' +
       '<div class="modal-body">' +
         '<div class="tr-sec tr-sec-top">Venda</div>' +
         '<div class="field-row"><div class="field"><label for="slTipo">Tipo da Venda</label><select id="slTipo">' +
@@ -24937,7 +24982,7 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Vale a regra mais específica: vendedor + tipo, depois vendedor, depois tipo, depois Todas. Regra inativa não vale.",
-      "Aditivo comissiona só a diferença para a venda que ele substituiu; Nova, o total da venda.",
+      "Aditivo é a venda da diferença do renegociado; Nova, o total da venda.",
       "Cada venda tem no máximo uma comissão; apurar de novo não duplica.",
       "Sem vendedor na venda ou sem regra que sirva, nenhuma comissão é gerada (a janela avisa o motivo)."
     ],
@@ -24945,7 +24990,7 @@ var HELP_TOPICS = [
   {id: "vendas", group: "Cadastros", title: "Vendas do Tratamento", mod: "vendas", tab: "tratamentos",
     purpose: "Cada tratamento novo e cada alteração comercial dele (valor, Sessão/Mês, especialidades, convênio ou vencimento) é uma venda, com vendedor e, se quiser, parcelas no Contas a Receber.",
     steps: [
-      "Ao salvar um tratamento novo ou alterado, abre <b>Registrar Venda</b>. O tipo vem sozinho: <b>Nova</b> ou <b>Aditivo</b> (alteração de valores ou de sessões, inclusive ao renegociar). Renegociar apenas para renovar, sem mudar valores nem a quantidade de sessões, não gera venda. <b>Agora Não</b> fecha sem registrar.",
+      "Ao salvar um tratamento <b>novo</b>, abre <b>Registrar Venda</b> com o valor integral (tipo <b>Nova</b>). Ao salvar um tratamento <b>renegociado</b>, a venda é só a <b>diferença</b> para o tratamento anterior (tipo <b>Aditivo</b>): se o valor subiu de R$ 1.000 para R$ 1.500, a venda é de R$ 500; se ficou igual ou diminuiu, não gera venda. Cada tratamento tem no máximo <b>uma venda</b>. <b>Agora Não</b> fecha sem registrar; depois, o botão <b>Gerar Venda</b> (ao lado de Cancelar, na janela do tratamento) registra a venda que ficou pendente.",
       "Informe a data, o vendedor, a forma de pagamento, o <b>valor mensal</b> e os <b>meses</b>; o total é calculado.",
       "Marque <b>Gerar parcelas no Contas a Receber</b> para criar as contas: entrada (opcional), número de parcelas, primeiro vencimento, intervalo em meses, conta bancária e subcategoria. A prévia mostra cada parcela antes de salvar.",
       "Na venda seguinte do mesmo tratamento, a anterior fica <b>Substituída</b>; se havia parcelas em aberto dela, você escolhe manter ou excluir.",

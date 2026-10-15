@@ -48,36 +48,67 @@ const path = require('path');
   check('1 venda ativa com total 3.000', st1.sales.length === 1 && st1.sales[0].status === 'ativa' && st1.sales[0].total === 3000 && st1.sales[0].tipo === 'nova', JSON.stringify(st1.sales));
   check('4 contas a receber ligadas à venda, soma 3.000', st1.fp.length === 4 && st1.fp.every((x) => x.sale === st1.sales[0].id && x.plan === 'pl-rec') && Math.round(st1.fp.reduce((a, x) => a + x.valor, 0) * 100) === 300000, st1.fp.length);
 
-  // Alteração comercial -> aditivo; venda anterior fica Substituída
+  // Só uma venda por tratamento: alterar o valor de um tratamento que já tem venda não pergunta de novo
   const trId = await ev(`state.treatments[0].id`);
+  const patId = await ev(`state.treatments[0].patientId`);
   await ev(`openTreatmentModal(state.treatments[0])`);
-  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(200);
+  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(300);
+  check('tratamento que já tem venda não mostra Gerar Venda', await page.$eval('#trGenSale', (x) => x.hidden));
   await page.fill('#trVal', '1.200,00');
+  await page.click('#trSave'); await page.waitForTimeout(500);
+  check('alterar o valor de tratamento que já tem venda não abre outra', !(await page.$('#ovSale')));
+
+  // Renegociar para MENOS ou IGUAL: sem venda
+  await ev(`openTreatmentModal(null, {patientId: ${JSON.stringify(patId)}, copyFrom: state.treatments[0], renegotiateFrom: ${JSON.stringify(trId)}})`);
+  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(300);
+  await page.fill('#trVal', '900,00');
+  await page.click('#trSave'); await page.waitForTimeout(600);
+  check('renegociado com valor menor (1200 -> 900) não gera venda', !(await page.$('#ovSale')) && (await ev(`SALES.rows.length`)) === 1, await ev(`SALES.rows.length`));
+  await ev(`(function(){ var h = document.getElementById("confirmHost"); if (h) h.innerHTML = ""; })()`);
+  const negId = await ev(`state.treatments.filter(function(x){ return x.status === "ativo"; })[0].id`);
+
+  // Renegociar para MAIS: venda = diferença (900 -> 1500 = 600), tipo Aditivo
+  await ev(`openTreatmentModal(null, {patientId: ${JSON.stringify(patId)}, copyFrom: state.treatments.filter(function(x){ return x.status === "ativo"; })[0], renegotiateFrom: ${JSON.stringify(negId)}})`);
+  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(300);
+  await page.fill('#trVal', '1.500,00');
   await page.click('#trSave');
   await page.waitForSelector('#ovSale', { timeout: 3000 });
-  check('alterar o valor abre a venda como Aditivo', (await page.$eval('#slTipo', (x) => x.value)) === 'aditivo');
-  check('avisa das parcelas em aberto da venda anterior', !!(await page.$('#slPrevOpen')));
-  await setVal('#slPrevOpen', 'del');
+  check('renegociado para mais abre a venda como Aditivo', (await page.$eval('#slTipo', (x) => x.value)) === 'aditivo');
+  check('valor da venda é a diferença para o anterior (1500 - 900 = 600)', (await page.$eval('#slValor', (x) => x.value)).replace(/\D/g, '') === '60000', await page.$eval('#slValor', (x) => x.value));
+  check('não oferece mexer nas parcelas da venda anterior', !(await page.$('#slPrevOpen')));
+  await setVal('#slMeses', '1');
   await page.click('#slSave'); await page.waitForTimeout(300);
   const st2 = JSON.parse(await ev(`JSON.stringify({sales: SALES.rows, fp: FP.rows})`));
   const old = st2.sales.find((x) => x.id === st1.sales[0].id), neu = st2.sales.find((x) => x.id !== st1.sales[0].id);
-  check('a venda anterior ficou Substituída apontando para a nova', old.status === 'substituida' && old.replacedBy === neu.id && neu.tipo === 'aditivo' && neu.status === 'ativa', JSON.stringify(st2.sales.map((x) => [x.tipo, x.status])));
-  check('parcelas em aberto da venda anterior foram excluídas', st2.fp.length === 0, st2.fp.length);
+  check('a venda anterior continua ativa e a nova é o aditivo de 600', old.status === 'ativa' && neu.tipo === 'aditivo' && neu.status === 'ativa' && neu.total === 600, JSON.stringify(st2.sales.map((x) => [x.tipo, x.status, x.total])));
+
+  await ev(`(function(){ var h = document.getElementById("confirmHost"); if (h) h.innerHTML = ""; })()`);
+  // Botão Gerar Venda: tratamento sem venda (só uma por tratamento)
+  await ev(`(function(){ var t = state.treatments.filter(function(x){ return x.status === "ativo"; })[0]; SALES.rows = SALES.rows.filter(function(s){ return s.treatment !== t.id; }); })()`);
+  await ev(`openTreatmentModal(state.treatments.filter(function(x){ return x.status === "ativo"; })[0])`);
+  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(300);
+  check('tratamento sem venda mostra Gerar Venda', !(await page.$eval('#trGenSale', (x) => x.hidden)));
+  await page.click('#trGenSale');
+  await page.waitForSelector('#ovSale', { timeout: 3000 });
+  check('Gerar Venda abre a venda com a diferença (600)', (await page.$eval('#slValor', (x) => x.value)).replace(/\D/g, '') === '60000');
+  await page.click('#slSave'); await page.waitForTimeout(300);
+  check('depois de gerar, o botão some e não há segunda venda', await page.$eval('#trGenSale', (x) => x.hidden) && (await ev(`SALES.rows.filter(function(s){ return s.treatment === state.treatments.filter(function(x){ return x.status === "ativo"; })[0].id; }).length`)) === 1);
+  await page.click('#trCancel'); await page.waitForTimeout(200);
 
   // Salvar sem mudança comercial não pergunta
-  await ev(`openTreatmentModal(state.treatments[0])`);
+  await ev(`openTreatmentModal(state.treatments.filter(function(x){ return x.status === "ativo"; })[0])`);
   await page.waitForSelector('#ovTreat'); await page.waitForTimeout(200);
   await page.fill('#trObs', 'só uma observação');
   await page.click('#trSave'); await page.waitForTimeout(400);
   check('mudança que não é comercial não abre venda', !(await page.$('#ovSale')));
 
   // Cancelamento: parcelas
-  await ev(`(function(){ var s = SALES.rows.filter(function(x){ return x.status === "ativa"; })[0];
+  await ev(`(function(){ var at = state.treatments.filter(function(x){ return x.status === "ativo"; })[0]; var s = SALES.rows.filter(function(x){ return x.status === "ativa" && x.treatment === at.id; })[0];
     FP.rows = [
       {id: "a1", venc: "2026-12-10", desc: "p1", plan: "pl-rec", acc: "", sup: "", valor: 100, entry: "", grupo: s.id, parcela: 1, parcelas: 3, obs: "", linhas: [], loan: "", staff: "", abate: "", sale: s.id},
       {id: "a2", venc: "2027-01-10", desc: "p2", plan: "pl-rec", acc: "", sup: "", valor: 100, entry: "", grupo: s.id, parcela: 2, parcelas: 3, obs: "", linhas: [], loan: "", staff: "", abate: "", sale: s.id},
       {id: "a3", venc: "2026-10-01", desc: "p0", plan: "pl-rec", acc: "", sup: "", valor: 100, entry: "lanc", grupo: s.id, parcela: 0, parcelas: 3, obs: "", linhas: [], loan: "", staff: "", abate: "", sale: s.id}]; })()`);
-  await ev(`openTreatmentModal(state.treatments[0])`);
+  await ev(`openTreatmentModal(state.treatments.filter(function(x){ return x.status === "ativo"; })[0])`);
   await page.waitForSelector('#ovTreat'); await page.waitForTimeout(200);
   await setVal('#trSt', 'cancelado'); await page.waitForTimeout(100);
   await setVal('#trMot', await page.$eval('#trMot', (x) => (x.options[1] || {}).value || ''));
