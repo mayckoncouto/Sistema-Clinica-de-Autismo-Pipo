@@ -21409,6 +21409,7 @@ function prFromAppointment(row){
  */
 var RP_TYPES = [
   {id: "lista",           name: "Lista de Atendimentos",          desc: "Todos os atendimentos do período, com status.", filters: ["status", "servico", "paciente"]},
+  {id: "elegibilidade",   name: "Elegibilidade",                  desc: "Pacientes atendidos na Agenda no período (um registro por paciente), com convênio, plano e número da carteirinha.", filters: ["convenio"]},
   {id: "produtividade",   name: "Produtividade por Profissional", desc: "Agendados, por status, comparecimento e horas atendidas.", filters: []},
   {id: "frequencia",      name: "Frequência por Paciente",        desc: "Presenças, faltas e % de frequência de cada paciente.", filters: ["paciente"]},
   {id: "convenios",       name: "Atendimentos por Convênio",      desc: "Atendimentos Finalizados por convênio, plano e serviço.", filters: ["convenio"]},
@@ -21806,6 +21807,22 @@ var RP_BUILDERS = {
     });
     return {sections: [{title: "Por Profissional", head: ["Profissional", "Bloqueios", "Horas", "Reuniões", "Horas", "Treinamentos", "Horas"],
       rows: list, foot: list.length > 1 ? ["Total", tot.bloqueado, rpHours(tot.bloqueado), tot.reuniao, rpHours(tot.reuniao), tot.treinamento, rpHours(tot.treinamento)] : null}]};
+  },
+  "elegibilidade": function(rows, o){
+    var by = {};
+    rpPatientRows(rows).forEach(function(a){
+      var p0 = findPatientByName(a); if (!p0) return;
+      var cur = by[p0.id];
+      if (!cur || a.date > cur.last) by[p0.id] = {p: p0, last: a.date};
+    });
+    var list = Object.keys(by).map(function(id){
+      var x = by[id], p = findPatientAt(x.p.nome, x.last) || x.p;
+      return {nome: x.p.nome, conv: patientConvenioName(p) || "Sem convênio", plano: p.plano || p.planoPadrao || "", cart: p.carteirinha || x.p.carteirinha || ""};
+    }).filter(function(r){ return !o.conv || r.conv === o.conv; })
+      .sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
+    return {note: (o.prof ? "Considerando só os atendimentos do profissional escolhido. " : "") + "Cada paciente aparece uma só vez, mesmo com vários atendimentos no período. Bloqueios, reuniões e treinamentos não entram.",
+      sections: [{title: list.length + (list.length === 1 ? " paciente" : " pacientes"), head: ["Paciente", "Convênio", "Plano", "Carteirinha"],
+        rows: list.map(function(r){ return [r.nome, r.conv, r.plano, r.cart]; })}]};
   },
   "sem-atendimento": function(rows, o){
     var seen = {};
@@ -25000,7 +25017,8 @@ var HELP_TOPICS = [
       "Clique no título de uma coluna para ordenar. Use <b>Imprimir/PDF</b> ou <b>Exportar Excel</b>."
     ],
     rules: [
-      "Tipos: Lista de atendimentos, Produtividade, Frequência, Atendimentos por convênio, Pacote contratado × realizado, Evoluções pendentes, Ocupação, Bloqueios/reuniões/treinamentos, Pacientes sem atendimento, Tratamentos novos e renegociados, Relatório financeiro, Evolução por habilidade.",
+      "<b>Elegibilidade</b>: os pacientes atendidos na Agenda no período, uma linha por paciente (sem repetir), com convênio, plano e número da carteirinha do cadastro; bloqueios, reuniões e treinamentos não entram. Para ver o dia, escolha o mesmo dia em De e Até.",
+      "Tipos: Lista de atendimentos, Elegibilidade, Produtividade, Frequência, Atendimentos por convênio, Pacote contratado × realizado, Evoluções pendentes, Ocupação, Bloqueios/reuniões/treinamentos, Pacientes sem atendimento, Tratamentos novos e renegociados, Relatório financeiro, Evolução por habilidade.",
       "<b>Evolução por Habilidade</b>: dos planos terapêuticos vigentes, uma linha por paciente e habilidade com objetivos, ativos, atingidos, suspensos, % atingidos e atingidos no período; com profissional escolhido, só os objetivos que ele pode trabalhar.",
       "<b>Relatório Financeiro</b>: uma linha por mês do período com tratamentos ativos (que valeram em algum dia do mês), novos, renegociados, cancelados, receita prevista (soma do valor final mensal dos ativos) e ticket médio (receita ÷ ativos), com a linha de totais; embaixo, a lista dos tratamentos ativos no período com o valor do mês, os meses no período e o total.",
       "Convênio, plano e sessões vêm do tratamento que valia na data de cada atendimento.",

@@ -95,6 +95,7 @@
   // Relatórios da aba "Relatórios" (ids iguais a RP_TYPES no index.html).
   var REPORTS = [
     { key: "lista", label: "Lista de Atendimentos" },
+    { key: "elegibilidade", label: "Elegibilidade" },
     { key: "produtividade", label: "Produtividade por Profissional" },
     { key: "frequencia", label: "Frequência por Paciente" },
     { key: "convenios", label: "Atendimentos por Convênio" },

@@ -4591,3 +4591,6 @@ Pedido do usuário ("Faça tudo"). Permissão `vendas` em tudo (Financeiro ▾ �
   “Desconto Acima do Limite” (aprovação). Vazio = sem limite.
 - Teste `tests/run_painel_vendas.js` (no `npm test`). Ajuda: tópico `painel-vendas`.
 - NÃO feito: aviso automático ao agendar paciente inadimplente e automação do CRM de cobrança (ideias para depois).
+
+## Relatório Elegibilidade (2026-10-15)
+Relatórios → **Elegibilidade** (`RP_TYPES` id `elegibilidade`, `RP_BUILDERS.elegibilidade`; permissão `relatorios.elegibilidade` em `REPORTS` de `js/usuarios.js`): pacientes atendidos na Agenda no período (um registro por paciente, sem bloqueio/reunião/treinamento) com Paciente, Convênio, Plano e Carteirinha (convênio/plano do tratamento vigente na última data atendida; carteirinha do cadastro). Para ver um dia, De e Até iguais. Filtro de convênio. Sem SQL. Teste `tests/run_elegibilidade.js`. Ajuda: tópico Relatórios.
