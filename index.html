@@ -5047,7 +5047,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", agenda:"Agenda", visao_geral:"Visão Geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
+var PERM_MODULE_LABELS = {comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", agenda:"Agenda", visao_geral:"Visão Geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -16640,6 +16640,7 @@ function agdSetStatus(row, statusId){
     if (typeof lgPatch === "function") lgPatch(updated);
     var st = statusById(statusId);
     showToast("Status: " + (st ? st.name : "Em Aberto") + ".");
+    if (statusId === FINAL_STATUS && typeof comApuraAuto === "function") comApuraAuto();
     return true;
   });
 }
@@ -23514,7 +23515,11 @@ function slCancelFlow(rec){
     var ids = sales.map(function(s){ return s.id; });
     var parc = slParcels(ids), open = parc.filter(function(x){ return !fpDone(x); }), paid = parc.filter(fpDone);
     var actIds = sales.filter(function(s){ return s.status === "ativa"; }).map(function(s){ return s.id; });   // as substituídas ficam como histórico
-    var mark = slCan("edit") ? function(){ return slPatch(actIds, {status: "cancelada"}); } : function(){ return Promise.resolve(true); };
+    var mark = function(){
+      return (slCan("edit") ? slPatch(actIds, {status: "cancelada"}) : Promise.resolve(true)).then(function(){ return comReverse(actIds); }).then(function(r){
+        if (r) showToast("Comissão estornada" + (r.n > 1 ? " (" + r.n + ")" : "") + (r.del ? "; conta a pagar excluída" : "") + (r.paid ? ". Atenção: " + fmtMoney(r.paid) + " já foram pagos ao vendedor." : "."));
+      });
+    };
     if (!open.length) return mark();
     return slCancelDialog(open, paid, rec).then(function(ch){
       return mark().then(function(){
@@ -23562,6 +23567,292 @@ function trSalesHtml(t){
       (s.sellerName ? ' · ' + esc(s.sellerName) : '') + ' · ' + esc(SALE_STATUS[s.status] || s.status) +
       (parc.length ? ' · Parcelas: ' + open.length + ' em aberto de ' + parc.length : '') + '</li>';
   }).join("") + '</ul>';
+}
+
+/* ===== Comissões de venda (2026-10-15) =====
+ * Regras (`commission_rules`): percentual por tipo de venda (ou Todas), vendedor opcional, subcategoria da despesa, conta e dia do pagamento.
+ * A comissão (`sale_commissions`, uma por venda) nasce no 1º atendimento FINALIZADO do tratamento (apuração ao finalizar e em "Apurar Agora") e vira
+ * conta a pagar do vendedor. Aditivo comissiona só a diferença para a venda que ele substituiu. Venda cancelada estorna a comissão. Permissão `comissoes`. */
+var COMM = {rules: null, rows: null, loading: null, busy: false};
+var COMM_TIPOS = {todas: "Todas as Vendas", nova: "Nova", renovacao: "Renovação", aditivo: "Aditivo"};
+function comCan(a){ return can("comissoes", a); }
+function comOnline(){ return !!agdClient() || !!window.__pipoSales; }
+function comRuleFromDb(x){ return {id: x.id, name: x.name || "", tipo: x.tipo || "todas", pct: Number(x.percentual) || 0, seller: x.seller_id || "", plan: x.plan_id || "", acc: x.account_id || "", day: x.pay_day || 10, inativo: !!x.inativo}; }
+function comRuleToDb(r){ return {name: r.name, tipo: r.tipo, percentual: r.pct, seller_id: r.seller || null, plan_id: r.plan || null, account_id: r.acc || null, pay_day: r.day, inativo: !!r.inativo}; }
+function comFromDb(x){
+  return {id: x.id, sale: x.sale_id, treatment: x.treatment_id, patient: x.patient_id, seller: x.seller_id || "", sellerName: x.seller_name || "", rule: x.rule_id || "",
+    base: Number(x.base) || 0, pct: Number(x.percentual) || 0, valor: Number(x.valor) || 0, status: x.status || "gerada", payable: x.payable_id || "", obs: x.obs || "", at: x.created_at || ""};
+}
+function comToDb(c){
+  return {sale_id: c.sale, treatment_id: c.treatment, patient_id: c.patient, seller_id: c.seller || null, seller_name: c.sellerName || null, rule_id: c.rule || null,
+    base: c.base, percentual: c.pct, valor: c.valor, status: c.status || "gerada", payable_id: c.payable || null, obs: c.obs || null};
+}
+function comLoad(force){
+  var c = agdClient();
+  if (!c){ COMM.rules = COMM.rules || []; COMM.rows = COMM.rows || []; return Promise.resolve(); }
+  if (!comCan("view")){ COMM.rules = []; COMM.rows = []; return Promise.resolve(); }
+  if (COMM.loading) return COMM.loading;
+  if (COMM.rows && !force) return Promise.resolve();
+  COMM.loading = Promise.all([
+    dbAll(function(){ return c.from("commission_rules").select("*").order("id"); }),
+    dbAll(function(){ return c.from("sale_commissions").select("*").order("id"); })
+  ]).then(function(res){
+    COMM.loading = null;
+    var bad = res[0].error || res[1].error;
+    if (bad){
+      COMM.rules = COMM.rules || []; COMM.rows = COMM.rows || [];
+      showToast("Não foi possível ler as comissões: " + bad.message + (/does not exist|relation/i.test(bad.message || "") ? " (rode o SQL 2026-10-15b)" : ""), true);
+      return;
+    }
+    COMM.rules = (res[0].data || []).map(comRuleFromDb); COMM.rows = (res[1].data || []).map(comFromDb);
+  }, function(){ COMM.loading = null; COMM.rules = COMM.rules || []; COMM.rows = COMM.rows || []; });
+  return COMM.loading;
+}
+function comOf(saleId){ return (COMM.rows || []).filter(function(c){ return c.sale === saleId; })[0] || null; }
+function comInsert(rec){
+  var c = agdClient(); COMM.rows = COMM.rows || [];
+  if (!c){ var n = Object.assign({}, rec, {id: uid("cm"), at: new Date().toISOString()}); COMM.rows.push(n); return Promise.resolve(n); }
+  return c.from("sale_commissions").insert(comToDb(rec)).select().single().then(function(res){
+    if (res.error || !res.data){ showToast("Não foi possível registrar a comissão: " + ((res.error && res.error.message) || "sem permissão"), true); return null; }
+    var n = comFromDb(res.data); COMM.rows.push(n); return n;
+  });
+}
+function comPatch(id, patch){
+  var c = agdClient();
+  var apply = function(){ COMM.rows = (COMM.rows || []).map(function(x){ return x.id === id ? Object.assign({}, x, patch) : x; }); return true; };
+  if (!c) return Promise.resolve(apply());
+  return c.from("sale_commissions").update({status: patch.status, obs: patch.obs || null}).eq("id", id).then(function(res){
+    if (res.error){ showToast("Não foi possível atualizar a comissão: " + res.error.message, true); return false; }
+    return apply();
+  });
+}
+function comRuleSave(r){
+  var c = agdClient(); COMM.rules = COMM.rules || [];
+  if (!c){
+    if (r.id) COMM.rules = COMM.rules.map(function(x){ return x.id === r.id ? Object.assign({}, x, r) : x; });
+    else COMM.rules.push(Object.assign({}, r, {id: uid("cr")}));
+    return Promise.resolve(true);
+  }
+  var q = r.id ? c.from("commission_rules").update(comRuleToDb(r)).eq("id", r.id).select().single() : c.from("commission_rules").insert(comRuleToDb(r)).select().single();
+  return q.then(function(res){
+    if (res.error || !res.data){ showToast("Não foi possível salvar a regra: " + ((res.error && res.error.message) || "sem permissão"), true); return false; }
+    var n = comRuleFromDb(res.data);
+    if (r.id) COMM.rules = COMM.rules.map(function(x){ return x.id === n.id ? n : x; }); else COMM.rules.push(n);
+    return true;
+  });
+}
+function comRuleDelete(id){
+  var c = agdClient();
+  var done = function(){ COMM.rules = (COMM.rules || []).filter(function(x){ return x.id !== id; }); return true; };
+  if (!c) return Promise.resolve(done());
+  return c.from("commission_rules").delete().eq("id", id).then(function(res){
+    if (res.error){ showToast("Não foi possível excluir a regra: " + res.error.message, true); return false; }
+    return done();
+  });
+}
+// A regra mais específica vence: vendedor + tipo, vendedor + todas, tipo, todas.
+function comRuleFor(sale){
+  var best = null, bestScore = -1;
+  (COMM.rules || []).forEach(function(r){
+    if (r.inativo) return;
+    if (r.tipo !== "todas" && r.tipo !== sale.tipo) return;
+    if (r.seller && r.seller !== sale.seller) return;
+    var sc = (r.seller ? 2 : 0) + (r.tipo !== "todas" ? 1 : 0);
+    if (sc > bestScore){ best = r; bestScore = sc; }
+  });
+  return best;
+}
+// Aditivo comissiona só o que passou da venda que ele substituiu.
+function comBase(sale){
+  if (sale.tipo !== "aditivo") return sale.total;
+  var prev = (SALES.rows || []).filter(function(s){ return s.replacedBy === sale.id; })[0];
+  return Math.max(0, Math.round((sale.total - (prev ? prev.total : 0)) * 100) / 100);
+}
+function comDueDate(day){
+  var d = agdParse(trTodayIso());
+  return agdIso(new Date(d.getFullYear(), d.getMonth() + 1, 1)).slice(0, 8) + String(day).padStart(2, "0");
+}
+// Gera as comissões que já podem nascer. Promise<{made, wait, skip[]}> ou null (sem permissão/ocupado).
+function comApurar(silent){
+  if (!comCan("create") || !fpCan("create") || COMM.busy) return Promise.resolve(null);
+  COMM.busy = true;
+  var out = {made: 0, wait: 0, skip: []};
+  return Promise.all([slLoad(), comLoad(), fpLoad()]).then(function(){
+    var pend = (SALES.rows || []).filter(function(s){ return s.status === "ativa" && s.seller && !comOf(s.id); });
+    if (!pend.length) return null;
+    return trLoadLast(true).then(function(){ return pend; });
+  }).then(function(pend){
+    var chain = Promise.resolve();
+    (pend || []).forEach(function(s){
+      chain = chain.then(function(){
+        var t = state.treatments.filter(function(x){ return x.id === s.treatment; })[0];
+        if (!t || !trDoneCount(t)){ out.wait++; return; }
+        var pat = rawPatient(s.patient) || {}, who = (pat.nome || "Paciente") + " (" + (COMM_TIPOS[s.tipo] || s.tipo) + ")";
+        var rule = comRuleFor(s);
+        if (!rule){ out.skip.push(who + ": nenhuma regra de comissão serve para esta venda"); return; }
+        var plan = flPlanById(rule.plan);
+        if (!plan || (plan.tipo !== "Despesa" && plan.tipo !== "Saída")){ out.skip.push(who + ": a regra “" + rule.name + "” precisa de uma subcategoria de despesa"); return; }
+        var base = comBase(s), valor = Math.round(base * rule.pct) / 100;
+        if (!(valor > 0)){ out.skip.push(who + ": comissão zerada (base " + fmtMoney(base) + ", " + rule.pct + "%)"); return; }
+        return fpSave({venc: comDueDate(rule.day), desc: "Comissão — " + (s.sellerName || "Vendedor") + " — " + who, plan: rule.plan, acc: rule.acc || "", sup: "", valor: valor,
+          grupo: "", parcela: 0, parcelas: 0, obs: "", linhas: [], loan: "", staff: s.seller, abate: "", sale: ""}, true).then(function(pay){
+          if (!pay) return;
+          return comInsert({sale: s.id, treatment: s.treatment, patient: s.patient, seller: s.seller, sellerName: s.sellerName, rule: rule.id, base: base, pct: rule.pct, valor: valor,
+            status: "gerada", payable: pay.id}).then(function(c){ if (c) out.made++; });
+        });
+      });
+    });
+    return chain;
+  }).then(function(){
+    COMM.busy = false;
+    if (out.made) showToast(out.made + (out.made === 1 ? " comissão gerada" : " comissões geradas") + " e enviada" + (out.made === 1 ? "" : "s") + " ao Contas a Pagar.");
+    else if (!silent && out.skip.length) showToast(out.skip[0], true);
+    else if (!silent) showToast(out.wait ? "Nenhuma comissão a gerar: " + out.wait + (out.wait === 1 ? " venda aguarda" : " vendas aguardam") + " o 1º atendimento finalizado." : "Nenhuma comissão a gerar.");
+    return out;
+  }, function(e){ COMM.busy = false; if (!silent) showToast("Erro ao apurar comissões: " + (e && e.message ? e.message : e), true); return null; });
+}
+// Depois de finalizar um atendimento: se há venda com vendedor esperando comissão, apura em silêncio.
+function comApuraAuto(){
+  if (!comOnline() || !comCan("create") || !(SALES.rows || []).some(function(s){ return s.status === "ativa" && s.seller && !comOf(s.id); })) return;
+  comApurar(true);
+}
+// Venda cancelada: a comissão é estornada. Conta a pagar ainda em aberto é excluída; se já foi paga, avisa o valor a descontar do vendedor.
+function comReverse(saleIds){
+  if (!saleIds.length || !comCan("edit")) return Promise.resolve(null);
+  return Promise.all([comLoad(), fpLoad()]).then(function(){
+    var list = (COMM.rows || []).filter(function(c){ return saleIds.indexOf(c.sale) !== -1 && c.status === "gerada"; });
+    if (!list.length) return null;
+    var out = {n: list.length, paid: 0, del: 0}, chain = Promise.resolve();
+    list.forEach(function(c){
+      chain = chain.then(function(){
+        var pay = (FP.rows || []).filter(function(x){ return x.id === c.payable; })[0], open = pay && !fpDone(pay), step = Promise.resolve(), obs = "Estornada";
+        if (open && fpCan("delete")){ step = fpDelete([pay.id]).then(function(){ out.del++; }); obs = "Conta a pagar excluída"; }
+        else if (pay && !open){ out.paid += c.valor; obs = "Comissão já paga: descontar do vendedor"; }
+        return step.then(function(){ return comPatch(c.id, {status: "estornada", obs: obs}); });
+      });
+    });
+    return chain.then(function(){ return out; });
+  });
+}
+function comStatusText(c){
+  if (c.status === "estornada") return "Estornada";
+  var pay = (FP.rows || []).filter(function(x){ return x.id === c.payable; })[0];
+  return !pay ? "A Pagar" : fpDone(pay) ? "Paga" : "A Pagar";
+}
+function openComissoes(){
+  if (!comCan("view")){ showToast(permDeniedMsg("comissoes", "view"), true); return; }
+  var host = regQuickHost();
+  host.innerHTML = '<div class="overlay" id="ovComm"><div class="modal" style="max-width:1000px">' +
+    '<div class="modal-head"><div><h3>Comissões</h3><div class="modal-sub">Geradas no 1º atendimento finalizado do tratamento vendido; cada uma vira conta a pagar do vendedor.</div></div>' +
+    '<button class="modal-close" id="cmClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="field-row"><div class="field"><label for="cmSeller">Vendedor</label><select id="cmSeller"><option value="">Todos</option></select></div>' +
+      '<div class="field"><label for="cmSt">Situação</label><select id="cmSt"><option value="">Todas</option><option value="A Pagar">A Pagar</option><option value="Paga">Paga</option><option value="Estornada">Estornada</option></select></div></div>' +
+      '<div class="pat-count" id="cmSum"></div><div id="cmHost"></div></div>' +
+    '<div class="modal-foot"><span></span><div class="spacer"></div>' +
+      (comCan("view") ? '<button class="btn ghost" id="cmRules">Regras de Comissão</button>' : '') +
+      (comCan("create") ? '<button class="btn ghost" id="cmRun">Apurar Agora</button>' : '') +
+      '<button class="btn primary" id="cmOk">Fechar</button></div></div></div>';
+  var ov = document.getElementById("ovComm"), $ = function(id){ return document.getElementById(id); };
+  function close(){ host.innerHTML = ""; }
+  function render(){
+    var q = {seller: $("cmSeller").value, st: $("cmSt").value};
+    var list = (COMM.rows || []).filter(function(c){ return (!q.seller || c.seller === q.seller) && (!q.st || comStatusText(c) === q.st); })
+      .sort(function(a, b){ return String(b.at).localeCompare(String(a.at)); });
+    var tot = {"A Pagar": 0, "Paga": 0, "Estornada": 0};
+    list.forEach(function(c){ tot[comStatusText(c)] += c.valor; });
+    var aguardando = (SALES.rows || []).filter(function(s){ return s.status === "ativa" && s.seller && !comOf(s.id); }).length;
+    $("cmSum").innerHTML = 'A pagar: <b>' + esc(fmtMoney(tot["A Pagar"])) + '</b> · Pagas: <b>' + esc(fmtMoney(tot["Paga"])) + '</b> · Estornadas: <b>' + esc(fmtMoney(tot["Estornada"])) + '</b>' +
+      (aguardando ? ' · ' + aguardando + (aguardando === 1 ? ' venda aguarda' : ' vendas aguardam') + ' o 1º atendimento finalizado' : '');
+    var cols = [{key: "data", label: "Gerada em", width: 110, min: 90}, {key: "vend", label: "Vendedor", width: 170, min: 100}, {key: "pac", label: "Paciente", width: 190, min: 100, cls: "pt-nome"},
+      {key: "tipo", label: "Venda", width: 100, min: 70}, {key: "base", label: "Base", width: 110, min: 80}, {key: "pct", label: "%", width: 70, min: 50}, {key: "valor", label: "Comissão", width: 120, min: 80},
+      {key: "sit", label: "Situação", width: 110, min: 80}];
+    gtRender($("cmHost"), "comissoes", cols, list.map(function(c){
+      var p = rawPatient(c.patient) || {}, s = (SALES.rows || []).filter(function(x){ return x.id === c.sale; })[0];
+      return {attrs: 'data-id="' + esc(c.id) + '"', cells: [esc(trBr(String(c.at).slice(0, 10))), esc(c.sellerName || "—"), esc(p.nome || "—"), esc(s ? (SALE_TIPOS[s.tipo] || s.tipo) : "—"), esc(fmtMoney(c.base)),
+        esc(String(c.pct).replace(".", ",")) + "%", "<b>" + esc(fmtMoney(c.valor)) + "</b>", esc(comStatusText(c)) + (c.obs ? ' <span class="hint">' + esc(c.obs) + '</span>' : "")],
+        vals: [String(c.at), c.sellerName, p.nome, s ? s.tipo : "", c.base, c.pct, c.valor, comStatusText(c)]};
+    }), render);
+    if (!list.length) $("cmHost").insertAdjacentHTML("beforeend", '<div class="empty-state"><b>Nenhuma comissão</b>As comissões aparecem aqui depois do 1º atendimento finalizado do tratamento vendido.</div>');
+  }
+  Promise.all([slLoad(), comLoad(), fpLoad()]).then(function(){
+    var sel = $("cmSeller"); if (!sel) return;
+    var seen = {}; (COMM.rows || []).forEach(function(c){ if (c.seller) seen[c.seller] = c.sellerName || fpStaffName(c.seller); });
+    Object.keys(seen).sort(function(a, b){ return normText(seen[a]) < normText(seen[b]) ? -1 : 1; }).forEach(function(id){ sel.insertAdjacentHTML("beforeend", '<option value="' + esc(id) + '">' + esc(seen[id]) + '</option>'); });
+    render();
+  });
+  ["cmSeller", "cmSt"].forEach(function(id){ $(id).addEventListener("change", render); });
+  $("cmClose").addEventListener("click", close); $("cmOk").addEventListener("click", close);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  if ($("cmRules")) $("cmRules").addEventListener("click", function(){ openComRules(function(){ openComissoes(); }); });
+  if ($("cmRun")) $("cmRun").addEventListener("click", function(){ comApurar(false).then(function(){ if ($("cmHost")) render(); }); });
+}
+function openComRules(back){
+  var host = regQuickHost();
+  host.innerHTML = '<div class="overlay" id="ovComRules"><div class="modal" style="max-width:860px">' +
+    '<div class="modal-head"><div><h3>Regras de Comissão</h3><div class="modal-sub">A regra mais específica vence: vendedor + tipo, vendedor, tipo, todas. Aditivo comissiona só a diferença para a venda anterior.</div></div>' +
+    '<button class="modal-close" id="crClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div id="crHost"></div></div>' +
+    '<div class="modal-foot"><span></span><div class="spacer"></div>' + (comCan("create") ? '<button class="btn ghost" id="crAdd">+ Incluir</button>' : '') + '<button class="btn primary" id="crOk">Fechar</button></div></div></div>';
+  var ov = document.getElementById("ovComRules"), $ = function(id){ return document.getElementById(id); };
+  function close(){ host.innerHTML = ""; if (back) back(); }
+  function render(){
+    var list = (COMM.rules || []).slice().sort(function(a, b){ return normText(a.name) < normText(b.name) ? -1 : 1; });
+    var cols = [{key: "nome", label: "Regra", width: 220, min: 120, cls: "pt-nome"}, {key: "tipo", label: "Tipo da Venda", width: 150, min: 90}, {key: "pct", label: "Percentual", width: 100, min: 70},
+      {key: "vend", label: "Vendedor", width: 170, min: 100}, {key: "dia", label: "Paga no Dia", width: 100, min: 70}, {key: "sit", label: "Situação", width: 90, min: 70}];
+    gtRender($("crHost"), "comregras", cols, list.map(function(r){
+      return {attrs: 'data-rid="' + esc(r.id) + '"', cells: [esc(r.name || "—"), esc(COMM_TIPOS[r.tipo] || r.tipo), esc(String(r.pct).replace(".", ",")) + "%", esc(r.seller ? fpStaffName(r.seller) : "Todos"), String(r.day), r.inativo ? "Inativa" : "Ativa"],
+        vals: [r.name, r.tipo, r.pct, r.seller ? fpStaffName(r.seller) : "", r.day, r.inativo ? 1 : 0]};
+    }), render);
+    if (!list.length) $("crHost").insertAdjacentHTML("beforeend", '<div class="empty-state"><b>Nenhuma regra</b>Inclua uma regra para as comissões serem geradas.</div>');
+    $("crHost").querySelectorAll("tr[data-rid]").forEach(function(tr){ tr.addEventListener("click", function(){ openComRuleDialog((COMM.rules || []).filter(function(x){ return x.id === tr.getAttribute("data-rid"); })[0], render); }); });
+  }
+  comLoad().then(render);
+  $("crClose").addEventListener("click", close); $("crOk").addEventListener("click", close);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  if ($("crAdd")) $("crAdd").addEventListener("click", function(){ openComRuleDialog(null, render); });
+}
+function openComRuleDialog(rule, after){
+  var isNew = !rule, r = rule || {name: "", tipo: "todas", pct: 5, seller: "", plan: "", acc: "", day: 10, inativo: false}, host = slDlgHost();
+  var canSave = isNew ? comCan("create") : comCan("edit"), canDel = !isNew && comCan("delete");
+  var plans = activeOnly(state.chartAccounts, r.plan).filter(function(x){ return x.id === r.plan || x.tipo === "Despesa" || x.tipo === "Saída"; }).sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
+  var accs = activeOnly(state.bankAccounts, r.acc).slice().sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovComRule" role="dialog" aria-modal="true"><div class="modal" style="max-width:560px">' +
+    '<div class="modal-head"><div><h3>' + (isNew ? "Nova Regra de Comissão" : "Regra de Comissão") + '</h3></div><button class="modal-close" id="rlClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="tr-sec tr-sec-top">Regra</div>' +
+      '<div class="field"><label for="rlName">Nome</label><input type="text" id="rlName" value="' + esc(r.name) + '"></div>' +
+      '<div class="field-row"><div class="field"><label for="rlTipo">Tipo da Venda</label><select id="rlTipo">' +
+        Object.keys(COMM_TIPOS).map(function(k){ return '<option value="' + k + '"' + (k === r.tipo ? ' selected' : '') + '>' + COMM_TIPOS[k] + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field"><label for="rlPct">Percentual (%)</label><input type="text" id="rlPct" inputmode="decimal" value="' + esc(String(r.pct).replace(".", ",")) + '"></div></div>' +
+      '<div class="field"><label for="rlSeller">Vendedor</label><select id="rlSeller"><option value="">Todos os vendedores</option>' +
+        fpStaffList().map(function(s){ return '<option value="' + esc(s.id) + '"' + (s.id === r.seller ? ' selected' : '') + '>' + esc(s.nome) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="tr-sec">Pagamento</div>' +
+      '<div class="field-row"><div class="field"><label for="rlPlan">Subcategoria da Despesa</label><select id="rlPlan"><option value="">Escolha…</option>' +
+        plans.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === r.plan ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field"><label for="rlAcc">Conta Bancária</label><select id="rlAcc"><option value="">Sem conta definida</option>' +
+        accs.map(function(a){ return '<option value="' + esc(a.id) + '"' + (a.id === r.acc ? ' selected' : '') + '>' + esc(a.name) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="field"><label for="rlDay">Dia do Pagamento (Mês Seguinte)</label><input type="text" id="rlDay" inputmode="numeric" value="' + r.day + '"></div>' +
+      '<label class="rb-opt"><input type="checkbox" id="rlOff"' + (r.inativo ? ' checked' : '') + '> <span>Regra inativa</span></label></div>' +
+    '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="rlDel">Excluir</button>' : '') + '<div class="spacer"></div><button class="btn ghost" id="rlCancel">Cancelar</button>' +
+      (canSave ? '<button class="btn primary" id="rlSave">Salvar</button>' : '') + '</div></div></div>';
+  var $ = function(id){ return document.getElementById(id); };
+  function close(){ host.innerHTML = ""; }
+  $("rlClose").addEventListener("click", close); $("rlCancel").addEventListener("click", close);
+  if ($("rlSave")) $("rlSave").addEventListener("click", function(){
+    var name = $("rlName").value.trim(), pct = parseMoney($("rlPct").value), day = parseInt($("rlDay").value, 10);
+    if (!name){ showToast("Dê um nome para a regra.", true); $("rlName").focus(); return; }
+    if (!(pct > 0 && pct <= 100)){ showToast("O percentual precisa estar entre 0 e 100.", true); $("rlPct").focus(); return; }
+    if (!(day >= 1 && day <= 28)){ showToast("O dia do pagamento precisa estar entre 1 e 28.", true); $("rlDay").focus(); return; }
+    if (!$("rlPlan").value){ showToast("Escolha a subcategoria da despesa.", true); return; }
+    comRuleSave({id: r.id, name: name, tipo: $("rlTipo").value, pct: pct, seller: $("rlSeller").value, plan: $("rlPlan").value, acc: $("rlAcc").value, day: day, inativo: $("rlOff").checked}).then(function(ok){
+      if (ok){ close(); if (after) after(); }
+    });
+  });
+  if ($("rlDel")) $("rlDel").addEventListener("click", function(){
+    confirmDialog({title: "Confirmar Exclusão", message: "Excluir a regra <b>" + esc(r.name) + "</b>? As comissões já geradas não mudam.", confirmLabel: "Excluir", danger: true}).then(function(ok){
+      if (ok) comRuleDelete(r.id).then(function(){ close(); if (after) after(); });
+    });
+  });
+  $("rlName").focus();
 }
 
 // "Mostrar inativos" nas telas de cadastro (ver setupInactivate).
@@ -24236,6 +24527,21 @@ var HELP_TOPICS = [
       "Não aparece no celular: use a tela Agenda."
     ],
     who: "Permissão <b>Agenda</b> (ver para consultar; incluir, editar e excluir para marcar, mover/trocar e excluir). Quem só vê a própria agenda enxerga apenas os atendimentos dele."},
+  {id: "comissoes", group: "Financeiro", title: "Comissões de Venda", mod: "comissoes",
+    purpose: "Pagar o vendedor pelas vendas dos tratamentos: a comissão nasce no 1º atendimento finalizado do tratamento e vira conta a pagar do vendedor.",
+    steps: [
+      "Abra <b>Financeiro ▾ → Comissões</b> e clique em <b>Regras de Comissão</b>. Inclua uma regra com nome, tipo da venda (Nova, Renovação, Aditivo ou Todas), percentual, vendedor (ou todos), a subcategoria da despesa, a conta bancária e o dia do pagamento.",
+      "Ao registrar uma venda (janela do tratamento) escolha o <b>vendedor</b>. Quando o 1º atendimento do tratamento for marcado como <b>Finalizado</b>, a comissão é gerada sozinha e a conta a pagar aparece no mês seguinte, no dia da regra.",
+      "A janela <b>Comissões</b> mostra cada comissão com base, percentual, valor e situação (A Pagar, Paga ou Estornada), com filtro por vendedor e situação. <b>Apurar Agora</b> gera as que já podem nascer.",
+      "Se a venda for <b>cancelada</b>, a comissão é estornada: a conta a pagar em aberto é excluída; se já foi paga, o sistema avisa o valor a descontar do vendedor."
+    ],
+    rules: [
+      "Vale a regra mais específica: vendedor + tipo, depois vendedor, depois tipo, depois Todas. Regra inativa não vale.",
+      "Aditivo comissiona só a diferença para a venda que ele substituiu; Nova e Renovação, o total da venda.",
+      "Cada venda tem no máximo uma comissão; apurar de novo não duplica.",
+      "Sem vendedor na venda ou sem regra que sirva, nenhuma comissão é gerada (a janela avisa o motivo)."
+    ],
+    who: "Permissão Comissões (ver, incluir, editar, excluir); gerar a conta a pagar também exige incluir em Financeiro."},
   {id: "vendas", group: "Cadastros", title: "Vendas do Tratamento", mod: "vendas", tab: "tratamentos",
     purpose: "Cada tratamento novo e cada alteração comercial dele (valor, Sessão/Mês, especialidades, convênio ou vencimento) é uma venda, com vendedor e, se quiser, parcelas no Contas a Receber.",
     steps: [
@@ -24867,6 +25173,8 @@ var BACKUP_TABLES = [
   {name: "finance_entries", order: "id", label: "Lançamentos financeiros", restore: true, optional: true},
   {name: "finance_statement_lines", order: "id", label: "Extrato do Banco (Conciliação)", restore: true, optional: true},
   {name: "treatment_sales", order: "id", label: "Vendas dos Tratamentos", restore: true, optional: true},
+  {name: "commission_rules", order: "id", label: "Regras de Comissão", restore: true, optional: true},
+  {name: "sale_commissions", order: "id", label: "Comissões de Venda", restore: true, optional: true},
   {name: "finance_loans", order: "id", label: "Empréstimos", restore: true, optional: true},
   {name: "finance_payables", order: "id", label: "Contas a Pagar e a Receber", restore: true, optional: true},
   {name: "staff", order: "id", label: "Colaboradores", restore: true, optional: true},
@@ -25822,6 +26130,7 @@ var FIN_ITEMS = [
   {key: "empconcedidos", label: "Empréstimos Concedidos", tab: "empconcedidos", ok: function(){ return can("financeiro", "view"); }},
   {key: "conciliacao", label: "Conciliação", tab: "conciliacao", ok: function(){ return can("financeiro", "view"); }},
   {key: "demonstrativos", label: "Demonstrativos", tab: "demonstrativos", ok: function(){ return can("financeiro", "view"); }},
+  {key: "comissoes", label: "Comissões", ok: function(){ return can("comissoes", "view"); }, open: function(){ openComissoes(); }},
   // Cadastros que envolvem o financeiro
   {sep: true, key: "fornecedores", label: "Fornecedores", tab: "fornecedores", ok: function(){ return can("fornecedores", "view"); }},
   {key: "catfornecedor", label: "Categorias de Fornecedor", tab: "catfornecedor", ok: function(){ return can("categorias_fornecedor", "view"); }},

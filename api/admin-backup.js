@@ -109,6 +109,16 @@ var TABLES = {
            "replaced_by", "obs", "created_at", "created_by", "created_by_name"],
     users: ["created_by"]
   },
+  commission_rules: {
+    key: "id",
+    cols: ["unit_id", "id", "name", "tipo", "percentual", "seller_id", "plan_id", "account_id", "pay_day", "inativo", "created_at"],
+    users: []
+  },
+  sale_commissions: {
+    key: "id",
+    cols: ["unit_id", "id", "sale_id", "treatment_id", "patient_id", "seller_id", "seller_name", "rule_id", "base", "percentual", "valor", "status", "payable_id", "obs", "created_at", "created_by"],
+    users: ["created_by"]
+  },
   finance_loans: {
     key: "id",
     cols: ["unit_id", "id", "sentido", "descricao", "contraparte", "supplier_id", "account_id", "valor", "tipo", "taxa", "parcelas", "liberacao",

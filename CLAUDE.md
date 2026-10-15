@@ -4562,3 +4562,17 @@ no cancelamento a pergunta é "remover as sessões do Planner e da Agenda a part
 - Sem o sistema online (testes) a janela de venda só abre com `window.__pipoSales = true`. Teste `tests/run_vendas.js` (no `npm test`). Ajuda: tópico `vendas`.
 - Próximas etapas combinadas: 5) Regras de Comissão (cadastro; percentual por tipo; conta a pagar ao vendedor no fechamento; estorno no cancelamento), 6) Painel de Vendas (relatório: conversão lead→venda, ticket, churn),
   7) extras (contrato automático, inadimplência, metas, aprovação de desconto).
+
+## Comissões de venda (2026-10-15, etapa 5)
+Decisão do usuário: a comissão nasce no **primeiro atendimento FINALIZADO do tratamento**. Menu Financeiro ▾ → **Comissões** (item com `open`, sem aba: `openComissoes()`; permissão
+`comissoes` ver/incluir/editar/excluir, nenhum nível recebe; `MODULES` nos dois js, `PERM_MODULE_LABELS`).
+- Banco (migração `supabase/2026-10-15b-comissoes.sql`, rodada em produção pelo conector em partes — o script inteiro estourou os 60 s; linha 130 da conferência; `schema.sql` atualizado;
+  `conferencia-geral.sql` NÃO regerado): `commission_rules` (name, tipo todas|nova|renovacao|aditivo, percentual, seller_id opcional, plan_id = subcategoria de DESPESA, account_id, pay_day 1–28, inativo)
+  e `sale_commissions` (sale_id ÚNICO = no máximo uma por venda, base, percentual, valor, status gerada|estornada, payable_id, obs). Backup inclui as duas.
+- App (bloco "Comissões de venda", depois do bloco de Vendas): `comRuleFor(sale)` (mais específica vence: vendedor+tipo, vendedor, tipo, todas; inativa não vale), `comBase` (aditivo = total − total da venda
+  que ele substituiu; os outros = total), `comApurar(silent)` (venda ativa com vendedor e sem comissão + `trDoneCount(t) > 0` com `trLoadLast(true)`; cria a conta a pagar do vendedor — `staff` = vendedor,
+  vencimento no `pay_day` do mês seguinte — e a comissão; erros por venda vão em `skip[]`), `comApuraAuto()` (chamado em `agdSetStatus` ao finalizar), `comReverse(saleIds)` (chamado em `slCancelFlow`:
+  conta a pagar em aberto é excluída; já paga só avisa o valor a descontar), `openComissoes` (filtros vendedor/situação, resumo A Pagar/Paga/Estornada, Apurar Agora), `openComRules`/`openComRuleDialog`.
+  Situação mostrada = Estornada, Paga (conta com lançamento) ou A Pagar (`comStatusText`).
+- Sem o sistema online (testes) as comissões só funcionam com `window.__pipoSales = true`. Teste `tests/run_comissoes.js` (no `npm test`). Ajuda: tópico `comissoes`.
+- Próximas: 6) Painel de Vendas (relatório), 7) extras (contrato automático, inadimplência, metas, aprovação de desconto).
