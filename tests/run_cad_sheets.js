@@ -43,7 +43,7 @@ const path = require('path');
     }
     return {tested, bad};
   }
-  const tabs = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'escolas', 'colaboradores', 'tiposcolab', 'especialidades', 'servicos', 'cbo', 'conselhos', 'fornecedores', 'catfornecedor', 'unidades', 'contratos', 'contas', 'planocontas', 'lancamentos', 'pagar', 'receber', 'emptomados', 'empconcedidos', 'conciliacao', 'automacoes', 'feriados', 'status'];
+  const tabs = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'escolas', 'colaboradores', 'tiposcolab', 'especialidades', 'servicos', 'cbo', 'conselhos', 'fornecedores', 'catfornecedor', 'unidades', 'contratos', 'contas', 'planocontas', 'lancamentos', 'pagar', 'receber', 'emptomados', 'empconcedidos', 'conciliacao', 'vendas', 'automacoes', 'feriados', 'status'];
   const addBtn = {pacientes: '#addPatientBtn', tratamentos: '#trAdd', colaboradores: '#staffAddBtn', lancamentos: '#flAdd', pagar: '#fpAdd', receber: '#frAdd', emptomados: '#ltAdd', empconcedidos: '#lcAdd', conciliacao: '#cnImport'};
   for (const t of tabs){
     await page.evaluate((t) => { document.querySelector('#mainTabs button[data-tab="' + t + '"]').click(); }, t);
