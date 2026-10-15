@@ -4597,3 +4597,4 @@ Relatórios → **Elegibilidade** (`RP_TYPES` id `elegibilidade`, `RP_BUILDERS.e
 
 ## Rede Social no cadastro do paciente (2026-10-15)
 Grupo **Contato**: campo de uma linha **Rede Social** (`redeSocial`, `PAT_FIELDS` tipo `line`, input `#pf-redeSocial`, depois dos e-mails; aparece/obrigatório em Campos obrigatórios; ficha impressa; Ajuda do paciente). Fora do link de cadastro (não está em `LINK_OF_FIELD`; `run_intake.js` o ignora). Sem SQL.
+- (2026-10-15, pedido do usuário) **Incluir Todas** (quadros do tratamento) inclui nesta ordem: Fonoaudiologia, Psicologia, Terapia Ocupacional, Psicopedagogia, Psicomotricidade, Fisioterapia, Musicoterapia, Nutrição (pelo começo do nome, `ORD` no clique de `#specRowAddAll`); outras especialidades vão depois, na ordem do cadastro. Sem SQL.
