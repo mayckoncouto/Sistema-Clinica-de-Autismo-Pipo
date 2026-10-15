@@ -20,7 +20,7 @@
     { key: "pacientes", label: "Pacientes", hint: "", group: "Cadastros" },
     { key: "saude_paciente", label: "Pacientes – Saúde", hint: "ver/editar médico, CID, diagnóstico, suporte, comunicação, alergias, medicações e restrições", actions: ["view", "edit"] },
     { key: "campos_paciente", label: "Pacientes – Campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
-    { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, ABA, especialidades e horários" },
+    { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, Intervenção ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – Valores", hint: "ver/editar valor, descontos e valor final", actions: ["view", "edit"] },
     { key: "convenios", label: "Convênios", hint: "" },
     { key: "motivos_cancelamento", label: "Motivos de Cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
