@@ -12299,6 +12299,20 @@ function openTreatLineModal(ctx){
   });
   setTimeout(function(){ var f = lk ? $("tlProf") : $("tlSpec"); var b = f && f.closest(".field") && f.closest(".field").querySelector(".dp-in, .dp-btn"); if (b) b.focus(); }, 0);
 }
+// Quadro de informações do paciente (Idade, Diagnóstico, Nível de Suporte) acima das especialidades do tratamento.
+function trInfoBoxHtml(v){
+  var p = (v && v.patientId && findPatientById(v.patientId)) || null;
+  if (!p) return '';
+  var age = patientAgeYears(p), see = healthCanSee();
+  var none = '<span class="pt-muted">—</span>', noperm = '<span class="pt-muted">Sem permissão</span>';
+  var cid = Array.isArray(p.cid) ? p.cid.join(", ") : p.cid;
+  var items = [["Idade", age == null ? none : esc(age + (age === 1 ? " ano" : " anos"))],
+    ["Diagnóstico", !see ? noperm : (cid ? esc(String(cid)) : none)],
+    ["Nível de Suporte", !see ? noperm : (p.suporte ? esc(String(p.suporte)) : none)]];
+  return '<div class="pl-clin" id="trInfoBox">' + items.map(function(it){
+    return '<div class="pl-clin-it"><span>' + it[0] + '</span><b>' + it[1] + '</b></div>';
+  }).join("") + '</div>';
+}
 function treatFieldsEditor(v, opts){
   // Quadros do tratamento (uma linha = um quadro; a mesma especialidade pode repetir).
   var draftLines = patientSpecRows(v).map(function(row){ return Object.assign({}, row, {aba: abaYesNo(row.aba || abaLegacy(v) || "Sim")}); });
@@ -12335,6 +12349,7 @@ function treatFieldsEditor(v, opts){
           '<div class="field"><label>&nbsp;</label><label class="chk-line"><input type="checkbox" id="pAba"' + (abaYesNo(abaLegacy(v) || abaAuto((v.patientId && findPatientById(v.patientId)) || v)) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
           '<div class="field"><label for="pAbaRev">Data de Revisão</label><input type="date" id="pAbaRev" value="' + esc(v.abaRevisao || "") + '"></div>' +
         '</div>' +
+        trInfoBoxHtml(v) +
         '<div class="tr-sec spec-sum-label">Especialidades e Serviços <span class="spec-sum" id="specSum" hidden></span></div>' +
         '<div class="field">' +
           '<div class="room-list tl-list" id="specRowsHost"></div>' +
@@ -24378,7 +24393,7 @@ var HELP_TOPICS = [
     ],
     who: "Exportar: quem vê o cadastro. Importar: quem pode incluir ou alterar nele."},
   {id: "tratamentos-terapeuta", group: "Cadastros", title: "Tratamento: Terapeuta e Horário do Paciente", mod: "tratamentos", tab: "tratamentos",
-    purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido.",
+    purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido. Acima das especialidades, um quadro mostra a idade, o diagnóstico e o nível de suporte do paciente (diagnóstico e suporte só para quem pode ver os dados de saúde).",
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
       "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre todos os quadros; o resto vai para os primeiros; se o total for menor que o número de quadros, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
