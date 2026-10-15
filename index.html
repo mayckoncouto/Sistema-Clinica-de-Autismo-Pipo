@@ -5047,7 +5047,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", agenda:"Agenda", visao_geral:"Visão Geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
+var PERM_MODULE_LABELS = {vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", agenda:"Agenda", visao_geral:"Visão Geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
@@ -5864,6 +5864,7 @@ var SYS_RULES = [
   {id: "pac_cpf_pais", g: "pacientes", label: "CPF de Mãe ou Pai Igual ao de Outro Paciente", desc: "Aviso ao salvar quando o CPF da mãe ou do pai já está em outro paciente (irmãos, por exemplo).", def: "warn", modes: ["warn", "off"]},
   {id: "pac_entrada", g: "pacientes", label: "Data de Entrada × Início do Tratamento", desc: "A data de entrada não passa do início do 1º tratamento, e o tratamento não começa antes dela.", def: "block", modes: BWO},
   {id: "tr_um_ativo", g: "tratamentos", label: "Um Só Tratamento Ativo por Paciente", desc: "Salvar outro Ativo passa o anterior para Renegociado.", def: "block", locked: true},
+  {id: "tr_cancel_pendencias", g: "tratamentos", label: "Perguntar das Sessões e Parcelas ao Cancelar", desc: "Ao cancelar um tratamento, pergunta se exclui as parcelas em aberto do Contas a Receber e se remove as sessões do Planner e da Agenda a partir de uma data.", def: "warn", modes: ["warn", "off"]},
   {id: "tr_cancelado_def", g: "tratamentos", label: "Cancelado É Definitivo", desc: "Tratamento cancelado não volta a outro status; para retomar, crie um novo.", def: "block", modes: ["block", "off"], db: true},
   {id: "tr_cancel_motivo", g: "tratamentos", label: "Cancelar Exige Motivo", desc: "Ao cancelar, escolher o motivo (\"Outro\" exige observação).", def: "block", modes: ["block", "off"], db: true},
   {id: "tr_soma", g: "tratamentos", label: "Sessão/Mês Diferente da Soma das Especialidades", desc: "Salvar o tratamento com a soma das especialidades/serviços diferente de Sessão/Mês.", def: "warn", modes: BWO},
@@ -22548,7 +22549,7 @@ function trMonthViewHtml(t, ym){
 }
 // Seção recolhível genérica da janela do tratamento (título com seta; começa fechada;
 // aberta/fechada lembrada neste navegador pela chave `key`).
-var TR_HIST_OPEN_KEY = "agendaPipo:trHistOpen";
+var TR_HIST_OPEN_KEY = "agendaPipo:trHistOpen", TR_SALES_OPEN_KEY = "agendaPipo:trSalesOpen";
 function trCollapseHtml(id, title, inner, key){
   var open = false; try { open = localStorage.getItem(key) === "1"; } catch (e) {}
   return '<button type="button" class="tr-sec tr-sec-toggle" id="' + id + 'Toggle" aria-expanded="' + open + '" aria-controls="' + id + 'Body">' +
@@ -22924,6 +22925,7 @@ function openTreatmentModal(t, opts){
         '<div class="tr-sec">Convênio e Valores</div>' +
         ed.html +
         (isNew ? '' : trMonthSectionHtml()) +
+        (isNew || !slCan("view") ? '' : trCollapseHtml("trSales", "Vendas", '<div id="trSalesList">' + trSalesHtml(t) + '</div>', TR_SALES_OPEN_KEY)) +
         (isNew ? '' : trCollapseHtml("trHist", "Histórico", trHistHtml(t), TR_HIST_OPEN_KEY)) +
       '</div>' +
       '<div class="modal-foot">' +
@@ -23020,6 +23022,10 @@ function openTreatmentModal(t, opts){
   syncVencPor();
   var trMonthSec = trMonthSectionWire(t);
   trCollapseWire("trHist", TR_HIST_OPEN_KEY);
+  if (!isNew && slCan("view")){
+    trCollapseWire("trSales", TR_SALES_OPEN_KEY);
+    Promise.all([slLoad(), fpLoad()]).then(function(){ var el = document.getElementById("trSalesList"); if (el) el.innerHTML = trSalesHtml(t); });
+  }
   if (!isNew && (trUsedCount(t) === null || !TR.appts) && agdClient()) trLoadLast(false).then(function(){
     if (!document.getElementById("ovTreat")) return;
     syncVencPor();
@@ -23179,12 +23185,20 @@ function openTreatmentModal(t, opts){
         var changed = finTable && canEditVal && (isNew || money.valor !== newVal || money.descontos !== newDesp);
         return (changed ? trSaveFinance(rec.id, newVal, newDesp) : Promise.resolve(true)).then(function(){
           close(); if (state.tab === "tratamentos") renderTreatmentsTab();
-          // Cancelou ou renegociou (este ou o ativo anterior): pergunta se remove os agendamentos.
-          if (((st === "cancelado" || st === "renegociado") && (isNew || t.status !== st)) || others.length) trOfferRemoveBookings(patId);
-          // Tratamento passou a Cancelado e o paciente não tem outro Ativo: inativa o paciente.
-          if (st === "cancelado" && (isNew || t.status !== "cancelado")) trInactivatePatient(patId, list);
-          // Tratamento novo para paciente inativo: o paciente volta a ficar ativo.
-          else if (isNew) trReactivatePatient(patId);
+          // Venda (2026-10-15): tratamento novo ou alterado vira venda; cancelado pergunta das parcelas.
+          var vMes = canEditVal ? newVal : money.valor, vDesc = canEditVal ? newDesp : money.descontos;
+          var salePromise = slOnTreatmentSaved({t: t, rec: rec, isNew: isNew, opts: opts, st: st, others: others,
+            oldKey: isNew ? "" : slKey(t, money), newKey: slKey(rec, {valor: vMes, descontos: vDesc}), valorFinal: Math.round((vMes - vDesc) * 100) / 100});
+          var after = function(){
+            // Cancelou ou renegociou (este ou o ativo anterior): pergunta se remove os agendamentos.
+            var cancelNow = st === "cancelado" && (isNew || t.status !== "cancelado");
+            if ((cancelNow && sysOn("tr_cancel_pendencias")) || (!cancelNow && (((st === "renegociado") && (isNew || t.status !== st)) || others.length))) trOfferRemoveBookings(patId);
+            // Tratamento passou a Cancelado e o paciente não tem outro Ativo: inativa o paciente.
+            if (cancelNow) trInactivatePatient(patId, list);
+            // Tratamento novo para paciente inativo: o paciente volta a ficar ativo.
+            else if (isNew) trReactivatePatient(patId);
+          };
+          if (salePromise) salePromise.then(after, after); else after();
         });
       });
     });
@@ -23291,6 +23305,263 @@ function trReactivatePatient(patId){
   if (!can("pacientes", "edit")){ showToast("Tratamento salvo. O paciente continua inativo: seu nível não pode editar Pacientes.", true); return; }
   showToast("Tratamento salvo e paciente " + (p.nome || "") + " reativado.");
   writePatients(state.patientsRaw.map(function(x){ return x.id === patId ? Object.assign({}, x, {inativo: false}) : x; }));
+}
+
+/* ===== Vendas dos tratamentos (2026-10-15) =====
+ * Cada tratamento novo e cada alteração comercial dele (valor, Sessão/Mês, quadros, convênio, vencimento) é uma VENDA
+ * (`treatment_sales`: nova, renovação ou aditivo). A anterior fica Substituída; tratamento cancelado marca Cancelada.
+ * Parcelas opcionais viram contas a receber (`finance_payables.sale_id`). Permissão própria `vendas`.
+ * Ao cancelar o tratamento (regra do Sistema `tr_cancel_pendencias`): pergunta das parcelas e, depois, das sessões. */
+var SALES = {rows: null, loading: null};
+var SALE_TIPOS = {nova: "Nova", renovacao: "Renovação", aditivo: "Aditivo"};
+var SALE_STATUS = {ativa: "Ativa", substituida: "Substituída", cancelada: "Cancelada"};
+var SALE_FORMAS = ["PIX", "Cartão de Crédito", "Cartão de Débito", "Boleto", "Dinheiro", "Transferência", "Convênio"];
+function slCan(a){ return can("vendas", a); }
+function slFromDb(x){
+  return {id: x.id, treatment: x.treatment_id, patient: x.patient_id, tipo: x.tipo, data: x.data, seller: x.seller_id || "", sellerName: x.seller_name || "",
+    valorMensal: Number(x.valor_mensal) || 0, meses: x.meses || 1, total: Number(x.total) || 0, forma: x.forma || "", status: x.status || "ativa",
+    replacedBy: x.replaced_by || "", obs: x.obs || "", by: x.created_by_name || "", at: x.created_at || ""};
+}
+function slToDb(r){
+  return {treatment_id: r.treatment, patient_id: r.patient, tipo: r.tipo, data: r.data, seller_id: r.seller || null, seller_name: r.sellerName || null,
+    valor_mensal: r.valorMensal, meses: r.meses, total: r.total, forma: r.forma || null, status: r.status || "ativa", replaced_by: r.replacedBy || null, obs: r.obs || null};
+}
+function slLoad(force){
+  var c = agdClient();
+  if (!c){ if (!SALES.rows) SALES.rows = []; return Promise.resolve(); }
+  if (!slCan("view")){ SALES.rows = []; return Promise.resolve(); }
+  if (SALES.loading) return SALES.loading;
+  if (SALES.rows && !force) return Promise.resolve();
+  SALES.loading = dbAll(function(){ return c.from("treatment_sales").select("*").order("id"); }).then(function(r){
+    SALES.loading = null;
+    if (r.error){
+      SALES.rows = SALES.rows || [];
+      showToast("Não foi possível ler as vendas: " + r.error.message + (/does not exist|relation/i.test(r.error.message || "") ? " (rode o SQL 2026-10-15)" : ""), true);
+      return;
+    }
+    SALES.rows = (r.data || []).map(slFromDb);
+  }, function(){ SALES.loading = null; SALES.rows = SALES.rows || []; });
+  return SALES.loading;
+}
+function slOf(treatmentId){
+  return (SALES.rows || []).filter(function(s){ return s.treatment === treatmentId; }).sort(function(a, b){ return String(b.data + b.at).localeCompare(String(a.data + a.at)); });
+}
+function slInsert(rec){
+  var c = agdClient();
+  SALES.rows = SALES.rows || [];
+  if (!c){ var n = Object.assign({}, rec, {id: rec.id || uid("sl"), status: rec.status || "ativa", by: trWho(), at: new Date().toISOString()}); SALES.rows.push(n); return Promise.resolve(n); }
+  return c.from("treatment_sales").insert(slToDb(rec)).select().single().then(function(res){
+    if (res.error || !res.data){ showToast("Não foi possível registrar a venda: " + ((res.error && res.error.message) || "sem permissão"), true); return null; }
+    var n = slFromDb(res.data); SALES.rows.push(n); return n;
+  });
+}
+// patch: {status, replacedBy}
+function slPatch(ids, patch){
+  if (!ids.length) return Promise.resolve(true);
+  var c = agdClient();
+  var apply = function(){ SALES.rows = (SALES.rows || []).map(function(s){ return ids.indexOf(s.id) !== -1 ? Object.assign({}, s, patch) : s; }); return true; };
+  if (!c) return Promise.resolve(apply());
+  var db = {}; if (patch.status) db.status = patch.status; if (patch.replacedBy !== undefined) db.replaced_by = patch.replacedBy || null;
+  return c.from("treatment_sales").update(db).in("id", ids).then(function(res){
+    if (res.error){ showToast("Não foi possível atualizar a venda: " + res.error.message, true); return false; }
+    return apply();
+  });
+}
+function slParcels(saleIds){ return (FP.rows || []).filter(function(x){ return x.sale && saleIds.indexOf(x.sale) !== -1; }); }
+function slSum(list){ var t = 0; list.forEach(function(x){ t += x.valor; }); return Math.round(t * 100) / 100; }
+// O que muda de "comercial" no tratamento: valor, descontos, Sessão/Mês, soma dos quadros, convênio e vencimento.
+function slKey(t, money){
+  return [money.valor, money.descontos, t.sessoesMes, trLinesSum(t.specHours || []), t.convenioId || t.convenio || "", t.vencPor || "", t.duracaoMeses || "", t.totalSessoes || "", t.validoAte || ""].join("|");
+}
+// Parcelas: entrada (opcional, no 1º vencimento) + n iguais; os centavos fecham na última.
+function slPlanParcels(total, entrada, n, venc1, step){
+  var out = [], rest = Math.round((total - entrada) * 100) / 100, acc = 0, i;
+  if (!(n >= 1) || !venc1) return out;
+  if (entrada > 0) out.push({venc: venc1, valor: entrada, entrada: true});
+  var base = Math.floor(rest / n * 100) / 100;
+  for (i = 0; i < n; i++){
+    var v = i === n - 1 ? Math.round((rest - acc) * 100) / 100 : base;
+    acc = Math.round((acc + v) * 100) / 100;
+    out.push({venc: fpAddMonths(venc1, (entrada > 0 ? step : 0) + i * step), valor: v});
+  }
+  return out;
+}
+function slDlgHost(){
+  var host = document.getElementById("confirmHost");
+  if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
+  return host;
+}
+// Depois de salvar o tratamento. Devolve Promise (a pergunta que abriu) ou null (nada a perguntar).
+function slOnTreatmentSaved(ctx){
+  if (!agdClient() && !window.__pipoSales) return null;   // sem o sistema online (testes) as perguntas de venda só entram quando o teste liga window.__pipoSales
+  if (ctx.st === "cancelado"){
+    if (!(ctx.isNew || ctx.t.status !== "cancelado") || !sysOn("tr_cancel_pendencias") || !slCan("view")) return null;
+    return slCancelFlow(ctx.rec);
+  }
+  if (!slCan("create") || ctx.st !== "ativo") return null;
+  if (!ctx.isNew && ctx.oldKey === ctx.newKey) return null;
+  return slLoad().then(function(){ return fpLoad(); }).then(function(){ return slSaleDialog(ctx); });
+}
+function slSaleDialog(ctx){
+  return new Promise(function(resolve){
+    var rec = ctx.rec, p = rawPatient(rec.patientId) || {}, host = slDlgHost();
+    var prevTr = [rec.id]; if (ctx.opts && ctx.opts.renegotiateFrom) prevTr.push(ctx.opts.renegotiateFrom);
+    (ctx.others || []).forEach(function(o){ prevTr.push(o.id); });
+    var prevSales = (SALES.rows || []).filter(function(s){ return prevTr.indexOf(s.treatment) !== -1 && s.status === "ativa"; });
+    var prev = prevSales.slice().sort(function(a, b){ return String(b.data).localeCompare(String(a.data)); })[0];
+    var prevOpen = slParcels(prevSales.map(function(s){ return s.id; })).filter(function(x){ return !fpDone(x); });
+    var tipo = ctx.isNew ? (ctx.opts && ctx.opts.renegotiateFrom ? "renovacao" : "nova") : "aditivo";
+    var meses = prev ? prev.meses : (rec.duracaoMeses > 0 ? rec.duracaoMeses : 1);
+    var valor = ctx.valorFinal;
+    var staff = fpStaffList();
+    var plans = activeOnly(state.chartAccounts, "").filter(function(x){ return x.tipo === "Receita"; }).sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
+    var defPlan = (plans.filter(function(x){ return rec.convenioId && x.convenioId === rec.convenioId; })[0] || plans.filter(function(x){ return /particular|mensalidade|tratamento|sess/i.test(x.name || ""); })[0] || plans[0] || {}).id || "";
+    var accs = activeOnly(state.bankAccounts, "").slice().sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
+    var canFp = fpCan("create");
+    host.innerHTML = '<div class="overlay confirm-overlay" id="ovSale" role="dialog" aria-modal="true" aria-labelledby="slTitle"><div class="modal" style="max-width:640px">' +
+      '<div class="modal-head"><div><h3 id="slTitle">Registrar Venda</h3><div class="modal-sub">' + esc(p.nome || "") + ' · ' + (ctx.isNew ? "Tratamento novo" : "Tratamento alterado") + '</div></div></div>' +
+      '<div class="modal-body">' +
+        '<div class="tr-sec tr-sec-top">Venda</div>' +
+        '<div class="field-row"><div class="field"><label for="slTipo">Tipo da Venda</label><select id="slTipo">' +
+          Object.keys(SALE_TIPOS).map(function(k){ return '<option value="' + k + '"' + (k === tipo ? ' selected' : '') + '>' + SALE_TIPOS[k] + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field"><label for="slData">Data da Venda</label><input type="date" id="slData" value="' + trTodayIso() + '"></div></div>' +
+        '<div class="field-row"><div class="field"><label for="slSeller">Vendedor</label><select id="slSeller"><option value="">Sem vendedor</option>' +
+          staff.map(function(s){ return '<option value="' + esc(s.id) + '"' + (prev && prev.seller === s.id ? ' selected' : '') + '>' + esc(s.nome) + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field"><label for="slForma">Forma de Pagamento</label><select id="slForma"><option value="">Não informada</option>' +
+          SALE_FORMAS.map(function(f){ return '<option value="' + esc(f) + '"' + (prev && prev.forma === f ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join("") + '</select></div></div>' +
+        '<div class="field-row"><div class="field"><label for="slValor">Valor Mensal (R$)</label><input type="text" id="slValor" data-money inputmode="decimal" value="' + esc(fmtMoney(valor || 0).replace("R$ ", "")) + '"></div>' +
+        '<div class="field"><label for="slMeses">Meses</label><input type="text" id="slMeses" inputmode="numeric" value="' + meses + '"></div>' +
+        '<div class="field"><label for="slTotal">Total da Venda</label><input type="text" id="slTotal" disabled></div></div>' +
+        '<div class="field"><label for="slObs">Observações</label><textarea id="slObs" rows="3"></textarea></div>' +
+        (prevOpen.length ? '<div class="tr-sec">Parcelas da Venda Anterior</div><div class="field"><label for="slPrevOpen">' + prevOpen.length + (prevOpen.length === 1 ? ' parcela em aberto' : ' parcelas em aberto') + ' (' + esc(fmtMoney(slSum(prevOpen))) + ')</label>' +
+          '<select id="slPrevOpen"><option value="keep">Manter as parcelas</option><option value="del">Excluir as parcelas em aberto</option></select></div>' : '') +
+        (canFp ? '<div class="tr-sec">Contas a Receber</div>' +
+          '<label class="rb-opt"><input type="checkbox" id="slGen"> <span>Gerar parcelas no Contas a Receber</span></label>' +
+          '<div id="slGenBox" hidden>' +
+            '<div class="field-row"><div class="field"><label for="slEntrada">Entrada (R$)</label><input type="text" id="slEntrada" data-money inputmode="decimal" value="0,00"></div>' +
+            '<div class="field"><label for="slN">Número de Parcelas</label><input type="text" id="slN" inputmode="numeric" value="' + Math.min(12, Math.max(1, meses)) + '"></div></div>' +
+            '<div class="field-row"><div class="field"><label for="slVenc1">Primeiro Vencimento</label><input type="date" id="slVenc1" value="' + fpAddMonths(trTodayIso(), 1) + '"></div>' +
+            '<div class="field"><label for="slStep">Intervalo (Meses)</label><input type="text" id="slStep" inputmode="numeric" value="1"></div></div>' +
+            '<div class="field-row"><div class="field"><label for="slAcc">Conta Bancária</label><select id="slAcc"><option value="">Sem conta definida</option>' +
+              accs.map(function(a){ return '<option value="' + esc(a.id) + '">' + esc(a.name) + '</option>'; }).join("") + '</select></div>' +
+            '<div class="field"><label for="slPlan">Subcategoria</label><select id="slPlan"><option value="">Escolha…</option>' +
+              plans.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === defPlan ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div></div>' +
+            '<div id="slPrev" class="pat-count"></div>' +
+          '</div>' : '<div class="hint">Seu nível não pode incluir contas a receber: a venda é registrada sem parcelas.</div>') +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="slSkip">Agora Não</button><button class="btn primary" id="slSave">Registrar Venda</button></div>' +
+    '</div></div>';
+    var $ = function(id){ return document.getElementById(id); };
+    function close(){ host.innerHTML = ""; resolve(); }
+    function num(id){ return parseMoney($(id).value); }
+    function totals(){ var t = Math.round(num("slValor") * (parseInt($("slMeses").value, 10) || 0) * 100) / 100; $("slTotal").value = fmtMoney(t).replace("R$ ", ""); return t; }
+    function plan(){
+      var t = totals();
+      return slPlanParcels(t, $("slGen") && $("slGen").checked ? num("slEntrada") : 0, parseInt($("slN") && $("slN").value, 10) || 0, $("slVenc1") ? $("slVenc1").value : "", parseInt($("slStep") && $("slStep").value, 10) || 1);
+    }
+    function refresh(){
+      var t = totals();
+      if (!$("slGen")) return;
+      $("slGenBox").hidden = !$("slGen").checked;
+      if (!$("slGen").checked) return;
+      var list = plan();
+      $("slPrev").innerHTML = list.length ? list.map(function(x, i){ return (x.entrada ? "Entrada" : "Parcela " + (i + 1 - (list[0].entrada ? 1 : 0))) + " · " + esc(trBr(x.venc)) + " · <b>" + esc(fmtMoney(x.valor)) + "</b>"; }).join("<br>") + "<br>Total: <b>" + esc(fmtMoney(slSum(list))) + "</b>" : "Informe o número de parcelas e o primeiro vencimento.";
+    }
+    ["slValor", "slMeses", "slEntrada", "slN", "slVenc1", "slStep"].forEach(function(id){ if ($(id)){ $(id).addEventListener("input", refresh); $(id).addEventListener("change", refresh); } });
+    if ($("slGen")) $("slGen").addEventListener("change", refresh);
+    refresh();
+    $("slSkip").addEventListener("click", close);
+    $("slSave").addEventListener("click", function(){
+      var meses2 = parseInt($("slMeses").value, 10);
+      if (!(meses2 >= 1)){ showToast("Informe a quantidade de meses da venda.", true); $("slMeses").focus(); return; }
+      var gen = $("slGen") && $("slGen").checked, list = gen ? plan() : [];
+      if (gen){
+        if (!$("slPlan").value){ showToast("Escolha a subcategoria das parcelas.", true); return; }
+        if (!list.length){ showToast("Informe o número de parcelas e o primeiro vencimento.", true); return; }
+        if (Math.abs(slSum(list) - totals()) > 0.009){ showToast("A entrada não pode passar do total da venda.", true); return; }
+      }
+      var sellerId = $("slSeller").value;
+      var sale = {treatment: rec.id, patient: rec.patientId, tipo: $("slTipo").value, data: $("slData").value || trTodayIso(), seller: sellerId,
+        sellerName: sellerId ? fpStaffName(sellerId) : "", valorMensal: num("slValor"), meses: meses2, total: totals(), forma: $("slForma").value, obs: $("slObs").value.trim()};
+      $("slSave").disabled = true;
+      slInsert(sale).then(function(n){
+        if (!n){ $("slSave").disabled = false; return; }
+        var old = prevSales.filter(function(s){ return s.id !== n.id; }).map(function(s){ return s.id; });
+        return slPatch(old, {status: "substituida", replacedBy: n.id}).then(function(){
+          var steps = Promise.resolve(true);
+          if (gen) steps = steps.then(function(){
+            var nl = list.length, rows = list.map(function(x, i){
+              return {venc: x.venc, desc: "Venda — " + (p.nome || "Paciente") + (x.entrada ? " — Entrada" : ""), plan: $("slPlan").value, acc: $("slAcc").value, sup: "", valor: x.valor,
+                grupo: n.id, parcela: i + 1, parcelas: nl, obs: "", linhas: [], loan: "", staff: "", abate: "", sale: n.id};
+            });
+            return fpInsertMany(rows);
+          });
+          if ($("slPrevOpen") && $("slPrevOpen").value === "del" && fpCan("delete")) steps = steps.then(function(){ return fpDelete(prevOpen.map(function(x){ return x.id; })); });
+          return steps;
+        }).then(function(ok){
+          showToast("Venda " + SALE_TIPOS[n.tipo].toLowerCase() + " registrada: " + fmtMoney(n.total) + (gen ? " · " + list.length + (list.length === 1 ? " parcela gerada" : " parcelas geradas") + " no Contas a Receber" : "") + ".");
+          close();
+        });
+      });
+    });
+  });
+}
+// Cancelar o tratamento: as vendas viram Canceladas e, se há parcelas em aberto ligadas a elas, pergunta o que fazer.
+function slCancelFlow(rec){
+  return slLoad().then(function(){ return fpLoad(); }).then(function(){
+    var sales = (SALES.rows || []).filter(function(s){ return s.treatment === rec.id && s.status !== "cancelada"; });
+    if (!sales.length) return;
+    var ids = sales.map(function(s){ return s.id; });
+    var parc = slParcels(ids), open = parc.filter(function(x){ return !fpDone(x); }), paid = parc.filter(fpDone);
+    var actIds = sales.filter(function(s){ return s.status === "ativa"; }).map(function(s){ return s.id; });   // as substituídas ficam como histórico
+    var mark = slCan("edit") ? function(){ return slPatch(actIds, {status: "cancelada"}); } : function(){ return Promise.resolve(true); };
+    if (!open.length) return mark();
+    return slCancelDialog(open, paid, rec).then(function(ch){
+      return mark().then(function(){
+        if (!ch) return;
+        var del = ch.mode === "all" ? open : open.filter(function(x){ return x.venc >= ch.from; });
+        if (!del.length){ showToast("Nenhuma parcela em aberto a partir de " + trBr(ch.from) + "."); return; }
+        return fpDelete(del.map(function(x){ return x.id; })).then(function(ok){ if (ok) showToast(del.length + (del.length === 1 ? " parcela excluída" : " parcelas excluídas") + " do Contas a Receber."); });
+      });
+    });
+  });
+}
+function slCancelDialog(open, paid, rec){
+  return new Promise(function(resolve){
+    var host = slDlgHost(), p = rawPatient(rec.patientId) || {}, canDel = fpCan("delete");
+    host.innerHTML = '<div class="overlay confirm-overlay" id="ovSlCanc" role="alertdialog" aria-modal="true" aria-labelledby="scTitle"><div class="modal" style="max-width:500px">' +
+      '<div class="modal-head"><div><h3 id="scTitle">Parcelas Vinculadas</h3><div class="modal-sub">' + esc(p.nome || "") + '</div></div></div>' +
+      '<div class="modal-body">' +
+        '<div class="pat-count">Este tratamento tem <b>' + open.length + (open.length === 1 ? ' parcela em aberto' : ' parcelas em aberto') + '</b> (' + esc(fmtMoney(slSum(open))) + ') no Contas a Receber.' +
+          (paid.length ? '<br>Já recebidas: ' + paid.length + ' (' + esc(fmtMoney(slSum(paid))) + ') — não são alteradas.' : '') + '</div>' +
+        '<label class="rb-opt"><input type="radio" name="scMode" value="all"' + (canDel ? ' checked' : ' disabled') + '> <span>Excluir as parcelas em aberto</span></label>' +
+        '<label class="rb-opt"><input type="radio" name="scMode" value="from"' + (canDel ? '' : ' disabled') + '> <span>Excluir só as que vencem a partir de</span></label>' +
+        '<div class="field"><input type="date" id="scFrom" value="' + trTodayIso() + '"' + (canDel ? '' : ' disabled') + '></div>' +
+        '<label class="rb-opt"><input type="radio" name="scMode" value="keep"' + (canDel ? '' : ' checked') + '> <span>Manter as parcelas</span></label>' +
+        (canDel ? '' : '<div class="hint">Seu nível não pode excluir contas a receber.</div>') +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn primary" id="scOk">Confirmar</button></div>' +
+    '</div></div>';
+    document.getElementById("scOk").addEventListener("click", function(){
+      var mode = (document.querySelector('#ovSlCanc input[name="scMode"]:checked') || {}).value || "keep";
+      var from = document.getElementById("scFrom").value || trTodayIso();
+      host.innerHTML = "";
+      resolve(mode === "keep" ? null : {mode: mode, from: from});
+    });
+    document.getElementById("scOk").focus();
+  });
+}
+// Grupo "Vendas" da janela do tratamento (tratamento já salvo, com permissão de ver).
+function trSalesHtml(t){
+  var list = slOf(t.id);
+  if (!list.length) return '<div class="hint">Nenhuma venda registrada.</div>';
+  var ids = list.map(function(s){ return s.id; });
+  return '<ul class="tr-hist">' + list.map(function(s){
+    var parc = slParcels([s.id]), open = parc.filter(function(x){ return !fpDone(x); });
+    return '<li><span class="tr-hist-when">' + esc(trBr(s.data)) + '</span><b>' + esc(SALE_TIPOS[s.tipo] || s.tipo) + '</b> · ' + esc(fmtMoney(s.total)) + ' (' + esc(fmtMoney(s.valorMensal)) + ' × ' + s.meses + ')' +
+      (s.sellerName ? ' · ' + esc(s.sellerName) : '') + ' · ' + esc(SALE_STATUS[s.status] || s.status) +
+      (parc.length ? ' · Parcelas: ' + open.length + ' em aberto de ' + parc.length : '') + '</li>';
+  }).join("") + '</ul>';
 }
 
 // "Mostrar inativos" nas telas de cadastro (ver setupInactivate).
@@ -23965,6 +24236,23 @@ var HELP_TOPICS = [
       "Não aparece no celular: use a tela Agenda."
     ],
     who: "Permissão <b>Agenda</b> (ver para consultar; incluir, editar e excluir para marcar, mover/trocar e excluir). Quem só vê a própria agenda enxerga apenas os atendimentos dele."},
+  {id: "vendas", group: "Cadastros", title: "Vendas do Tratamento", mod: "vendas", tab: "tratamentos",
+    purpose: "Cada tratamento novo e cada alteração comercial dele (valor, Sessão/Mês, especialidades, convênio ou vencimento) é uma venda, com vendedor e, se quiser, parcelas no Contas a Receber.",
+    steps: [
+      "Ao salvar um tratamento novo ou alterado, abre <b>Registrar Venda</b>. O tipo vem sozinho: <b>Nova</b>, <b>Renovação</b> (ao renegociar) ou <b>Aditivo</b> (alteração no meio do contrato). <b>Agora Não</b> fecha sem registrar.",
+      "Informe a data, o vendedor, a forma de pagamento, o <b>valor mensal</b> e os <b>meses</b>; o total é calculado.",
+      "Marque <b>Gerar parcelas no Contas a Receber</b> para criar as contas: entrada (opcional), número de parcelas, primeiro vencimento, intervalo em meses, conta bancária e subcategoria. A prévia mostra cada parcela antes de salvar.",
+      "Na venda seguinte do mesmo tratamento, a anterior fica <b>Substituída</b>; se havia parcelas em aberto dela, você escolhe manter ou excluir.",
+      "No grupo <b>Vendas</b> da janela do tratamento ficam todas as vendas, com situação e quantas parcelas estão em aberto.",
+      "Ao <b>cancelar</b> o tratamento, o sistema pergunta se exclui as parcelas em aberto (todas, ou só as que vencem a partir de uma data; as já recebidas não mudam) e depois se remove as sessões do Planner e da Agenda a partir de uma data. A venda ativa fica <b>Cancelada</b>."
+    ],
+    rules: [
+      "Mudança que não é comercial (observação, horário do paciente) não abre venda.",
+      "As perguntas do cancelamento seguem a regra <b>Perguntar das Sessões e Parcelas ao Cancelar</b> em Acesso → Sistema (começa ligada; em <b>Desligado</b> o cancelamento não pergunta).",
+      "Sessões com status ou evolução nunca são removidas.",
+      "A comissão do vendedor ainda não é calculada."
+    ],
+    who: "Permissão Vendas (ver e incluir); gerar parcelas exige incluir em Financeiro."},
   {id: "agendamentos", group: "Agenda", title: "Agendamentos", mod: "agenda", tab: "agendamentos",
     purpose: "Ver numa lista só todos os atendimentos dos pacientes na Agenda, com resumo e alertas que acompanham a busca e os filtros.",
     steps: [
@@ -24578,6 +24866,7 @@ var BACKUP_TABLES = [
   {name: "bank_account_finance", order: "account_id", label: "Saldo inicial das contas", restore: true, optional: true},
   {name: "finance_entries", order: "id", label: "Lançamentos financeiros", restore: true, optional: true},
   {name: "finance_statement_lines", order: "id", label: "Extrato do Banco (Conciliação)", restore: true, optional: true},
+  {name: "treatment_sales", order: "id", label: "Vendas dos Tratamentos", restore: true, optional: true},
   {name: "finance_loans", order: "id", label: "Empréstimos", restore: true, optional: true},
   {name: "finance_payables", order: "id", label: "Contas a Pagar e a Receber", restore: true, optional: true},
   {name: "staff", order: "id", label: "Colaboradores", restore: true, optional: true},
@@ -30637,7 +30926,7 @@ function fpFromDb(x){
   return {id: x.id, venc: x.vencimento, desc: x.descricao || "", plan: x.plan_id || "", acc: x.account_id || "", sup: x.supplier_id || "",
     valor: Number(x.valor) || 0, entry: x.entry_id || "", grupo: x.grupo || "", parcela: x.parcela || 0, parcelas: x.parcelas || 0, obs: x.obs || "",
     linhas: Array.isArray(x.linhas) ? x.linhas.map(function(l){ return {plan: l.plan || "", valor: Number(l.valor) || 0}; }) : [], loan: x.loan_id || "",
-    staff: x.staff_id || "", abate: x.abate_id || ""};
+    staff: x.staff_id || "", abate: x.abate_id || "", sale: x.sale_id || ""};
 }
 /* Colaborador e abatimento (2026-10-14): conta a pagar com `staff`; parcela de empréstimo com `abate` = id da conta a pagar do MESMO colaborador onde
  * ela é descontada. Parcela abatida deixa de estar em aberto (fpDone) e a conta a pagar passa a valer o líquido; na baixa da conta saem os lançamentos
@@ -30668,9 +30957,11 @@ function fpStaffName(id){
 // Composição da conta: as linhas do rateio ou, sem rateio, uma linha só com a subcategoria e o valor da conta.
 function fpLines(r){ return r.linhas && r.linhas.length > 1 ? r.linhas : [{plan: r.plan, valor: r.valor}]; }
 function fpToDb(r){
-  return {vencimento: r.venc, descricao: r.desc, plan_id: r.plan || null, account_id: r.acc || null, supplier_id: r.sup || null, valor: r.valor,
+  var o = {vencimento: r.venc, descricao: r.desc, plan_id: r.plan || null, account_id: r.acc || null, supplier_id: r.sup || null, valor: r.valor,
     grupo: r.grupo || null, parcela: r.parcela || null, parcelas: r.parcelas || null, obs: r.obs || null,
     linhas: r.linhas && r.linhas.length > 1 ? r.linhas : null, loan_id: r.loan || null, staff_id: r.staff || null, abate_id: r.abate || null};
+  if (r.sale) o.sale_id = r.sale;   // só manda quando há venda (a coluna vem do SQL 2026-10-15)
+  return o;
 }
 function fpLoad(force){
   var c = agdClient();

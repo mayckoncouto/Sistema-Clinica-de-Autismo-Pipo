@@ -103,6 +103,12 @@ var TABLES = {
     cols: ["unit_id", "id", "account_id", "data", "descricao", "valor", "doc", "key", "entry_id", "matched_at", "matched_by", "created_at", "created_by"],
     users: ["matched_by", "created_by"]
   },
+  treatment_sales: {
+    key: "id",
+    cols: ["unit_id", "id", "treatment_id", "patient_id", "tipo", "data", "seller_id", "seller_name", "valor_mensal", "meses", "total", "forma", "status",
+           "replaced_by", "obs", "created_at", "created_by", "created_by_name"],
+    users: ["created_by"]
+  },
   finance_loans: {
     key: "id",
     cols: ["unit_id", "id", "sentido", "descricao", "contraparte", "supplier_id", "account_id", "valor", "tipo", "taxa", "parcelas", "liberacao",
@@ -112,7 +118,7 @@ var TABLES = {
   finance_payables: {
     key: "id",
     cols: ["unit_id", "id", "vencimento", "descricao", "plan_id", "account_id", "supplier_id", "valor", "entry_id", "grupo", "parcela", "parcelas",
-           "obs", "linhas", "loan_id", "created_at", "created_by", "updated_at", "updated_by"],
+           "obs", "linhas", "loan_id", "staff_id", "abate_id", "sale_id", "created_at", "created_by", "updated_at", "updated_by"],
     users: ["created_by", "updated_by"]
   },
   staff: {

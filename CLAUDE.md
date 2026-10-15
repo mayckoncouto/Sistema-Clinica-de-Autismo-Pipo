@@ -4545,3 +4545,20 @@ Este arquivo é um histórico: seções antigas usam nomes que já mudaram. Vale
 - Title Case aplicado em: diálogos de confirmação ("Tem Certeza?", "Mesclar Cadastros?", "Finalizar sem Evolução?", "Descartar Alterações?", "Restaurar o Backup?", "Lançamento Repetido?", "Substituir Agendamento?"), títulos da Disponibilidade, "Contratado × Realizado (Mês a Mês)", "Sessões/Mês", títulos de tarefas criadas por conta, botão "Não Lida" e TODOS os rótulos de `SYS_RULES` (tela Acesso → Sistema).
 - Agenda Planner: `agpRender` monta o HTML sem marcas de busca e aplica com `agdPatchGrid(host, html, "table.agp-table")` (só troca as células que mudaram); busca e status usam `agpApplySearch()` (liga/desliga `search-hit`, `search-dim-item`, `match` sem redesenhar); busca com espera de 150 ms; `agpFillFilters` só refaz as listas quando as opções mudam.
 - Financeiro/CRM: `gtRender` mostra 300 linhas (`GT_PAGE`) nas listas de `GT_PAGED` (lancamentos, conciliacao, pagar, receber, crm-lista, crm-mine, crm-all) com botão "Mostrar Mais" (`data-gt-more`); `GT_MORE`/`gtMoreReset(id)` zeram ao buscar; `debounce150(fn)` nas buscas de Lançamentos, Contas, Conciliação e CRM. Lista nova grande: acrescentar o id em `GT_PAGED`.
+
+## Vendas dos tratamentos (2026-10-15, etapas 1 a 4)
+Pedido do usuário: cada tratamento é uma venda e cada alteração é uma nova venda; controlar vendas e comissões; gerar parcelas (opcional) no Contas a Receber; cancelar
+tratamento pergunta das parcelas e das sessões. Decisões: valor da venda **mensal** (× meses); **comissão** nasce no primeiro atendimento FINALIZADO do tratamento (etapa 5, NÃO feita);
+no cancelamento a pergunta é "remover as sessões do Planner e da Agenda a partir da data X" (já existia: `trOfferRemoveBookings`) — a trava de alteração com sessões agendadas NÃO foi feita.
+- Banco (migração `supabase/2026-10-15-vendas.sql`, rodada em produção pelo conector; linha 129 da conferência de migrações; `schema.sql` atualizado; `conferencia-geral.sql` NÃO regerado):
+  `treatment_sales` (treatment_id, patient_id, tipo nova|renovacao|aditivo, data, seller_id/name, valor_mensal, meses, total, forma, status ativa|substituida|cancelada, replaced_by, obs, unit_id; RLS pela
+  permissão **Vendas** `vendas` ver/incluir/editar/excluir — nenhum nível recebe, o Administrador libera; `MODULES` nos dois js, grupo Financeiro) e `finance_payables.sale_id`. Backup inclui `treatment_sales`.
+- App (bloco "Vendas dos tratamentos", antes de "Mostrar inativos"): `SALES`, `slLoad`, `slInsert`, `slPatch`, `slOf`, `slKey` (valor, descontos, Sessão/Mês, soma dos quadros, convênio, vencimento — mudou = venda),
+  `slPlanParcels` (entrada no 1º vencimento + n parcelas iguais; centavos na última), `slOnTreatmentSaved(ctx)` (chamado ao salvar em `openTreatmentModal`; devolve Promise ou null),
+  `slSaleDialog` (`#ovSale`: tipo, data, vendedor, forma, valor mensal, meses, total, parcelas opcionais com prévia, parcelas em aberto da venda anterior manter/excluir; a anterior vira Substituída),
+  `slCancelFlow`/`slCancelDialog` (`#ovSlCanc`: excluir todas as em aberto / só as que vencem a partir de uma data / manter; recebidas não mudam; venda ativa vira Cancelada),
+  `trSalesHtml` (grupo **Vendas** recolhível na janela do tratamento). Parcelas = contas a receber com `sale` (id da venda) e `grupo` = id da venda.
+- Regra do Sistema `tr_cancel_pendencias` ("Perguntar das Sessões e Parcelas ao Cancelar", Avisar/Desligado, padrão Avisar): desligada, o cancelamento não pergunta nem das parcelas nem das sessões.
+- Sem o sistema online (testes) a janela de venda só abre com `window.__pipoSales = true`. Teste `tests/run_vendas.js` (no `npm test`). Ajuda: tópico `vendas`.
+- Próximas etapas combinadas: 5) Regras de Comissão (cadastro; percentual por tipo; conta a pagar ao vendedor no fechamento; estorno no cancelamento), 6) Painel de Vendas (relatório: conversão lead→venda, ticket, churn),
+  7) extras (contrato automático, inadimplência, metas, aprovação de desconto).

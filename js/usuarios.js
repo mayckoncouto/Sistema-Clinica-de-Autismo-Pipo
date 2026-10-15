@@ -57,6 +57,7 @@
     { key: "escalas", label: "Escalas", hint: "escalas do plano terapêutico (níveis e cores)" },
     { key: "habilidades", label: "Habilidades", hint: "habilidades dos objetivos do plano terapêutico" },
     { key: "financeiro", label: "Financeiro", hint: "Lançamentos: movimentação das contas (valores, extrato, subcategorias)", group: "Financeiro" },
+    { key: "vendas", label: "Vendas", hint: "vendas dos tratamentos (nova, renovação, aditivo), vendedor e parcelas no Contas a Receber" },
     { key: "fechamento_mes", label: "Fechamento de Mês", hint: "incluir = fechar o mês; excluir = reabrir; ver = histórico dos fechamentos", actions: ["view", "create", "delete"] },
     { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"], group: "Menu Acesso" },
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de Permissão e administradores: só o Administrador)" },
