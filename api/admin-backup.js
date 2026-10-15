@@ -119,6 +119,11 @@ var TABLES = {
     cols: ["unit_id", "id", "sale_id", "treatment_id", "patient_id", "seller_id", "seller_name", "rule_id", "base", "percentual", "valor", "status", "payable_id", "obs", "created_at", "created_by"],
     users: ["created_by"]
   },
+  sale_goals: {
+    key: "id",
+    cols: ["unit_id", "id", "seller_id", "ym", "valor", "qtd", "created_at"],
+    users: []
+  },
   finance_loans: {
     key: "id",
     cols: ["unit_id", "id", "sentido", "descricao", "contraparte", "supplier_id", "account_id", "valor", "tipo", "taxa", "parcelas", "liberacao",

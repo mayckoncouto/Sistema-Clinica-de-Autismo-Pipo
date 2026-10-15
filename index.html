@@ -4005,6 +4005,10 @@ function openClinicModal(){
               '<label class="cl-color-label" for="clMargem">Margem de Desconto</label><input id="clMargem" type="number" inputmode="decimal" min="0" max="100" step="1" style="width:150px" value="' + esc(String(clinicMargem())) + '">' +
               '<span class="cl-hint">% máximo do valor de uma conta a pagar de colaborador que pode ser descontado com parcelas de empréstimo. Acima disso o sistema pede confirmação.</span>' +
             '</div>' +
+            '<div class="cl-row">' +
+              '<label class="cl-color-label" for="clDescMax">Desconto Máximo na Venda</label><input id="clDescMax" type="number" inputmode="decimal" min="0" max="100" step="1" style="width:150px" value="' + esc(clinicDescMax() ? String(clinicDescMax()) : "") + '">' +
+              '<span class="cl-hint">% máximo de desconto sobre o valor mensal do tratamento. Acima disso só quem tem Vendas (editar) aprova. Vazio = sem limite.</span>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<div class="prof-section"><div class="prof-section-head"><span class="tr-sec tr-sec-in">Horário de Atendimento</span>' +
@@ -4183,6 +4187,7 @@ function openClinicModal(){
       endereco: document.getElementById("clEnd").value.trim(), cidade: document.getElementById("clCidade").value.trim(),
       horarios: horarios,
       duracao: dur,
+      descontoMax: (function(){ var dv = parseFloat(String(document.getElementById("clDescMax").value).replace(",", ".")); return dv > 0 ? Math.min(100, dv) : ""; })(),
       margemDesconto: (function(){ var mv = parseFloat(String(document.getElementById("clMargem").value).replace(",", ".")); return isNaN(mv) ? 30 : Math.max(0, Math.min(100, mv)); })(),
       corBotoes: corBtn,
       corTexto: corTxt,
@@ -19961,6 +19966,7 @@ var CONTRACT_TIPOS = [
 var CV = {
   clinica: {g: "Clínica", items: [["clinica_nome", "Nome da clínica"], ["clinica_cnpj", "CNPJ"], ["clinica_endereco", "Endereço"], ["clinica_cidade", "Cidade"], ["clinica_telefone", "Telefone"]]},
   data: {g: "Data", items: [["data_hoje", "Data de hoje"], ["data_hoje_extenso", "Data de hoje por extenso"]]},
+  venda: {g: "Venda", items: [["venda_tipo", "Tipo da venda"], ["venda_data", "Data da venda"], ["venda_vendedor", "Vendedor"], ["venda_valor_mensal", "Valor mensal"], ["venda_meses", "Meses"], ["venda_total", "Total da venda"], ["venda_total_extenso", "Total por extenso"], ["venda_forma", "Forma de pagamento"], ["venda_parcelas", "Número de parcelas"], ["tabela_parcelas_venda", "Tabela de parcelas da venda"]]},
   tomador: {g: "Tomador", items: [["tomador_nome", "Nome do tomador"], ["tomador_cpf", "CPF do tomador"], ["tomador_cargo", "Cargo do tomador"]]},
   emprestimo: {g: "Empréstimo", items: [["emprestimo_descricao", "Descrição"], ["emprestimo_valor", "Valor (R$)"], ["emprestimo_valor_extenso", "Valor por extenso"], ["emprestimo_data", "Data da liberação"],
     ["emprestimo_tipo", "Tipo de juros"], ["emprestimo_taxa", "Taxa ao mês"], ["emprestimo_parcelas", "Número de parcelas"], ["emprestimo_primeiro_vencimento", "1º vencimento"],
@@ -19989,7 +19995,7 @@ var CV = {
 // grupos de cada tipo (Clínica e Data valem para todos)
 var CONTRACT_VARS_BY = {
   emprestimo: ["tomador", "emprestimo"],
-  tratamento: ["paciente", "responsavel", "tratamento"],
+  tratamento: ["paciente", "responsavel", "tratamento", "venda"],
   "confissao-divida": ["devedor", "divida"],
   locacao: ["colaborador", "locacao"],
   servicos: ["colaborador", "servico"],
@@ -20082,6 +20088,8 @@ function contractContext(loan, sample){
       interrupcao_data: trBr(trTodayIso()), interrupcao_motivo: "Mudança de cidade", interrupcao_observacoes: "—",
       material_descricao: "Kit de materiais pedagógicos", material_quantidade: "1", material_valor: fmtMoney(350), material_data: trBr(trTodayIso()), material_devolucao: trBr(fpAddMonths(trTodayIso(), 6))};
     Object.keys(smp).forEach(function(k){ out[k] = smp[k]; });
+    Object.assign(out, {venda_tipo: "Nova", venda_data: trBr(trTodayIso()), venda_vendedor: "Vendedora Exemplo", venda_valor_mensal: fmtMoney(1000), venda_meses: "6", venda_total: fmtMoney(6000), venda_total_extenso: numExtenso(6000),
+      venda_forma: "PIX", venda_parcelas: "6", tabela_parcelas_venda: '<table class="ct-tab"><thead><tr><th>Nº</th><th>Vencimento</th><th>Valor</th></tr></thead><tbody><tr><td>1</td><td>' + trBr(fpAddMonths(trTodayIso(), 1)) + '</td><td>' + fmtMoney(1000) + '</td></tr></tbody></table>'});
     return out;
   }
   if (loan.staff){
@@ -20108,7 +20116,7 @@ function contractRender(html, ctx){
   var out = String(html || "").replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, function(m, k){
     k = k.toLowerCase();
     if (!Object.prototype.hasOwnProperty.call(ctx, k)){ if (unknown.indexOf(k) === -1) unknown.push(k); return m; }
-    return k === "tabela_parcelas" ? ctx[k] : esc(ctx[k]);
+    return (k === "tabela_parcelas" || k === "tabela_parcelas_venda") ? ctx[k] : esc(ctx[k]);
   });
   return {html: out, unknown: unknown};
 }
@@ -23026,6 +23034,10 @@ function openTreatmentModal(t, opts){
   if (!isNew && slCan("view")){
     trCollapseWire("trSales", TR_SALES_OPEN_KEY);
     Promise.all([slLoad(), fpLoad()]).then(function(){ var el = document.getElementById("trSalesList"); if (el) el.innerHTML = trSalesHtml(t); });
+    document.getElementById("trSalesList").addEventListener("click", function(e){
+      var b = e.target.closest("[data-sale-ct]"); if (!b) return;
+      var sale = (SALES.rows || []).filter(function(x){ return x.id === b.getAttribute("data-sale-ct"); })[0]; if (sale) slContratoDialog(sale);
+    });
   }
   if (!isNew && (trUsedCount(t) === null || !TR.appts) && agdClient()) trLoadLast(false).then(function(){
     if (!document.getElementById("ovTreat")) return;
@@ -23155,6 +23167,15 @@ function openTreatmentModal(t, opts){
     // o sistema online (testes) continuam no próprio tratamento.
     var newVal = canEditVal ? parseMoney(document.getElementById("trVal").value) : null;
     var newDesp = canEditVal ? parseMoney(document.getElementById("trDesp").value) : null;
+    // Desconto acima do limite da Clínica: só quem aprova vendas (Vendas – editar) salva, e confirma.
+    var dMax = clinicDescMax();
+    if (canEditVal && dMax > 0 && newVal > 0 && st !== "cancelado" && newDesp / newVal * 100 > dMax + 0.0001 && !sv._descOk && (isNew || !t || parseMoney(trMoney(t).descontos) !== newDesp)){
+      var dPct = Math.round(newDesp / newVal * 1000) / 10;
+      if (!slCan("edit")){ showToast("Desconto de " + String(dPct).replace(".", ",") + "% acima do limite de " + String(dMax).replace(".", ",") + "%. Peça a quem aprova vendas (permissão Vendas – editar) para salvar.", true); return; }
+      confirmDialog({title: "Desconto Acima do Limite", message: "O desconto de <b>" + String(dPct).replace(".", ",") + "%</b> passa do limite de <b>" + String(dMax).replace(".", ",") + "%</b> da clínica. Aprovar e salvar?", confirmLabel: "Aprovar e Salvar"})
+        .then(function(ok){ if (ok){ sv._descOk = true; try { sv.click(); } finally { sv._descOk = false; } } });
+      return;
+    }
     // TR.fin só existe depois que a tabela protegida foi lida: antes de rodar o
     // ajuste do banco, os valores continuam no documento (nada se perde).
     var finTable = !!(agdClient() && TR.fin);
@@ -23565,7 +23586,8 @@ function trSalesHtml(t){
     var parc = slParcels([s.id]), open = parc.filter(function(x){ return !fpDone(x); });
     return '<li><span class="tr-hist-when">' + esc(trBr(s.data)) + '</span><b>' + esc(SALE_TIPOS[s.tipo] || s.tipo) + '</b> · ' + esc(fmtMoney(s.total)) + ' (' + esc(fmtMoney(s.valorMensal)) + ' × ' + s.meses + ')' +
       (s.sellerName ? ' · ' + esc(s.sellerName) : '') + ' · ' + esc(SALE_STATUS[s.status] || s.status) +
-      (parc.length ? ' · Parcelas: ' + open.length + ' em aberto de ' + parc.length : '') + '</li>';
+      (parc.length ? ' · Parcelas: ' + open.length + ' em aberto de ' + parc.length : '') +
+      (pvOverdue([s.id]).length ? ' · <b class="fl-neg">' + pvOverdue([s.id]).length + ' vencida(s)</b>' : '') + ' · <button type="button" class="btn ghost" data-sale-ct="' + esc(s.id) + '">Contrato</button></li>';
   }).join("") + '</ul>';
 }
 
@@ -23853,6 +23875,250 @@ function openComRuleDialog(rule, after){
     });
   });
   $("rlName").focus();
+}
+
+/* ===== Painel de Vendas, metas, inadimplência e contrato do tratamento (2026-10-15) ===== */
+var GOALS = {rows: null, loading: null};
+function goalFromDb(x){ return {id: x.id, seller: x.seller_id || "", ym: x.ym, valor: Number(x.valor) || 0, qtd: x.qtd || 0}; }
+function goalLoad(force){
+  var c = agdClient();
+  if (!c){ GOALS.rows = GOALS.rows || []; return Promise.resolve(); }
+  if (!slCan("view")){ GOALS.rows = []; return Promise.resolve(); }
+  if (GOALS.loading) return GOALS.loading;
+  if (GOALS.rows && !force) return Promise.resolve();
+  GOALS.loading = dbAll(function(){ return c.from("sale_goals").select("*").order("id"); }).then(function(r){
+    GOALS.loading = null;
+    if (r.error){
+      GOALS.rows = GOALS.rows || [];
+      showToast("Não foi possível ler as metas: " + r.error.message + (/does not exist|relation/i.test(r.error.message || "") ? " (rode o SQL 2026-10-15c)" : ""), true);
+      return;
+    }
+    GOALS.rows = (r.data || []).map(goalFromDb);
+  }, function(){ GOALS.loading = null; GOALS.rows = GOALS.rows || []; });
+  return GOALS.loading;
+}
+function goalSave(g){
+  var c = agdClient(); GOALS.rows = GOALS.rows || [];
+  if (!c){
+    if (g.id) GOALS.rows = GOALS.rows.map(function(x){ return x.id === g.id ? Object.assign({}, x, g) : x; }); else GOALS.rows.push(Object.assign({}, g, {id: uid("mt")}));
+    return Promise.resolve(true);
+  }
+  var db = {seller_id: g.seller || null, ym: g.ym, valor: g.valor, qtd: g.qtd};
+  var q = g.id ? c.from("sale_goals").update(db).eq("id", g.id).select().single() : c.from("sale_goals").insert(db).select().single();
+  return q.then(function(res){
+    if (res.error || !res.data){ showToast("Não foi possível salvar a meta: " + ((res.error && res.error.message) || "sem permissão"), true); return false; }
+    var n = goalFromDb(res.data);
+    if (g.id) GOALS.rows = GOALS.rows.map(function(x){ return x.id === n.id ? n : x; }); else GOALS.rows.push(n);
+    return true;
+  });
+}
+function goalDelete(id){
+  var c = agdClient();
+  var done = function(){ GOALS.rows = (GOALS.rows || []).filter(function(x){ return x.id !== id; }); return true; };
+  if (!c) return Promise.resolve(done());
+  return c.from("sale_goals").delete().eq("id", id).then(function(res){ if (res.error){ showToast("Não foi possível excluir a meta: " + res.error.message, true); return false; } return done(); });
+}
+// Desconto máximo sem aprovação (% do valor mensal) — cadastro da Clínica; vazio ou 0 = sem limite.
+function clinicDescMax(){ var m = parseFloat(state.clinic && state.clinic.descontoMax); return m > 0 && m <= 100 ? m : 0; }
+
+// ----- Cálculos do painel -----
+function pvMonthOf(iso){ return String(iso || "").slice(0, 7); }
+function pvInRange(iso, from, to){ return iso >= from && iso <= to; }
+function pvMonthsBetween(from, to){
+  var out = [], y = +from.slice(0, 4), m = +from.slice(5, 7), ey = +to.slice(0, 4), em = +to.slice(5, 7);
+  while ((y < ey || (y === ey && m <= em)) && out.length < 24){ out.push(y + "-" + String(m).padStart(2, "0")); m++; if (m > 12){ m = 1; y++; } }
+  return out;
+}
+function pvMonthLabel(ym){ var n = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]; return n[+ym.slice(5, 7) - 1] + "/" + ym.slice(2, 4); }
+// Parcelas vencidas e não recebidas das vendas (ativas ou substituídas).
+function pvOverdue(saleIds){
+  var today = trTodayIso();
+  return (FP.rows || []).filter(function(x){ return x.sale && saleIds.indexOf(x.sale) !== -1 && !fpDone(x) && x.venc < today; });
+}
+function pvCompute(from, to, seller){
+  var all = (SALES.rows || []).filter(function(s){ return (!seller || s.seller === seller); });
+  var inPeriod = all.filter(function(s){ return pvInRange(s.data, from, to); });
+  var valid = inPeriod.filter(function(s){ return s.status !== "cancelada"; }), canc = inPeriod.filter(function(s){ return s.status === "cancelada"; });
+  var sum = function(l){ var t = 0; l.forEach(function(s){ t += s.total; }); return Math.round(t * 100) / 100; };
+  var byTipo = {}; Object.keys(SALE_TIPOS).forEach(function(k){ var l = valid.filter(function(s){ return s.tipo === k; }); byTipo[k] = {n: l.length, total: sum(l)}; });
+  var sellers = {};
+  valid.forEach(function(s){ var k = s.seller || ""; var o = sellers[k] = sellers[k] || {seller: k, name: s.sellerName || "Sem vendedor", n: 0, total: 0, com: 0}; o.n++; o.total += s.total; });
+  (COMM.rows || []).forEach(function(c){ if (c.status !== "gerada") return; var s = valid.filter(function(x){ return x.id === c.sale; })[0]; if (s) sellers[s.seller || ""].com += c.valor; });
+  var months = pvMonthsBetween(from, to).map(function(ym){ var l = valid.filter(function(s){ return pvMonthOf(s.data) === ym; }); return {ym: ym, n: l.length, total: sum(l)}; });
+  var overdue = pvOverdue(all.filter(function(s){ return s.status !== "cancelada"; }).map(function(s){ return s.id; }));
+  // Leads do CRM (listas com funil de contatos) criados no período × vendas novas
+  var leads = null;
+  if (CRM.loaded){
+    leads = 0;
+    Object.keys(CRM.tasks || {}).forEach(function(id){
+      var t = CRM.tasks[id], l = crmListById(t.list_id); if (!l || !l.lead) return;
+      if (pvInRange(String(t.created_at || "").slice(0, 10), from, to)) leads++;
+    });
+  }
+  return {valid: valid, canc: canc, total: sum(valid), n: valid.length, ticket: valid.length ? Math.round(sum(valid) / valid.length * 100) / 100 : 0, byTipo: byTipo,
+    sellers: Object.keys(sellers).map(function(k){ var o = sellers[k]; o.total = Math.round(o.total * 100) / 100; o.com = Math.round(o.com * 100) / 100; return o; }).sort(function(a, b){ return b.total - a.total; }),
+    months: months, overdue: overdue, overdueTotal: sum(overdue.map(function(x){ return {total: x.valor}; })), leads: leads, conv: leads ? Math.round(byTipo.nova.n / leads * 1000) / 10 : null,
+    cancTotal: sum(canc)};
+}
+function openPainelVendas(){
+  if (!slCan("view")){ showToast(permDeniedMsg("vendas", "view"), true); return; }
+  var host = regQuickHost(), today = trTodayIso();
+  host.innerHTML = '<div class="overlay" id="ovPv"><div class="modal wide" style="max-width:1100px;width:96vw">' +
+    '<div class="modal-head"><div><h3>Painel de Vendas</h3><div class="modal-sub">Vendas dos tratamentos por período: valor, ticket, vendedores, metas, cancelamentos e parcelas vencidas.</div></div>' +
+    '<button class="modal-close" id="pvClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="field-row">' +
+      '<div class="field"><label for="pvFrom">De</label><input type="date" id="pvFrom" value="' + today.slice(0, 8) + '01"></div>' +
+      '<div class="field"><label for="pvTo">Até</label><input type="date" id="pvTo" value="' + today + '"></div>' +
+      '<div class="field"><label for="pvSeller">Vendedor</label><select id="pvSeller"><option value="">Todos</option></select></div></div>' +
+      '<div class="fl-sum" id="pvCards"></div><div id="pvBody"></div></div>' +
+    '<div class="modal-foot"><span></span><div class="spacer"></div>' + (slCan("create") || slCan("edit") ? '<button class="btn ghost" id="pvMetas">Metas</button>' : '') +
+      '<button class="btn ghost" id="pvXls">Exportar Excel</button><button class="btn primary" id="pvOk">Fechar</button></div></div></div>';
+  var ov = document.getElementById("ovPv"), $ = function(id){ return document.getElementById(id); }, last = null;
+  function close(){ host.innerHTML = ""; }
+  function render(){
+    if (!$("pvBody")) return;
+    var from = $("pvFrom").value || today.slice(0, 8) + "01", to = $("pvTo").value || today;
+    if (from > to){ var x = from; from = to; to = x; }
+    var r = last = pvCompute(from, to, $("pvSeller").value);
+    r.from = from; r.to = to;
+    var card = function(lbl, val, cls){ return '<div class="fl-card' + (cls ? " " + cls : "") + '"><small>' + esc(lbl) + '</small><b>' + val + '</b></div>'; };
+    $("pvCards").innerHTML = card("Vendas", r.n + " · " + esc(fmtMoney(r.total))) + card("Ticket Médio", esc(fmtMoney(r.ticket))) +
+      card("Novas / Renovações / Aditivos", r.byTipo.nova.n + " / " + r.byTipo.renovacao.n + " / " + r.byTipo.aditivo.n) +
+      card("Canceladas", r.canc.length + " · " + esc(fmtMoney(r.cancTotal)), r.canc.length ? "fl-neg" : "") +
+      card("Conversão de Leads", r.conv == null ? "—" : String(r.conv).replace(".", ",") + "% (" + r.byTipo.nova.n + " de " + r.leads + ")") +
+      card("Parcelas Vencidas", r.overdue.length + " · " + esc(fmtMoney(r.overdueTotal)), r.overdue.length ? "fl-warn" : "");
+    var tbl = function(head, rows){ return '<div class="ln-scroll"><table class="pat-table ln-plan"><thead><tr>' + head.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+      (rows.length ? rows.map(function(c){ return '<tr>' + c.map(function(v){ return '<td>' + v + '</td>'; }).join("") + '</tr>'; }).join("") : '<tr><td colspan="' + head.length + '"><span class="hint">Nada no período.</span></td></tr>') + '</tbody></table></div>'; };
+    var goalYm = pvMonthOf(to), goals = (GOALS.rows || []).filter(function(g){ return g.ym === goalYm && (!$("pvSeller").value || !g.seller || g.seller === $("pvSeller").value); });
+    var goalRows = goals.map(function(g){
+      var l = (SALES.rows || []).filter(function(s){ return s.status !== "cancelada" && pvMonthOf(s.data) === g.ym && (!g.seller || s.seller === g.seller); });
+      var v = 0; l.forEach(function(s){ v += s.total; });
+      var pctV = g.valor > 0 ? Math.round(v / g.valor * 100) : null, pctQ = g.qtd > 0 ? Math.round(l.length / g.qtd * 100) : null;
+      return [esc(g.seller ? fpStaffName(g.seller) : "Equipe toda"), esc(pvMonthLabel(g.ym)),
+        g.valor > 0 ? esc(fmtMoney(v)) + " de " + esc(fmtMoney(g.valor)) + " (<b>" + pctV + "%</b>)" : "—", g.qtd > 0 ? l.length + " de " + g.qtd + " (<b>" + pctQ + "%</b>)" : "—"];
+    });
+    $("pvBody").innerHTML =
+      '<div class="tr-sec tr-sec-top">Por Vendedor</div>' + tbl(["Vendedor", "Vendas", "Total", "Ticket Médio", "Comissão Gerada"], r.sellers.map(function(o){ return [esc(o.name), String(o.n), esc(fmtMoney(o.total)), esc(fmtMoney(o.n ? o.total / o.n : 0)), esc(fmtMoney(o.com))]; })) +
+      '<div class="tr-sec">Por Tipo de Venda</div>' + tbl(["Tipo", "Vendas", "Total"], Object.keys(SALE_TIPOS).map(function(k){ return [esc(SALE_TIPOS[k]), String(r.byTipo[k].n), esc(fmtMoney(r.byTipo[k].total))]; })) +
+      '<div class="tr-sec">Mês a Mês</div>' + tbl(["Mês", "Vendas", "Total"], r.months.map(function(m){ return [esc(pvMonthLabel(m.ym)), String(m.n), esc(fmtMoney(m.total))]; })) +
+      '<div class="tr-sec">Metas de ' + esc(pvMonthLabel(goalYm)) + '</div>' + tbl(["Meta de", "Mês", "Valor", "Vendas"], goalRows) +
+      '<div class="tr-sec">Parcelas Vencidas</div>' + tbl(["Paciente", "Parcela", "Vencimento", "Dias", "Valor"], r.overdue.slice().sort(function(a, b){ return a.venc < b.venc ? -1 : 1; }).map(function(x){
+        var s = (SALES.rows || []).filter(function(y){ return y.id === x.sale; })[0] || {}, p = rawPatient(s.patient) || {};
+        return [esc(p.nome || "—"), esc(fpLabel(x)), esc(trBr(x.venc)), String(fpDays(trTodayIso(), x.venc)), esc(fmtMoney(x.valor))]; }));
+  }
+  Promise.all([slLoad(), fpLoad(), comLoad(), goalLoad(), crmLoad()]).then(function(){
+    var sel = $("pvSeller"); if (!sel) return;
+    var seen = {}; (SALES.rows || []).forEach(function(s){ if (s.seller) seen[s.seller] = s.sellerName || fpStaffName(s.seller); });
+    Object.keys(seen).sort(function(a, b){ return normText(seen[a]) < normText(seen[b]) ? -1 : 1; }).forEach(function(id){ sel.insertAdjacentHTML("beforeend", '<option value="' + esc(id) + '">' + esc(seen[id]) + '</option>'); });
+    render();
+  });
+  ["pvFrom", "pvTo", "pvSeller"].forEach(function(id){ $(id).addEventListener("change", render); });
+  $("pvClose").addEventListener("click", close); $("pvOk").addEventListener("click", close);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  if ($("pvMetas")) $("pvMetas").addEventListener("click", function(){ openMetasVendas(function(){ openPainelVendas(); }); });
+  $("pvXls").addEventListener("click", function(){
+    if (!last) return;
+    var r = last;
+    xlDownload("painel-de-vendas-" + r.from + "-a-" + r.to + ".xlsx", [
+      {name: "Resumo", rows: [["Período", trBr(r.from) + " a " + trBr(r.to)], ["Vendas", r.n], ["Total", r.total], ["Ticket Médio", r.ticket], ["Canceladas", r.canc.length], ["Valor Cancelado", r.cancTotal],
+        ["Leads no Período", r.leads == null ? "" : r.leads], ["Conversão (%)", r.conv == null ? "" : r.conv], ["Parcelas Vencidas", r.overdue.length], ["Valor Vencido", r.overdueTotal]], widths: [26, 24]},
+      {name: "Por Vendedor", rows: [["Vendedor", "Vendas", "Total", "Ticket Médio", "Comissão Gerada"]].concat(r.sellers.map(function(o){ return [o.name, o.n, o.total, o.n ? Math.round(o.total / o.n * 100) / 100 : 0, o.com]; })), widths: [30, 10, 14, 14, 16]},
+      {name: "Mês a Mês", rows: [["Mês", "Vendas", "Total"]].concat(r.months.map(function(m){ return [m.ym, m.n, m.total]; })), widths: [12, 10, 14]},
+      {name: "Vendas", rows: [["Data", "Paciente", "Tipo", "Vendedor", "Valor Mensal", "Meses", "Total", "Forma", "Situação"]].concat(r.valid.concat(r.canc).sort(function(a, b){ return a.data < b.data ? -1 : 1; }).map(function(s){
+        var p = rawPatient(s.patient) || {}; return [trBr(s.data), p.nome || "", SALE_TIPOS[s.tipo] || s.tipo, s.sellerName || "", s.valorMensal, s.meses, s.total, s.forma || "", SALE_STATUS[s.status] || s.status]; })), widths: [12, 30, 12, 24, 14, 8, 14, 18, 14]}
+    ]);
+  });
+}
+// Metas por vendedor (ou da equipe toda) e mês.
+function openMetasVendas(back){
+  var host = regQuickHost(), canEdit = slCan("edit") || slCan("create"), today = trTodayIso();
+  var months = []; for (var i = -2; i <= 9; i++){ var d = agdParse(today); months.push(agdIso(new Date(d.getFullYear(), d.getMonth() + i, 1)).slice(0, 7)); }
+  host.innerHTML = '<div class="overlay" id="ovMetas"><div class="modal" style="max-width:760px">' +
+    '<div class="modal-head"><div><h3>Metas de Vendas</h3><div class="modal-sub">Meta de valor e de quantidade por mês, para a equipe toda ou para um vendedor. O progresso aparece no Painel de Vendas.</div></div>' +
+    '<button class="modal-close" id="mtClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body">' + (canEdit ? '<div class="tr-sec tr-sec-top">Nova Meta</div><div class="field-row">' +
+      '<div class="field"><label for="mtSeller">Vendedor</label><select id="mtSeller"><option value="">Equipe toda</option>' + fpStaffList().map(function(s){ return '<option value="' + esc(s.id) + '">' + esc(s.nome) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field"><label for="mtYm">Mês</label><select id="mtYm">' + months.map(function(m){ return '<option value="' + m + '"' + (m === today.slice(0, 7) ? ' selected' : '') + '>' + esc(pvMonthLabel(m)) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="field-row"><div class="field"><label for="mtValor">Meta de Valor (R$)</label><input type="text" id="mtValor" data-money inputmode="decimal"></div>' +
+      '<div class="field"><label for="mtQtd">Meta de Vendas (Quantidade)</label><input type="text" id="mtQtd" inputmode="numeric"></div></div>' : '') +
+      '<div class="tr-sec">Metas Cadastradas</div><div id="mtHost"></div></div>' +
+    '<div class="modal-foot"><span></span><div class="spacer"></div>' + (canEdit ? '<button class="btn ghost" id="mtAdd">+ Incluir</button>' : '') + '<button class="btn primary" id="mtOk">Fechar</button></div></div></div>';
+  var ov = document.getElementById("ovMetas"), $ = function(id){ return document.getElementById(id); };
+  function close(){ host.innerHTML = ""; if (back) back(); }
+  function render(){
+    var list = (GOALS.rows || []).slice().sort(function(a, b){ return a.ym < b.ym ? 1 : -1; });
+    $("mtHost").innerHTML = list.length ? '<div class="ln-scroll"><table class="pat-table ln-plan"><thead><tr><th>Mês</th><th>Meta de</th><th>Valor</th><th>Vendas</th><th></th></tr></thead><tbody>' +
+      list.map(function(g){ return '<tr><td>' + esc(pvMonthLabel(g.ym)) + '</td><td>' + esc(g.seller ? fpStaffName(g.seller) : "Equipe toda") + '</td><td>' + (g.valor ? esc(fmtMoney(g.valor)) : "—") + '</td><td>' + (g.qtd || "—") + '</td><td>' +
+        (slCan("delete") ? '<button class="btn ghost" data-mt-del="' + esc(g.id) + '">Excluir</button>' : '') + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="hint">Nenhuma meta cadastrada.</div>';
+    $("mtHost").querySelectorAll("[data-mt-del]").forEach(function(b){ b.addEventListener("click", function(){ goalDelete(b.getAttribute("data-mt-del")).then(render); }); });
+  }
+  goalLoad().then(render);
+  $("mtClose").addEventListener("click", close); $("mtOk").addEventListener("click", close);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  if ($("mtAdd")) $("mtAdd").addEventListener("click", function(){
+    var valor = parseMoney($("mtValor").value), qtd = parseInt($("mtQtd").value, 10) || 0;
+    if (!(valor > 0) && !(qtd > 0)){ showToast("Informe a meta de valor ou de quantidade.", true); return; }
+    var seller = $("mtSeller").value, ym = $("mtYm").value;
+    var ex = (GOALS.rows || []).filter(function(g){ return g.ym === ym && g.seller === seller; })[0];
+    goalSave({id: ex ? ex.id : "", seller: seller, ym: ym, valor: valor > 0 ? valor : 0, qtd: qtd}).then(function(ok){ if (ok){ $("mtValor").value = ""; $("mtQtd").value = ""; render(); } });
+  });
+}
+
+// ----- Contrato do tratamento -----
+function patAddrText(e){
+  if (!e || typeof e !== "object") return String(e || "");
+  return [e.rua && (e.rua + (e.numero ? ", " + e.numero : "")), e.compl, e.bairro, e.cidade && (e.cidade + (e.uf ? "/" + e.uf : "")), e.cep].filter(Boolean).join(", ");
+}
+function contractVendaParcelasHtml(sale){
+  var parcs = (FP.rows || []).filter(function(x){ return x.sale === sale.id; }).sort(function(a, b){ return a.venc < b.venc ? -1 : 1; });
+  if (!parcs.length) return "<p>Sem parcelas geradas.</p>";
+  return '<table class="ct-tab"><thead><tr><th>Nº</th><th>Vencimento</th><th>Valor</th></tr></thead><tbody>' + parcs.map(function(x, i){
+    return '<tr><td>' + (i + 1) + '</td><td>' + esc(trBr(x.venc)) + '</td><td>' + esc(fmtMoney(x.valor)) + '</td></tr>'; }).join("") + '</tbody></table>';
+}
+function contractContextSale(sale){
+  var out = {}, base = contractContext(null, true);
+  Object.keys(base).forEach(function(k){ out[k] = ""; });
+  var cl = state.clinic || {}, p = rawPatient(sale.patient) || {}, n = patNormalize(p), t = state.treatments.filter(function(x){ return x.id === sale.treatment; })[0] || {};
+  var resp = n.financeiro && n.financeiro.nome ? {nome: n.financeiro.nome, doc: n.financeiro.doc, tel: n.financeiro.telefone, end: n.financeiro.endereco}
+    : n.mae && n.mae.nome ? {nome: n.mae.nome, doc: n.mae.cpf, tel: patFirstPhone(p), end: n.endereco} : n.pai && n.pai.nome ? {nome: n.pai.nome, doc: n.pai.cpf, tel: patFirstPhone(p), end: n.endereco} : {};
+  var specs = []; treatLines(t.specHours || []).forEach(function(l){ var nm = specialtyName(l.specId); if (nm && specs.indexOf(nm) === -1) specs.push(nm); });
+  var age = patientAgeYears(p), parcs = (FP.rows || []).filter(function(x){ return x.sale === sale.id; });
+  Object.assign(out, {clinica_nome: clinicName(), clinica_cnpj: cl.cnpj || "", clinica_endereco: cl.endereco || "", clinica_cidade: cl.cidade || "", clinica_telefone: cl.telefone || "",
+    data_hoje: trBr(trTodayIso()), data_hoje_extenso: contractTodayExtenso(),
+    paciente_nome: p.nome || "", paciente_cpf: p.cpf ? formatCpf(p.cpf) : "", paciente_nascimento: p.nascimento ? trBr(p.nascimento) : "", paciente_idade: age == null ? "" : age + (age === 1 ? " ano" : " anos"),
+    paciente_endereco: patAddrText(n.endereco),
+    responsavel_nome: resp.nome || "", responsavel_cpf: resp.doc ? formatCpf(resp.doc) : "", responsavel_telefone: resp.tel ? formatPhone(resp.tel) : "", responsavel_endereco: patAddrText(resp.end),
+    tratamento_inicio: t.inicio ? trBr(t.inicio) : "", tratamento_termino: t.termino ? trBr(t.termino) : (t.validoAte ? trBr(t.validoAte) : ""), tratamento_valor: fmtMoney(sale.valorMensal),
+    tratamento_valor_extenso: numExtenso(sale.valorMensal), tratamento_sessoes_mes: String(t.sessoesMes == null ? "" : t.sessoesMes).replace(".", ","), tratamento_convenio: t.convenio || "Particular",
+    tratamento_plano: t.plano || "", tratamento_especialidades: specs.join(", "), tratamento_validade: t.validoAte ? trBr(t.validoAte) : "",
+    venda_tipo: SALE_TIPOS[sale.tipo] || sale.tipo, venda_data: trBr(sale.data), venda_vendedor: sale.sellerName || "", venda_valor_mensal: fmtMoney(sale.valorMensal), venda_meses: String(sale.meses),
+    venda_total: fmtMoney(sale.total), venda_total_extenso: numExtenso(sale.total), venda_forma: sale.forma || "", venda_parcelas: String(parcs.length),
+    tabela_parcelas_venda: contractVendaParcelasHtml(sale)});
+  return out;
+}
+function slContratoDialog(sale){
+  var tps = contractsFor("tratamento");
+  if (!tps.length){ showToast("Não há modelo de contrato do tipo Tratamento. Cadastre um em Acesso → Contratos.", true); return; }
+  var p = rawPatient(sale.patient) || {}, host = regQuickHost();
+  host.innerHTML = '<div class="overlay" id="ovCtVenda"><div class="modal" style="max-width:860px">' +
+    '<div class="modal-head"><div><h3>Contrato do Tratamento</h3><div class="modal-sub">' + esc(p.nome || "") + ' · ' + esc(SALE_TIPOS[sale.tipo] || sale.tipo) + ' · ' + esc(fmtMoney(sale.total)) + '</div></div>' +
+    '<button class="modal-close" id="cvClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="tr-sec tr-sec-top">Modelo</div>' +
+    '<div class="field"><label for="cvModelo">Modelo do Contrato</label><select id="cvModelo">' + tps.map(function(c){ return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>'; }).join("") + '</select></div>' +
+    '<div class="tr-sec">Pré-Visualização</div><div class="pr-content ct-prev" id="cvPrev"></div></div>' +
+    '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="cvCancel">Fechar</button><button class="btn primary" id="cvPrint">Imprimir / PDF</button></div></div></div>';
+  var ov = document.getElementById("ovCtVenda"), ctx = contractContextSale(sale), cur = "";
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("cvClose").addEventListener("click", close);
+  document.getElementById("cvCancel").addEventListener("click", close);
+  function draw(){
+    var c = tps.filter(function(x){ return x.id === document.getElementById("cvModelo").value; })[0] || tps[0], r = contractRender(c.content, ctx);
+    cur = r.html;
+    document.getElementById("cvPrev").innerHTML = prSanitize(r.html) + (r.unknown.length ? '<p class="field-hint">Variáveis que o sistema não conhece (ficam no texto): ' + esc(r.unknown.map(function(k){ return "{{" + k + "}}"; }).join(", ")) + '</p>' : "");
+  }
+  document.getElementById("cvModelo").addEventListener("change", draw); draw();
+  document.getElementById("cvPrint").addEventListener("click", function(){ contractPrint(cur, "Contrato — " + (ctx.paciente_nome || "Tratamento")); });
 }
 
 // "Mostrar inativos" nas telas de cadastro (ver setupInactivate).
@@ -24527,6 +24793,23 @@ var HELP_TOPICS = [
       "Não aparece no celular: use a tela Agenda."
     ],
     who: "Permissão <b>Agenda</b> (ver para consultar; incluir, editar e excluir para marcar, mover/trocar e excluir). Quem só vê a própria agenda enxerga apenas os atendimentos dele."},
+  {id: "painel-vendas", group: "Financeiro", title: "Painel de Vendas", mod: "vendas",
+    purpose: "Acompanhar as vendas dos tratamentos por período: valor, ticket médio, vendedores, metas, cancelamentos, conversão de leads e parcelas vencidas.",
+    steps: [
+      "Abra <b>Financeiro ▾ → Painel de Vendas</b>. Escolha o período (De e Até) e, se quiser, um vendedor.",
+      "Os cartões do alto mostram vendas e total, ticket médio, quantas foram Novas, Renovações e Aditivos, as canceladas, a conversão de leads e as parcelas vencidas.",
+      "Abaixo ficam as tabelas por vendedor (com a comissão gerada), por tipo de venda, mês a mês, as metas do mês e a lista de parcelas vencidas.",
+      "<b>Metas</b> cadastra a meta de valor e/ou de quantidade de vendas por mês, da equipe toda ou de um vendedor; o painel mostra quanto já foi atingido.",
+      "<b>Exportar Excel</b> baixa o resumo, os vendedores, os meses e a lista de vendas do período."
+    ],
+    rules: [
+      "Venda cancelada não entra no total nem no ticket médio; aparece nos cartões de canceladas.",
+      "Conversão de leads = vendas Novas do período ÷ leads criados no período nas listas do CRM com funil de contatos.",
+      "Parcela vencida é a conta a receber da venda que passou do vencimento sem ser recebida.",
+      "O contrato do tratamento sai do botão <b>Contrato</b> ao lado de cada venda, no grupo <b>Vendas</b> da janela do tratamento, usando um modelo do tipo Tratamento (Acesso → Contratos).",
+      "O limite de <b>Desconto Máximo na Venda</b> fica no cadastro da Clínica: acima dele só quem tem Vendas (editar) salva o tratamento, e confirma a aprovação."
+    ],
+    who: "Permissão Vendas."},
   {id: "comissoes", group: "Financeiro", title: "Comissões de Venda", mod: "comissoes",
     purpose: "Pagar o vendedor pelas vendas dos tratamentos: a comissão nasce no 1º atendimento finalizado do tratamento e vira conta a pagar do vendedor.",
     steps: [
@@ -25175,6 +25458,7 @@ var BACKUP_TABLES = [
   {name: "treatment_sales", order: "id", label: "Vendas dos Tratamentos", restore: true, optional: true},
   {name: "commission_rules", order: "id", label: "Regras de Comissão", restore: true, optional: true},
   {name: "sale_commissions", order: "id", label: "Comissões de Venda", restore: true, optional: true},
+  {name: "sale_goals", order: "id", label: "Metas de Vendas", restore: true, optional: true},
   {name: "finance_loans", order: "id", label: "Empréstimos", restore: true, optional: true},
   {name: "finance_payables", order: "id", label: "Contas a Pagar e a Receber", restore: true, optional: true},
   {name: "staff", order: "id", label: "Colaboradores", restore: true, optional: true},
@@ -26130,6 +26414,7 @@ var FIN_ITEMS = [
   {key: "empconcedidos", label: "Empréstimos Concedidos", tab: "empconcedidos", ok: function(){ return can("financeiro", "view"); }},
   {key: "conciliacao", label: "Conciliação", tab: "conciliacao", ok: function(){ return can("financeiro", "view"); }},
   {key: "demonstrativos", label: "Demonstrativos", tab: "demonstrativos", ok: function(){ return can("financeiro", "view"); }},
+  {key: "painelvendas", label: "Painel de Vendas", ok: function(){ return can("vendas", "view"); }, open: function(){ openPainelVendas(); }},
   {key: "comissoes", label: "Comissões", ok: function(){ return can("comissoes", "view"); }, open: function(){ openComissoes(); }},
   // Cadastros que envolvem o financeiro
   {sep: true, key: "fornecedores", label: "Fornecedores", tab: "fornecedores", ok: function(){ return can("fornecedores", "view"); }},

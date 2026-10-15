@@ -47,7 +47,7 @@ const fs = require('fs');
     {id:'e2', acc:'viacredi', date:'2026-10-07', desc:'Repasse convênio X', plan:'conv', valor:2000.5, extDate:'', extVal:null, obs:'', key:'', pay:''},
     {id:'e3', acc:'viacredi', date:'2026-10-20', desc:'Lançamento sem extrato', plan:'alu', valor:99, extDate:'', extVal:null, obs:'', key:'', pay:''}]; CN.rows = []; CN.acc = 'viacredi'`);
   await page.click('#finBtn');
-  check('Financeiro menu tem Conciliação depois de Empréstimos Concedidos?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,conciliacao,demonstrativos,comissoes,fornecedores,catfornecedor,contas,planocontas');
+  check('Financeiro menu tem Conciliação depois de Empréstimos Concedidos?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,conciliacao,demonstrativos,painelvendas,comissoes,fornecedores,catfornecedor,contas,planocontas');
   await page.click('#finMenu [data-nav="conciliacao"]'); await page.waitForTimeout(300);
   check('tela abre com título e hash?', /Conciliação/.test(await page.$eval('#tab-conciliacao .cad-title', (e) => e.textContent)) && (await page.evaluate(() => location.hash)) === '#conciliacao');
   check('sem extrato: estado vazio?', /Nenhum extrato importado/.test(await page.textContent('#reg-conciliacao-host')));

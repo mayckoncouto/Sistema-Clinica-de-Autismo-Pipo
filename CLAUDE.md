@@ -4576,3 +4576,18 @@ Decisão do usuário: a comissão nasce no **primeiro atendimento FINALIZADO do 
   Situação mostrada = Estornada, Paga (conta com lançamento) ou A Pagar (`comStatusText`).
 - Sem o sistema online (testes) as comissões só funcionam com `window.__pipoSales = true`. Teste `tests/run_comissoes.js` (no `npm test`). Ajuda: tópico `comissoes`.
 - Próximas: 6) Painel de Vendas (relatório), 7) extras (contrato automático, inadimplência, metas, aprovação de desconto).
+
+## Painel de Vendas, metas, contrato do tratamento, inadimplência e desconto máximo (2026-10-15, etapas 6 e 7)
+Pedido do usuário ("Faça tudo"). Permissão `vendas` em tudo (Financeiro ▾ → **Painel de Vendas**, item com `open`, sem aba).
+- **Painel** (`openPainelVendas`, `pvCompute(from, to, seller)`): período + vendedor; cartões (vendas e total, ticket médio, novas/renovações/aditivos, canceladas, conversão de leads, parcelas vencidas);
+  tabelas por vendedor (com comissão gerada), tipo, mês, metas do mês e parcelas vencidas; Exportar Excel (`xlDownload`). Venda cancelada não entra no total. Conversão = vendas Novas ÷ leads criados no
+  período em listas do CRM com `lead` (`CRM.tasks`, só quando o CRM já carregou).
+- **Metas**: tabela `sale_goals` (seller_id nulo = equipe, ym, valor, qtd; único por unidade+vendedor+mês), `GOALS`, `goalLoad/goalSave/goalDelete`, janela `openMetasVendas`. Migração
+  `supabase/2026-10-15c-metas-de-vendas.sql` (rodada em produção em partes; linha 131 da conferência; `schema.sql` atualizado). Backup inclui.
+- **Inadimplência**: `pvOverdue(saleIds)` = contas a receber da venda (`sale_id`) não recebidas e vencidas; aparece no painel e como “N vencida(s)” na lista Vendas do tratamento.
+- **Contrato do tratamento**: botão **Contrato** em cada venda do grupo Vendas → `slContratoDialog(sale)` (modelos do tipo Tratamento/Geral de Acesso → Contratos), `contractContextSale(sale)` (paciente,
+  responsável financeiro/mãe/pai, tratamento, venda) e variáveis do grupo `venda` (`CV.venda`, incluída em `CONTRACT_VARS_BY.tratamento`; `tabela_parcelas_venda` é HTML como `tabela_parcelas`).
+- **Desconto máximo na venda**: campo `descontoMax` (%) no cadastro da Clínica (`clinicDescMax()`); ao salvar tratamento com desconto acima, quem NÃO tem Vendas (editar) é barrado e quem tem confirma
+  “Desconto Acima do Limite” (aprovação). Vazio = sem limite.
+- Teste `tests/run_painel_vendas.js` (no `npm test`). Ajuda: tópico `painel-vendas`.
+- NÃO feito: aviso automático ao agendar paciente inadimplente e automação do CRM de cobrança (ideias para depois).
