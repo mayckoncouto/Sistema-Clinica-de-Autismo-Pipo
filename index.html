@@ -23311,8 +23311,10 @@ function openTreatmentModal(t, opts){
           showToast("Tratamento salvo.");
           // Venda (2026-10-15): tratamento novo ou alterado vira venda; cancelado pergunta das parcelas.
           var vMes = canEditVal ? newVal : money.valor, vDesc = canEditVal ? newDesp : money.descontos;
-          var salePromise = slOnTreatmentSaved({t: t, rec: rec, isNew: isNew, opts: opts, st: st, others: others,
-            oldKey: isNew ? "" : slKey(t, money), newKey: slKey(rec, {valor: vMes, descontos: vDesc}), valorFinal: Math.round((vMes - vDesc) * 100) / 100});
+          var rgPrev = isNew && opts && opts.renegotiateFrom ? (state.treatments || []).filter(function(x){ return x.id === opts.renegotiateFrom; })[0] : null;
+          var salePromise = slOnTreatmentSaved({t: t, rec: rec, isNew: isNew, opts: opts, st: st, others: others, reneg: !!rgPrev,
+            oldKey: rgPrev ? slKeyQty(rgPrev, trMoney(rgPrev)) : (isNew ? "" : slKey(t, money)),
+            newKey: rgPrev ? slKeyQty(rec, {valor: vMes, descontos: vDesc}) : slKey(rec, {valor: vMes, descontos: vDesc}), valorFinal: Math.round((vMes - vDesc) * 100) / 100});
           var after = function(){
             // Cancelou ou renegociou (este ou o ativo anterior): pergunta se remove os agendamentos.
             var cancelNow = st === "cancelado" && (isNew || t.status !== "cancelado");
@@ -23437,7 +23439,8 @@ function trReactivatePatient(patId){
  * Parcelas opcionais viram contas a receber (`finance_payables.sale_id`). Permissão própria `vendas`.
  * Ao cancelar o tratamento (regra do Sistema `tr_cancel_pendencias`): pergunta das parcelas e, depois, das sessões. */
 var SALES = {rows: null, loading: null};
-var SALE_TIPOS = {nova: "Nova", renovacao: "Renovação", aditivo: "Aditivo"};
+var SALE_TIPOS = {nova: "Nova", renovacao: "Renovação", aditivo: "Aditivo"};   // "renovacao" só existe nas vendas antigas
+var SALE_TIPOS_NEW = {nova: "Nova", aditivo: "Aditivo"};   // o que dá para escolher ao registrar uma venda
 var SALE_STATUS = {ativa: "Ativa", substituida: "Substituída", cancelada: "Cancelada"};
 var SALE_FORMAS = ["PIX", "Cartão de Crédito", "Cartão de Débito", "Boleto", "Dinheiro", "Transferência", "Convênio"];
 function slCan(a){ return can("vendas", a); }
@@ -23494,6 +23497,8 @@ function slPatch(ids, patch){
 function slParcels(saleIds){ return (FP.rows || []).filter(function(x){ return x.sale && saleIds.indexOf(x.sale) !== -1; }); }
 function slSum(list){ var t = 0; list.forEach(function(x){ t += x.valor; }); return Math.round(t * 100) / 100; }
 // O que muda de "comercial" no tratamento: valor, descontos, Sessão/Mês, soma dos quadros, convênio e vencimento.
+// Renegociar sem mexer em valores nem em quantidade de sessões não é venda: compara só isto.
+function slKeyQty(t, money){ return [money.valor, money.descontos, t.sessoesMes, trLinesSum(t.specHours || [])].join("|"); }
 function slKey(t, money){
   return [money.valor, money.descontos, t.sessoesMes, trLinesSum(t.specHours || []), t.convenioId || t.convenio || "", t.vencPor || "", t.duracaoMeses || "", t.totalSessoes || "", t.validoAte || ""].join("|");
 }
@@ -23523,7 +23528,7 @@ function slOnTreatmentSaved(ctx){
     return slCancelFlow(ctx.rec);
   }
   if (!slCan("create") || ctx.st !== "ativo") return null;
-  if (!ctx.isNew && ctx.oldKey === ctx.newKey) return null;
+  if ((!ctx.isNew || ctx.reneg) && ctx.oldKey === ctx.newKey) return null;
   return slLoad().then(function(){ return fpLoad(); }).then(function(){ return slSaleDialog(ctx); });
 }
 function slSaleDialog(ctx){
@@ -23534,7 +23539,7 @@ function slSaleDialog(ctx){
     var prevSales = (SALES.rows || []).filter(function(s){ return prevTr.indexOf(s.treatment) !== -1 && s.status === "ativa"; });
     var prev = prevSales.slice().sort(function(a, b){ return String(b.data).localeCompare(String(a.data)); })[0];
     var prevOpen = slParcels(prevSales.map(function(s){ return s.id; })).filter(function(x){ return !fpDone(x); });
-    var tipo = ctx.isNew ? (ctx.opts && ctx.opts.renegotiateFrom ? "renovacao" : "nova") : "aditivo";
+    var tipo = ctx.isNew && !ctx.reneg ? "nova" : "aditivo";
     var meses = prev ? prev.meses : (rec.duracaoMeses > 0 ? rec.duracaoMeses : 1);
     var valor = ctx.valorFinal;
     var staff = fpStaffList();
@@ -23547,7 +23552,7 @@ function slSaleDialog(ctx){
       '<div class="modal-body">' +
         '<div class="tr-sec tr-sec-top">Venda</div>' +
         '<div class="field-row"><div class="field"><label for="slTipo">Tipo da Venda</label><select id="slTipo">' +
-          Object.keys(SALE_TIPOS).map(function(k){ return '<option value="' + k + '"' + (k === tipo ? ' selected' : '') + '>' + SALE_TIPOS[k] + '</option>'; }).join("") + '</select></div>' +
+          Object.keys(SALE_TIPOS_NEW).map(function(k){ return '<option value="' + k + '"' + (k === tipo ? ' selected' : '') + '>' + SALE_TIPOS_NEW[k] + '</option>'; }).join("") + '</select></div>' +
         '<div class="field"><label for="slData">Data da Venda</label><input type="date" id="slData" value="' + trTodayIso() + '"></div></div>' +
         '<div class="field-row"><div class="field"><label for="slSeller">Vendedor</label><select id="slSeller"><option value="">Sem vendedor</option>' +
           staff.map(function(s){ return '<option value="' + esc(s.id) + '"' + (prev && prev.seller === s.id ? ' selected' : '') + '>' + esc(s.nome) + '</option>'; }).join("") + '</select></div>' +
@@ -24923,7 +24928,7 @@ var HELP_TOPICS = [
     ],
     rules: [
       "Vale a regra mais específica: vendedor + tipo, depois vendedor, depois tipo, depois Todas. Regra inativa não vale.",
-      "Aditivo comissiona só a diferença para a venda que ele substituiu; Nova e Renovação, o total da venda.",
+      "Aditivo comissiona só a diferença para a venda que ele substituiu; Nova, o total da venda.",
       "Cada venda tem no máximo uma comissão; apurar de novo não duplica.",
       "Sem vendedor na venda ou sem regra que sirva, nenhuma comissão é gerada (a janela avisa o motivo)."
     ],
@@ -24931,7 +24936,7 @@ var HELP_TOPICS = [
   {id: "vendas", group: "Cadastros", title: "Vendas do Tratamento", mod: "vendas", tab: "tratamentos",
     purpose: "Cada tratamento novo e cada alteração comercial dele (valor, Sessão/Mês, especialidades, convênio ou vencimento) é uma venda, com vendedor e, se quiser, parcelas no Contas a Receber.",
     steps: [
-      "Ao salvar um tratamento novo ou alterado, abre <b>Registrar Venda</b>. O tipo vem sozinho: <b>Nova</b>, <b>Renovação</b> (ao renegociar) ou <b>Aditivo</b> (alteração no meio do contrato). <b>Agora Não</b> fecha sem registrar.",
+      "Ao salvar um tratamento novo ou alterado, abre <b>Registrar Venda</b>. O tipo vem sozinho: <b>Nova</b> ou <b>Aditivo</b> (alteração de valores ou de sessões, inclusive ao renegociar). Renegociar apenas para renovar, sem mudar valores nem a quantidade de sessões, não gera venda. <b>Agora Não</b> fecha sem registrar.",
       "Informe a data, o vendedor, a forma de pagamento, o <b>valor mensal</b> e os <b>meses</b>; o total é calculado.",
       "Marque <b>Gerar parcelas no Contas a Receber</b> para criar as contas: entrada (opcional), número de parcelas, primeiro vencimento, intervalo em meses, conta bancária e subcategoria. A prévia mostra cada parcela antes de salvar.",
       "Na venda seguinte do mesmo tratamento, a anterior fica <b>Substituída</b>; se havia parcelas em aberto dela, você escolhe manter ou excluir.",
