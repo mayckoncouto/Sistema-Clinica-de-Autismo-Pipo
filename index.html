@@ -22194,8 +22194,45 @@ function trLabel(list, id){ var x = list.filter(function(i){ return i.id === id;
 function trTodayIso(){ var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function trBr(iso){ return iso ? String(iso).slice(8, 10) + "/" + String(iso).slice(5, 7) + "/" + String(iso).slice(0, 4) : "—"; }
 // Valores em reais: aceita "1.234,56", "1234.56" ou número.
+// Conta digitada no campo de dinheiro: "=1500-200", "= 3 x 450,50", "=(100+50)/2". Sem eval: leitor próprio
+// de números e + - * x / ( ). Devolve o número ou null se a conta não fecha.
+function calcMoneyExpr(txt){
+  var src = String(txt || "").replace(/^\s*=/, "").replace(/R\$/g, "").replace(/[xX×]/g, "*").replace(/÷/g, "/").replace(/\s+/g, "");
+  if (!src) return null;
+  var pos = 0;
+  function num(){
+    var m = /^[\d.,]+/.exec(src.slice(pos));
+    if (!m) throw 0;
+    pos += m[0].length;
+    var t = m[0];
+    t = t.indexOf(",") !== -1 ? t.replace(/\./g, "").replace(",", ".") : t;
+    var n = parseFloat(t); if (!isFinite(n)) throw 0; return n;
+  }
+  function atom(){
+    if (src[pos] === "-"){ pos++; return -atom(); }
+    if (src[pos] === "+"){ pos++; return atom(); }
+    if (src[pos] === "("){ pos++; var v = expr(); if (src[pos] !== ")") throw 0; pos++; return v; }
+    return num();
+  }
+  function term(){
+    var v = atom();
+    while (src[pos] === "*" || src[pos] === "/"){
+      var op = src[pos++], r = atom();
+      if (op === "/"){ if (r === 0) throw 0; v = v / r; } else v = v * r;
+    }
+    return v;
+  }
+  function expr(){
+    var v = term();
+    while (src[pos] === "+" || src[pos] === "-"){ var op = src[pos++], r = term(); v = op === "+" ? v + r : v - r; }
+    return v;
+  }
+  try { var out = expr(); if (pos !== src.length || !isFinite(out)) return null; return Math.round(out * 100) / 100; }
+  catch (e){ return null; }
+}
 function parseMoney(v){
   if (typeof v === "number") return isFinite(v) ? v : 0;
+  if (typeof v === "string" && /^\s*=/.test(v)){ var c = calcMoneyExpr(v); return c == null ? 0 : c; }
   var t = String(v || "").replace(/[^\d,.-]/g, "");
   if (!t) return 0;
   if (t.indexOf(",") !== -1) t = t.replace(/\./g, "").replace(",", ".");
@@ -22205,6 +22242,7 @@ function parseMoney(v){
 document.addEventListener("focusout", function(e){
   var t = e.target;
   if (!t || !t.hasAttribute || !t.hasAttribute("data-money") || !String(t.value).trim()) return;
+  if (/^\s*=/.test(t.value) && calcMoneyExpr(t.value) == null){ if (typeof showToast === "function") showToast("Conta inválida. Use números e + - x /, por exemplo =1500-200."); t.value = ""; return; }
   var n = parseMoney(t.value);
   if (isFinite(n)) t.value = fmtMoney(n).replace("R$ ", "");
 });
@@ -23133,7 +23171,11 @@ function openTreatmentModal(t, opts){
       var el = document.getElementById(id);
       el.addEventListener("input", upFinal);
       // Ao sair do campo, mostra no formato R$ 1.234,56 (vazio continua vazio).
-      el.addEventListener("blur", function(){ if (String(el.value).trim()) el.value = fmtMoney(parseMoney(el.value)); });
+      el.addEventListener("blur", function(){
+        if (!String(el.value).trim()) return;
+        if (/^\s*=/.test(el.value) && calcMoneyExpr(el.value) == null){ showToast("Conta inválida. Use números e + - x /, por exemplo =1500-200."); el.value = ""; upFinal(); return; }
+        el.value = fmtMoney(parseMoney(el.value)); upFinal();
+      });
     });
   }
   // Vencimento: duração (meses) + início calculam o "Válido até" (que pode ser ajustado à mão).
@@ -24493,6 +24535,7 @@ var HELP_TOPICS = [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio e o plano do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "Valor, Descontos e Valor final ficam em <b>Convênio, pacote e horário</b>, logo depois de Convênio e Plano. Ao sair do campo, o valor aparece no formato R$ 1.234,56.",
+      "Nos campos de valor (no tratamento, Descontos, vendas, lançamentos e contas) dá para digitar uma conta começando com <b>=</b>, por exemplo <b>=1500-200</b>, <b>=3 x 450,50</b> ou <b>=(100+50)/2</b> (use + - x / e parênteses). Ao sair do campo, o resultado preenche o valor; se a conta estiver errada, o campo é limpo e aparece um aviso.",
       "Em <b>Especialidades e Serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). Em <b>Dia</b> dá para marcar mais de um dia da semana (Segunda e Quarta, por exemplo); sem nenhum marcado vale qualquer dia. <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>) e <b>Remover</b>, no próprio quadro, tira o quadro do tratamento na hora, valendo ao salvar (quadros travados por atendimentos realizados não saem).",
       "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de Início</b> (vazios = qualquer um), <b>Semanas</b> (Todas, 1ª e 3ª, 2ª e 4ª ou uma só) e <b>Sessões Seguidas</b> (1 ou 2). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
       "A mesma especialidade pode ter vários quadros: por exemplo, Psicologia com o Tiago no serviço Acolhimento familiar às quintas 08:00 e mais um quadro de Psicologia em Sessão com qualquer terapeuta.",
