@@ -13564,8 +13564,15 @@ function openPatientModal(p, opts){
   overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
   $("closePat").addEventListener("click", close);
   $("pCancel").addEventListener("click", close);
+  // Cartão do tratamento da janela acompanha o tratamento quando ele é salvo por cima desta janela.
+  window.__patTrRefresh = function(){
+    var box = overlay && overlay.querySelector(".pt-treat .trc");
+    if (!document.body.contains(overlay)){ window.__patTrRefresh = null; return; }
+    var cur = activeTreatment(v.id);
+    if (box && cur) box.innerHTML = treatCardHtml(cur);
+  };
   var ot = $("pOpenTreat");
-  if (ot) ot.addEventListener("click", function(){ openTreatmentModal(tr, {stack: true}); });
+  if (ot) ot.addEventListener("click", function(){ openTreatmentModal(activeTreatment(v.id) || tr, {stack: true}); });
   var nt = $("pNewTreat");
   if (nt) nt.addEventListener("click", function(){ openTreatmentModal(null, {patientId: v.id, stack: true}); });
 
@@ -22347,6 +22354,7 @@ function subscribeTreatments(){
   }, function(){ treatmentsLoaded = true; });
 }
 function afterTreatmentsChange(){
+  if (window.__patTrRefresh) window.__patTrRefresh();
   renderPatientsTab();
   queueGridUpdate();
   agdRenderIfVisible();
