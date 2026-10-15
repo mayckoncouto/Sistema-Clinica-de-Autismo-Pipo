@@ -12636,6 +12636,7 @@ var PAT_FIELDS = [
   {key: "protetiva", label: "Medida Protetiva", sec: "protetiva", type: "protetiva", hint: "pessoas que não podem retirar o paciente"},
   {key: "telefones", label: "Telefones", sec: "contato", type: "phones", hint: "pelo menos um"},
   {key: "emails", label: "E-mails", sec: "contato", type: "emails", hint: "pelo menos um"},
+  {key: "redeSocial", label: "Rede Social", sec: "contato", type: "line"},
   {key: "financeiro", label: "Responsável Financeiro", sec: "financeiro", type: "fin", fixed: true, hint: "nome e CPF/CNPJ"},
   // Convênio padrão do paciente: o tratamento novo já começa com ele (pode ser trocado no tratamento).
   // Chaves próprias (convenioPadrao…) para não se misturar com convênio/plano do tratamento.
@@ -13171,7 +13172,8 @@ function openPatientModal(p, opts){
       '<button type="button" class="btn ghost add-row-btn" id="protAdd">+ Incluir Pessoa Impedida</button>';
     else if (sec.id === "contato"){
       html = (patFieldCfg("telefones").show ? '<div class="pm-sub">Telefones' + reqMark("telefones") + '</div><div id="telHost" class="pm-list"></div><button type="button" class="btn ghost add-row-btn" id="telAdd">+ telefone</button>' : '') +
-        (patFieldCfg("emails").show ? '<div class="pm-sub">E-mails' + reqMark("emails") + '</div><div id="mailHost" class="pm-list"></div><button type="button" class="btn ghost add-row-btn" id="mailAdd">+ e-mail</button>' : '');
+        (patFieldCfg("emails").show ? '<div class="pm-sub">E-mails' + reqMark("emails") + '</div><div id="mailHost" class="pm-list"></div><button type="button" class="btn ghost add-row-btn" id="mailAdd">+ e-mail</button>' : '') +
+        (patFieldCfg("redeSocial").show ? '<div class="pm-grid"><div class="field pm-wide" data-pf="redeSocial">' + patFieldInputHtml(PAT_FIELDS.filter(function(f){ return f.key === "redeSocial"; })[0], v).replace('</label>', reqMark("redeSocial") + '</label>').replace('<input ', '<input placeholder="Ex.: @usuario no Instagram" ') + '</div></div>' : '');
     } else if (sec.id === "financeiro"){
       function fi(k, label, extra, btn, cls){
         var fv = k === "telefone" ? formatPhone(fin[k] || "") : (fin[k] || "");
@@ -13817,7 +13819,7 @@ function patientFichaHtml(p){
       return ["Responsáveis pela Retirada", row("Podem retirar", k.ret.map(function(r){ return r.nome + (r.rel ? " (" + r.rel + ")" : "") + (r.telefone ? " " + formatPhone(r.telefone) : "") + (r.doc ? " doc. " + r.doc : ""); }).join(", ")) +
         k.prot.concat(k.old).map(function(m){ return row("Medida Protetiva" + (protActive(m) ? "" : " (vencida)"), m.nome + (m.rel ? " (" + m.rel + ")" : "") + (m.ate ? " — até " + trBr(m.ate) : "") + (seeObs && m.obs ? " — " + m.obs : "")); }).join("")]; })(),
     ["Contato", (v.telefones || []).map(function(t){ return row("Telefone", formatPhone(t.numero) + (t.nome ? " — " + t.nome : "") + " (" + (t.via === "ligacao" ? "Ligação" : "WhatsApp") + ")"); }).join("") +
-      (v.emails || []).map(function(m){ return row("E-mail", m.email + (m.nome ? " — " + m.nome : "")); }).join("")],
+      (v.emails || []).map(function(m){ return row("E-mail", m.email + (m.nome ? " — " + m.nome : "")); }).join("") + row("Rede Social", v.redeSocial)],
     ["Responsável Financeiro", row("Nome", v.financeiro.nome) + row("CPF/CNPJ", v.financeiro.doc && v.financeiro.doc.length === 11 ? formatCpf(v.financeiro.doc) : v.financeiro.doc) +
       row("Telefone", v.financeiro.telefone ? formatPhone(v.financeiro.telefone) : "") + row("E-mail", v.financeiro.email) + row("Endereço", v.financeiro.endereco)],
     ["Convênio", row("Convênio", regName("convenios", v.convenioPadrao)) + row("Plano", v.planoPadrao) + row("Carteirinha", v.carteirinha) + row("Validade da Carteirinha", v.carteirinhaValidade ? trBr(v.carteirinhaValidade) : "")],
@@ -24285,7 +24287,7 @@ var HELP_TOPICS = [
       "Em <b>Filiação</b> ficam Mãe e Pai (nome, CPF e profissão). O botão <b>Responsável</b> ao lado do nome faz da mãe ou do pai o responsável financeiro: nome e CPF passam para o grupo Responsável financeiro e acompanham as correções enquanto o botão estiver marcado. Desmarcado, o responsável financeiro é digitado à parte.",
       "<b>Responsáveis pela Retirada</b>: a Mãe e o Pai vêm da <b>Filiação</b> — a caixa <b>Pode retirar o paciente</b>, ao lado de cada um, vem marcada; desmarque quando a pessoa não pode retirar. Em <b>+ Incluir outra pessoa</b> ficam só as outras pessoas (avó, tio, motorista…), com nome, parentesco, telefone e documento.",
       "<b>Medida Protetiva</b>: use <b>+ Incluir pessoa impedida</b> para quem NÃO pode retirar o paciente. Escolha <b>Mãe</b>, <b>Pai</b> (o nome vem da Filiação) ou <b>Outra pessoa</b> (nome e relação); depois a observação — ex.: nº do processo — e <b>Válida até</b>, opcional. Mãe ou Pai com medida ativa não aparecem como responsáveis pela retirada. Depois da data, a medida fica como vencida e para de avisar.",
-      "Em <b>Contato</b>, cadastre quantos telefones precisar, com o nome de quem atende e como fazer contato (<b>WhatsApp</b> ou <b>Ligação</b>), e os e-mails com o nome de quem é.",
+      "Em <b>Contato</b>, cadastre quantos telefones precisar, com o nome de quem atende e como fazer contato (<b>WhatsApp</b> ou <b>Ligação</b>), os e-mails com o nome de quem é e a <b>Rede Social</b> (por exemplo, o @ do Instagram).",
       "No <b>Responsável Financeiro</b>, os botões <b>Copiar Telefone</b> e <b>Copiar E-mail</b> trazem um dos contatos já cadastrados (com mais de um, escolha na lista); <b>Copiar Endereço</b> traz o endereço do paciente. Se o campo já tiver outro valor, o sistema pergunta antes de trocar.",
       "Diagnóstico, Médico, Escola e Como conheceu a clínica são escolhidos na lista do cadastro (digite para buscar). No fim da lista, <b>+ Incluir</b> cadastra um novo sem sair da janela (só para quem pode incluir naquele cadastro).",
       "O título de cada grupo mostra quantos campos obrigatórios ainda faltam (ex.: \"2 faltando\").",

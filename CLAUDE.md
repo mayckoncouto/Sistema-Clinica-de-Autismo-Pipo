@@ -4594,3 +4594,6 @@ Pedido do usuário ("Faça tudo"). Permissão `vendas` em tudo (Financeiro ▾ �
 
 ## Relatório Elegibilidade (2026-10-15)
 Relatórios → **Elegibilidade** (`RP_TYPES` id `elegibilidade`, `RP_BUILDERS.elegibilidade`; permissão `relatorios.elegibilidade` em `REPORTS` de `js/usuarios.js`): pacientes atendidos na Agenda no período (um registro por paciente, sem bloqueio/reunião/treinamento) com Paciente, Convênio, Plano e Carteirinha (convênio/plano do tratamento vigente na última data atendida; carteirinha do cadastro). Para ver um dia, De e Até iguais. Filtro de convênio. Sem SQL. Teste `tests/run_elegibilidade.js`. Ajuda: tópico Relatórios.
+
+## Rede Social no cadastro do paciente (2026-10-15)
+Grupo **Contato**: campo de uma linha **Rede Social** (`redeSocial`, `PAT_FIELDS` tipo `line`, input `#pf-redeSocial`, depois dos e-mails; aparece/obrigatório em Campos obrigatórios; ficha impressa; Ajuda do paciente). Fora do link de cadastro (não está em `LINK_OF_FIELD`; `run_intake.js` o ignora). Sem SQL.
