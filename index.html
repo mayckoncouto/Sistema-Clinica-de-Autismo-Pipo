@@ -1081,6 +1081,7 @@ tr.is-inactive td{color:var(--muted)}
 .agd-pick-list{max-height:150px;overflow:auto;padding:4px 8px}
 .agd-pick-it{display:flex;gap:7px;align-items:center;padding:3px 0;font-size:13px;cursor:pointer}
 .agd-pick-it[hidden]{display:none}
+.agd-pick-all{display:flex;gap:7px;align-items:center;padding:6px 8px;font-size:13px;font-weight:600;cursor:pointer;border-bottom:1px solid var(--line)}
 .field .agd-pick-box .agd-pick-it{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:400;color:var(--ink);margin:0;padding:4px 0}
 .field .agd-pick-box input[type=checkbox]{width:auto;flex:none;margin:0;padding:0}
 .field .agd-pick-box .agd-pick-q{border:0;border-bottom:1px solid var(--line);border-radius:8px 8px 0 0;background:transparent}
@@ -20508,6 +20509,7 @@ function agdPickHtml(id, label, items, checked){
   checked = checked || [];
   return '<div class="field"><label>' + esc(label) + ' <span class="hint" data-pick-sum="' + id + '"></span></label>' +
     '<div class="agd-pick-box" id="' + id + '"><input type="text" class="agd-pick-q" placeholder="Filtrar…" aria-label="Filtrar ' + esc(label.toLowerCase()) + '">' +
+    (items.length > 1 ? '<label class="agd-pick-all chk-line"><input type="checkbox" data-pick-all> <span>Marcar Todos</span></label>' : '') +
     '<div class="agd-pick-list">' + (items.length ? items.map(function(it){
       return '<label class="agd-pick-it" data-n="' + esc(normText(it.t)) + '"><input type="checkbox" value="' + esc(it.v) + '"' + (checked.indexOf(it.v) !== -1 ? ' checked' : '') + '> <span>' + esc(it.t) + '</span></label>';
     }).join("") : '<div class="hint">Nenhum.</div>') + '</div></div></div>';
@@ -20515,14 +20517,21 @@ function agdPickHtml(id, label, items, checked){
 function agdPickWire(ov, id, emptyLabel){
   var box = ov.querySelector("#" + id); if (!box) return;
   var sum = ov.querySelector('[data-pick-sum="' + id + '"]');
-  function upd(){ var n = agdPickRead(ov, id).length; if (sum) sum.textContent = n ? "(" + n + (n === 1 ? " escolhido)" : " escolhidos)") : "(" + (emptyLabel || "todos") + ")"; }
+  var allCb = box.querySelector("[data-pick-all]");
+  function items(){ return box.querySelectorAll(".agd-pick-it input"); }
+  function upd(){ var n = agdPickRead(ov, id).length; if (allCb) allCb.checked = n > 0 && n === items().length; if (sum) sum.textContent = n ? "(" + n + (n === 1 ? " escolhido)" : " escolhidos)") : "(" + (emptyLabel || "todos") + ")"; }
   box.querySelector(".agd-pick-q").addEventListener("input", function(){
     var q = normText(this.value.trim());
     Array.prototype.forEach.call(box.querySelectorAll(".agd-pick-it"), function(l){ l.hidden = !!q && l.getAttribute("data-n").indexOf(q) === -1; });
   });
+  if (allCb) allCb.addEventListener("change", function(){
+    var on = allCb.checked;
+    Array.prototype.forEach.call(box.querySelectorAll(".agd-pick-it"), function(l){ if (!l.hidden) l.querySelector("input").checked = on; });
+    upd();
+  });
   box.addEventListener("change", upd); upd();
 }
-function agdPickRead(ov, id){ return Array.prototype.map.call(ov.querySelectorAll("#" + id + " input[type=checkbox]:checked"), function(c){ return c.value; }); }
+function agdPickRead(ov, id){ return Array.prototype.map.call(ov.querySelectorAll("#" + id + " .agd-pick-it input[type=checkbox]:checked"), function(c){ return c.value; }); }
 function agdProfItems(){
   return state.professionals.filter(isActive).slice().sort(function(a, b){ return String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"); })
     .map(function(p){ return {v: p.id, t: p.name || p.id}; });
@@ -21001,7 +21010,7 @@ function agdOpenExport(){
   var m = agdToolModal("ovAgdExp", "Exportar Excel",
     "Baixa uma planilha com os atendimentos do período (abre no Excel).",
     '<div class="field-row">' + agdRangeHtml("aeFrom", "aeTo", rg[0], rg[1]) + '</div>' +
-    (own ? '' : '<div class="field-row">' + agdPickHtml("aeProfs", "Profissionais", agdProfItems(), agdPreselProfs()) + agdPickHtml("aeRooms", "Salas", agdRoomItems(), agdPreselRooms()) + '</div>') +
+    (own ? '' : '<div class="field-row">' + agdPickHtml("aeProfs", "Profissionais", agdProfItems(), agdProfItems().map(function(i){ return i.v; })) + agdPickHtml("aeRooms", "Salas", agdRoomItems(), agdRoomItems().map(function(i){ return i.v; })) + '</div>') +
     '<label class="chk-line"><input type="checkbox" id="aeKinds" checked> Incluir bloqueios, reuniões e treinamentos</label>',
     '<div class="spacer"></div><button class="btn ghost" data-tclose>Cancelar</button><button class="btn primary" id="aeGo">Baixar Planilha</button>', 640);
   if (!own){ agdPickWire(m.ov, "aeProfs"); agdPickWire(m.ov, "aeRooms"); }
