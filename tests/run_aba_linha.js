@@ -44,7 +44,7 @@ const path = require('path');
     // outro serviço, mas a especialidade do profissional está cadastrada (quadro de Sessão com ABA Não): vale o ABA do quadro
     state.treatments[0].specHours = [{specId: "psico", hours: 4, aba: "Não"}]; rebuildPatients();
     out.otherSvcLine = isNaoABABooking({patient: pat.nome, service: "avaliacao"}, "ana-terapeuta");
-    out.otherSvcNoLine = isNaoABABooking({patient: pat.nome, service: "avaliacao"}, "bia-terapeuta");
+
     // regra automática: Não com nível de suporte 3 ou 17 anos ou mais
     out.auto = [abaAuto({idade: 16}), abaAuto({idade: 17}), abaAuto({idade: 5, suporte: "Nível 3"}), abaAuto({idade: 5, suporte: "Nível 2"}), abaAuto({idade: ""})].join(",");
     out.dueSem = trDue({status: "ativo", vencPor: "sem", validoAte: "2020-01-01"}) === null && trDueText({vencPor: "sem", validoAte: "2020-01-01"}) === "";
@@ -129,11 +129,11 @@ const path = require('path');
     out.agdTriNoLock = agdConflictIn(rows, {date: "2030-01-07", time: "08:00", professional_id: "bia-terapeuta", room_id: "r1", patient: "Bruno Verde", service: "sessao"});
     return out;
   })()`);
-  check('não ABA flag only for Sessão?', svc.flagSess === true && svc.flagTri === false, JSON.stringify(svc));
+  check('não ABA flag also in other services?', svc.flagSess === true && svc.flagTri === true, JSON.stringify(svc));
   check('Planner: other service with the specialty registered is blocked next to a não ABA?', svc.sessBlocked && !!svc.otherFree);
   check('Planner: locked cell still accepts another service (aba-soft)?', svc.soft);
-  check('Planner: não ABA patient in another service does not lock the room?', svc.triNoLock === null, svc.triNoLock);
-  check('Agenda: same rules by service?', svc.agdSess && !!svc.agdOther && svc.agdTriNoLock === null, JSON.stringify([svc.agdOther, svc.agdTriNoLock]));
+  check('Planner: não ABA patient in another service locks the room?', !!svc.triNoLock, svc.triNoLock);
+  check('Agenda: same rules by service?', svc.agdSess && !!svc.agdOther && !!svc.agdTriNoLock, JSON.stringify([svc.agdOther, svc.agdTriNoLock]));
 
   // Sem exceção: grupo de suporte marcando a sala NÃO libera dois "não ABA" do mesmo profissional.
   const grp = await ev(`(function(){
