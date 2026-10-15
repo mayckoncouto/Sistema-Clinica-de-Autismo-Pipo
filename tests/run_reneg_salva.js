@@ -1,0 +1,24 @@
+const { chromium } = require('playwright');
+const fs = require('fs'); const path = require('path');
+(async () => {
+  const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
+  const i = src.indexOf('"use strict";');
+  const pg = path.join(__dirname, 'page_rn.html');
+  fs.writeFileSync(pg, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
+  const b = await chromium.launch(require('./launch-opts'));
+  const page = await b.newPage({ viewport: { width: 1300, height: 900 } });
+  const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + pg); await page.waitForTimeout(800);
+  const ev = (c) => page.evaluate((x) => window.__ev(x), c);
+  await ev(`(function(){ state.treatments = []; rebuildPatients(); openTreatmentModal(null, {patientId: state.patientsRaw[0].id}); })()`);
+  await page.waitForSelector('#ovTreat'); await page.fill('#trVal', '1.000,00'); await page.click('#trSave'); await page.waitForTimeout(500);
+  await ev(`openTreatmentModal(state.treatments[0])`);
+  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(300);
+  await page.click('#trObs'); await page.keyboard.type('alterado antes de renegociar');
+  await page.click('#trReneg'); await page.waitForTimeout(800);
+  const r = JSON.parse(await ev(`JSON.stringify({n: state.treatments.length, obs: state.treatments[0].obs, open: !!document.getElementById("ovTreat"), tipo: document.getElementById("trSt") && document.getElementById("trSt").value})`));
+  console.log(r, errors);
+  const ok = r.obs === 'alterado antes de renegociar' && r.open && !errors.length;
+  console.log('salvou antes de renegociar?', ok);
+  fs.unlinkSync(pg); await b.close(); process.exit(ok ? 0 : 1);
+})();

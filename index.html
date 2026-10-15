@@ -23202,7 +23202,12 @@ function openTreatmentModal(t, opts){
     openTreatmentModal(null, {patientId: np, stack: opts.stack});
   });
   var rn = document.getElementById("trReneg");
-  if (rn) rn.addEventListener("click", function(){ openTreatmentModal(null, {patientId: t.patientId, copyFrom: t, renegotiateFrom: t.id, stack: opts.stack}); });
+  if (rn) rn.addEventListener("click", function(){
+    // Com alterações no tratamento aberto: salva primeiro e só depois abre o renegociado.
+    var svb = document.getElementById("trSave");
+    if (svb && overlay.__dirty){ svb._thenReneg = true; svb.click(); return; }
+    openTreatmentModal(null, {patientId: t.patientId, copyFrom: t, renegotiateFrom: t.id, stack: opts.stack});
+  });
   var del = document.getElementById("trDel");
   if (del) del.addEventListener("click", function(){
     var p = rawPatient(t.patientId);
@@ -23221,6 +23226,7 @@ function openTreatmentModal(t, opts){
   });
   var sv = document.getElementById("trSave");
   if (sv) sv.addEventListener("click", function(){
+    var thenReneg = !!sv._thenReneg; sv._thenReneg = false;   // veio do botão Renegociar: salva e depois abre o novo
     var patId = isNew ? document.getElementById("trPat").value : t.patientId;
     if (!patId){ showToast("Escolha o paciente.", true); return; }
     var ini = document.getElementById("trIni").value;
@@ -23239,7 +23245,7 @@ function openTreatmentModal(t, opts){
     // Redistribuição das sessões entre os quadros (mesma soma): os meses anteriores são recalculados.
     if (!isNew && trDoneCount(t) && !sv._redistOk && trLinesHoursChanged(t.specHours, r.fields.specHours)){
       confirmDialog({title: "Redistribuir Sessões", message: "As sessões/mês dos quadros mudaram (a soma continua " + String(trLinesSum(r.fields.specHours)).replace(".", ",") + ").<br>O contratado × realizado e o relatório Pacote dos <b>meses anteriores</b> passam a usar a nova distribuição.<br>Salvar assim mesmo?", confirmLabel: "Salvar Assim Mesmo"})
-        .then(function(ok){ if (ok){ sv._redistOk = true; try { sv.click(); } finally { sv._redistOk = false; } } });
+        .then(function(ok){ if (ok){ sv._redistOk = true; sv._thenReneg = thenReneg; try { sv.click(); } finally { sv._redistOk = false; } } });
       return;
     }
     var sm = specSumRead();
@@ -23247,7 +23253,7 @@ function openTreatmentModal(t, opts){
       if (sysMode("tr_soma") === "block"){ showToast("A soma das especialidades/serviços (" + String(sm.sum).replace(".", ",") + ") é diferente de Sessão/Mês (" + String(sm.total).replace(".", ",") + ").", true); return; }
       confirmDialog({title: "Sessão/Mês Diferente da Soma",
         message: "A soma das especialidades/serviços (<b>" + String(sm.sum).replace(".", ",") + "</b>) é diferente de Sessão/Mês (<b>" + String(sm.total).replace(".", ",") + "</b>). Salvar assim mesmo?",
-        confirmLabel: "Salvar Assim Mesmo"}).then(function(ok){ if (ok){ sv._sumOk = true; try { sv.click(); } finally { sv._sumOk = false; } } });
+        confirmLabel: "Salvar Assim Mesmo"}).then(function(ok){ if (ok){ sv._sumOk = true; sv._thenReneg = thenReneg; try { sv.click(); } finally { sv._sumOk = false; } } });
       return;
     }
     var st = document.getElementById("trSt").value;
@@ -23344,7 +23350,14 @@ function openTreatmentModal(t, opts){
             // Tratamento novo para paciente inativo: o paciente volta a ficar ativo.
             else if (isNew) trReactivatePatient(patId);
           };
-          if (salePromise) salePromise.then(after, after); else after();
+          var afterAll = function(){
+            after();
+            if (thenReneg){
+              var cur = (state.treatments || []).filter(function(x){ return x.id === rec.id; })[0] || rec;
+              openTreatmentModal(null, {patientId: cur.patientId, copyFrom: cur, renegotiateFrom: cur.id, stack: opts.stack});
+            }
+          };
+          if (salePromise) salePromise.then(afterAll, afterAll); else afterAll();
         });
       });
     });
