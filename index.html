@@ -4513,17 +4513,17 @@ function patientIsNaoABA(p){ return !!p && patientAba(p) === "Não"; }
 // ABA do paciente num atendimento: o quadro do tratamento do atendimento (principal do profissional
 // ou complementar; serviço diferente de Sessão = o quadro do serviço) manda; sem quadro para o
 // atendimento (ou tratamento sem quadros), o ABA geral do tratamento (abaAntigo) ou, sem ele, a regra automática.
-function bookingAbaOf(p, profId, service){
+function bookingAbaOf(p, profId, service, week){
   if (!p) return "";
   var rows = treatLines(p.specHours);
   if (!rows.length) return abaFallback(p);
-  var line = treatLineFor(rows, profId, service);
+  var line = treatLineFor(rows, profId, service, week);
   return line ? abaYesNo(line.aba || abaFallback(p)) : abaFallback(p);
 }
 // Paciente com o ABA do atendimento (para a cor e as regras "não ABA").
-function bookingPatient(p, b, profId){
+function bookingPatient(p, b, profId, week){
   if (!p) return p;
-  var aba = bookingAbaOf(p, profId || (b && b.professional_id), b && b.service);
+  var aba = bookingAbaOf(p, profId || (b && b.professional_id), b && b.service, week || tlWeekOfRec(b));
   return p._aba === aba ? p : Object.assign({}, p, {_aba: aba});
 }
 function patientColor(p){
@@ -4829,6 +4829,26 @@ function lineSvc(r){
   if (r && isSvcItem(r.specId)) return String(r.specId).slice(SVC_PREFIX.length);
   return (r && r.service) || DEFAULT_SERVICE_ID;
 }
+// Semana do mês (1 a 4) de uma data: a 1ª é a que começa na primeira segunda-feira do mês (a mesma conta do
+// "Enviar para a Agenda"); dias antes dela e depois da 4ª semana = 0 (sem semana: vale qualquer quadro).
+function tlWeekOfDate(iso){
+  if (!iso || String(iso).length < 10) return 0;
+  var y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1, d = +iso.slice(8, 10);
+  var first = new Date(y, m, 1); while (first.getDay() !== 1) first.setDate(first.getDate() + 1);
+  var diff = d - first.getDate(); if (diff < 0) return 0;
+  var w = Math.floor(diff / 7) + 1; return w <= 4 ? w : 0;
+}
+// Semana do agendamento: Agenda (date) pela data; Planner pelo nome do documento ("seg-2" -> 2) quando vem em _week.
+function tlWeekOfRec(b){ return b ? (b.date ? tlWeekOfDate(b.date) : (+b._week || 0)) : 0; }
+function tlWeekOk(r, week){ return !week || !r.semanas || String(r.semanas).split(",").indexOf(String(week)) !== -1; }
+// Entre os quadros da mesma especialidade, os que valem para a semana (os com semanas marcadas antes dos de "Todas").
+function tlPickWeek(list, week){
+  if (!week || list.length < 2) return list;
+  var ok = list.filter(function(r){ return tlWeekOk(r, week); });
+  if (!ok.length) return list;
+  var ex = ok.filter(function(r){ return !!r.semanas; });
+  return ex.length ? ex : ok;
+}
 function treatLines(rows){
   return (Array.isArray(rows) ? rows : []).filter(function(r){ return r && r.specId; }).map(function(r, i){
     return Object.assign({}, r, {id: r.id || ("l" + (i + 1)), hours: r.hours == null ? "" : r.hours, profId: r.profId || "", aba: r.aba || ""});
@@ -4838,17 +4858,18 @@ function treatLines(rows){
 // Na especialidade principal do profissional (depois nas complementares, na ordem), com o mesmo
 // serviço: 1) o quadro do MESMO profissional; 2) o de "Todos"; 3) o de outro profissional.
 // Serviço diferente de Sessão sem quadro na área dele: o quadro com esse serviço.
-function treatLineFor(lines, profId, service){
+function treatLineFor(lines, profId, service, week){
   var svc = service || DEFAULT_SERVICE_ID, prof = profId ? findProfessional(profId) : null, areas = prof ? profAreas(prof) : [];
   var same = lines.filter(function(r){ return lineSvc(r) === svc; });
   if (!same.length) return null;
   // Especialidade principal do profissional primeiro; depois as áreas complementares, na ordem.
   for (var ai = 0; ai < areas.length; ai++){
-    var spec = same.filter(function(r){ return r.specId === areas[ai]; });
+    var spec = tlPickWeek(same.filter(function(r){ return r.specId === areas[ai]; }), week);
     var hit = spec.filter(function(r){ return profId && r.profId === profId; })[0] || spec.filter(function(r){ return !r.profId; })[0] || spec[0];
     if (hit) return hit;
   }
   if (svc !== DEFAULT_SERVICE_ID){
+    same = tlPickWeek(same, week);
     var any = same.filter(function(r){ return profId && r.profId === profId; })[0] || same.filter(function(r){ return !r.profId; })[0] || same[0];
     return any || null;
   }
@@ -6685,7 +6706,7 @@ function dispCompute(weeks){
         if (b && b.patient){
           if (bookingKind(b)){ c.lockProf[profId] = 1; continue; }   // Bloqueado/Reunião/Treinamento: 1× por profissional
           c.at[spec] = (c.at[spec] || 0) + 1;
-          if (isNaoABABooking(b, profId)) c.nao++;
+          if (isNaoABABooking(b, profId, +w)) c.nao++;
           c.busy[profId] = room.id;
         } else if (/ pl-lock/.test(m[1])){
           continue;   // horário bloqueado (cadeado / Bloquear horário): fica fora da conta (nem livre, nem bloqueio)
@@ -9839,10 +9860,10 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
       // Paciente que não faz intervenção ABA nesta sala e horário: bloqueia as outras
       // colunas do MESMO profissional (as de outros profissionais ficam livres).
       var abaByProf = {};
-      if (!isGroup(r)) r.therapists.forEach(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (t2.professionalId && isNaoABABooking(b2, t2.professionalId) && !abaByProf[t2.professionalId]) abaByProf[t2.professionalId] = b2.patient; });
+      if (!isGroup(r)) r.therapists.forEach(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (t2.professionalId && isNaoABABooking(b2, t2.professionalId, week) && !abaByProf[t2.professionalId]) abaByProf[t2.professionalId] = b2.patient; });
       // Qualquer "não ABA" bloqueia a sala toda (desde 2026-10-08 também nas salas com "ABA" no nome).
       var abaAny = null;
-      if (!isGroup(r)) r.therapists.some(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2, t2.professionalId)){ abaAny = b2.patient; return true; } return false; });
+      if (!isGroup(r)) r.therapists.some(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (isNaoABABooking(b2, t2.professionalId, week)){ abaAny = b2.patient; return true; } return false; });
       r.therapists.forEach(function(t){
         var key = row.time+"|"+r.id+"|"+t.id;
         var b = effectiveBooking(bookings, key, dayObj.key, row.time);
@@ -9890,7 +9911,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
           var isTraining = !isBlocked && bookingKind(b) === "treinamento";
           var isSpecialKind = isBlocked || isMeetingDefault || isTraining;
           var pRec = isSpecialKind ? null : findPatientByName(b);
-          var pCol = pRec ? (otherService(b) ? TRAINING_COLOR : patientColor(bookingPatient(pRec, b, t.professionalId))) : null;
+          var pCol = pRec ? (otherService(b) ? TRAINING_COLOR : patientColor(bookingPatient(pRec, b, t.professionalId, week))) : null;
           var roomMatch = (!isSpecialKind && !pRec) ? bookingRoomRef(b) : null;
           var roomCol = roomMatch ? roomFillColor(roomMatch) : null;
           var fillCol = isBlocked ? BLOCKED_COLOR : (isMeetingDefault ? MEETING_COLOR : (isTraining ? TRAINING_COLOR : (pCol || roomCol)));
@@ -10690,13 +10711,13 @@ function patientBusyMsg(patient, service, time, place){
 }
 // Paciente que não faz intervenção ABA ocupa a SALA inteira no horário: as outras
 // colunas da mesma sala ficam bloqueadas (só no Planner, só em sala — não em grupo).
-function isNaoABABooking(b, profId){
+function isNaoABABooking(b, profId, week){
   if (!b || !b.patient || bookingKind(b)) return false;
   // Regras "não ABA" só valem para Sessão: outro serviço (avaliação, triagem…) não ocupa
   // nem é barrado (Planner e Agenda).
   if ((b.service || DEFAULT_SERVICE_ID) !== DEFAULT_SERVICE_ID) return false;
   var p = b.date ? findPatientAt(b, b.date) : findPatientByName(b);  // Agenda: tratamento da data
-  return !!(p && patientIsNaoABA(bookingPatient(p, b, profId)));   // Planner: profissional da coluna
+  return !!(p && patientIsNaoABA(bookingPatient(p, b, profId, week)));   // Planner: profissional da coluna
 }
 // Paciente "não ABA" bloqueia a sala toda no horário (inclusive as colunas de outros
 // profissionais), em qualquer sala — desde 2026-10-08 também nas salas com "ABA" no nome.
@@ -10721,7 +10742,8 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
   var bookings = (doc && doc.bookings) || {};
   var patientRule = !isGroup(room) && !!findPatientByName(rec);
   var svc = rec.service || DEFAULT_SERVICE_ID;
-  var recNaoABA = !isGroup(room) && isNaoABABooking(rec, profId);
+  var wkNum = +String(docId).split("-")[1] || 0;
+  var recNaoABA = !isGroup(room) && isNaoABABooking(rec, profId, wkNum);
   var rooms = plannerRooms();
   // Acesso → Sistema: regra em "Bloquear" recusa (texto); "Avisar" guarda o 1º aviso
   // e segue procurando recusas ({warn, msg} no fim); "Desligado" não confere.
@@ -10773,7 +10795,7 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       // "Não ABA" vale para a sala toda (desde 2026-10-08 também nas salas com "ABA" no nome).
       if (r.id === room.id && !isGroup(room)){
         if (recNaoABA && (x = hit("pl_nao_aba", "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + "."))) return x;
-        if (!recNaoABA && svc === DEFAULT_SERVICE_ID && isNaoABABooking(b, t.professionalId) && (x = hit("pl_nao_aba", abaRoomMsg(b.patient, room.name, time, "")))) return x;
+        if (!recNaoABA && svc === DEFAULT_SERVICE_ID && isNaoABABooking(b, t.professionalId, wkNum) && (x = hit("pl_nao_aba", abaRoomMsg(b.patient, room.name, time, "")))) return x;
       }
       // Profissional em dois lugares: vale também para o grupo que marca a mesma sala
       // (2026-10-06 — sem exceção nos dois sentidos).
@@ -18743,7 +18765,7 @@ function openFixPatientModal(back){
     var pk = lines.map(function(r){ return {id: r.id, line: r, hours: Number(String(r.hours).replace(",", ".")) || 0}; }).filter(function(r){ return r.hours > 0; });
     var planned = {};
     list.forEach(function(x){
-      var ln = treatLineFor(lines, x.profId, (x.rec && x.rec.service) || DEFAULT_SERVICE_ID);
+      var ln = treatLineFor(lines, x.profId, (x.rec && x.rec.service) || DEFAULT_SERVICE_ID, x.week);
       if (ln) planned[ln.id] = (planned[ln.id] || 0) + 1;
     });
     return pk.map(function(r){ var got = planned[r.id] || 0; return {id: r.id, name: lineLabel(r.line), hours: r.hours, got: got, diff: got - r.hours}; });
@@ -19281,12 +19303,12 @@ function apOcc(docId, time, room){
     var b = bk[time + "|" + room.id + "|" + t.id];
     if (!b || !b.patient || bookingKind(b)) return;
     var p2 = findPatientRef(b); if (!p2) return;
-    out.push({p: p2, b: b, seat: t, prof: t.professionalId});
+    out.push({p: p2, b: b, seat: t, prof: t.professionalId, wk: +String(docId).split("-")[1] || 0});
   });
   return out;
 }
 function apOccAba(list){
-  return list.filter(function(o){ return (o.b.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID && !isNaoABABooking(o.b, o.prof); });
+  return list.filter(function(o){ return (o.b.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID && !isNaoABABooking(o.b, o.prof, o.wk); });
 }
 // Grava uma sugestão só na memória (para as regras enxergarem) guardando o valor anterior; apRestore desfaz.
 function apPut(temp, docId, key, rec){
@@ -19329,7 +19351,7 @@ function apBuild(patients){
         var ps = key.split("|"), room = findRoom(ps[1]); if (!room || isGroup(room)) return;
         if (!recIsPatient(b, p)) return;
         var th = findTherapist(room, ps[2]), pid = th && th.professionalId;
-        var ln = treatLineFor(lines, pid, b.service || DEFAULT_SERVICE_ID);
+        var ln = treatLineFor(lines, pid, b.service || DEFAULT_SERVICE_ID, w);
         have.push({lineId: ln ? ln.id : "", w: w, day: d.key, time: ps[0], roomId: ps[1], seatId: ps[2]});
       });
     }); });
@@ -21777,7 +21799,7 @@ var RP_BUILDERS = {
       if (a.status !== "finalizado") return;
       var p0 = findPatientByName(a); if (!p0) return;
       var t = treatmentAt(p0.id, a.date), tk = p0.id + "|" + (t ? t.id : "");
-      var ln = treatLineFor(patientSpecRows(t || p0), a.professional_id, a.service);
+      var ln = treatLineFor(patientSpecRows(t || p0), a.professional_id, a.service, tlWeekOfDate(a.date));
       if (!ln) return;
       done[tk + "|" + ln.id] = (done[tk + "|" + ln.id] || 0) + 1;
     });
@@ -22464,7 +22486,7 @@ function trLoadLast(force){
 function trMonthEnd(iso){ var d = agdParse(iso); return agdIso(new Date(d.getFullYear(), d.getMonth() + 1, 0)); }
 var TR_MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 // Quadro do tratamento ao qual o atendimento pertence (id da linha; "" = fora do tratamento).
-function trLineKey(lines, a){ var r = treatLineFor(lines, a.prof, a.svc); return r ? r.id : ""; }
+function trLineKey(lines, a){ var r = treatLineFor(lines, a.prof, a.svc, a.wk != null ? a.wk : tlWeekOfDate(a.d)); return r ? r.id : ""; }
 // Fim do período do tratamento: véspera do início do seguinte, ou o encerramento.
 function trPeriodEnd(t){
   var r = trPeriodEndAuto(t);
@@ -22492,7 +22514,7 @@ function trPlannerCounts(p, lines){
       var b = bkRec(bk[k]);
       if (!b || !b.patient || bookingKind(b) || !recIsPatient(b, p)) return;
       var kp = k.split("|"), room = findRoom(kp[1]), ther = room ? findTherapist(room, kp[2]) : null;
-      var key = trLineKey(lines, {prof: ther ? ther.professionalId : "", svc: b.service || DEFAULT_SERVICE_ID});
+      var key = trLineKey(lines, {prof: ther ? ther.professionalId : "", svc: b.service || DEFAULT_SERVICE_ID, wk: +String(docId).split("-")[1] || 0});
       out[key] = (out[key] || 0) + 1;
     });
   });
@@ -24440,6 +24462,7 @@ var HELP_TOPICS = [
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
       "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre todos os quadros; o resto vai para os primeiros; se o total for menor que o número de quadros, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
+      "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",
       "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava."
     ],
     rules: [
