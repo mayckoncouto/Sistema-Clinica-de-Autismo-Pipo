@@ -12169,6 +12169,9 @@ function specSumRender(){
 // ABA dos quadros: só "Sim" ou "Não"; vazio (cadastros antigos) = Sim.
 function abaYesNo(v){ return v === "Não" ? "Não" : "Sim"; }
 function tlDayName(k){ var d = ALL_WEEKDAYS.filter(function(x){ return x.key === k; })[0]; return d ? d.name : k; }
+// "dia" do quadro: um ou mais dias separados por vírgula ("seg,qua"); vazio = qualquer dia.
+function tlDays(r){ var v = r && r.dia != null ? r : {dia: r}; return String(v.dia || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean); }
+function tlDaysText(r){ return tlDays(r).map(tlDayName).join(", "); }
 function tlWeeksText(v){ var w = TL_WEEKS.filter(function(x){ return x[0] === (v || ""); })[0]; return w ? w[1] : v; }
 // Resumo do quadro (linha de baixo do cartão).
 function tlSummary(r){
@@ -12176,7 +12179,7 @@ function tlSummary(r){
   var pr = r.profId ? findProfessional(r.profId) : null;
   out.push(pr ? profNome(pr) : "Todos os terapeutas");
   out.push("ABA " + abaYesNo(r.aba));
-  if (r.dia || r.hora) out.push((r.dia ? tlDayName(r.dia) : "Qualquer dia") + (r.hora ? " " + r.hora : ""));
+  if (r.dia || r.hora) out.push((r.dia ? tlDaysText(r) : "Qualquer dia") + (r.hora ? " " + r.hora : ""));
   if (r.semanas) out.push(tlWeeksText(r.semanas) + (String(r.semanas).indexOf(",") !== -1 ? " semanas" : " semana"));
   if (r.roomId){ var rm = findRoom(r.roomId); out.push(rm ? rm.name : "Sala removida"); }
   if (+r.seguidas > 1) out.push(r.seguidas + " seguidas");
@@ -12196,7 +12199,11 @@ function openTreatLineModal(ctx){
   svcs.sort(function(a, b){ return (a.id === DEFAULT_SERVICE_ID ? 0 : 1) - (b.id === DEFAULT_SERVICE_ID ? 0 : 1); });
   var rooms = physicalRooms(true).filter(function(x){ return isActive(x) || x.id === r.roomId; });
   function opt(v, label, cur){ return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(label) + '</option>'; }
-  function timesFor(day){ var d = DAYS.filter(function(x){ return x.key === day; })[0]; return d ? d.morning.concat(d.afternoon) : clinicAllTimes(); }
+  function timesFor(day){
+    var ks = tlDays({dia: day}), out = [];
+    ks.forEach(function(k){ var d = DAYS.filter(function(x){ return x.key === k; })[0]; if (d) d.morning.concat(d.afternoon).forEach(function(t){ if (out.indexOf(t) === -1) out.push(t); }); });
+    return ks.length && out.length ? out.sort() : clinicAllTimes();
+  }
   function timeOpts(day, cur){
     var list = timesFor(day); if (cur && list.indexOf(cur) === -1) list = list.concat([cur]).sort();
     return opt("", "Qualquer horário", cur) + list.map(function(t){ return opt(t, t, cur); }).join("");
@@ -12219,8 +12226,12 @@ function openTreatLineModal(ctx){
           '<div class="field"><label class="chk-line"><input type="checkbox" id="tlAba"' + (abaYesNo(r.aba) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
           '<div class="field"><label for="tlRoom">Sala</label><select id="tlRoom" data-combo>' + opt("", "Qualquer sala", r.roomId) + rooms.map(function(x){ return opt(x.id, x.name, r.roomId); }).join("") + '</select></div>' +
         '</div><div class="field-row">' +
-          '<div class="field"><label for="tlDia">Dia</label><select id="tlDia">' + opt("", "Qualquer dia", r.dia) +
-            DAYS.map(function(d){ return opt(d.key, d.full, r.dia); }).join("") + (r.dia && !dayEnabled(r.dia) ? opt(r.dia, tlDayName(r.dia) + " (clínica fechada)", r.dia) : "") + '</select></div>' +
+          '<div class="field"><label id="tlDiaLabel">Dia</label><div class="ms" id="tlDiaMs">' +
+            '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="tlDiaLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
+            '<div class="ms-panel" id="tlDia" hidden role="listbox" aria-multiselectable="true">' +
+              DAYS.map(function(d){ return '<label class="ms-opt"><input type="checkbox" value="' + esc(d.key) + '"' + (tlDays(r).indexOf(d.key) !== -1 ? ' checked' : '') + '><span>' + esc(d.full) + '</span></label>'; }).join("") +
+              tlDays(r).filter(function(k){ return !dayEnabled(k); }).map(function(k){ return '<label class="ms-opt"><input type="checkbox" value="' + esc(k) + '" checked><span>' + esc(tlDayName(k)) + ' (clínica fechada)</span></label>'; }).join("") +
+            '</div></div></div>' +
           '<div class="field"><label for="tlHora">Horário de Início</label><select id="tlHora">' + timeOpts(r.dia, r.hora) + '</select></div>' +
         '</div><div class="field-row">' +
           '<div class="field"><label for="tlSem">Semanas</label><select id="tlSem">' + TL_WEEKS.map(function(w){ return opt(w[0], w[1], r.semanas || ""); }).join("") + '</select></div>' +
@@ -12235,6 +12246,7 @@ function openTreatLineModal(ctx){
   function close(){ host.innerHTML = ""; document.removeEventListener("keydown", onKey, true); }
   function onKey(e){
     if (e.key !== "Escape" || !$("ovTLine")) return;
+    if (!diaPanel.hidden){ e.preventDefault(); e.stopImmediatePropagation(); diaOpen(false); return; }
     if (document.getElementById("dpPop") || document.querySelector("#confirmHost .overlay, #quickHost .overlay")) return;
     e.preventDefault(); e.stopImmediatePropagation(); close();
   }
@@ -12247,11 +12259,23 @@ function openTreatLineModal(ctx){
     $("tlProf").value = specProfessionals($("tlSpec").value).some(function(p){ return p.id === cur; }) ? cur : "";
     $("tlProf").dispatchEvent(new Event("change", {bubbles: true}));
   });
-  $("tlDia").addEventListener("change", function(){
-    var cur = $("tlHora").value, list = timesFor($("tlDia").value);
-    $("tlHora").innerHTML = timeOpts($("tlDia").value, list.indexOf(cur) !== -1 ? cur : "");
+  var diaMs = $("tlDiaMs"), diaBtn = diaMs.querySelector(".ms-btn"), diaPanel = $("tlDia");
+  function diaVal(){ return Array.prototype.map.call(diaPanel.querySelectorAll("input:checked"), function(c){ return c.value; }).join(","); }
+  function diaRefresh(){
+    var txt = tlDaysText({dia: diaVal()}), sum = diaMs.querySelector(".ms-sum");
+    sum.textContent = txt || "Qualquer dia"; sum.classList.toggle("ms-placeholder", !txt); diaBtn.title = txt;
+  }
+  function diaOpen(open){ diaPanel.hidden = !open; diaBtn.setAttribute("aria-expanded", open ? "true" : "false"); if (open){ var f = diaPanel.querySelector("input"); if (f) f.focus(); } }
+  diaBtn.addEventListener("click", function(){ diaOpen(diaPanel.hidden); });
+  diaPanel.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); diaOpen(false); diaBtn.focus(); } });
+  $("ovTLine").addEventListener("mousedown", function(e){ if (!diaMs.contains(e.target)) diaOpen(false); });
+  diaPanel.addEventListener("change", function(){
+    diaRefresh();
+    var cur = $("tlHora").value, list = timesFor(diaVal());
+    $("tlHora").innerHTML = timeOpts(diaVal(), list.indexOf(cur) !== -1 ? cur : "");
     $("tlHora").dispatchEvent(new Event("change", {bubbles: true}));
   });
+  diaRefresh();
   $("tlX").addEventListener("click", close);
   $("tlCancel").addEventListener("click", close);
   if ($("tlDel")) $("tlDel").addEventListener("click", function(){
@@ -12260,7 +12284,7 @@ function openTreatLineModal(ctx){
   });
   function read(){
     var o = {id: r.id || uid("tl"), specId: $("tlSpec").value, hours: $("tlHours").value.trim(), profId: $("tlProf").value, aba: $("tlAba").checked ? "Sim" : "Não",
-      service: $("tlSvc").value || DEFAULT_SERVICE_ID, dia: $("tlDia").value, hora: $("tlHora").value, semanas: $("tlSem").value,
+      service: $("tlSvc").value || DEFAULT_SERVICE_ID, dia: diaVal(), hora: $("tlHora").value, semanas: $("tlSem").value,
       roomId: $("tlRoom").value, seguidas: $("tlSeg").value, obs: $("tlSvc").value === DEFAULT_SERVICE_ID ? "" : $("tlObs").value.trim()};
     if (lk){ o.specId = r.specId; o.service = r.service; }
     return o;
@@ -12269,20 +12293,23 @@ function openTreatLineModal(ctx){
   function warnings(o){
     var w = [], n = specSumNum(o.hours), seg = +o.seguidas || 1, pr = o.profId ? findProfessional(o.profId) : null;
     var times = o.hora ? [o.hora].concat(seg > 1 ? [addMinutes(o.hora, CLINIC_SLOT_MIN)] : []) : [];
-    if (o.dia && times.length){
+    var days = tlDays(o);
+    if (days.length && times.length){
       var hp = ctx.horarios ? ctx.horarios() : null;
-      if (hp && times.some(function(t){ return !patientSlotOk({horarios: hp}, o.dia, t); })) w.push("Fora do horário disponível do paciente (" + tlDayName(o.dia) + " " + o.hora + ").");
-      if (pr && times.some(function(t){ return !profSlotOk(pr, o.dia, t); })) w.push("Fora do horário de trabalho de " + profNome(pr) + " (" + tlDayName(o.dia) + " " + o.hora + ").");
-      if (seg > 1 && timesFor(o.dia).indexOf(times[1]) === -1) w.push("A 2ª sessão seguida (" + times[1] + ") não existe na grade da clínica.");
+      days.forEach(function(dk){
+        if (hp && times.some(function(t){ return !patientSlotOk({horarios: hp}, dk, t); })) w.push("Fora do horário disponível do paciente (" + tlDayName(dk) + " " + o.hora + ").");
+        if (pr && times.some(function(t){ return !profSlotOk(pr, dk, t); })) w.push("Fora do horário de trabalho de " + profNome(pr) + " (" + tlDayName(dk) + " " + o.hora + ").");
+        if (seg > 1 && timesFor(dk).indexOf(times[1]) === -1) w.push("A 2ª sessão seguida (" + times[1] + ") não existe na grade da clínica (" + tlDayName(dk) + ").");
+      });
     }
-    if (o.dia && !dayEnabled(o.dia)) w.push("A clínica não abre neste dia.");
+    days.forEach(function(dk){ if (!dayEnabled(dk)) w.push("A clínica não abre " + (days.length > 1 ? "em " + tlDayName(dk) : "neste dia") + "."); });
     if (n != null && seg > 1 && n % seg) w.push(String(o.hours).replace(".", ",") + " sessões/mês não fecha com " + seg + " sessões seguidas.");
-    if (o.dia && n != null){
-      var nw = o.semanas ? String(o.semanas).split(",").length : 4, exp = nw * seg;
-      if (exp !== n) w.push("Dia fixo " + (o.semanas ? "nas semanas " + tlWeeksText(o.semanas) : "em todas as semanas") + " com " + (seg > 1 ? seg + " sessões seguidas" : "1 sessão") +
+    if (days.length && n != null){
+      var nw = o.semanas ? String(o.semanas).split(",").length : 4, exp = nw * seg * days.length;
+      if (exp !== n) w.push((days.length > 1 ? "Dias fixos (" + tlDaysText(o) + ") " : "Dia fixo ") + (o.semanas ? "nas semanas " + tlWeeksText(o.semanas) : "em todas as semanas") + " com " + (seg > 1 ? seg + " sessões seguidas" : "1 sessão") +
         " dá " + exp + " sessões/mês, mas o quadro tem " + String(o.hours).replace(".", ",") + ".");
     }
-    var key = function(x){ return [x.specId, lineSvc(x), x.profId || "", x.dia || "", x.hora || ""].join("|"); };
+    var key = function(x){ return [x.specId, lineSvc(x), x.profId || "", tlDays(x).slice().sort().join(","), x.hora || ""].join("|"); };
     if ((ctx.others || []).some(function(x){ return key(x) === key(o); })) w.push("Já existe um quadro igual (mesma especialidade, serviço, profissional, dia e horário).");
     return w;
   }
@@ -19325,7 +19352,7 @@ function apBuild(patients){
         for (var n = 0; n < per[w] && placedHere < missing; n++){
           var best = null, bestScore = 1e9;
           DAYS.forEach(function(d){
-            if (line.dia && d.key !== line.dia) return;
+            if (line.dia && tlDays(line).indexOf(d.key) === -1) return;
             var docId = d.key + "-" + w, bk = state.scheduleDocs[docId].bookings;
             var times = d.morning.concat(d.afternoon);
             times.forEach(function(time, ti){
@@ -24346,7 +24373,7 @@ var HELP_TOPICS = [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio e o plano do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "Valor, Descontos e Valor final ficam em <b>Convênio, pacote e horário</b>, logo depois de Convênio e Plano. Ao sair do campo, o valor aparece no formato R$ 1.234,56.",
-      "Em <b>Especialidades e Serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>).",
+      "Em <b>Especialidades e Serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). Em <b>Dia</b> dá para marcar mais de um dia da semana (Segunda e Quarta, por exemplo); sem nenhum marcado vale qualquer dia. <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>).",
       "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de Início</b> (vazios = qualquer um), <b>Semanas</b> (Todas, 1ª e 3ª, 2ª e 4ª ou uma só) e <b>Sessões Seguidas</b> (1 ou 2). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
       "A mesma especialidade pode ter vários quadros: por exemplo, Psicologia com o Tiago no serviço Acolhimento familiar às quintas 08:00 e mais um quadro de Psicologia em Sessão com qualquer terapeuta.",
       "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: abre um novo tratamento copiando o atual. Ao clicar em Salvar, o atual vira Renegociado e o novo fica Ativo; cancelando a janela, nada muda.",

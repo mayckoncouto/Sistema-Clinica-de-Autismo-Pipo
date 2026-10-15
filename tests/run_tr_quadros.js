@@ -65,7 +65,7 @@ const TL = require('./tl-helper');
   await page.click('#tlCancel');
   // Quadro com dia fixo e 1ª e 3ª semanas, mas 4 sessões/mês → aviso
   await page.click('#specRowAdd'); await page.waitForSelector('#ovTLine');
-  await page.evaluate(() => { function set(id, v){ const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('change', {bubbles: true})); }
+  await page.evaluate(() => { function set(id, v){ if (id === 'tlDia'){ document.querySelectorAll('#tlDia input').forEach((c) => { c.checked = c.value === v; }); document.getElementById('tlDia').dispatchEvent(new Event('change', {bubbles: true})); return; } const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('change', {bubbles: true})); }
     const sp = document.getElementById('tlSpec'); set('tlSpec', [...sp.options].find((o) => o.textContent === 'Psicologia').value);
     document.getElementById('tlHours').value = '4'; set('tlSvc', 'acolh'); set('tlProf', 'ana-terapeuta'); set('tlDia', 'qui'); set('tlHora', '08:00'); set('tlSem', '1,3');
     document.getElementById('tlObs').value = 'Acolhimento pais'; });
@@ -120,6 +120,9 @@ const TL = require('./tl-helper');
   await mob.click('[data-tl-edit="0"]'); await mob.waitForSelector('#ovTLine');
   check('mobile: card window fits the screen?', await mob.evaluate(() => document.documentElement.scrollWidth <= 390 && document.querySelector('#ovTLine .modal').getBoundingClientRect().width <= 390));
 
+  // Vários dias no mesmo quadro
+  const multi = await mob.evaluate(() => { document.querySelectorAll('#tlDia input').forEach((c) => { c.checked = c.value === 'seg' || c.value === 'qua'; }); document.getElementById('tlDia').dispatchEvent(new Event('change', {bubbles: true})); return {sum: document.querySelector('#tlDiaMs .ms-sum').textContent, dia: document.getElementById('tlDia').querySelectorAll('input:checked').length}; });
+  check('multi-day: summary lists both days?', /Segunda/.test(multi.sum) && /Quarta/.test(multi.sum) && multi.dia === 2, JSON.stringify(multi));
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage); fs.unlinkSync(mPage);

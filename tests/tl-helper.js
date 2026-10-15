@@ -6,13 +6,14 @@ exports.addLine = async function(page, o, editIndex){
   await page.waitForSelector('#ovTLine');
   await page.evaluate((o) => {
     function set(id, v){ var e = document.getElementById(id); if (v == null || !e || e.disabled) return; e.value = v; e.dispatchEvent(new Event('change', {bubbles: true})); }
+function setDia(v){ if (v == null) return; var want = String(v).split(','); Array.prototype.forEach.call(document.querySelectorAll('#tlDia input'), function(c){ c.checked = want.indexOf(c.value) !== -1; }); var pn = document.getElementById('tlDia'); if (pn) pn.dispatchEvent(new Event('change', {bubbles: true})); }
     function norm(s){ return String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); }
     if (o.spec != null){
       var sel = document.getElementById('tlSpec'), op = Array.prototype.filter.call(sel.options, function(x){ return norm(x.textContent) === norm(o.spec) || x.value === o.spec; })[0];
       set('tlSpec', op ? op.value : '');
     }
     if (o.hours != null && !document.getElementById('tlHours').disabled) document.getElementById('tlHours').value = String(o.hours);
-    set('tlSvc', o.svc); set('tlProf', o.prof); if (o.aba != null){ var ab = document.getElementById('tlAba'); ab.checked = (o.aba === 'Sim'); ab.dispatchEvent(new Event('change', {bubbles: true})); } set('tlDia', o.dia); set('tlHora', o.hora);
+    set('tlSvc', o.svc); set('tlProf', o.prof); if (o.aba != null){ var ab = document.getElementById('tlAba'); ab.checked = (o.aba === 'Sim'); ab.dispatchEvent(new Event('change', {bubbles: true})); } setDia(o.dia); set('tlHora', o.hora);
     set('tlSem', o.semanas); set('tlRoom', o.room); set('tlSeg', o.seguidas == null ? null : String(o.seguidas));
     if (o.obs != null) document.getElementById('tlObs').value = o.obs;
   }, o);
