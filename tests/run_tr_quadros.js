@@ -123,6 +123,11 @@ const TL = require('./tl-helper');
   // Vários dias no mesmo quadro
   const multi = await mob.evaluate(() => { document.querySelectorAll('#tlDia input').forEach((c) => { c.checked = c.value === 'seg' || c.value === 'qua'; }); document.getElementById('tlDia').dispatchEvent(new Event('change', {bubbles: true})); return {sum: document.querySelector('#tlDiaMs .ms-sum').textContent, dia: document.getElementById('tlDia').querySelectorAll('input:checked').length}; });
   check('multi-day: summary lists both days?', /Segunda/.test(multi.sum) && /Quarta/.test(multi.sum) && multi.dia === 2, JSON.stringify(multi));
+  await mob.click('#tlCancel'); await mob.waitForTimeout(150);
+  { const rmN = await mob.$$eval('[data-tl-rm]', (b) => b.length), rowsN = await mob.$$eval('#specRowsHost .tl-row', (b) => b.length);
+    check('remove button on each unlocked card?', rmN > 0 && rmN <= rowsN, rmN + '/' + rowsN);
+    await mob.click('[data-tl-rm="0"]'); await mob.waitForSelector('#cfOk'); await mob.click('#cfOk'); await mob.waitForTimeout(150);
+    check('Remover takes the card out?', (await mob.$$eval('#specRowsHost .tl-row', (b) => b.length)) === rowsN - 1); }
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage); fs.unlinkSync(mPage);

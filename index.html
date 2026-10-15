@@ -12421,6 +12421,7 @@ function treatFieldsEditor(v, opts){
             (r.obs && lineSvc(r) !== DEFAULT_SERVICE_ID ? '<div class="rs tl-obs">Obs.: ' + esc(r.obs) + '</div>' : '') +
             (cov ? '<div class="rs tl-cover">' + esc(cov.txt) + '</div>' : '') + '</div>' +
           '<button type="button" class="btn ghost" data-tl-edit="' + i + '">Editar</button>' +
+          (locked ? '' : '<button type="button" class="btn danger" data-tl-rm="' + i + '">Remover</button>') +
         '</div>';
       }).join("") : '<div class="hours-empty">Nenhuma especialidade neste tratamento — clique em "+ Incluir especialidade".</div>';
       specSumRender();
@@ -12434,7 +12435,13 @@ function treatFieldsEditor(v, opts){
         onSave: function(o){ if (isNew) draftLines.push(o); else draftLines[i] = o; render(); },
         onDelete: function(){ draftLines.splice(i, 1); render(); }});
     }
-    host.addEventListener("click", function(e){ var b = e.target.closest("[data-tl-edit]"); if (b) edit(+b.getAttribute("data-tl-edit")); });
+    host.addEventListener("click", function(e){
+      var b = e.target.closest("[data-tl-edit]"); if (b){ edit(+b.getAttribute("data-tl-edit")); return; }
+      var rm = e.target.closest("[data-tl-rm]"); if (!rm) return;
+      var i = +rm.getAttribute("data-tl-rm"), line = draftLines[i]; if (!line) return;
+      confirmDialog({title: "Confirmar Exclusão", message: "Tirar o quadro <b>" + esc(lineLabel(line)) + "</b> do tratamento?<br>A exclusão vale quando o tratamento for salvo.", confirmLabel: "Confirmar Exclusão"})
+        .then(function(ok){ if (ok){ var j = draftLines.indexOf(line); if (j !== -1){ draftLines.splice(j, 1); render(); } } });
+    });
     document.getElementById("specRowAdd").addEventListener("click", function(){ edit(null); });
     // Incluir Todas: um quadro de 1 sessão/mês por especialidade ativa, menos Aplicador ABA e as que já têm quadro.
     (function(){
@@ -24381,7 +24388,7 @@ var HELP_TOPICS = [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio e o plano do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "Valor, Descontos e Valor final ficam em <b>Convênio, pacote e horário</b>, logo depois de Convênio e Plano. Ao sair do campo, o valor aparece no formato R$ 1.234,56.",
-      "Em <b>Especialidades e Serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). Em <b>Dia</b> dá para marcar mais de um dia da semana (Segunda e Quarta, por exemplo); sem nenhum marcado vale qualquer dia. <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>).",
+      "Em <b>Especialidades e Serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). Em <b>Dia</b> dá para marcar mais de um dia da semana (Segunda e Quarta, por exemplo); sem nenhum marcado vale qualquer dia. <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>) e <b>Remover</b>, no próprio quadro, tira o quadro do tratamento depois de confirmar (quadros travados por atendimentos realizados não saem).",
       "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de Início</b> (vazios = qualquer um), <b>Semanas</b> (Todas, 1ª e 3ª, 2ª e 4ª ou uma só) e <b>Sessões Seguidas</b> (1 ou 2). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
       "A mesma especialidade pode ter vários quadros: por exemplo, Psicologia com o Tiago no serviço Acolhimento familiar às quintas 08:00 e mais um quadro de Psicologia em Sessão com qualquer terapeuta.",
       "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: abre um novo tratamento copiando o atual. Ao clicar em Salvar, o atual vira Renegociado e o novo fica Ativo; cancelando a janela, nada muda.",
