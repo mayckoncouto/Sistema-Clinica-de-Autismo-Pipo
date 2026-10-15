@@ -42,6 +42,11 @@ const path = require('path');
   // Sem atendimento finalizado: aguarda
   let r = JSON.parse(await ev(`comApurar(true).then(function(o){ return JSON.stringify(o); })`));
   check('sem atendimento finalizado nada é gerado (a venda aguarda)', r.made === 0 && r.wait === 1, JSON.stringify(r));
+  // 1ª parcela paga gera a comissão mesmo sem atendimento finalizado
+  await ev(`FP.rows = [{id: "par1", venc: "2026-10-05", desc: "Parcela", plan: "pl-com", acc: "", sup: "", valor: 1000, entry: "lancP", sale: "s1", grupo: "s1", parcela: 1, parcelas: 3, obs: "", linhas: [], loan: "", staff: "", abate: ""}]`);
+  r = JSON.parse(await ev(`comApurar(true).then(function(o){ return JSON.stringify(o); })`));
+  check('1ª parcela paga gera a comissão sem atendimento finalizado', r.made === 1 && JSON.parse(await ev(`JSON.stringify(COMM.rows.length)`)) === 1, JSON.stringify(r));
+  await ev(`COMM.rows = []; FP.rows = []`);
   // Com 1º finalizado: gera
   await ev(`TR.done[window.__pid] = ["2026-10-05"]`);
   r = JSON.parse(await ev(`comApurar(true).then(function(o){ return JSON.stringify(o); })`));

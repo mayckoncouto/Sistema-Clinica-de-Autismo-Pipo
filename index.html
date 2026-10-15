@@ -23821,7 +23821,7 @@ function trSalesHtml(t){
 
 /* ===== Comissões de venda (2026-10-15) =====
  * Regras (`commission_rules`): percentual por tipo de venda (ou Todas), vendedor opcional, subcategoria da despesa, conta e dia do pagamento.
- * A comissão (`sale_commissions`, uma por venda) nasce no 1º atendimento FINALIZADO do tratamento (apuração ao finalizar e em "Apurar Agora") e vira
+ * A comissão (`sale_commissions`, uma por venda) nasce na 1ª parcela paga da venda ou no 1º atendimento FINALIZADO do tratamento, o que vier primeiro (apuração ao finalizar/receber e em "Apurar Agora") e vira
  * conta a pagar do vendedor. Aditivo comissiona só a diferença para a venda que ele substituiu. Venda cancelada estorna a comissão. Permissão `comissoes`. */
 var COMM = {rules: null, rows: null, loading: null, busy: false};
 var COMM_TIPOS = {todas: "Todas as Vendas", nova: "Nova", renovacao: "Renovação", aditivo: "Aditivo"};
@@ -23923,6 +23923,8 @@ function comDueDate(day){
   return agdIso(new Date(d.getFullYear(), d.getMonth() + 1, 1)).slice(0, 8) + String(day).padStart(2, "0");
 }
 // Gera as comissões que já podem nascer. Promise<{made, wait, skip[]}> ou null (sem permissão/ocupado).
+// A comissão nasce no que vier primeiro: a 1ª parcela da venda paga (recebida) ou o 1º atendimento finalizado do tratamento.
+function comSalePaid(s){ return (FP.rows || []).some(function(r){ return r.sale === s.id && r.entry; }); }
 function comApurar(silent){
   if (!comCan("create") || !fpCan("create") || COMM.busy) return Promise.resolve(null);
   COMM.busy = true;
@@ -23936,7 +23938,7 @@ function comApurar(silent){
     (pend || []).forEach(function(s){
       chain = chain.then(function(){
         var t = state.treatments.filter(function(x){ return x.id === s.treatment; })[0];
-        if (!t || !trDoneCount(t)){ out.wait++; return; }
+        if (!comSalePaid(s) && (!t || !trDoneCount(t))){ out.wait++; return; }
         var pat = rawPatient(s.patient) || {}, who = (pat.nome || "Paciente") + " (" + (COMM_TIPOS[s.tipo] || s.tipo) + ")";
         var rule = comRuleFor(s);
         if (!rule){ out.skip.push(who + ": nenhuma regra de comissão serve para esta venda"); return; }
@@ -23957,7 +23959,7 @@ function comApurar(silent){
     COMM.busy = false;
     if (out.made) showToast(out.made + (out.made === 1 ? " comissão gerada" : " comissões geradas") + " e enviada" + (out.made === 1 ? "" : "s") + " ao Contas a Pagar.");
     else if (!silent && out.skip.length) showToast(out.skip[0], true);
-    else if (!silent) showToast(out.wait ? "Nenhuma comissão a gerar: " + out.wait + (out.wait === 1 ? " venda aguarda" : " vendas aguardam") + " o 1º atendimento finalizado." : "Nenhuma comissão a gerar.");
+    else if (!silent) showToast(out.wait ? "Nenhuma comissão a gerar: " + out.wait + (out.wait === 1 ? " venda aguarda" : " vendas aguardam") + " a 1ª parcela paga ou o 1º atendimento finalizado." : "Nenhuma comissão a gerar.");
     return out;
   }, function(e){ COMM.busy = false; if (!silent) showToast("Erro ao apurar comissões: " + (e && e.message ? e.message : e), true); return null; });
 }
@@ -23993,7 +23995,7 @@ function openComissoes(){
   if (!comCan("view")){ showToast(permDeniedMsg("comissoes", "view"), true); return; }
   var host = regQuickHost();
   host.innerHTML = '<div class="overlay" id="ovComm"><div class="modal" style="max-width:1000px">' +
-    '<div class="modal-head"><div><h3>Comissões</h3><div class="modal-sub">Geradas no 1º atendimento finalizado do tratamento vendido; cada uma vira conta a pagar do vendedor.</div></div>' +
+    '<div class="modal-head"><div><h3>Comissões</h3><div class="modal-sub">Geradas na 1ª parcela paga da venda ou no 1º atendimento finalizado do tratamento (o que vier primeiro); cada uma vira conta a pagar do vendedor.</div></div>' +
     '<button class="modal-close" id="cmClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body"><div class="field-row"><div class="field"><label for="cmSeller">Vendedor</label><select id="cmSeller"><option value="">Todos</option></select></div>' +
       '<div class="field"><label for="cmSt">Situação</label><select id="cmSt"><option value="">Todas</option><option value="A Pagar">A Pagar</option><option value="Paga">Paga</option><option value="Estornada">Estornada</option></select></div></div>' +
@@ -24012,7 +24014,7 @@ function openComissoes(){
     list.forEach(function(c){ tot[comStatusText(c)] += c.valor; });
     var aguardando = (SALES.rows || []).filter(function(s){ return s.status === "ativa" && s.seller && !comOf(s.id); }).length;
     $("cmSum").innerHTML = 'A pagar: <b>' + esc(fmtMoney(tot["A Pagar"])) + '</b> · Pagas: <b>' + esc(fmtMoney(tot["Paga"])) + '</b> · Estornadas: <b>' + esc(fmtMoney(tot["Estornada"])) + '</b>' +
-      (aguardando ? ' · ' + aguardando + (aguardando === 1 ? ' venda aguarda' : ' vendas aguardam') + ' o 1º atendimento finalizado' : '');
+      (aguardando ? ' · ' + aguardando + (aguardando === 1 ? ' venda aguarda' : ' vendas aguardam') + ' a 1ª parcela paga ou o 1º atendimento finalizado' : '');
     var cols = [{key: "data", label: "Gerada em", width: 110, min: 90}, {key: "vend", label: "Vendedor", width: 170, min: 100}, {key: "pac", label: "Paciente", width: 190, min: 100, cls: "pt-nome"},
       {key: "tipo", label: "Venda", width: 100, min: 70}, {key: "base", label: "Base", width: 110, min: 80}, {key: "pct", label: "%", width: 70, min: 50}, {key: "valor", label: "Comissão", width: 120, min: 80},
       {key: "sit", label: "Situação", width: 110, min: 80}];
@@ -24022,7 +24024,7 @@ function openComissoes(){
         esc(String(c.pct).replace(".", ",")) + "%", "<b>" + esc(fmtMoney(c.valor)) + "</b>", esc(comStatusText(c)) + (c.obs ? ' <span class="hint">' + esc(c.obs) + '</span>' : "")],
         vals: [String(c.at), c.sellerName, p.nome, s ? s.tipo : "", c.base, c.pct, c.valor, comStatusText(c)]};
     }), render);
-    if (!list.length) $("cmHost").insertAdjacentHTML("beforeend", '<div class="empty-state"><b>Nenhuma comissão</b>As comissões aparecem aqui depois do 1º atendimento finalizado do tratamento vendido.</div>');
+    if (!list.length) $("cmHost").insertAdjacentHTML("beforeend", '<div class="empty-state"><b>Nenhuma comissão</b>As comissões aparecem aqui depois da 1ª parcela paga da venda ou do 1º atendimento finalizado do tratamento.</div>');
   }
   Promise.all([slLoad(), comLoad(), fpLoad()]).then(function(){
     var sel = $("cmSeller"); if (!sel) return;
@@ -25041,10 +25043,10 @@ var HELP_TOPICS = [
     ],
     who: "Permissão Vendas."},
   {id: "comissoes", group: "Financeiro", title: "Comissões de Venda", mod: "comissoes",
-    purpose: "Pagar o vendedor pelas vendas dos tratamentos: a comissão nasce no 1º atendimento finalizado do tratamento e vira conta a pagar do vendedor.",
+    purpose: "Pagar o vendedor pelas vendas dos tratamentos: a comissão nasce na 1ª parcela paga da venda ou no 1º atendimento finalizado do tratamento (o que vier primeiro) e vira conta a pagar do vendedor.",
     steps: [
       "Abra <b>Financeiro ▾ → Comissões</b> e clique em <b>Regras de Comissão</b>. Inclua uma regra com nome, tipo da venda (Nova, Renovação, Aditivo ou Todas), percentual, vendedor (ou todos), a subcategoria da despesa, a conta bancária e o dia do pagamento.",
-      "Ao registrar uma venda (janela do tratamento) escolha o <b>vendedor</b>. Quando o 1º atendimento do tratamento for marcado como <b>Finalizado</b>, a comissão é gerada sozinha e a conta a pagar aparece no mês seguinte, no dia da regra.",
+      "Ao registrar uma venda (janela do tratamento) escolha o <b>vendedor</b>. Quando a 1ª parcela da venda for <b>recebida</b> ou o 1º atendimento do tratamento for marcado como <b>Finalizado</b> (o que vier primeiro), a comissão é gerada sozinha e a conta a pagar aparece no mês seguinte, no dia da regra.",
       "A janela <b>Comissões</b> mostra cada comissão com base, percentual, valor e situação (A Pagar, Paga ou Estornada), com filtro por vendedor e situação. <b>Apurar Agora</b> gera as que já podem nascer.",
       "Se a venda for <b>cancelada</b>, a comissão é estornada: a conta a pagar em aberto é excluída; se já foi paga, o sistema avisa o valor a descontar do vendedor."
     ],
@@ -31868,7 +31870,7 @@ function fpSettle(r, o){
   return c.rpc("finance_payable_settle", {p_id: r.id, p_acc: o.acc, p_date: o.date, p_valor: o.valor, p_ext_data: o.extDate || null,
     p_ext_val: o.extVal == null ? null : o.extVal, p_obs: o.obs || null, p_descricao: o.desc || null}).then(function(res){
     if (res.error){ showToast("Não foi possível baixar a conta: " + fcErrMsg(res.error), true); return false; }
-    return Promise.all([flLoad(true), fpLoad(true)]).then(function(){ return true; });
+    return Promise.all([flLoad(true), fpLoad(true)]).then(function(){ if (typeof comApuraAuto === "function") comApuraAuto(); return true; });
   });
 }
 // Baixa com rateio: um lançamento por linha (subcategoria e valor de cada uma), todos ligados à conta.
@@ -31887,7 +31889,7 @@ function fpSettleSplit(r, o){
   return c.rpc("finance_payable_settle_split", {p_id: r.id, p_acc: o.acc, p_date: o.date, p_obs: o.obs || null,
     p_linhas: o.linhas.map(function(l){ return {plan: l.plan, valor: l.valor, desc: l.desc}; })}).then(function(res){
     if (res.error){ showToast("Não foi possível baixar a conta: " + fcErrMsg(res.error) + (/does not exist|function/i.test(res.error.message || "") ? " (rode o SQL 2026-10-12e)" : ""), true); return false; }
-    return Promise.all([flLoad(true), fpLoad(true)]).then(function(){ return true; });
+    return Promise.all([flLoad(true), fpLoad(true)]).then(function(){ if (typeof comApuraAuto === "function") comApuraAuto(); return true; });
   });
 }
 // Desfazer a baixa: apaga todos os lançamentos que a baixa criou (ou o que estava ligado) e reabre a conta.
@@ -32136,7 +32138,7 @@ function fpSuggest(p){
 function fpLinkSet(payId, entryId){
   if (entryId && (FP.rows || []).some(function(r){ return r.entry === entryId && r.id !== payId; })){ showToast("Esse lançamento já está ligado a outra conta.", true); return Promise.resolve(false); }
   var c = agdClient();
-  var apply = function(){ FP.rows = (FP.rows || []).map(function(r){ return r.id === payId ? Object.assign({}, r, {entry: entryId || ""}) : r; }); return true; };
+  var apply = function(){ FP.rows = (FP.rows || []).map(function(r){ return r.id === payId ? Object.assign({}, r, {entry: entryId || ""}) : r; }); if (entryId && typeof comApuraAuto === "function") comApuraAuto(); return true; };
   if (!c) return Promise.resolve(apply());
   return c.from("finance_payables").update({entry_id: entryId || null}).eq("id", payId).then(function(res){
     if (res.error){ showToast("Não foi possível " + (entryId ? "vincular" : "desvincular") + ": " + (/duplicate|unique/i.test(res.error.message || "") ? "esse lançamento já está ligado a outra conta." : fcErrMsg(res.error)), true); return false; }
