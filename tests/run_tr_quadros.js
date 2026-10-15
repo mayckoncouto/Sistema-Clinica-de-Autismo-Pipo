@@ -126,7 +126,7 @@ const TL = require('./tl-helper');
   await mob.click('#tlCancel'); await mob.waitForTimeout(150);
   { const rmN = await mob.$$eval('[data-tl-rm]', (b) => b.length), rowsN = await mob.$$eval('#specRowsHost .tl-row', (b) => b.length);
     check('remove button on each unlocked card?', rmN > 0 && rmN <= rowsN, rmN + '/' + rowsN);
-    await mob.click('[data-tl-rm="0"]'); await mob.waitForSelector('#cfOk'); await mob.click('#cfOk'); await mob.waitForTimeout(150);
+    await mob.click('[data-tl-rm="0"]'); await mob.waitForTimeout(150);
     check('Remover takes the card out?', (await mob.$$eval('#specRowsHost .tl-row', (b) => b.length)) === rowsN - 1); }
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
