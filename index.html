@@ -15557,7 +15557,7 @@ function diagOptionsHtml(cur){
     .sort(function(a, b){ return diagLabel(a).localeCompare(diagLabel(b), "pt-BR"); });
   var has = !cur || list.some(function(d){ return diagMatch(d, cur); });
   return '<option value="">Não informado</option>' + (has ? '' : '<option value="' + esc(cur) + '" selected>' + esc(cur) + '</option>') +
-    list.map(function(d){ var t = diagLabel(d); return '<option value="' + esc(t) + '"' + (cur && diagMatch(d, cur) ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join("");
+    list.map(function(d){ var t = diagLabel(d); return '<option value="' + esc(t) + '"' + (d.code ? ' data-search="' + esc(d.code) + '"' : '') + (cur && diagMatch(d, cur) ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join("");
 }
 var DEFAULT_ORIGINS = ["Indicação médica", "Indicação de outro paciente", "Escola", "Convênio", "Internet / redes sociais", "Outro"];
 function originsList(){
@@ -24627,7 +24627,7 @@ var HELP_TOPICS = [
   {id: "diagnosticos", group: "Cadastros", title: "Diagnósticos", mod: "diagnosticos", tab: "diagnosticos",
     purpose: "Lista de diagnósticos escolhida no cadastro do paciente (grupo Saúde) e nos dados do lead do CRM. Cada diagnóstico tem o nome e, à parte, o código CID.",
     steps: ["Cadastros → <b>Diagnósticos</b> → <b>+ Incluir</b>: o <b>nome</b> do diagnóstico e, em outro campo, o código CID (opcional).", "No paciente e no lead do CRM, o campo <b>Diagnóstico</b> lista este cadastro; no fim da lista, <b>+ Incluir</b> cadastra um diagnóstico novo sem sair da janela."],
-    rules: ["A lista mostra quantos pacientes têm cada diagnóstico.", "Diagnóstico usado por paciente não é excluído: é <b>Inativado</b>.", "As listas mostram só o nome do diagnóstico, em ordem alfabética; o código CID fica só no cadastro.", "Corrigir o nome troca o texto também nos pacientes que usavam o nome anterior."],
+    rules: ["A lista mostra quantos pacientes têm cada diagnóstico.", "Diagnóstico usado por paciente não é excluído: é <b>Inativado</b>.", "As listas mostram só o nome do diagnóstico, em ordem alfabética; o código CID fica só no cadastro.", "Ao digitar no campo <b>Diagnóstico</b>, a busca encontra pelo nome ou pelo código CID.", "Corrigir o nome troca o texto também nos pacientes que usavam o nome anterior."],
     who: "Permissão <b>Diagnósticos</b>."},
   {id: "origens", group: "Cadastros", title: "Origens", mod: "origens", tab: "origens",
     purpose: "Como o paciente conheceu a clínica (Indicação médica, Escola, Internet…). Usada no cadastro do paciente.",
@@ -27143,7 +27143,7 @@ function dpEnhanceCombo(el){
       p.classList.add("dp-pop-list");
       p.style.minWidth = Math.max(160, b.offsetWidth) + "px";
       p.innerHTML = '<div class="dp-list">' + Array.prototype.map.call(el.options, function(o){
-        return '<button type="button" tabindex="-1" class="dp-opt' + (o.value === el.value ? ' sel' : '') + '" data-v="' + esc(o.value) + '" data-n="' + esc(normText(o.textContent)) + '"' + (o.disabled ? ' disabled' : '') + (o.hidden ? ' hidden' : '') + '>' + esc(o.textContent) + '</button>';
+        return '<button type="button" tabindex="-1" class="dp-opt' + (o.value === el.value ? ' sel' : '') + '" data-v="' + esc(o.value) + '" data-n="' + esc(normText(o.textContent + " " + (o.getAttribute("data-search") || ""))) + '"' + (o.disabled ? ' disabled' : '') + (o.hidden ? ' hidden' : '') + '>' + esc(o.textContent) + '</button>';
       }).join("") + '<div class="dp-none" hidden>Nenhum item encontrado</div>' + regAddOptHtml(el) + '</div>';
       p.__onEsc = function(){ inp.value = text(); inp.setAttribute("aria-expanded", "false"); inp.focus(); };
       // clicar na lista não tira o foco do campo
@@ -27161,7 +27161,7 @@ function dpEnhanceCombo(el){
     var t = normText(inp.value.trim());
     if (inp.value === text()) return;
     if (!t){ if (hasEmpty() && el.value){ var e0 = Array.prototype.filter.call(el.options, function(o){ return !o.value; })[0]; dpCommit(el, e0.value); } inp.value = text(); return; }
-    var m = Array.prototype.filter.call(el.options, function(o){ return !o.disabled && normText(o.textContent) === t; })[0];
+    var m = Array.prototype.filter.call(el.options, function(o){ return !o.disabled && (normText(o.textContent) === t || (o.getAttribute("data-search") && normText(o.getAttribute("data-search")) === t)); })[0];
     if (m && m.value !== el.value) dpCommit(el, m.value);
     inp.value = text();
   }
@@ -27227,7 +27227,7 @@ function dpEnhanceTimeList(el){
   b.addEventListener("click", function(ev){
     if (document.getElementById("dpPop") && document.getElementById("dpPop").__btn === b){ dpClose(); return; }
     var items;
-    if (isSel) items = Array.prototype.map.call(el.options, function(o){ return {v: o.value, t: o.textContent, dis: o.disabled}; });
+    if (isSel) items = Array.prototype.map.call(el.options, function(o){ return {v: o.value, t: o.textContent, dis: o.disabled, s: o.getAttribute("data-search") || ""}; });
     else {
       items = [{v: "", t: "Sem horário"}];
       for (var m = 5 * 60; m <= 23 * 60; m += 10) items.push({v: dpPad(Math.floor(m / 60)) + ":" + dpPad(m % 60), t: dpPad(Math.floor(m / 60)) + ":" + dpPad(m % 60)});
@@ -27237,7 +27237,7 @@ function dpEnhanceTimeList(el){
       pop.style.minWidth = Math.max(140, b.offsetWidth) + "px";
       var withFilter = isSel && !dpIsTimeSelect(el) && items.length > 6;
       pop.innerHTML = (withFilter ? '<input type="text" class="dp-filter" placeholder="Digite para buscar…" autocomplete="off">' : '') + '<div class="dp-list">' + items.map(function(it){
-        return '<button type="button" class="dp-opt' + (it.v === el.value ? ' sel' : '') + '" data-v="' + esc(it.v) + '" data-n="' + esc(normText(it.t)) + '"' + (it.dis ? ' disabled' : '') + '>' + esc(it.t) + '</button>';
+        return '<button type="button" class="dp-opt' + (it.v === el.value ? ' sel' : '') + '" data-v="' + esc(it.v) + '" data-n="' + esc(normText(it.t + " " + (it.s || ""))) + '"' + (it.dis ? ' disabled' : '') + '>' + esc(it.t) + '</button>';
       }).join("") + (isSel ? regAddOptHtml(el) : "") + '</div>';
       pop.addEventListener("click", function(e){
         var t = e.target.closest(".dp-opt"); if (!t || t.disabled) return;

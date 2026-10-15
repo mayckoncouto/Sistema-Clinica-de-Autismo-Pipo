@@ -70,6 +70,16 @@ const path = require('path');
   if (q){ await q.type('zzz'); await page.waitForTimeout(200); }
   const s2 = await sg();
   console.log('CRM picker opened upwards stays glued to the field?', s1.up && s2.up && Math.abs(s1.gap - 4) <= 1 && Math.abs(s2.gap - 4) <= 1 && !!q, JSON.stringify([s1, s2, !!q]));
+  // Diagnóstico: pesquisa pelo nome ou pelo código CID (data-search)
+  await ev('state.diagnoses = [{id:"d1",code:"F84.0",name:"Autismo infantil"},{id:"d2",code:"F90",name:"TDAH"}]; var h = document.createElement("div"); h.style.cssText = "position:fixed;top:60px;left:20px;width:260px;z-index:9999"; h.innerHTML = "<select id=\'zzDiag\' data-combo>" + diagOptionsHtml("") + "</select>"; document.body.appendChild(h); dpScan(document.body);');
+  await page.waitForTimeout(300);
+  const dIn = page.locator('#zzDiag').locator('xpath=..').locator('.dp-in');
+  await dIn.click(); await dIn.fill('f84'); await page.waitForTimeout(150);
+  const byCode = await page.$$eval('#dpPop .dp-opt:not([hidden])', (a) => a.map((x) => x.textContent));
+  console.log('typing the CID code finds the diagnosis by name?', byCode.length === 1 && /Autismo infantil/.test(byCode[0]), JSON.stringify(byCode));
+  await dIn.fill('tdah'); await page.waitForTimeout(150);
+  const byName = await page.$$eval('#dpPop .dp-opt:not([hidden])', (a) => a.map((x) => x.textContent));
+  console.log('typing the name still works?', byName.length === 1 && /TDAH/.test(byName[0]), JSON.stringify(byName));
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
