@@ -4518,8 +4518,23 @@ function bookingAbaOf(p, profId, service, week){
   if (!p) return "";
   var rows = treatLines(p.specHours);
   if (!rows.length) return abaFallback(p);
-  var line = treatLineFor(rows, profId, service, week);
+  var line = abaLineFor(rows, profId, service, week);
   return line ? abaYesNo(line.aba || abaFallback(p)) : abaFallback(p);
+}
+// Quadro cujo ABA vale para o atendimento: o do serviço; outro serviço sem quadro próprio usa o quadro
+// de Sessão da especialidade do profissional (2026-10-15).
+function abaLineFor(rows, profId, service, week){
+  var line = treatLineFor(rows, profId, service, week);
+  if (!line && service && service !== DEFAULT_SERVICE_ID) line = treatLineFor(rows, profId, DEFAULT_SERVICE_ID, week);
+  return line;
+}
+// A regra "não ABA" vale para o atendimento? Sessão sempre; outro serviço só se a especialidade está cadastrada no tratamento.
+function abaRuleApplies(b, profId, week){
+  if (!b) return false;
+  if ((b.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID) return true;
+  var p = b.date ? findPatientAt(b, b.date) : findPatientByName(b);
+  var rows = p ? treatLines(p.specHours) : [];
+  return !!(rows.length && abaLineFor(rows, profId || b.professional_id, b.service, week || tlWeekOfRec(b)));
 }
 // Paciente com o ABA do atendimento (para a cor e as regras "não ABA").
 function bookingPatient(p, b, profId, week){
@@ -10716,7 +10731,7 @@ function isNaoABABooking(b, profId, week){
   if (!b || !b.patient || bookingKind(b)) return false;
   // Regras "não ABA" só valem para Sessão: outro serviço (avaliação, triagem…) não ocupa
   // nem é barrado (Planner e Agenda).
-  if ((b.service || DEFAULT_SERVICE_ID) !== DEFAULT_SERVICE_ID) return false;
+  if (!abaRuleApplies(b, profId, week)) return false;
   var p = b.date ? findPatientAt(b, b.date) : findPatientByName(b);  // Agenda: tratamento da data
   return !!(p && patientIsNaoABA(bookingPatient(p, b, profId, week)));   // Planner: profissional da coluna
 }
@@ -10796,7 +10811,7 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       // "Não ABA" vale para a sala toda (desde 2026-10-08 também nas salas com "ABA" no nome).
       if (r.id === room.id && !isGroup(room)){
         if (recNaoABA && (x = hit("pl_nao_aba", "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + "."))) return x;
-        if (!recNaoABA && svc === DEFAULT_SERVICE_ID && isNaoABABooking(b, t.professionalId, wkNum) && (x = hit("pl_nao_aba", abaRoomMsg(b.patient, room.name, time, "")))) return x;
+        if (!recNaoABA && abaRuleApplies(rec, profId, wkNum) && isNaoABABooking(b, t.professionalId, wkNum) && (x = hit("pl_nao_aba", abaRoomMsg(b.patient, room.name, time, "")))) return x;
       }
       // Profissional em dois lugares: vale também para o grupo que marca a mesma sala
       // (2026-10-06 — sem exceção nos dois sentidos).
@@ -17600,7 +17615,7 @@ function agdConflictIn(rows, rec, held){
       {
         var oNao = isNaoABABooking(o);
         if (recNao && (x = hit("ag_nao_aba", "Paciente que não faz intervenção ABA ocupa a sala toda: " + recRoom.name + " já tem " + o.patient + " às " + rec.time + "."))) return x;
-        if (!recNao && oNao && (rec.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID && (x = hit("ag_nao_aba", abaRoomMsg(o.patient, recRoom.name, rec.time, "")))) return x;
+        if (!recNao && oNao && abaRuleApplies(rec, rec.professional_id) && (x = hit("ag_nao_aba", abaRoomMsg(o.patient, recRoom.name, rec.time, "")))) return x;
       }
     }
     if (o.professional_id === rec.professional_id && (o.room_id || "") !== (rec.room_id || "")){

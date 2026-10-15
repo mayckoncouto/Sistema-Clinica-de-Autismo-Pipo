@@ -39,8 +39,12 @@ const path = require('path');
     state.treatments[0].abaAntigo = "Não"; delete state.treatments[0].aba; rebuildPatients();
     out.noLines = isNaoABABooking({patient: pat.nome}, "bia-terapeuta");
     // com quadros, atendimento sem quadro usa o ABA geral do tratamento (abaAntigo = Não)
-    state.treatments[0].specHours = [{specId: "psico", hours: 4, aba: "Sim"}]; rebuildPatients();
+    state.treatments[0].specHours = [{specId: "nutri-x", hours: 4, aba: "Sim"}]; rebuildPatients();
     out.autoNotLegacy = bookingAbaOf(findPatientByName(pat.nome), "bia-terapeuta", "avaliacao");
+    // outro serviço, mas a especialidade do profissional está cadastrada (quadro de Sessão com ABA Não): vale o ABA do quadro
+    state.treatments[0].specHours = [{specId: "psico", hours: 4, aba: "Não"}]; rebuildPatients();
+    out.otherSvcLine = isNaoABABooking({patient: pat.nome, service: "avaliacao"}, "ana-terapeuta");
+    out.otherSvcNoLine = isNaoABABooking({patient: pat.nome, service: "avaliacao"}, "bia-terapeuta");
     // regra automática: Não com nível de suporte 3 ou 17 anos ou mais
     out.auto = [abaAuto({idade: 16}), abaAuto({idade: 17}), abaAuto({idade: 5, suporte: "Nível 3"}), abaAuto({idade: 5, suporte: "Nível 2"}), abaAuto({idade: ""})].join(",");
     out.dueSem = trDue({status: "ativo", vencPor: "sem", validoAte: "2020-01-01"}) === null && trDueText({vencPor: "sem", validoAte: "2020-01-01"}) === "";
@@ -49,6 +53,7 @@ const path = require('path');
   check('psico line ABA Não?', r.psico === 'Não', r.psico);
   check('fono line ABA Sim?', r.fono === 'Sim', r.fono);
   check('service line ABA Não?', r.svc === 'Não', r.svc);
+  check('other service uses the ABA of the registered specialty line?', r.otherSvcLine === true, String(r.otherSvcLine));
   check('booking without quadro uses the general ABA of the treatment?', r.outside === 'Sim' && r.autoNotLegacy === 'Não', r.outside + ' ' + r.autoNotLegacy);
   check('automatic rule: 16 Sim, 17 Não, suporte 3 Não, suporte 2 Sim, no age Sim?', r.auto === 'Sim,Não,Não,Sim,Sim', r.auto);
   check('não ABA only with psico professional?', r.naoAna === true && r.naoBia === false);
@@ -125,10 +130,10 @@ const path = require('path');
     return out;
   })()`);
   check('não ABA flag only for Sessão?', svc.flagSess === true && svc.flagTri === false, JSON.stringify(svc));
-  check('Planner: Sessão blocked, other service allowed next to a não ABA?', svc.sessBlocked && svc.otherFree === null);
+  check('Planner: other service with the specialty registered is blocked next to a não ABA?', svc.sessBlocked && !!svc.otherFree);
   check('Planner: locked cell still accepts another service (aba-soft)?', svc.soft);
   check('Planner: não ABA patient in another service does not lock the room?', svc.triNoLock === null, svc.triNoLock);
-  check('Agenda: same rules by service?', svc.agdSess && svc.agdOther === null && svc.agdTriNoLock === null, JSON.stringify([svc.agdOther, svc.agdTriNoLock]));
+  check('Agenda: same rules by service?', svc.agdSess && !!svc.agdOther && svc.agdTriNoLock === null, JSON.stringify([svc.agdOther, svc.agdTriNoLock]));
 
   // Sem exceção: grupo de suporte marcando a sala NÃO libera dois "não ABA" do mesmo profissional.
   const grp = await ev(`(function(){
