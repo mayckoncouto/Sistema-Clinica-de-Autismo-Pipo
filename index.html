@@ -3001,6 +3001,8 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="plUnblockBtn" title="Liberar horários bloqueados de um profissional, de uma sala ou da clínica toda" hidden>Liberar Horário</button>
         <button class="btn ghost" id="autoPlannerBtn" title="Propõe as sessões que faltam no Auto Planner a partir dos quadros do tratamento (você confere antes de aplicar)" hidden>Montar Proposta</button>
         <button class="btn ghost" id="apQualityBtn" title="Confere o Auto Planner inteiro: sessões colocadas × contratadas, meta de grupo, ocupação, horário vago por sala e alertas" hidden>Relatório de Qualidade</button>
+        <button class="btn ghost" id="apDraftsBtn" title="Guarde até 5 versões da grade, compare e carregue a melhor" hidden>Rascunhos</button>
+        <button class="btn ghost" id="apPrintBtn" title="Imprimir a grade por terapeuta, o horário da família e exportar para Excel" hidden>Imprimir e Exportar</button>
         <button class="btn ghost" id="apSendPlannerBtn" title="Leva o que está no Auto Planner para o Planner (só acrescenta em horários livres, respeitando as regras do Planner)" hidden>Enviar para o Planner</button>
         <button class="btn ghost" id="apUnsendBtn" title="Apaga do Planner só o que o Auto Planner enviou" hidden>Remover do Planner o que o Auto Planner Enviou</button>
         <button class="btn ghost" id="freeSlotBtn" title="Ver os horários livres para agendar um paciente">Horário Livre</button>
@@ -9702,6 +9704,8 @@ function wireControls(){
   document.getElementById("freeSlotBtn").addEventListener("click", function(){ openFreeSlotModal(); });
   document.getElementById("autoPlannerBtn").addEventListener("click", function(){ openAutoPlannerModal(); });
   document.getElementById("apQualityBtn").addEventListener("click", openApQualityModal);
+  document.getElementById("apDraftsBtn").addEventListener("click", openApDraftsModal);
+  document.getElementById("apPrintBtn").addEventListener("click", openApPrintModal);
   document.getElementById("apSendPlannerBtn").addEventListener("click", apSendToPlanner);
   document.getElementById("apUnsendBtn").addEventListener("click", apUnsendFromPlanner);
   document.getElementById("plBlockBtn").addEventListener("click", function(){ openPlBlockModal("lock"); });
@@ -19217,13 +19221,13 @@ function plannerExportCsv(){
       });
     });
     rows.sort(function(a, b){ for (var i = 0; i < a.sort.length; i++){ if (a.sort[i] < b.sort[i]) return -1; if (a.sort[i] > b.sort[i]) return 1; } return 0; });
-    if (!rows.length){ showToast("Nenhum agendamento no Planner para exportar.", true); return; }
+    if (!rows.length){ showToast("Nenhum agendamento no " + (PLA.on ? "Auto Planner" : "Planner") + " para exportar.", true); return; }
     var lines = [["Semana", "Dia", "Hora", "Sala / grupo", "Profissional", "Agendamento", "Tipo", "Serviço", "Observação"].map(cell).join(";")]
       .concat(rows.map(function(r){ return r.cells.map(cell).join(";"); }));
     var blob = new Blob(["﻿" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "planner" + (state.activeRoomFilter ? "-" + slugify((findRoom(state.activeRoomFilter) || {}).name || "sala") : "") + ".csv";
+    a.download = (PLA.on ? "autoplanner" : "planner") + (state.activeRoomFilter ? "-" + slugify((findRoom(state.activeRoomFilter) || {}).name || "sala") : "") + ".csv";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
     showToast(rows.length + " agendamentos exportados.");
@@ -19770,6 +19774,8 @@ function plAutoUi(){
   show("plAutoTitle", PLA.on);
   show("autoPlannerBtn", PLA.on && can("planner", "create") && healthCanSee());
   show("apQualityBtn", PLA.on);
+  show("apDraftsBtn", PLA.on);
+  show("apPrintBtn", PLA.on);
   show("apSendPlannerBtn", PLA.on && apSendCan() && real("planner", "create"));
   show("apUnsendBtn", PLA.on && apSendCan() && real("planner", "delete"));
   show("sendToAgendaBtn", can("agenda", "create") && (!PLA.on || apSendCan()));
@@ -19969,6 +19975,302 @@ function openApQualityModal(){
     gapBox.innerHTML = sec("Não Couberam (se rodar Montar Proposta agora)") + (plan.gaps.length ? tbl(["Paciente", "Quadro", "Faltam", "Motivo"], plan.gaps.slice(0, 200).map(function(g){ return [esc(g.p.nome), esc(lineLabel(g.line)), g.falta, esc(g.why)]; })) : '<div class="pat-count">Tudo o que está nos tratamentos tem lugar.</div>');
   }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o Auto Planner.</div>'; });
 }
+/* ---- Auto Planner: rascunhos (até 5), comparação, impressão e Excel ----
+ * Rascunho = cópia das 4 semanas do Auto Planner num documento próprio (autoplan/rascunho-<1..5>:
+ * {name, criadoEm, por, docs:{"seg-1":{chave: registro}}}). Carregar um rascunho troca a grade por ele
+ * (um único applyBookingChanges, Ctrl+Z desfaz). Comparar usa as mesmas contas do Relatório de Qualidade. */
+var AP_DRAFTS = 5;
+function apDraftPath(n){ return "autoplan/rascunho-" + n; }
+function apDraftsRead(){
+  var ns = []; for (var i = 1; i <= AP_DRAFTS; i++) ns.push(i);
+  return Promise.all(ns.map(function(n){ return db.doc(apDraftPath(n)).get(); })).then(function(snaps){
+    return snaps.map(function(sn, i){ var d = sn && sn.exists && sn.data(); return d && d.name ? Object.assign({n: i + 1}, d) : null; });
+  });
+}
+function apCountDocs(docs){
+  var n = 0;
+  Object.keys(docs || {}).forEach(function(id){ var bk = docs[id] || {}; Object.keys(bk).forEach(function(k){ var b = bk[k]; if (b && b.patient && !b.lock && !b.blocked && !bookingKind(b)) n++; }); });
+  return n;
+}
+// Roda uma conta com a grade trocada por `docs` ({docId: {chave: registro}}) e devolve o resultado.
+function apWithDocs(docs, fn){
+  var save = state.scheduleDocs, full = {};
+  plannerAllDocIds().forEach(function(id){ full[id] = {bookings: Object.assign({}, (docs && docs[id]) || {})}; });
+  state.scheduleDocs = full;
+  try { return fn(); } finally { state.scheduleDocs = save; }
+}
+function apStatsFor(docs){
+  return apWithDocs(docs, function(){
+    var q = apQuality(), complete = q.contr.filter(function(c){ return c.want === c.got; }).length, falta = q.contr.reduce(function(a, c){ return a + Math.max(0, c.want - c.got); }, 0);
+    var used = q.therRows.reduce(function(a, r){ return a + r.used; }, 0), av = q.therRows.reduce(function(a, r){ return a + r.avail; }, 0);
+    return {total: q.total, pats: Object.keys(q.byPat).length, complete: complete, of: q.contr.length, falta: falta,
+      goalOk: q.goal.filter(function(g){ return g.ok; }).length, goalN: q.goal.length, occ: av ? Math.round(used * 100 / av) : 0,
+      full: q.full.length, shifts: q.shifts, alerts: q.alerts.length};
+  });
+}
+// Diferença entre dois conjuntos: acrescentados, retirados e trocados de paciente (mesma chave).
+function apDiffDocs(a, b){
+  var add = 0, rem = 0, chg = 0;
+  plannerAllDocIds().forEach(function(id){
+    var x = (a && a[id]) || {}, y = (b && b[id]) || {};
+    var keys = {}; Object.keys(x).concat(Object.keys(y)).forEach(function(k){ keys[k] = 1; });
+    Object.keys(keys).forEach(function(k){
+      var p = x[k] && x[k].patient && !x[k].lock && !bookingKind(x[k]) ? x[k] : null, q = y[k] && y[k].patient && !y[k].lock && !bookingKind(y[k]) ? y[k] : null;
+      if (!p && q) add++; else if (p && !q) rem++; else if (p && q && (p.patient !== q.patient || (p.service || "") !== (q.service || ""))) chg++;
+    });
+  });
+  return {add: add, rem: rem, chg: chg};
+}
+function apSourceLabel(code, drafts){
+  if (code === "atual") return "Auto Planner (Atual)";
+  if (code === "plan") return "Planner (Atual)";
+  var d = drafts[+code.slice(1) - 1]; return d ? "Rascunho " + d.n + " — " + d.name : "Rascunho " + code.slice(1);
+}
+function apSourceDocs(code, drafts){
+  if (code === "atual") return currentBookingsFor(plannerAllDocIds());
+  if (code === "plan") return apReadReal().then(function(r){ var o = {}; Object.keys(r).forEach(function(id){ o[id] = r[id].bookings; }); return o; });
+  var d = drafts[+code.slice(1) - 1]; return Promise.resolve((d && d.docs) || {});
+}
+function openApDraftsModal(){
+  if (!PLA.on) return;
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var host = document.getElementById("modalHost"), drafts = [];
+  host.innerHTML =
+    '<div class="overlay" id="ovApD"><div class="modal wide" style="max-width:880px">' +
+      '<div class="modal-head"><div><h3>Rascunhos do Auto Planner</h3><div class="modal-sub">Guarde até ' + AP_DRAFTS + ' versões da grade, compare os números e carregue a melhor. Carregar troca a grade atual (Ctrl+Z desfaz).</div></div>' +
+        '<button class="modal-close" id="apdClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="tr-sec tr-sec-top">Rascunhos Salvos</div><div id="apdList"><div class="pat-count">Lendo…</div></div>' +
+        '<div class="tr-sec">Salvar o Auto Planner Atual</div>' +
+        '<div class="field-row"><div class="field"><label for="apdName">Nome</label><input id="apdName" type="text" maxlength="40" placeholder="Ex.: Mais grupos de manhã"></div>' +
+        '<div class="field"><label for="apdSlot">Guardar em</label><select id="apdSlot"></select></div></div>' +
+        '<div class="field-row"><button type="button" class="btn" id="apdSave">Salvar Rascunho</button><button type="button" class="btn ghost" id="apdRename">Só Renomear o Escolhido</button></div>' +
+        '<div class="tr-sec">Comparar</div>' +
+        '<div class="field-row"><div class="field"><label for="apdA">A</label><select id="apdA"></select></div><div class="field"><label for="apdB">B</label><select id="apdB"></select></div></div>' +
+        '<div class="field-row"><button type="button" class="btn ghost" id="apdCmp">Comparar</button></div><div id="apdOut"></div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="apdCancel">Fechar</button></div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovApD"), listEl = document.getElementById("apdList"), out = document.getElementById("apdOut");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("apdClose").addEventListener("click", close);
+  document.getElementById("apdCancel").addEventListener("click", close);
+  function srcOpts(){
+    var o = '<option value="atual">Auto Planner (Atual)</option><option value="plan">Planner (Atual)</option>';
+    drafts.forEach(function(d, i){ if (d) o += '<option value="r' + (i + 1) + '">' + esc("Rascunho " + d.n + " — " + d.name) + '</option>'; });
+    return o;
+  }
+  function refresh(){
+    return apDraftsRead().then(function(list){
+      drafts = list;
+      listEl.innerHTML = '<table class="fx-table"><thead><tr><th>Nº</th><th>Nome</th><th>Salvo em</th><th>Por</th><th>Atendimentos</th><th></th></tr></thead><tbody>' +
+        drafts.map(function(d, i){
+          if (!d) return '<tr><td>' + (i + 1) + '</td><td colspan="4"><span class="pt-muted">Vazio</span></td><td></td></tr>';
+          return '<tr><td>' + d.n + '</td><td>' + esc(d.name) + '</td><td>' + esc(trBr ? trBr(String(d.criadoEm || "").slice(0, 10)) : d.criadoEm) + '</td><td>' + esc(d.por || "") + '</td><td>' + apCountDocs(d.docs) + '</td>' +
+            '<td><button type="button" class="btn ghost" data-apd-load="' + d.n + '">Carregar</button> <button type="button" class="btn ghost" data-apd-del="' + d.n + '">Excluir</button></td></tr>';
+        }).join("") + '</tbody></table>';
+      var free = drafts.map(function(d, i){ return d ? 0 : i + 1; }).filter(Boolean)[0] || 1;
+      document.getElementById("apdSlot").innerHTML = drafts.map(function(d, i){ return '<option value="' + (i + 1) + '"' + (i + 1 === free ? ' selected' : '') + '>' + (i + 1) + (d ? ' — ' + esc(d.name) + ' (substitui)' : ' — vazio') + '</option>'; }).join("");
+      var sel = srcOpts();
+      ["apdA", "apdB"].forEach(function(id, k){ var el = document.getElementById(id), cur = el.value; el.innerHTML = sel; el.value = cur || (k ? "plan" : "atual"); if (el.selectedIndex < 0) el.value = k ? "plan" : "atual"; el.dispatchEvent(new Event("change", {bubbles: true})); });
+    });
+  }
+  refresh().catch(function(){ listEl.innerHTML = '<div class="pat-count">Não foi possível ler os rascunhos.</div>'; });
+  document.getElementById("apdSave").addEventListener("click", function(){
+    var name = document.getElementById("apdName").value.trim(), n = +document.getElementById("apdSlot").value;
+    if (!can("planner", "create") || !can("planner", "edit")){ showToast(permDeniedMsg("planner", "edit"), true); return; }
+    if (!name){ showToast("Dê um nome ao rascunho.", true); document.getElementById("apdName").focus(); return; }
+    var old = drafts[n - 1];
+    (old ? confirmDialog({title: "Substituir Rascunho", message: "O rascunho <b>" + esc(old.name) + "</b> será substituído pela grade atual do Auto Planner.", confirmLabel: "Substituir"}) : Promise.resolve(true)).then(function(ok){
+      if (!ok) return;
+      return currentBookingsFor(plannerAllDocIds()).then(function(all){
+        var docs = {}; Object.keys(all).forEach(function(id){ if (Object.keys(all[id] || {}).length) docs[id] = cloneJson(all[id]); });
+        var me = window.pipoAuth && window.pipoAuth.profile && window.pipoAuth.profile();
+        return db.doc(apDraftPath(n)).set({name: name, criadoEm: new Date().toISOString(), por: (me && me.full_name) || "", docs: docs});
+      }).then(function(){ showToast("Rascunho salvo."); document.getElementById("apdName").value = ""; return refresh(); });
+    }).catch(function(err){ showToast("Não foi possível salvar o rascunho" + (err && err.message ? ": " + err.message : "."), true); });
+  });
+  document.getElementById("apdRename").addEventListener("click", function(){
+    var name = document.getElementById("apdName").value.trim(), n = +document.getElementById("apdSlot").value, old = drafts[n - 1];
+    if (!old){ showToast("Escolha em “Guardar em” um rascunho que já existe.", true); return; }
+    if (!name){ showToast("Digite o novo nome.", true); document.getElementById("apdName").focus(); return; }
+    db.doc(apDraftPath(n)).set((function(){ var c = Object.assign({}, old, {name: name}); delete c.n; return c; })()).then(function(){ showToast("Rascunho renomeado."); document.getElementById("apdName").value = ""; return refresh(); })
+      .catch(function(err){ showToast("Não foi possível renomear" + (err && err.message ? ": " + err.message : "."), true); });
+  });
+  listEl.addEventListener("click", function(e){
+    var ld = e.target.closest("[data-apd-load]"), dl = e.target.closest("[data-apd-del]");
+    if (dl){
+      var n = +dl.getAttribute("data-apd-del"), d = drafts[n - 1]; if (!d) return;
+      confirmDialog({title: "Confirmar Exclusão", message: "Excluir o rascunho <b>" + esc(d.name) + "</b>?", confirmLabel: "Confirmar Exclusão"}).then(function(ok){
+        if (!ok) return;
+        return db.doc(apDraftPath(n)).set({}).then(function(){ showToast("Rascunho excluído."); return refresh(); });
+      }).catch(function(err){ showToast("Não foi possível excluir" + (err && err.message ? ": " + err.message : "."), true); });
+      return;
+    }
+    if (!ld) return;
+    var m = +ld.getAttribute("data-apd-load"), dr = drafts[m - 1]; if (!dr) return;
+    confirmDialog({title: "Carregar Rascunho", message: "A grade atual do Auto Planner será trocada pelo rascunho <b>" + esc(dr.name) + "</b>. Se quiser guardar a atual, salve antes. Ctrl+Z desfaz.", confirmLabel: "Carregar"}).then(function(ok){
+      if (!ok) return;
+      return currentBookingsFor(plannerAllDocIds()).then(function(cur){
+        var changes = {}, n = 0;
+        plannerAllDocIds().forEach(function(id){
+          var a = cur[id] || {}, b = (dr.docs && dr.docs[id]) || {}, day = id.split("-")[0], keys = {};
+          Object.keys(a).concat(Object.keys(b)).forEach(function(k){ keys[k] = 1; });
+          Object.keys(keys).forEach(function(k){
+            if (stableStr(a[k]) === stableStr(b[k])) return;
+            (changes[id] = changes[id] || {})[k] = b[k] ? b[k] : clearValueFor(day, k.split("|")[0]); n++;
+          });
+        });
+        if (!n){ showToast("A grade atual já é igual a este rascunho."); return; }
+        return applyBookingChanges(changes, {patientHoursOk: true, routineOk: true, therapistOk: true, areaOk: true}).then(function(res){
+          if (res === false) return;
+          showToast("Rascunho carregado (" + n + " células mudaram). Ctrl+Z desfaz."); close(); renderGrid();
+        });
+      });
+    }).catch(function(err){ showToast("Não foi possível carregar" + (err && err.message ? ": " + err.message : "."), true); });
+  });
+  document.getElementById("apdCmp").addEventListener("click", function(){
+    var ca = document.getElementById("apdA").value, cb = document.getElementById("apdB").value;
+    out.innerHTML = '<div class="pat-count">Comparando…</div>';
+    Promise.all([apSourceDocs(ca, drafts), apSourceDocs(cb, drafts)]).then(function(r){
+      var A = apStatsFor(r[0]), B = apStatsFor(r[1]), df = apDiffDocs(r[0], r[1]);
+      function row(label, a, b, fmt, better){   // better: 1 = maior é melhor, -1 = menor é melhor, 0 = sem juízo
+        var diff = b - a, s = (diff > 0 ? "+" : "") + fmt(diff);
+        return '<tr><td>' + label + '</td><td>' + fmt(a) + '</td><td>' + fmt(b) + '</td><td>' + (diff ? s : "—") + (diff && better ? (diff * better > 0 ? " (melhor)" : " (pior)") : "") + '</td></tr>';
+      }
+      var n0 = function(x){ return String(x); }, pc = function(x){ return x + "%"; };
+      out.innerHTML = '<table class="fx-table"><thead><tr><th></th><th>A — ' + esc(apSourceLabel(ca, drafts)) + '</th><th>B — ' + esc(apSourceLabel(cb, drafts)) + '</th><th>B − A</th></tr></thead><tbody>' +
+        row("Atendimentos", A.total, B.total, n0, 0) + row("Pacientes atendidos", A.pats, B.pats, n0, 0) +
+        row("Tratamentos com todas as sessões", A.complete, B.complete, n0, 1) + row("Sessões que faltam colocar", A.falta, B.falta, n0, -1) +
+        row("Pacientes ABA Sim dentro da meta de grupo", A.goalOk, B.goalOk, n0, 1) + row("Ocupação dos terapeutas", A.occ, B.occ, pc, 0) +
+        row("Turnos de sala sem horário vago", A.full, B.full, n0, -1) + row("Alertas", A.alerts, B.alerts, n0, -1) + '</tbody></table>' +
+        '<div class="pat-count">De A para B: <b>+' + df.add + '</b> atendimentos acrescentados, <b>−' + df.rem + '</b> retirados e <b>' + df.chg + '</b> trocados de paciente na mesma célula.</div>';
+    }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível comparar.</div>'; });
+  });
+}
+// ---- Imprimir e exportar ----
+var AP_PRINT_CSS = "body{font:12px Arial,sans-serif;color:#111;margin:0}h1{font-size:16px;margin:0 0 2px}h2{font-size:13px;margin:0 0 8px;color:#444}.pg{page-break-after:always;padding:6mm}.pg:last-child{page-break-after:auto}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:3px 5px;text-align:left;vertical-align:top}th{background:#eee}td.t{white-space:nowrap;width:46px;font-weight:bold}.mut{color:#666}@page{size:A4 landscape;margin:8mm}";
+function apPersonBookings(){   // sessões de pacientes da grade atual: [{p, w, day, dayFull, time, room, prof, svc}]
+  var out = [];
+  WEEKS.forEach(function(w){ DAYS.forEach(function(d){
+    var bk = ((state.scheduleDocs[d.key + "-" + w] || {}).bookings) || {};
+    Object.keys(bk).forEach(function(key){
+      var b = bk[key]; if (!b || !b.patient || b.lock || b.blocked || bookingKind(b)) return;
+      var ps = key.split("|"), room = findRoom(ps[1]); if (!room || isGroup(room)) return;
+      var p = findPatientRef(b); if (!p) return;
+      var th = findTherapist(room, ps[2]);
+      out.push({p: p, w: w, day: d.key, dayFull: d.full, time: ps[0], room: room, prof: th && th.professionalId ? findProfessional(th.professionalId) : null, svc: bookingServiceName(b), b: b});
+    });
+  }); });
+  return out;
+}
+function apWeeksText(ws){
+  ws = ws.slice().sort();
+  if (ws.length === 4) return "todas as semanas";
+  return ws.map(function(w){ return w + "ª"; }).join(" e ") + (ws.length === 1 ? " semana" : " semanas");
+}
+// Horário da família de um paciente: linhas consolidadas (mesmo dia, hora, terapeuta e sala nas várias semanas).
+function apFamilyLines(pid, list){
+  var by = {}, order = [];
+  list.filter(function(x){ return x.p.id === pid; }).forEach(function(x){
+    var k = [x.day, x.time, x.prof ? x.prof.id : "", x.room.id, x.svc].join("|");
+    if (!by[k]){ by[k] = {x: x, ws: []}; order.push(k); }
+    by[k].ws.push(x.w);
+  });
+  return order.map(function(k){ return by[k]; }).sort(function(a, b){
+    return DAYS.indexOf(findDayObj(a.x.day)) - DAYS.indexOf(findDayObj(b.x.day)) || a.x.time.localeCompare(b.x.time);
+  }).map(function(l){
+    var pr = l.x.prof, spec = pr ? (specialtyName(profAreas(pr)[0]) || "") : "";
+    return {day: l.x.dayFull, time: l.x.time, what: (l.x.svc && l.x.svc !== "Sessão" ? l.x.svc + " — " : "") + spec, who: pr ? profShortName(pr) : "", room: l.x.room.name, weeks: apWeeksText(l.ws)};
+  });
+}
+function apFamilyText(p, lines){
+  return "Horários de " + p.nome + " — " + clinicName() + "\n" + lines.map(function(l){
+    return "• " + l.day + ", " + l.time + " — " + (l.what ? l.what + " " : "") + (l.who ? "com " + l.who + " " : "") + "(" + l.room + ") — " + l.weeks;
+  }).join("\n");
+}
+function apPrintFamily(pids, list){
+  var pages = pids.map(function(pid){
+    var p = findPatientById(pid), lines = apFamilyLines(pid, list); if (!p || !lines.length) return "";
+    return '<div class="pg"><h1>' + esc(clinicName()) + '</h1><h2>Horários de ' + esc(p.nome) + '</h2><table><thead><tr><th>Dia</th><th>Horário</th><th>Atendimento</th><th>Terapeuta</th><th>Sala</th><th>Semanas</th></tr></thead><tbody>' +
+      lines.map(function(l){ return '<tr><td>' + esc(l.day) + '</td><td>' + esc(l.time) + '</td><td>' + esc(l.what) + '</td><td>' + esc(l.who) + '</td><td>' + esc(l.room) + '</td><td>' + esc(l.weeks) + '</td></tr>'; }).join("") + '</tbody></table></div>';
+  }).filter(Boolean);
+  if (!pages.length){ showToast("Nenhuma sessão no Auto Planner para imprimir.", true); return; }
+  demPrintFrame("Horário da Família", AP_PRINT_CSS, pages.join(""));
+}
+function apPrintTherapists(profId, week){
+  var list = apPersonBookings(), profs = {}, pages = [];
+  list.forEach(function(x){ if (x.prof && (!profId || x.prof.id === profId)) profs[x.prof.id] = x.prof; });
+  Object.keys(profs).map(function(id){ return profs[id]; }).sort(function(a, b){ return String(profNome(a)).localeCompare(String(profNome(b)), "pt-BR"); }).forEach(function(pr){
+    WEEKS.filter(function(w){ return !week || w === +week; }).forEach(function(w){
+      var mine = list.filter(function(x){ return x.prof && x.prof.id === pr.id && x.w === w; });
+      if (!mine.length) return;
+      var times = {}; DAYS.forEach(function(d){ d.morning.concat(d.afternoon).forEach(function(t){ times[t] = 1; }); });
+      var ts = Object.keys(times).sort();
+      pages.push('<div class="pg"><h1>' + esc(clinicName()) + ' — ' + esc(profNome(pr)) + '</h1><h2>' + esc(WEEK_LABEL[w]) + ' · Auto Planner</h2><table><thead><tr><th>Hora</th>' + DAYS.map(function(d){ return '<th>' + esc(d.full) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+        ts.map(function(t){
+          return '<tr><td class="t">' + esc(t) + '</td>' + DAYS.map(function(d){
+            var c = mine.filter(function(x){ return x.day === d.key && x.time === t; }).map(function(x){ return esc(x.p.nome) + (x.svc && x.svc !== "Sessão" ? ' <span class="mut">(' + esc(x.svc) + ')</span>' : '') + ' <span class="mut">' + esc(x.room.name) + '</span>'; });
+            return '<td>' + c.join("<br>") + '</td>';
+          }).join("") + '</tr>';
+        }).join("") + '</tbody></table></div>');
+    });
+  });
+  if (!pages.length){ showToast("Nenhuma sessão no Auto Planner para imprimir.", true); return; }
+  demPrintFrame("Grade por Terapeuta", AP_PRINT_CSS, pages.join(""));
+}
+function openApPrintModal(){
+  if (!PLA.on) return;
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var host = document.getElementById("modalHost");
+  host.innerHTML =
+    '<div class="overlay" id="ovApP"><div class="modal" style="max-width:560px">' +
+      '<div class="modal-head"><div><h3>Imprimir e Exportar</h3><div class="modal-sub">Usa o que está no Auto Planner agora.</div></div><button class="modal-close" id="appClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="tr-sec tr-sec-top">Grade por Terapeuta</div>' +
+        '<div class="field-row"><div class="field"><label for="appTher">Terapeuta</label><select id="appTher"><option value="">Todos os terapeutas</option>' + apTherOptions() + '</select></div>' +
+        '<div class="field"><label for="appWeek">Semana</label><select id="appWeek"><option value="">Todas as semanas</option>' + WEEKS.map(function(w){ return '<option value="' + w + '">' + esc(WEEK_LABEL[w]) + '</option>'; }).join("") + '</select></div></div>' +
+        '<div class="field-row"><button type="button" class="btn" id="appPrintTher">Imprimir / PDF</button></div>' +
+        '<div class="tr-sec">Horário da Família</div>' +
+        '<div class="field"><label for="appPat">Paciente</label><select id="appPat" data-combo><option value="">Todos os pacientes</option>' + state.patients.filter(isActive).sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); }).map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field-row"><button type="button" class="btn" id="appPrintFam">Imprimir / PDF</button><button type="button" class="btn ghost" id="appCopyFam" title="Copia o texto para mandar por WhatsApp (escolha um paciente)">Copiar Texto</button></div>' +
+        '<div id="appText"></div>' +
+        '<div class="tr-sec">Excel</div>' +
+        '<div class="field-row"><button type="button" class="btn ghost" id="appExcel">Exportar Excel</button></div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="appCancel">Fechar</button></div>' +
+    '</div></div>';
+  var ov = document.getElementById("ovApP");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("appClose").addEventListener("click", close);
+  document.getElementById("appCancel").addEventListener("click", close);
+  function withDocs(fn){ plannerLoadDocs().then(function(){ plannerAllDocIds().forEach(function(id){ if (!state.scheduleDocs[id]) state.scheduleDocs[id] = {bookings: {}}; }); fn(apPersonBookings()); }).catch(function(){ showToast("Não foi possível ler o Auto Planner.", true); }); }
+  document.getElementById("appPrintTher").addEventListener("click", function(){
+    var t = document.getElementById("appTher").value, w = document.getElementById("appWeek").value;
+    withDocs(function(){ apPrintTherapists(t, w); });
+  });
+  document.getElementById("appPrintFam").addEventListener("click", function(){
+    var pid = document.getElementById("appPat").value;
+    withDocs(function(list){ var ids = pid ? [pid] : Object.keys(list.reduce(function(a, x){ a[x.p.id] = 1; return a; }, {})).sort(function(a, b){ return String(findPatientById(a).nome).localeCompare(String(findPatientById(b).nome), "pt-BR"); }); apPrintFamily(ids, list); });
+  });
+  document.getElementById("appCopyFam").addEventListener("click", function(){
+    var pid = document.getElementById("appPat").value;
+    if (!pid){ showToast("Escolha um paciente para copiar o texto.", true); return; }
+    withDocs(function(list){
+      var p = findPatientById(pid), lines = apFamilyLines(pid, list);
+      if (!lines.length){ showToast("Esse paciente não tem sessões no Auto Planner.", true); return; }
+      var txt = apFamilyText(p, lines);
+      document.getElementById("appText").innerHTML = '<div class="field"><label for="appTa">Texto</label><textarea id="appTa" rows="' + Math.min(10, lines.length + 2) + '" readonly>' + esc(txt) + '</textarea></div>';
+      var done = function(){ showToast("Texto copiado."); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, function(){ var ta = document.getElementById("appTa"); ta.select(); showToast("Selecione e copie o texto acima."); });
+      else { var ta = document.getElementById("appTa"); ta.select(); showToast("Selecione e copie o texto acima."); }
+    });
+  });
+  document.getElementById("appExcel").addEventListener("click", function(){ plannerExportCsv(); });
+}
+
 // Remover uma chave só na memória (com apRestore devolvendo o valor).
 function apDel(temp, docId, key){
   var bk = state.scheduleDocs[docId].bookings;
@@ -25632,6 +25934,9 @@ var HELP_TOPICS = [
       "<b>Fixar</b>: na mesma janela, marque <b>Fixar neste horário</b>; a Montar Proposta (inclusive o Remontar) nunca muda ou apaga um atendimento fixo ou marcado à mão.",
       "<b>Montar Proposta → Modo Remontar</b>: escolha o paciente e/ou o terapeuta; o sistema apaga só o que a proposta colocou e não está fixo e monta de novo para eles (a prévia mostra quantos serão removidos). Aplicar faz tudo de uma vez e Ctrl+Z desfaz.",
       "<b>Outras Opções → Relatório de Qualidade</b>: confere o Auto Planner inteiro — sessões colocadas × contratadas por paciente, meta de grupo (60% a 80%), ocupação por terapeuta, turnos de sala sem horário vago, alertas (pacientes de Não Agrupar com juntos, fora do Horário de Atendimento) e o que não coube se rodar a Montar Proposta agora.",
+      "<b>Outras Opções → Rascunhos</b>: guarde até 5 versões da grade com nome (<b>Salvar Rascunho</b>, em “Guardar em” escolha o número; escolher um que já existe substitui). <b>Carregar</b> troca a grade atual pelo rascunho (Ctrl+Z desfaz); <b>Excluir</b> apaga; <b>Só Renomear o Escolhido</b> muda o nome. Os bloqueios extras do Auto Planner não entram no rascunho.",
+      "<b>Comparar</b> (na mesma janela): escolha A e B entre o Auto Planner atual, o Planner atual e os rascunhos; aparecem atendimentos, pacientes, tratamentos com todas as sessões, sessões que faltam, pacientes dentro da meta de grupo, ocupação dos terapeutas, turnos de sala sem horário vago e alertas, mais quantos atendimentos foram acrescentados, retirados ou trocados de paciente de A para B.",
+      "<b>Outras Opções → Imprimir e Exportar</b>: <b>Grade por Terapeuta</b> (uma página por terapeuta e semana, para entregar), <b>Horário da Família</b> (por paciente ou todos; <b>Copiar Texto</b> gera a mensagem para o WhatsApp, com os dias, horários, terapeutas, salas e semanas) e <b>Exportar Excel</b> (autoplanner.csv, uma linha por atendimento).",
       "O que a proposta coloca fica marcado: <b>Remover o que a Proposta Colocou</b> (dentro da janela Montar Proposta) apaga só essas sessões do Auto Planner (do paciente escolhido ou de todos), sem tocar no que foi marcado à mão.",
       "<b>Outras Opções → Enviar para o Planner</b>: leva os atendimentos do Auto Planner para o Planner, só em horários livres e dentro das regras dele; mostra quantos vão e quantos ficam de fora (com o motivo) antes de confirmar. Não altera nem apaga o que já está no Planner; bloqueios de horário do Auto Planner não vão.",
       "<b>Outras Opções → Remover do Planner o que o Auto Planner Enviou</b>: apaga do Planner só o que veio por esse envio (marcado internamente); o que foi marcado à mão no Planner fica.",
