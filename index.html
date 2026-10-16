@@ -12653,17 +12653,25 @@ function treatFieldsEditor(v, opts){
         showToast(del.length + (del.length === 1 ? " quadro removido." : " quadros removidos."));
       });
     });
-    // Distribuir: divide o Sessão/Mês igualmente entre todos os quadros (o resto vai para os primeiros).
+    // Distribuir: divide o Sessão/Mês entre os quadros de Sessão (o resto vai para os primeiros). Quadros de outros serviços
+    // não mudam, mas as sessões deles são descontadas do total (10/mês com 2 de outro serviço = 8 para os quadros de Sessão).
     document.getElementById("specRowDistribute").addEventListener("click", function(){
-      var total = specSumNum(document.getElementById("pPac").value), n = draftLines.length;
-      if (!n){ showToast("Inclua as especialidades antes de distribuir."); return; }
+      var total = specSumNum(document.getElementById("pPac").value);
+      var sess = draftLines.filter(function(r){ return lineSvc(r) === DEFAULT_SERVICE_ID; }), n = sess.length;
+      var others = draftLines.filter(function(r){ return lineSvc(r) !== DEFAULT_SERVICE_ID; });
+      var otherSum = 0; others.forEach(function(r){ otherSum += specSumNum(r.hours) || 0; });
+      if (!draftLines.length){ showToast("Inclua as especialidades antes de distribuir."); return; }
+      if (!n){ showToast("Não há quadros de Sessão para distribuir (os quadros de outros serviços não são distribuídos).", true); return; }
       if (total == null || total <= 0){ showToast("Preencha o Sessão/Mês para distribuir.", true); return; }
-      if (total !== Math.floor(total)){ showToast("O Sessão/Mês precisa ser um número inteiro para distribuir.", true); return; }
-      if (total < n){ showToast("Não dá para dar 1 sessão a cada quadro: são " + total + (total === 1 ? " sessão" : " sessões") + " para " + n + " quadros. Aumente o Sessão/Mês ou remova quadros.", true); return; }
-      var base = Math.floor(total / n), rem = total % n, parts = draftLines.map(function(r, i){ return base + (i < rem ? 1 : 0); });
-      confirmDialog({title: "Distribuir Sessões", message: "Dividir <b>" + total + " sessões/mês</b> entre " + n + " quadros (" + parts.join(", ") + ")?<br>Isso troca as sessões de todos os quadros.", confirmLabel: "Distribuir"}).then(function(ok){
+      if (total !== Math.floor(total) || otherSum !== Math.floor(otherSum)){ showToast("O Sessão/Mês e as sessões dos outros serviços precisam ser números inteiros para distribuir.", true); return; }
+      var avail = total - otherSum;
+      var tail = others.length ? " (" + total + " do Sessão/Mês − " + otherSum + " de outros serviços)" : "";
+      if (avail < n){ showToast("Não dá para dar 1 sessão a cada quadro de Sessão: sobram " + avail + (avail === 1 ? " sessão" : " sessões") + tail + " para " + n + " quadros. Aumente o Sessão/Mês ou remova quadros.", true); return; }
+      var base = Math.floor(avail / n), rem = avail % n, parts = sess.map(function(r, i){ return base + (i < rem ? 1 : 0); });
+      confirmDialog({title: "Distribuir Sessões", message: "Dividir <b>" + avail + " sessões/mês</b>" + esc(tail) + " entre " + n + (n === 1 ? " quadro" : " quadros") + " de Sessão (" + parts.join(", ") + ")?" +
+        (others.length ? (others.length === 1 ? "<br>O quadro de outro serviço não muda." : "<br>Os " + others.length + " quadros de outros serviços não mudam.") : "") + "<br>Isso troca as sessões dos quadros de Sessão.", confirmLabel: "Distribuir"}).then(function(ok){
         if (!ok) return;
-        draftLines.forEach(function(r, i){ r.hours = String(parts[i]); });
+        sess.forEach(function(r, i){ r.hours = String(parts[i]); });
         render();
         showToast("Sessões distribuídas: " + parts.join(", ") + ".");
       });
@@ -25849,7 +25857,7 @@ var HELP_TOPICS = [
     purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido. Acima das especialidades, um quadro mostra a idade, o diagnóstico e o nível de suporte do paciente (diagnóstico e suporte só para quem pode ver os dados de saúde).",
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
-      "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre todos os quadros; o resto vai para os primeiros; se o total for menor que o número de quadros, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
+      "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre os quadros de <b>Sessão</b>; os quadros de outros serviços não mudam, mas as sessões deles são descontadas do total — 10 por mês com 2 de outro serviço = 8 divididas entre os de Sessão; o resto vai para os primeiros; se não der 1 para cada quadro de Sessão, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
       "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",
       "<b>Não Agrupar com</b> (ao lado de Sessão/Mês): marque os pacientes que não devem ficar juntos na mesma sala e horário; o Auto Planner respeita nos dois sentidos.",
       "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava."

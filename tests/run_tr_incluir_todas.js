@@ -37,6 +37,16 @@ const TL = require('./tl-helper');
   await page.$eval('#pPac', (x) => { x.value = '1'; x.dispatchEvent(new Event('input', {bubbles: true})); });
   await menu('#specRowDistribute');
   check('total menor que os quadros: avisa e não muda', !(await page.$('#ovConfirm')) && (await TL.lines(page)).map((l) => l.hours).join(',') === '3,2');
+  // Distribuir ignora quadros que não são Sessão, mas desconta as sessões deles: 10/mês com 2 de outro serviço = 8 nos de Sessão
+  await ev(`state.services = state.services.concat([{id: "aval", name: "Avaliação"}])`);
+  const svcId = "aval";
+  await TL.addLine(page, {spec: 'Psicologia', hours: '2', svc: svcId});
+  await page.$eval('#pPac', (x) => { x.value = '10'; x.dispatchEvent(new Event('input', {bubbles: true})); });
+  await menu('#specRowDistribute');
+  const dmsg = await page.$eval('#ovConfirm', (x) => x.innerText);
+  await page.click('#cfOk'); await page.waitForTimeout(150);
+  const dl = await TL.lines(page);
+  check('Distribuir com outro serviço: 8 nos quadros de Sessão (4,4) e o outro serviço fica 2', dl.map((l) => l.hours).join(',') === '4,4,2', dl.map((l) => l.hours).join(',') + ' | ' + dmsg);
   await menu('#specRowRemoveAll'); await page.click('#cfOk'); await page.waitForTimeout(150);
   check('Remover Todas esvazia os quadros', (await TL.lines(page)).length === 0);
   check('no JS errors?', errors.length === 0, errors.join(' | '));
