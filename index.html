@@ -5121,7 +5121,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", visao_geral:"Visão Geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
+var PERM_MODULE_LABELS = {comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", visao_geral:"Visão Geral", gerenciar_status:"Gerenciar Status", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 // Auto Planner aberto? (grade própria: ver "Auto Planner: grade própria" perto de subscribeSchedule)
 var PLA = {on: false, hist: {undo: [], redo: []}};
@@ -7272,6 +7272,43 @@ function lgStatusMenu(btn, row){
   }).join("");
   menu.__row = row; menu.hidden = false; placeToolsMenu(btn, menu);
 }
+function lgManageStatus(){
+  var rows = (LG.last || []).filter(function(r){ return r && r.id; });
+  if (!rows.length){ showToast("Não há agendamentos na lista.", true); return; }
+  if (!agdToolNeedsOnline()) return;
+  var sts = statusesList().filter(function(s){ return s.id !== FINAL_STATUS && canUseStatus(s.id); });
+  if (!sts.length){ showToast("Seu nível não pode trocar nenhum status em lote.", true); return; }
+  var m = agdToolModal("ovLgManage", "Gerenciar Status",
+    "Marque os agendamentos da lista e escolha o novo status. <b>Finalizado</b> não entra aqui: exige a evolução de cada atendimento.",
+    '<div class="agd-tool-prev" id="lgmList"><table class="tr-month"><tbody>' + rows.map(function(r){
+      var lock = !canUseStatus(r.status);
+      return '<tr><td style="width:28px"><input type="checkbox" data-lgm="' + esc(String(r.id)) + '"' + (lock ? ' disabled title="Seu nível não troca este status"' : '') + ' aria-label="Marcar"></td>' +
+        '<td>' + esc(agdBrDate(r.date)) + '</td><td>' + esc(r.time) + '</td><td>' + esc(r.patient) + '</td><td>' + esc(professionalName(r.professional_id) || "—") + '</td><td>' + esc(r.status ? rpStatusName(r.status) : "Sem status") + '</td></tr>';
+    }).join("") + '</tbody></table></div>',
+    '<label class="chk-line" style="margin:0"><input type="checkbox" id="lgmAll"> Marcar Todos</label><div class="spacer"></div>' +
+    '<select id="lgmSt" aria-label="Status">' + sts.map(function(s){ return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join("") + '</select>' +
+    '<button class="btn primary" id="lgmGo" disabled>Aplicar aos Marcados</button><button class="btn ghost" data-tclose>Fechar</button>', 760);
+  var go = m.$("#lgmGo");
+  function selected(){ return Array.prototype.map.call(m.ov.querySelectorAll("[data-lgm]:checked"), function(c){ return LG.rows[c.getAttribute("data-lgm")]; }).filter(Boolean); }
+  function sync(){ var n = selected().length; go.disabled = !n; go.textContent = n ? "Aplicar aos Marcados (" + n + ")" : "Aplicar aos Marcados"; }
+  m.$("#lgmList").addEventListener("change", sync);
+  m.$("#lgmAll").addEventListener("change", function(){ var on = this.checked; Array.prototype.forEach.call(m.ov.querySelectorAll("[data-lgm]:not(:disabled)"), function(c){ c.checked = on; }); sync(); });
+  go.addEventListener("click", function(){
+    var sel = selected(), st = m.$("#lgmSt").value, stName = rpStatusName(st);
+    if (!sel.length) return;
+    confirmDialog({title: "Gerenciar Status", message: "Marcar <b>" + sel.length + "</b> agendamentos como <b>" + esc(stName) + "</b>?", confirmLabel: "Marcar"}).then(function(ok){
+      if (!ok) return;
+      go.disabled = true;
+      var fail = 0, done = 0;
+      sel.reduce(function(p, r){
+        return p.then(function(){ return agdSetStatusQuiet(r, st).then(function(u){ if (u){ done++; lgPatch(u); } else fail++; }); });
+      }, Promise.resolve()).then(function(){
+        showToast(done + " marcados como " + stName + "." + (fail ? " " + fail + " não puderam ser alterados." : ""), !!fail);
+        m.close(); lgRender();
+      });
+    });
+  });
+}
 function lgGoToAgenda(row){ prGoToAppointment({appointment_date: row.date, professional_id: row.professional_id, appointment_id: row.id}, true); }
 function wireAgendamentos(){
   var host = document.getElementById("reg-agendamentos-host"); if (!host) return;
@@ -7317,13 +7354,15 @@ function wireAgendamentos(){
   mb.addEventListener("click", function(e){
     e.stopPropagation();
     if (!mm.hidden){ mm.hidden = true; mb.setAttribute("aria-expanded", "false"); return; }
-    mm.innerHTML = '<button type="button" class="cad-item" role="menuitem" data-lg-act="csv">Exportar Excel</button><button type="button" class="cad-item" role="menuitem" data-lg-act="print">Imprimir / PDF</button>';
+    mm.innerHTML = '<button type="button" class="cad-item" role="menuitem" data-lg-act="csv">Exportar Excel</button><button type="button" class="cad-item" role="menuitem" data-lg-act="print">Imprimir / PDF</button>' +
+      (can("gerenciar_status", "view") && statusesList().some(function(s){ return s.id !== FINAL_STATUS && canUseStatus(s.id); }) ? '<button type="button" class="cad-item" role="menuitem" data-lg-act="manage">Gerenciar Status</button>' : '');
     mm.hidden = false; mb.setAttribute("aria-expanded", "true"); placeToolsMenu(mb, mm);
   });
   mm.addEventListener("click", function(e){
     var b = e.target.closest("[data-lg-act]"); if (!b) return;
     mm.hidden = true; mb.setAttribute("aria-expanded", "false");
-    if (b.getAttribute("data-lg-act") === "csv") lgExportCsv(); else lgPrint();
+    var act = b.getAttribute("data-lg-act");
+    if (act === "csv") lgExportCsv(); else if (act === "manage") lgManageStatus(); else lgPrint();
   });
   document.addEventListener("click", function(){ if (!mm.hidden){ mm.hidden = true; mb.setAttribute("aria-expanded", "false"); } });
 }
@@ -26147,7 +26186,8 @@ var HELP_TOPICS = [
       "Filtre também por profissional, especialidade e status. Clique no título de uma coluna para ordenar.",
       "Clique numa linha para abrir os <b>Detalhes do Agendamento</b>; o botão <b>Ver na Agenda</b> leva à Agenda na data e no horário do atendimento. Na própria linha, <b>Status</b> muda o status e <b>Ver na Agenda</b> faz o mesmo caminho.",
       "Os botões de alerta (sem status já passado, 2 ou mais faltas, sem próximo atendimento, paciente bloqueado) filtram a lista; clique de novo para voltar.",
-      "<b>Outras Opções</b> exporta a lista para Excel ou imprime/PDF, com o resumo e os filtros usados."
+      "<b>Outras Opções</b> exporta a lista para Excel ou imprime/PDF, com o resumo e os filtros usados.",
+      "<b>Outras Opções → Gerenciar Status</b> (quem tem a permissão <b>Gerenciar Status</b>) abre os agendamentos da lista com caixas de marcar: escolha o status, marque os atendimentos e use <b>Aplicar aos Marcados</b>. Finalizado não entra (exige a evolução) e só aparecem os status que o seu nível pode usar."
     ],
     rules: [
       "Entram só atendimentos de pacientes; bloqueios, reuniões, treinamentos e grupos de suporte ficam de fora.",

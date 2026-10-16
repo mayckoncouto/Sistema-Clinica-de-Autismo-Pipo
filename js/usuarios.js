@@ -52,6 +52,7 @@
     { key: "disponibilidade", label: "Disponibilidade", hint: "relatório de atendidos e vagas livres do Planner por dia, horário e especialidade", actions: ["view"] },
     { key: "agenda", label: "Agenda", hint: "atendimentos por data", group: "Agenda" },
     { key: "visao_geral", label: "Visão Geral", hint: "Agenda ▾ → Visão Geral: todos os atendimentos do dia numa tela", actions: ["view"] },
+    { key: "gerenciar_status", label: "Gerenciar Status", hint: "Agenda ▾ → Agendamentos → Outras Opções: mudar o status de vários atendimentos de uma vez (só os status que o nível pode usar; Finalizado não entra)", actions: ["view"] },
     { key: "prontuario", label: "Prontuário", hint: "evoluções dos atendimentos (só o autor edita a sua)", group: "Prontuário" },
     { key: "plano_terapeutico", label: "Plano Terapêutico", hint: "ver: consultar; incluir: criar e revisar; editar: tudo. Profissional sem editar muda só situação/status nas especialidades dele" },
     { key: "objetivos", label: "Objetivos", hint: "objetivos prontos para usar no plano terapêutico" },
