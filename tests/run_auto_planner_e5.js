@@ -52,15 +52,15 @@ const path = require('path');
   let r = await build(['pa', 'pb']);
   check('tightest window (pb, one slot) is placed before pa?', r.items.length === 2 && r.items[0].p === 'pb', JSON.stringify(r.items.map((x) => x.p)));
 
-  // 2) sem lugar dentro da janela do paciente: entra fora dela, marcada como "fora"
+  // 2) sem lugar dentro da janela do paciente: NÃO sugere fora dela (vai para Não Couberam)
   await setTr([tr('pa', { horarios: hor('seg', '07:20', '08:00') }, { hours: 1, aba: 'Não', semanas: '1' })]);
   await ev(`(function(){
     var bk = {}; ['rA-f1','rA-f2','rA-f3','rA-f4'].forEach(function(c){ bk["07:20|rA|" + c] = {patient: "Outro " + c, patientId: "o" + c, note: "", service: "sessao"}; });
     ['rB-f5','rB-f6'].forEach(function(c){ bk["07:20|rB|" + c] = {patient: "Outro " + c, patientId: "o" + c, note: "", service: "sessao"}; });
     state.scheduleDocs["seg-1"] = {bookings: bk};
   })()`);
-  r = await ev(`(function(){ var plan = apBuild(state.patients.filter(function(p){ return p.id === 'pa'; }), {}); return JSON.stringify({n: plan.items.length, why: plan.items[0] && plan.items[0].rec.porque, day: plan.items[0] && plan.items[0].day, gaps: plan.gaps.length}); })()`).then(JSON.parse);
-  check('placed outside the patient window and marked "fora"?', r.n === 1 && r.why.indexOf('fora') !== -1 && r.day !== 'seg' && r.gaps === 0, JSON.stringify(r));
+  r = await ev(`(function(){ var plan = apBuild(state.patients.filter(function(p){ return p.id === 'pa'; }), {}); return JSON.stringify({n: plan.items.length,  gaps: plan.gaps.length}); })()`).then(JSON.parse);
+  check('never suggested outside the patient window (goes to gaps)?', r.n === 0 && r.gaps === 1, JSON.stringify(r));
 
   // 3) relatório de viabilidade e faixa vizinha
   await setTr([tr('pa', { horarios: hor('seg', '07:20', '08:00') }, { hours: 8, aba: 'Não' })]);

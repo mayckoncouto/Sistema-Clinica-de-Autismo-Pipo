@@ -118,11 +118,11 @@ const path = require('path');
   check('one already in week 2 → the other goes to week 4?', r.items.length === 1 && r.items[0].w === 4, JSON.stringify(r.items.map((x) => x.w)));
   await ev(`plannerAllDocIds().forEach(function(id){ state.scheduleDocs[id] = {bookings: {}}; })`);
 
-  // 10) horário do quadro manda; sem horário no quadro vale o Horário de Atendimento do paciente
+  // 10) o Horário de Atendimento do paciente vale sempre, até com horário no quadro
   await setTr([tr('pa', null, { hours: 1, aba: 'Não', dia: 'seg', hora: '09:20', semanas: '1' })]);
   await ev(`state.patients.forEach(function(p){ if (p.id === 'pa') p.horarios = {seg: {ativo: true, tarde: {inicio: '13:30', fim: '18:10'}}}; })`);
   r = await build(['pa']);
-  check('quadro time (09:20) wins over the patient availability?', r.items.length === 1 && r.items[0].time === '09:20', JSON.stringify(r.items));
+  check('quadro time outside the patient availability is never suggested?', r.items.length === 0, JSON.stringify(r.items));
   await setTr([tr('pa', null, { hours: 1, aba: 'Não', dia: 'seg', semanas: '1' })]);
   await ev(`state.patients.forEach(function(p){ if (p.id === 'pa') p.horarios = {seg: {ativo: true, tarde: {inicio: '13:30', fim: '18:10'}}}; })`);
   r = await build(['pa']);
