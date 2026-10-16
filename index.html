@@ -19556,7 +19556,7 @@ function apWhyText(code){ var pr = String(code).split(":"); return (AP_WHY[pr[0]
 // Monta a proposta. Devolve {items:[{p, line, w, day, time, room, seat, prof, docId, key, rec, group}], gaps:[{p, line, falta, why}], noLines:[p]}.
 function apBuild(patients, opts){
   opts = opts || {};
-  var plan = {items: [], gaps: [], noLines: [], support: [], goal: [], capacity: [], viab: []}, temp = [], haveBy = {}, tasks = [], capNeed = {}, capFree = {};
+  var plan = {items: [], gaps: [], noLines: [], support: [], goal: [], capacity: [], viab: [], diag: [], ejected: 0}, temp = [], haveBy = {}, tasks = [], capNeed = {}, capFree = {};
   var docIds = plannerAllDocIds();
   docIds.forEach(function(id){ if (!state.scheduleDocs[id]) state.scheduleDocs[id] = {bookings: {}}; if (!state.scheduleDocs[id].bookings) state.scheduleDocs[id].bookings = {}; });
   var sibCache = {}, profCache = {}, seatProf = {}, roomCache = {}, kindCache = {}, statCache = {};
@@ -19627,11 +19627,33 @@ function apBuild(patients, opts){
       plan.viab.push({p: p, slots: slots, dias: Object.keys(daysOk).length, sem: Math.round(wk * 10) / 10, tight: tight});
       todo.forEach(function(x){ tasks.push({p: p, lines: lines, line: x.line, hours: x.hours, tot: tot, tight: (x.line.hora ? 0 : tight), cls: lineSvc(x.line) !== DEFAULT_SERVICE_ID ? 0 : (apIsAbaSim(p, x.line) ? 2 : 1)}); });
     });
-    // 1º os serviços que não são Sessão, depois as Sessões individuais (ABA = Não) e por último o grupo ABA = Sim (agrupado por faixa e especialidade). Em cada grupo, quem tem MENOS sessões no mês monta primeiro (1, 2, 3…).
-    tasks.sort(function(a, b){
-      return a.cls - b.cls || (a.tot - b.tot) || (a.cls === 2 ? (apBandId(a.p).localeCompare(apBandId(b.p)) || String(a.line.specId).localeCompare(String(b.line.specId))) : 0) ||
-        (a.tight - b.tight) || String(a.p.nome).localeCompare(String(b.p.nome), "pt-BR");
+    // Fase 1 (diagnóstico): para cada quadro, em quantos horários (semana × dia × hora) ele ainda tem alguma coluna livre
+    // dentro do Horário de Atendimento do paciente. Dificuldade = horários possíveis ÷ sessões a colocar (menor = mais difícil).
+    tasks.forEach(function(tk){
+      var cols0 = apColumnsFor(tk.line), opts0 = 0;
+      apWeeksOf(tk.line).forEach(function(w){ DAYS.forEach(function(d){
+        if (tk.line.dia && tlDays(tk.line).indexOf(d.key) === -1) return;
+        var bk0 = state.scheduleDocs[d.key + "-" + w].bookings;
+        d.morning.concat(d.afternoon).forEach(function(time){
+          if (tk.line.hora && time !== tk.line.hora) return;
+          if (!patientSlotOk(tk.p, d.key, time)) return;
+          var ok0 = cols0.some(function(c){
+            var cur = effectiveBooking(bk0, time + "|" + c.room.id + "|" + c.seat.id, d.key, time);
+            return !(cur && (cur.patient || cur.blocked || cur.lock)) && seatAvailable(c.seat, d.key, time) && !plLockInfo(cur, d.key, w, time, c.room, c.seat);
+          });
+          if (ok0) opts0++;
+        });
+      }); });
+      tk.opts = opts0; tk.diff = tk.hours > 0 ? opts0 / tk.hours : 99;
+      plan.diag.push({p: tk.p, line: tk.line, hours: tk.hours, opts: opts0, diff: tk.diff, cls: tk.cls});
     });
+    // Fase 2 (distribuição): 1º os serviços que não são Sessão, depois as Sessões individuais (ABA = Não) e por último o grupo ABA = Sim
+    // (agrupado por faixa e especialidade). Em cada grupo, o quadro mais DIFÍCIL (menos horários possíveis por sessão) monta primeiro; empate: menos sessões no mês.
+    tasks.sort(function(a, b){
+      return a.cls - b.cls || (a.cls === 2 ? (apBandId(a.p).localeCompare(apBandId(b.p)) || String(a.line.specId).localeCompare(String(b.line.specId))) : 0) ||
+        (a.diff - b.diff) || (a.tot - b.tot) || (a.tight - b.tight) || String(a.p.nome).localeCompare(String(b.p.nome), "pt-BR");
+    });
+    plan.diag.sort(function(a, b){ return a.diff - b.diff; });
     // vagas livres (individuais) hoje, por especialidade das sessões a colocar
     var capSpecs = {}; tasks.forEach(function(tk){ capSpecs[tk.line.specId] = 1; });
     Object.keys(capSpecs).forEach(function(sid){
@@ -19772,7 +19794,7 @@ function apBuild(patients, opts){
           var rec = Object.assign({}, rec0, {auto: true, porque: best.rs});
           apPut(temp, best.docId, best.key, rec);
           sibCache = {}; profCache = {}; roomCache = {}; kindCache = {}; statCache = {};
-          plan.items.push({p: p, line: line, w: w, day: best.d.key, dayFull: best.d.full, time: best.time, room: best.c.room, seat: best.c.seat, prof: best.c.prof, docId: best.docId, key: best.key, rec: rec, abaSim: abaSim});
+          plan.items.push({p: p, line: line, w: w, day: best.d.key, dayFull: best.d.full, time: best.time, room: best.c.room, seat: best.c.seat, prof: best.c.prof, docId: best.docId, key: best.key, rec: rec, abaSim: abaSim, _tk: tk});
           sched.push({w: w, day: best.d.key, time: best.time, roomId: best.c.room.id, seatId: best.c.seat.id});
           placedHere++;
           return true;
@@ -19801,7 +19823,57 @@ function apBuild(patients, opts){
           for (var oj = 0; oj < ord.length && placedHere < missing; oj++){ if (tryPlace(ord[oj], rx)){ mv = true; break; } }
         }
       });
-      if (placedHere < missing) plan.gaps.push({p: p, line: line, falta: missing - placedHere, why: why});
+      // Etapa B (troca para abrir vaga): funções deste quadro, usadas depois do laço principal
+      tk.api = {
+        allowed: allowed,
+        left: function(){ return missing - placedHere; },
+        try1: function(w, rx){ return tryPlace(w, rx); },
+        placeAny: function(){   // coloca UMA sessão nas semanas permitidas (semana mais vazia primeiro); no grupo ABA Sim tenta também a faixa vizinha
+          var rxs = abaSim ? [0, 2] : [0];
+          for (var ri = 0; ri < rxs.length; ri++){
+            var ord2 = allowed.slice().sort(function(a, b){ return (mine.concat(sched).filter(function(h){ return h.w === a; }).length) - (mine.concat(sched).filter(function(h){ return h.w === b; }).length); });
+            for (var oi2 = 0; oi2 < ord2.length; oi2++){ if (tryPlace(ord2[oi2], rxs[ri])) return true; }
+          }
+          return false;
+        },
+        unplace: function(it){
+          var ix = plan.items.indexOf(it); if (ix < 0) return false;
+          plan.items.splice(ix, 1); apDel(temp, it.docId, it.key);
+          for (var si = sched.length - 1; si >= 0; si--){ var s0 = sched[si]; if (s0.w === it.w && s0.day === it.day && s0.time === it.time && s0.roomId === it.room.id && s0.seatId === it.seat.id){ sched.splice(si, 1); break; } }
+          placedHere--; sibCache = {}; profCache = {}; roomCache = {}; kindCache = {}; statCache = {};
+          return true;
+        },
+        restore: function(it){
+          apPut(temp, it.docId, it.key, it.rec); plan.items.push(it);
+          sched.push({w: it.w, day: it.day, time: it.time, roomId: it.room.id, seatId: it.seat.id});
+          placedHere++; sibCache = {}; profCache = {}; roomCache = {}; kindCache = {}; statCache = {};
+        }
+      };
+      if (placedHere < missing) plan.gaps.push({p: p, line: line, falta: missing - placedHere, why: why, tk: tk});
+    });
+    // Etapa B: para cada sessão que não coube, tenta tirar uma sessão já proposta (de quadro igual ou mais fácil) do lugar,
+    // colocar a difícil ali e recolocar a outra em outro horário. Só vale se as duas ficarem no Auto Planner; senão volta tudo.
+    var tEj = Date.now();
+    plan.gaps.slice().forEach(function(gp){
+      var tk = gp.tk, api = tk && tk.api; if (!api) return;
+      var cols = apColumnsFor(tk.line), guard = 0;
+      while (api.left() > 0 && Date.now() - tEj < 6000 && guard++ < 12){
+        var victims = plan.items.filter(function(v){
+          return v._tk && v._tk !== tk && v._tk.api && v._tk.diff >= tk.diff && v.prof && cols.some(function(c){ return c.prof.id === v.prof.id; }) &&
+            (!tk.line.dia || tlDays(tk.line).indexOf(v.day) !== -1) && (!tk.line.hora || v.time === tk.line.hora) && patientSlotOk(tk.p, v.day, v.time) && tk.api.allowed.indexOf(v.w) !== -1;
+        }).sort(function(a, b){ return b._tk.diff - a._tk.diff; }).slice(0, 60);
+        var fixed = false;
+        for (var vi2 = 0; vi2 < victims.length && !fixed; vi2++){
+          var v = victims[vi2], va = v._tk.api;
+          if (!va.unplace(v)) continue;
+          var okNew = api.try1(v.w, 0);
+          if (okNew && va.placeAny()){ fixed = true; plan.ejected++; break; }
+          if (okNew) api.unplace(plan.items[plan.items.length - 1]);
+          va.restore(v);
+        }
+        if (!fixed) break;
+      }
+      if (api.left() <= 0) plan.gaps.splice(plan.gaps.indexOf(gp), 1); else gp.falta = api.left();
     });
     // tamanho final de cada grupo (ainda com as sugestões na memória)
     plan.items.forEach(function(it){ if (it.abaSim) it.group = apOccAba(apOcc(it.docId, it.time, it.room)).length; });
@@ -20444,6 +20516,7 @@ function openAutoPlannerModal(){
     var aba = plan.items.filter(function(it){ return it.abaSim; }), alone = aba.filter(function(it){ return it.group === 1; }).length;
     var html = '<div class="pat-count" style="margin-bottom:8px"><b>' + plan.items.length + '</b> ' + (plan.items.length === 1 ? "sessão proposta" : "sessões propostas") + ' para <b>' + Object.keys(by).length + '</b> ' + (Object.keys(by).length === 1 ? "paciente" : "pacientes") +
       (plan.gaps.length ? ' · <b>' + plan.gaps.reduce(function(a, g){ return a + g.falta; }, 0) + '</b> não couberam' : '') +
+      (plan.ejected ? ' · <b>' + plan.ejected + '</b> ' + (plan.ejected === 1 ? 'sessão encaixada' : 'sessões encaixadas') + ' trocando outra de lugar' : '') +
       (plan.noLines.length ? ' · ' + plan.noLines.length + ' sem quadros no tratamento' : '') +
       (aba.length ? ' · ABA Sim: ' + (aba.length - alone) + ' em grupo, ' + alone + ' sozinhas' : '') + '.' +
       ((plan.removed || []).length ? ' <b>' + plan.removed.length + '</b> ' + (plan.removed.length === 1 ? 'atendimento da proposta anterior será removido' : 'atendimentos da proposta anterior serão removidos') + ' (fixos e marcados à mão ficam).' : '') + '</div>';
@@ -20455,6 +20528,12 @@ function openAutoPlannerModal(){
             (it.abaSim ? ' <span class="pat-count">' + (it.group > 1 ? 'grupo de ' + it.group : 'sozinho(a)') + '</span>' : (apLineAba(it.p, it.line) === "Não" ? ' <span class="pat-count">individual</span>' : '')) + '</div>';
         }).join("") + '</div></details>';
     });
+    if ((plan.diag || []).length){
+      var dg = plan.diag.filter(function(x){ return x.diff < 3; }).slice(0, 25);
+      html += '<div class="prof-section-head" style="margin-top:12px"><span class="tr-sec tr-sec-in">Diagnóstico dos Quadros</span></div><div class="pat-count">' + plan.diag.length + ' quadros analisados (do mais difícil ao mais fácil). Dificuldade = horários possíveis (dentro do Horário de Atendimento, com alguma coluna livre) ÷ sessões a colocar.</div>' +
+        (dg.length ? '<table class="fx-table"><thead><tr><th>Paciente</th><th>Quadro</th><th>Sessões a Colocar</th><th>Horários Possíveis</th><th>Por Sessão</th></tr></thead><tbody>' +
+        dg.map(function(x){ return '<tr><td>' + esc(x.p.nome) + '</td><td>' + esc(lineLabel(x.line)) + '</td><td>' + x.hours + '</td><td>' + x.opts + '</td><td>' + (Math.round(x.diff * 10) / 10) + '</td></tr>'; }).join("") + '</tbody></table><div class="pat-count">Mostrando os quadros com menos de 3 horários possíveis por sessão.</div>' : '<div class="pat-count">Nenhum quadro com menos de 3 horários possíveis por sessão.</div>');
+    }
     var vi = (plan.viab || []).filter(function(v){ return v.slots < Math.ceil(v.sem) || v.tight < 1.2; }).sort(function(a, b){ return a.tight - b.tight; });
     if (vi.length){
       html += '<div class="prof-section-head" style="margin-top:12px"><span class="tr-sec tr-sec-in">Viabilidade dos Horários</span></div><table class="fx-table"><thead><tr><th>Paciente</th><th>Horários Disponíveis por Semana</th><th>Dias</th><th>Sessões por Semana</th><th>Situação</th></tr></thead><tbody>' +
@@ -26216,7 +26295,7 @@ var HELP_TOPICS = [
     purpose: "Grade igual à do Planner, mas <b>com registros próprios</b> (começa vazia): o sistema monta uma proposta de agenda a partir dos tratamentos de cada paciente e você confere, ajusta e só então envia para o Planner ou para a Agenda. O Planner de verdade não muda enquanto você trabalha aqui.",
     steps: [
       "Menu <b>Planner ▾ → Auto Planner</b>. A grade, as regras (conflitos, ABA, máximo de 4 por sala, horário de trabalho, paciente bloqueado, rotina) e as ferramentas são as do Planner; os registros ficam separados e o nome <b>Auto Planner</b> aparece no começo da barra. Voltar ao Planner mostra os registros dele.",
-      "<b>Outras Opções → Montar Proposta</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Auto Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. Dentro de cada grupo de prioridade, quem tem MENOS sessões no mês é montado primeiro (1 por mês, depois 2, 3 e assim por diante); no empate, quem tem menos folga (horários disponíveis ÷ sessões por semana). Nenhuma sessão é sugerida fora do Horário de Atendimento do paciente (cadastro do tratamento), nem quando o quadro tem horário: o que não couber vai para Não Couberam. Nos grupos ABA Sim vale também a faixa etária vizinha, se não houver colegas da mesma faixa. A prévia traz a tabela Viabilidade dos Horários (pacientes com menos horários que sessões ou quase sem folga). Prioridade: o que foi marcado à mão fica fixo e atrai os grupos; depois vêm os serviços que não são Sessão, as Sessões de pacientes ABA Não e, por último, os pacientes ABA Sim, em grupo só com a mesma faixa etária (cor). Grupos: nas salas com Intervenção ABA Sim, de 2 a 4 pacientes (sala de 4 colunas até 4; sala de 3 colunas no máximo 3); nas demais salas, de 1 a 2; as salas ABA são preferidas para os grupos. Meta: 80% das sessões de cada paciente ABA Sim no mês em grupo (o resto individual), preferindo juntar quem tem o mesmo nível de suporte (cadastro, seção Saúde). As sessões seguem o dia e o horário do quadro da especialidade e ficam sempre dentro do Horário de Atendimento do paciente. Com só 2 sessões no mês, as semanas são alternadas (1ª e 3ª, ou 2ª e 4ª). Quem está em <b>Não Agrupar com</b> no tratamento nunca fica junto, na mesma sala e horário. Cada profissional só atende uma sala por horário e os bloqueios de horário (do Planner e do Auto Planner) são respeitados. Sempre que possível: um horário sem ninguém por sala em cada turno e, nas salas ABA, grupos intercalados com sessões individuais. Com a caixa <b>Marcar o Aplicador ABA nos grupos de 3 ou 4 pacientes</b>, o Aplicador ABA é marcado na coluna do grupo de suporte nesses horários. Sempre que possível: irmãos (mesma mãe ou pai no cadastro) no mesmo horário ou em horários colados; por turno, de 3 a 4 horários cheios por profissional e um horário livre que não seja o primeiro nem o último. Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo. A prévia também mostra a Meta de Grupo por Paciente (quem ficou abaixo ou acima de 80%) e a Capacidade por Especialidade (sessões a colocar × vagas livres). Exige a permissão <b>Pacientes – Saúde</b>.",
+      "<b>Outras Opções → Montar Proposta</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Auto Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. O cálculo tem fases: primeiro analisa todos os quadros (quantos horários possíveis cada um tem dentro do Horário de Atendimento do paciente, com alguma coluna livre); depois distribui, dentro de cada grupo de prioridade, do quadro mais difícil (menos horários possíveis por sessão) ao mais fácil, e no empate quem tem menos sessões no mês. Quando uma sessão não cabe, o sistema tenta tirar do lugar uma sessão já proposta de quadro igual ou mais fácil, colocar a difícil ali e recolocar a outra em outro horário; se a outra não achar lugar, tudo volta como estava. A tabela “Diagnóstico dos Quadros” mostra os mais difíceis. Nenhuma sessão é sugerida fora do Horário de Atendimento do paciente (cadastro do tratamento), nem quando o quadro tem horário: o que não couber vai para Não Couberam. Nos grupos ABA Sim vale também a faixa etária vizinha, se não houver colegas da mesma faixa. A prévia traz a tabela Viabilidade dos Horários (pacientes com menos horários que sessões ou quase sem folga). Prioridade: o que foi marcado à mão fica fixo e atrai os grupos; depois vêm os serviços que não são Sessão, as Sessões de pacientes ABA Não e, por último, os pacientes ABA Sim, em grupo só com a mesma faixa etária (cor). Grupos: nas salas com Intervenção ABA Sim, de 2 a 4 pacientes (sala de 4 colunas até 4; sala de 3 colunas no máximo 3); nas demais salas, de 1 a 2; as salas ABA são preferidas para os grupos. Meta: 80% das sessões de cada paciente ABA Sim no mês em grupo (o resto individual), preferindo juntar quem tem o mesmo nível de suporte (cadastro, seção Saúde). As sessões seguem o dia e o horário do quadro da especialidade e ficam sempre dentro do Horário de Atendimento do paciente. Com só 2 sessões no mês, as semanas são alternadas (1ª e 3ª, ou 2ª e 4ª). Quem está em <b>Não Agrupar com</b> no tratamento nunca fica junto, na mesma sala e horário. Cada profissional só atende uma sala por horário e os bloqueios de horário (do Planner e do Auto Planner) são respeitados. Sempre que possível: um horário sem ninguém por sala em cada turno e, nas salas ABA, grupos intercalados com sessões individuais. Com a caixa <b>Marcar o Aplicador ABA nos grupos de 3 ou 4 pacientes</b>, o Aplicador ABA é marcado na coluna do grupo de suporte nesses horários. Sempre que possível: irmãos (mesma mãe ou pai no cadastro) no mesmo horário ou em horários colados; por turno, de 3 a 4 horários cheios por profissional e um horário livre que não seja o primeiro nem o último. Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo. A prévia também mostra a Meta de Grupo por Paciente (quem ficou abaixo ou acima de 80%) e a Capacidade por Especialidade (sessões a colocar × vagas livres). Exige a permissão <b>Pacientes – Saúde</b>.",
       "<b>Por que aqui?</b>: clique num atendimento colocado pela proposta; a janela lista os motivos do encaixe (horário do quadro, grupo e nível de suporte, repetição do horário nas semanas, horário vago na sala etc.). Na prévia, passe o mouse sobre a sessão.",
       "<b>Fixar</b>: na mesma janela, marque <b>Fixar neste horário</b>; a Montar Proposta (inclusive o Remontar) nunca muda ou apaga um atendimento fixo ou marcado à mão.",
       "<b>Montar Proposta → Modo Remontar</b>: escolha o paciente e/ou o terapeuta; o sistema apaga só o que a proposta colocou e não está fixo e monta de novo para eles (a prévia mostra quantos serão removidos). Aplicar faz tudo de uma vez e Ctrl+Z desfaz.",
