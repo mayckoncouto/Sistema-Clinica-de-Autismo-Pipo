@@ -24170,15 +24170,27 @@ function openTreatmentModal(t, opts){
     var n0 = sysMode("tr_realizados") === "block" ? trDoneCount(t) : 0;
     if (n0 === null && agdClient()){ trLoadLast(false).then(function(){ applyLock(); var n1 = trDoneCount(t); if (n1 === null) showToast("Não foi possível conferir os atendimentos deste tratamento. Tente de novo.", true); else if (n1) showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); else del.click(); }); return; }
     if (n0){ showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); return; }
-    confirmDialog({title: "Confirmar Exclusão", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Confirmar Exclusão"})
+    // Vendas do tratamento saem junto (mesmas regras do Excluir venda).
+    var withSales = agdClient() ? slCan("view") : !!window.__pipoSales;
+    (withSales ? Promise.all([slLoad(true), fpLoad(), comLoad()]) : Promise.resolve()).then(function(){
+    var sales = withSales ? (SALES.rows || []).filter(function(s){ return s.treatment === t.id; }) : [];
+    var chk = slDeleteCheck(sales);
+    if (chk.why){ showToast("O tratamento não pode ser excluído: " + chk.why.charAt(0).toLowerCase() + chk.why.slice(1), true); return; }
+    confirmDialog({title: "Confirmar Exclusão", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?" +
+      (sales.length ? "<br><b>Será excluído junto:</b> " + esc(slDeleteText(sales, chk)) + "." : "") +
+      "<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Confirmar Exclusão"})
       .then(function(ok){
         if (!ok) return;
+        (sales.length ? slDeleteSales(sales) : Promise.resolve(true)).then(function(sOk){
+        if (!sOk){ showToast("A venda não foi excluída; o tratamento foi mantido.", true); return; }
         writeTreatments(state.treatments.filter(function(x){ return x.id !== t.id; })).then(function(done){
           var c = agdClient();
           if (done !== false && c) c.from("treatment_finance").delete().eq("treatment_id", t.id).then(function(){});
           close();
         });
+        });
       });
+    });
   });
   var sv = document.getElementById("trSave");
   if (sv) sv.addEventListener("click", function(){
@@ -25355,7 +25367,7 @@ function openVendaDetalhe(id){
         return '<tr><td>' + esc(fpLabel(x)) + '</td><td>' + esc(trBr(x.venc)) + '</td><td>' + esc(fmtMoney(x.valor)) + '</td><td>' + fpStatusChip(x) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="hint">Nenhuma parcela gerada no Contas a Receber.</div>') +
       (comCan("view") ? '<div class="tr-sec">Comissão</div>' + (c ? '<div class="field-row">' + row("Valor", esc(fmtMoney(c.valor)) + ' (' + String(c.pct).replace(".", ",") + '% de ' + esc(fmtMoney(c.base)) + ')') + row("Situação", esc(comStatusText(c))) + '</div>' :
         '<div class="hint">' + (s.status !== "ativa" ? "Venda sem comissão." : !s.seller ? "Venda sem vendedor: não gera comissão." : "Aguardando a 1ª parcela paga ou o 1º atendimento finalizado.") + '</div>') : '') +
-    '</div><div class="modal-foot"><span></span><div class="spacer"></div>' + (t && can("tratamentos", "view") ? '<button class="btn ghost" id="vnDTr">Abrir Tratamento</button>' : '') + '<button class="btn ghost" id="vnDCt">Contrato</button>' +
+    '</div><div class="modal-foot">' + (slCan("delete") ? '<button class="btn danger" id="vnDDel">Excluir</button>' : '<span></span>') + '<div class="spacer"></div>' + (t && can("tratamentos", "view") ? '<button class="btn ghost" id="vnDTr">Abrir Tratamento</button>' : '') + '<button class="btn ghost" id="vnDCt">Contrato</button>' +
       (slCan("edit") ? '<button class="btn ghost" id="vnDEdit">Editar</button>' : '') + '<button class="btn primary" id="vnDOk">Fechar</button></div></div></div>';
   var $ = function(x){ return document.getElementById(x); }, ov = $("ovVn");
   var close = function(){ host.innerHTML = ""; };
@@ -25364,6 +25376,9 @@ function openVendaDetalhe(id){
   if ($("vnDEdit")) $("vnDEdit").addEventListener("click", function(){
     var why = slEditBlocked(s); if (why){ showToast(why, true); return; }
     close(); openVendaEditar(s);
+  });
+  if ($("vnDDel")) $("vnDDel").addEventListener("click", function(){
+    slDeleteFlow(s).then(function(done){ if (done){ close(); if (state.tab === "vendas") renderVendas(); } });
   });
   $("vnDCt").addEventListener("click", function(){ close(); slContratoDialog(s); });
   if ($("vnDTr")) $("vnDTr").addEventListener("click", function(){ close(); openTreatmentModal(t, {stack: true}); });
@@ -25463,6 +25478,84 @@ function openVendaEditar(s){
         openVendaDetalhe(s.id);
       });
     });
+  });
+}
+/* Excluir venda (2026-10-16): permissão Vendas (excluir). Parcela recebida ou comissão paga bloqueiam; parcelas em aberto, a comissão e a conta a pagar
+ * do vendedor em aberto são excluídas junto. Excluir o tratamento exclui as vendas dele com as mesmas regras (`slDeleteCheck` / `slDeleteSales`). */
+function slDeleteCheck(list){
+  var out = {why: "", parc: 0, com: 0};
+  if (!list.length) return out;
+  if (!slCan("delete")){ out.why = permDeniedMsg("vendas", "delete"); return out; }
+  list.forEach(function(s){
+    if (out.why) return;
+    var parc = slParcels([s.id]);
+    if (parc.some(fpDone)){ out.why = "A venda de " + trBr(s.data) + " tem parcela recebida no Contas a Receber e não pode ser excluída: use Cancelar."; return; }
+    out.parc += parc.length;
+    var c = comOf(s.id);
+    if (!c) return;
+    var pay = c.payable ? (FP.rows || []).filter(function(x){ return x.id === c.payable; })[0] : null;
+    if (c.status === "gerada" && pay && fpDone(pay)){ out.why = "A comissão da venda de " + trBr(s.data) + " já foi paga a " + (c.sellerName || "o vendedor") + " e a venda não pode ser excluída: use Cancelar."; return; }
+    out.com++;
+  });
+  if (!out.why && out.parc && !fpCan("delete")) out.why = "Para excluir as parcelas em aberto da venda é preciso ter Financeiro (excluir).";
+  if (!out.why && out.com && !comCan("delete")) out.why = "Para excluir a comissão da venda é preciso ter Comissões (excluir).";
+  if (!out.why && out.com && !fpCan("delete")) out.why = "Para excluir a conta a pagar da comissão é preciso ter Financeiro (excluir).";
+  return out;
+}
+function slDeleteText(list, chk){
+  return (list.length === 1 ? "a venda" : "as " + list.length + " vendas") +
+    (chk.parc ? ", " + chk.parc + (chk.parc === 1 ? " parcela em aberto" : " parcelas em aberto") + " no Contas a Receber" : "") +
+    (chk.com ? " e " + (chk.com === 1 ? "a comissão" : "as comissões") + " do vendedor (com a conta a pagar em aberto)" : "");
+}
+function comDeleteRow(id){
+  var c = agdClient();
+  var done = function(){ COMM.rows = (COMM.rows || []).filter(function(x){ return x.id !== id; }); return true; };
+  if (!c) return Promise.resolve(done());
+  return c.from("sale_commissions").delete().eq("id", id).then(function(res){
+    if (res.error){ showToast("Não foi possível excluir a comissão: " + res.error.message, true); return false; }
+    return done();
+  });
+}
+function slDeleteRow(id){
+  var c = agdClient();
+  var done = function(){ SALES.rows = (SALES.rows || []).filter(function(x){ return x.id !== id; }); return true; };
+  if (!c) return Promise.resolve(done());
+  return c.from("treatment_sales").delete().eq("id", id).then(function(res){
+    if (res.error){ showToast("Não foi possível excluir a venda: " + res.error.message, true); return false; }
+    return done();
+  });
+}
+// Exclui as vendas (já conferidas por slDeleteCheck). Promise<true|false>.
+function slDeleteSales(list){
+  var chain = Promise.resolve(true);
+  list.forEach(function(s){
+    chain = chain.then(function(ok){
+      if (!ok) return false;
+      var open = slParcels([s.id]).filter(function(x){ return !fpDone(x); }).map(function(x){ return x.id; });
+      var c = comOf(s.id);
+      return (open.length ? fpDelete(open) : Promise.resolve(true)).then(function(ok2){
+        if (!ok2) return false;
+        if (!c) return true;
+        return (c.payable && (FP.rows || []).some(function(x){ return x.id === c.payable; }) ? fpDelete([c.payable]) : Promise.resolve(true)).then(function(ok3){ return ok3 && comDeleteRow(c.id); });
+      }).then(function(ok4){
+        if (!ok4) return false;
+        // a venda que esta tinha substituído volta a valer
+        var prev = (SALES.rows || []).filter(function(x){ return x.replacedBy === s.id && x.status === "substituida"; }).map(function(x){ return x.id; });
+        return slDeleteRow(s.id).then(function(ok5){ return ok5 && (prev.length ? slPatch(prev, {status: "ativa", replacedBy: ""}) : true); });
+      });
+    });
+  });
+  return chain;
+}
+function slDeleteFlow(s){
+  return Promise.all([slLoad(), fpLoad(), comLoad()]).then(function(){
+    var chk = slDeleteCheck([s]);
+    if (chk.why){ showToast(chk.why, true); return false; }
+    return confirmDialog({title: "Confirmar Exclusão", message: "Excluir " + esc(slDeleteText([s], chk)) + " de <b>" + esc(vnPatName(s)) + "</b> (" + esc(trBr(s.data)) + ", " + esc(fmtMoney(s.total)) + ")?<br>Para encerrar uma venda normalmente, cancele o tratamento.", confirmLabel: "Confirmar Exclusão"})
+      .then(function(ok){
+        if (!ok) return false;
+        return slDeleteSales([s]).then(function(done){ if (done) showToast("Venda excluída."); return done; });
+      });
   });
 }
 function wireVendas(){
@@ -26271,6 +26364,7 @@ var HELP_TOPICS = [
       "Marque <b>Gerar parcelas no Contas a Receber</b> para criar as contas: entrada (opcional), número de parcelas, primeiro vencimento, intervalo em meses, conta bancária e subcategoria. A prévia mostra cada parcela antes de salvar.",
       "Na venda seguinte do mesmo tratamento, a anterior fica <b>Substituída</b>; se havia parcelas em aberto dela, você escolhe manter ou excluir.",
       "Para corrigir uma venda, abra-a em <b>Financeiro ▾ → Vendas</b> e clique em <b>Editar</b>: dá para mudar a data, o vendedor, a forma de pagamento e as observações (valor, meses e tipo não mudam). Só a venda <b>Ativa</b> e sem parcela recebida pode ser editada. Trocar o vendedor recalcula a comissão que ainda não foi paga; se já foi paga, o sistema só avisa a diferença a acertar.",
+      "Na mesma janela, <b>Excluir</b> apaga a venda junto com as parcelas em aberto no Contas a Receber e a comissão do vendedor (e a conta a pagar dela). Venda com parcela recebida ou com comissão já paga não pode ser excluída: cancele o tratamento. Excluir o <b>tratamento</b> exclui a venda dele do mesmo jeito (a confirmação mostra o que sai junto); se a venda estiver bloqueada, o tratamento também não é excluído.",
       "No grupo <b>Vendas</b> da janela do tratamento ficam todas as vendas, com situação e quantas parcelas estão em aberto.",
       "Ao <b>cancelar</b> o tratamento, o sistema pergunta se exclui as parcelas em aberto (todas, ou só as que vencem a partir de uma data; as já recebidas não mudam) e depois se remove as sessões do Planner e da Agenda a partir de uma data. A venda ativa fica <b>Cancelada</b>."
     ],
