@@ -29,6 +29,7 @@
     { key: "pgrp_financeiro", label: "Pacientes – Responsável Financeiro", hint: "ver o grupo Responsável Financeiro na janela do cadastro, na ficha impressa e na revisão", actions: ["view"], dflt: true },
     { key: "pgrp_convenio", label: "Pacientes – Convênio", hint: "ver o grupo Convênio na janela do cadastro, na ficha impressa e na revisão", actions: ["view"], dflt: true },
     { key: "pgrp_bloqueio", label: "Pacientes – Bloqueio de Agendamento", hint: "ver o grupo Bloqueio de Agendamento na janela do cadastro, na ficha impressa e na revisão", actions: ["view"], dflt: true },
+    { key: "pgrp_encaminhamento", label: "Pacientes – Encaminhamento", hint: "ver o grupo Encaminhamento (data, validade e especialidades) na janela do cadastro e na ficha impressa; os dados também exigem Pacientes – Saúde", actions: ["view"], dflt: true },
     { key: "pgrp_escola", label: "Pacientes – Escola", hint: "ver o grupo Escola na janela do cadastro, na ficha impressa e na revisão", actions: ["view"], dflt: true },
     { key: "pgrp_rotinaatual", label: "Pacientes – Rotina Atual", hint: "ver o grupo Rotina Atual na janela do cadastro, na ficha impressa e na revisão", actions: ["view"], dflt: true },
     { key: "pgrp_admin", label: "Pacientes – Administrativo", hint: "ver o grupo Administrativo na janela do cadastro, na ficha impressa e na revisão", actions: ["view"], dflt: true },

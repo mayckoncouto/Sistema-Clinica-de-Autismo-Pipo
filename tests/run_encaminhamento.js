@@ -32,7 +32,7 @@ const path = require('path');
   const pid = await ev('state.patients[0].id');
   await ev('openPatientModal(state.patients[0])');
   await page.waitForTimeout(250);
-  check('window shows the Encaminhamento block inside Saúde?', !!(await page.$('#ovPat [data-pmsec="saude"] #enc-data')) && !!(await page.$('#encAdd')));
+  check('window shows the Encaminhamento block as its own group?', !!(await page.$('#ovPat [data-pmsec="encaminhamento"] #enc-data')) && !!(await page.$('#encAdd')));
   check('due date field is read-only?', await page.$eval('#enc-venc', (e) => e.readOnly));
   await setv('#enc-data', '2026-01-01'); await setv('#enc-val', '6m'); await page.waitForTimeout(100);
   check('due date is calculated on screen (30/06/2026)?', (await page.$eval('#enc-venc', (e) => e.value)) === '30/06/2026');
@@ -72,6 +72,19 @@ const path = require('path');
   await page.click('#elDel'); await page.waitForTimeout(150);
   await page.click('#cfOk'); await page.waitForTimeout(150);
   check('delete (with confirmation) removes the card?', await page.$eval('#encRows', (e) => e.querySelectorAll('.tl-row').length === 1));
+  // Remover (sem confirmação), Incluir Todas e Remover Todas.
+  await page.click('[data-enc-rm="0"]'); await page.waitForTimeout(100);
+  check('Remover on a card removes it without confirmation?', await page.$eval('#encRows', (e) => e.querySelectorAll('.tl-row').length === 0) && !(await page.$('#cfOk')));
+  await page.click('#encMoreBtn'); await page.click('#encAddAll'); await page.waitForTimeout(120);
+  const allN = await page.$$eval('#encRows .tl-row', (r) => r.length);
+  const nActive = await page.evaluate(() => window.__STORE__['config/specialties'].list.filter((s) => !s.inativo && !/aplicador/i.test(s.name)).length);
+  check('Incluir Todas adds every active specialty (no Aplicador ABA)?', allN === nActive && allN > 0, allN + '/' + nActive);
+  await page.click('#encMoreBtn'); await page.click('#encAddAll'); await page.waitForTimeout(100);
+  check('Incluir Todas twice does not duplicate?', (await page.$$eval('#encRows .tl-row', (r) => r.length)) === allN);
+  await page.click('#encMoreBtn'); await page.click('#encRemoveAll'); await page.waitForTimeout(100);
+  check('Remover Todas empties the list without confirmation?', (await page.$$eval('#encRows .tl-row', (r) => r.length)) === 0 && !(await page.$('#cfOk')));
+  await page.click('#encAdd'); await page.waitForTimeout(150);
+  await setv('#elSpec', 'fono'); await page.fill('#elQtd', '3'); await page.click('#elSave'); await page.waitForTimeout(150);
 
   // salvar o paciente
   await page.fill('#pf-cpf', '529.982.247-25');

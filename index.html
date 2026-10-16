@@ -12848,7 +12848,7 @@ var PAT_SECTIONS = [
   {id: "filiacao", label: "Filiação"}, {id: "rotina", label: "Responsáveis pela Retirada"}, {id: "protetiva", label: "Medida Protetiva"},
   {id: "contato", label: "Contato"}, {id: "financeiro", label: "Responsável Financeiro"},
   {id: "convenio", label: "Convênio"}, {id: "bloqueio", label: "Bloqueio de Agendamento"},
-  {id: "saude", label: "Saúde"}, {id: "escola", label: "Escola"}, {id: "rotinaatual", label: "Rotina Atual"}, {id: "admin", label: "Administrativo"}
+  {id: "saude", label: "Saúde"}, {id: "encaminhamento", label: "Encaminhamento"}, {id: "escola", label: "Escola"}, {id: "rotinaatual", label: "Rotina Atual"}, {id: "admin", label: "Administrativo"}
 ];
 var CID_SUGGESTIONS = [
   "F84.0 Autismo infantil",
@@ -12933,7 +12933,7 @@ var PAT_FIELDS = [
   {key: "alergias", label: "Alergias", sec: "saude", type: "line"},
   {key: "medicacoes", label: "Medicações em Uso", sec: "saude", type: "line"},
   {key: "restricoes", label: "Restrições Alimentares", sec: "saude", type: "line"},
-  {key: "encaminhamento", label: "Encaminhamento", sec: "saude", type: "referral", hint: "data e especialidades"},
+  {key: "encaminhamento", label: "Encaminhamento", sec: "encaminhamento", type: "referral", hint: "data e especialidades"},
   {key: "comoConheceu", label: "Como Conheceu a Clínica", sec: "admin", type: "regtext", reg: "origens"},
   {key: "obs", label: "Observações", sec: "admin", type: "area", rows: 5}
 ];
@@ -13148,8 +13148,7 @@ function encSummary(e){
 function encSemanalText(n){ n = Number(n) || 0; return n ? n + (n === 1 ? " sessão" : " sessões") + " por semana" : "Quantidade semanal não informada"; }
 function encHtml(e){
   e = e || {};
-  return '<div class="pm-sub">Encaminhamento</div>' +
-    '<div class="pm-grid pm-enc">' +
+  return '<div class="pm-grid pm-enc">' +
       '<div class="field"><label for="enc-data">Data do Encaminhamento</label><input id="enc-data" type="date" value="' + esc(e.data || "") + '"></div>' +
       '<div class="field"><label for="enc-val">Validade</label><select id="enc-val"><option value="">Não informada</option>' +
         ENC_VALID.map(function(a){ return '<option value="' + a[0] + '"' + (e.validade === a[0] ? ' selected' : '') + '>' + a[1] + '</option>'; }).join("") + '</select></div>' +
@@ -13157,7 +13156,12 @@ function encHtml(e){
     '</div><div class="pm-note" id="encNote" hidden></div>' +
     '<div class="pm-sub">Especialidades do Encaminhamento</div>' +
     '<div class="room-list tl-list" id="encRows"></div>' +
-    '<button type="button" class="btn ghost add-row-btn" id="encAdd">+ Incluir Especialidade</button>';
+    '<button type="button" class="btn ghost add-row-btn" id="encAdd">+ Incluir Especialidade</button> ' +
+    '<div class="cad-wrap pl-tools-wrap tr-more-wrap spec-more-wrap" id="encMoreWrap"><button type="button" class="btn ghost" id="encMoreBtn" aria-haspopup="menu" aria-expanded="false">Outras Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
+      '<div class="cad-menu pl-tools-menu" id="encMoreMenu" role="menu" hidden>' +
+        '<button type="button" class="btn ghost" id="encAddAll" title="Inclui todas as especialidades ativas (menos Aplicador ABA) que ainda não estão no encaminhamento">Incluir Todas</button>' +
+        '<button type="button" class="btn ghost" id="encRemoveAll">Remover Todas</button>' +
+      '</div></div>';
 }
 // Janela de uma especialidade do encaminhamento (Especialidade + Quantidade Semanal).
 function openEncLineModal(ctx){
@@ -13216,7 +13220,8 @@ function encWire(root, e0, patient){
       var sp = state.specialties.filter(function(x){ return x.id === r.specId; })[0];
       return '<div class="room-row tl-row" data-i="' + i + '"><span class="room-dot" style="background:' + swatchVar(sp ? (sp.color || "teal") : "slate") + '"></span>' +
         '<div class="room-info"><div class="rn">' + esc(specialtyName(r.specId)) + '</div><div class="rs">' + esc(encSemanalText(r.semanal)) + '</div></div>' +
-        '<button type="button" class="btn ghost" data-enc-edit="' + i + '">Editar</button></div>';
+        '<button type="button" class="btn ghost" data-enc-edit="' + i + '">Editar</button>' +
+        '<button type="button" class="btn danger" data-enc-rm="' + i + '">Remover</button></div>';
     }).join("") : '<div class="hours-empty">Nenhuma especialidade no encaminhamento — clique em "+ Incluir Especialidade".</div>';
   }
   function edit(i){
@@ -13225,7 +13230,36 @@ function encWire(root, e0, patient){
       onSave: function(o){ if (isNew) enc.esp.push(o); else enc.esp[i] = o; render(); },
       onDelete: function(){ enc.esp.splice(i, 1); render(); }});
   }
-  var rows = $("encRows"); if (rows) rows.addEventListener("click", function(ev){ var b = ev.target.closest("[data-enc-edit]"); if (b) edit(+b.getAttribute("data-enc-edit")); });
+  var rows = $("encRows"); if (rows) rows.addEventListener("click", function(ev){
+    var rm = ev.target.closest("[data-enc-rm]");
+    if (rm){ enc.esp.splice(+rm.getAttribute("data-enc-rm"), 1); render(); return; }   // sem confirmação: só vale ao salvar o paciente
+    var b = ev.target.closest("[data-enc-edit]"); if (b) edit(+b.getAttribute("data-enc-edit"));
+  });
+  // Outras Opções: Incluir Todas / Remover Todas.
+  (function(){
+    var mb = $("encMoreBtn"), mm = $("encMoreMenu"); if (!mb || !mm) return;
+    function setOpen(o){ mm.hidden = !o; mb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ placeToolsMenu(mb, mm); var f = mm.querySelector("button"); if (f) f.focus(); } }
+    mb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(mm.hidden); });
+    mm.addEventListener("click", function(e){ if (e.target.closest("button")) setOpen(false); });
+    document.addEventListener("mousedown", function(e){ if (!mm.hidden && !e.target.closest("#encMoreWrap")) setOpen(false); });
+    mm.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); setOpen(false); mb.focus(); } });
+    $("encAddAll").addEventListener("click", function(){
+      var have = {}; enc.esp.forEach(function(r){ have[r.specId] = true; });
+      var add = activeOnly(state.specialties).filter(function(sp){ return !/aplicador/.test(normText(sp.name || "")) && !have[sp.id]; });
+      if (!add.length){ showToast("Todas as especialidades (menos Aplicador ABA) já estão no encaminhamento."); return; }
+      var ORD = ["fono", "psicolog", "ocupacional", "psicoped", "psicomot", "fisio", "music", "nutri"];
+      function ordIdx(sp){ var n = normText(sp.name || ""); for (var i = 0; i < ORD.length; i++){ if (n.indexOf(ORD[i]) !== -1) return i; } return ORD.length; }
+      add.map(function(sp, i){ return {sp: sp, o: ordIdx(sp), i: i}; }).sort(function(a, b){ return a.o - b.o || a.i - b.i; })
+        .forEach(function(x){ enc.esp.push({id: uid("en"), specId: x.sp.id, semanal: ""}); });
+      render();
+      showToast(add.length + (add.length === 1 ? " especialidade incluída." : " especialidades incluídas.") + " Ajuste a quantidade semanal em Editar.");
+    });
+    $("encRemoveAll").addEventListener("click", function(){
+      if (!enc.esp.length){ showToast("Não há especialidades no encaminhamento."); return; }
+      var n = enc.esp.length; enc.esp = []; render();
+      showToast(n + (n === 1 ? " especialidade removida." : " especialidades removidas."));
+    });
+  })();
   var add = $("encAdd"); if (add) add.addEventListener("click", function(){ edit(null); });
   ["enc-data", "enc-val"].forEach(function(id){ var el = $(id); if (el){ el.addEventListener("change", note); el.addEventListener("input", note); } });
   render(); note();
@@ -13448,6 +13482,7 @@ function openPatientModal(p, opts){
       '<div class="pm-note pm-ret-parents" id="rotParents"></div><div id="rotHost" class="pm-list"></div>' +
       '<button type="button" class="btn ghost add-row-btn" id="rotAdd">+ Incluir Outra Pessoa</button>';
     else if (sec.id === "rotinaatual") html = routineHtml(v.rotinaAtual);
+    else if (sec.id === "encaminhamento") html = encHtml(v.encaminhamento);
     else if (sec.id === "protetiva") html = '<div class="pat-count">Pessoas que NÃO podem retirar o paciente. O aviso aparece no último atendimento do dia na Agenda.' +
       (protCanSeeObs() ? '' : ' A observação só aparece para quem pode finalizar atendimentos.') + '</div><div id="protHost" class="pm-list"></div>' +
       '<button type="button" class="btn ghost add-row-btn" id="protAdd">+ Incluir Pessoa Impedida</button>';
@@ -13473,7 +13508,6 @@ function openPatientModal(p, opts){
         if (f.key === "nascimento") cell += '<div class="field" id="pIdadeField"></div>';
         return cell;
       }).join("") + '</div>';
-      if (sec.id === "saude" && fs.some(function(f){ return f.type === "referral"; })) html += encHtml(v.encaminhamento);
       if (sec.id === "bloqueio") html += '<div class="pat-count" id="pBloqNote">' + esc(patBlockNote(v)) + '</div>';
       if (sec.id === "ident"){
         if (!patFieldCfg("nascimento").show) html += '<div class="pm-grid"><div class="field" id="pIdadeField"></div></div>';
@@ -13785,8 +13819,10 @@ function openPatientModal(p, opts){
   pendUpdate();
   // Saúde: quem só pode ver não altera.
   if (healthCanSee() && !healthCanEdit()){
-    var hs = overlay.querySelector('[data-pmsec="saude"]');
+    ["saude", "encaminhamento"].forEach(function(sid){
+    var hs = overlay.querySelector('[data-pmsec="' + sid + '"]');
     if (hs){ hs.querySelectorAll("input,select,textarea,button").forEach(function(el){ el.disabled = true; }); hs.insertAdjacentHTML("beforeend", '<div class="pat-count">Você pode ver os dados de saúde, mas não alterar.</div>'); }
+    });
   }
 
   modalApplyPerms("pacientes", isNew, {ov: "ovPat", save: "pSave", del: "pDelete", cancel: "pCancel"});
@@ -25893,7 +25929,7 @@ var HELP_TOPICS = [
     rules: [
       "<b>Convênio do cadastro × convênio do tratamento</b>: o do cadastro é o padrão; o tratamento pode usar outro. Ao trocar o convênio ou o plano no cadastro de um paciente que tem tratamento Ativo, o sistema pergunta se aplica ao tratamento ativo (quem pode editar Tratamentos); os tratamentos antigos nunca mudam. A troca fica no Histórico do tratamento.",
       "<b>Carteirinha</b>: com a validade preenchida, a lista de Pacientes mostra uma etiqueta ao lado do nome quando a carteirinha está vencida ou vence em até 30 dias (no computador), e a janela do tratamento repete o aviso.",
-      "<b>Encaminhamento</b> (no grupo Saúde): informe a <b>Data do Encaminhamento</b> e a <b>Validade</b> (3 meses, 6 meses ou 1 ano); o <b>Vencimento</b> é calculado sozinho (6 meses a partir de 01/01 = válido até 30/06). Em <b>+ Incluir Especialidade</b> escolha a especialidade indicada pelo médico e a <b>Quantidade Semanal</b> de sessões (sem limite; <b>opcional</b> — deixe em branco quando o plano de saúde não pede a quantidade no encaminhamento); cada especialidade aparece num quadro com o botão Editar, e a mesma especialidade não repete. Quando o encaminhamento está vencido ou vence em até 30 dias, a janela mostra um aviso e a lista de Pacientes mostra a etiqueta <b>Enc. vencido</b> / <b>Enc. vence</b> (no computador). O encaminhamento sai na ficha impressa e, como todo dado de saúde, só aparece para quem tem <b>Pacientes – Saúde</b>.",
+      "<b>Encaminhamento</b> (grupo próprio, depois de Saúde, com permissão <b>Pacientes – Encaminhamento</b> para ver): informe a <b>Data do Encaminhamento</b> e a <b>Validade</b> (3 meses, 6 meses ou 1 ano); o <b>Vencimento</b> é calculado sozinho (6 meses a partir de 01/01 = válido até 30/06). Em <b>+ Incluir Especialidade</b> (ou em <b>Outras Opções → Incluir Todas / Remover Todas</b>) escolha a especialidade indicada pelo médico e a <b>Quantidade Semanal</b> de sessões (sem limite; <b>opcional</b> — deixe em branco quando o plano de saúde não pede a quantidade no encaminhamento); cada especialidade aparece num quadro com o botão Editar, e a mesma especialidade não repete. Quando o encaminhamento está vencido ou vence em até 30 dias, a janela mostra um aviso e a lista de Pacientes mostra a etiqueta <b>Enc. vencido</b> / <b>Enc. vence</b> (no computador). O encaminhamento sai na ficha impressa e, como todo dado de saúde, só aparece para quem tem <b>Pacientes – Saúde</b>.",
       "<b>Rotina Atual</b> (abaixo de Escola): para cada dia de segunda a sexta, manhã e tarde, escolha onde o paciente está (Escola, Terapia (Pipo), Outra terapia, Atividade, Em casa / livre ou Outro) e, se quiser, um detalhe. <b>Terapia (Pipo)</b> e <b>Em casa / livre</b> não avisam ao agendar. <b>Copiar Segunda</b>, acima de Manhã ou de Tarde, repete aquele período de segunda nos outros dias (com Desfazer por alguns segundos). Ao agendar no Planner ou na Agenda num período de Escola, Outra terapia, Atividade ou Outro, o sistema avisa (regra em Acesso → Sistema). A rotina sai na ficha impressa e pode ser obrigatória em Campos obrigatórios.",
       "Trocar o nome do paciente no cadastro troca também nos agendamentos do Planner e da Agenda, nas evoluções do Prontuário e no Plano terapêutico. Se outro paciente tem o mesmo nome antigo, nada é trocado (aparece um aviso para conferir à mão).",
       "Só é possível agendar (Planner e Agenda) quem está cadastrado aqui.",

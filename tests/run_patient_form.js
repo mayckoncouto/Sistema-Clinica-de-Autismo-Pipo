@@ -31,7 +31,7 @@ const path = require('path');
   // Ana Azul: janela única com os grupos.
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
   const secs = await page.$$eval('#ovPat .pm-sec-head .tr-sec', (a) => a.map((x) => x.textContent));
-  console.log('single window with the groups in order?', JSON.stringify(secs) === '["Identificação","Endereço","Filiação","Responsáveis pela Retirada","Medida Protetiva","Contato","Responsável Financeiro","Convênio","Bloqueio de Agendamento","Saúde","Escola","Rotina Atual","Administrativo","Tratamento"]', JSON.stringify(secs));
+  console.log('single window with the groups in order?', JSON.stringify(secs) === '["Identificação","Endereço","Filiação","Responsáveis pela Retirada","Medida Protetiva","Contato","Responsável Financeiro","Convênio","Bloqueio de Agendamento","Saúde","Encaminhamento","Escola","Rotina Atual","Administrativo","Tratamento"]', JSON.stringify(secs));
   console.log('no tabs anymore?', !(await page.$('#ovPat .pm-tab')));
   await page.click('#pSave'); await page.waitForTimeout(200);
   console.log('CPF required when editing (window stays, pending chip)?', await page.isVisible('#ovPat') && /1 faltando/.test(await page.textContent('[data-pend="ident"]')));
