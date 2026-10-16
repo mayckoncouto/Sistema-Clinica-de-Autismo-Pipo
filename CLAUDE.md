@@ -4734,3 +4734,5 @@ Pedido do usuário. Agenda ▾ Agendamentos → **Outras Opções → Gerenciar 
 - (2026-10-16, pedido do usuário) **Contratado × Realizado (Mês a Mês)**: cada linha mostra Especialidade · Serviço (sempre, inclusive Sessão) · terapeuta do quadro. Sem SQL.
 
 - (2026-10-16, pedido do usuário) **Horário de Atendimento do tratamento abre LIMPO**: sem horário salvo, nenhum dia vem marcado nem preenchido (antes vinha o horário da clínica). Tabela em branco ao salvar grava `horarios: null` (= sem restrição, `patientSlotOk`), não "todos os dias desmarcados". Sem SQL. Teste em `run_treatments.js`.
+
+- (2026-10-16, pedido do usuário "fornecedores precisa de nível de permissão"; conferido: todo módulo usado nas telas está em `MODULES` de `js/usuarios.js`, só `unidades` fica de fora de propósito — é exclusiva da Gestão) Em Níveis de Permissão, **Fornecedores, Categorias de Fornecedor, Contas Bancárias, Plano de Contas e Financeiro – Valores** saíram do grupo Cadastros e foram para o grupo **Financeiro** (onde esses menus moram desde 2026-10-11), logo depois de "Financeiro". Sem SQL.
