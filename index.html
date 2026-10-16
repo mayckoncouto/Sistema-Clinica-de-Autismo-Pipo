@@ -12653,17 +12653,25 @@ function treatFieldsEditor(v, opts){
         showToast(del.length + (del.length === 1 ? " quadro removido." : " quadros removidos."));
       });
     });
-    // Distribuir: divide o Sessão/Mês igualmente entre todos os quadros (o resto vai para os primeiros).
+    // Distribuir: divide o Sessão/Mês entre os quadros de Sessão (o resto vai para os primeiros). Quadros de outros serviços
+    // não mudam, mas as sessões deles são descontadas do total (10/mês com 2 de outro serviço = 8 para os quadros de Sessão).
     document.getElementById("specRowDistribute").addEventListener("click", function(){
-      var total = specSumNum(document.getElementById("pPac").value), n = draftLines.length;
-      if (!n){ showToast("Inclua as especialidades antes de distribuir."); return; }
+      var total = specSumNum(document.getElementById("pPac").value);
+      var sess = draftLines.filter(function(r){ return lineSvc(r) === DEFAULT_SERVICE_ID; }), n = sess.length;
+      var others = draftLines.filter(function(r){ return lineSvc(r) !== DEFAULT_SERVICE_ID; });
+      var otherSum = 0; others.forEach(function(r){ otherSum += specSumNum(r.hours) || 0; });
+      if (!draftLines.length){ showToast("Inclua as especialidades antes de distribuir."); return; }
+      if (!n){ showToast("Não há quadros de Sessão para distribuir (os quadros de outros serviços não são distribuídos).", true); return; }
       if (total == null || total <= 0){ showToast("Preencha o Sessão/Mês para distribuir.", true); return; }
-      if (total !== Math.floor(total)){ showToast("O Sessão/Mês precisa ser um número inteiro para distribuir.", true); return; }
-      if (total < n){ showToast("Não dá para dar 1 sessão a cada quadro: são " + total + (total === 1 ? " sessão" : " sessões") + " para " + n + " quadros. Aumente o Sessão/Mês ou remova quadros.", true); return; }
-      var base = Math.floor(total / n), rem = total % n, parts = draftLines.map(function(r, i){ return base + (i < rem ? 1 : 0); });
-      confirmDialog({title: "Distribuir Sessões", message: "Dividir <b>" + total + " sessões/mês</b> entre " + n + " quadros (" + parts.join(", ") + ")?<br>Isso troca as sessões de todos os quadros.", confirmLabel: "Distribuir"}).then(function(ok){
+      if (total !== Math.floor(total) || otherSum !== Math.floor(otherSum)){ showToast("O Sessão/Mês e as sessões dos outros serviços precisam ser números inteiros para distribuir.", true); return; }
+      var avail = total - otherSum;
+      var tail = others.length ? " (" + total + " do Sessão/Mês − " + otherSum + " de outros serviços)" : "";
+      if (avail < n){ showToast("Não dá para dar 1 sessão a cada quadro de Sessão: sobram " + avail + (avail === 1 ? " sessão" : " sessões") + tail + " para " + n + " quadros. Aumente o Sessão/Mês ou remova quadros.", true); return; }
+      var base = Math.floor(avail / n), rem = avail % n, parts = sess.map(function(r, i){ return base + (i < rem ? 1 : 0); });
+      confirmDialog({title: "Distribuir Sessões", message: "Dividir <b>" + avail + " sessões/mês</b>" + esc(tail) + " entre " + n + (n === 1 ? " quadro" : " quadros") + " de Sessão (" + parts.join(", ") + ")?" +
+        (others.length ? (others.length === 1 ? "<br>O quadro de outro serviço não muda." : "<br>Os " + others.length + " quadros de outros serviços não mudam.") : "") + "<br>Isso troca as sessões dos quadros de Sessão.", confirmLabel: "Distribuir"}).then(function(ok){
         if (!ok) return;
-        draftLines.forEach(function(r, i){ r.hours = String(parts[i]); });
+        sess.forEach(function(r, i){ r.hours = String(parts[i]); });
         render();
         showToast("Sessões distribuídas: " + parts.join(", ") + ".");
       });
@@ -24170,15 +24178,27 @@ function openTreatmentModal(t, opts){
     var n0 = sysMode("tr_realizados") === "block" ? trDoneCount(t) : 0;
     if (n0 === null && agdClient()){ trLoadLast(false).then(function(){ applyLock(); var n1 = trDoneCount(t); if (n1 === null) showToast("Não foi possível conferir os atendimentos deste tratamento. Tente de novo.", true); else if (n1) showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); else del.click(); }); return; }
     if (n0){ showToast("Tratamento com atendimentos realizados não pode ser excluído: use Renegociar ou Cancelar.", true); return; }
-    confirmDialog({title: "Confirmar Exclusão", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Confirmar Exclusão"})
+    // Vendas do tratamento saem junto (mesmas regras do Excluir venda).
+    var withSales = agdClient() ? slCan("view") : !!window.__pipoSales;
+    (withSales ? Promise.all([slLoad(true), fpLoad(), comLoad()]) : Promise.resolve()).then(function(){
+    var sales = withSales ? (SALES.rows || []).filter(function(s){ return s.treatment === t.id; }) : [];
+    var chk = slDeleteCheck(sales);
+    if (chk.why){ showToast("O tratamento não pode ser excluído: " + chk.why.charAt(0).toLowerCase() + chk.why.slice(1), true); return; }
+    confirmDialog({title: "Confirmar Exclusão", message: "Excluir o tratamento de <b>" + esc(p ? p.nome : "") + "</b> iniciado em " + esc(trBr(t.inicio)) + "?" +
+      (sales.length ? "<br><b>Será excluído junto:</b> " + esc(slDeleteText(sales, chk)) + "." : "") +
+      "<br>Para encerrar um tratamento normalmente, use o Status (Cancelado ou Renegociado).", confirmLabel: "Confirmar Exclusão"})
       .then(function(ok){
         if (!ok) return;
+        (sales.length ? slDeleteSales(sales) : Promise.resolve(true)).then(function(sOk){
+        if (!sOk){ showToast("A venda não foi excluída; o tratamento foi mantido.", true); return; }
         writeTreatments(state.treatments.filter(function(x){ return x.id !== t.id; })).then(function(done){
           var c = agdClient();
           if (done !== false && c) c.from("treatment_finance").delete().eq("treatment_id", t.id).then(function(){});
           close();
         });
+        });
       });
+    });
   });
   var sv = document.getElementById("trSave");
   if (sv) sv.addEventListener("click", function(){
@@ -25355,13 +25375,196 @@ function openVendaDetalhe(id){
         return '<tr><td>' + esc(fpLabel(x)) + '</td><td>' + esc(trBr(x.venc)) + '</td><td>' + esc(fmtMoney(x.valor)) + '</td><td>' + fpStatusChip(x) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="hint">Nenhuma parcela gerada no Contas a Receber.</div>') +
       (comCan("view") ? '<div class="tr-sec">Comissão</div>' + (c ? '<div class="field-row">' + row("Valor", esc(fmtMoney(c.valor)) + ' (' + String(c.pct).replace(".", ",") + '% de ' + esc(fmtMoney(c.base)) + ')') + row("Situação", esc(comStatusText(c))) + '</div>' :
         '<div class="hint">' + (s.status !== "ativa" ? "Venda sem comissão." : !s.seller ? "Venda sem vendedor: não gera comissão." : "Aguardando a 1ª parcela paga ou o 1º atendimento finalizado.") + '</div>') : '') +
-    '</div><div class="modal-foot"><span></span><div class="spacer"></div>' + (t && can("tratamentos", "view") ? '<button class="btn ghost" id="vnDTr">Abrir Tratamento</button>' : '') + '<button class="btn ghost" id="vnDCt">Contrato</button><button class="btn primary" id="vnDOk">Fechar</button></div></div></div>';
+    '</div><div class="modal-foot">' + (slCan("delete") ? '<button class="btn danger" id="vnDDel">Excluir</button>' : '<span></span>') + '<div class="spacer"></div>' + (t && can("tratamentos", "view") ? '<button class="btn ghost" id="vnDTr">Abrir Tratamento</button>' : '') + '<button class="btn ghost" id="vnDCt">Contrato</button>' +
+      (slCan("edit") ? '<button class="btn ghost" id="vnDEdit">Editar</button>' : '') + '<button class="btn primary" id="vnDOk">Fechar</button></div></div></div>';
   var $ = function(x){ return document.getElementById(x); }, ov = $("ovVn");
   var close = function(){ host.innerHTML = ""; };
   $("vnDClose").addEventListener("click", close); $("vnDOk").addEventListener("click", close);
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  if ($("vnDEdit")) $("vnDEdit").addEventListener("click", function(){
+    var why = slEditBlocked(s); if (why){ showToast(why, true); return; }
+    close(); openVendaEditar(s);
+  });
+  if ($("vnDDel")) $("vnDDel").addEventListener("click", function(){
+    slDeleteFlow(s).then(function(done){ if (done){ close(); if (state.tab === "vendas") renderVendas(); } });
+  });
   $("vnDCt").addEventListener("click", function(){ close(); slContratoDialog(s); });
   if ($("vnDTr")) $("vnDTr").addEventListener("click", function(){ close(); openTreatmentModal(t, {stack: true}); });
+}
+/* Editar venda (2026-10-16): data, vendedor, forma de pagamento e observações. Só venda ativa, permissão Vendas (editar) e sem parcela recebida.
+ * Vendedor trocado: comissão em aberto é recalculada (regra do vendedor novo); já paga, só avisa. */
+function slEditBlocked(s){
+  if (!slCan("edit")) return permDeniedMsg("vendas", "edit");
+  if (s.status !== "ativa") return "Só a venda ativa pode ser editada (esta está " + (SALE_STATUS[s.status] || s.status).toLowerCase() + ").";
+  if (slParcels([s.id]).some(fpDone)) return "Venda com parcela recebida no Contas a Receber não pode ser editada.";
+  return "";
+}
+function slUpdate(id, patch){
+  var c = agdClient();
+  var apply = function(){ SALES.rows = (SALES.rows || []).map(function(s){ return s.id === id ? Object.assign({}, s, patch) : s; }); return true; };
+  if (!c) return Promise.resolve(apply());
+  return c.from("treatment_sales").update({data: patch.data, seller_id: patch.seller || null, seller_name: patch.sellerName || null, forma: patch.forma || null, obs: patch.obs || null})
+    .eq("id", id).select().single().then(function(res){
+      if (res.error || !res.data){ showToast("Não foi possível salvar a venda: " + ((res.error && res.error.message) || "sem permissão"), true); return false; }
+      SALES.rows = (SALES.rows || []).map(function(s){ return s.id === id ? slFromDb(res.data) : s; }); return true;
+    });
+}
+function comUpdate(id, patch){
+  var c = agdClient();
+  var apply = function(){ COMM.rows = (COMM.rows || []).map(function(x){ return x.id === id ? Object.assign({}, x, patch) : x; }); return true; };
+  if (!c) return Promise.resolve(apply());
+  var map = {seller: "seller_id", sellerName: "seller_name", rule: "rule_id", pct: "percentual", valor: "valor", status: "status", payable: "payable_id", obs: "obs"}, db = {};
+  Object.keys(patch).forEach(function(k){ if (map[k]) db[map[k]] = patch[k] === "" ? null : patch[k]; });
+  return c.from("sale_commissions").update(db).eq("id", id).then(function(res){
+    if (res.error){ showToast("Não foi possível atualizar a comissão: " + res.error.message, true); return false; }
+    return apply();
+  });
+}
+var COM_EDIT_MARK = "Edição da venda: ";
+// Depois de trocar o vendedor da venda s (já gravada). Promise<texto do aviso ou "">.
+function comResync(s){
+  return Promise.all([comLoad(), fpLoad()]).then(function(){
+    var c = comOf(s.id);
+    if (!c){ if (typeof comApuraAuto === "function") comApuraAuto(); return ""; }
+    if (c.status === "estornada" && String(c.obs || "").indexOf(COM_EDIT_MARK) !== 0) return "";
+    var pay = c.payable ? (FP.rows || []).filter(function(x){ return x.id === c.payable; })[0] : null;
+    if (c.status === "gerada" && pay && fpDone(pay)) return "A comissão já foi paga a " + (c.sellerName || "outro vendedor") + " (" + fmtMoney(c.valor) + "): acerte a diferença manualmente.";
+    if (!comCan("edit") || !fpCan("edit") || !fpCan("create") || !fpCan("delete")) return "A comissão não foi recalculada: é preciso ter Comissões (editar) e Financeiro (incluir, editar e excluir).";
+    var rule = s.seller ? comRuleFor(s) : null, plan = rule ? flPlanById(rule.plan) : null;
+    var base = comBase(s), valor = rule ? Math.round(base * rule.pct) / 100 : 0;
+    var ok = rule && plan && (plan.tipo === "Despesa" || plan.tipo === "Saída") && valor > 0;
+    if (!ok){
+      if (c.status !== "gerada") return "";
+      return (pay ? fpDelete([pay.id]) : Promise.resolve(true)).then(function(){
+        return comUpdate(c.id, {status: "estornada", payable: "", obs: COM_EDIT_MARK + (s.seller ? "nenhuma regra de comissão serve" : "venda ficou sem vendedor")});
+      }).then(function(){ return "Comissão estornada: " + (s.seller ? "nenhuma regra de comissão serve para o vendedor novo." : "a venda ficou sem vendedor."); });
+    }
+    var pat = rawPatient(s.patient) || {}, who = (pat.nome || "Paciente") + " (" + (COMM_TIPOS[s.tipo] || s.tipo) + ")";
+    var fields = {desc: "Comissão — " + (s.sellerName || "Vendedor") + " — " + who, plan: rule.plan, acc: rule.acc || "", valor: valor, staff: s.seller};
+    var step = pay ? fpSave(Object.assign({}, pay, fields), false)
+      : fpSave(Object.assign({venc: comDueDate(rule.day), sup: "", grupo: "", parcela: 0, parcelas: 0, obs: "", linhas: [], loan: "", abate: "", sale: ""}, fields), true);
+    return step.then(function(p){
+      if (!p) return "A comissão não foi recalculada.";
+      return comUpdate(c.id, {seller: s.seller, sellerName: s.sellerName, rule: rule.id, pct: rule.pct, valor: valor, status: "gerada", payable: p.id, obs: ""})
+        .then(function(){ return "Comissão recalculada para " + (s.sellerName || "o vendedor") + ": " + fmtMoney(valor) + "."; });
+    });
+  });
+}
+function openVendaEditar(s){
+  var host = regQuickHost(), staff = fpStaffList();
+  if (s.seller && !staff.some(function(x){ return x.id === s.seller; })) staff = staff.concat([{id: s.seller, nome: s.sellerName || fpStaffName(s.seller)}]);
+  var formas = SALE_FORMAS.slice(); if (s.forma && formas.indexOf(s.forma) === -1) formas.push(s.forma);
+  host.innerHTML = '<div class="overlay" id="ovVnEd"><div class="modal" style="max-width:560px">' +
+    '<div class="modal-head"><div><h3>Editar Venda</h3><div class="modal-sub">' + esc(vnPatName(s)) + ' · ' + esc(SALE_TIPOS[s.tipo] || s.tipo) + ' · ' + esc(fmtMoney(s.total)) + '</div></div><button class="modal-close" id="vnEClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="tr-sec tr-sec-top">Venda</div>' +
+      '<div class="field-row"><div class="field"><label for="vnEData">Data da Venda</label><input type="date" id="vnEData" value="' + esc(s.data || "") + '"></div>' +
+      '<div class="field"><label for="vnESeller">Vendedor</label><select id="vnESeller"><option value="">Sem vendedor</option>' +
+        staff.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === s.seller ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="field"><label for="vnEForma">Forma de Pagamento</label><select id="vnEForma"><option value="">Não informada</option>' +
+        formas.map(function(f){ return '<option value="' + esc(f) + '"' + (f === s.forma ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field"><label for="vnEObs">Observações</label><textarea id="vnEObs" rows="3">' + esc(s.obs || "") + '</textarea></div>' +
+      '<div class="hint">Valor, meses e tipo não mudam aqui. Trocar o vendedor recalcula a comissão que ainda não foi paga.</div>' +
+    '</div><div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="vnECancel">Cancelar</button><button class="btn primary" id="vnESave">Salvar</button></div></div></div>';
+  var $ = function(x){ return document.getElementById(x); }, ov = $("ovVnEd");
+  var close = function(){ host.innerHTML = ""; };
+  $("vnEClose").addEventListener("click", close); $("vnECancel").addEventListener("click", close);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  $("vnESave").addEventListener("click", function(){
+    var data = $("vnEData").value, seller = $("vnESeller").value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)){ showToast("Informe a data da venda.", true); return; }
+    var why = slEditBlocked(s); if (why){ showToast(why, true); return; }
+    var sellerName = seller ? ((staff.filter(function(x){ return x.id === seller; })[0] || {}).nome || fpStaffName(seller)) : "";
+    var patch = {data: data, seller: seller, sellerName: sellerName, forma: $("vnEForma").value, obs: $("vnEObs").value.trim()};
+    var sellerChanged = seller !== (s.seller || "");
+    $("vnESave").disabled = true;
+    slUpdate(s.id, patch).then(function(ok){
+      if (!ok){ $("vnESave").disabled = false; return; }
+      var now = (SALES.rows || []).filter(function(x){ return x.id === s.id; })[0] || Object.assign({}, s, patch);
+      return (sellerChanged ? comResync(now) : Promise.resolve("")).then(function(msg){
+        close(); showToast("Venda alterada." + (msg ? " " + msg : ""), /paga a|não foi/.test(msg || ""));
+        if (state.tab === "vendas") renderVendas();
+        openVendaDetalhe(s.id);
+      });
+    });
+  });
+}
+/* Excluir venda (2026-10-16): permissão Vendas (excluir). Parcela recebida ou comissão paga bloqueiam; parcelas em aberto, a comissão e a conta a pagar
+ * do vendedor em aberto são excluídas junto. Excluir o tratamento exclui as vendas dele com as mesmas regras (`slDeleteCheck` / `slDeleteSales`). */
+function slDeleteCheck(list){
+  var out = {why: "", parc: 0, com: 0};
+  if (!list.length) return out;
+  if (!slCan("delete")){ out.why = permDeniedMsg("vendas", "delete"); return out; }
+  list.forEach(function(s){
+    if (out.why) return;
+    var parc = slParcels([s.id]);
+    if (parc.some(fpDone)){ out.why = "A venda de " + trBr(s.data) + " tem parcela recebida no Contas a Receber e não pode ser excluída: use Cancelar."; return; }
+    out.parc += parc.length;
+    var c = comOf(s.id);
+    if (!c) return;
+    var pay = c.payable ? (FP.rows || []).filter(function(x){ return x.id === c.payable; })[0] : null;
+    if (c.status === "gerada" && pay && fpDone(pay)){ out.why = "A comissão da venda de " + trBr(s.data) + " já foi paga a " + (c.sellerName || "o vendedor") + " e a venda não pode ser excluída: use Cancelar."; return; }
+    out.com++;
+  });
+  if (!out.why && out.parc && !fpCan("delete")) out.why = "Para excluir as parcelas em aberto da venda é preciso ter Financeiro (excluir).";
+  if (!out.why && out.com && !comCan("delete")) out.why = "Para excluir a comissão da venda é preciso ter Comissões (excluir).";
+  if (!out.why && out.com && !fpCan("delete")) out.why = "Para excluir a conta a pagar da comissão é preciso ter Financeiro (excluir).";
+  return out;
+}
+function slDeleteText(list, chk){
+  return (list.length === 1 ? "a venda" : "as " + list.length + " vendas") +
+    (chk.parc ? ", " + chk.parc + (chk.parc === 1 ? " parcela em aberto" : " parcelas em aberto") + " no Contas a Receber" : "") +
+    (chk.com ? " e " + (chk.com === 1 ? "a comissão" : "as comissões") + " do vendedor (com a conta a pagar em aberto)" : "");
+}
+function comDeleteRow(id){
+  var c = agdClient();
+  var done = function(){ COMM.rows = (COMM.rows || []).filter(function(x){ return x.id !== id; }); return true; };
+  if (!c) return Promise.resolve(done());
+  return c.from("sale_commissions").delete().eq("id", id).then(function(res){
+    if (res.error){ showToast("Não foi possível excluir a comissão: " + res.error.message, true); return false; }
+    return done();
+  });
+}
+function slDeleteRow(id){
+  var c = agdClient();
+  var done = function(){ SALES.rows = (SALES.rows || []).filter(function(x){ return x.id !== id; }); return true; };
+  if (!c) return Promise.resolve(done());
+  return c.from("treatment_sales").delete().eq("id", id).then(function(res){
+    if (res.error){ showToast("Não foi possível excluir a venda: " + res.error.message, true); return false; }
+    return done();
+  });
+}
+// Exclui as vendas (já conferidas por slDeleteCheck). Promise<true|false>.
+function slDeleteSales(list){
+  var chain = Promise.resolve(true);
+  list.forEach(function(s){
+    chain = chain.then(function(ok){
+      if (!ok) return false;
+      var open = slParcels([s.id]).filter(function(x){ return !fpDone(x); }).map(function(x){ return x.id; });
+      var c = comOf(s.id);
+      return (open.length ? fpDelete(open) : Promise.resolve(true)).then(function(ok2){
+        if (!ok2) return false;
+        if (!c) return true;
+        return (c.payable && (FP.rows || []).some(function(x){ return x.id === c.payable; }) ? fpDelete([c.payable]) : Promise.resolve(true)).then(function(ok3){ return ok3 && comDeleteRow(c.id); });
+      }).then(function(ok4){
+        if (!ok4) return false;
+        // a venda que esta tinha substituído volta a valer
+        var prev = (SALES.rows || []).filter(function(x){ return x.replacedBy === s.id && x.status === "substituida"; }).map(function(x){ return x.id; });
+        return slDeleteRow(s.id).then(function(ok5){ return ok5 && (prev.length ? slPatch(prev, {status: "ativa", replacedBy: ""}) : true); });
+      });
+    });
+  });
+  return chain;
+}
+function slDeleteFlow(s){
+  return Promise.all([slLoad(), fpLoad(), comLoad()]).then(function(){
+    var chk = slDeleteCheck([s]);
+    if (chk.why){ showToast(chk.why, true); return false; }
+    return confirmDialog({title: "Confirmar Exclusão", message: "Excluir " + esc(slDeleteText([s], chk)) + " de <b>" + esc(vnPatName(s)) + "</b> (" + esc(trBr(s.data)) + ", " + esc(fmtMoney(s.total)) + ")?<br>Para encerrar uma venda normalmente, cancele o tratamento.", confirmLabel: "Confirmar Exclusão"})
+      .then(function(ok){
+        if (!ok) return false;
+        return slDeleteSales([s]).then(function(done){ if (done) showToast("Venda excluída."); return done; });
+      });
+  });
 }
 function wireVendas(){
   var s = document.getElementById("vnSearch"); if (s) s.addEventListener("input", debounce150(function(){ VN.q = s.value; gtMoreReset("vendas"); renderVendas(); }));
@@ -25654,7 +25857,7 @@ var HELP_TOPICS = [
     purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido. Acima das especialidades, um quadro mostra a idade, o diagnóstico e o nível de suporte do paciente (diagnóstico e suporte só para quem pode ver os dados de saúde).",
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
-      "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre todos os quadros; o resto vai para os primeiros; se o total for menor que o número de quadros, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
+      "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre os quadros de <b>Sessão</b>; os quadros de outros serviços não mudam, mas as sessões deles são descontadas do total — 10 por mês com 2 de outro serviço = 8 divididas entre os de Sessão; o resto vai para os primeiros; se não der 1 para cada quadro de Sessão, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
       "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",
       "<b>Não Agrupar com</b> (ao lado de Sessão/Mês): marque os pacientes que não devem ficar juntos na mesma sala e horário; o Auto Planner respeita nos dois sentidos.",
       "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava."
@@ -26168,6 +26371,8 @@ var HELP_TOPICS = [
       "Informe a data, o vendedor, a forma de pagamento, o <b>valor mensal</b> e os <b>meses</b>; o total é calculado.",
       "Marque <b>Gerar parcelas no Contas a Receber</b> para criar as contas: entrada (opcional), número de parcelas, primeiro vencimento, intervalo em meses, conta bancária e subcategoria. A prévia mostra cada parcela antes de salvar.",
       "Na venda seguinte do mesmo tratamento, a anterior fica <b>Substituída</b>; se havia parcelas em aberto dela, você escolhe manter ou excluir.",
+      "Para corrigir uma venda, abra-a em <b>Financeiro ▾ → Vendas</b> e clique em <b>Editar</b>: dá para mudar a data, o vendedor, a forma de pagamento e as observações (valor, meses e tipo não mudam). Só a venda <b>Ativa</b> e sem parcela recebida pode ser editada. Trocar o vendedor recalcula a comissão que ainda não foi paga; se já foi paga, o sistema só avisa a diferença a acertar.",
+      "Na mesma janela, <b>Excluir</b> apaga a venda junto com as parcelas em aberto no Contas a Receber e a comissão do vendedor (e a conta a pagar dela). Venda com parcela recebida ou com comissão já paga não pode ser excluída: cancele o tratamento. Excluir o <b>tratamento</b> exclui a venda dele do mesmo jeito (a confirmação mostra o que sai junto); se a venda estiver bloqueada, o tratamento também não é excluído.",
       "No grupo <b>Vendas</b> da janela do tratamento ficam todas as vendas, com situação e quantas parcelas estão em aberto.",
       "Ao <b>cancelar</b> o tratamento, o sistema pergunta se exclui as parcelas em aberto (todas, ou só as que vencem a partir de uma data; as já recebidas não mudam) e depois se remove as sessões do Planner e da Agenda a partir de uma data. A venda ativa fica <b>Cancelada</b>."
     ],
