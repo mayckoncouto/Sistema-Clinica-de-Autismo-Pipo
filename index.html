@@ -25355,13 +25355,115 @@ function openVendaDetalhe(id){
         return '<tr><td>' + esc(fpLabel(x)) + '</td><td>' + esc(trBr(x.venc)) + '</td><td>' + esc(fmtMoney(x.valor)) + '</td><td>' + fpStatusChip(x) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="hint">Nenhuma parcela gerada no Contas a Receber.</div>') +
       (comCan("view") ? '<div class="tr-sec">Comissão</div>' + (c ? '<div class="field-row">' + row("Valor", esc(fmtMoney(c.valor)) + ' (' + String(c.pct).replace(".", ",") + '% de ' + esc(fmtMoney(c.base)) + ')') + row("Situação", esc(comStatusText(c))) + '</div>' :
         '<div class="hint">' + (s.status !== "ativa" ? "Venda sem comissão." : !s.seller ? "Venda sem vendedor: não gera comissão." : "Aguardando a 1ª parcela paga ou o 1º atendimento finalizado.") + '</div>') : '') +
-    '</div><div class="modal-foot"><span></span><div class="spacer"></div>' + (t && can("tratamentos", "view") ? '<button class="btn ghost" id="vnDTr">Abrir Tratamento</button>' : '') + '<button class="btn ghost" id="vnDCt">Contrato</button><button class="btn primary" id="vnDOk">Fechar</button></div></div></div>';
+    '</div><div class="modal-foot"><span></span><div class="spacer"></div>' + (t && can("tratamentos", "view") ? '<button class="btn ghost" id="vnDTr">Abrir Tratamento</button>' : '') + '<button class="btn ghost" id="vnDCt">Contrato</button>' +
+      (slCan("edit") ? '<button class="btn ghost" id="vnDEdit">Editar</button>' : '') + '<button class="btn primary" id="vnDOk">Fechar</button></div></div></div>';
   var $ = function(x){ return document.getElementById(x); }, ov = $("ovVn");
   var close = function(){ host.innerHTML = ""; };
   $("vnDClose").addEventListener("click", close); $("vnDOk").addEventListener("click", close);
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  if ($("vnDEdit")) $("vnDEdit").addEventListener("click", function(){
+    var why = slEditBlocked(s); if (why){ showToast(why, true); return; }
+    close(); openVendaEditar(s);
+  });
   $("vnDCt").addEventListener("click", function(){ close(); slContratoDialog(s); });
   if ($("vnDTr")) $("vnDTr").addEventListener("click", function(){ close(); openTreatmentModal(t, {stack: true}); });
+}
+/* Editar venda (2026-10-16): data, vendedor, forma de pagamento e observações. Só venda ativa, permissão Vendas (editar) e sem parcela recebida.
+ * Vendedor trocado: comissão em aberto é recalculada (regra do vendedor novo); já paga, só avisa. */
+function slEditBlocked(s){
+  if (!slCan("edit")) return permDeniedMsg("vendas", "edit");
+  if (s.status !== "ativa") return "Só a venda ativa pode ser editada (esta está " + (SALE_STATUS[s.status] || s.status).toLowerCase() + ").";
+  if (slParcels([s.id]).some(fpDone)) return "Venda com parcela recebida no Contas a Receber não pode ser editada.";
+  return "";
+}
+function slUpdate(id, patch){
+  var c = agdClient();
+  var apply = function(){ SALES.rows = (SALES.rows || []).map(function(s){ return s.id === id ? Object.assign({}, s, patch) : s; }); return true; };
+  if (!c) return Promise.resolve(apply());
+  return c.from("treatment_sales").update({data: patch.data, seller_id: patch.seller || null, seller_name: patch.sellerName || null, forma: patch.forma || null, obs: patch.obs || null})
+    .eq("id", id).select().single().then(function(res){
+      if (res.error || !res.data){ showToast("Não foi possível salvar a venda: " + ((res.error && res.error.message) || "sem permissão"), true); return false; }
+      SALES.rows = (SALES.rows || []).map(function(s){ return s.id === id ? slFromDb(res.data) : s; }); return true;
+    });
+}
+function comUpdate(id, patch){
+  var c = agdClient();
+  var apply = function(){ COMM.rows = (COMM.rows || []).map(function(x){ return x.id === id ? Object.assign({}, x, patch) : x; }); return true; };
+  if (!c) return Promise.resolve(apply());
+  var map = {seller: "seller_id", sellerName: "seller_name", rule: "rule_id", pct: "percentual", valor: "valor", status: "status", payable: "payable_id", obs: "obs"}, db = {};
+  Object.keys(patch).forEach(function(k){ if (map[k]) db[map[k]] = patch[k] === "" ? null : patch[k]; });
+  return c.from("sale_commissions").update(db).eq("id", id).then(function(res){
+    if (res.error){ showToast("Não foi possível atualizar a comissão: " + res.error.message, true); return false; }
+    return apply();
+  });
+}
+var COM_EDIT_MARK = "Edição da venda: ";
+// Depois de trocar o vendedor da venda s (já gravada). Promise<texto do aviso ou "">.
+function comResync(s){
+  return Promise.all([comLoad(), fpLoad()]).then(function(){
+    var c = comOf(s.id);
+    if (!c){ if (typeof comApuraAuto === "function") comApuraAuto(); return ""; }
+    if (c.status === "estornada" && String(c.obs || "").indexOf(COM_EDIT_MARK) !== 0) return "";
+    var pay = c.payable ? (FP.rows || []).filter(function(x){ return x.id === c.payable; })[0] : null;
+    if (c.status === "gerada" && pay && fpDone(pay)) return "A comissão já foi paga a " + (c.sellerName || "outro vendedor") + " (" + fmtMoney(c.valor) + "): acerte a diferença manualmente.";
+    if (!comCan("edit") || !fpCan("edit") || !fpCan("create") || !fpCan("delete")) return "A comissão não foi recalculada: é preciso ter Comissões (editar) e Financeiro (incluir, editar e excluir).";
+    var rule = s.seller ? comRuleFor(s) : null, plan = rule ? flPlanById(rule.plan) : null;
+    var base = comBase(s), valor = rule ? Math.round(base * rule.pct) / 100 : 0;
+    var ok = rule && plan && (plan.tipo === "Despesa" || plan.tipo === "Saída") && valor > 0;
+    if (!ok){
+      if (c.status !== "gerada") return "";
+      return (pay ? fpDelete([pay.id]) : Promise.resolve(true)).then(function(){
+        return comUpdate(c.id, {status: "estornada", payable: "", obs: COM_EDIT_MARK + (s.seller ? "nenhuma regra de comissão serve" : "venda ficou sem vendedor")});
+      }).then(function(){ return "Comissão estornada: " + (s.seller ? "nenhuma regra de comissão serve para o vendedor novo." : "a venda ficou sem vendedor."); });
+    }
+    var pat = rawPatient(s.patient) || {}, who = (pat.nome || "Paciente") + " (" + (COMM_TIPOS[s.tipo] || s.tipo) + ")";
+    var fields = {desc: "Comissão — " + (s.sellerName || "Vendedor") + " — " + who, plan: rule.plan, acc: rule.acc || "", valor: valor, staff: s.seller};
+    var step = pay ? fpSave(Object.assign({}, pay, fields), false)
+      : fpSave(Object.assign({venc: comDueDate(rule.day), sup: "", grupo: "", parcela: 0, parcelas: 0, obs: "", linhas: [], loan: "", abate: "", sale: ""}, fields), true);
+    return step.then(function(p){
+      if (!p) return "A comissão não foi recalculada.";
+      return comUpdate(c.id, {seller: s.seller, sellerName: s.sellerName, rule: rule.id, pct: rule.pct, valor: valor, status: "gerada", payable: p.id, obs: ""})
+        .then(function(){ return "Comissão recalculada para " + (s.sellerName || "o vendedor") + ": " + fmtMoney(valor) + "."; });
+    });
+  });
+}
+function openVendaEditar(s){
+  var host = regQuickHost(), staff = fpStaffList();
+  if (s.seller && !staff.some(function(x){ return x.id === s.seller; })) staff = staff.concat([{id: s.seller, nome: s.sellerName || fpStaffName(s.seller)}]);
+  var formas = SALE_FORMAS.slice(); if (s.forma && formas.indexOf(s.forma) === -1) formas.push(s.forma);
+  host.innerHTML = '<div class="overlay" id="ovVnEd"><div class="modal" style="max-width:560px">' +
+    '<div class="modal-head"><div><h3>Editar Venda</h3><div class="modal-sub">' + esc(vnPatName(s)) + ' · ' + esc(SALE_TIPOS[s.tipo] || s.tipo) + ' · ' + esc(fmtMoney(s.total)) + '</div></div><button class="modal-close" id="vnEClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="tr-sec tr-sec-top">Venda</div>' +
+      '<div class="field-row"><div class="field"><label for="vnEData">Data da Venda</label><input type="date" id="vnEData" value="' + esc(s.data || "") + '"></div>' +
+      '<div class="field"><label for="vnESeller">Vendedor</label><select id="vnESeller"><option value="">Sem vendedor</option>' +
+        staff.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === s.seller ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="field"><label for="vnEForma">Forma de Pagamento</label><select id="vnEForma"><option value="">Não informada</option>' +
+        formas.map(function(f){ return '<option value="' + esc(f) + '"' + (f === s.forma ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field"><label for="vnEObs">Observações</label><textarea id="vnEObs" rows="3">' + esc(s.obs || "") + '</textarea></div>' +
+      '<div class="hint">Valor, meses e tipo não mudam aqui. Trocar o vendedor recalcula a comissão que ainda não foi paga.</div>' +
+    '</div><div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="vnECancel">Cancelar</button><button class="btn primary" id="vnESave">Salvar</button></div></div></div>';
+  var $ = function(x){ return document.getElementById(x); }, ov = $("ovVnEd");
+  var close = function(){ host.innerHTML = ""; };
+  $("vnEClose").addEventListener("click", close); $("vnECancel").addEventListener("click", close);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  $("vnESave").addEventListener("click", function(){
+    var data = $("vnEData").value, seller = $("vnESeller").value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)){ showToast("Informe a data da venda.", true); return; }
+    var why = slEditBlocked(s); if (why){ showToast(why, true); return; }
+    var sellerName = seller ? ((staff.filter(function(x){ return x.id === seller; })[0] || {}).nome || fpStaffName(seller)) : "";
+    var patch = {data: data, seller: seller, sellerName: sellerName, forma: $("vnEForma").value, obs: $("vnEObs").value.trim()};
+    var sellerChanged = seller !== (s.seller || "");
+    $("vnESave").disabled = true;
+    slUpdate(s.id, patch).then(function(ok){
+      if (!ok){ $("vnESave").disabled = false; return; }
+      var now = (SALES.rows || []).filter(function(x){ return x.id === s.id; })[0] || Object.assign({}, s, patch);
+      return (sellerChanged ? comResync(now) : Promise.resolve("")).then(function(msg){
+        close(); showToast("Venda alterada." + (msg ? " " + msg : ""), /paga a|não foi/.test(msg || ""));
+        if (state.tab === "vendas") renderVendas();
+        openVendaDetalhe(s.id);
+      });
+    });
+  });
 }
 function wireVendas(){
   var s = document.getElementById("vnSearch"); if (s) s.addEventListener("input", debounce150(function(){ VN.q = s.value; gtMoreReset("vendas"); renderVendas(); }));
@@ -26168,6 +26270,7 @@ var HELP_TOPICS = [
       "Informe a data, o vendedor, a forma de pagamento, o <b>valor mensal</b> e os <b>meses</b>; o total é calculado.",
       "Marque <b>Gerar parcelas no Contas a Receber</b> para criar as contas: entrada (opcional), número de parcelas, primeiro vencimento, intervalo em meses, conta bancária e subcategoria. A prévia mostra cada parcela antes de salvar.",
       "Na venda seguinte do mesmo tratamento, a anterior fica <b>Substituída</b>; se havia parcelas em aberto dela, você escolhe manter ou excluir.",
+      "Para corrigir uma venda, abra-a em <b>Financeiro ▾ → Vendas</b> e clique em <b>Editar</b>: dá para mudar a data, o vendedor, a forma de pagamento e as observações (valor, meses e tipo não mudam). Só a venda <b>Ativa</b> e sem parcela recebida pode ser editada. Trocar o vendedor recalcula a comissão que ainda não foi paga; se já foi paga, o sistema só avisa a diferença a acertar.",
       "No grupo <b>Vendas</b> da janela do tratamento ficam todas as vendas, com situação e quantas parcelas estão em aberto.",
       "Ao <b>cancelar</b> o tratamento, o sistema pergunta se exclui as parcelas em aberto (todas, ou só as que vencem a partir de uma data; as já recebidas não mudam) e depois se remove as sessões do Planner e da Agenda a partir de uma data. A venda ativa fica <b>Cancelada</b>."
     ],
