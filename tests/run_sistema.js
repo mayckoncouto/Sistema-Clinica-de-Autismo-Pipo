@@ -34,18 +34,19 @@ const path = require('path');
   await page.fill('#sysSearch', '');
 
   // Desligar "não ABA" do Planner e salvar → histórico.
-  await page.click('[data-sys="pl_nao_aba"][data-mode="off"]');
+  await page.click('[data-sys="pl_nao_aba"][data-mode="block"]');
   await page.click('[data-sys="pl_prof_dois"][data-mode="warn"]');
   await page.click('#sysSave');
   await page.waitForTimeout(200);
   const saved = await ev(`JSON.stringify([sysMode("pl_nao_aba"), sysMode("pl_prof_dois"), window.__STORE__["config/system"]])`);
   const sv = JSON.parse(saved);
-  check('saved modes and history?', sv[0] === 'off' && sv[1] === 'warn' && sv[2].rules.pl_nao_aba === 'off' && sv[2].historico.length === 2, saved);
+  check('saved modes and history?', sv[0] === 'block' && sv[1] === 'warn' && sv[2].rules.pl_nao_aba === 'block' && sv[2].historico.length === 2, saved);
 
   // Regras no Planner.
   const pl = await ev(`(function(){
     var out = {}, d = state.scheduleDocs["seg-1"] = state.scheduleDocs["seg-1"] || {bookings: {}};
     d.bookings["09:20|r1|r1-t1"] = {patient: "Duda Vermelho", note: "", service: "sessao"};
+    state.sysRules = {pl_nao_aba: "off"};
     out.abaOff = plannerConflict("seg-1", "09:20|r1|r1-t2", {patient: "Bruno Verde", note: "", service: "sessao"});
     renderGrid();
     var td = document.querySelector('table.sched[data-doc="seg-1"] td.slotcell[data-key="09:20|r1|r1-t2"]');
@@ -68,7 +69,7 @@ const path = require('path');
   const ag = await ev(`(function(){
     var out = {}, rows = [{id: "o1", date: "2030-01-07", time: "08:00", professional_id: "ana-terapeuta", room_id: "r1", patient: "Duda Vermelho", service: "sessao"}];
     var rec = {date: "2030-01-07", time: "08:00", professional_id: "bia-terapeuta", room_id: "r1", patient: "Bruno Verde", service: "sessao"};
-    state.sysRules = {}; out.block = typeof agdConflictIn(rows, rec);
+    state.sysRules = {ag_nao_aba: "block"}; out.block = typeof agdConflictIn(rows, rec);
     state.sysRules = {ag_nao_aba: "warn"}; var w = agdConflictIn(rows, rec); out.warn = !!(w && w.warn);
     state.sysRules = {ag_nao_aba: "off"}; out.off = agdConflictIn(rows, rec);
     state.sysRules = {ag_final_terapeuta: "off"}; window.__planProfId = "ana-terapeuta"; out.finalOff = agdFinalLocked(FINAL_STATUS);
@@ -103,7 +104,7 @@ const path = require('path');
   await ev(`(function(){ var d = state.scheduleDocs["seg-1"]; delete d.bookings["09:20|r1|r1-t1"]; delete d.bookings["09:20|r1|r1-t2"]; state.sysRules = {}; document.querySelectorAll(".overlay").forEach(function(o){ o.remove(); }); })()`);
 
   // Restaurar Tudo.
-  await ev(`state.sysRules = {pl_nao_aba: "off"}`);
+  await ev(`state.sysRules = {pl_nao_aba: "block"}`);
   await page.evaluate(() => window.pipoOpenSystem());
   await page.waitForSelector('#ovSys');
   const chg = await page.$$eval('#sysBody .sys-changed', (x) => x.length);

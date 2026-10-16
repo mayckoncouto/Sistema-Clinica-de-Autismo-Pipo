@@ -87,7 +87,7 @@ const path = require('path');
   await setTr([tr('pa', null, { hours: 1, aba: 'Não', dia: 'seg', semanas: '1' })]);
   await ev(`(function(){
     var times = ${morning}; var bk = {};
-    times.slice(0, -1).forEach(function(t, i){ bk[t + "|rB|rB-f5"] = {patient: "Paciente E", patientId: "pe", note: "", service: "sessao"}; });
+    times.slice(0, -1).forEach(function(t, i){ ["rB-f5", "rB-f6"].forEach(function(c, j){ bk[t + "|rB|" + c] = {patient: "Paciente E" + j, patientId: "pe" + j, note: "", service: "sessao"}; }); });
     state.scheduleDocs["seg-1"] = {bookings: bk};
     window.__apFill = true;
   })()`);

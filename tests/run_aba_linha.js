@@ -17,6 +17,7 @@ const path = require('path');
   await page.goto('file://' + evPage);
   await page.waitForTimeout(800);
   const ev = (code) => page.evaluate((c) => window.__ev(c), code);
+  await ev('state.sysRules = {pl_nao_aba: "block", ag_nao_aba: "block"}');
   let fails = 0;
   const check = (label, ok, extra) => { console.log(label, ok, extra === undefined ? '' : extra); if (!ok) fails++; };
 
