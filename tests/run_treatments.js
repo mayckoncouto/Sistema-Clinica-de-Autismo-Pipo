@@ -162,10 +162,17 @@ const path = require('path');
     document.getElementById('ph-seg-mi').value = '08:00'; document.getElementById('ph-seg-mf').value = '11:00';
     await act('copy');
     const copied = rows.every((tr) => tr.querySelector('.cl-ativo').checked && tr.querySelector('input[id$="-mi"]').value === '08:00');
-    return {head: head.slice(0, 2), items, offOk, undoShown, undoOk, cleared, copied};
+    const cnt = rows.map((tr) => +tr.querySelector('.ph-n').textContent);
+    const week = cnt.reduce((a, b) => a + b, 0), totTxt = document.getElementById('pHoursTotal').textContent;
+    const totOk = week > 0 && cnt.every((n) => n === cnt[0]) && totTxt.indexOf(week + ' por semana') !== -1 && totTxt.indexOf('= ' + (week * 4) + ' por mês') !== -1;
+    document.getElementById('ph-seg-mi').value = '09:00'; document.getElementById('ph-seg-mi').dispatchEvent(new Event('input', {bubbles: true}));
+    const segN = +rows[0].querySelector('.ph-n').textContent;
+    const smaller = segN < cnt[0];
+    document.getElementById('pHoursUndo').click();
+    return {head: head.slice(0, 2), items, offOk, undoShown, undoOk, cleared, copied, totOk, smaller, cnt, totTxt};
   });
   console.log('patient hours: "Disponível" column, Outras Opções (clear all / clear unmarked / copy) and Desfazer work?',
-    ph.head.join('|') === 'Dia|Disponível' && ph.items.length === 3 && ph.offOk && ph.undoShown && ph.undoOk && ph.cleared && ph.copied, JSON.stringify(ph));
+    ph.head.join('|') === 'Dia|Disponível' && ph.items.length === 3 && ph.offOk && ph.undoShown && ph.undoOk && ph.cleared && ph.copied && ph.totOk && ph.smaller, JSON.stringify(ph));
   await page.click('#trCancel').catch(() => {});
 
   // Data de Término digitável: antes do início é recusada; válida fica gravada e aparece na lista.

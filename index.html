@@ -12111,7 +12111,7 @@ function patHoursSectionHtml(v){
     return '<tr data-day="'+d.key+'"><td class="ph-day" title="'+esc(d.full)+'">'+d.full.slice(0, 3)+'</td>' +
       '<td class="cl-on"><input type="checkbox" class="cl-ativo"'+(h.ativo ? ' checked' : '')+' aria-label="Disponível '+d.full+'"></td>' +
       '<td>'+tm("ph-"+d.key+"-mi", h.manha && h.manha.inicio, off)+'</td><td>'+tm("ph-"+d.key+"-mf", h.manha && h.manha.fim, off)+'</td>' +
-      '<td>'+tm("ph-"+d.key+"-ti", h.tarde && h.tarde.inicio, off)+'</td><td>'+tm("ph-"+d.key+"-tf", h.tarde && h.tarde.fim, off)+'</td></tr>';
+      '<td>'+tm("ph-"+d.key+"-ti", h.tarde && h.tarde.inicio, off)+'</td><td>'+tm("ph-"+d.key+"-tf", h.tarde && h.tarde.fim, off)+'</td><td class="ph-count ph-n"></td></tr>';
   }).join("");
   return '<div class="prof-section"><div class="prof-section-head"><span class="tr-sec tr-sec-in">Horário de Atendimento</span>' +
       '<span class="ph-acts"><button type="button" class="btn ghost ph-copy" id="pHoursUndo" hidden>Desfazer</button>' +
@@ -12121,16 +12121,34 @@ function patHoursSectionHtml(v){
         '<button type="button" class="btn ghost" data-ph-act="clear-off" id="pHoursClearOff">Limpar os Dias sem “Disponível” Marcado</button>' +
         '<button type="button" class="btn ghost" data-ph-act="copy" id="pHoursCopy">Copiar Segunda para Todos</button>' +
       '</div></div></span></div>' +
-    '<table class="prof-hours cl-hours" id="pHours"><colgroup><col style="width:48px"><col style="width:58px"><col><col><col><col></colgroup><thead>' +
-      '<tr><th rowspan="2">Dia</th><th rowspan="2">Disponível</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th></tr>' +
+    '<table class="prof-hours cl-hours" id="pHours"><colgroup><col style="width:48px"><col style="width:58px"><col><col><col><col><col style="width:58px"></colgroup><thead>' +
+      '<tr><th rowspan="2">Dia</th><th rowspan="2">Disponível</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th><th rowspan="2" title="Sessões disponíveis no dia">Sessões</th></tr>' +
       '<tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div class="pat-count" id="pHoursTotal" style="margin-top:6px"></div>' +
     '<div class="pat-count" style="margin-top:6px">Horários em que o paciente pode ser atendido. Marque "Disponível" nos dias em que o paciente pode vir. No Planner e na Agenda, agendar fora deles pede confirmação dupla. Deixe o período em branco se não houver atendimento nele.</div></div>';
 }
 function wirePatHours(){
   var tbl = document.getElementById("pHours"); if (!tbl) return;
   tbl.addEventListener("change", function(e){
     if (e.target.classList.contains("cl-ativo")) e.target.closest("tr").querySelectorAll(".cl-time").forEach(function(x){ x.disabled = !e.target.checked; });
+    tbl.__recount();
   });
+  tbl.addEventListener("input", function(){ tbl.__recount(); });
+  tbl.addEventListener("focusout", function(){ setTimeout(function(){ if (tbl.__recount) tbl.__recount(); }, 0); });
+  // Sessões disponíveis por dia (horários da clínica que cabem nas faixas marcadas) e total × 4 semanas.
+  tbl.__recount = function(){
+    var tmp = {horarios: readPatHours()}, week = 0;
+    Array.prototype.forEach.call(tbl.querySelectorAll("tbody tr"), function(tr){
+      var key = tr.getAttribute("data-day"), day = DAYS.filter(function(x){ return x.key === key; })[0], n = 0;
+      if (day && tr.querySelector(".cl-ativo").checked) n = day.morning.concat(day.afternoon).filter(function(t){ return patientSlotOk(tmp, key, t); }).length;
+      week += n;
+      var c = tr.querySelector(".ph-n"); c.textContent = day ? String(n) : "×";
+      c.title = !day ? "Clínica fechada neste dia" : n + (n === 1 ? " sessão disponível" : " sessões disponíveis") + " neste dia";
+    });
+    var tot = document.getElementById("pHoursTotal");
+    if (tot) tot.innerHTML = "<b>Sessões disponíveis:</b> " + week + (week === 1 ? " por semana" : " por semana") + " × 4 semanas = <b>" + (week * 4) + " por mês</b>";
+  };
+  tbl.__recount();
   wirePatHoursMenu(tbl);
 }
 // "Outras Opções ▾" do horário do paciente: limpar todos os dias, limpar só os dias sem
@@ -12166,9 +12184,10 @@ function wirePatHoursMenu(tbl){
     }
     snap = before; undo.hidden = false; clearTimeout(timer);
     timer = setTimeout(function(){ undo.hidden = true; snap = null; }, 15000);
+    if (tbl.__recount) tbl.__recount();
     if (msg) showToast(msg);
   });
-  undo.addEventListener("click", function(){ if (!snap) return; put(snap); snap = null; undo.hidden = true; clearTimeout(timer); showToast("Desfeito."); });
+  undo.addEventListener("click", function(){ if (!snap) return; put(snap); if (tbl.__recount) tbl.__recount(); snap = null; undo.hidden = true; clearTimeout(timer); showToast("Desfeito."); });
   document.addEventListener("mousedown", function(e){ if (!tm.hidden && !e.target.closest("#pHoursMore")) setOpen(false); });
   document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !tm.hidden){ e.stopPropagation(); setOpen(false); tb.focus(); } }, true);
 }
@@ -25860,7 +25879,7 @@ var HELP_TOPICS = [
       "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre os quadros de <b>Sessão</b>; os quadros de outros serviços não mudam, mas as sessões deles são descontadas do total — 10 por mês com 2 de outro serviço = 8 divididas entre os de Sessão; o resto vai para os primeiros; se não der 1 para cada quadro de Sessão, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
       "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",
       "<b>Não Agrupar com</b> (ao lado de Sessão/Mês): marque os pacientes que não devem ficar juntos na mesma sala e horário; o Auto Planner respeita nos dois sentidos.",
-      "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava."
+      "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava. A coluna <b>Sessões</b> mostra quantos horários da clínica cabem nas faixas de cada dia, e abaixo da tabela fica a soma: sessões disponíveis por semana × 4 semanas = por mês."
     ],
     rules: [
       "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda).",
