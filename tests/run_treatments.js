@@ -149,6 +149,11 @@ const path = require('path');
     // terça desmarcada com horário sobrando
     const ter = rows.find((tr) => tr.dataset.day === 'ter');
     ter.querySelector('.cl-ativo').checked = false; document.getElementById('ph-ter-mi').value = '08:00';
+    // a tabela abre limpa
+    const startsEmpty = rows.every((tr) => tr.dataset.day === 'ter' || (!tr.querySelector('.cl-ativo').checked && [...tr.querySelectorAll('input.cl-time')].every((x) => x.value === '')));
+    const segCk = rows.find((tr) => tr.dataset.day === 'seg').querySelector('.cl-ativo');
+    segCk.checked = true; segCk.dispatchEvent(new Event('change', {bubbles: true}));
+    document.getElementById('ph-seg-mi').value = '08:00'; document.getElementById('ph-seg-mf').value = '11:00';
     const segBefore = document.getElementById('ph-seg-mi').value;
     await act('clear-off');
     const offOk = document.getElementById('ph-ter-mi').value === '' && document.getElementById('ph-seg-mi').value === segBefore && segBefore !== '';
@@ -169,10 +174,10 @@ const path = require('path');
     const segN = +rows[0].querySelector('.ph-n').textContent;
     const smaller = segN < cnt[0];
     document.getElementById('pHoursUndo').click();
-    return {head: head.slice(0, 2), items, offOk, undoShown, undoOk, cleared, copied, totOk, smaller, cnt, totTxt};
+    return {head: head.slice(0, 2), startsEmpty, items, offOk, undoShown, undoOk, cleared, copied, totOk, smaller, cnt, totTxt};
   });
   console.log('patient hours: "Disponível" column, Outras Opções (clear all / clear unmarked / copy) and Desfazer work?',
-    ph.head.join('|') === 'Dia|Disponível' && ph.items.length === 3 && ph.offOk && ph.undoShown && ph.undoOk && ph.cleared && ph.copied && ph.totOk && ph.smaller, JSON.stringify(ph));
+    ph.head.join('|') === 'Dia|Disponível' && ph.startsEmpty && ph.items.length === 3 && ph.offOk && ph.undoShown && ph.undoOk && ph.cleared && ph.copied && ph.totOk && ph.smaller, JSON.stringify(ph));
   await page.click('#trCancel').catch(() => {});
 
   // Data de Término digitável: antes do início é recusada; válida fica gravada e aparece na lista.

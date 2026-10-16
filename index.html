@@ -12102,12 +12102,12 @@ function renderPatientsTab(){
 }
 
 // Tabela "Horário de atendimento" do cadastro do paciente (dias abertos da clínica).
-// Sem horário salvo, abre com o horário da clínica (= sem restrição na prática).
+// Sem horário salvo, abre limpa (sem restrição até alguém preencher).
 function patHoursSectionHtml(v){
   var days = ALL_WEEKDAYS.filter(function(d){ return clinicDayCfg(d.key).ativo; });
   function tm(id, val, dis){ return '<input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="cl-time" id="'+id+'" value="'+esc(val || "")+'"'+(dis ? ' disabled' : '')+'>'; }
   var rows = days.map(function(d){
-    var h = (v.horarios && v.horarios[d.key]) || (v.horarios ? {ativo: false} : clinicDayCfg(d.key)), off = !h.ativo;
+    var h = (v.horarios && v.horarios[d.key]) || {ativo: false}, off = !h.ativo;
     return '<tr data-day="'+d.key+'"><td class="ph-day" title="'+esc(d.full)+'">'+d.full.slice(0, 3)+'</td>' +
       '<td class="cl-on"><input type="checkbox" class="cl-ativo"'+(h.ativo ? ' checked' : '')+' aria-label="Disponível '+d.full+'"></td>' +
       '<td>'+tm("ph-"+d.key+"-mi", h.manha && h.manha.inicio, off)+'</td><td>'+tm("ph-"+d.key+"-mf", h.manha && h.manha.fim, off)+'</td>' +
@@ -12199,7 +12199,9 @@ function readPatHours(){
     function v(s){ return document.getElementById("ph-"+k+"-"+s).value; }
     out[k] = {ativo: tr.querySelector(".cl-ativo").checked, manha: {inicio: v("mi"), fim: v("mf")}, tarde: {inicio: v("ti"), fim: v("tf")}};
   });
-  return out;
+  // Tabela em branco = sem restrição de horário (não grava dias todos desmarcados).
+  var any = Object.keys(out).some(function(k){ var o = out[k]; return o.ativo || o.manha.inicio || o.manha.fim || o.tarde.inicio || o.tarde.fim; });
+  return any ? out : null;
 }
 // Campos do tratamento (convênio, plano, pacote, ABA, especialidades/serviços e
 // horário de atendimento). Antes ficavam no cadastro do paciente; desde 2026-10-03
