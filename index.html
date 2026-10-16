@@ -2895,6 +2895,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <div class="cad-wrap crm-wrap"><button type="button" class="cad-btn" id="cadBtn" aria-haspopup="menu" aria-expanded="false">Cadastros <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><span class="crm-badge" id="cadBadge" hidden title="Cadastros enviados pelo link esperando revisão"></span><div class="cad-menu" id="cadMenu" role="menu" hidden></div></div>
       <div class="cad-wrap"><button type="button" class="cad-btn" id="plBtn" aria-haspopup="menu" aria-expanded="false">Planner <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="plMenu" role="menu" hidden></div></div>
       <button data-tab="planner" hidden>Planner</button>
+      <button data-tab="autoplanner" hidden>Auto Planner</button>
       <div class="cad-wrap"><button type="button" class="cad-btn" id="agBtn" aria-haspopup="menu" aria-expanded="false">Agenda <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="agMenu" role="menu" hidden></div></div>
       <button data-tab="agenda" hidden>Agenda</button>
       <button data-tab="agendaplanner" hidden>Agenda Planner</button>
@@ -2967,6 +2968,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
   <section id="tab-inicio" class="panel inicio-panel"></section>
   <section id="tab-planner" class="panel" hidden>
     <div class="controls">
+      <h2 class="cad-title" id="plAutoTitle" hidden>Auto Planner</h2>
       <div class="seg" id="daySeg"></div>
       <div class="seg" id="weekSeg"></div>
       <!-- Filtro de salas (menu suspenso), antes da busca -->
@@ -2997,7 +2999,9 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="sendToAgendaBtn" title="Envia os agendamentos do Planner para a Agenda: uma semana (ou um dia) ou o mês inteiro" hidden>Enviar para a Agenda</button>
         <button class="btn ghost" id="plBlockBtn" title="Bloquear horários de um profissional, de uma sala ou da clínica toda (fica cinza, como fora do horário)" hidden>Bloquear Horário</button>
         <button class="btn ghost" id="plUnblockBtn" title="Liberar horários bloqueados de um profissional, de uma sala ou da clínica toda" hidden>Liberar Horário</button>
-        <button class="btn ghost" id="autoPlannerBtn" title="Propõe as sessões que faltam no Planner a partir dos quadros do tratamento (você confere antes de aplicar)">Auto Planner</button>
+        <button class="btn ghost" id="autoPlannerBtn" title="Propõe as sessões que faltam no Auto Planner a partir dos quadros do tratamento (você confere antes de aplicar)" hidden>Montar Proposta</button>
+        <button class="btn ghost" id="apSendPlannerBtn" title="Leva o que está no Auto Planner para o Planner (só acrescenta em horários livres, respeitando as regras do Planner)" hidden>Enviar para o Planner</button>
+        <button class="btn ghost" id="apUnsendBtn" title="Apaga do Planner só o que o Auto Planner enviou" hidden>Remover do Planner o que o Auto Planner Enviou</button>
         <button class="btn ghost" id="freeSlotBtn" title="Ver os horários livres para agendar um paciente">Horário Livre</button>
         <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar Agendamento</button>
         <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar Profissional</button>
@@ -5114,10 +5118,14 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", agenda:"Agenda", visao_geral:"Visão Geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
+var PERM_MODULE_LABELS = {comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", visao_geral:"Visão Geral", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
+// Auto Planner aberto? (grade própria: ver "Auto Planner: grade própria" perto de subscribeSchedule)
+var PLA = {on: false, hist: {undo: [], redo: []}};
 function can(module, action){
   if (action !== "view" && state.writable === false) return false;
+  // Auto Planner aberto: incluir/editar/excluir (e bloquear horário) seguem a permissão dele.
+  if (PLA.on && action !== "view" && (module === "planner" || module === "bloqueio_horario")) module = "autoplanner";
   return window.pipoAuth ? window.pipoAuth.can(module, action) : true;
 }
 function permDeniedMsg(module, action){
@@ -5211,7 +5219,9 @@ function permToolClasses(){
 function applyPermissionsUI(){
   if (HEALTH.map === null && healthCanSee()) healthLoad();
   if (!window.pipoAuth) return;
-  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", agendamentos:"agenda", agendaplanner:"agenda", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", atividades:"atividades", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", motivosbloq:"motivos_bloqueio", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", unidades:"unidades", contratos:"contratos", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", emptomados:"financeiro", empconcedidos:"financeiro", conciliacao:"financeiro", vendas:"vendas", pagar:"financeiro", receber:"financeiro", automacoes:"crmautomacoes"};
+  // Endereço #autoplanner sem permissão: volta ao Planner de verdade.
+  if (PLA.on && !window.pipoAuth.can("autoplanner", "view")){ plAutoSet(false); if (db && state.tab === "planner") subscribeSchedule(); }
+  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", agendamentos:"agenda", agendaplanner:"agenda", autoplanner:"autoplanner", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", atividades:"atividades", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", motivosbloq:"motivos_bloqueio", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", unidades:"unidades", contratos:"contratos", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", emptomados:"financeiro", empconcedidos:"financeiro", conciliacao:"financeiro", vendas:"vendas", pagar:"financeiro", receber:"financeiro", automacoes:"crmautomacoes"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : (k === "crm" || k === "automacoes") ? crmMainCan() : k === "caixa" ? cxCan() : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -5232,7 +5242,8 @@ function applyPermissionsUI(){
     var visible = tabCan(k);
     // Cadastros: botão sempre oculto (abre pelo menu "Cadastros").
     b.hidden = !visible || navMenuTab(k);
-    if (!visible && k === state.tab) activeHidden = true;
+    // O Auto Planner usa a seção do Planner: o botão dele é quem decide quando ele está aberto.
+    if (!visible && (k === "autoplanner" ? (state.tab === "planner" && PLA.on) : (k === state.tab && !(k === "planner" && PLA.on)))) activeHidden = true;
   });
   renderCadMenu();
   // Aba atual sem permissão (ou sem conteúdo visível): vai para a primeira permitida.
@@ -5261,11 +5272,11 @@ function applyPermissionsUI(){
   if (state.salasView === "grupos" && !can("grupos", "view") && can("salas", "view")) state.salasView = "salas";
   show("sendToAgendaBtn", can("agenda","create"));
   show("plClearWeekBtn", can("planner","delete"));
-  show("autoPlannerBtn", can("planner","create"));
+  plAutoUi();
   show("plBlockBtn", can("bloqueio_horario","create"));
   show("plUnblockBtn", can("bloqueio_horario","delete"));
   show("fixPatientBtn", can("planner","create") || can("planner","edit") || can("planner","delete"));
-  show("swapProfBtn", can("salas","edit") || can("grupos","edit"));
+  show("swapProfBtn", !PLA.on && (can("salas","edit") || can("grupos","edit")));
   permToolClasses();
   var agendaWrite = can("planner","create") || can("planner","edit") || can("planner","delete");
   var banner = document.getElementById("readonlyBanner");
@@ -5290,6 +5301,8 @@ function navInitialTab(){
   var key = "";
   try { key = navOldHash(decodeURIComponent((location.hash || "").slice(1))); } catch(e){}
   var tab = ({planner: "planner", resumo: "resumo", grupos: "salas"})[key] || key;
+  if (tab === "autoplanner" && !(document.querySelector('#mainTabs button[data-tab="autoplanner"]'))) tab = "";
+  if (tab === "autoplanner"){ PLA.on = true; tab = "planner"; }   // mesma seção do Planner, com os registros do Auto Planner
   if (!tab || !document.getElementById("tab-" + tab) || !document.querySelector('#mainTabs button[data-tab="' + tab + '"]')) tab = "";
   var mobile = !!(window.matchMedia && window.matchMedia("(max-width:760px)").matches);
   if (tab === "inicio" && !INICIO_ON) tab = "";
@@ -5300,7 +5313,7 @@ function navInitialTab(){
     try { history.replaceState(history.state, "", location.pathname + location.search + (mobile ? "#agenda" : "#planner")); } catch(e){}
   }
   if (mobile && (tab === "planner" || tab === "resumo" || tab === "disponibilidade")){
-    tab = INICIO_ON ? "inicio" : "agenda";
+    tab = INICIO_ON ? "inicio" : "agenda"; PLA.on = false;
     try { history.replaceState(history.state, "", location.pathname + location.search + "#" + tab); } catch(e){}
   }
   if (!tab) return;
@@ -5600,7 +5613,7 @@ var USAGE = {
   profissionais: function(p){
     var cols = state.rooms.filter(function(r){ return (r.therapists || []).some(function(t){ return t.professionalId === p.id; }); }).length;
     var trs = state.treatments.filter(function(t){ return (t.specHours || []).some(function(h){ return h.profId === p.id; }); }).length;
-    var blocks = (PLB.list || []).filter(function(b){ return b.alvo === "prof" && b.profId === p.id; }).length;
+    var blocks = (PLB.list || []).concat(PLB.autoList || []).filter(function(b){ return b.alvo === "prof" && b.profId === p.id; }).length;
     return Promise.all([apptUseCount("professional_id", p.id),
       rowUseCount("clinical_records", "professional_id", p.id, function(){ return (PLAN.evoMem || []).filter(function(r){ return r.professional_id === p.id; }).length; })
     ]).then(function(n){
@@ -6481,6 +6494,27 @@ function activeDocIds(){
   return ids;
 }
 
+/* ---------------- Auto Planner: grade própria ----------------
+ * O Auto Planner usa a MESMA grade, regras e ferramentas do Planner, mas guarda os registros em
+ * documentos próprios (autoplan/<dia>-<semana>) e bloqueios extras em config/autoplan_blocks.
+ * state.tab continua "planner"; PLA.on diz qual conjunto de registros está aberto. Ao trocar de
+ * modo as assinaturas, os documentos em memória, o desfazer e a área de copiar são trocados:
+ * nada do Planner aparece no Auto Planner (nem o contrário). */
+function schedPath(docId){ return (PLA.on ? "autoplan/" : "schedule/") + docId; }
+// Documento do Resumo (Planner de verdade): no Auto Planner nunca serve de reserva.
+function repDoc(docId){ return PLA.on ? undefined : state.reportDocs[docId]; }
+function plAutoSet(on){
+  on = !!on;
+  if (PLA.on === on) return false;
+  Object.keys(state.scheduleSubs).forEach(function(id){ var h = state.scheduleSubs[id]; h.active = false; if (h.unsub) h.unsub(); });
+  state.scheduleSubs = {}; state.scheduleDocs = {}; state.pendingBookingChanges = {};
+  var t = bookingHistory; bookingHistory = PLA.hist; PLA.hist = t;
+  state.clipboard = null; state.dragKey = null; state.dragDocId = null;
+  PLA.on = on; PLB.idx = null;
+  try { refreshHistoryButtons(); renderClipboardBar(); } catch(e){}
+  return true;
+}
+
 function subscribeSchedule(){
   var needed = activeDocIds();
   // tear down subscriptions we no longer need
@@ -6499,10 +6533,10 @@ function subscribeSchedule(){
     state.pendingBookingChanges[docId] = {};
     // Os 20 dias do Planner já ficam ao vivo para o Resumo (subscribeReportDocs): trocar de
     // dia/semana desenha na hora com esses dados, sem esperar a leitura do banco.
-    if (!state.scheduleDocs[docId] && state.reportDocs && state.reportDocs[docId]) state.scheduleDocs[docId] = state.reportDocs[docId];
+    if (!state.scheduleDocs[docId] && !PLA.on && state.reportDocs && state.reportDocs[docId]) state.scheduleDocs[docId] = state.reportDocs[docId];
     var holder = {active: true, unsub: null};
     state.scheduleSubs[docId] = holder;
-    holder.unsub = db.doc("schedule/" + docId).onSnapshot(function(snap){
+    holder.unsub = db.doc(schedPath(docId)).onSnapshot(function(snap){
       if (!holder.active) return;
       applyIncomingSnapshot(docId, (snap.exists && snap.data()) ? snap.data() : {bookings:{}});
     }, function(){
@@ -9519,7 +9553,11 @@ function wireTabs(){
     if (!b) return;
     // Celular: Planner e Resumo não são mostrados; vai para a primeira outra tela permitida.
     if (MOBILE_HIDDEN_TABS.indexOf(b.getAttribute("data-tab")) !== -1 && isMobileView()){ var alt = mobileAltTab(); if (alt){ alt.click(); return; } }
-    state.tab = b.getAttribute("data-tab");
+    // Auto Planner: mesma seção do Planner, com os registros dele (PLA.on).
+    var tabKey = b.getAttribute("data-tab"), wantAuto = tabKey === "autoplanner";
+    if (wantAuto) tabKey = "planner";
+    var modeChanged = plAutoSet(wantAuto);
+    state.tab = tabKey;
     Array.prototype.forEach.call(document.querySelectorAll("#mainTabs button"), function(x){
       x.classList.toggle("active", x === b);
     });
@@ -9544,7 +9582,7 @@ function wireTabs(){
     // wasn't repainted, so force one fresh render now that it's visible again.
     // Qualquer erro aqui vira aviso na tela (nunca uma aba em branco sem explicação).
     try {
-      if (state.tab === "planner") queueGridUpdate();
+      if (state.tab === "planner"){ plAutoUi(); if (modeChanged && db){ renderRoomChips(); subscribeSchedule(); } else queueGridUpdate(); }
       else if (state.tab === "resumo") renderRelatorioTab();
       else if (state.tab === "disponibilidade") renderDispTab();
       else if (state.tab === "visaogeral") vgOnShow();
@@ -9662,6 +9700,8 @@ function wireControls(){
   document.getElementById("swapProfBtn").addEventListener("click", function(){ openSwapProfModal(); });
   document.getElementById("freeSlotBtn").addEventListener("click", function(){ openFreeSlotModal(); });
   document.getElementById("autoPlannerBtn").addEventListener("click", function(){ openAutoPlannerModal(); });
+  document.getElementById("apSendPlannerBtn").addEventListener("click", apSendToPlanner);
+  document.getElementById("apUnsendBtn").addEventListener("click", apUnsendFromPlanner);
   document.getElementById("plBlockBtn").addEventListener("click", function(){ openPlBlockModal("lock"); });
   document.getElementById("plUnblockBtn").addEventListener("click", function(){ openPlBlockModal("unlock"); });
   document.getElementById("plExportBtn").addEventListener("click", function(){ plannerExportCsv(); });
@@ -10064,7 +10104,9 @@ function plannerRowAction(action, docId, dayKey, time){
  *     dos bloqueios do mesmo alvo e também os dos botões da grade nas colunas dele.
  * Permissão "Bloqueio de Horário" (bloqueio_horario) para tudo isso.
  */
-var PLB = {list: [], idx: null};
+var PLB = {list: [], autoList: [], idx: null};
+// Lista de bloqueios que a janela Bloquear/Liberar Horário edita: a do Planner ou, no Auto Planner, a dele.
+function plbCur(){ return PLA.on ? PLB.autoList : PLB.list; }
 var PLB_MOTIVOS = ["Férias", "Curso / treinamento externo", "Reunião externa", "Atestado / falta", "Manutenção da sala", "Evento da clínica", "Outro"];
 function subscribePlBlocks(){
   if (!db) return;
@@ -10075,12 +10117,19 @@ function subscribePlBlocks(){
     queueGridUpdate();
     scheduleRelatorioRender();
   }, function(){});
+  // Bloqueios extras só do Auto Planner (somam aos do Planner enquanto ele está aberto).
+  db.doc("config/autoplan_blocks").onSnapshot(function(snap){
+    var d = (snap.exists && snap.data()) || {};
+    PLB.autoList = Array.isArray(d.list) ? d.list : [];
+    PLB.idx = null;
+    if (PLA.on) queueGridUpdate();
+  }, function(){});
 }
 // Índice "dia|semana|hora" → bloqueios (montado uma vez por mudança, não por célula).
 function plbIndex(){
   if (PLB.idx) return PLB.idx;
   var idx = {};
-  PLB.list.forEach(function(b){
+  PLB.list.concat(PLA.on ? PLB.autoList : []).forEach(function(b){
     var s = b.slots || {};
     Object.keys(s).forEach(function(w){
       Object.keys(s[w] || {}).forEach(function(day){
@@ -10302,7 +10351,7 @@ function openPlBlockModal(mode){
     if (!plan) return;
     var p = plan, saveBtn = document.getElementById("plbSave");
     saveBtn.disabled = true;
-    var list = PLB.list.map(function(b){ return JSON.parse(JSON.stringify(b)); });
+    var list = plbCur().map(function(b){ return JSON.parse(JSON.stringify(b)); });
     if (lock){
       var mot = document.getElementById("plbMotivo").value, det = document.getElementById("plbDet").value.trim();
       var slots = {};
@@ -10328,7 +10377,7 @@ function openPlBlockModal(mode){
       }); });
       return Object.keys(ns).length ? Object.assign({}, b, {slots: ns}) : null;
     }).filter(Boolean);
-    var changed = JSON.stringify(list) !== JSON.stringify(PLB.list);
+    var changed = JSON.stringify(list) !== JSON.stringify(plbCur());
     (changed ? plbWrite(list) : Promise.resolve(true)).then(function(ok){
       if (!ok){ saveBtn.disabled = false; return false; }
       return p.nSeat ? applyBookingChanges(p.seatChanges) : true;
@@ -10345,10 +10394,12 @@ function plbSame(b, alvo, id, roomId){
 }
 function plbWrite(list){
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(false); }
-  var prev = PLB.list, prep = listPrepare(prev, list);
-  PLB.list = prep.list; PLB.idx = null; queueGridUpdate();
-  return listCommit("config/planner_blocks", prep).catch(function(e){
-    PLB.list = prev; PLB.idx = null; queueGridUpdate();
+  var auto = PLA.on, prev = plbCur(), prep = listPrepare(prev, list);
+  if (auto) PLB.autoList = prep.list; else PLB.list = prep.list;
+  PLB.idx = null; queueGridUpdate();
+  return listCommit(auto ? "config/autoplan_blocks" : "config/planner_blocks", prep).catch(function(e){
+    if (auto) PLB.autoList = prev; else PLB.list = prev;
+    PLB.idx = null; queueGridUpdate();
     showToast("Não foi possível gravar o bloqueio" + (e && e.message ? ": " + e.message : "."), true);
     return false;
   });
@@ -10780,7 +10831,7 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
   if (!room) return null;
   var ther = findTherapist(room, p[2]), profId = ther && ther.professionalId;
   var dayKey = docId.split("-")[0];
-  var doc = state.scheduleDocs[docId] || state.reportDocs[docId];
+  var doc = state.scheduleDocs[docId] || repDoc(docId);
   var bookings = (doc && doc.bookings) || {};
   var patientRule = !isGroup(room) && !!findPatientByName(rec);
   var svc = rec.service || DEFAULT_SERVICE_ID;
@@ -11077,7 +11128,7 @@ function currentBookingsFor(docIds){
     if (state.scheduleSubs[docId] && state.scheduleSubs[docId].active && state.scheduleDocs[docId]){
       return Promise.resolve([docId, state.scheduleDocs[docId].bookings || {}]);
     }
-    return db.doc("schedule/" + docId).get().then(function(snap){
+    return db.doc(schedPath(docId)).get().then(function(snap){
       var d = (snap.exists && snap.data()) ? snap.data() : {};
       return [docId, d.bookings || {}];
     });
@@ -11239,7 +11290,7 @@ function patientHoursOutside(changesByDoc){
   var out = [];
   Object.keys(changesByDoc).forEach(function(docId){
     var changes = changesByDoc[docId], parts = docId.split("-"), dayKey = parts[0], week = parts[1];
-    var doc = state.scheduleDocs[docId] || state.reportDocs[docId], oldB = (doc && doc.bookings) || {};
+    var doc = state.scheduleDocs[docId] || repDoc(docId), oldB = (doc && doc.bookings) || {};
     Object.keys(changes).forEach(function(k){
       var rec = changes[k];
       if (!rec || !rec.patient || bookingKind(rec)) return;
@@ -11260,7 +11311,7 @@ function therapistMismatches(changesByDoc){
   var out = [];
   Object.keys(changesByDoc).forEach(function(docId){
     var changes = changesByDoc[docId], dayKey = docId.split("-")[0];
-    var doc = state.scheduleDocs[docId] || state.reportDocs[docId], oldB = (doc && doc.bookings) || {};
+    var doc = state.scheduleDocs[docId] || repDoc(docId), oldB = (doc && doc.bookings) || {};
     Object.keys(changes).forEach(function(k){
       var rec = changes[k];
       if (!rec || !rec.patient || bookingKind(rec)) return;
@@ -11281,7 +11332,7 @@ function areaMismatches(changesByDoc){
   var out = [];
   Object.keys(changesByDoc).forEach(function(docId){
     var changes = changesByDoc[docId], dayKey = docId.split("-")[0];
-    var doc = state.scheduleDocs[docId] || state.reportDocs[docId], oldB = (doc && doc.bookings) || {};
+    var doc = state.scheduleDocs[docId] || repDoc(docId), oldB = (doc && doc.bookings) || {};
     Object.keys(changes).forEach(function(k){
       var rec = changes[k];
       if (!rec || !rec.patient || bookingKind(rec)) return;
@@ -11453,7 +11504,7 @@ function applyBookingChanges(changesByDoc, opts){
 
   var writes = Object.keys(changesByDoc).map(function(docId){
     var changes = changesByDoc[docId];
-    var ref = db.doc("schedule/" + docId);
+    var ref = db.doc(schedPath(docId));
     // Supabase: grava só as chaves alteradas, de forma atômica no banco.
     if (typeof ref.patchBookings === "function") return ref.patchBookings(changes);
     return ref.get().then(function(snap){
@@ -12869,7 +12920,7 @@ function routineConflicts(changesByDoc){
   var out = [];
   Object.keys(changesByDoc).forEach(function(docId){
     var changes = changesByDoc[docId], parts = docId.split("-"), dayKey = parts[0], week = parts[1];
-    var doc = state.scheduleDocs[docId] || state.reportDocs[docId], oldB = (doc && doc.bookings) || {};
+    var doc = state.scheduleDocs[docId] || repDoc(docId), oldB = (doc && doc.bookings) || {};
     var d = ALL_WEEKDAYS.filter(function(x){ return x.key === dayKey; })[0];
     Object.keys(changes).forEach(function(k){
       var rec = changes[k];
@@ -18671,7 +18722,7 @@ function plannerClearWeek(){
   if (!db){ showToast("Sem conexão com o servidor.", true); return; }
   var week = state.week;
   var docIds = DAYS.map(function(d){ return d.key + "-" + week; });
-  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+  Promise.all(docIds.map(function(id){ return db.doc(schedPath(id)).get(); })).then(function(snaps){
     var changesByDoc = {}, n = 0;
     snaps.forEach(function(snap, i){
       var docId = docIds[i];
@@ -18766,7 +18817,7 @@ function openFixPatientModal(back){
   var docs = null; // docId -> bookings (lidos do banco ao abrir)
   var reportEl = document.getElementById("fxReport");
   reportEl.innerHTML = '<div class="pat-count">Carregando o Planner…</div>';
-  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+  Promise.all(docIds.map(function(id){ return db.doc(schedPath(id)).get(); })).then(function(snaps){
     docs = {};
     snaps.forEach(function(snap, i){
       var data = snap && snap.exists ? snap.data() : null;
@@ -19018,7 +19069,7 @@ function openSwapProfModal(){
   var docIds = [];
   [1, 2, 3, 4].forEach(function(w){ DAYS.forEach(function(d){ docIds.push(d.key + "-" + w); }); });
   var docs = null;
-  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+  Promise.all(docIds.map(function(id){ return db.doc(schedPath(id)).get(); })).then(function(snaps){
     docs = {};
     snaps.forEach(function(snap, i){ var data = snap && snap.exists ? snap.data() : null; docs[docIds[i]] = (data && data.bookings) || {}; });
     update();
@@ -19114,7 +19165,7 @@ function plannerExportCsv(){
   var docIds = [];
   WEEKS.forEach(function(w){ DAYS.forEach(function(d){ docIds.push(d.key + "-" + w); }); });
   var shownRooms = {}; visibleRooms().forEach(function(r){ shownRooms[r.id] = true; });
-  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+  Promise.all(docIds.map(function(id){ return db.doc(schedPath(id)).get(); })).then(function(snaps){
     function cell(v){ v = v == null ? "" : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
     var rows = [];
     var roomOrder = {}; plannerRooms().forEach(function(r, i){ roomOrder[r.id] = i; });
@@ -19194,7 +19245,7 @@ function openFreeSlotModal(){
   WEEKS.forEach(function(w){ DAYS.forEach(function(d){ docIds.push(d.key + "-" + w); }); });
   var loaded = false;
   out.innerHTML = '<div class="pat-count">Carregando o Planner…</div>';
-  Promise.all(docIds.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+  Promise.all(docIds.map(function(id){ return db.doc(schedPath(id)).get(); })).then(function(snaps){
     snaps.forEach(function(snap, i){
       var data = snap && snap.exists ? snap.data() : null;
       // as regras (plannerConflict) leem state.scheduleDocs: garante as 4 semanas carregadas
@@ -19507,64 +19558,134 @@ function apBuild(patients){
   }
   return plan;
 }
-// Agenda: leva as sugestões escolhidas para as datas do mês (mesmas regras do Enviar para a Agenda; só acrescenta).
-function apAgendaPlan(items, ym){
-  var weeks = genMonthWeeks(ym), today = holIsoOf(new Date()), dates = [];
-  weeks.forEach(function(w){ w.days.forEach(function(x){ if (x.inMonth) dates.push(x.iso); }); });
-  dates.sort();
-  if (!dates.length) return Promise.resolve({send: [], skipped: 0});
-  return agdFetchRange(dates[0], dates[dates.length - 1]).then(function(rows){
-    var taken = (rows || []).slice(), send = [], skipped = 0;
-    items.forEach(function(it){
-      weeks.forEach(function(w){
-        if (w.week !== it.w) return;
-        w.days.forEach(function(x){
-          if (x.d.key !== it.day || !x.inMonth) return;
-          if (x.iso < today || holidayAt(x.iso, it.time)){ skipped++; return; }
-          var rec = {date: x.iso, time: it.time, professional_id: it.prof, note: "", source: "planner", patient: it.p.nome, blocked: false, service: lineSvc(it.line), room_id: it.room.id};
-          if (AD.hasPid){ rec.patient_id = it.p.id; rec.group_id = null; }
-          var pr = findProfessional(it.prof);
-          if (!pr || !agdInHours(pr, it.time, agdParse(x.iso))){ skipped++; return; }
-          var dup = taken.some(function(a){ return a.time === rec.time && a.date === rec.date && a.professional_id === rec.professional_id && samePatient(a, rec); });
-          if (dup){ skipped++; return; }
-          var cm = agdConflictIn(taken, rec);
-          if (typeof cm === "string" && cm){ skipped++; return; }
-          taken.push(rec); send.push(rec);
-        });
-      });
+/* ---- Auto Planner: tela, envio para o Planner e remoção ----
+ * A tela é a do Planner com os registros do Auto Planner (PLA.on, ver "Auto Planner: grade própria").
+ * Outras Opções: Montar Proposta (openAutoPlannerModal), Enviar para a Agenda, Enviar para o Planner e
+ * Remover do Planner o que o Auto Planner Enviou. O que vai para o Planner leva via = "autoplanner"
+ * (é por essa marca que a remoção acha o que foi enviado). */
+function apSendCan(){ return !window.pipoAuth || window.pipoAuth.can("autoplanner_enviar", "view"); }
+function plAutoUi(){
+  var sec = document.getElementById("tab-planner"); if (sec) sec.classList.toggle("pl-auto", PLA.on);
+  function show(id, on){ var el = document.getElementById(id); if (el) el.hidden = !on; }
+  var real = function(m, a){ return !window.pipoAuth || window.pipoAuth.can(m, a); };
+  show("plAutoTitle", PLA.on);
+  show("autoPlannerBtn", PLA.on && can("planner", "create"));
+  show("apSendPlannerBtn", PLA.on && apSendCan() && real("planner", "create"));
+  show("apUnsendBtn", PLA.on && apSendCan() && real("planner", "delete"));
+  show("sendToAgendaBtn", can("agenda", "create") && (!PLA.on || apSendCan()));
+  show("swapProfBtn", !PLA.on && (can("salas", "edit") || can("grupos", "edit")));
+}
+// Grava direto nos documentos do Planner de verdade (sem passar pela grade aberta, que é a do Auto Planner).
+function apPatchReal(changes){
+  return Promise.all(Object.keys(changes).map(function(docId){
+    var ref = db.doc("schedule/" + docId), ch = changes[docId];
+    if (typeof ref.patchBookings === "function") return ref.patchBookings(ch);
+    return ref.get().then(function(snap){
+      var body = (snap.exists && snap.data()) ? Object.assign({}, snap.data()) : {};
+      body.bookings = Object.assign({}, body.bookings || {});
+      Object.keys(ch).forEach(function(k){ if (ch[k] === null) delete body.bookings[k]; else body.bookings[k] = ch[k]; });
+      return ref.set(body);
     });
-    return {send: send, skipped: skipped};
+  }));
+}
+function apReadReal(){
+  var ids = plannerAllDocIds();
+  return Promise.all(ids.map(function(id){ return db.doc("schedule/" + id).get(); })).then(function(snaps){
+    var real = {};
+    ids.forEach(function(id, i){ var d = snaps[i] && snaps[i].exists ? snaps[i].data() : {}; real[id] = {bookings: JSON.parse(JSON.stringify((d && d.bookings) || {}))}; });
+    return real;
   });
 }
+// Confere cada atendimento do Auto Planner contra o Planner de verdade (um por vez; os aceitos já valem
+// para os seguintes). Devolve {send: {docId: {key: rec}}, n, skipped: {motivo: quantidade}}.
+function apSendPlan(autoAll, real){
+  var saveDocs = state.scheduleDocs, saveOn = PLA.on, out = {send: {}, n: 0, skipped: {}};
+  function skip(why){ out.skipped[why] = (out.skipped[why] || 0) + 1; }
+  state.scheduleDocs = real; PLA.on = false; PLB.idx = null;
+  try {
+    Object.keys(autoAll).sort().forEach(function(docId){
+      if (!real[docId]) return;
+      var day = docId.split("-")[0];
+      Object.keys(autoAll[docId] || {}).sort().forEach(function(key){
+        var r = bkRec(autoAll[docId][key]);
+        if (!r || r.lock || r.blocked || !bkHasContent(r)) return;   // bloqueios do Auto Planner não vão
+        var time = key.split("|")[0], cur = effectiveBooking(real[docId].bookings, key, day, time);
+        if (cur && (cur.patient || cur.blocked || cur.lock)){ skip("Horário já ocupado no Planner"); return; }
+        var c = sysHard(plannerConflict(docId, key, r));
+        if (c){ skip(c); return; }
+        var rec = Object.assign({}, r, {via: "autoplanner"}); delete rec.auto;
+        real[docId].bookings[key] = rec;
+        (out.send[docId] = out.send[docId] || {})[key] = rec; out.n++;
+      });
+    });
+  } finally { state.scheduleDocs = saveDocs; PLA.on = saveOn; PLB.idx = null; }
+  return out;
+}
+function apSendToPlanner(){
+  if (!PLA.on) return;
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  if (!apSendCan()){ showToast("Você não tem permissão para enviar o Auto Planner.", true); return; }
+  if (window.pipoAuth && !window.pipoAuth.can("planner", "create")){ showToast(permDeniedMsg("planner", "create"), true); return; }
+  Promise.all([currentBookingsFor(plannerAllDocIds()), apReadReal()]).then(function(res){
+    var plan = apSendPlan(res[0], res[1]);
+    var why = Object.keys(plan.skipped), nSkip = why.reduce(function(a, k){ return a + plan.skipped[k]; }, 0);
+    if (!plan.n){
+      showToast(nSkip ? "Nada para enviar: os " + nSkip + " atendimentos não cabem no Planner agora." : "O Auto Planner está vazio: nada para enviar ao Planner.", !!nSkip);
+      return;
+    }
+    var msg = "Serão incluídos <b>" + plan.n + (plan.n === 1 ? " atendimento" : " atendimentos") + "</b> no Planner, só em horários livres e dentro das regras dele." +
+      (nSkip ? "<br><br><b>" + nSkip + "</b> ficam de fora:<br>" + why.slice(0, 6).map(function(k){ return esc(k) + " (" + plan.skipped[k] + ")"; }).join("<br>") + (why.length > 6 ? "<br>…" : "") : "") +
+      "<br><br>O que já está no Planner não é alterado. Para tirar depois: Outras Opções → Remover do Planner o que o Auto Planner Enviou.";
+    return confirmDialog({title: "Enviar para o Planner", message: msg, confirmLabel: "Enviar (" + plan.n + ")"}).then(function(ok){
+      if (!ok) return;
+      return apPatchReal(plan.send).then(function(){ showToast(plan.n + (plan.n === 1 ? " atendimento enviado" : " atendimentos enviados") + " para o Planner."); });
+    });
+  }).catch(function(err){ showToast("Não foi possível enviar para o Planner: " + (err && err.message ? err.message : "erro"), true); });
+}
+function apUnsendFromPlanner(){
+  if (!PLA.on) return;
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  if (window.pipoAuth && !window.pipoAuth.can("planner", "delete")){ showToast(permDeniedMsg("planner", "delete"), true); return; }
+  apReadReal().then(function(real){
+    var changes = {}, n = 0;
+    Object.keys(real).forEach(function(docId){
+      var day = docId.split("-")[0];
+      Object.keys(real[docId].bookings).forEach(function(key){
+        var b = real[docId].bookings[key];
+        if (!b || b.via !== "autoplanner") return;
+        (changes[docId] = changes[docId] || {})[key] = clearValueFor(day, key.split("|")[0]); n++;
+      });
+    });
+    if (!n){ showToast("Nenhum atendimento do Planner veio do Auto Planner."); return; }
+    return confirmDialog({title: "Remover do Planner", message: "Apagar do Planner <b>" + n + (n === 1 ? " atendimento" : " atendimentos") + "</b> que o Auto Planner enviou? O que foi marcado à mão no Planner não é tocado.", confirmLabel: "Remover"}).then(function(ok){
+      if (!ok) return;
+      return apPatchReal(changes).then(function(){ showToast(n + (n === 1 ? " atendimento removido" : " atendimentos removidos") + " do Planner."); });
+    });
+  }).catch(function(err){ showToast("Não foi possível remover: " + (err && err.message ? err.message : "erro"), true); });
+}
+
 function openAutoPlannerModal(){
+  if (!PLA.on) return;
   if (!db){ showToast("Sem conexão com o servidor.", true); return; }
   var host = document.getElementById("modalHost");
   var pats = state.patients.filter(function(p){ return isActive(p) && activeTreatment(p.id); }).sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); });
-  var canPl = can("planner", "create"), canAg = !!agdClient() && can("agenda", "create");
-  var now = new Date(), months = [];
-  for (var i = 0; i < 13; i++){ var md = new Date(now.getFullYear(), now.getMonth() + i, 1); months.push({ym: holIsoOf(md).slice(0, 7), label: AD_MONTHS[md.getMonth()] + " de " + md.getFullYear()}); }
-  var destOpts = (canPl ? '<option value="plan">Só no Planner</option>' : "") + (canPl && canAg ? '<option value="both">Planner e Agenda</option>' : "") + (canAg ? '<option value="agenda">Só na Agenda</option>' : "");
   host.innerHTML =
     '<div class="overlay" id="ovAp"><div class="modal wide" style="max-width:860px">' +
-      '<div class="modal-head"><div><h3>Auto Planner</h3><div class="modal-sub">Completa o Planner com as sessões que faltam, a partir dos quadros do tratamento ativo. Só usa células livres e nunca muda o que já foi marcado à mão. Primeiro os individuais (ABA Não e outros serviços); depois os pacientes ABA Sim, de 2 a 4 por sala (mesma faixa etária e especialidade em comum).</div></div>' +
+      '<div class="modal-head"><div><h3>Auto Planner</h3><div class="modal-sub">Completa o Auto Planner com as sessões que faltam, a partir dos quadros do tratamento ativo. Só usa células livres e nunca muda o que já foi marcado à mão. Para levar o resultado adiante, use Outras Opções → Enviar para o Planner ou Enviar para a Agenda. Primeiro os individuais (ABA Não e outros serviços); depois os pacientes ABA Sim, de 2 a 4 por sala (mesma faixa etária e especialidade em comum).</div></div>' +
         '<button class="modal-close" id="apClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="field-row"><div class="field"><label for="apMode">Modo</label><select id="apMode"><option value="completar">Completar o que Falta</option></select></div>' +
         '<div class="field"><label for="apPat">Paciente</label><select id="apPat"><option value="">Todos os pacientes com tratamento ativo</option>' + pats.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div></div>' +
-        '<div class="field-row"><div class="field"><label for="apDest">Gravar em</label><select id="apDest">' + destOpts + '</select></div>' +
-        '<div class="field" id="apMonthBox" hidden><label for="apMonth">Mês da Agenda</label><select id="apMonth">' + months.map(function(m, i){ return '<option value="' + m.ym + '"' + (i === 1 ? ' selected' : '') + '>' + esc(m.label) + '</option>'; }).join("") + '</select></div></div>' +
-        '<div class="field-row"><button type="button" class="btn" id="apRun">Montar Proposta</button><button type="button" class="btn ghost" id="apRemove" title="Apaga do Planner só o que o Auto Planner colocou (do paciente escolhido ou de todos)"' + (can("planner", "delete") ? '' : ' hidden') + '>Remover o que o Auto Planner Colocou</button></div>' +
+        '<div class="field-row"><button type="button" class="btn" id="apRun">Montar Proposta</button><button type="button" class="btn ghost" id="apRemove" title="Apaga do Auto Planner só o que a Montar Proposta colocou (do paciente escolhido ou de todos)"' + (can("planner", "delete") ? '' : ' hidden') + '>Remover o que a Proposta Colocou</button></div>' +
         '<div id="apOut" class="fx-report"><div class="pat-count">Escolha e clique em “Montar Proposta”.</div></div>' +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="apCancel">Fechar</button><button class="btn" id="apApply" disabled>Aplicar</button></div>' +
     '</div></div>';
-  var ov = document.getElementById("ovAp"), out = document.getElementById("apOut"), applyBtn = document.getElementById("apApply"), destSel = document.getElementById("apDest");
+  var ov = document.getElementById("ovAp"), out = document.getElementById("apOut"), applyBtn = document.getElementById("apApply");
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("apClose").addEventListener("click", close);
   document.getElementById("apCancel").addEventListener("click", close);
-  function syncDest(){ document.getElementById("apMonthBox").hidden = destSel.value === "plan"; }
-  destSel.addEventListener("change", syncDest); syncDest();
   var plan = null;
   function selectedItems(){
     var off = {}; out.querySelectorAll("input[data-ap-pat]").forEach(function(c){ if (!c.checked) off[c.getAttribute("data-ap-pat")] = true; });
@@ -19594,24 +19715,24 @@ function openAutoPlannerModal(){
       html += '<div class="prof-section-head" style="margin-top:12px"><span class="tr-sec tr-sec-in">Não Couberam</span></div><table class="fx-table"><thead><tr><th>Paciente</th><th>Quadro</th><th>Faltam</th><th>Motivo</th></tr></thead><tbody>' +
         plan.gaps.map(function(g){ return '<tr><td>' + esc(g.p.nome) + '</td><td>' + esc(lineLabel(g.line)) + '</td><td>' + g.falta + '</td><td>' + esc(g.why) + '</td></tr>'; }).join("") + '</tbody></table>';
     }
-    if (!plan.items.length && !plan.gaps.length) html += '<div class="pat-count">Nada a completar: o Planner já tem as sessões dos quadros.</div>';
+    if (!plan.items.length && !plan.gaps.length) html += '<div class="pat-count">Nada a completar: o Auto Planner já tem as sessões dos quadros.</div>';
     out.innerHTML = html;
     out.querySelectorAll("input[data-ap-pat]").forEach(function(c){ c.addEventListener("change", sync); });
     sync();
   }
   document.getElementById("apRun").addEventListener("click", function(){
     plan = null; sync();
-    out.innerHTML = '<div class="pat-count">Lendo o Planner e calculando…</div>';
+    out.innerHTML = '<div class="pat-count">Lendo o Auto Planner e calculando…</div>';
     plannerLoadDocs().then(function(){
       var sel = document.getElementById("apPat").value;
       var list = (sel ? pats.filter(function(p){ return p.id === sel; }) : pats).filter(function(p){ return !patBlocked(p); });
       if (!list.length){ out.innerHTML = '<div class="pat-count">Paciente Bloqueado: não entra no Auto Planner.</div>'; return; }
       plan = apBuild(list);
       render();
-    }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o Planner.</div>'; });
+    }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o Auto Planner.</div>'; });
   });
   document.getElementById("apRemove").addEventListener("click", function(){
-    if (!can("planner", "delete")){ showToast("Você não tem permissão para excluir no Planner.", true); return; }
+    if (!can("planner", "delete")){ showToast("Você não tem permissão para excluir no Auto Planner.", true); return; }
     var sel = document.getElementById("apPat").value, who = sel ? (pats.filter(function(p){ return p.id === sel; })[0] || {}).nome : "todos os pacientes";
     currentBookingsFor(plannerAllDocIds()).then(function(all){
       var changes = {}, n = 0;
@@ -19623,7 +19744,7 @@ function openAutoPlannerModal(){
         });
       });
       if (!n){ showToast("Nenhuma sessão marcada pelo Auto Planner" + (sel ? " para " + who : "") + "."); return; }
-      return confirmDialog({title: "Remover o que o Auto Planner Colocou", message: "Apagar <b>" + n + (n === 1 ? " sessão" : " sessões") + "</b> do Planner colocadas pelo Auto Planner (" + esc(who) + ")? O que foi marcado à mão não é tocado.", confirmLabel: "Remover"}).then(function(ok){
+      return confirmDialog({title: "Remover o que a Proposta Colocou", message: "Apagar <b>" + n + (n === 1 ? " sessão" : " sessões") + "</b> do Auto Planner colocadas pela Montar Proposta (" + esc(who) + ")? O que foi marcado à mão não é tocado.", confirmLabel: "Remover"}).then(function(ok){
         if (!ok) return;
         return applyBookingChanges(changes).then(function(res){ if (res === false) return; showToast(n + (n === 1 ? " sessão removida" : " sessões removidas") + ". Ctrl+Z desfaz."); renderGrid(); });
       });
@@ -19632,11 +19753,9 @@ function openAutoPlannerModal(){
   applyBtn.addEventListener("click", function(){
     if (!plan) return;
     var items = selectedItems(); if (!items.length) return;
-    var dest = destSel.value, ym = document.getElementById("apMonth").value;
-    var toPlanner = dest === "plan" || dest === "both", toAgenda = dest === "agenda" || dest === "both";
     applyBtn.disabled = true;
     plannerLoadDocs().then(function(){
-      // reconfere com o Planner de agora, uma sugestão por vez (as aceitas anteriores já valem)
+      // reconfere com o Auto Planner de agora, uma sugestão por vez (as aceitas anteriores já valem)
       var changes = {}, ok = [], lost = 0, temp = [];
       try {
         items.forEach(function(it){
@@ -19647,19 +19766,10 @@ function openAutoPlannerModal(){
         });
       } finally { apRestore(temp); }
       if (!ok.length){ showToast("Nada aplicado: os horários mudaram desde a proposta. Monte de novo.", true); applyBtn.disabled = false; return; }
-      var step1 = toPlanner ? applyBookingChanges(changes) : Promise.resolve(true);
-      return step1.then(function(res){
+      return applyBookingChanges(changes).then(function(res){
         if (res === false){ applyBtn.disabled = false; return; }
-        var msg = ok.length + (ok.length === 1 ? " sessão" : " sessões") + (toPlanner ? " no Planner" : "") + (lost ? " (" + lost + " mudaram e ficaram de fora)" : "");
-        if (!toAgenda){ showToast(msg + " incluídas. Ctrl+Z desfaz."); close(); renderGrid(); return; }
-        return apAgendaPlan(ok, ym).then(function(ap){
-          if (!ap.send.length){ showToast((toPlanner ? msg + " no Planner; " : "") + "nada novo para a Agenda (datas passadas, feriados, fora do horário, conflitos ou já existentes).", !toPlanner); close(); if (toPlanner) renderGrid(); return; }
-          return agdInsertBatches(ap.send).then(function(created){
-            agdRecord("Auto Planner · Agenda", [], created);
-            showToast((toPlanner ? ok.length + " no Planner e " : "") + created.length + " na Agenda" + (ap.skipped ? " (" + ap.skipped + " pulados)" : "") + ".");
-            close(); if (toPlanner) renderGrid(); if (AD.loaded) agdLoadWeek();
-          });
-        });
+        showToast(ok.length + (ok.length === 1 ? " sessão incluída" : " sessões incluídas") + " no Auto Planner" + (lost ? " (" + lost + " mudaram e ficaram de fora)" : "") + ". Ctrl+Z desfaz.");
+        close(); renderGrid();
       });
     }).catch(function(err){ applyBtn.disabled = false; showToast("Não foi possível aplicar: " + (err && err.message ? err.message : agdErr(err)), true); });
   });
@@ -19685,7 +19795,7 @@ var SEND_SKIP_LABELS = {
 };
 function plannerSendPlan(dayKey, week, dateIso, skipTime){
   var c = agdClient();
-  var snapP = db ? db.doc("schedule/" + dayKey + "-" + week).get() : Promise.resolve(null);
+  var snapP = db ? db.doc(schedPath(dayKey + "-" + week)).get() : Promise.resolve(null);
   return Promise.all([snapP, c.from("appointments").select("*").eq("date", dateIso)]).then(function(res){
     var snap = res[0], r = res[1];
     if (r.error) throw r.error;
@@ -25103,11 +25213,10 @@ var HELP_TOPICS = [
     ],
     who: "Vale para todos que agendam."},
   {id: "planner-ferramentas", group: "Planner", title: "Outras Opções do Planner", mod: "planner", tab: "planner",
-    purpose: "Menu <b>Outras Opções ▾</b> do Planner: mudanças em lote e envio para a Agenda.",
+    purpose: "Menu <b>Outras Opções ▾</b> do Planner: mudanças em lote e envio para a Agenda. A montagem automática das sessões ficou no <b>Auto Planner</b> (menu Planner ▾), uma grade própria separada do Planner.",
     steps: [
       "<b>Editar Agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar Profissional</b>: passa as colunas de um profissional para outro.",
-      "<b>Auto Planner</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. Prioridade: o que foi marcado à mão fica fixo e atrai os grupos; depois vêm os individuais (ABA Não e outros serviços) e por último os pacientes ABA Sim, juntados de 2 a 4 por sala no mesmo horário, só com a mesma faixa etária (cor) e com a especialidade da sessão em comum; as salas com ABA Sim são preferidas para os grupos (o tamanho vem das colunas compatíveis na sala: 3 colunas, de 2 a 3; 4 colunas, de 3 a 4). Terapeutas na mesma sala e horário precisam ter a mesma especialidade principal ou um deles ter Aplicador ABA (principal ou complementar). Sempre que possível: irmãos (mesma mãe ou pai no cadastro) no mesmo horário ou em horários colados; por turno, de 3 a 4 horários cheios por profissional e um horário livre que não seja o primeiro nem o último. Tudo que o Auto Planner coloca fica marcado: o botão Remover o que o Auto Planner Colocou apaga só essas sessões (do paciente escolhido ou de todos) sem tocar no que foi marcado à mão. Em Gravar em escolha Só no Planner, Planner e Agenda ou Só na Agenda (e o mês da Agenda; datas passadas, feriados, fora do horário e conflitos são pulados). Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo.",
       "<b>Outras Opções ▾ → Enviar para a Agenda</b>: comece escolhendo o <b>Período</b>. <b>Mês</b>: escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda; a 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª; a prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
       "<b>Semana</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes. Na prévia, \"com aviso\" lista os que ficam fora do horário do paciente ou com terapeuta diferente do tratamento: desmarque os que não devem ir.",
       "<b>Limpar Semana</b>: apaga todos os agendamentos de uma semana do Planner (dupla confirmação, desfazível).",
@@ -25119,6 +25228,23 @@ var HELP_TOPICS = [
       "Trocar profissional não entra no desfazer; para voltar, troque ao contrário."
     ],
     who: "Permissão <b>Planner</b>. Enviar para a Agenda exige incluir na <b>Agenda</b>; Trocar profissional exige editar <b>Salas</b>."},
+  {id: "auto-planner", group: "Planner", title: "Auto Planner", mod: "autoplanner", tab: "autoplanner",
+    purpose: "Grade igual à do Planner, mas <b>com registros próprios</b> (começa vazia): o sistema monta uma proposta de agenda a partir dos tratamentos de cada paciente e você confere, ajusta e só então envia para o Planner ou para a Agenda. O Planner de verdade não muda enquanto você trabalha aqui.",
+    steps: [
+      "Menu <b>Planner ▾ → Auto Planner</b>. A grade, as regras (conflitos, ABA, máximo de 4 por sala, horário de trabalho, paciente bloqueado, rotina) e as ferramentas são as do Planner; os registros ficam separados e o nome <b>Auto Planner</b> aparece no começo da barra. Voltar ao Planner mostra os registros dele.",
+      "<b>Outras Opções → Montar Proposta</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Auto Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. Prioridade: o que foi marcado à mão fica fixo e atrai os grupos; depois vêm os individuais (ABA Não e outros serviços) e por último os pacientes ABA Sim, juntados de 2 a 4 por sala no mesmo horário, só com a mesma faixa etária (cor) e com a especialidade da sessão em comum; as salas ABA são preferidas para os grupos (o tamanho vem das colunas compatíveis na sala: 3 colunas, de 2 a 3; 4 colunas, de 3 a 4). Terapeutas na mesma sala e horário precisam ter a mesma especialidade principal ou um deles ter Aplicador ABA (principal ou complementar). Sempre que possível: irmãos (mesma mãe ou pai no cadastro) no mesmo horário ou em horários colados; por turno, de 3 a 4 horários cheios por profissional e um horário livre que não seja o primeiro nem o último. Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo.",
+      "O que a proposta coloca fica marcado: <b>Remover o que a Proposta Colocou</b> (dentro da janela Montar Proposta) apaga só essas sessões do Auto Planner (do paciente escolhido ou de todos), sem tocar no que foi marcado à mão.",
+      "<b>Outras Opções → Enviar para o Planner</b>: leva os atendimentos do Auto Planner para o Planner, só em horários livres e dentro das regras dele; mostra quantos vão e quantos ficam de fora (com o motivo) antes de confirmar. Não altera nem apaga o que já está no Planner; bloqueios de horário do Auto Planner não vão.",
+      "<b>Outras Opções → Remover do Planner o que o Auto Planner Enviou</b>: apaga do Planner só o que veio por esse envio (marcado internamente); o que foi marcado à mão no Planner fica.",
+      "<b>Outras Opções → Enviar para a Agenda</b>: igual ao do Planner, mas lendo o Auto Planner (semana, dia ou mês).",
+      "<b>Bloquear Horário</b> e <b>Liberar Horário</b> aqui mexem só nos bloqueios extras do Auto Planner; os bloqueios do Planner também valem na grade do Auto Planner, mas só se tiram no Planner."
+    ],
+    rules: [
+      "Salas, colunas e profissionais são os mesmos do Planner; só os agendamentos e os bloqueios extras são separados.",
+      "A Reunião Clínica automática de segunda às 11:20 aparece também aqui (não é gravada).",
+      "Cada unidade tem o seu Auto Planner."
+    ],
+    who: "Permissão <b>Auto Planner</b> (ver, incluir, editar, excluir). Enviar exige <b>Auto Planner – Enviar</b> e incluir no destino (Planner ou Agenda); remover do Planner exige excluir no <b>Planner</b>."},
   {id: "bloqueio", group: "Planner", title: "Bloqueio de Horário", mod: "bloqueio_horario", tab: "planner",
     purpose: "Fechar horários no Planner sem criar agendamento: a célula fica cinza, como fora do horário do profissional.",
     steps: [
@@ -25844,6 +25970,7 @@ function notifOpenFromUrl(){
 }
 // Botão "?" na barra de cada tela: abre o guia no tópico daquela tela.
 function helpTopicForTab(tab){
+  if (tab === "planner" && PLA.on) return "auto-planner";
   if (tab === "salas") return state.salasView === "grupos" ? "grupos" : "salas";
   return HELP_TAB_TOPIC[tab] || "inicio";
 }
@@ -26821,11 +26948,12 @@ var CAD_ITEMS = [
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
 var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados", "status", "unidades", "contratos"];
 var PL_ITEMS = [
-  {key: "planner", label: "Planner", tab: "planner", ok: function(){ return can("planner", "view"); }},
+  {key: "planner", label: "Planner", tab: "planner", isOn: function(){ return state.tab === "planner" && !PLA.on; }, ok: function(){ return can("planner", "view"); }},
+  {key: "autoplanner", label: "Auto Planner", tab: "autoplanner", isOn: function(){ return state.tab === "planner" && PLA.on; }, ok: function(){ return can("autoplanner", "view"); }},
   {key: "resumo", label: "Resumo", tab: "resumo", ok: function(){ return can("resumo", "view"); }},
   {key: "disponibilidade", label: "Disponibilidade", tab: "disponibilidade", ok: function(){ return can("disponibilidade", "view"); }}
 ];
-var PL_TABS = ["planner", "resumo", "disponibilidade"];
+var PL_TABS = ["planner", "autoplanner", "resumo", "disponibilidade"];
 var AG_ITEMS = [
   {key: "agenda", label: "Agenda", tab: "agenda", ok: function(){ return can("agenda", "view"); }},
   {key: "agendaplanner", label: "Agenda Planner", tab: "agendaplanner", ok: function(){ return can("agenda", "view"); }},
@@ -26941,7 +27069,7 @@ function openNavFromHash(final){
 // (#pacientes, #grupos, #agenda...), sem criar histórico no navegador.
 function navHashKey(){
   if (state.tab === "salas") return state.salasView === "grupos" ? "grupos" : "salas";
-  if (state.tab === "planner") return "planner";
+  if (state.tab === "planner") return PLA.on ? "autoplanner" : "planner";
   if (state.tab === "resumo") return "resumo";
   // CRM: a lista aberta fica no endereço (#crm-home, #crm-mine, #crm-<lista>), para o F5 voltar a ela.
   if (state.tab === "crm" && CRM.list) return CRM.list === "__home" ? "crm-home" : CRM.list === "__mine" ? "crm-mine" : "crm-" + CRM.list;
@@ -26956,7 +27084,7 @@ function navSaveHash(){
 // abas, os itens dos menus Cadastros/Planner e os do menu Acesso (que repassa o
 // clique para o botão original de #acessoMenu, em js/pipo-supabase.js).
 // Planner e Resumo não são mostrados no celular (nem no menu ☰, nem como tela inicial).
-var MOBILE_HIDDEN_TABS = ["planner", "resumo", "disponibilidade", "agendaplanner"];
+var MOBILE_HIDDEN_TABS = ["planner", "autoplanner", "resumo", "disponibilidade", "agendaplanner"];
 var MOBILE_MQ = window.matchMedia ? window.matchMedia("(max-width:760px)") : null;
 function isMobileView(){ return !!(MOBILE_MQ && MOBILE_MQ.matches); }
 // Primeira tela permitida que aparece no celular (ordem do topo).

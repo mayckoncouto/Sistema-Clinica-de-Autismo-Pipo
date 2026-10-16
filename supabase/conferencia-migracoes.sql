@@ -138,6 +138,7 @@ chk (ordem, migracao, aplicada, obs) as (values
  (124, '2026-10-13f-caixa-de-entrada',          exists(select 1 from pg_proc where proname = 'crm_inbox'), 'CRM Caixa de Entrada (task_inbox, crm_inbox e permissão crmcaixa)'),
  (125, '2026-10-14-caixa-vencimento', exists(select 1 from pg_proc where proname = 'crm_inbox' and prosrc like '%Vencimento%'), 'Caixa de Entrada: aviso de vencimento'),
  (126, '2026-10-14b-emprestimo-colaborador', exists(select 1 from information_schema.columns where table_name = 'finance_payables' and column_name = 'abate_id'), 'Empréstimo a colaborador (staff_id e abate_id)'),
+ (132, '2026-10-16-auto-planner', exists(select 1 from pg_proc where proname = 'documents_enforce' and prosrc like '%autoplan%'), 'Auto Planner (caminho autoplan/*, módulo autoplanner, bloqueios extras)'),
  (131, '2026-10-15c-metas-de-vendas', to_regclass('public.sale_goals') is not null, 'Metas de vendas (sale_goals)'),
  (130, '2026-10-15b-comissoes', to_regclass('public.sale_commissions') is not null and to_regclass('public.commission_rules') is not null, 'Comissões de venda (commission_rules, sale_commissions, permissão comissoes)'),
  (129, '2026-10-15-vendas', exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_payables' and column_name = 'sale_id') and to_regclass('public.treatment_sales') is not null, 'Vendas dos tratamentos (treatment_sales, parcelas ligadas à venda, permissão vendas)'),

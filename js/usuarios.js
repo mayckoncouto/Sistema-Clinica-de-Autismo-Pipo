@@ -46,6 +46,8 @@
     { key: "cadastro_status", label: "Status (Cadastro)", hint: "criar e alterar os status dos atendimentos" },
     { key: "planner", label: "Planner", hint: "grade de 4 semanas", group: "Planner" },
     { key: "bloqueio_horario", label: "Bloqueio de Horário", hint: "Planner: bloquear (incluir) e liberar (excluir) horários — botões da grade e Outras Opções" },
+    { key: "autoplanner", label: "Auto Planner", hint: "grade própria do Auto Planner, com registros separados do Planner" },
+    { key: "autoplanner_enviar", label: "Auto Planner – Enviar", hint: "enviar o que está no Auto Planner para o Planner ou para a Agenda (também exige incluir no destino)", actions: ["view"] },
     { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
     { key: "disponibilidade", label: "Disponibilidade", hint: "relatório de atendidos e vagas livres do Planner por dia, horário e especialidade", actions: ["view"] },
     { key: "agenda", label: "Agenda", hint: "atendimentos por data", group: "Agenda" },

@@ -32,7 +32,7 @@ const fs = require('fs');
 
   // ---- menu e tela ----
   await page.click('#finBtn');
-  check('Financeiro menu lists Contas a Pagar e receber after Lançamentos?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,conciliacao,demonstrativos,painelvendas,comissoes,fornecedores,catfornecedor,contas,planocontas');
+  check('Financeiro menu lists Contas a Pagar e receber after Lançamentos?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,conciliacao,demonstrativos,vendas,painelvendas,comissoes,fornecedores,catfornecedor,contas,planocontas');
   await page.click('#finMenu [data-nav="pagar"]'); await page.waitForTimeout(300);
   check('screen opens with title?', await page.$eval('#tab-pagar', (e) => !e.hidden) && /Contas a Pagar/.test(await page.$eval('#tab-pagar .cad-title', (e) => e.textContent)));
   check('empty state?', /Nenhuma conta a pagar cadastrada/.test(await page.textContent('#reg-pagar-host')));

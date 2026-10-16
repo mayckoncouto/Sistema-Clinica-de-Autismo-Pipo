@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 // Barras das telas (regra do usuário, 2026-10-10): computador numa linha só (1280px ou mais; mais estreito nunca passa
 // da tela, no máximo 2 linhas); celular no máximo 3 linhas abaixo do título.
-const TABS = ["pacientes","tratamentos","convenios","motivos","medicos","escolas","diagnosticos","origens","motivosbloq","colaboradores","tiposcolab","especialidades","servicos","cbo","conselhos","fornecedores","catfornecedor","unidades","contratos","contas","planocontas","lancamentos","pagar","receber","emptomados","empconcedidos","conciliacao","vendas","automacoes","caixa","demonstrativos","agendamentos","salas","feriados","status","planner","resumo","disponibilidade","agenda","agendaplanner","visaogeral","prontuario","planos","objetivos","atividades","escalas","habilidades","crm"];
+const TABS = ["pacientes","tratamentos","convenios","motivos","medicos","escolas","diagnosticos","origens","motivosbloq","colaboradores","tiposcolab","especialidades","servicos","cbo","conselhos","fornecedores","catfornecedor","unidades","contratos","contas","planocontas","lancamentos","pagar","receber","emptomados","empconcedidos","conciliacao","vendas","automacoes","caixa","demonstrativos","agendamentos","salas","feriados","status","planner","resumo","disponibilidade","agenda","agendaplanner","visaogeral","prontuario","planos","objetivos","atividades","escalas","habilidades","crm","autoplanner"];
 (async () => {
   const browser = await chromium.launch(require('./launch-opts'));
   const widths = (process.argv[2] || "1280,1440,1024,390").split(",").map(Number);
@@ -24,7 +24,7 @@ const TABS = ["pacientes","tratamentos","convenios","motivos","medicos","escolas
       }, t);
       await page.waitForTimeout(250);
       const res = await page.evaluate((t) => {
-        const sec = document.getElementById('tab-' + t); if (!sec || sec.hidden || sec.offsetParent === null && getComputedStyle(sec).display === 'none') return {t, err: 'sem tela'};
+        const sec = document.getElementById(t === 'autoplanner' ? 'tab-planner' : 'tab-' + t); if (!sec || sec.hidden || sec.offsetParent === null && getComputedStyle(sec).display === 'none') return {t, err: 'sem tela'};
         const bar = sec.querySelector('.pat-toolbar, .controls, .agd-toolbar, .crm-toolbar, .rp-form'); if (!bar) return {t, err: 'sem barra'};
         const items = [];
         (function walk(el){ Array.from(el.children).forEach((c) => { const cs = getComputedStyle(c); if (cs.display === 'none' || cs.visibility === 'hidden') return; if (cs.display === 'contents'){ walk(c); return; } const rc = c.getBoundingClientRect(); if (rc.width < 2 || rc.height < 2) return; items.push({tag: (c.id || c.className || c.tagName).toString().slice(0, 30), top: Math.round(rc.top), bottom: Math.round(rc.bottom), right: Math.round(rc.right)}); }); })(bar);
@@ -33,7 +33,7 @@ const TABS = ["pacientes","tratamentos","convenios","motivos","medicos","escolas
         return {t, title: !!bar.querySelector(':scope > .cad-title, :scope > .crm-title'), rows: rows.length, over: Math.max(0, Math.round(bar.scrollWidth - bar.clientWidth)), pageOver: Math.max(0, document.documentElement.scrollWidth - window.innerWidth), outside: items.filter((i) => i.right > window.innerWidth + 1).map((i) => i.tag), items: items.length};
       }, t);
       out.push(res);
-      if (process.env.SHOTS && res && !res.err && (process.env.ALL || res.rows > (mobile ? 3 : 1) || res.over || res.pageOver)){ const el = await page.$('#tab-' + t + ' :is(.pat-toolbar, .controls, .agd-toolbar, .crm-toolbar)'); if (el) await el.screenshot({path: process.env.SHOTS + '/' + w + '-' + t + '.png'}); }
+      if (process.env.SHOTS && res && !res.err && (process.env.ALL || res.rows > (mobile ? 3 : 1) || res.over || res.pageOver)){ const el = await page.$('#tab-' + (t === 'autoplanner' ? 'planner' : t) + ' :is(.pat-toolbar, .controls, .agd-toolbar, .crm-toolbar)'); if (el) await el.screenshot({path: process.env.SHOTS + '/' + w + '-' + t + '.png'}); }
     }
     out.filter((o) => !o.err).forEach((o) => {
       if (mobile) check(w + 'px ' + o.t + ': até 3 linhas abaixo do título, nada para fora?', o.rows <= (o.title ? 4 : 3) && !o.over && !o.pageOver && !o.outside.length, o);

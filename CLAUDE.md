@@ -4637,3 +4637,39 @@ Grupo **Contato**: campo de uma linha **Rede Social** (`redeSocial`, `PAT_FIELDS
 Pedido do usuário: botão **Vendas** depois de Demonstrativos, listando todas as vendas dos tratamentos. Aba `vendas` (`#tab-vendas`, `#reg-vendas-host`, endereço `#vendas`, permissão `vendas` ver; `FIN_ITEMS`/`FIN_TABS`, `tabModule`, `cadTitleText`, `GT_PAGED`). Bloco "Financeiro ▾ Vendas" antes de `slContratoDialog`: `VN` (filtros: busca, mês, situação, vendedor, pagamento, alerta), `vnInfo(s)` (parcelas do Contas a Receber com `sale`: recebido, em aberto, em atraso, pagamento Em Dia/Em Atraso/Quitada/Sem Parcelas, comissão), `vnShown`, `renderVendas`, `vnOnShow`, `vnExport` (Excel), `openVendaDetalhe` (valores, parcelas com situação, comissão, Abrir Tratamento, Contrato), `wireVendas`. Cartões: Vendas, Ticket Médio, Recebido, A Receber, Em Atraso, Comissões Geradas (só com ver Comissões); cancelada aparece na lista mas fora dos totais. Alertas (`.tr-due-btn`): parcela em atraso, sem parcelas, sem vendedor, aguardando comissão. Outras Opções: Exportar Excel, Painel de Vendas, Comissões, Metas. Celular: Data, Paciente, Total e Pagamento (Tipo, Vendedor, Recebido, Comissão e Situação ocultos). Sem SQL. Ajuda: tópico `lista-vendas`. Teste `tests/run_vendas_lista.js` (no `npm test`); a aba entra em `run_toolbar_rows`, `run_sticky_headers`, `run_cad_titles`, `run_cad_sheets`.
 
 - (2026-10-15, pedido do usuário) Menu **Prontuário ▾** (`PR_ITEMS`): Prontuário, Plano Terapêutico | **Habilidades, Escalas, Objetivos, Atividades** (nesta ordem; antes Objetivos, Atividades, Escalas, Habilidades). Sem SQL.
+
+## Auto Planner — Etapa 1: grade própria (2026-10-16)
+Pedido do usuário: Planner ▾ → **Auto Planner**, uma grade igual à do Planner mas com registros próprios (começa vazia); as funções do antigo
+"Auto Planner" do Outras Opções do Planner saíram de lá e vieram para cá. Decisões (perguntas respondidas em 2026-10-16): grade editável como o Planner;
+bloqueios de horário = os do Planner + extras só do Auto Planner; meta de 60%–80% em grupo para ABA Sim **por paciente, no mês** (etapa 2); só monta quem tem
+"Pacientes – Saúde" (regra de nível de suporte, etapa 2); grupos ABA Sim de 2 a 4 em sala de 4 colunas e 1 a 2 nas demais (etapa 2); serviços que não são Sessão
+primeiro, na sala do quadro (sem sala, na do terapeuta); apoio (Aplicador ABA) preenchido em grupos de 3 ou 4; "um horário vago por sala por turno" = preferência
+forte; campo **"Não agrupar com"** no TRATAMENTO (etapa 2); até 5 rascunhos com nome (etapa 4); permissões **Auto Planner** (ver/incluir/editar/excluir) e
+**Auto Planner – Enviar** (nenhum nível recebe, o Administrador libera).
+- **Como funciona (sem duplicar a tela):** o Auto Planner usa a seção `#tab-planner` e `state.tab` continua `"planner"`; o flag `PLA.on` (perto de `can()`) diz qual
+  conjunto de registros está aberto. O botão oculto `data-tab="autoplanner"` e o item do menu (`PL_ITEMS`, endereço `#autoplanner`) chamam `plAutoSet(true)` no
+  `wireTabs`; qualquer outra aba chama `plAutoSet(false)`. `plAutoSet` desliga as assinaturas, zera `state.scheduleDocs`/`pendingBookingChanges`, troca a pilha do
+  desfazer (`bookingHistory` ↔ `PLA.hist`) e limpa a área de copiar; depois `subscribeSchedule()` refaz tudo.
+- `schedPath(docId)` = `autoplan/<dia>-<semana>` com `PLA.on`, senão `schedule/…`; todos os `db.doc("schedule/…")` do Planner (assinatura, `currentBookingsFor`, gravação em
+  `applyBookingChanges`, Limpar Semana, Editar Agendamento, Trocar/Enviar etc.) passam por ele; só `subscribeReportDocs` (Resumo) continua direto em `schedule/`. `repDoc(docId)`
+  substitui `state.reportDocs[docId]` como reserva (no Auto Planner nunca serve o Planner de verdade). **Código novo do Planner que lê/grava `schedule/` precisa usar
+  `schedPath`** (ou, se for do Planner de verdade de propósito, `"schedule/"` explícito como `apPatchReal`).
+- `can("planner"|"bloqueio_horario", incluir/editar/excluir)` vira `can("autoplanner", …)` com `PLA.on` (ver não muda). `plAutoUi()` mostra/oculta título "Auto Planner"
+  (`#plAutoTitle`), Montar Proposta (`#autoPlannerBtn`), Enviar para o Planner (`#apSendPlannerBtn`), Remover do Planner o que o Auto Planner Enviou (`#apUnsendBtn`),
+  Enviar para a Agenda (exige Enviar) e esconde Trocar Profissional (mexe nas salas, que são compartilhadas).
+- Bloqueios extras: `config/autoplan_blocks` (`PLB.autoList`; `plbCur()` escolhe a lista que a janela Bloquear/Liberar edita; `plbIndex()` soma as duas com `PLA.on`).
+- **Enviar para o Planner** (`apSendToPlanner`): `apReadReal()` lê os 20 documentos reais; `apSendPlan` troca temporariamente `state.scheduleDocs`/`PLA.on` e confere cada
+  atendimento (`effectiveBooking` livre + `plannerConflict` duro), um por vez; prévia com `confirmDialog` (quantos vão e os motivos dos que ficam de fora); grava por
+  `apPatchReal` direto em `schedule/*` (sem desfazer); o registro enviado perde `auto` e ganha `via: "autoplanner"` — é por essa marca que `apUnsendFromPlanner` remove só
+  o que foi enviado. Bloqueios do Auto Planner e `blocked` antigo não vão. A Reunião Clínica automática de segunda 11:20 aparece também no Auto Planner (não é gravada).
+- **Montar Proposta** (`openAutoPlannerModal`) continua com as regras do antigo Auto Planner (ver seções anteriores) e agora só grava na grade do Auto Planner (saiu "Gravar
+  em"/mês da Agenda e `apAgendaPlan`); "Remover o que a Proposta Colocou" apaga do Auto Planner o que tem `auto: true`.
+- Banco (migração `supabase/2026-10-16-auto-planner.sql`, rodada em produção pelo conector; linha 132 da conferência de migrações; `schema.sql` atualizado;
+  `conferencia-geral.sql` NÃO regerado): caminhos `autoplan/(seg…dom)-[1-4]` e `config/autoplan_blocks` em `documents_path_valid`, `doc_scope` (por unidade),
+  `module_for_path` = `autoplanner`, `patch_bookings` aceita `autoplan/%`, `documents_enforce` confere `autoplanner:create|edit|delete` nesses documentos (bloqueios
+  `lock:true` também usam `autoplanner`).
+- Teste `tests/run_auto_planner_grade.js` (separação, trocar de tela, enviar, remover, permissões) + `run_auto_planner.js` adaptado; `run_toolbar_rows.js` mede o Auto Planner.
+  Ajuda: tópico `auto-planner` (e “Outras Opções do Planner” sem a montagem).
+- Próximas etapas combinadas: **E2** regras novas do motor (60%–80% em grupo por paciente/mês, nível de suporte, "Não agrupar com" no tratamento, horário vago por sala por turno,
+  apoio Aplicador ABA, serviços fora de Sessão primeiro, painel de capacidade); **E3** relatório de qualidade, "por que aqui?", cadeado nos atendimentos, remontar só um
+  paciente/terapeuta; **E4** até 5 rascunhos com nome, comparar, impressão/Excel.
