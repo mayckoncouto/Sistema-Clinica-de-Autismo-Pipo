@@ -13042,10 +13042,19 @@ function routineConflicts(changesByDoc){
 }
 // Campos do formato anterior (abas) que viram os novos ao abrir o cadastro.
 var PAT_LEGACY_KEYS = ["responsaveis", "finOutro", "telefone", "email", "prefContato", "escolaContato", "nomeSocial", "rotinaOff"];
-function patFieldCfg(key){
+// Cada grupo do cadastro do paciente tem permissão própria para VER (Níveis de Permissão → "Pacientes – <grupo>");
+// nível sem o item gravado vê tudo. Saúde segue "Pacientes – Saúde" (healthCanSee).
+function patSecCan(id){
+  if (!window.pipoAuth || id === "saude") return true;
+  if (typeof window.pipoAuth.canDefault !== "function") return true;
+  return window.pipoAuth.canDefault("pgrp_" + id, "view", true);
+}
+window.__patSec = {cfg: function(k, raw){ return patFieldCfg(k, raw); }, can: function(id){ return patSecCan(id); }};   // só para os testes
+function patFieldCfg(key, raw){
   var f = PAT_FIELDS.filter(function(x){ return x.key === key; })[0];
   if (!f) return {show: false, req: false};
   if (f.lock) return {show: true, req: true};          // Nome: sempre aparece e é obrigatório
+  if (!raw && !patSecCan(f.sec)) return {show: false, req: false};   // grupo sem permissão de ver: some da janela
   var c = (state.patientFields || {})[key];
   var show = c ? c.show !== false : true;
   var req = c ? !!c.req : !!f.dfltReq;                   // CPF nasce obrigatório
@@ -14012,7 +14021,7 @@ function openPatientFieldsModal(){
   var rows = PAT_SECTIONS.map(function(sec){
     return '<tr class="pf-sec"><td colspan="5">' + esc(sec.label) + '</td></tr>' + PAT_FIELDS.filter(function(f){ return f.sec === sec.id; }).map(function(f){
       // Administrador: controle total (menos o Nome). Outros níveis não mexem no CPF nem em Filiação/Financeiro.
-      var cfg = patFieldCfg(f.key), lk = LINK_OF_FIELD[f.key] || "";
+      var cfg = patFieldCfg(f.key, true), lk = LINK_OF_FIELD[f.key] || "";
       var lockShow = f.lock || (!admin && (f.fixed || f.dfltReq)), lockReq = f.lock || (!admin && f.dfltReq);
       return '<tr data-pfk="' + f.key + '"' + (lk ? ' data-lfk="' + lk + '"' : '') + '><td>' + esc(f.label) + (f.hint ? '<div class="pat-count">' + esc(f.hint) + '</div>' : '') + '</td>' +
         chk("show", cfg.show, lockShow, "Aparece: " + f.label) + linkCells(lk, f.label) + chk("req", cfg.req, lockReq, "Obrigatório: " + f.label) + '</tr>';
@@ -14114,6 +14123,8 @@ function patientFichaHtml(p){
   var t = activeTreatment(p.id);
   if (t) secs.push(["Tratamento", row("Status", trLabel(TR_STATUS, t.status)) + row("Início", trBr(t.inicio)) + row("Convênio", t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio) +
     row("Plano", t.plano) + row("Sessões/Mês", t.sessoesMes ? String(t.sessoesMes) : "") + row("Horário de atendimento", trHoursText(t))]);
+  var secOk = {}; PAT_SECTIONS.forEach(function(x){ secOk[x.label] = patSecCan(x.id); });
+  secs = secs.filter(function(s){ return secOk[s[0]] !== false; });
   return secs.filter(function(s){ return s[1]; }).map(function(s){ return '<h3>' + esc(s[0]) + '</h3><table>' + s[1] + '</table>'; }).join("");
 }
 // Rodapé das impressões com as redes sociais da clínica (vazio sem redes cadastradas).
@@ -25871,6 +25882,7 @@ var HELP_TOPICS = [
       "No <b>Responsável Financeiro</b>, os botões <b>Copiar Telefone</b> e <b>Copiar E-mail</b> trazem um dos contatos já cadastrados (com mais de um, escolha na lista); <b>Copiar Endereço</b> traz o endereço do paciente. Se o campo já tiver outro valor, o sistema pergunta antes de trocar.",
       "Diagnóstico, Médico, Escola e Como conheceu a clínica são escolhidos na lista do cadastro (digite para buscar). No fim da lista, <b>+ Incluir</b> cadastra um novo sem sair da janela (só para quem pode incluir naquele cadastro).",
       "O título de cada grupo mostra quantos campos obrigatórios ainda faltam (ex.: \"2 faltando\").",
+      "Cada grupo do cadastro tem permissão própria para <b>ver</b> em Níveis de Permissão (<b>Pacientes – Identificação</b>, <b>Pacientes – Endereço</b>, <b>Pacientes – Filiação</b> e assim por diante; Saúde segue <b>Pacientes – Saúde</b>). Sem a permissão, o grupo não aparece na janela do cadastro nem na ficha impressa. O Nome sempre aparece.",
       "<b>Bloqueio de Agendamento</b>: marque <b>Bloqueado</b> e escolha o <b>Motivo</b> (cadastro de Motivos de Bloqueio, com <b>+ Incluir</b> no fim da lista). Paciente bloqueado não pode ser agendado no Planner nem na Agenda (a regra <b>Paciente Bloqueado</b> fica em Acesso → Sistema), não é enviado do Planner para a Agenda e não entra no Auto Planner nem no Horário Livre. Os atendimentos que ele já tem continuam, com a tarja <b>Bloqueado</b>; ao bloquear, o sistema oferece remover os da Agenda a partir de uma data. Todos os usuários veem o bloqueio e o motivo. Desmarcar libera o paciente.",
       "A data de entrada começa com a data do cadastro e pode ser alterada.",
       "O grupo <b>Saúde</b> (médico, CID, data do diagnóstico, nível de suporte, comunicação, alergias, medicações, restrições e encaminhamento) só aparece para quem tem a permissão <b>Pacientes – Saúde</b>: com \"ver\" os campos aparecem travados; com \"editar\" dá para alterar. Sem a permissão, esses dados também não aparecem nos Detalhes do Agendamento, na ficha impressa nem no quadro clínico do Plano Terapêutico.",

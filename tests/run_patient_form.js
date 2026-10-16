@@ -258,6 +258,18 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab=conselhos]', (b) => b.click()); await page.waitForTimeout(250);
   console.log('Conselhos registry lists sigla and name?', /CRBM/.test(await page.textContent('#reg-conselhos-host')) && /Fonoaudiologia/.test(await page.textContent('#reg-conselhos-host')));
 
+  // Permissão de ver por grupo do cadastro do paciente.
+  const grp = await page.evaluate(() => {
+    const old = window.pipoAuth;
+    window.pipoAuth = {canDefault: (m) => m !== 'pgrp_escola' && m !== 'pgrp_admin'};
+    const r = {escola: __patSec.cfg('escolaId').show, escolaRaw: __patSec.cfg('escolaId', true).show, nome: __patSec.cfg('nome').show,
+      cpf: __patSec.cfg('cpf').show, saudeOk: __patSec.can('saude')};
+    window.pipoAuth = old;
+    return r;
+  });
+  console.log('patient group without "ver" permission hides its fields (raw config intact, Nome/others stay)?',
+    !grp.escola && grp.escolaRaw && grp.nome && grp.cpf && grp.saudeOk, JSON.stringify(grp));
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
