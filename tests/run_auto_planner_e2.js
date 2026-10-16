@@ -54,7 +54,7 @@ const path = require('path');
   await setTr(['pa', 'pb', 'pc', 'pd'].map((id) => tr(id)));
   r = await build(['pa', 'pb', 'pc', 'pd']);
   check('group goal reported for each patient?', r.goal.length === 4, JSON.stringify(r.goal));
-  check('every patient inside 60%–80% in group (3 of 4)?', r.goal.every((g) => g.total === 4 && g.group === 3 && g.ok), JSON.stringify(r.goal));
+  check('every patient at 80% in group (3 of 4)?', r.goal.every((g) => g.total === 4 && g.group === 3 && g.ok), JSON.stringify(r.goal));
   check('capacity table lists Fono with sessions to place?', r.cap.length === 1 && r.cap[0][0] === 'fono' && r.cap[0][1] === 16, JSON.stringify(r.cap));
 
   // 3) grupos nunca passam de 4 na sala de 4 colunas nem de 2 na sala dupla

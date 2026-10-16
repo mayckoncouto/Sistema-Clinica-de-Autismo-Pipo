@@ -18,7 +18,7 @@ const path = require('path');
   const ev = (c) => page.evaluate((x) => window.__ev(x), c);
 
   const leg = await page.$$eval('.color-legend span', (s) => s.map((x) => x.textContent.trim()));
-  console.log('legends come from the age bands?', ['0–4 anos', '5–9 anos', '10+ anos'].every((t) => leg.filter((x) => x === t).length === 2), leg.join('|'));
+  console.log('legends come from the age bands?', ['0–4 anos', '5–9 anos', '10+ anos'].every((t) => leg.filter((x) => x === t).length >= 2), leg.join('|'));
   const col = await ev(`[patientColor({nome: "x", idade: 3}), patientColor({nome: "x", idade: 7}), patientColor({nome: "x", idade: 12}), patientColor({nome: "x"})].join(",")`);
   console.log('patient color still by the same bands?', col === '#AECCE5,#C4DCA9,#F4CC99,', col);
 

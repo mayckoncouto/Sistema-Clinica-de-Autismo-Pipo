@@ -19434,12 +19434,11 @@ function apForbid(p){
   state.patients.forEach(function(q){ if (q.id !== p.id && (q.naoAgrupar || []).indexOf(p.id) !== -1) set[q.id] = 1; });
   return set;
 }
-// Meta de grupo (ABA Sim): de 60% a 80% das sessões do mês em grupo, por paciente.
-var AP_GROUP_MIN = 0.6, AP_GROUP_MAX = 0.8;
+// Meta de grupo (ABA Sim): 80% das sessões do mês em grupo, por paciente (arredondado).
+var AP_GROUP_PCT = 0.8;
 function apGroupGoal(hours){
-  var lo = Math.ceil(hours * AP_GROUP_MIN - 1e-9), hi = Math.floor(hours * AP_GROUP_MAX + 1e-9), mid = Math.round(hours * (AP_GROUP_MIN + AP_GROUP_MAX) / 2);
-  if (lo > hi){ lo = hi = Math.max(hours > 0 ? 1 : 0, Math.min(hours, mid)); }   // sem número inteiro dentro da faixa (ex.: 2 sessões)
-  return {lo: lo, hi: hi, target: Math.max(lo, Math.min(hi, mid))};
+  var t = Math.round(hours * AP_GROUP_PCT);
+  return {lo: t, hi: t, target: t};
 }
 // Quem está numa sala num horário (marcado à mão, já no Planner ou sugerido agora).
 function apOcc(docId, time, room){
@@ -19629,19 +19628,18 @@ function apBuild(patients, opts){
                   var occ = apOccAba(occAll), bad = false;
                   occ.forEach(function(o){
                     var oprof = findProfessional(o.prof);
-                    if (apBandId(o.p) !== band || !apProfCompat(c.prof, oprof)) { bad = true; return; }
-                    // mesma especialidade nos tratamentos, salvo quando um dos terapeutas é Aplicador ABA
-                    if (!apIsAplicador(c.prof) && !apIsAplicador(oprof) && apSpecIds(o.p).indexOf(line.specId) === -1) bad = true;
+                    if (apBandId(o.p) !== band) bad = true;
                   });
                   if (bad) return;
                   if (sysHard(plannerConflict(docId, key, rec0))) return;
-                  var k = (c.room.therapists || []).filter(function(t){ return t.professionalId && apProfCompat(c.prof, findProfessional(t.professionalId)); }).length || 1;
-                  // sala de 4 colunas: grupos de 2 a 4; as demais: de 1 a 2
+                  var k = (c.room.therapists || []).filter(function(t){ return t.professionalId; }).length || 1;
+                  // sala ABA: grupos de 2 a 4 (no máximo o nº de colunas); as demais: de 1 a 2
                   var roomCols = (c.room.therapists || []).filter(function(t){ return t.professionalId; }).length;
-                  var maxG = roomCols >= 4 ? 4 : 2, pref = roomCols >= 4 ? 3 : 2, size = occ.length + 1;
+                  // sala com Intervenção ABA Sim: até o nº de colunas (máx. 4); as demais: de 1 a 2
+                  var maxG = isAbaRoom ? Math.min(4, Math.max(roomCols, 1)) : 2, pref = isAbaRoom ? Math.min(3, maxG) : 2, size = occ.length + 1;
                   if (occ.length){
                     if (size > Math.min(k, maxG)) return;
-                    // meta do mês: de 60% a 80% das sessões do paciente em grupo
+                    // meta do mês: 80% das sessões do paciente em grupo
                     if (gNow >= goal.hi) score += 40; else { score -= 60; if (gNow < goal.lo) score -= 10; }
                     // entrar numa sessão que está sozinha faz dela um grupo: não passar da meta de quem já está lá
                     if (occ.length === 1){ var st1 = patStat(occ[0].p), gl1 = apGroupGoal(Math.max(st1.total, abaHoursOf(occ[0].p))); if (st1.grp >= gl1.hi) score += 80; }
@@ -19673,7 +19671,7 @@ function apBuild(patients, opts){
                 else if (turn.some(function(t0){ return t0 !== time && !rb[t0]; })) rs.push("vago");
                 // intercalar grupo e individual na agenda do profissional
                 var kinds = profKinds(docId, c.prof.id), kind = (abaSim && apOccAba(occAll).length) ? "g" : "i", ix2 = times.indexOf(time);
-                [times[ix2 - 1], times[ix2 + 1]].forEach(function(t0){ if (t0 && kinds[t0]){ score += (kinds[t0] === kind ? 5 : -5); if (kinds[t0] !== kind && rs.indexOf("intercala") === -1) rs.push("intercala"); } });
+                if (isAbaRoom) [times[ix2 - 1], times[ix2 + 1]].forEach(function(t0){ if (t0 && kinds[t0]){ score += (kinds[t0] === kind ? 5 : -5); if (kinds[t0] !== kind && rs.indexOf("intercala") === -1) rs.push("intercala"); } });
                 if (!pt[time]){
                   var usedN = turn.filter(function(t0){ return pt[t0]; }).length;
                   if (abaSim && usedN >= 4) score += 25;
@@ -19743,7 +19741,7 @@ function apBuild(patients, opts){
         }); });
       });
     }
-    // meta de grupo por paciente ABA Sim (de 60% a 80% das sessões em grupo)
+    // meta de grupo por paciente ABA Sim (80% das sessões em grupo)
     var seenP = {};
     tasks.forEach(function(tk){
       if (tk.cls !== 2 || seenP[tk.p.id]) return; seenP[tk.p.id] = 1;
@@ -19961,7 +19959,7 @@ function openApQualityModal(){
     var html = '<div class="pat-count"><b>' + q.total + '</b> atendimentos · <b>' + Object.keys(q.byPat).length + '</b> pacientes · <b>' + q.therRows.length + '</b> terapeutas.</div>';
     html += sec("Sessões Colocadas × Contratadas") + '<div class="pat-count">' + okN + ' de ' + q.contr.length + ' pacientes com tratamento completos' + (bad.length ? '; ' + bad.length + ' com diferença:' : '.') + '</div>' +
       (bad.length ? tbl(["Paciente", "Contratadas", "Colocadas", "Diferença"], bad.slice(0, 200).map(function(c){ return [esc(c.p.nome), c.want, c.got, (c.got - c.want > 0 ? "+" : "") + (c.got - c.want)]; })) : "");
-    if (q.goal.length) html += sec("Meta de Grupo (ABA Sim: 60% a 80%)") + '<div class="pat-count">' + q.goal.filter(function(g){ return g.ok; }).length + ' de ' + q.goal.length + ' pacientes dentro da meta.</div>' +
+    if (q.goal.length) html += sec("Meta de Grupo (ABA Sim: 80%)") + '<div class="pat-count">' + q.goal.filter(function(g){ return g.ok; }).length + ' de ' + q.goal.length + ' pacientes dentro da meta.</div>' +
       tbl(["Paciente", "Sessões", "Em Grupo", "%", "Situação"], q.goal.filter(function(g){ return !g.ok; }).slice(0, 200).map(function(g){ return [esc(g.p.nome), g.total, g.grp, g.pct + "%", (g.grp < g.lo ? "Abaixo" : "Acima") + " (ideal " + g.lo + (g.lo === g.hi ? "" : " a " + g.hi) + " em grupo)"]; }));
     html += sec("Ocupação por Terapeuta") + tbl(["Terapeuta", "Atendimentos", "Horários Ocupados", "Horários Disponíveis", "Ocupação"], q.therRows.map(function(r){ return [esc(profNome(r.prof)), r.n, r.used, r.avail, r.pct + "%"]; }));
     html += sec("Horário Vago por Sala e Turno") + '<div class="pat-count">' + (q.shifts - q.full.length) + ' de ' + q.shifts + ' turnos de sala com atendimento mantêm pelo menos um horário sem ninguém' + (q.full.length ? '; <b>' + q.full.length + '</b> estão cheios:' : '.') + '</div>' +
@@ -20317,7 +20315,7 @@ function openAutoPlannerModal(){
   var pats = state.patients.filter(function(p){ return isActive(p) && activeTreatment(p.id); }).sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); });
   host.innerHTML =
     '<div class="overlay" id="ovAp"><div class="modal wide" style="max-width:860px">' +
-      '<div class="modal-head"><div><h3>Auto Planner</h3><div class="modal-sub">Completa o Auto Planner com as sessões que faltam, a partir dos quadros do tratamento ativo. Só usa células livres e nunca muda o que já foi marcado à mão. Para levar o resultado adiante, use Outras Opções → Enviar para o Planner ou Enviar para a Agenda. Primeiro os individuais (ABA Não e outros serviços); depois os pacientes ABA Sim, de 2 a 4 por sala (mesma faixa etária e especialidade em comum).</div></div>' +
+      '<div class="modal-head"><div><h3>Auto Planner</h3><div class="modal-sub">Completa o Auto Planner com as sessões que faltam, a partir dos quadros do tratamento ativo. Só usa células livres e nunca muda o que já foi marcado à mão. Para levar o resultado adiante, use Outras Opções → Enviar para o Planner ou Enviar para a Agenda. Primeiro os individuais (ABA Não e outros serviços); depois os pacientes ABA Sim, de 2 a 4 por sala ABA (mesma faixa etária).</div></div>' +
         '<button class="modal-close" id="apClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="field-row"><div class="field"><label for="apMode">Modo</label><select id="apMode"><option value="completar">Completar o que Falta</option><option value="remontar">Remontar (Apaga a Proposta e Monta de Novo)</option></select></div>' +
@@ -20374,7 +20372,7 @@ function openAutoPlannerModal(){
     }
     if (plan.goal.length){
       html += '<div class="prof-section-head" style="margin-top:12px"><span class="tr-sec tr-sec-in">Meta de Grupo por Paciente (ABA Sim)</span></div><table class="fx-table"><thead><tr><th>Paciente</th><th>Sessões</th><th>Em Grupo</th><th>%</th><th>Meta</th></tr></thead><tbody>' +
-        plan.goal.map(function(g){ return '<tr><td>' + esc(g.p.nome) + '</td><td>' + g.total + '</td><td>' + g.group + '</td><td>' + g.pct + '%</td><td>' + (g.ok ? 'Dentro (60% a 80%)' : (g.group < g.lo ? 'Abaixo' : 'Acima') + ' — ideal de ' + g.lo + (g.lo === g.hi ? '' : ' a ' + g.hi) + ' em grupo') + '</td></tr>'; }).join("") + '</tbody></table>';
+        plan.goal.map(function(g){ return '<tr><td>' + esc(g.p.nome) + '</td><td>' + g.total + '</td><td>' + g.group + '</td><td>' + g.pct + '%</td><td>' + (g.ok ? 'Dentro (meta de 80%)' : (g.group < g.lo ? 'Abaixo' : 'Acima') + ' — ideal de ' + g.lo + (g.lo === g.hi ? '' : ' a ' + g.hi) + ' em grupo') + '</td></tr>'; }).join("") + '</tbody></table>';
     }
     if (plan.capacity.length){
       html += '<div class="prof-section-head" style="margin-top:12px"><span class="tr-sec tr-sec-in">Capacidade por Especialidade</span></div><table class="fx-table"><thead><tr><th>Especialidade</th><th>Sessões a Colocar</th><th>Vagas Livres Antes</th><th>Colocadas</th><th>Não Couberam</th></tr></thead><tbody>' +
@@ -25929,11 +25927,11 @@ var HELP_TOPICS = [
     purpose: "Grade igual à do Planner, mas <b>com registros próprios</b> (começa vazia): o sistema monta uma proposta de agenda a partir dos tratamentos de cada paciente e você confere, ajusta e só então envia para o Planner ou para a Agenda. O Planner de verdade não muda enquanto você trabalha aqui.",
     steps: [
       "Menu <b>Planner ▾ → Auto Planner</b>. A grade, as regras (conflitos, ABA, máximo de 4 por sala, horário de trabalho, paciente bloqueado, rotina) e as ferramentas são as do Planner; os registros ficam separados e o nome <b>Auto Planner</b> aparece no começo da barra. Voltar ao Planner mostra os registros dele.",
-      "<b>Outras Opções → Montar Proposta</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Auto Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. Prioridade: o que foi marcado à mão fica fixo e atrai os grupos; depois vêm os serviços que não são Sessão, as Sessões de pacientes ABA Não e, por último, os pacientes ABA Sim, em grupo só com a mesma faixa etária (cor) e a especialidade da sessão em comum. Grupos: de 2 a 4 pacientes na sala de 4 colunas e de 1 a 2 nas demais; as salas ABA são preferidas para os grupos. Meta: de 60% a 80% das sessões de cada paciente ABA Sim no mês em grupo (o resto individual), preferindo juntar quem tem o mesmo nível de suporte (cadastro, seção Saúde). As sessões seguem o dia e o horário do quadro da especialidade; quadro sem horário usa o Horário de Atendimento do paciente. Com só 2 sessões no mês, as semanas são alternadas (1ª e 3ª, ou 2ª e 4ª). Quem está em <b>Não Agrupar com</b> no tratamento nunca fica junto, na mesma sala e horário. Cada profissional só atende uma sala por horário e os bloqueios de horário (do Planner e do Auto Planner) são respeitados. Sempre que possível: um horário sem ninguém por sala em cada turno e grupos intercalados com sessões individuais. Com a caixa <b>Marcar o Aplicador ABA nos grupos de 3 ou 4 pacientes</b>, o Aplicador ABA é marcado na coluna do grupo de suporte nesses horários. Terapeutas na mesma sala e horário precisam ter a mesma especialidade principal ou um deles ter Aplicador ABA (principal ou complementar). Sempre que possível: irmãos (mesma mãe ou pai no cadastro) no mesmo horário ou em horários colados; por turno, de 3 a 4 horários cheios por profissional e um horário livre que não seja o primeiro nem o último. Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo. A prévia também mostra a Meta de Grupo por Paciente (quem ficou abaixo ou acima de 60%–80%) e a Capacidade por Especialidade (sessões a colocar × vagas livres). Exige a permissão <b>Pacientes – Saúde</b>.",
+      "<b>Outras Opções → Montar Proposta</b>: escolha o paciente (ou todos) e clique em Montar Proposta. O sistema lê os quadros do tratamento ativo (especialidade, sessões por mês, profissional, dia, horário, semanas e sessões seguidas), compara com o que já está no Auto Planner e propõe só as sessões que faltam, em células livres, repetindo o mesmo dia e horário nas semanas. Prioridade: o que foi marcado à mão fica fixo e atrai os grupos; depois vêm os serviços que não são Sessão, as Sessões de pacientes ABA Não e, por último, os pacientes ABA Sim, em grupo só com a mesma faixa etária (cor). Grupos: nas salas com Intervenção ABA Sim, de 2 a 4 pacientes (sala de 4 colunas até 4; sala de 3 colunas no máximo 3); nas demais salas, de 1 a 2; as salas ABA são preferidas para os grupos. Meta: 80% das sessões de cada paciente ABA Sim no mês em grupo (o resto individual), preferindo juntar quem tem o mesmo nível de suporte (cadastro, seção Saúde). As sessões seguem o dia e o horário do quadro da especialidade; quadro sem horário usa o Horário de Atendimento do paciente. Com só 2 sessões no mês, as semanas são alternadas (1ª e 3ª, ou 2ª e 4ª). Quem está em <b>Não Agrupar com</b> no tratamento nunca fica junto, na mesma sala e horário. Cada profissional só atende uma sala por horário e os bloqueios de horário (do Planner e do Auto Planner) são respeitados. Sempre que possível: um horário sem ninguém por sala em cada turno e, nas salas ABA, grupos intercalados com sessões individuais. Com a caixa <b>Marcar o Aplicador ABA nos grupos de 3 ou 4 pacientes</b>, o Aplicador ABA é marcado na coluna do grupo de suporte nesses horários. Sempre que possível: irmãos (mesma mãe ou pai no cadastro) no mesmo horário ou em horários colados; por turno, de 3 a 4 horários cheios por profissional e um horário livre que não seja o primeiro nem o último. Confira a prévia, desmarque quem não deve entrar e clique em Aplicar; Ctrl+Z desfaz. O que não coube aparece em Não Couberam, com o motivo. A prévia também mostra a Meta de Grupo por Paciente (quem ficou abaixo ou acima de 80%) e a Capacidade por Especialidade (sessões a colocar × vagas livres). Exige a permissão <b>Pacientes – Saúde</b>.",
       "<b>Por que aqui?</b>: clique num atendimento colocado pela proposta; a janela lista os motivos do encaixe (horário do quadro, grupo e nível de suporte, repetição do horário nas semanas, horário vago na sala etc.). Na prévia, passe o mouse sobre a sessão.",
       "<b>Fixar</b>: na mesma janela, marque <b>Fixar neste horário</b>; a Montar Proposta (inclusive o Remontar) nunca muda ou apaga um atendimento fixo ou marcado à mão.",
       "<b>Montar Proposta → Modo Remontar</b>: escolha o paciente e/ou o terapeuta; o sistema apaga só o que a proposta colocou e não está fixo e monta de novo para eles (a prévia mostra quantos serão removidos). Aplicar faz tudo de uma vez e Ctrl+Z desfaz.",
-      "<b>Outras Opções → Relatório de Qualidade</b>: confere o Auto Planner inteiro — sessões colocadas × contratadas por paciente, meta de grupo (60% a 80%), ocupação por terapeuta, turnos de sala sem horário vago, alertas (pacientes de Não Agrupar com juntos, fora do Horário de Atendimento) e o que não coube se rodar a Montar Proposta agora.",
+      "<b>Outras Opções → Relatório de Qualidade</b>: confere o Auto Planner inteiro — sessões colocadas × contratadas por paciente, meta de grupo (80%), ocupação por terapeuta, turnos de sala sem horário vago, alertas (pacientes de Não Agrupar com juntos, fora do Horário de Atendimento) e o que não coube se rodar a Montar Proposta agora.",
       "<b>Outras Opções → Rascunhos</b>: guarde até 5 versões da grade com nome (<b>Salvar Rascunho</b>, em “Guardar em” escolha o número; escolher um que já existe substitui). <b>Carregar</b> troca a grade atual pelo rascunho (Ctrl+Z desfaz); <b>Excluir</b> apaga; <b>Só Renomear o Escolhido</b> muda o nome. Os bloqueios extras do Auto Planner não entram no rascunho.",
       "<b>Comparar</b> (na mesma janela): escolha A e B entre o Auto Planner atual, o Planner atual e os rascunhos; aparecem atendimentos, pacientes, tratamentos com todas as sessões, sessões que faltam, pacientes dentro da meta de grupo, ocupação dos terapeutas, turnos de sala sem horário vago e alertas, mais quantos atendimentos foram acrescentados, retirados ou trocados de paciente de A para B.",
       "<b>Outras Opções → Imprimir e Exportar</b>: <b>Grade por Terapeuta</b> (uma página por terapeuta e semana, para entregar), <b>Horário da Família</b> (por paciente ou todos; <b>Copiar Texto</b> gera a mensagem para o WhatsApp, com os dias, horários, terapeutas, salas e semanas) e <b>Exportar Excel</b> (autoplanner.csv, uma linha por atendimento).",
