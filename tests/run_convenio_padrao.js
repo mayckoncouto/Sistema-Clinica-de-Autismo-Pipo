@@ -39,7 +39,7 @@ const path = require('path');
   // Tratamento novo já vem com o convênio e o plano do cadastro, e a dica mostra a carteirinha.
   await ev('openTreatmentModal(null, {patientId: "ana-azul"})'); await page.waitForSelector('#ovTreat');
   check('tratamento novo vem com o convênio do cadastro?', (await page.inputValue('#pConv')) === 'Unimed', await page.inputValue('#pConv'));
-  check('e com o plano do cadastro?', (await page.inputValue('#pPlano')) === 'Plano Fictício');
+  check('o tratamento não tem mais o campo Plano?', (await page.$('#pPlano')) === null);
   const hint = await page.textContent('#trConvHint');
   check('dica mostra o cadastro, a carteirinha e o aviso de vencida?', /Cadastro do Paciente: Unimed/.test(hint) && /0001-FICT/.test(hint) && /carteirinha vencida/.test(hint), hint);
   await page.fill('#pConv', 'Bradesco Saúde'); await page.dispatchEvent('#pConv', 'input'); await page.waitForTimeout(300);
@@ -47,31 +47,37 @@ const path = require('path');
   await page.click('#trCancel'); await page.waitForTimeout(150);
 
   // Tratamento ativo com outro convênio; trocar o convênio no cadastro pergunta se aplica.
-  await ev('writeTreatments([{id:"tr-cp", patientId:"ana-azul", status:"ativo", statusEm:"2026-01-01", inicio:"2026-01-01", tipo:"novo", convenioId:"bradesco-saude", convenio:"Bradesco Saúde", plano:"Antigo", sessoesMes:"", specHours:[], vencPor:"sem", criadoEm:"2026-01-01T00:00:00Z", atualizadoEm:"2026-01-01T00:00:00Z"}])');
+  await ev('writeTreatments([{id:"tr-cp", patientId:"ana-azul", status:"ativo", statusEm:"2026-01-01", inicio:"2026-01-01", tipo:"novo", convenioId:"unimed", convenio:"Unimed", sessoesMes:"", specHours:[], vencPor:"sem", criadoEm:"2026-01-01T00:00:00Z", atualizadoEm:"2026-01-01T00:00:00Z"}])');
   await page.waitForTimeout(300);
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
   await setv('#pf-planoPadrao', 'Plano Novo');
+  await page.click('#pSave'); await page.waitForTimeout(400);
+  check('mudar só o plano do cadastro não pergunta nada?', !(await page.$('#ovConfirm')));
+  await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
+  await setv('#pf-convenioPadrao', 'bradesco-saude');
   await page.click('#pSave'); await page.waitForSelector('#ovConfirm');
-  check('com tratamento ativo diferente, pergunta se aplica?', /Convênio do Tratamento Ativo/.test(await page.textContent('#ovConfirm')) && /Plano Novo/.test(await page.textContent('#ovConfirm')));
+  check('com tratamento ativo diferente, pergunta se aplica?', /Convênio do Tratamento Ativo/.test(await page.textContent('#ovConfirm')) && /Bradesco Saúde/.test(await page.textContent('#ovConfirm')));
   await page.click('#cfCancel'); await page.waitForTimeout(400);
   let t = (await trs()).find((x) => x.id === 'tr-cp');
-  check('"Só no cadastro" não mexe no tratamento?', t.plano === 'Antigo' && t.convenioId === 'bradesco-saude', [t.plano, t.convenioId]);
+  check('"Só no cadastro" não mexe no tratamento?', t.convenioId === 'unimed' && t.convenio === 'Unimed', [t.convenioId]);
   p = await raw('ana-azul');
-  check('e o cadastro foi gravado?', p.planoPadrao === 'Plano Novo');
+  check('e o cadastro foi gravado?', p.planoPadrao === 'Plano Novo' && p.convenioPadrao === 'bradesco-saude');
 
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
-  await setv('#pf-convenioPadrao', 'bradesco-saude'); await setv('#pf-planoPadrao', 'Gold');
+  await setv('#pf-convenioPadrao', 'unimed'); await page.click('#pSave'); await page.waitForTimeout(400);
+  await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
+  await setv('#pf-convenioPadrao', 'bradesco-saude');
   await page.click('#pSave'); await page.waitForSelector('#ovConfirm');
   check('troca de convênio no cadastro pergunta com o convênio novo?', /Bradesco Saúde/.test(await page.textContent('#ovConfirm')));
   await page.click('#cfOk'); await page.waitForTimeout(500);
   t = (await trs()).find((x) => x.id === 'tr-cp');
-  check('"Aplicar ao Tratamento" muda o convênio e o plano do tratamento ativo?', t.convenioId === 'bradesco-saude' && t.plano === 'Gold', [t.convenioId, t.plano]);
+  check('"Aplicar ao Tratamento" muda o convênio do tratamento ativo?', t.convenioId === 'bradesco-saude', [t.convenioId]);
   const h = (t.historico || []).slice(-1)[0] || {};
-  check('histórico do tratamento registra a troca?', h.acao === 'convenio' && /Gold/.test(h.para) && /Antigo/.test(h.de), h);
+  check('histórico do tratamento registra a troca?', h.acao === 'convenio' && /Bradesco/.test(h.para) && /Unimed/.test(h.de), h);
   // Convênio igual ao do tratamento: não pergunta.
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
   await setv('#pf-planoPadrao', 'Gold'); await page.click('#pSave'); await page.waitForTimeout(400);
-  check('sem mudança de convênio/plano não pergunta?', !(await page.$('#ovConfirm')));
+  check('sem mudança de convênio não pergunta?', !(await page.$('#ovConfirm')));
 
   // Link de Cadastro: o convênio cadastrado vira o convênio do paciente; plano/carteirinha/validade vêm junto.
   const m = await ev('intakeToPatient({nome:"Lia", convenio:"Unimed", plano:"P1", carteirinha:"99", carteirinhaValidade:"2027-02-01"})');

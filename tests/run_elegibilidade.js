@@ -17,7 +17,7 @@ const path = require('path');
   const check = (l, ok, x) => { console.log(l, ok, x === undefined ? '' : x); if (!ok) fails++; };
   const r = JSON.parse(await page.evaluate(() => window.__ev(`(function(){
     var p = state.patients[0], q = state.patients[1];
-    p.carteirinha = "123456"; p.plano = "Plano Ouro";
+    p.carteirinha = "123456"; p.planoPadrao = "Plano Ouro";
     var rows = [
       {patient: p.nome, date: "2026-10-15", time: "08:00"},
       {patient: p.nome, date: "2026-10-15", time: "09:00"},

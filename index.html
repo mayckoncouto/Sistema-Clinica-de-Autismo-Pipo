@@ -9315,7 +9315,7 @@ function crmLeadTreatment(patId, convName){
   var pcd = patConvDefault(rawPatient(patId));
   if (!cv && !nm && pcd.id){ cv = (state.convenios || []).filter(function(c){ return c.id === pcd.id; })[0] || null; }
   var rec = {id: uid("tr"), patientId: patId, inicio: today, status: "ativo", statusEm: today, obs: "", criadoEm: now, atualizadoEm: now,
-    convenioId: cv ? cv.id : "", convenio: cv ? cv.name : nm, plano: pcd.plano, sessoesMes: "", specHours: [],
+    convenioId: cv ? cv.id : "", convenio: cv ? cv.name : nm, sessoesMes: "", specHours: [],
     vencPor: "sem", totalSessoes: "", validoAte: ""};
   trHistAdd(rec, {acao: "criado", para: "ativo"});
   var list = (state.treatments || []).concat([rec]);
@@ -12291,7 +12291,7 @@ function areaConfirm(msgs){
   return confirmDialog({title: "Profissional Fora das Especialidades do Tratamento",
     message: msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : "") + "<br>Agendar mesmo assim?", confirmLabel: "Agendar Assim Mesmo"});
 }
-var TREAT_FIELDS = ["convenioId", "convenio", "plano", "sessoesMes", "aba", "abaAntigo", "abaRevisao", "naoAgrupar", "specHours", "horarios"];
+var TREAT_FIELDS = ["convenioId", "convenio", "sessoesMes", "aba", "abaAntigo", "abaRevisao", "naoAgrupar", "specHours", "horarios"];
 // ---- Convênios: especialidades cobertas, valor por sessão e especialidades que liberam outras ----
 // Cadastro de Especialidades: libera = [ids] — "dentro de Psicologia posso atender
 // Musicoterapia, Psicopedagogia…" (igual para todos os convênios).
@@ -12576,7 +12576,6 @@ function treatFieldsEditor(v, opts){
             '<input id="pConv" type="text" autocomplete="off" placeholder="Selecione ou cadastre um convênio" value="'+esc(initialConvenioText)+'">' +
             '<div class="autolist floating" id="pConvSuggest" hidden></div>' +
           '</div></div>' +
-          '<div class="field"><label for="pPlano">Plano</label><input id="pPlano" type="text" value="'+esc(v.plano || "")+'"></div>' +
         '</div>' +
         (opts && opts.afterConv || "") +
         '<div class="tr-sec">Pacote</div>' +
@@ -12835,7 +12834,6 @@ function treatFieldsEditor(v, opts){
       fields: {
         convenioId: convenioId,
         convenio: "",
-        plano: document.getElementById("pPlano").value.trim(),
         sessoesMes: document.getElementById("pPac").value.trim(),
         aba: undefined,                              // o ABA geral fica em abaAntigo; cada quadro pode ter o seu
         abaRevisao: (function(){ var r = document.getElementById("pAbaRev"); return r && r.value ? r.value : undefined; })(),
@@ -13997,24 +13995,20 @@ function openPatientModal(p, opts){
 // Tratamentos antigos nunca mudam sozinhos (histórico, relatórios e pacote seguem como estavam).
 function offerApplyConvenio(oldRec, rec){
   var o = patConvDefault(oldRec), n = patConvDefault(rec);
-  if (!n.id && !n.plano) return Promise.resolve();
-  var convChanged = o.id !== n.id, planoChanged = o.plano !== n.plano;
-  if (!convChanged && !planoChanged) return Promise.resolve();
+  if (!n.id) return Promise.resolve();
+  if (o.id === n.id) return Promise.resolve();
   var t = activeTreatment(rec.id); if (!t) return Promise.resolve();
   var tc = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : (t.convenio || "");
-  var newConv = convChanged && n.id && t.convenioId !== n.id, newPlano = planoChanged && n.plano !== String(t.plano || "").trim();
-  if (!newConv && !newPlano) return Promise.resolve();
+  if (t.convenioId === n.id) return Promise.resolve();
   if (!can("tratamentos", "edit")){ showToast("O tratamento ativo continua com " + (tc || "outro convênio") + ": quem edita Tratamentos pode ajustá-lo.", false); return Promise.resolve(); }
   return confirmDialog({title: "Convênio do Tratamento Ativo",
-    message: "O cadastro do paciente agora tem " + (newConv ? "o convênio <b>" + esc(n.nome) + "</b>" : "o plano <b>" + esc(n.plano) + "</b>") + ".<br>O tratamento ativo está com <b>" + esc(tc || "sem convênio") + "</b>" + (t.plano ? " · " + esc(t.plano) : "") + ".<br>Aplicar ao tratamento ativo? Os tratamentos antigos não mudam.",
+    message: "O cadastro do paciente agora tem o convênio <b>" + esc(n.nome) + "</b>.<br>O tratamento ativo está com <b>" + esc(tc || "sem convênio") + "</b>.<br>Aplicar ao tratamento ativo? Os tratamentos antigos não mudam.",
     confirmLabel: "Aplicar ao Tratamento", cancelLabel: "Só no cadastro"}).then(function(ok){
     if (!ok) return;
     var now = new Date().toISOString();
     var nt = Object.assign({}, t, {atualizadoEm: now});
-    if (newConv){ nt.convenioId = n.id; nt.convenio = n.nome; nt.plano = n.plano; }
-    else nt.plano = n.plano;
-    function cp(nome, plano){ return [nome, plano].filter(Boolean).join(" · "); }
-    trHistAdd(nt, {acao: "convenio", de: cp(tc, String(t.plano || "").trim()), para: cp(newConv ? n.nome : tc, nt.plano)});
+    nt.convenioId = n.id; nt.convenio = n.nome;
+    trHistAdd(nt, {acao: "convenio", de: tc || "", para: n.nome});
     return writeTreatments(state.treatments.map(function(x){ return x.id === t.id ? nt : x; }));
   });
 }
@@ -14180,7 +14174,7 @@ function patientFichaHtml(p){
   ];
   var t = activeTreatment(p.id);
   if (t) secs.push(["Tratamento", row("Status", trLabel(TR_STATUS, t.status)) + row("Início", trBr(t.inicio)) + row("Convênio", t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio) +
-    row("Plano", t.plano) + row("Sessões/Mês", t.sessoesMes ? String(t.sessoesMes) : "") + row("Horário de atendimento", trHoursText(t))]);
+    row("Sessões/Mês", t.sessoesMes ? String(t.sessoesMes) : "") + row("Horário de atendimento", trHoursText(t))]);
   var secOk = {}; PAT_SECTIONS.forEach(function(x){ secOk[x.label] = patSecCan(x.id); });
   secs = secs.filter(function(s){ return secOk[s[0]] !== false; });
   return secs.filter(function(s){ return s[1]; }).map(function(s){ return '<h3>' + esc(s[0]) + '</h3><table>' + s[1] + '</table>'; }).join("");
@@ -17431,7 +17425,7 @@ function agdOpenDetails(row){
           line("Diagnóstico (CID)", pat.cid || "") + line("Alergias", pat.alergias || "") +
           line("Medicações em Uso", pat.medicacoes || "") + line("Restrições Alimentares", pat.restricoes || "") + '</div>' : '') +
           '<div class="agd-det" data-det-pane="tr" hidden>' +
-          line("Plano", pat.plano || "") + line("Intervenção ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) + lineHtml("Horários", agdDetHoursHtml(trHoursText(pat))) + '</div>' : '') +
+          line("Intervenção ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) + lineHtml("Horários", agdDetHoursHtml(trHoursText(pat))) + '</div>' : '') +
         (grp ? '<div class="agd-det-pane" data-det-pane="pa" hidden>' + agdGroupPatientsHtml(grpItems) + '</div>' : '') +
         (pat ? pickupProtHtml(pat, agdIsLastOfDay(row)) : '') +
         '<div id="agdDetGoals"></div>' +
@@ -22880,13 +22874,13 @@ var RP_BUILDERS = {
       var p = findPatientAt(a, a.date); if (!p) return;   // convênio/plano do tratamento da data
       var conv = patientConvenioName(p) || "Sem convênio";
       if (o.conv && conv !== o.conv) return;
-      var k = conv + "|" + (p.plano || "") + "|" + bookingServiceName(a);
-      var s = by[k] = by[k] || {conv: conv, plano: p.plano || "—", serv: bookingServiceName(a), n: 0, pats: {}};
+      var k = conv + "|" + (p.planoPadrao || "") + "|" + bookingServiceName(a);
+      var s = by[k] = by[k] || {conv: conv, plano: p.planoPadrao || "—", serv: bookingServiceName(a), n: 0, pats: {}};
       s.n++; s.pats[p.id] = 1;
     });
     var list = Object.keys(by).map(function(k){ return by[k]; }).sort(function(a, b){ return (a.conv + a.plano + a.serv).localeCompare(b.conv + b.plano + b.serv, "pt-BR"); });
     var total = list.reduce(function(t, s){ return t + s.n; }, 0);
-    return {note: "Só atendimentos com status Finalizado. Convênio e plano do tratamento que valia na data de cada atendimento.",
+    return {note: "Só atendimentos com status Finalizado. Convênio do tratamento que valia na data de cada atendimento e plano do cadastro do paciente.",
       sections: [{title: "Por Convênio, Plano e Serviço", head: ["Convênio", "Plano", "Serviço", "Atendimentos", "Pacientes"],
         rows: list.map(function(s){ return [s.conv, s.plano, s.serv, s.n, Object.keys(s.pats).length]; }),
         foot: list.length ? ["Total", "", "", total, ""] : null}]};
@@ -23004,7 +22998,7 @@ var RP_BUILDERS = {
     });
     var list = Object.keys(by).map(function(id){
       var x = by[id], p = findPatientAt(x.p.nome, x.last) || x.p;
-      return {nome: x.p.nome, conv: patientConvenioName(p) || "Sem convênio", plano: p.plano || p.planoPadrao || "", cart: p.carteirinha || x.p.carteirinha || ""};
+      return {nome: x.p.nome, conv: patientConvenioName(p) || "Sem convênio", plano: p.planoPadrao || "", cart: p.carteirinha || x.p.carteirinha || ""};
     }).filter(function(r){ return !o.conv || r.conv === o.conv; })
       .sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
     return {note: (o.prof ? "Considerando só os atendimentos do profissional escolhido. " : "") + "Cada paciente aparece uma só vez, mesmo com vários atendimentos no período. Bloqueios, reuniões e treinamentos não entram.",
@@ -23027,7 +23021,7 @@ var RP_BUILDERS = {
     var age = function(p){ var y = patientAgeYears(p); return y == null ? "" : Math.floor(y) + " anos"; };
     return {note: (o.prof ? "Considerando só os atendimentos do profissional escolhido. " : "") + "Pacientes com tratamento encerrado antes do período não aparecem.",
       sections: [{title: list.length + (list.length === 1 ? " paciente" : " pacientes"), head: ["Paciente", "Convênio", "Plano", "Idade"],
-        rows: list.map(function(p){ return [p.nome, patientConvenioName(p) || "Sem convênio", p.plano || "", age(p)]; })}]};
+        rows: list.map(function(p){ return [p.nome, patientConvenioName(p) || "Sem convênio", p.planoPadrao || "", age(p)]; })}]};
   }
 };
 
@@ -23555,14 +23549,13 @@ function trPatEntrada(pid){ var p = pid && rawPatient(pid); return (p && p.entra
 // Janela do paciente: uma linha só com Início, Tipo, Plano e ABA do tratamento atual.
 function treatCardHtml(t){
   function item(label, val){ return '<span class="trc-item"><span>' + label + ':</span> <b>' + (val ? esc(val) : "—") + '</b></span>'; }
-  return '<div class="trc-line">' + item("Início", trBr(t.inicio)) + item("Tipo", trLabel(TR_TIPOS, t.tipo)) + item("Plano", t.plano) + item("Intervenção ABA", trAbaText(t)) + '</div>';
+  return '<div class="trc-line">' + item("Início", trBr(t.inicio)) + item("Tipo", trLabel(TR_TIPOS, t.tipo)) + item("Intervenção ABA", trAbaText(t)) + '</div>';
 }
 function treatSummaryHtml(t){
   var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
   return '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span> ' +
     'desde <b>' + esc(trBr(t.inicio)) + '</b> · ' + esc(trLabel(TR_TIPOS, t.tipo)) +
-    (conv ? ' · ' + esc(conv) : '') + (t.plano ? ' · ' + esc(t.plano) : '') +
-    (t.sessoesMes !== "" && t.sessoesMes != null ? ' · ' + esc(t.sessoesMes) + ' sessões/mês' : '') +
+    (conv ? ' · ' + esc(conv) : '') +     (t.sessoesMes !== "" && t.sessoesMes != null ? ' · ' + esc(t.sessoesMes) + ' sessões/mês' : '') +
     (trAbaText(t) ? ' · Intervenção ABA: ' + esc(trAbaText(t)) : '');
 }
 
@@ -24090,7 +24083,6 @@ function openTreatmentModal(t, opts){
   if (!src && pid){
     var pcd = patConvDefault(rawPatient(pid));
     if (pcd.id){ v.convenioId = pcd.id; v.convenio = pcd.nome; }
-    if (pcd.plano) v.plano = pcd.plano;
   }
   var d = {
     inicio: isNew ? trTodayIso() : (t.inicio || ""),
@@ -25408,7 +25400,7 @@ function contractContextSale(sale){
     responsavel_nome: resp.nome || "", responsavel_cpf: resp.doc ? formatCpf(resp.doc) : "", responsavel_telefone: resp.tel ? formatPhone(resp.tel) : "", responsavel_endereco: patAddrText(resp.end),
     tratamento_inicio: t.inicio ? trBr(t.inicio) : "", tratamento_termino: t.termino ? trBr(t.termino) : (t.validoAte ? trBr(t.validoAte) : ""), tratamento_valor: fmtMoney(sale.valorMensal),
     tratamento_valor_extenso: numExtenso(sale.valorMensal), tratamento_sessoes_mes: String(t.sessoesMes == null ? "" : t.sessoesMes).replace(".", ","), tratamento_convenio: t.convenio || "Particular",
-    tratamento_plano: t.plano || "", tratamento_especialidades: specs.join(", "), tratamento_validade: t.validoAte ? trBr(t.validoAte) : "",
+    tratamento_plano: p.planoPadrao || "", tratamento_especialidades: specs.join(", "), tratamento_validade: t.validoAte ? trBr(t.validoAte) : "",
     venda_tipo: SALE_TIPOS[sale.tipo] || sale.tipo, venda_data: trBr(sale.data), venda_vendedor: sale.sellerName || "", venda_valor_mensal: fmtMoney(sale.valorMensal), venda_meses: String(sale.meses),
     venda_total: fmtMoney(sale.total), venda_total_extenso: numExtenso(sale.total), venda_forma: sale.forma || "", venda_parcelas: String(parcs.length),
     tabela_parcelas_venda: contractVendaParcelasHtml(sale)});
@@ -25967,7 +25959,7 @@ var HELP_TOPICS = [
     ],
     who: "Permissão <b>Pacientes</b> (ver, incluir, editar, excluir). Campos obrigatórios: permissão <b>Pacientes – Campos</b>. Mesclar cadastros: só Administrador."},
   {id: "tratamentos", group: "Cadastros", title: "Tratamentos", mod: "tratamentos", tab: "tratamentos",
-    purpose: "O contrato de atendimento de cada paciente: convênio, plano, Sessão/Mês, a caixa <b>Intervenção ABA</b> do tratamento (vale para o paciente todo e é o padrão dos quadros novos), as especialidades em quadros (cada um pode ter o seu ABA, que manda nos atendimentos dele) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras Opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
+    purpose: "O contrato de atendimento de cada paciente: convênio, Sessão/Mês, a caixa <b>Intervenção ABA</b> do tratamento (vale para o paciente todo e é o padrão dos quadros novos), as especialidades em quadros (cada um pode ter o seu ABA, que manda nos atendimentos dele) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras Opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio e o plano do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
@@ -31147,7 +31139,7 @@ function ioTrPlan(recs){
       if ((o.valor !== "" || o.desc !== "") && !canVal){ o.warn.push("Valores não importados: seu nível não pode alterar \"Tratamentos – valores\"."); o.valor = o.desc = ""; }
       o.convTxt = ioText(r.convenio); o.conv = o.convTxt ? ioConvFind(o.convTxt) : null;
       if (o.convTxt && !o.conv) o.warn.push("Convênio não cadastrado: <b>" + esc(o.convTxt) + "</b> (fica só o nome; cadastre em Convênios).");
-      o.plano = ioText(r.plano); o.obs = ioText(r.obs);
+      o.obs = ioText(r.obs);
       o.motTxt = ioText(r.motivo);
       if (o.motTxt){ o.mot = cancelReasonsList().filter(function(x){ return ioKey(x.name) === ioKey(o.motTxt); })[0] || null; if (!o.mot) o.warn.push("Motivo de cancelamento não cadastrado: <b>" + esc(o.motTxt) + "</b> (fica pendente)."); }
       return o;
@@ -31193,7 +31185,6 @@ function ioTrPlan(recs){
       set("sessoesMes", o.pacote, "Sessão/Mês");
       set("status", o.status, "Status", trLabel(TR_STATUS, o.status), t ? trLabel(TR_STATUS, t.status) : "");
       if (o.status !== "ativo") set("statusEm", o.fim, "Data fim", trBr(o.fim), t ? trBr(t.statusEm) : "");
-      set("plano", o.plano, "Plano");
       set("obs", o.obs, "Observação");
       if (o.status === "cancelado" && o.mot) set("motivoCancel", o.mot.id, "Motivo", o.mot.name, t ? cancelReasonName(t) : "");
       if (o.valor !== "" || o.desc !== ""){
@@ -31312,7 +31303,7 @@ function ioTrExportRows(){
     return {paciente: p.nome || "", nascimento: p.nascimento ? trBr(p.nascimento) : "", convenio: conv || "", inicio: trBr(t.inicio),
       fim: t.status !== "ativo" && t.statusEm ? trBr(t.statusEm) : "", pacote: t.sessoesMes === "" || t.sessoesMes == null ? "" : Number(t.sessoesMes),
       valor: m.valor, descontos: m.descontos, status: trLabel(TR_STATUS, t.status),
-      motivo: t.status === "cancelado" ? cancelReasonName(t) : "", plano: t.plano || "", suporte: (h.suporte || "").replace(/^N[ií]vel\s*/i, "") || "", obs: t.obs || ""};
+      motivo: t.status === "cancelado" ? cancelReasonName(t) : "", suporte: (h.suporte || "").replace(/^N[ií]vel\s*/i, "") || "", obs: t.obs || ""};
   });
 }
 
@@ -31910,7 +31901,6 @@ var IO_KINDS = {
       {k: "descontos", h: "Descontos", alias: ["despesas", "desconto"], w: 13, hide: function(){ return !trCanSeeVal(); }},
       {k: "status", h: "Status", w: 13, req: true},
       {k: "motivo", h: "Motivo do Cancelamento", alias: ["motivo"], w: 22},
-      {k: "plano", h: "Plano", w: 24},
       {k: "suporte", h: "Suporte", alias: ["nivel de suporte"], w: 10, hide: function(){ return !healthCanSee(); }},
       {k: "obs", h: "Observação", alias: ["observacao", "observacoes", "obs"], w: 44}
     ],

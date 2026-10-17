@@ -61,7 +61,7 @@ const path = require('path');
   console.log('Agenda "não ABA" rule uses the treatment of the date (Planner keeps current)?', r.naoPast === true && r.naoPlanner === false);
   console.log('Agenda cell in the past uses the color of that time?', r.colorDiffers && r.cellPast);
   console.log('package report split by treatment (4/mês then 8/mês)?', /^01\/01\/2026 \(Renegociado\)\/4\/8\/1 \| 01\/03\/2026 \(Ativo\)\/8\/16\/2$/.test(r.pacote), r.pacote);
-  console.log('convênio report uses convênio of the date?', r.conv === 'Conv A:P1:1 | Conv B:P2:2', r.conv);
+  console.log('convênio report uses convênio of the date?', r.conv === 'Conv A:—:1 | Conv B:—:2', r.conv);
   console.log('no-appointment report skips treatment closed before the period?', r.semHasCancelled === false);
   console.log('no-appointment report shows convênio at the end of the period?', r.semConv === 'Conv B', r.semConv);
 
