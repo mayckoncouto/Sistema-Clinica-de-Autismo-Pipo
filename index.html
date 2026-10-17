@@ -994,7 +994,7 @@ div.ag-obj-head{cursor:default}
 .cad-menu .cad-sep{flex:none;height:5px;background:var(--surface-2);border-bottom:1px solid var(--line)}
 .cad-menu button{border:0;background:transparent;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 .cad-menu button:hover,.cad-menu button:focus{background:var(--accent-weak);outline:none}
-.panel.reg-panel,#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-diagnosticos,#tab-origens,#tab-motivosbloq,#tab-cbo,#tab-conselhos,#tab-fornecedores,#tab-catfornecedor,#tab-contas,#tab-planocontas,#tab-feriados,#tab-status,#tab-unidades,#tab-contratos{flex:1;min-height:0;display:flex;flex-direction:column}
+.panel.reg-panel,#tab-convenios,#tab-servicos,#tab-especialidades,#tab-motivos,#tab-medicos,#tab-escolas,#tab-diagnosticos,#tab-origens,#tab-motivosbloq,#tab-tipostrat,#tab-cbo,#tab-conselhos,#tab-fornecedores,#tab-catfornecedor,#tab-contas,#tab-planocontas,#tab-feriados,#tab-status,#tab-unidades,#tab-contratos{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-host{flex:1;min-height:0;display:flex;flex-direction:column}
 .reg-table tbody tr{cursor:pointer}
 .reg-table tbody tr:hover td{background:var(--accent-weak)}
@@ -2923,6 +2923,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <button data-tab="vendas" hidden>Vendas</button>
       <button data-tab="pacientes" hidden>Pacientes</button>
       <button data-tab="tratamentos" hidden>Tratamentos</button>
+      <button data-tab="tipostrat" hidden>Tipos de Tratamento</button>
       <button data-tab="profissionais" hidden>Profissionais</button>
       <button data-tab="convenios" hidden>Convênios</button>
       <button data-tab="servicos" hidden>Serviços</button>
@@ -3375,6 +3376,18 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <button class="btn primary" id="reg-diagnosticos-add">+ Incluir</button>
     </div>
     <div id="reg-diagnosticos-host" class="reg-host"></div>
+  </section>
+  <section id="tab-tipostrat" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-tipostrat-search" type="text" placeholder="Buscar tipo…">
+      </div>
+      <span class="pat-count" id="reg-tipostrat-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-tipostrat-add">+ Incluir</button>
+    </div>
+    <div id="reg-tipostrat-host" class="reg-host"></div>
   </section>
   <section id="tab-origens" class="panel reg-panel" hidden>
     <div class="pat-toolbar">
@@ -5083,6 +5096,7 @@ var state = {
   doctors: [],           // médicos [{id,name,especialidade,crm,telefone}] (config/doctors)
   diagnoses: [],         // diagnósticos [{id,code,name}] (config/diagnoses)
   blockReasons: [],      // motivos de bloqueio do paciente [{id,name}] (config/block_reasons)
+  treatmentTypes: [],    // tipos de tratamento próprios [{id,name,padrao}] (config/treatment_types); especialidades e serviços com "tratamento" ligado também valem como tipo
   origins: [],           // origens / como conheceu a clínica [{id,name}] (config/origins)
   schools: [],           // escolas [{id,name,telefone,contato}] (config/schools)
   contracts: [],         // modelos de contrato (config/contract_templates)
@@ -5133,7 +5147,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", visao_geral:"Visão Geral", gerenciar_status:"Gerenciar Status", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
+var PERM_MODULE_LABELS = {tipos_tratamento:"Tipos de Tratamento", comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", visao_geral:"Visão Geral", gerenciar_status:"Gerenciar Status", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 // Auto Planner aberto? (grade própria: ver "Auto Planner: grade própria" perto de subscribeSchedule)
 var PLA = {on: false, hist: {undo: [], redo: []}};
@@ -5236,7 +5250,7 @@ function applyPermissionsUI(){
   if (!window.pipoAuth) return;
   // Endereço #autoplanner sem permissão: volta ao Planner de verdade.
   if (PLA.on && !window.pipoAuth.can("autoplanner", "view")){ plAutoSet(false); if (db && state.tab === "planner") subscribeSchedule(); }
-  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", agendamentos:"agenda", agendaplanner:"agenda", autoplanner:"autoplanner", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", atividades:"atividades", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", motivosbloq:"motivos_bloqueio", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", unidades:"unidades", contratos:"contratos", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", emptomados:"financeiro", empconcedidos:"financeiro", conciliacao:"financeiro", vendas:"vendas", pagar:"financeiro", receber:"financeiro", automacoes:"crmautomacoes"};
+  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", agendamentos:"agenda", agendaplanner:"agenda", autoplanner:"autoplanner", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", tipostrat:"tipos_tratamento", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", atividades:"atividades", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", motivosbloq:"motivos_bloqueio", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", unidades:"unidades", contratos:"contratos", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", emptomados:"financeiro", empconcedidos:"financeiro", conciliacao:"financeiro", vendas:"vendas", pagar:"financeiro", receber:"financeiro", automacoes:"crmautomacoes"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : (k === "crm" || k === "automacoes") ? crmMainCan() : k === "caixa" ? cxCan() : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -5379,13 +5393,13 @@ function restorePlannerView(){
 function cadTitleText(k){
   if (k === "salas") return state.salasView === "grupos" ? "Grupos de Suporte" : "Salas";
   return ({pacientes: "Pacientes", tratamentos: "Tratamentos", convenios: "Convênios", motivos: "Motivos de Cancelamento",
-    medicos: "Médicos", escolas: "Escolas", diagnosticos: "Diagnósticos", origens: "Origens", motivosbloq: "Motivos de Bloqueio", colaboradores: "Colaboradores",
+    medicos: "Médicos", escolas: "Escolas", diagnosticos: "Diagnósticos", origens: "Origens", motivosbloq: "Motivos de Bloqueio", tipostrat: "Tipos de Tratamento", colaboradores: "Colaboradores",
     tiposcolab: "Tipos de Colaborador", profissionais: "Profissionais", especialidades: "Especialidades", servicos: "Serviços",
     cbo: "CBO", conselhos: "Conselhos", fornecedores: "Fornecedores", catfornecedor: "Categorias de Fornecedor", unidades: "Unidades", contratos: "Contratos", contas: "Contas Bancárias", planocontas: "Plano de Contas", lancamentos: "Lançamentos", pagar: "Contas a Pagar", receber: "Contas a Receber", emptomados: "Empréstimos Tomados", empconcedidos: "Empréstimos Concedidos", conciliacao: "Conciliação", vendas: "Vendas", automacoes: "Automações", caixa: "Caixa de Entrada", demonstrativos: "Demonstrativos", agendamentos: "Agendamentos", feriados: "Feriados e Recessos", status: "Status", objetivos: "Objetivos",
     atividades: "Atividades", escalas: "Escalas", habilidades: "Habilidades"})[k] || "";
 }
 function cadTitlesInit(){
-  ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab",
+  ["pacientes", "tratamentos", "tipostrat", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab",
    "profissionais", "especialidades", "servicos", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contratos", "contas", "planocontas", "lancamentos", "pagar", "receber", "emptomados", "empconcedidos", "conciliacao", "vendas", "automacoes", "caixa", "demonstrativos", "agendamentos", "salas", "feriados", "status", "objetivos", "atividades", "escalas", "habilidades"].forEach(function(k){
     var sec = document.getElementById("tab-" + k), tb = sec && sec.querySelector(".pat-toolbar");
     if (!tb || tb.querySelector(".cad-title")) return;
@@ -5605,6 +5619,7 @@ var USAGE = {
   diagnosticos: function(d){ return Promise.resolve([useTxt(diagUseCount(d), "paciente", "pacientes")].filter(Boolean)); },
   origens: function(o){ return Promise.resolve([useTxt(originUseCount(o), "paciente", "pacientes")].filter(Boolean)); },
   motivosbloq: function(o){ return Promise.resolve([useTxt(blockReasonUse(o), "paciente", "pacientes")].filter(Boolean)); },
+  tipostrat: function(o){ return Promise.resolve([useTxt(ttUseCount(o.id), "tratamento", "tratamentos")].filter(Boolean)); },
   catfornecedor: function(c){ return Promise.resolve([useTxt(supplierCatUse(c), "fornecedor", "fornecedores")].filter(Boolean)); },
   unidades: function(u){
     return rowUseCount("profiles", "unit_id", u.id, function(){ return 0; }).then(function(n){
@@ -6298,6 +6313,7 @@ var SIMPLE_LISTS = {
   planocontas: {path: "config/chart_accounts", key: "chartAccounts", module: "plano_contas", label: "plano de contas"},
   diagnosticos: {path: "config/diagnoses", key: "diagnoses", module: "diagnosticos", label: "diagnósticos"},
   origens: {path: "config/origins", key: "origins", module: "origens", label: "origens"},
+  tipostrat: {path: "config/treatment_types", key: "treatmentTypes", module: "tipos_tratamento", label: "tipos de tratamento"},
   motivosbloq: {path: "config/block_reasons", key: "blockReasons", module: "motivos_bloqueio", label: "motivos de bloqueio"},
   cbo: {path: "config/cbo", key: "cbos", module: "cbo", label: "CBO"},
   conselhos: {path: "config/councils", key: "councils", module: "conselhos", label: "conselhos"},
@@ -15865,6 +15881,24 @@ function blockReasonsList(){
   return DEFAULT_BLOCK_REASONS.map(function(n){ return {id: slugify(n), name: n}; });
 }
 function blockReasonName(id){ var r = blockReasonsList().filter(function(x){ return x.id === id; })[0]; return r ? r.name : ""; }
+// ---- Tipos de Tratamento (2026-10-17) ----
+// Tipos próprios em config/treatment_types ({id, name, padrao}); especialidades e serviços com "tratamento" ligado
+// (campo `tratamento`; sem ele vale Sim) também são tipos, com id "spec:<id>" / "svc:<id>". O tratamento guarda os ids em `tipos`.
+var DEFAULT_TREAT_TYPES = [{id: "multidisciplinar", name: "Multidisciplinar", padrao: true}];
+var TT_SPEC = "spec:", TT_SVC = "svc:";
+function ttOn(x){ return !x || x.tratamento !== false; }
+function treatTypesCustom(){
+  return (state.treatmentTypes && state.treatmentTypes.length ? state.treatmentTypes : DEFAULT_TREAT_TYPES).map(function(x){ return Object.assign({}, x, {_src: "Tipo de Tratamento"}); });
+}
+function treatTypesAll(){
+  return treatTypesCustom()
+    .concat((state.specialties || []).filter(ttOn).map(function(x){ return {id: TT_SPEC + x.id, name: x.name, inativo: x.inativo, _src: "Especialidade", _ref: x.id}; }))
+    .concat(servicesList().filter(ttOn).map(function(x){ return {id: TT_SVC + x.id, name: x.name, inativo: x.inativo, _src: "Serviço", _ref: x.id}; }));
+}
+function ttLabel(x){ return x.name + (x.padrao ? " (Padrão)" : ""); }
+function trTypeName(id){ var x = treatTypesAll().filter(function(y){ return y.id === id; })[0]; return x ? x.name : ""; }
+function trTypeDefaults(){ return treatTypesCustom().filter(function(x){ return x.padrao && isActive(x); }).map(function(x){ return x.id; }); }
+function ttUseCount(id){ return (state.treatments || []).filter(function(t){ return Array.isArray(t.tipos) && t.tipos.indexOf(id) !== -1; }).length; }
 function blockReasonUse(o){ return (state.patientsRaw || state.patients || []).filter(function(p){ return p.bloqueado === "Sim" && p.bloqueioMotivo === o.id; }).length; }
 function cboList(){
   if (state.cbos && state.cbos.length) return state.cbos.slice();
@@ -24091,6 +24125,8 @@ function openTreatmentModal(t, opts){
     descontos: src ? trMoney(src).descontos : "",
     tipo: isNew ? (pid ? (opts.renegotiateFrom ? "renegociado" : trTipoAuto(pid)) : "novo") : trTipoFor(t),
     status: isNew ? "ativo" : (t.status || "ativo"),
+    // Tipos de tratamento: novo = os marcados como padrão; renegociar copia os do anterior.
+    tipos: isNew ? (src ? (Array.isArray(src.tipos) ? src.tipos.slice() : []) : trTypeDefaults()) : (Array.isArray(t.tipos) ? t.tipos.slice() : []),
     obs: isNew ? "" : (t.obs || ""),
     // Renegociar/novo: o vencimento começa em branco.
     validoAte: isNew ? "" : (t.validoAte || ""),
@@ -24141,6 +24177,13 @@ function openTreatmentModal(t, opts){
         '<div class="tr-cancel" id="trLockNote" hidden><p class="tr-cancel-note" id="trLockText"></p></div>' +
         '<div class="tr-sec tr-sec-top">Tratamento</div>' +
         '<div class="field"><label for="trPat">Paciente</label><select id="trPat"' + (isNew && !opts.renegotiateFrom ? '' : ' disabled') + '>' + patOpts + '</select></div>' +
+        '<div class="field"><label id="trTiposLabel">Tipo de Tratamento</label><div class="ms" id="trTiposMs">' +
+          '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="trTiposLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
+          '<div class="ms-panel" id="trTipos" hidden role="listbox" aria-multiselectable="true">' +
+            treatTypesAll().filter(function(x){ return isActive(x) || d.tipos.indexOf(x.id) !== -1; }).sort(REG_CFG.tipostrat.sort).map(function(x){
+              return '<label class="ms-opt"><input type="checkbox" value="' + esc(x.id) + '"' + (d.tipos.indexOf(x.id) !== -1 ? ' checked' : '') + '><span>' + esc(ttLabel(x)) + '</span></label>';
+            }).join("") +
+          '</div></div></div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="trIni">Data de Início</label><input type="date" id="trIni" value="' + esc(d.inicio) + '">' +
             (trPatEntrada(pid) ? '<div class="pat-count" id="trEntradaHint">Cadastrado em ' + esc(trBr(trPatEntrada(pid))) + ' (o início não pode ser antes)</div>' : '') + '</div>' +
@@ -24254,6 +24297,19 @@ function openTreatmentModal(t, opts){
       });
     });
   }
+  // Tipo de Tratamento: lista de marcar (vários).
+  var tpMs = document.getElementById("trTiposMs"), tpBtn = tpMs.querySelector(".ms-btn"), tpPanel = document.getElementById("trTipos");
+  function trTiposRead(){ return Array.prototype.map.call(tpPanel.querySelectorAll("input:checked"), function(c){ return c.value; }); }
+  function trTiposRefresh(){
+    var names = Array.prototype.map.call(tpPanel.querySelectorAll("input:checked"), function(c){ return trTypeName(c.value); }).filter(Boolean).join(", "), sum = tpMs.querySelector(".ms-sum");
+    sum.textContent = names || "Selecione"; sum.classList.toggle("ms-placeholder", !names); tpBtn.title = names;
+  }
+  function trTiposOpen(open){ tpPanel.hidden = !open; tpBtn.setAttribute("aria-expanded", open ? "true" : "false"); if (open){ var f = tpPanel.querySelector("input"); if (f) f.focus(); } }
+  tpBtn.addEventListener("click", function(){ trTiposOpen(tpPanel.hidden); });
+  tpPanel.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); trTiposOpen(false); tpBtn.focus(); } });
+  tpPanel.addEventListener("change", trTiposRefresh);
+  document.getElementById("ovTreat").addEventListener("mousedown", function(e){ if (!tpMs.contains(e.target)) trTiposOpen(false); });
+  trTiposRefresh();
   // Por data: válido até; por sessões: total contratado (usadas = Finalizados + Não compareceu).
   function syncVencPor(){
     var vp = document.getElementById("trVencPor").value, bySess = vp === "sessoes";
@@ -24412,6 +24468,7 @@ function openTreatmentModal(t, opts){
     });
     if (!t || t.status !== st) rec.statusEm = trTodayIso();
     if (fimV) rec.termino = fimV; else delete rec.termino;
+    rec.tipos = trTiposRead();
     rec.vencPor = ["sem", "sessoes"].indexOf(document.getElementById("trVencPor").value) !== -1 ? document.getElementById("trVencPor").value : "data";
     var totV = parseInt(document.getElementById("trTotal").value, 10);
     rec.totalSessoes = rec.vencPor === "sessoes" && totV > 0 ? totV : "";
@@ -25782,7 +25839,7 @@ function slContratoDialog(sale){
   addInactiveToggle("tab-pacientes", "pacientes", function(){ renderPatientsTab(); });
   addInactiveToggle("tab-profissionais", "profissionais", function(){ renderProfissionaisTab(); });
   addInactiveToggle("tab-salas", "salas", function(){ renderSalasTab(); });
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "cbo", "conselhos", "objetivos", "atividades", "escalas", "habilidades"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "tipostrat", "cbo", "conselhos", "objetivos", "atividades", "escalas", "habilidades"].forEach(function(k){
     addInactiveToggle("tab-" + k, k, function(){ renderRegistryTab(k); });
   });
 })();
@@ -25962,8 +26019,9 @@ var HELP_TOPICS = [
     purpose: "O contrato de atendimento de cada paciente: convênio, Sessão/Mês, a caixa <b>Intervenção ABA</b> do tratamento (vale para o paciente todo e é o padrão dos quadros novos), as especialidades em quadros (cada um pode ter o seu ABA, que manda nos atendimentos dele) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras Opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
-      "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio e o plano do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
-      "Valor, Descontos e Valor final ficam em <b>Convênio, pacote e horário</b>, logo depois de Convênio e Plano. Ao sair do campo, o valor aparece no formato R$ 1.234,56.",
+      "Logo depois do paciente, <b>Tipo de Tratamento</b> aceita escolher vários (Multidisciplinar, especialidades, serviços…). Os marcados como padrão em Cadastros → Tipos de Tratamento já vêm escolhidos no tratamento novo.",
+      "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
+      "Valor, Descontos e Valor final ficam em <b>Convênio, pacote e horário</b>, logo depois do Convênio. Ao sair do campo, o valor aparece no formato R$ 1.234,56.",
       "Nos campos de valor (no tratamento, Descontos, vendas, lançamentos e contas) dá para digitar uma conta começando com <b>=</b>, por exemplo <b>=1500-200</b>, <b>=3 x 450,50</b> ou <b>=(100+50)/2</b> (use + - x / e parênteses). Ao sair do campo, o resultado preenche o valor; se a conta estiver errada, o campo é limpo e aparece um aviso.",
       "Em <b>Especialidades e Serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). Em <b>Dia</b> dá para marcar mais de um dia da semana (Segunda e Quarta, por exemplo); sem nenhum marcado vale qualquer dia. <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>) e <b>Remover</b>, no próprio quadro, tira o quadro do tratamento na hora, valendo ao salvar (quadros travados por atendimentos realizados não saem).",
       "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de Início</b> (vazios = qualquer um), <b>Semanas</b> (Todas, 1ª e 3ª, 2ª e 4ª ou uma só) e <b>Sessões Seguidas</b> (1 ou 2). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
@@ -26122,7 +26180,8 @@ var HELP_TOPICS = [
     rules: [
       "<b>Sessão</b> é o serviço padrão e não pode ser renomeado nem excluído.",
       "Atendimento com serviço diferente de Sessão aparece na cor ciano (Treinamento ou Outros serviços).",
-      "Na janela do atendimento, o campo Serviço oferece só os serviços do profissional."
+      "Na janela do atendimento, o campo Serviço oferece só os serviços do profissional.",
+      "A caixa <b>Tratamento</b> (ligada nos serviços já cadastrados e nos novos) faz o serviço aparecer como tipo em Cadastros → Tipos de Tratamento."
     ],
     who: "Permissão <b>Serviços</b>."},
   {id: "especialidades", group: "Cadastros", title: "Especialidades", mod: "especialidades", tab: "especialidades",
@@ -26133,6 +26192,7 @@ var HELP_TOPICS = [
     ],
     rules: ["No tratamento (especialidades/serviços), no convênio (especialidades cobertas) e no colaborador (especialidade principal), <b>+ Incluir</b> no fim da lista cadastra uma especialidade nova sem sair da janela.", 
       "A cor da especialidade aparece nos agendamentos e nos cabeçalhos.",
+      "A caixa <b>Tratamento</b> (ligada nas especialidades já cadastradas e nas novas) faz a especialidade aparecer como tipo em Cadastros → Tipos de Tratamento.",
       "As sessões do tratamento são contadas por especialidade.",
       "A liberação vale para todos os convênios: o convênio que cobre esta especialidade passa a cobrir também as liberadas, com o mesmo valor por sessão.",
       "Especialidade em uso (profissionais, áreas complementares, tratamentos, convênios, liberações, habilidades, Banco de objetivos ou objetivos de planos) não é excluída: é <b>Inativada</b>."
@@ -26213,6 +26273,11 @@ var HELP_TOPICS = [
     steps: ["Cadastros → <b>Origens</b> → <b>+ Incluir</b>: nome da origem.", "No paciente (Como conheceu a clínica), o <b>+ Incluir</b> no fim da lista cadastra uma origem nova sem sair da janela."],
     rules: ["A lista mostra quantos pacientes vieram de cada origem.", "Origem usada por paciente não é excluída: é <b>Inativada</b>.", "Corrigir o nome troca o texto também nos pacientes que usavam o nome anterior."],
     who: "Permissão <b>Origens</b>."},
+  {id: "tipostrat", group: "Cadastros", title: "Tipos de Tratamento", mod: "tipos_tratamento", tab: "tipostrat",
+    purpose: "Os tipos que o tratamento do paciente pode ter (Multidisciplinar, Fonoaudiologia, Psicologia…). Cada tratamento pode ter vários tipos.",
+    steps: ["Cadastros → <b>Tipos de Tratamento</b> → <b>+ Incluir</b>: nome do tipo (ex.: Multidisciplinar). A caixa <b>Padrão</b> faz o tipo já vir escolhido no tratamento novo.", "Todas as especialidades e serviços cadastrados aparecem na lista sozinhos: em Cadastros → Especialidades e Serviços há a caixa <b>Tratamento</b>; desligada, a especialidade ou o serviço deixa de ser tipo. Clicar numa especialidade ou serviço da lista abre o cadastro dele.", "No tratamento, o campo <b>Tipo de Tratamento</b> (logo depois do paciente) aceita escolher vários."],
+    rules: ["A lista mostra a origem (Tipo de Tratamento, Especialidade ou Serviço) e quantos tratamentos usam cada tipo.", "Tipo usado em tratamento não é excluído: é <b>Inativado</b>.", "Especialidade e serviço novos já vêm com Tratamento ligado."],
+    who: "Permissão <b>Tipos de Tratamento</b>."},
   {id: "motivosbloq", group: "Cadastros", title: "Motivos de Bloqueio", mod: "motivos_bloqueio", tab: "motivosbloq",
     purpose: "Motivos para bloquear um paciente (Financeiro, Documentação pendente, Aguardando laudo…). Usados no grupo <b>Bloqueio de Agendamento</b> do cadastro do paciente.",
     steps: ["Cadastros → <b>Motivos de Bloqueio</b> → <b>+ Incluir</b>: nome do motivo.", "No paciente, o <b>+ Incluir</b> no fim da lista de motivos cadastra um motivo novo sem sair da janela."],
@@ -26843,7 +26908,7 @@ var HELP_NEWS = [];
 var HELP = {topic: "inicio", search: ""};
 var HELP_TAB_TOPIC = {crm: "crm", inicio: "inicio", planner: "planner", visaogeral: "visaogeral", agendamentos: "agendamentos", agendaplanner: "agenda-planner", resumo: "resumo", disponibilidade: "disponibilidade", agenda: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "colaboradores", convenios: "convenios", servicos: "servicos",
-  caixa: "crm-caixa", vendas: "lista-vendas", especialidades: "especialidades", motivos: "motivos", status: "agenda-status", medicos: "medicos", escolas: "escolas", diagnosticos: "diagnosticos", origens: "origens", motivosbloq: "motivosbloq", cbo: "cbo", conselhos: "conselhos", fornecedores: "fornecedores", catfornecedor: "fornecedores", unidades: "unidades", contratos: "contratos", contas: "contas-bancarias", planocontas: "plano-de-contas", lancamentos: "lancamentos", pagar: "contas-pagar-receber", receber: "contas-pagar-receber", emptomados: "emprestimos", empconcedidos: "emprestimos", conciliacao: "conciliacao", automacoes: "crm-automacoes", demonstrativos: "demonstrativos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
+  caixa: "crm-caixa", vendas: "lista-vendas", especialidades: "especialidades", motivos: "motivos", status: "agenda-status", medicos: "medicos", escolas: "escolas", diagnosticos: "diagnosticos", origens: "origens", motivosbloq: "motivosbloq", tipostrat: "tipostrat", cbo: "cbo", conselhos: "conselhos", fornecedores: "fornecedores", catfornecedor: "fornecedores", unidades: "unidades", contratos: "contratos", contas: "contas-bancarias", planocontas: "plano-de-contas", lancamentos: "lancamentos", pagar: "contas-pagar-receber", receber: "contas-pagar-receber", emptomados: "emprestimos", empconcedidos: "emprestimos", conciliacao: "conciliacao", automacoes: "crm-automacoes", demonstrativos: "demonstrativos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
   planos: "plano-terapeutico", objetivos: "objetivos", atividades: "atividades", escalas: "escalas", habilidades: "habilidades"};
 function helpCan(t){
   if (!t.mod) return true;
@@ -27467,6 +27532,14 @@ var REG_CFG = {
   servicos: {
     title: "serviço", plural: "serviços", module: "servicos", newLabel: "+ Incluir",
     list: function(){ return servicesList(); },
+    extraHtml: function(item, canSave){
+      return '<div class="field"><label class="chk-line"><input type="checkbox" id="regTratamento"' + (ttOn(item) ? ' checked' : '') + (canSave ? '' : ' disabled') + '> <span>Tratamento</span></label>' +
+        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>';
+    },
+    extraWire: function(){
+      var c = document.getElementById("regTratamento");
+      return {read: function(){ return {on: !c || c.checked}; }, apply: function(rec, v){ rec.tratamento = v.on; }, after: function(){}};
+    },
     write: function(l){
       // "Sessão" sempre fica, com esse nome, em primeiro.
       var sess = l.filter(function(s){ return s.id === DEFAULT_SERVICE_ID; })[0];
@@ -27652,6 +27725,37 @@ var REG_CFG = {
     row: function(o){ return ['<b>' + esc(o.name) + '</b>', originUseCount(o)]; },
     vals: function(o){ return [o.name, originUseCount(o)]; }
   },
+  tipostrat: {
+    title: "tipo de tratamento", plural: "tipos de tratamento", module: "tipos_tratamento", newLabel: "+ Incluir",
+    list: function(){ return treatTypesAll(); },
+    write: function(l){
+      return writeSimpleList("tipostrat", l.filter(function(x){ return !x._ref; }).map(function(x){ var o = Object.assign({}, x); delete o._src; return o; }));
+    },
+    // Especialidade e serviço aparecem na lista, mas se editam no cadastro deles (botão "Tratamento").
+    route: function(item){
+      if (!item || !item._ref) return false;
+      if (item._src === "Especialidade") openRegistryItem("especialidades", (state.specialties || []).filter(function(x){ return x.id === item._ref; })[0]);
+      else openRegistryItem("servicos", servicesList().filter(function(x){ return x.id === item._ref; })[0]);
+      return true;
+    },
+    sort: function(a, b){
+      var ord = {"Tipo de Tratamento": 0, "Especialidade": 1, "Serviço": 2};
+      return (ord[a._src] - ord[b._src]) || String(a.name).localeCompare(String(b.name), "pt-BR");
+    },
+    search: function(x){ return x.name + " " + x._src; },
+    cols: ["Nome", "Origem", "Tratamentos"],
+    widths: [380, 220, 130],
+    row: function(x){ return ['<b>' + esc(x.name) + '</b>' + (x.padrao ? ' <span class="serv-lock">padrão</span>' : ''), esc(x._src), ttUseCount(x.id)]; },
+    vals: function(x){ return [x.name, x._src, ttUseCount(x.id)]; },
+    extraHtml: function(item, canSave){
+      return '<div class="field"><label class="chk-line"><input type="checkbox" id="regPadrao"' + (item && item.padrao ? ' checked' : '') + (canSave ? '' : ' disabled') + '> <span>Padrão</span></label>' +
+        '<div class="pat-count" style="margin-top:4px;font-weight:500">Os tipos marcados como padrão já vêm escolhidos no tratamento novo.</div></div>';
+    },
+    extraWire: function(){
+      var c = document.getElementById("regPadrao");
+      return {read: function(){ return {padrao: !!(c && c.checked)}; }, apply: function(rec, v){ if (v.padrao) rec.padrao = true; else delete rec.padrao; }, after: function(){}};
+    }
+  },
   motivosbloq: {
     title: "motivo de bloqueio", plural: "motivos de bloqueio", module: "motivos_bloqueio", newLabel: "+ Incluir",
     list: function(){ return blockReasonsList(); },
@@ -27727,6 +27831,14 @@ var REG_CFG = {
   especialidades: {
     title: "especialidade", plural: "especialidades", module: "especialidades", newLabel: "+ Incluir", fem: true,
     list: function(){ return state.specialties.slice(); },
+    extraHtml: function(item, canSave){
+      return '<div class="field"><label class="chk-line"><input type="checkbox" id="regTratamento"' + (ttOn(item) ? ' checked' : '') + (canSave ? '' : ' disabled') + '> <span>Tratamento</span></label>' +
+        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>';
+    },
+    extraWire: function(){
+      var c = document.getElementById("regTratamento");
+      return {read: function(){ return {on: !c || c.checked}; }, apply: function(rec, v){ rec.tratamento = v.on; }, after: function(){}};
+    },
     write: function(l){ return writeSpecialties(l); },
     cols: ["Nome", "Sigla", "Profissionais", "Libera Atender Também"],
     row: function(s){
@@ -27817,6 +27929,7 @@ function readRegFields(cfg, root){
 function openRegistryItem(kind, item){
   var cfg = REG_CFG[kind], isNew = !item;
   if (cfg.open) return cfg.open(item);
+  if (cfg.route && cfg.route(item)) return;
   if (isNew && !can(cfg.module, "create")){ showToast(permDeniedMsg(cfg.module, "create"), true); return; }
   var locked = !!(item && cfg.locked && cfg.locked(item));
   var canSave = !locked && (isNew || can(cfg.module, "edit"));
@@ -28059,6 +28172,7 @@ function regRenameEverywhere(kind, oldTxt, newTxt, id){
 var CAD_ITEMS = [
   {key: "pacientes", label: "Pacientes", tab: "pacientes", ok: function(){ return can("pacientes", "view"); }},
   {key: "tratamentos", label: "Tratamentos", tab: "tratamentos", ok: function(){ return can("tratamentos", "view"); }},
+  {key: "tipostrat", label: "Tipos de Tratamento", tab: "tipostrat", ok: function(){ return can("tipos_tratamento", "view"); }},
   {key: "convenios", label: "Convênios", tab: "convenios", ok: function(){ return can("convenios", "view"); }},
   {key: "motivos", label: "Motivos de Cancelamento", tab: "motivos", ok: function(){ return can("motivos_cancelamento", "view"); }},
   {key: "medicos", label: "Médicos", tab: "medicos", ok: function(){ return can("medicos", "view"); }},
@@ -28081,7 +28195,7 @@ var CAD_ITEMS = [
 ];
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
-var CAD_TABS = ["pacientes", "tratamentos", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados", "status", "unidades", "contratos"];
+var CAD_TABS = ["pacientes", "tratamentos", "tipostrat", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados", "status", "unidades", "contratos"];
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "planner", isOn: function(){ return state.tab === "planner" && !PLA.on; }, ok: function(){ return can("planner", "view"); }},
   {key: "autoplanner", label: "Auto Planner", tab: "autoplanner", isOn: function(){ return state.tab === "planner" && PLA.on; }, ok: function(){ return can("autoplanner", "view"); }},
@@ -28382,7 +28496,7 @@ function wireMobileNav(){
   setTimeout(openNavFromHash, 0);
   wireMobileNav();
   wirePlansTab();
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contratos", "contas", "planocontas", "feriados", "tiposcolab", "objetivos", "atividades", "escalas", "habilidades", "status"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "tipostrat", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contratos", "contas", "planocontas", "feriados", "tiposcolab", "objetivos", "atividades", "escalas", "habilidades", "status"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
     var a = document.getElementById("reg-" + k + "-add");

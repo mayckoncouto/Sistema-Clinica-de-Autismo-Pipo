@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const TABS = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'escolas', 'diagnosticos', 'origens', 'motivosbloq', 'colaboradores', 'tiposcolab',
+const TABS = ['pacientes', 'tratamentos', 'tipostrat', 'convenios', 'motivos', 'medicos', 'escolas', 'diagnosticos', 'origens', 'motivosbloq', 'colaboradores', 'tiposcolab',
   'especialidades', 'servicos', 'cbo', 'conselhos', 'fornecedores', 'catfornecedor', 'unidades', 'contratos', 'contas', 'planocontas', 'lancamentos', 'pagar', 'receber', 'emptomados', 'empconcedidos', 'conciliacao', 'vendas', 'automacoes', 'caixa', 'agendamentos', 'feriados', 'status', 'prontuario', 'planos', 'objetivos', 'atividades', 'escalas', 'habilidades', 'crm', 'resumo', 'disponibilidade'];
 
 (async () => {

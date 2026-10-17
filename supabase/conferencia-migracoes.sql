@@ -140,6 +140,7 @@ chk (ordem, migracao, aplicada, obs) as (values
  (126, '2026-10-14b-emprestimo-colaborador', exists(select 1 from information_schema.columns where table_name = 'finance_payables' and column_name = 'abate_id'), 'Empréstimo a colaborador (staff_id e abate_id)'),
  (133, '2026-10-16b-auto-planner-rascunhos', exists(select 1 from pg_constraint where conname = 'documents_path_valid' and pg_get_constraintdef(oid) like '%autoplan/rascunho%'), 'Auto Planner: rascunhos (autoplan/rascunho-1..5)'),
  (134, '2026-10-17-finalizado-so-administrador', exists(select 1 from pg_proc where proname = 'appointments_status_guard' and prosrc like '%só o Administrador altera o status%'), 'Finalizado: só o Administrador altera o status'),
+ (135, '2026-10-17b-tipos-de-tratamento', (select pg_get_constraintdef(oid) like '%treatment_types%' from pg_constraint where conname = 'documents_path_valid'), 'Cadastro Tipos de Tratamento (config/treatment_types)'),
  (132, '2026-10-16-auto-planner', exists(select 1 from pg_proc where proname = 'documents_enforce' and prosrc like '%autoplan%'), 'Auto Planner (caminho autoplan/*, módulo autoplanner, bloqueios extras)'),
  (131, '2026-10-15c-metas-de-vendas', to_regclass('public.sale_goals') is not null, 'Metas de vendas (sale_goals)'),
  (130, '2026-10-15b-comissoes', to_regclass('public.sale_commissions') is not null and to_regclass('public.commission_rules') is not null, 'Comissões de venda (commission_rules, sale_commissions, permissão comissoes)'),

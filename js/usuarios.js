@@ -36,6 +36,7 @@
     { key: "campos_paciente", label: "Pacientes – Campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, Intervenção ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – Valores", hint: "ver/editar valor, descontos e valor final", actions: ["view", "edit"] },
+    { key: "tipos_tratamento", label: "Tipos de Tratamento", hint: "cadastro dos tipos de tratamento (além das especialidades e serviços)" },
     { key: "convenios", label: "Convênios", hint: "" },
     { key: "motivos_cancelamento", label: "Motivos de Cancelamento", hint: "lista de motivos usada ao cancelar um tratamento" },
     { key: "medicos", label: "Médicos", hint: "médicos dos pacientes" },
