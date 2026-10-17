@@ -5951,6 +5951,7 @@ var SYS_RULES = [
   {id: "pl_rotina", g: "planner", label: "Rotina Atual do Paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "pl_fora_paciente", g: "planner", label: "Fora do Horário do Paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
   {id: "pl_terapeuta", g: "planner", label: "Terapeuta Diferente do Tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
+  {id: "pl_tipo_trat", g: "planner", label: "Especialidade Fora do Tipo de Tratamento", desc: "Sessão de uma especialidade que não está no Tipo de Tratamento (Multidisciplinar libera todas; serviços são livres).", def: "warn", modes: BWO},
   {id: "pl_area", g: "planner", label: "Profissional Fora das Especialidades do Tratamento", desc: "Sessão com profissional cuja especialidade (principal ou complementar) não está no tratamento.", def: "warn", modes: BWO},
   {id: "pl_so_cadastrado", g: "planner", label: "Só Agenda Quem Está Cadastrado", desc: "O nome precisa ser de um paciente (ou de uma sala, nos grupos) do cadastro.", def: "block", locked: true},
   {id: "pl_grupo_sala", g: "planner", label: "Grupo Só Recebe Sala; Sala Só Recebe Paciente", desc: "Célula de grupo de suporte só aceita nome de sala; célula de sala só aceita paciente.", def: "block", locked: true},
@@ -5964,6 +5965,7 @@ var SYS_RULES = [
   {id: "ag_rotina", g: "agenda", label: "Rotina Atual do Paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "ag_fora_paciente", g: "agenda", label: "Fora do Horário do Paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
   {id: "ag_terapeuta", g: "agenda", label: "Terapeuta Diferente do Tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
+  {id: "ag_tipo_trat", g: "agenda", label: "Especialidade Fora do Tipo de Tratamento", desc: "Sessão de uma especialidade que não está no Tipo de Tratamento (Multidisciplinar libera todas; serviços são livres).", def: "warn", modes: BWO},
   {id: "ag_area", g: "agenda", label: "Profissional Fora das Especialidades do Tratamento", desc: "Sessão com profissional cuja especialidade não está no tratamento.", def: "warn", modes: BWO},
   {id: "ag_objetivos", g: "agenda", label: "Sem Objetivos em Comum", desc: "Pacientes do mesmo profissional e horário sem nenhum objetivo em comum no plano terapêutico.", def: "warn", modes: BWO},
   {id: "ag_final_evolucao", g: "agenda", label: "Finalizado Exige Evolução", desc: "Para marcar Finalizado é preciso registrar a evolução no prontuário, e a evolução do atendimento Finalizado só é excluída depois de tirar o status. Avisar = pergunta e deixa finalizar sem evolução.", def: "block", modes: BWO, db: true},
@@ -11417,7 +11419,8 @@ function therapistMismatches(changesByDoc){
   return out;
 }
 // Planner: agendamentos com profissional fora das especialidades do tratamento.
-function areaMismatches(changesByDoc){
+function areaMismatches(changesByDoc, msgFn){
+  msgFn = msgFn || areaMismatchMsg;
   var out = [];
   Object.keys(changesByDoc).forEach(function(docId){
     var changes = changesByDoc[docId], dayKey = docId.split("-")[0];
@@ -11431,7 +11434,7 @@ function areaMismatches(changesByDoc){
       var old = effectiveBooking(oldB, k, dayKey, kp[0]);
       if (old && old.patient && samePatient(old, rec) &&
           (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return; // já estava assim
-      var m = areaMismatchMsg(rec, profId, rec.service);
+      var m = msgFn(rec, profId, rec.service);
       if (m && out.indexOf(m) === -1) out.push(m);
     });
   });
@@ -11519,6 +11522,15 @@ function applyBookingChanges(changesByDoc, opts){
     if (mism.length){
       return sysGate("pl_terapeuta", "Terapeuta Diferente do Tratamento", mism, function(){ return therapistConfirm(mism); }).then(function(ok){
         return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {therapistOk: true})) : false;
+      });
+    }
+  }
+  // Tipo de Tratamento: especialidade fora do tipo (aviso; não vale para desfazer/refazer).
+  if (!opts.history && !opts.tipoOk){
+    var outTipo = sysOn("pl_tipo_trat") ? areaMismatches(changesByDoc, treatTypeMismatchMsg) : [];
+    if (outTipo.length){
+      return sysGate("pl_tipo_trat", "Especialidade Fora do Tipo de Tratamento", outTipo, function(){ return tipoConfirm(outTipo); }).then(function(ok){
+        return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {tipoOk: true})) : false;
       });
     }
   }
@@ -12302,6 +12314,43 @@ function areaMismatchMsg(patientName, profId, serviceId, iso){
   return "<b>" + esc(p.nome) + "</b> — <b>" + esc(profNome(prof)) + "</b> (" + esc(mine.length ? mine.map(specialtyName).join(", ") : "sem especialidade") +
     ") não atende nenhuma especialidade do tratamento (" + esc(specs.map(specialtyName).join(", ")) + ")";
 }
+// Tipo de Tratamento × especialidade do agendamento (2026-10-17). Só Sessão é conferida (serviço é sempre livre).
+// Sem tipo marcado, ou com Multidisciplinar, não avisa. Tipos próprios que não são Multidisciplinar não restringem.
+// Tipo só de serviço: agendar uma especialidade como Sessão avisa; tipo de especialidade: avisa se o profissional
+// (principal ou complementar) não atende nenhuma delas. O aviso dos quadros (areaMismatchMsg) segue como segunda regra.
+function treatTypeMismatchMsg(patientName, profId, serviceId, iso){
+  if (!patientName || !profId || (serviceId || DEFAULT_SERVICE_ID) !== DEFAULT_SERVICE_ID) return null;
+  var p = findPatientAt(patientName, iso); if (!p || !p.id) return null;
+  var prof = findProfessional(profId); if (!prof) return null;
+  var t = treatmentAt(p.id, iso), tipos = t && Array.isArray(t.tipos) ? t.tipos : [];
+  if (!tipos.length || tipos.indexOf("multidisciplinar") !== -1) return null;
+  var specs = tipos.filter(function(x){ return String(x).indexOf(TT_SPEC) === 0; }).map(function(x){ return String(x).slice(TT_SPEC.length); });
+  var svcs = tipos.filter(function(x){ return String(x).indexOf(TT_SVC) === 0; });
+  if (!specs.length && !svcs.length) return null;
+  var mine = profAreas(prof);
+  if (specs.some(function(id){ return mine.indexOf(id) !== -1; })) return null;
+  var names = tipos.map(trTypeName).filter(Boolean).join(", "), who = "<b>" + esc(p.nome) + "</b> — <b>" + esc(profNome(prof)) + "</b> (" + esc(mine.length ? mine.map(specialtyName).join(", ") : "sem especialidade") + ")";
+  return specs.length ? who + " não atende nenhuma especialidade do tipo de tratamento (" + esc(names) + ")"
+    : who + ": o tratamento é do tipo " + esc(names) + " (serviço) e a Sessão é de uma especialidade";
+}
+// Quadro do tratamento × Tipo de Tratamento escolhido na janela (mesma regra do agendamento): só Sessão de especialidade é conferida.
+function tipoLineMsg(tipos, specId, service){
+  if (!specId || isSvcItem(specId) || (service || DEFAULT_SERVICE_ID) !== DEFAULT_SERVICE_ID) return null;
+  tipos = tipos || [];
+  if (!tipos.length || tipos.indexOf("multidisciplinar") !== -1) return null;
+  var specs = tipos.filter(function(x){ return String(x).indexOf(TT_SPEC) === 0; }).map(function(x){ return String(x).slice(TT_SPEC.length); });
+  var svcs = tipos.filter(function(x){ return String(x).indexOf(TT_SVC) === 0; });
+  if (!specs.length && !svcs.length) return null;
+  if (specs.indexOf(specId) !== -1) return null;
+  var names = tipos.map(trTypeName).filter(Boolean).join(", ");
+  return specs.length ? specialtyName(specId) + " não está no Tipo de Tratamento (" + names + ")."
+    : "O tratamento é do tipo " + names + " (serviço) e este quadro é uma Sessão da especialidade " + specialtyName(specId) + ".";
+}
+function tipoConfirm(msgs){
+  if (!msgs.length) return Promise.resolve(true);
+  return confirmDialog({title: "Especialidade Fora do Tipo de Tratamento",
+    message: msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : "") + "<br>Agendar mesmo assim?", confirmLabel: "Agendar Assim Mesmo"});
+}
 function areaConfirm(msgs){
   if (!msgs.length) return Promise.resolve(true);
   return confirmDialog({title: "Profissional Fora das Especialidades do Tratamento",
@@ -12534,6 +12583,7 @@ function openTreatLineModal(ctx){
       if (exp !== n) w.push((days.length > 1 ? "Dias fixos (" + tlDaysText(o) + ") " : "Dia fixo ") + (o.semanas ? "nas semanas " + tlWeeksText(o.semanas) : "em todas as semanas") + " com " + (seg > 1 ? seg + " sessões seguidas" : "1 sessão") +
         " dá " + exp + " sessões/mês, mas o quadro tem " + String(o.hours).replace(".", ",") + ".");
     }
+    var tm = ctx.tipos ? tipoLineMsg(ctx.tipos(), o.specId, lineSvc(o)) : null; if (tm) w.push(tm);
     var key = function(x){ return [x.specId, lineSvc(x), x.profId || "", tlDays(x).slice().sort().join(","), x.hora || ""].join("|"); };
     if ((ctx.others || []).some(function(x){ return key(x) === key(o); })) w.push("Já existe um quadro igual (mesma especialidade, serviço, profissional, dia e horário).");
     return w;
@@ -12568,6 +12618,7 @@ function trInfoBoxHtml(v){
 function treatFieldsEditor(v, opts){
   // Quadros do tratamento (uma linha = um quadro; a mesma especialidade pode repetir).
   var draftLines = patientSpecRows(v).map(function(row){ return Object.assign({}, row, {aba: abaYesNo(row.aba || abaLegacy(v) || "Sim")}); });
+  var addForTypesFn = null;   // preenchidas em wire(): quadros pelo Tipo de Tratamento e conferência
   var lockedIds = null;   // ids dos quadros travados (tratamento com atendimentos realizados)
   var newSpecialties = [];
   var localConvenios = state.convenios.slice();
@@ -12676,6 +12727,7 @@ function treatFieldsEditor(v, opts){
       openTreatLineModal({line: line, isNew: isNew, locked: !isNew && lockedIds && lockedIds.indexOf(line.id) !== -1,
         aba: abaNewLine(), horarios: function(){ try { return readPatHours(); } catch (e){ return null; } },
         others: draftLines.filter(function(x, j){ return j !== i; }), patient: pName,
+        tipos: function(){ var pn = document.getElementById("trTipos"); return pn ? Array.prototype.map.call(pn.querySelectorAll("input:checked"), function(c){ return c.value; }) : []; },
         onSave: function(o){ if (isNew) draftLines.push(o); else draftLines[i] = o; render(); },
         onDelete: function(){ draftLines.splice(i, 1); render(); }});
     }
@@ -12730,10 +12782,13 @@ function treatFieldsEditor(v, opts){
         showToast("Sessões distribuídas: " + parts.join(", ") + ".");
       });
     });
-    document.getElementById("specRowAddAll").addEventListener("click", function(){
+    document.getElementById("specRowAddAll").addEventListener("click", function(){ addAllSpecs(false); });
+    // Inclui 1 sessão de cada especialidade ativa (menos Aplicador ABA) que ainda não tem quadro de Sessão.
+    // silent = chamado pelo Tipo de Tratamento (Multidisciplinar): sem aviso quando não há nada a incluir.
+    function addAllSpecs(silent){
       var have = {}; draftLines.forEach(function(r){ if (lineSvc(r) === DEFAULT_SERVICE_ID) have[r.specId] = true; });
       var add = activeOnly(state.specialties).filter(function(sp){ return !/aplicador/.test(normText(sp.name || "")) && !have[sp.id]; });
-      if (!add.length){ showToast("Todas as especialidades (menos Aplicador ABA) já estão no tratamento."); return; }
+      if (!add.length){ if (!silent) showToast("Todas as especialidades (menos Aplicador ABA) já estão no tratamento."); return 0; }
       // Ordem fixa: Fono, Psicologia, TO, Psicopedagogia, Psicomotricidade, Fisioterapia, Musicoterapia, Nutrição; as outras depois.
       var ORD = ["fono", "psicolog", "ocupacional", "psicoped", "psicomot", "fisio", "music", "nutri"];
       function ordIdx(sp){ var n = normText(sp.name || ""); for (var i = 0; i < ORD.length; i++){ if (n.indexOf(ORD[i]) !== -1) return i; } return ORD.length; }
@@ -12741,8 +12796,25 @@ function treatFieldsEditor(v, opts){
       var aba = abaNewLine();
       add.forEach(function(sp){ draftLines.push({id: uid("tl"), specId: sp.id, hours: "1", profId: "", aba: aba, service: DEFAULT_SERVICE_ID, dia: "", hora: "", semanas: "", roomId: "", seguidas: "", obs: ""}); });
       render();
-      showToast(add.length + (add.length === 1 ? " especialidade incluída" : " especialidades incluídas") + " com 1 sessão/mês cada. Ajuste as sessões em Editar.");
-    });
+      if (!silent) showToast(add.length + (add.length === 1 ? " especialidade incluída" : " especialidades incluídas") + " com 1 sessão/mês cada. Ajuste as sessões em Editar.");
+      return add.length;
+    }
+    // Tipo de Tratamento marcado na janela: os quadros entram sozinhos (a pessoa remove depois o que não quiser).
+    // Multidisciplinar = todas as especialidades; Especialidade = o quadro de Sessão dela. Serviço não cria quadro
+    // (o quadro precisa de uma especialidade; a pessoa inclui em "+ Incluir Especialidade").
+    addForTypesFn = function(ids){
+      var n = 0;
+      (ids || []).forEach(function(id){
+        if (id === "multidisciplinar"){ n += addAllSpecs(true); return; }
+        if (String(id).indexOf(TT_SPEC) !== 0) return;
+        var sid = String(id).slice(TT_SPEC.length), sp = state.specialties.filter(function(x){ return x.id === sid; })[0];
+        if (!sp || draftLines.some(function(r){ return r.specId === sid && lineSvc(r) === DEFAULT_SERVICE_ID; })) return;
+        draftLines.push({id: uid("tl"), specId: sid, hours: "1", profId: "", aba: abaNewLine(), service: DEFAULT_SERVICE_ID, dia: "", hora: "", semanas: "", roomId: "", seguidas: "", obs: ""});
+        n++;
+      });
+      if (n){ render(); showToast(n + (n === 1 ? " quadro incluído" : " quadros incluídos") + " pelo Tipo de Tratamento. Remova o que não quiser."); }
+      return n;
+    };
     // ABA do quadro novo: o ABA antigo do tratamento (enquanto existir) ou a regra automática do paciente.
     function abaNewLine(){
       var sel = document.getElementById("trPat"), pid = (sel && sel.value) || v.patientId || "";
@@ -12864,7 +12936,7 @@ function treatFieldsEditor(v, opts){
   // Tratamento com atendimentos realizados: os quadros que já existem ficam com especialidade,
   // sessões/mês e serviço travados; quadros novos continuam permitidos.
   function lock(){ lockedIds = draftLines.map(function(r){ return r.id; }); renderRef(); }
-  return {html: html, wire: wire, read: read, lock: lock};
+  return {html: html, wire: wire, read: read, lock: lock, addForTypes: function(ids){ return addForTypesFn ? addForTypesFn(ids) : 0; }};
 }
 
 /* ---------------- Cadastro do paciente: grupos e campos configuráveis ----------------
@@ -14405,7 +14477,7 @@ function patientRenameEverywhere(id, oldName, newName){
       });
     });
     if (!n) return;
-    return Promise.resolve(applyBookingChanges(changes, {noHistory: true, patientHoursOk: true, therapistOk: true, areaOk: true})).then(function(r){
+    return Promise.resolve(applyBookingChanges(changes, {noHistory: true, patientHoursOk: true, therapistOk: true, areaOk: true, tipoOk: true})).then(function(r){
       msgs.push(r === false ? "Planner não atualizado (sem permissão de editar o Planner ou sem conexão)" : n + (n === 1 ? " agendamento" : " agendamentos") + " no Planner");
     });
   });
@@ -16275,7 +16347,7 @@ function roomRenameEverywhere(room, oldName, newName){
       });
     });
     if (!n) return;
-    return Promise.resolve(applyBookingChanges(changes, {noHistory: true, patientHoursOk: true, therapistOk: true, areaOk: true})).then(function(r){
+    return Promise.resolve(applyBookingChanges(changes, {noHistory: true, patientHoursOk: true, therapistOk: true, areaOk: true, tipoOk: true})).then(function(r){
       if (r === false) msgs.push("Planner não atualizado (sem permissão de editar o Planner)");
       else msgs.push(n + (n === 1 ? " agendamento" : " agendamentos") + " de grupo no Planner");
       showToast("Nome da sala atualizado também: " + msgs.join(" · ") + ".", r === false);
@@ -17813,7 +17885,18 @@ function agdTherapistCheck(pairs){
         (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return null;
     return therapistMismatchMsg(rec, rec.professional_id, rec.service, rec.date);
   }).filter(Boolean);
-  return sysGate("ag_terapeuta", "Terapeuta Diferente do Tratamento", msgs, function(){ return therapistConfirm(msgs); }).then(function(ok){ return ok ? agdAreaCheck(pairs) : false; }).then(function(ok){ return ok ? agdGoalsCheck(pairs) : false; });
+  return sysGate("ag_terapeuta", "Terapeuta Diferente do Tratamento", msgs, function(){ return therapistConfirm(msgs); }).then(function(ok){ return ok ? agdTipoCheck(pairs) : false; }).then(function(ok){ return ok ? agdAreaCheck(pairs) : false; }).then(function(ok){ return ok ? agdGoalsCheck(pairs) : false; });
+}
+function agdTipoCheck(pairs){
+  var msgs = pairs.map(function(x){
+    var rec = x.rec, old = x.old;
+    if (!rec || bookingKind(rec)) return null;
+    if (old && old.professional_id === rec.professional_id && samePatient(old, rec) &&
+        (old.service || DEFAULT_SERVICE_ID) === (rec.service || DEFAULT_SERVICE_ID)) return null;
+    return treatTypeMismatchMsg(rec, rec.professional_id, rec.service, rec.date);
+  }).filter(Boolean);
+  var uniq = msgs.filter(function(m, i){ return msgs.indexOf(m) === i; });
+  return sysGate("ag_tipo_trat", "Especialidade Fora do Tipo de Tratamento", uniq, function(){ return tipoConfirm(uniq); });
 }
 function agdAreaCheck(pairs){
   var msgs = pairs.map(function(x){
@@ -20382,7 +20465,7 @@ function openApDraftsModal(){
           });
         });
         if (!n){ showToast("A grade atual já é igual a este rascunho."); return; }
-        return applyBookingChanges(changes, {patientHoursOk: true, routineOk: true, therapistOk: true, areaOk: true}).then(function(res){
+        return applyBookingChanges(changes, {patientHoursOk: true, routineOk: true, therapistOk: true, areaOk: true, tipoOk: true}).then(function(res){
           if (res === false) return;
           showToast("Rascunho carregado (" + n + " células mudaram). Ctrl+Z desfaz."); close(); renderGrid();
         });
@@ -24306,7 +24389,14 @@ function openTreatmentModal(t, opts){
   function trTiposOpen(open){ tpPanel.hidden = !open; tpBtn.setAttribute("aria-expanded", open ? "true" : "false"); if (open){ var f = tpPanel.querySelector("input"); if (f) f.focus(); } }
   tpBtn.addEventListener("click", function(){ trTiposOpen(tpPanel.hidden); });
   tpPanel.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); trTiposOpen(false); tpBtn.focus(); } });
-  tpPanel.addEventListener("change", trTiposRefresh);
+  // Só os tipos recém-marcados incluem quadros (abrir o tratamento ou desmarcar não mexe nos quadros).
+  var tpPrev = trTiposRead();
+  tpPanel.addEventListener("change", function(){
+    trTiposRefresh();
+    var now = trTiposRead(), added = now.filter(function(id){ return tpPrev.indexOf(id) === -1; });
+    tpPrev = now;
+    if (added.length && ed && ed.addForTypes) ed.addForTypes(added);
+  });
   document.getElementById("ovTreat").addEventListener("mousedown", function(e){ if (!tpMs.contains(e.target)) trTiposOpen(false); });
   trTiposRefresh();
   // Por data: válido até; por sessões: total contratado (usadas = Finalizados + Não compareceu).
@@ -26275,7 +26365,7 @@ var HELP_TOPICS = [
   {id: "tipostrat", group: "Cadastros", title: "Tipos de Tratamento", mod: "tipos_tratamento", tab: "tipostrat",
     purpose: "Os tipos que o tratamento do paciente pode ter (Multidisciplinar, Fonoaudiologia, Psicologia…). Cada tratamento pode ter vários tipos.",
     steps: ["Cadastros → <b>Tipos de Tratamento</b> → <b>+ Incluir</b>: nome do tipo (ex.: Multidisciplinar). A caixa <b>Padrão</b> faz o tipo já vir escolhido no tratamento novo.", "Todas as especialidades e serviços cadastrados aparecem na lista sozinhos: em Cadastros → Especialidades e Serviços há a caixa <b>Tratamento</b>; desligada, a especialidade ou o serviço deixa de ser tipo. Clicar numa especialidade ou serviço da lista abre o cadastro dele.", "No tratamento, o campo <b>Tipo de Tratamento</b> (logo depois do paciente) aceita escolher vários."],
-    rules: ["A lista mostra a origem (Tipo de Tratamento, Especialidade ou Serviço) e quantos tratamentos usam cada tipo.", "Tipo usado em tratamento não é excluído: é <b>Inativado</b>.", "Especialidade e serviço novos já vêm com Tratamento ligado."],
+    rules: ["Ao marcar um tipo no tratamento, os quadros entram sozinhos: <b>Multidisciplinar</b> traz todas as especialidades (menos Aplicador ABA) e uma especialidade traz o quadro dela; você remove o que não quiser.", "Ao agendar uma Sessão (Planner e Agenda) ou salvar um quadro de especialidade, o sistema avisa se a especialidade não está no tipo. Multidisciplinar libera todas, serviços são sempre livres e, num tratamento só de serviço, agendar uma Sessão de especialidade também avisa. O aviso dos quadros continua valendo como segunda regra; no <b>Sistema</b> o Administrador escolhe Bloquear, Avisar ou Desligado.", "A lista mostra a origem (Tipo de Tratamento, Especialidade ou Serviço) e quantos tratamentos usam cada tipo.", "Tipo usado em tratamento não é excluído: é <b>Inativado</b>.", "Especialidade e serviço novos já vêm com Tratamento ligado."],
     who: "Permissão <b>Tipos de Tratamento</b>."},
   {id: "motivosbloq", group: "Cadastros", title: "Motivos de Bloqueio", mod: "motivos_bloqueio", tab: "motivosbloq",
     purpose: "Motivos para bloquear um paciente (Financeiro, Documentação pendente, Aguardando laudo…). Usados no grupo <b>Bloqueio de Agendamento</b> do cadastro do paciente.",
