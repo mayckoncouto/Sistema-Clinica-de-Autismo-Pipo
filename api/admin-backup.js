@@ -103,6 +103,12 @@ var TABLES = {
     cols: ["unit_id", "id", "account_id", "data", "descricao", "valor", "doc", "key", "entry_id", "matched_at", "matched_by", "created_at", "created_by"],
     users: ["matched_by", "created_by"]
   },
+  anamneses: {
+    key: "id",
+    cols: ["unit_id", "id", "patient_id", "patient_name", "type_id", "type_name", "type_version", "perguntas", "answers", "status", "data", "versao", "prev_id",
+           "done_at", "done_by_name", "created_at", "created_by", "created_by_name", "updated_at", "updated_by", "updated_by_name"],
+    users: ["created_by", "updated_by"]
+  },
   treatment_sales: {
     key: "id",
     cols: ["unit_id", "id", "treatment_id", "patient_id", "tipo", "data", "seller_id", "seller_name", "valor_mensal", "meses", "total", "forma", "status",
