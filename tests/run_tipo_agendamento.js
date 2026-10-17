@@ -88,6 +88,19 @@ const path = require('path');
   await page.click('#ovConfirm button:has-text("Salvar Assim Mesmo")'); await page.waitForTimeout(300);
   await page.click('#trCancel').catch(() => {});
 
+  // Cor do serviço
+  check('serviço sem cor usa o ciano de Treinamento?', (await ev('serviceFillColor("triagem")')) === '#24E2FC');
+  await ev('openRegistryItem("servicos", servicesList().filter(function(x){ return x.id === "triagem"; })[0])'); await page.waitForSelector('#ovReg');
+  check('cadastro do serviço tem o campo Cor?', await page.$('#regColor') !== null);
+  await page.evaluate(() => { document.getElementById('regColor').click(); }); await page.waitForSelector('#cpPop');
+  await page.click('#cpPop .cp-sw >> nth=2').catch(() => {});
+  await page.keyboard.press('Escape'); await page.click('#regSave'); await page.waitForTimeout(400);
+  const saved = await ev('state.services.filter(function(x){ return x.id === "triagem"; })[0].color');
+  check('cor escolhida é gravada no serviço?', !!saved, saved);
+  check('atendimento de serviço usa a cor do serviço?', (await ev('serviceFillColor("triagem")')) !== '#24E2FC' || saved === '#24E2FC');
+  await ev('openRegistryItem("servicos", servicesList().filter(function(x){ return x.id === DEFAULT_SERVICE_ID; })[0])'); await page.waitForSelector('#ovReg');
+  check('Sessão não tem campo Cor (usa idade/ABA)?', await page.$('#regColor') === null);
+  await page.click('#regCancel');
   check('sem erros de JS?', errors.length === 0, errors.slice(0, 3));
   fs.unlinkSync(evPage);
   await browser.close();

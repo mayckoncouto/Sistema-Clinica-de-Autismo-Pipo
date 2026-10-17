@@ -4792,6 +4792,12 @@ var DEFAULT_SERVICE_ID = "sessao";
 // Atendimento de paciente com serviço que não é "Sessão" (Orientação Familiar, Avaliação...):
 // a célula usa a mesma cor de Treinamento (Planner e Agenda).
 function otherService(b){ return !!(b && b.service && b.service !== DEFAULT_SERVICE_ID); }
+// Cor do atendimento de um serviço que não é Sessão: a cor escolhida no cadastro do serviço (Cadastros → Serviços);
+// sem cor escolhida vale o ciano de Treinamento. Ignora a faixa etária e a Intervenção ABA.
+function serviceFillColor(serviceId){
+  var sv = state.services.filter(function(x){ return x.id === serviceId; })[0];
+  return sv && sv.color ? swatchVar(sv.color) : TRAINING_COLOR;
+}
 function servicesList(){
   var list = state.services.slice();
   if (!list.some(function(s){ return s.id === DEFAULT_SERVICE_ID; })) list.unshift({id: DEFAULT_SERVICE_ID, name: "Sessão"});
@@ -10075,7 +10081,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
           var isTraining = !isBlocked && bookingKind(b) === "treinamento";
           var isSpecialKind = isBlocked || isMeetingDefault || isTraining;
           var pRec = isSpecialKind ? null : findPatientByName(b);
-          var pCol = pRec ? (otherService(b) ? TRAINING_COLOR : patientColor(bookingPatient(pRec, b, t.professionalId, week))) : null;
+          var pCol = pRec ? (otherService(b) ? serviceFillColor(b.service) : patientColor(bookingPatient(pRec, b, t.professionalId, week))) : null;
           var roomMatch = (!isSpecialKind && !pRec) ? bookingRoomRef(b) : null;
           var roomCol = roomMatch ? roomFillColor(roomMatch) : null;
           var fillCol = isBlocked ? BLOCKED_COLOR : (isMeetingDefault ? MEETING_COLOR : (isTraining ? TRAINING_COLOR : (pCol || roomCol)));
@@ -17049,7 +17055,7 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   else {
     var pRec = findPatientAt(row, row.date);   // cor/ABA da época do atendimento
     var room = !pRec ? bookingRoomRef(row) : null;
-    fill = pRec ? (otherService(row) ? TRAINING_COLOR : patientColor(bookingPatient(pRec, row))) : (room ? roomFillColor(room) : null);
+    fill = pRec ? (otherService(row) ? serviceFillColor(row.service) : patientColor(bookingPatient(pRec, row))) : (room ? roomFillColor(room) : null);
     if (fill) cls = " pcolor";
   }
   var name = kind ? SLOT_KINDS.filter(function(x){ return x.key === kind; })[0].label : row.patient;
@@ -26265,10 +26271,10 @@ var HELP_TOPICS = [
     who: "Permissão <b>Convênios</b>."},
   {id: "servicos", group: "Cadastros", title: "Serviços", mod: "servicos", tab: "servicos",
     purpose: "Tipos de atendimento: Sessão, Triagem, Avaliação, Orientação Familiar etc.",
-    steps: ["Cadastros → <b>Serviços</b> → <b>+ Incluir</b> (nome e sigla).", "No cadastro do colaborador com o tipo Profissional (Cadastros → Colaboradores), marque quais serviços ele atende."],
+    steps: ["Cadastros → <b>Serviços</b> → <b>+ Incluir</b> (nome, sigla e cor). A cor aparece numa bolinha antes do nome na lista e pinta os atendimentos desse serviço no Planner e na Agenda.", "No cadastro do colaborador com o tipo Profissional (Cadastros → Colaboradores), marque quais serviços ele atende."],
     rules: [
       "<b>Sessão</b> é o serviço padrão e não pode ser renomeado nem excluído.",
-      "Atendimento com serviço diferente de Sessão aparece na cor ciano (Treinamento ou Outros serviços).",
+      "Atendimento com serviço diferente de Sessão aparece na cor escolhida no cadastro do serviço (ciano, a cor de Treinamento, quando nenhuma foi escolhida), sem usar a faixa etária nem a Intervenção ABA.",
       "Na janela do atendimento, o campo Serviço oferece só os serviços do profissional.",
       "A caixa <b>Tratamento</b> (ligada nos serviços já cadastrados e nos novos) faz o serviço aparecer como tipo em Cadastros → Tipos de Tratamento."
     ],
@@ -27640,7 +27646,7 @@ var REG_CFG = {
     cols: ["Nome", "Sigla", "Profissionais que Atendem"],
     row: function(s){
       var n = state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length;
-      return ['<b>' + esc(s.name) + '</b>' + (s.id === DEFAULT_SERVICE_ID ? ' <span class="serv-lock">padrão</span>' : ''), esc(specialtySigla(SVC_PREFIX + s.id)), n];
+      return [(s.id === DEFAULT_SERVICE_ID ? '' : '<span class="pcolor-dot" style="background:' + serviceFillColor(s.id) + '"></span>') + '<b>' + esc(s.name) + '</b>' + (s.id === DEFAULT_SERVICE_ID ? ' <span class="serv-lock">padrão</span>' : ''), esc(specialtySigla(SVC_PREFIX + s.id)), n];
     },
     vals: function(s){
       return [s.name, specialtySigla(SVC_PREFIX + s.id), state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length];
@@ -28024,7 +28030,7 @@ function openRegistryItem(kind, item){
   var canSave = !locked && (isNew || can(cfg.module, "edit"));
   var canDel = !isNew && !locked && can(cfg.module, "delete");
   var canExtra = canSave || (locked && !!cfg.extraHtml && can(cfg.module, "edit"));   // item travado: só os campos extras (ex.: Tratamento da Sessão)
-  var color = item && item.color ? item.color : "teal";
+  var color = item && item.color ? item.color : (kind === "servicos" ? TRAINING_COLOR : "teal");
   var host = document.getElementById("modalHost");
   host.innerHTML =
     '<div class="overlay" id="ovReg"><div class="modal" style="max-width:' + (kind === "convenios" ? 620 : kind === "especialidades" || kind === "habilidades" ? 520 : 440) + 'px">' +
@@ -28038,7 +28044,8 @@ function openRegistryItem(kind, item){
         regFieldsHtml(cfg, item, canSave, false) +
         (cfg.extraHtml ? cfg.extraHtml(item, canExtra) : '') +
         (kind === "servicos" ?
-          '<div class="field"><label for="regSigla">Sigla</label><input id="regSigla" type="text" maxlength="4" value="' + esc(item ? item.sigla || "" : "") + '" placeholder="' + esc(item ? defaultSigla(item.name) : "") + '"' + (canSave ? '' : ' disabled') + '></div>' : '') +
+          '<div class="field-row"><div class="field"><label for="regSigla">Sigla</label><input id="regSigla" type="text" maxlength="4" value="' + esc(item ? item.sigla || "" : "") + '" placeholder="' + esc(item ? defaultSigla(item.name) : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
+          (item && item.id === DEFAULT_SERVICE_ID ? '' : '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="regColor"' + (canSave ? '' : ' disabled') + ' aria-label="Escolher cor"></button><span class="color-pick-code mono" id="regColorCode"></span></div></div>') + '</div>' : '') +
         (kind === "especialidades" ?
           '<div class="field-row"><div class="field"><label for="regSigla">Sigla</label><input id="regSigla" type="text" maxlength="4" value="' + esc(item ? item.sigla || "" : "") + '" placeholder="' + esc(item ? defaultSigla(item.name) : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
           '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="regColor"' + (canSave ? '' : ' disabled') + ' aria-label="Escolher cor"></button><span class="color-pick-code mono" id="regColorCode"></span></div></div></div>' +
@@ -28183,7 +28190,7 @@ function openRegistryItem(kind, item){
     if (dup){ showToast('Já existe "' + regItemLabel(cfg, dup) + '" no cadastro.', true); return; }
     var rec = Object.assign({}, item || {}, extra, {id: item ? item.id : (cfg.newId ? cfg.newId(probe) : uid(slugify(name) || kind)), name: name});
     if (kind === "especialidades"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); rec.color = color; }
-    if (kind === "servicos"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); }
+    if (kind === "servicos"){ rec.sigla = document.getElementById("regSigla").value.trim().toUpperCase(); if (document.getElementById("regColor")) rec.color = color; }
     if (exw && exv) exw.apply(rec, exv);
     if (kind === "especialidades" && lib) rec.libera = libSel();
     if (habSel){
