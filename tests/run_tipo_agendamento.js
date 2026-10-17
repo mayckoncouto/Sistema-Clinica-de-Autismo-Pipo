@@ -101,6 +101,13 @@ const path = require('path');
   await ev('openRegistryItem("servicos", servicesList().filter(function(x){ return x.id === DEFAULT_SERVICE_ID; })[0])'); await page.waitForSelector('#ovReg');
   check('Sessão não tem campo Cor (usa idade/ABA)?', await page.$('#regColor') === null);
   await page.click('#regCancel');
+  // Legenda: Sem Intervenção ABA, Bloqueado junto com fora do horário, um item por serviço (Triagem, cor do cadastro)
+  await ev('svcLegendFill(); 0');
+  const leg = await page.$$eval('.color-legend', (a) => a.map((x) => x.textContent));
+  check('legendas dizem Sem Intervenção ABA e têm Triagem + Treinamento?', leg.length >= 3 && leg.every((t) => /Sem Intervenção ABA/.test(t) && /Treinamento/.test(t) && /Triagem/.test(t) && !/Outros serviços/.test(t)), leg[0]);
+  check('Bloqueado e fora do horário juntos em todas as legendas?', leg.every((t) => /Bloqueado ou Fora do Horário do Profissional/.test(t)));
+  await ev('state.services = state.services.concat([{id: "novo-svc", name: "Serviço Novo", color: "#ff0000"}]); svcLegendFill(); 0');
+  check('serviço novo entra na legenda sozinho?', (await page.$$eval('.color-legend', (a) => a.every((x) => /Serviço Novo/.test(x.textContent)))));
   check('sem erros de JS?', errors.length === 0, errors.slice(0, 3));
   fs.unlinkSync(evPage);
   await browser.close();

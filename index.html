@@ -3017,11 +3017,11 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
     <div class="clipboard-bar" id="clipboardBar"></div>
     <div class="grid-scroll"><div id="gridHost"></div></div>
     <div class="color-legend">
-      <span><i style="background:#F4B7B7"></i>Não faz Intervenção ABA</span>
+      <span><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
       <span data-age-legend hidden></span>
       <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
-      <span><i style="background:#24E2FC"></i>Treinamento ou Outros serviços</span>
-      <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou fora do horário do profissional</span>
+      <span data-svc-legend style="display:contents"></span>
+      <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
       <span title="Profissional atendendo em outra sala ou grupo, ou paciente que não faz intervenção ABA ocupando o horário"><i style="background:repeating-linear-gradient(135deg,#E4E7E6 0 3px,#FFFFFF 3px 6px);border:1px solid var(--line)"></i>Bloqueado por regra</span>
     </div>
   </section>
@@ -3131,12 +3131,11 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <div class="clipboard-bar" id="agdClipboardBar"></div>
       <div class="agd-scroll"><div id="agdGrid"></div></div>
       <div class="color-legend agd-legend">
-        <span><i style="background:#F4B7B7"></i>Não faz Intervenção ABA</span>
+        <span><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
         <span data-age-legend hidden></span>
         <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
-        <span><i style="background:#24E2FC"></i>Treinamento ou Outros serviços</span>
-        <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado</span>
-        <span><i class="agd-off-swatch"></i>Fora do horário do profissional</span>
+        <span data-svc-legend style="display:contents"></span>
+        <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
       </div>
     </div>
   </section>
@@ -3167,12 +3166,11 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <div class="clipboard-bar" id="agpClipboardBar"></div>
       <div class="agd-scroll"><div id="agpGrid"></div></div>
       <div class="color-legend agd-legend">
-        <span><i style="background:#F4B7B7"></i>Não faz Intervenção ABA</span>
+        <span><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
         <span data-age-legend hidden></span>
         <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
-        <span><i style="background:#24E2FC"></i>Treinamento ou Outros serviços</span>
-        <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado</span>
-        <span><i class="agd-off-swatch"></i>Fora do horário do profissional</span>
+        <span data-svc-legend style="display:contents"></span>
+        <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
       </div>
     </div>
   </section>
@@ -4527,8 +4525,18 @@ function ageBandOf(age){
 function ageBandIds(ids){ var ok = AGE_BANDS.map(function(b){ return b.id; }); return (Array.isArray(ids) ? ids : []).filter(function(x){ return ok.indexOf(x) !== -1; }); }
 function ageBandText(ids){ var v = ageBandIds(ids); return v.length && v.length < AGE_BANDS.length ? AGE_BANDS.filter(function(b){ return v.indexOf(b.id) !== -1; }).map(function(b){ return b.label; }).join(", ") : "Todas as idades"; }
 function ageLegendHtml(){ return AGE_BANDS.map(function(b){ return '<span><i style="background:' + b.color + '"></i>' + esc(b.label) + '</span>'; }).join(""); }
+// Legenda de serviços: Treinamento + um item por serviço (menos Sessão) com a cor do cadastro; serviço novo entra sozinho.
+function svcLegendHtml(){
+  var out = '<span><i style="background:' + TRAINING_COLOR + '"></i>Treinamento</span>';
+  (state.services || []).filter(function(x){ return x.id !== DEFAULT_SERVICE_ID && isActive(x); }).forEach(function(x){
+    out += '<span><i style="background:' + serviceFillColor(x.id) + '"></i>' + esc(x.name) + '</span>';
+  });
+  return out;
+}
+function svcLegendFill(){ Array.prototype.forEach.call(document.querySelectorAll("[data-svc-legend]"), function(el){ el.innerHTML = svcLegendHtml(); }); }
 function ageLegendFill(){ Array.prototype.forEach.call(document.querySelectorAll("[data-age-legend]"), function(el){ el.outerHTML = ageLegendHtml(); }); }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ageLegendFill); else ageLegendFill();
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", svcLegendFill); else svcLegendFill();
 
 function computeAgeFromBirth(isoDate){
   if (!isoDate) return null;
@@ -6438,6 +6446,7 @@ function writeCancelReasons(list){
 function subscribeServices(){
   db.doc("config/services").onSnapshot(function(snap){
     state.services = (snap.exists && snap.data() && Array.isArray(snap.data().list)) ? snap.data().list : [];
+    svcLegendFill();
     if (state.tab === "servicos") renderRegistryTab("servicos");
   }, function(){});
 }
@@ -14969,6 +14978,7 @@ function writeServices(list){
   if (denied){ showToast(denied, true); return Promise.resolve(); }
   var prep = listPrepare(state.services, list);
   state.services = prep.list;
+  svcLegendFill();
   if (!db){ showToast("Não salvo: sem conexão com o servidor.", true); return Promise.resolve(); }
   if (state.writable === false){ showToast("Modo somente leitura — alteração não salva.", true); return Promise.resolve(); }
   return listCommit("config/services", prep).catch(function(){
@@ -26274,7 +26284,7 @@ var HELP_TOPICS = [
     steps: ["Cadastros → <b>Serviços</b> → <b>+ Incluir</b> (nome, sigla e cor). A cor aparece numa bolinha antes do nome na lista e pinta os atendimentos desse serviço no Planner e na Agenda.", "No cadastro do colaborador com o tipo Profissional (Cadastros → Colaboradores), marque quais serviços ele atende."],
     rules: [
       "<b>Sessão</b> é o serviço padrão e não pode ser renomeado nem excluído.",
-      "Atendimento com serviço diferente de Sessão aparece na cor escolhida no cadastro do serviço (ciano, a cor de Treinamento, quando nenhuma foi escolhida), sem usar a faixa etária nem a Intervenção ABA.",
+      "Atendimento com serviço diferente de Sessão aparece na cor escolhida no cadastro do serviço (ciano, a cor de Treinamento, quando nenhuma foi escolhida), sem usar a faixa etária nem a Intervenção ABA. A legenda de cores do Planner, da Agenda e da Agenda Planner mostra um item para cada serviço cadastrado, então serviço novo entra sozinho.",
       "Na janela do atendimento, o campo Serviço oferece só os serviços do profissional.",
       "A caixa <b>Tratamento</b> (ligada nos serviços já cadastrados e nos novos) faz o serviço aparecer como tipo em Cadastros → Tipos de Tratamento."
     ],
