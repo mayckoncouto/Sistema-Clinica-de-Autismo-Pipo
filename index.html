@@ -3022,7 +3022,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
       <span data-svc-legend style="display:contents"></span>
       <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
-      <span title="Profissional atendendo em outra sala ou grupo, ou paciente que não faz intervenção ABA ocupando o horário"><i style="background:repeating-linear-gradient(135deg,#E4E7E6 0 3px,#FFFFFF 3px 6px);border:1px solid var(--line)"></i>Bloqueado por regra</span>
+      <span title="Profissional atendendo em outra sala ou grupo, ou paciente sem Intervenção ABA ocupando o horário"><i style="background:repeating-linear-gradient(135deg,#E4E7E6 0 3px,#FFFFFF 3px 6px);border:1px solid var(--line)"></i>Bloqueado por Regra</span>
     </div>
   </section>
 
@@ -3171,6 +3171,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
         <span data-svc-legend style="display:contents"></span>
         <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
+        <span title="Profissional atendendo em outra sala ou grupo, ou paciente sem Intervenção ABA ocupando o horário"><i style="background:repeating-linear-gradient(135deg,#E4E7E6 0 3px,#FFFFFF 3px 6px);border:1px solid var(--line)"></i>Bloqueado por Regra</span>
       </div>
     </div>
   </section>
@@ -10036,7 +10037,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
       });
     });
     rooms.forEach(function(r){
-      // Paciente que não faz intervenção ABA nesta sala e horário: bloqueia as outras
+      // Paciente sem Intervenção ABA nesta sala e horário: bloqueia as outras
       // colunas do MESMO profissional (as de outros profissionais ficam livres).
       var abaByProf = {};
       if (!isGroup(r)) r.therapists.forEach(function(t2){ var b2 = effectiveBooking(bookings, row.time+"|"+r.id+"|"+t2.id, dayObj.key, row.time); if (t2.professionalId && isNaoABABooking(b2, t2.professionalId, week) && !abaByProf[t2.professionalId]) abaByProf[t2.professionalId] = b2.patient; });
@@ -10899,7 +10900,7 @@ function profBusyMsg(profName, time, place){
 function patientBusyMsg(patient, service, time, place){
   return patient + " já tem " + (service || "esse serviço") + " às " + time + (place ? " em " + place : "") + ". O mesmo paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.";
 }
-// Paciente que não faz intervenção ABA ocupa a SALA inteira no horário: as outras
+// Paciente sem Intervenção ABA ocupa a SALA inteira no horário: as outras
 // colunas da mesma sala ficam bloqueadas (só no Planner, só em sala — não em grupo).
 function isNaoABABooking(b, profId, week){
   if (!b || !b.patient || bookingKind(b)) return false;
@@ -10913,8 +10914,8 @@ function isNaoABABooking(b, profId, week){
 // profissionais), em qualquer sala — desde 2026-10-08 também nas salas com "ABA" no nome.
 function abaRoomMsg(holder, roomName, time, profName){
   return profName
-    ? profName + " está com " + holder + " às " + time + " em " + roomName + ": paciente que não faz intervenção ABA ocupa o horário do profissional."
-    : roomName + " às " + time + " está ocupada por " + holder + ", que não faz intervenção ABA (ocupa a sala toda).";
+    ? profName + " está com " + holder + " às " + time + " em " + roomName + ": paciente sem Intervenção ABA ocupa o horário do profissional."
+    : roomName + " às " + time + " está ocupada por " + holder + ", que está sem Intervenção ABA (ocupa a sala toda).";
 }
 // Planner: confere se rec pode ir na célula key do docId (dia-semana).
 // ignoreKeys: células que vão ficar vazias (origem de um mover); extra: {key: rec}
@@ -10984,7 +10985,7 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
       if (!b || !b.patient || bookingKind(b)) continue;
       // "Não ABA" vale para a sala toda (desde 2026-10-08 também nas salas com "ABA" no nome).
       if (r.id === room.id && !isGroup(room)){
-        if (recNaoABA && (x = hit("pl_nao_aba", "Paciente que não faz intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + "."))) return x;
+        if (recNaoABA && (x = hit("pl_nao_aba", "Paciente sem Intervenção ABA ocupa a sala toda: " + room.name + " já tem " + b.patient + " às " + time + "."))) return x;
         if (!recNaoABA && abaRuleApplies(rec, profId, wkNum) && isNaoABABooking(b, t.professionalId, wkNum) && (x = hit("pl_nao_aba", abaRoomMsg(b.patient, room.name, time, "")))) return x;
       }
       // Profissional em dois lugares: vale também para o grupo que marca a mesma sala
@@ -17993,7 +17994,7 @@ function agdConflictIn(rows, rec, held){
       // "Não ABA" vale para a sala toda (desde 2026-10-08 também nas salas com "ABA" no nome).
       {
         var oNao = isNaoABABooking(o);
-        if (recNao && (x = hit("ag_nao_aba", "Paciente que não faz intervenção ABA ocupa a sala toda: " + recRoom.name + " já tem " + o.patient + " às " + rec.time + "."))) return x;
+        if (recNao && (x = hit("ag_nao_aba", "Paciente sem Intervenção ABA ocupa a sala toda: " + recRoom.name + " já tem " + o.patient + " às " + rec.time + "."))) return x;
         if (!recNao && oNao && abaRuleApplies(rec, rec.professional_id) && (x = hit("ag_nao_aba", abaRoomMsg(o.patient, recRoom.name, rec.time, "")))) return x;
       }
     }
@@ -26187,7 +26188,7 @@ var HELP_TOPICS = [
     rules: [
       "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda).",
       "O <b>ABA</b> fica só no quadro de cada especialidade (Sim ou Não). O quadro novo já vem com a regra automática: <b>Sim</b> para todos, <b>Não</b> quando o paciente tem nível de suporte 3 ou 17 anos ou mais. Pode ser trocado à mão em cada quadro.",
-      "No Planner e na Agenda, a cor do paciente e as regras de \u201cnão faz intervenção ABA\u201d usam o ABA do quadro da especialidade do atendimento (especialidade principal ou complementar do profissional; serviço diferente de Sessão = o quadro do serviço). Atendimento sem quadro no tratamento usa a regra automática.",
+      "No Planner e na Agenda, a cor do paciente e as regras de \u201csem Intervenção ABA\u201d usam o ABA do quadro da especialidade do atendimento (especialidade principal ou complementar do profissional; serviço diferente de Sessão = o quadro do serviço). Atendimento sem quadro no tratamento usa a regra automática.",
       "Tratamentos cadastrados antes dos quadros guardam o ABA antigo (anotado no fim das Observações como \u201cABA (antigo)\u201d): enquanto o tratamento não tem nenhum quadro, vale ele, e o primeiro quadro já vem com esse valor."
     ],
     who: "Permissão <b>Tratamentos</b> (editar)."},

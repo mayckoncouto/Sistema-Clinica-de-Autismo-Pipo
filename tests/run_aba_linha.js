@@ -152,8 +152,8 @@ const path = require('path');
     out.agenda = agdConflictIn(rows, {date: "2030-01-07", time: "10:00", professional_id: "ana-terapeuta", room_id: "rx", patient: "Eva Teste", service: "sessao"});
     return out;
   })()`);
-  check('Planner: group booked for the room does NOT allow two não ABA together?', /não faz intervenção ABA/.test(grp.planner || '') && grp.noDepFn, JSON.stringify(grp));
-  check('Agenda: group row in the room does NOT allow two não ABA together?', /não faz intervenção ABA/.test(grp.agenda || ''), JSON.stringify(grp));
+  check('Planner: group booked for the room does NOT allow two não ABA together?', /sem Intervenção ABA/.test(grp.planner || '') && grp.noDepFn, JSON.stringify(grp));
+  check('Agenda: group row in the room does NOT allow two não ABA together?', /sem Intervenção ABA/.test(grp.agenda || ''), JSON.stringify(grp));
 
   // Desde 2026-10-08: sala COM "ABA" no nome também fica toda bloqueada (outro profissional incluído).
   const whole = await ev(`(function(){
