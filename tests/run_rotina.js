@@ -44,7 +44,7 @@ const path = require('path');
 
   // Ficha impressa e Campos Obrigatórios.
   const ficha = await ev('patientFichaHtml(state.patients.filter(function(p){ return p.nome === "Paciente Um"; })[0])');
-  console.log('printed form has the routine?', /Rotina Atual/.test(ficha) && /Manhã: Escola \(Escola Azul\)/.test(ficha) && /Tarde: Em casa/.test(ficha));
+  console.log('printed form has the routine?', /Rotina Atual/.test(ficha) && /Manhã: Escola \(Escola Azul\)/.test(ficha) && /Tarde: Livre/.test(ficha));
   const inFields = await ev('PAT_FIELDS.some(function(f){ return f.key === "rotinaAtual" && f.sec === "rotinaatual"; }) && PAT_SECTIONS.some(function(s){ return s.id === "rotinaatual"; })');
   console.log('"Rotina Atual" is in Campos Obrigatórios (same list as the form)?', inFields === true);
 
@@ -62,7 +62,7 @@ const path = require('path');
   const pipoAsk = await ev(`routineConflicts({"ter-2": {"${afternoon}|r1|r1-t1": {patient: "Paciente Um", service: "sessao"}}}).length`);
   console.log("Planner: \"Clínica Pipo\" does not warn?", pipoAsk === 0, pipoAsk);
   const asked = await ev(`(function(){ var r = routineConflicts({"seg-2": {"${afternoon}|r1|r1-t1": {patient: "Paciente Um", service: "sessao"}}}); return r.length; })()`);
-  console.log('Planner: afternoon "Em casa" does not warn?', asked === 0, asked);
+  console.log('Planner: afternoon "Livre" does not warn?', asked === 0, asked);
   // Sistema: regra desligada não pergunta.
   const offOk = await ev(`(function(){ state.sysRules = Object.assign({}, state.sysRules, {pl_rotina: "off"}); return sysOn("pl_rotina"); })()`);
   console.log('rule can be switched off in Sistema?', offOk === false);
