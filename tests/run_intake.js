@@ -67,7 +67,7 @@ const path = require('path');
     data: {nome: "Ana Azul", telefone: "47977776666", cep: "89020000", rua: "Rua Nova", numero: "99"}}); return intakeLoad().then(function(){ return true; }); })()`);
   await page.waitForTimeout(100);
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
-  check('patient window shows "Revisar Cadastro" when a submission is pending?', await page.isVisible('#pReview') && await page.isVisible('#pAskUpd'));
+  check('patient window shows "Revisar Cadastro" when a submission is pending?', await page.isVisible('#pReview') && (await page.click('#pMoreBtn'), await page.isVisible('#pAskUpd')));
   await page.click('#pReview'); await page.waitForTimeout(300);
   const df = await page.evaluate(() => ({diffs: document.querySelectorAll('#ovPat .ik-diff').length, rua: document.getElementById('pa-rua').value,
     bar: (document.querySelector('#pa-rua') && document.querySelector('#pa-rua').closest('.field').querySelector('.ik-diff-bar') || {}).textContent || '',
