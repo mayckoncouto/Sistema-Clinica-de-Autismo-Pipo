@@ -68,6 +68,12 @@ const path = require('path');
   check('tratamento guarda os tipos escolhidos (vários)?', saved.indexOf('multidisciplinar') !== -1 && saved.indexOf('spec:' + specId) !== -1 && saved.length === 2, saved);
   check('tipo em uso aparece na contagem?', (await ev('ttUseCount("multidisciplinar")')) >= 1);
 
+  // Serviço Sessão (travado): só a caixa Tratamento pode mudar
+  await ev('openRegistryItem("servicos", servicesList().filter(function(s){ return s.id === DEFAULT_SERVICE_ID; })[0])'); await page.waitForSelector('#ovReg');
+  check('Sessão: nome travado, caixa Tratamento e Salvar liberados?', (await page.$eval('#regName', (e) => e.disabled)) && !(await page.$eval('#regTratamento', (e) => e.disabled)) && (await page.$('#regSave')) !== null);
+  await page.uncheck('#regTratamento'); await page.click('#regSave'); await page.waitForTimeout(500);
+  check('Sessão sai dos Tipos de Tratamento e continua Sessão?', (await ev('treatTypesAll().filter(function(x){ return x.id === "svc:sessao"; }).length')) === 0 && (await ev('servicesList()[0].name')) === 'Sessão');
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close(); fs.unlinkSync(evPage);
   process.exit(fails || errors.length ? 1 : 0);

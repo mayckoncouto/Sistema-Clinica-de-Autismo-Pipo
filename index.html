@@ -27933,19 +27933,20 @@ function openRegistryItem(kind, item){
   var locked = !!(item && cfg.locked && cfg.locked(item));
   var canSave = !locked && (isNew || can(cfg.module, "edit"));
   var canDel = !isNew && !locked && can(cfg.module, "delete");
+  var canExtra = canSave || (locked && !!cfg.extraHtml && can(cfg.module, "edit"));   // item travado: só os campos extras (ex.: Tratamento da Sessão)
   var color = item && item.color ? item.color : "teal";
   var host = document.getElementById("modalHost");
   host.innerHTML =
     '<div class="overlay" id="ovReg"><div class="modal" style="max-width:' + (kind === "convenios" ? 620 : kind === "especialidades" || kind === "habilidades" ? 520 : 440) + 'px">' +
       '<div class="modal-head"><div><h3>' + (isNew ? (cfg.fem ? "Nova " : "Novo ") + ttl(cfg.title) : (canSave ? "Editar " : "") + ttl(cfg.title)) + '</h3>' +
-        (locked ? '<div class="modal-sub">' + esc(cfg.lockedMsg || "Serviço padrão dos atendimentos: não pode ser renomeado nem excluído.") + '</div>' : '') + '</div>' +
+        (locked ? '<div class="modal-sub">' + esc(cfg.lockedMsg || "Serviço padrão dos atendimentos: não pode ser renomeado nem excluído (só a caixa Tratamento pode ser alterada).") + '</div>' : '') + '</div>' +
         '<button class="modal-close" id="regClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         (kind === "convenios" ? '<div class="tr-sec tr-sec-top">Convênio</div>' : '') +
         regFieldsHtml(cfg, item, canSave, true) +
         '<div class="field"><label for="regName">' + esc(cfg.nameLabel || "Nome") + '</label><input id="regName" type="text" value="' + esc(item ? item.name : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
         regFieldsHtml(cfg, item, canSave, false) +
-        (cfg.extraHtml ? cfg.extraHtml(item, canSave) : '') +
+        (cfg.extraHtml ? cfg.extraHtml(item, canExtra) : '') +
         (kind === "servicos" ?
           '<div class="field"><label for="regSigla">Sigla</label><input id="regSigla" type="text" maxlength="4" value="' + esc(item ? item.sigla || "" : "") + '" placeholder="' + esc(item ? defaultSigla(item.name) : "") + '"' + (canSave ? '' : ' disabled') + '></div>' : '') +
         (kind === "especialidades" ?
@@ -27977,8 +27978,8 @@ function openRegistryItem(kind, item){
             '<div class="pat-count" style="margin-top:4px;font-weight:500">Cada especialidade coberta libera também as especialidades marcadas no cadastro dela (Cadastros → Especialidades), com o mesmo valor por sessão.</div></div>' : '') +
       '</div>' +
       '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="regDel">Excluir</button>' : '<span></span>') +
-        '<div class="spacer"></div><button class="btn ghost" id="regCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
-        (canSave ? '<button class="btn primary" id="regSave">Salvar</button>' : '') + '</div>' +
+        '<div class="spacer"></div><button class="btn ghost" id="regCancel">' + (canExtra ? "Cancelar" : "Fechar") + '</button>' +
+        (canExtra ? '<button class="btn primary" id="regSave">Salvar</button>' : '') + '</div>' +
     '</div></div>';
   var ov = document.getElementById("ovReg");
   function close(){ host.innerHTML = ""; }
@@ -28064,7 +28065,7 @@ function openRegistryItem(kind, item){
   var habSel = kind === "habilidades" ? specCheckGridWire(document.getElementById("regHabSpecs")) : null;
   var nameEl = document.getElementById("regName");
   wireRegFields(cfg);
-  var exw = cfg.extraWire ? cfg.extraWire(item, canSave) : null;
+  var exw = cfg.extraWire ? cfg.extraWire(item, canExtra) : null;
   if (canSave) (document.querySelector("#ovReg [data-regf]") && cfg.fields && cfg.fields[0].first ? document.querySelector("#ovReg [data-regf]") : nameEl).focus();
   var del = document.getElementById("regDel");
   if (del && USAGE[kind]) setupInactivate({btn: "regDel", mod: cfg.module, item: item, name: item.name, usage: USAGE[kind], close: close,
