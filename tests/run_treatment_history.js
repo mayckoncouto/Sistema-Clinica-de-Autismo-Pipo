@@ -117,14 +117,14 @@ const path = require('path');
   await page.waitForTimeout(200);
   await page.$eval('#trIni', (i) => { i.value = '2026-03-15'; i.dispatchEvent(new Event('change', {bubbles: true})); });
   await page.$eval('#trVencPor', (s) => { s.value = 'data'; s.dispatchEvent(new Event('change', {bubbles: true})); });
-  await page.fill('#trDur', '6'); await page.dispatchEvent('#trDur', 'input');
-  console.log('duration 6 months from 15/03 fills valid until 14/09?', (await page.$eval('#trVenc', (i) => i.value)) === '2026-09-14');
+  await page.$eval('#trVenc', (i) => { i.value = '2026-09-14'; i.dispatchEvent(new Event('change', {bubbles: true})); });
+  console.log('no duration field in the treatment window?', (await page.$('#trDur')) === null);
   await page.click('#trSave'); await page.waitForTimeout(300);
-  const saved = await ev(`(function(){ var t = state.treatments.filter(function(x){ return x.patientId === state.patientsRaw[5].id; })[0]; return t ? [t.duracaoMeses, t.validoAte].join("|") : ""; })()`);
-  console.log('duration and valid-until saved?', saved === '6|2026-09-14', saved);
+  const saved = await ev(`(function(){ var t = state.treatments.filter(function(x){ return x.patientId === state.patientsRaw[5].id; })[0]; return t ? [t.duracaoMeses === undefined ? "sem" : "tem", t.validoAte].join("|") : ""; })()`);
+  console.log('valid-until saved and no duration kept?', saved === 'sem|2026-09-14', saved);
   await page.click('#trHost tbody tr:has-text("' + (await ev('state.patientsRaw[5].nome')) + '")'); await page.waitForSelector('#ovTreat');
   await page.click('#trReneg'); await page.waitForTimeout(300);
-  console.log('renegotiation starts with blank duration and valid-until?', (await page.$eval('#trDur', (i) => i.value)) === '' && (await page.$eval('#trVenc', (i) => i.value)) === '');
+  console.log('renegotiation starts with blank valid-until?', (await page.$eval('#trVenc', (i) => i.value)) === '');
   await page.click('#trCancel');
 
   // Vencimento por quantidade de sessões (Finalizados + Não compareceu).
@@ -145,9 +145,9 @@ const path = require('path');
   console.log('sessions: 6 of 10 used = vencendo (4 left), 3 of 3 = esgotado?', sv.s1 === 'vencendo:4' && sv.s2 === 'vencido:0', JSON.stringify(sv));
   await ev(`openTreatmentModal(state.treatments.filter(function(x){ return x.id === "s1"; })[0])`);
   await page.waitForSelector('#ovTreat');
-  console.log('modal by sessions: total shown, date fields hidden, used count shown?', await page.isVisible('#trTotal') && !(await page.isVisible('#trDur')) && /usadas: 6/.test(await page.textContent('#trUsedInfo')));
+  console.log('modal by sessions: total shown, date fields hidden, used count shown?', await page.isVisible('#trTotal') && !(await page.isVisible('#trDateBox')) && /usadas: 6/.test(await page.textContent('#trUsedInfo')));
   await page.$eval('#trVencPor', (s) => { s.value = 'data'; s.dispatchEvent(new Event('change', {bubbles: true})); });
-  console.log('switching to Data shows duration/valid-until?', await page.isVisible('#trDur') && !(await page.isVisible('#trTotal')));
+  console.log('switching to Data shows valid-until?', await page.isVisible('#trDateBox') && !(await page.isVisible('#trTotal')));
   await page.click('#trCancel');
 
   // Etapa 5: contratado × realizado mês a mês.

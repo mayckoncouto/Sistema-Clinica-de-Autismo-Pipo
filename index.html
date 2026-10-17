@@ -9316,7 +9316,7 @@ function crmLeadTreatment(patId, convName){
   if (!cv && !nm && pcd.id){ cv = (state.convenios || []).filter(function(c){ return c.id === pcd.id; })[0] || null; }
   var rec = {id: uid("tr"), patientId: patId, inicio: today, status: "ativo", statusEm: today, obs: "", criadoEm: now, atualizadoEm: now,
     convenioId: cv ? cv.id : "", convenio: cv ? cv.name : nm, plano: pcd.plano, sessoesMes: "", specHours: [],
-    vencPor: "sem", totalSessoes: "", duracaoMeses: "", validoAte: ""};
+    vencPor: "sem", totalSessoes: "", validoAte: ""};
   trHistAdd(rec, {acao: "criado", para: "ativo"});
   var list = (state.treatments || []).concat([rec]);
   rec.tipo = trTipoFor(Object.assign({}, rec, {isNew: true}), list);
@@ -24100,8 +24100,7 @@ function openTreatmentModal(t, opts){
     tipo: isNew ? (pid ? (opts.renegotiateFrom ? "renegociado" : trTipoAuto(pid)) : "novo") : trTipoFor(t),
     status: isNew ? "ativo" : (t.status || "ativo"),
     obs: isNew ? "" : (t.obs || ""),
-    // Renegociar/novo: duração e vencimento começam em branco.
-    duracao: isNew ? "" : (t.duracaoMeses || ""),
+    // Renegociar/novo: o vencimento começa em branco.
     validoAte: isNew ? "" : (t.validoAte || ""),
     vencPor: isNew ? "sem" : (t.vencPor || "data"),
     total: isNew ? "" : (t.totalSessoes || "")
@@ -24162,7 +24161,6 @@ function openTreatmentModal(t, opts){
           '<div class="field" id="trTotalBox"><label for="trTotal">Total de sessões <span id="trUsedInfo" class="hint"></span></label><input type="number" min="1" step="1" inputmode="numeric" id="trTotal" placeholder="Ex.: 40" value="' + esc(d.total) + '"></div>' +
         '</div>' +
         '<div class="field-row" id="trDateBox">' +
-          '<div class="field"><label for="trDur">Duração (Meses)</label><input type="number" min="1" max="60" step="1" inputmode="numeric" id="trDur" placeholder="Opcional" value="' + esc(d.duracao) + '"></div>' +
           '<div class="field"><label for="trVenc">Válido até <span id="trVencChip">' + (isNew ? '' : trDueChip(t)) + '</span></label><input type="date" id="trVenc" value="' + esc(d.validoAte) + '"></div>' +
         '</div>' +
         '<div class="field-row">' +
@@ -24264,17 +24262,11 @@ function openTreatmentModal(t, opts){
       });
     });
   }
-  // Vencimento: duração (meses) + início calculam o "Válido até" (que pode ser ajustado à mão).
-  function syncVenc(){
-    var n = parseInt(document.getElementById("trDur").value, 10), ini = document.getElementById("trIni").value;
-    if (n > 0 && ini){ var v = document.getElementById("trVenc"); v.value = trAddMonths(ini, n); v.dispatchEvent(new Event("change", {bubbles: true})); }
-  }
-  document.getElementById("trDur").addEventListener("input", syncVenc);
-  // Por data: duração/válido até; por sessões: total contratado (usadas = Finalizados + Não compareceu).
+  // Por data: válido até; por sessões: total contratado (usadas = Finalizados + Não compareceu).
   function syncVencPor(){
     var vp = document.getElementById("trVencPor").value, bySess = vp === "sessoes";
     document.getElementById("trTotalBox").hidden = !bySess;
-    document.getElementById("trDateBox").hidden = vp !== "data";   // "Sem vencimento": sem duração nem válido até
+    document.getElementById("trDateBox").hidden = vp !== "data";   // "Sem vencimento": sem válido até
     var u = isNew ? 0 : trUsedCount(t);
     document.getElementById("trUsedInfo").textContent = bySess ? "(usadas: " + (u === null ? "…" : u) + ")" : "";
   }
@@ -24306,7 +24298,6 @@ function openTreatmentModal(t, opts){
     trMonthSec.refresh();
   });
   if (!isNew) trLoadPlanner().then(function(){ if (document.getElementById("ovTreat")) trMonthSec.refresh(); });
-  document.getElementById("trIni").addEventListener("change", syncVenc);
   // Com atendimentos Finalizados: não exclui e não muda a quantidade de sessões
   // (pacote e especialidades/serviços) — para isso, Renegociar ou Cancelar.
   var doneN = isNew ? 0 : trDoneCount(t);
@@ -24387,7 +24378,6 @@ function openTreatmentModal(t, opts){
     if (entP && ini < entP && !sysSaveGate(sv, "pac_entrada", "Data de Entrada", "O paciente foi cadastrado em " + trBr(entP) + ": o início do tratamento não pode ser antes dessa data.")) return;
     var fimV = document.getElementById("trFim").value;
     if (fimV && fimV < ini){ showToast("A data de término não pode ser antes do início.", true); return; }
-    var durV = parseInt(document.getElementById("trDur").value, 10);
     var vencV = document.getElementById("trVenc").value;
     if (vencV && vencV < ini){ showToast("A data de vencimento não pode ser antes do início.", true); return; }
     var r = ed.read();
@@ -24433,7 +24423,7 @@ function openTreatmentModal(t, opts){
     rec.vencPor = ["sem", "sessoes"].indexOf(document.getElementById("trVencPor").value) !== -1 ? document.getElementById("trVencPor").value : "data";
     var totV = parseInt(document.getElementById("trTotal").value, 10);
     rec.totalSessoes = rec.vencPor === "sessoes" && totV > 0 ? totV : "";
-    rec.duracaoMeses = rec.vencPor === "data" && durV > 0 ? durV : "";
+    delete rec.duracaoMeses;
     rec.validoAte = rec.vencPor === "data" ? (vencV || "") : "";
     if (st === "cancelado"){ rec.motivoCancel = motId; rec.motivoCancelNome = motName; rec.obsCancel = obsCancel; }
     else { delete rec.motivoCancel; delete rec.motivoCancelNome; delete rec.obsCancel; }
@@ -24685,7 +24675,7 @@ function slSum(list){ var t = 0; list.forEach(function(x){ t += x.valor; }); ret
 // Renegociar sem mexer em valores nem em quantidade de sessões não é venda: compara só isto.
 function slKeyQty(t, money){ return [money.valor, money.descontos, t.sessoesMes, trLinesSum(t.specHours || [])].join("|"); }
 function slKey(t, money){
-  return [money.valor, money.descontos, t.sessoesMes, trLinesSum(t.specHours || []), t.convenioId || t.convenio || "", t.vencPor || "", t.duracaoMeses || "", t.totalSessoes || "", t.validoAte || ""].join("|");
+  return [money.valor, money.descontos, t.sessoesMes, trLinesSum(t.specHours || []), t.convenioId || t.convenio || "", t.vencPor || "", t.totalSessoes || "", t.validoAte || ""].join("|");
 }
 // Parcelas: entrada (opcional, no 1º vencimento) + n iguais; os centavos fecham na última.
 function slPlanParcels(total, entrada, n, venc1, step){
@@ -24759,7 +24749,7 @@ function slSaleDialog(ctx){
     var prev = prevAll.slice().sort(function(a, b){ return String(b.data).localeCompare(String(a.data)); })[0];
     var prevSales = [], prevOpen = [];   // a venda é só a diferença: a anterior continua valendo
     var tipo = (ctx.plan && ctx.plan.tipo) || (ctx.isNew ? "nova" : "aditivo");
-    var meses = prev ? prev.meses : (rec.duracaoMeses > 0 ? rec.duracaoMeses : 1);
+    var meses = prev ? prev.meses : (rec.inicio && rec.validoAte ? Math.max(1, Math.ceil((Date.parse(rec.validoAte) - Date.parse(rec.inicio)) / 2629800000)) : 1);
     var valor = ctx.valorFinal;
     var staff = fpStaffList();
     var plans = activeOnly(state.chartAccounts, "").filter(function(x){ return x.tipo === "Receita"; }).sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
@@ -26049,7 +26039,7 @@ var HELP_TOPICS = [
   {id: "tratamentos-vencimento", group: "Cadastros", title: "Tratamento: Vencimento e Renovação", mod: "tratamentos", tab: "tratamentos",
     purpose: "Avisa quando o tratamento está perto de acabar, por data ou por quantidade de sessões.",
     steps: [
-      "Na janela, escolha <b>Vencimento por</b>: <b>Sem vencimento</b> (o padrão; não pede duração nem data), <b>Data</b> (digite a duração em meses; o \"Válido até\" é calculado e pode ser ajustado) ou <b>Quantidade de sessões</b> (digite o total contratado).",
+      "Na janela, escolha <b>Vencimento por</b>: <b>Sem vencimento</b> (o padrão; não pede data), <b>Data</b> (informe o \"Válido até\") ou <b>Quantidade de sessões</b> (digite o total contratado).",
       "Na tela de Tratamentos, os botões \"N vencem nos próximos 30 dias\", \"N vencidos\" e os de revisão da Intervenção ABA (vencendo e vencida) filtram a lista."
     ],
     rules: [
