@@ -52,7 +52,7 @@ const path = require('path');
   check('"Revisar Cadastro" button on the Pacientes screen?', await page.isVisible('#intakeRevBtn'));
   await page.click('#intakeRevBtn');
   await page.waitForSelector('#ovPat');
-  const nv = await page.evaluate(() => ({nome: document.getElementById('pNome').value, mae: (document.getElementById('pm-mae-nome') || {}).value, banner: !!document.querySelector('#ovPat .ik-banner'),
+  const nv = await page.evaluate(() => ({nome: document.getElementById('pNome').value, mae: (document.getElementById('pm-mae-nome') || {}).value, banner: !!document.querySelector('#ovPat .ik-note'),
     obs: (document.getElementById('pf-obs') || {}).value || '', cpf: (document.getElementById('pf-cpf') || {}).value}));
   check('review opens the new-patient window filled from the submission (with notice)?', nv.nome === 'Caio Link Teste' && nv.mae === 'Rita Link' && nv.banner && /Possui diagnóstico: Sim/.test(nv.obs) && /Escola Fictícia X/.test(nv.obs), nv);
   await page.click('#pSave'); await page.waitForTimeout(500);

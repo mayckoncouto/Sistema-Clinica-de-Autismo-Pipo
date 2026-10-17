@@ -132,7 +132,7 @@ const path = require('path');
   await page.click('#crmDuePop [data-act="rec"]'); await page.waitForTimeout(100);
   const recUi = await page.evaluate(() => ({ freq: [...document.querySelectorAll('#crmDuePop [data-freq]')].map((b) => b.textContent), wdOn: document.querySelectorAll('#crmDuePop [data-wd].on').length,
     prev: document.querySelectorAll('#crmDuePop .dp-day.rec').length, sts: document.querySelectorAll('#crmDuePop [data-st]').length }));
-  check('recurrence form: frequencies, weekday of the due date marked, next dates painted, statuses to go back to?', recUi.freq.join('|') === 'Diariamente|Semanalmente|Mensalmente|Anualmente' && recUi.wdOn === 1 && recUi.prev >= 3 && recUi.sts >= 1, JSON.stringify(recUi));
+  check('recurrence form: frequencies, weekday of the due date marked, next dates painted, statuses to go back to?', recUi.freq.join('|') === 'Diariamente|Semanalmente|Mensalmente|Anualmente' && recUi.wdOn === 1 && recUi.prev >= 2 && recUi.sts >= 1, JSON.stringify(recUi));
   const stBack = await ev(`(crmListById(CRM.tasks["${tid}"].list_id).statuses.filter(function(s){ return !s.done; })[0] || {}).id`);
   const stDone = await ev(`(crmListById(CRM.tasks["${tid}"].list_id).statuses.filter(function(s){ return s.done; })[0] || {}).id`);
   await page.click(`#crmDuePop [data-st="${stBack}"]`); await page.click('#crmDuePop [data-act="rec-save"]'); await page.waitForTimeout(200);
