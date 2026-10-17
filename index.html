@@ -12863,11 +12863,12 @@ function treatFieldsEditor(v, opts){
  * Filiação/Responsável financeiro nascem visíveis — só o Administrador muda esses três.
  */
 var PAT_SECTIONS = [
-  {id: "ident", label: "Identificação"}, {id: "endereco", label: "Endereço"},
-  {id: "filiacao", label: "Filiação"}, {id: "rotina", label: "Responsáveis pela Retirada"}, {id: "protetiva", label: "Medida Protetiva"},
-  {id: "contato", label: "Contato"}, {id: "financeiro", label: "Responsável Financeiro"},
-  {id: "convenio", label: "Convênio"}, {id: "bloqueio", label: "Bloqueio de Agendamento"},
-  {id: "saude", label: "Saúde"}, {id: "encaminhamento", label: "Encaminhamento"}, {id: "escola", label: "Escola"}, {id: "rotinaatual", label: "Rotina Atual"}, {id: "admin", label: "Administrativo"}
+  {id: "ident", label: "Identificação"}, {id: "contato", label: "Contato"}, {id: "endereco", label: "Endereço"},
+  {id: "filiacao", label: "Filiação"}, {id: "financeiro", label: "Responsável Financeiro"},
+  {id: "rotina", label: "Responsáveis pela Retirada"}, {id: "protetiva", label: "Medida Protetiva"},
+  {id: "convenio", label: "Convênio"}, {id: "encaminhamento", label: "Encaminhamento"},
+  {id: "saude", label: "Saúde"}, {id: "escola", label: "Escola"}, {id: "rotinaatual", label: "Rotina Atual"},
+  {id: "admin", label: "Administrativo"}, {id: "bloqueio", label: "Bloqueio de Agendamento"}
 ];
 var CID_SUGGESTIONS = [
   "F84.0 Autismo infantil",
@@ -13491,7 +13492,7 @@ function openPatientModal(p, opts){
       '</div><label class="chk-line pm-retira"><input type="checkbox" id="pm-' + role + '-retira"' + (x.retira === false ? '' : ' checked') + '> <span>Pode retirar o paciente</span><span class="pm-retira-prot" data-retira-prot="' + role + '" hidden> — medida protetiva ativa: não aparece como responsável pela retirada</span></label>' +
       '<div class="pm-note" data-note="' + role + '" hidden></div></div>';
   }
-  var secs = PAT_SECTIONS.map(function(sec){
+  function secOne(sec){
     var fs = PAT_FIELDS.filter(function(f){ return f.sec === sec.id && patFieldShown(f.key); });
     if (!fs.length) return "";
     var html = "";
@@ -13534,7 +13535,12 @@ function openPatientModal(p, opts){
       }
     }
     return '<section class="pm-sec" data-pmsec="' + sec.id + '">' + secHead(sec) + html + '</section>';
-  }).join("");
+  }
+  // Tratamento: logo depois de Convênio e Encaminhamento, antes de Saúde (só com "ver" em Pacientes – Tratamento).
+  var treatSecHtml = !patSecCan("tratamento") ? "" :
+    '<section class="pm-sec" data-pmsec="tratamento"><div class="pm-sec-head"><span class="tr-sec tr-sec-in">Tratamento</span></div>' + trBox +
+    (isNew && trCanCreate ? '<div class="pt-treat-txt">Depois de salvar, abre o cadastro do tratamento (convênio, sessões/mês, Intervenção ABA, especialidades e horários).</div>' : '') + '</section>';
+  var secs = PAT_SECTIONS.map(function(sec){ return (sec.id === "saude" ? treatSecHtml : "") + secOne(sec); }).join("");
 
   host.innerHTML =
     '<div class="overlay" id="ovPat"><div class="modal wide pm-modal">' +
@@ -13543,8 +13549,6 @@ function openPatientModal(p, opts){
         (!isNew && !opts.intake && intakePendingFor(v.id) ? '<button type="button" class="btn primary" id="pReview" data-ro-ok>Revisar Cadastro</button>' : '') +
         '<button class="modal-close" id="closePat" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' + secs +
-        '<section class="pm-sec" data-pmsec="tratamento"><div class="pm-sec-head"><span class="tr-sec tr-sec-in">Tratamento</span></div>' + trBox +
-          (isNew && trCanCreate ? '<div class="pt-treat-txt">Depois de salvar, abre o cadastro do tratamento (convênio, sessões/mês, Intervenção ABA, especialidades e horários).</div>' : '') + '</section>' +
       '</div>' +
       '<div class="modal-foot">' +
         (isNew ? '<span></span>' : '<button class="btn danger" id="pDelete">Excluir</button>') +
@@ -25932,7 +25936,7 @@ var HELP_TOPICS = [
     purpose: "Cadastro dos pacientes: identificação, endereço, filiação, quem pode retirar o paciente, contatos, responsável financeiro, convênio, escola, saúde e dados administrativos. Sessões/mês, ABA, especialidades e horário ficam no <b>Tratamento</b> do paciente.",
     steps: [
       "Cadastros → <b>Pacientes</b> → <b>+ Incluir</b>.",
-      "A janela mostra todos os grupos, um embaixo do outro: <b>Identificação</b> (nome, nome social, nascimento, sexo, CPF, RG, Cartão SUS, data de entrada), <b>Endereço</b>, <b>Filiação</b>, <b>Responsáveis pela Retirada</b>, <b>Medida Protetiva</b>, <b>Contato</b>, <b>Responsável Financeiro</b>, <b>Convênio</b>, <b>Escola</b>, <b>Saúde</b>, <b>Administrativo</b> e o resumo do <b>Tratamento</b>.",
+      "A janela mostra os grupos um embaixo do outro, nesta ordem: <b>Identificação</b> (nome, nascimento, sexo, CPF, RG, Cartão SUS, data de entrada), <b>Contato</b>, <b>Endereço</b>, <b>Filiação</b>, <b>Responsável Financeiro</b>, <b>Responsáveis pela Retirada</b>, <b>Medida Protetiva</b>, <b>Convênio</b>, <b>Encaminhamento</b>, o resumo do <b>Tratamento</b>, <b>Saúde</b>, <b>Escola</b>, <b>Rotina Atual</b>, <b>Administrativo</b> e <b>Bloqueio de Agendamento</b>. Cada grupo tem permissão própria para ver em Níveis de Permissão (Pacientes – &lt;grupo&gt;); Saúde segue Pacientes – Saúde.",
       "No <b>Endereço</b>, digite o CEP: rua, bairro, cidade e UF são preenchidos sozinhos; complete o número.",
       "Em <b>Convênio</b> ficam o convênio do paciente (lista do cadastro de Convênios; <b>+ Incluir</b> no fim da lista), o plano, o nº da carteirinha e a validade da carteirinha. Todo tratamento novo do paciente já começa com esse convênio e esse plano.",
       "Em <b>Filiação</b> ficam Mãe e Pai (nome, CPF e profissão). O botão <b>Responsável</b> ao lado do nome faz da mãe ou do pai o responsável financeiro: nome e CPF passam para o grupo Responsável financeiro e acompanham as correções enquanto o botão estiver marcado. Desmarcado, o responsável financeiro é digitado à parte.",
