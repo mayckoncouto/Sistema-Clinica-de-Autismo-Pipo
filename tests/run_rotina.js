@@ -60,7 +60,7 @@ const path = require('path');
   console.log('Planner: booking on a school morning asks first ("Rotina Atual do Paciente"); cancel keeps it empty?', t1 === 'Rotina Atual do Paciente' && /manhã de Escola \(Escola Azul\)/.test(m1) && notSaved, t1, m1);
   await ev(`(function(){ var l = state.patients.filter(function(p){ return p.nome === "Paciente Um"; })[0]; l.rotinaAtual.ter.t = {tipo: "pipo", txt: ""}; return true; })()`);
   const pipoAsk = await ev(`routineConflicts({"ter-2": {"${afternoon}|r1|r1-t1": {patient: "Paciente Um", service: "sessao"}}}).length`);
-  console.log("Planner: \"Terapia (Pipo)\" does not warn?", pipoAsk === 0, pipoAsk);
+  console.log("Planner: \"Clínica Pipo\" does not warn?", pipoAsk === 0, pipoAsk);
   const asked = await ev(`(function(){ var r = routineConflicts({"seg-2": {"${afternoon}|r1|r1-t1": {patient: "Paciente Um", service: "sessao"}}}); return r.length; })()`);
   console.log('Planner: afternoon "Em casa" does not warn?', asked === 0, asked);
   // Sistema: regra desligada não pergunta.
