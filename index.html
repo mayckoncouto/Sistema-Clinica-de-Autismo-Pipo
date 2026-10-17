@@ -2473,7 +2473,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .sf-pay .field-row .rm{margin-left:auto}
   :is(#reg-servicos-host,#reg-especialidades-host) .pat-table :is(col,th,td):nth-child(n+4){display:none}
   #reg-convenios-host .pat-table :is(col,th,td):nth-child(n+3){display:none}
-  :is(#reg-cbo-host,#reg-atividades-host,#reg-conselhos-host,#reg-feriados-host,#reg-fornecedores-host,#reg-catfornecedor-host,#reg-contas-host,#reg-unidades-host) .pat-table :is(col,th,td):nth-child(n+3){display:none}
+  :is(#reg-cbo-host,#reg-atividades-host,#reg-tiposanam-host,#reg-conselhos-host,#reg-feriados-host,#reg-fornecedores-host,#reg-catfornecedor-host,#reg-contas-host,#reg-unidades-host) .pat-table :is(col,th,td):nth-child(n+3){display:none}
   #reg-contratos-host .pat-table :is(col,th,td):nth-child(n+3){display:none}
   #reg-planocontas-host .pat-table :is(col,th,td):is(:nth-child(2),:nth-child(n+4)){display:none}
   #reg-medicos-host .pat-table :is(col,th,td):is(:nth-child(3),:nth-child(4)),#reg-escolas-host .pat-table :is(col,th,td):nth-child(3),#reg-diagnosticos-host .pat-table :is(col,th,td):nth-child(n+3),#reg-status-host .pat-table :is(col,th,td):nth-child(n+2){display:none}
@@ -2907,6 +2907,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <button data-tab="objetivos" hidden>Objetivos</button>
       <button data-tab="escalas" hidden>Escalas</button>
       <button data-tab="atividades" hidden>Atividades</button>
+      <button data-tab="tiposanam" hidden>Tipos de Anamnese</button>
       <button data-tab="habilidades" hidden>Habilidades</button>
       <div class="cad-wrap crm-wrap"><button type="button" class="cad-btn" id="crmBtn" aria-haspopup="menu" aria-expanded="false">CRM <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><span class="crm-badge" id="crmBadge" hidden title="Tarefas suas vencidas + menções não lidas"></span><div class="cad-menu" id="crmMenu" role="menu" hidden></div></div>
       <button data-tab="crm" hidden>CRM</button>
@@ -3738,6 +3739,18 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <button class="btn primary" id="reg-atividades-add">+ Incluir</button>
     </div>
     <div id="reg-atividades-host" class="reg-host"></div>
+  </section>
+  <section id="tab-tiposanam" class="panel reg-panel" hidden>
+    <div class="pat-toolbar">
+      <div class="search-wrap" style="max-width:320px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="reg-tiposanam-search" type="text" placeholder="Buscar tipo de anamnese…">
+      </div>
+      <span class="pat-count" id="reg-tiposanam-count"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="reg-tiposanam-add">+ Incluir</button>
+    </div>
+    <div id="reg-tiposanam-host" class="reg-host"></div>
   </section>
   <section id="tab-escalas" class="panel reg-panel" hidden>
     <div class="pat-toolbar">
@@ -5127,6 +5140,7 @@ var state = {
   chartAccounts: [],     // plano de contas [{id,name(subcategoria),categoria,tipo,convenioId}] (config/chart_accounts)
   suppliers: [],         // fornecedores [{id,name,fantasia,documento,categoria,contato,telefone,email,endereco,pix,obs}] (config/suppliers)
   scales: [],            // escalas do plano terapêutico [{id,name,levels:[{id,name,color}]}] (config/scales)
+  anamTypes: [],         // modelos de anamnese (config/anamnesis_types)
   activities: [],        // banco de atividades [{id,name,descricao,materiais,duracao,faixas,specIds,goalIds}] (config/activities)
   goalBank: [],          // banco de objetivos do plano terapêutico [{id,name,areaId,criterio,scaleId,specId}] (config/goal_bank)
   skillAreas: [],        // habilidades do plano terapêutico [{id,name}] (config/skill_areas)
@@ -5167,7 +5181,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {tipos_tratamento:"Tipos de Tratamento", comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", visao_geral:"Visão Geral", gerenciar_status:"Gerenciar Status", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
+var PERM_MODULE_LABELS = {tipos_tratamento:"Tipos de Tratamento", comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", visao_geral:"Visão Geral", gerenciar_status:"Gerenciar Status", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", tipos_anamnese:"Tipos de Anamnese", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 // Auto Planner aberto? (grade própria: ver "Auto Planner: grade própria" perto de subscribeSchedule)
 var PLA = {on: false, hist: {undo: [], redo: []}};
@@ -5270,7 +5284,7 @@ function applyPermissionsUI(){
   if (!window.pipoAuth) return;
   // Endereço #autoplanner sem permissão: volta ao Planner de verdade.
   if (PLA.on && !window.pipoAuth.can("autoplanner", "view")){ plAutoSet(false); if (db && state.tab === "planner") subscribeSchedule(); }
-  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", agendamentos:"agenda", agendaplanner:"agenda", autoplanner:"autoplanner", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", tipostrat:"tipos_tratamento", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", atividades:"atividades", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", motivosbloq:"motivos_bloqueio", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", unidades:"unidades", contratos:"contratos", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", emptomados:"financeiro", empconcedidos:"financeiro", conciliacao:"financeiro", vendas:"vendas", pagar:"financeiro", receber:"financeiro", automacoes:"crmautomacoes"};
+  var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", agendamentos:"agenda", agendaplanner:"agenda", autoplanner:"autoplanner", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", tipostrat:"tipos_tratamento", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", atividades:"atividades", tiposanam:"tipos_anamnese", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", motivosbloq:"motivos_bloqueio", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", unidades:"unidades", contratos:"contratos", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", emptomados:"financeiro", empconcedidos:"financeiro", conciliacao:"financeiro", vendas:"vendas", pagar:"financeiro", receber:"financeiro", automacoes:"crmautomacoes"};
   // Salas e Grupos de Suporte dividem a mesma tela.
   function tabCan(k){ return k === "salas" ? (can("salas", "view") || can("grupos", "view")) : (k === "crm" || k === "automacoes") ? crmMainCan() : k === "caixa" ? cxCan() : can(tabModule[k], "view"); }
   var activeHidden = false;
@@ -5416,11 +5430,11 @@ function cadTitleText(k){
     medicos: "Médicos", escolas: "Escolas", diagnosticos: "Diagnósticos", origens: "Origens", motivosbloq: "Motivos de Bloqueio", tipostrat: "Tipos de Tratamento", colaboradores: "Colaboradores",
     tiposcolab: "Tipos de Colaborador", profissionais: "Profissionais", especialidades: "Especialidades", servicos: "Serviços",
     cbo: "CBO", conselhos: "Conselhos", fornecedores: "Fornecedores", catfornecedor: "Categorias de Fornecedor", unidades: "Unidades", contratos: "Contratos", contas: "Contas Bancárias", planocontas: "Plano de Contas", lancamentos: "Lançamentos", pagar: "Contas a Pagar", receber: "Contas a Receber", emptomados: "Empréstimos Tomados", empconcedidos: "Empréstimos Concedidos", conciliacao: "Conciliação", vendas: "Vendas", automacoes: "Automações", caixa: "Caixa de Entrada", demonstrativos: "Demonstrativos", agendamentos: "Agendamentos", feriados: "Feriados e Recessos", status: "Status", objetivos: "Objetivos",
-    atividades: "Atividades", escalas: "Escalas", habilidades: "Habilidades"})[k] || "";
+    atividades: "Atividades", tiposanam: "Tipos de Anamnese", escalas: "Escalas", habilidades: "Habilidades"})[k] || "";
 }
 function cadTitlesInit(){
   ["pacientes", "tratamentos", "tipostrat", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab",
-   "profissionais", "especialidades", "servicos", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contratos", "contas", "planocontas", "lancamentos", "pagar", "receber", "emptomados", "empconcedidos", "conciliacao", "vendas", "automacoes", "caixa", "demonstrativos", "agendamentos", "salas", "feriados", "status", "objetivos", "atividades", "escalas", "habilidades"].forEach(function(k){
+   "profissionais", "especialidades", "servicos", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contratos", "contas", "planocontas", "lancamentos", "pagar", "receber", "emptomados", "empconcedidos", "conciliacao", "vendas", "automacoes", "caixa", "demonstrativos", "agendamentos", "salas", "feriados", "status", "objetivos", "atividades", "tiposanam", "escalas", "habilidades"].forEach(function(k){
     var sec = document.getElementById("tab-" + k), tb = sec && sec.querySelector(".pat-toolbar");
     if (!tb || tb.querySelector(".cad-title")) return;
     tb.insertAdjacentHTML("afterbegin", '<h2 class="cad-title" data-cad-title="' + k + '">' + esc(cadTitleText(k)) + '</h2>');
@@ -5631,6 +5645,7 @@ function useTxt(n, one, many){ return n ? n + " " + (n === 1 ? one : many) : nul
 var USAGE = {
   escalas: function(sc){ return planUseCount("scaleId", sc.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos"), useTxt(goalBankUseCount("scaleId", sc.id), "objetivo no Banco de objetivos", "objetivos no Banco de objetivos")].filter(Boolean); }); },
   objetivos: function(g){ return planUseCount("goalId", g.id).then(function(n){ var nAct = activitiesList().filter(function(a){ return (a.goalIds || []).indexOf(g.id) !== -1; }).length; return [n ? n + (n === 1 ? " objetivo em plano terapêutico" : " objetivos em planos terapêuticos") : "", nAct ? nAct + (nAct === 1 ? " atividade" : " atividades") : ""].filter(Boolean); }); },
+  tiposanam: function(){ return Promise.resolve([]); },
   atividades: function(a){ return actUseCount(a.id).then(function(n){ return [useTxt(n, "evolução com esta atividade", "evoluções com esta atividade")].filter(Boolean); }); },
   habilidades: function(a){ return planUseCount("areaId", a.id).then(function(n){ return [useTxt(n, "objetivo de plano terapêutico", "objetivos de planos terapêuticos"), useTxt(goalBankUseCount("areaId", a.id), "objetivo no Banco de objetivos", "objetivos no Banco de objetivos")].filter(Boolean); }); },
   tiposcolab: function(t){ return Promise.resolve([useTxt(staffTypeUseCount(t.id), "pessoa", "pessoas")].filter(Boolean)); },
@@ -5842,7 +5857,7 @@ function confirmDialog(opts){
  * Vale para as janelas listadas em GUARD_IDS. Campo mudado pela pessoa (evento de verdade) marca a janela;
  * ✕, Cancelar/Fechar, clique fora e Esc perguntam: Salvar | Sair sem Salvar | Continuar Editando.
  * "Salvar" aciona o botão Salvar da própria janela (se ela recusar, continua aberta). */
-var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf","ovRoom","ovScale","ovGoal","ovAct","ovClinic","ovFl","ovFp","ovLn","ovCrm","ovCrmL","ovPlan","ovPr","ovTLine","ovEncLine","ovQuick","ovBook","ovAgd","ovServ","ovSpec","ovStatus","ovUser","ovRole"];
+var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf","ovRoom","ovScale","ovGoal","ovAct","ovAnTipo","ovClinic","ovFl","ovFp","ovLn","ovCrm","ovCrmL","ovPlan","ovPr","ovTLine","ovEncLine","ovQuick","ovBook","ovAgd","ovServ","ovSpec","ovStatus","ovUser","ovRole"];
 (function(){
   var asking = false;
   function guardOv(el){
@@ -6345,6 +6360,7 @@ var SIMPLE_LISTS = {
   habilidades: {path: "config/skill_areas", key: "skillAreas", module: "habilidades", label: "habilidades"},
   objetivos: {path: "config/goal_bank", key: "goalBank", module: "objetivos", label: "banco de objetivos"},
   atividades: {path: "config/activities", key: "activities", module: "atividades", label: "atividades"},
+  tiposanam: {path: "config/anamnesis_types", key: "anamTypes", module: "tipos_anamnese", label: "tipos de anamnese"},
   visoesdre: {path: "config/dre_views", key: "dreViews", module: "financeiro", label: "visões do DRE"}
 };
 function subscribeSimpleLists(){
@@ -25950,7 +25966,7 @@ function slContratoDialog(sale){
   addInactiveToggle("tab-pacientes", "pacientes", function(){ renderPatientsTab(); });
   addInactiveToggle("tab-profissionais", "profissionais", function(){ renderProfissionaisTab(); });
   addInactiveToggle("tab-salas", "salas", function(){ renderSalasTab(); });
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "tipostrat", "cbo", "conselhos", "objetivos", "atividades", "escalas", "habilidades"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "tipostrat", "cbo", "conselhos", "objetivos", "atividades", "tiposanam", "escalas", "habilidades"].forEach(function(k){
     addInactiveToggle("tab-" + k, k, function(){ renderRegistryTab(k); });
   });
 })();
@@ -26429,6 +26445,14 @@ var HELP_TOPICS = [
       "A lista mostra quantos objetivos cada atividade trabalha; a busca encontra pelo nome, descrição, materiais, objetivo ou especialidade."],
     rules: ["Não pode haver duas atividades com o mesmo nome.", "Objetivo que tem atividades ligadas não é excluído: é <b>Inativado</b>.", "Atividade marcada como realizada em alguma evolução <b>não pode ser alterada nem excluída</b>: a janela abre só para leitura e o botão vira <b>Inativar</b> (a atividade some das sugestões novas e o histórico continua). A importação de planilha também não altera essas atividades."],
     who: "Permissão <b>Atividades</b>."},
+  {id: "tipos-anamnese", group: "Prontuário", title: "Tipos de Anamnese", mod: "tipos_anamnese", tab: "tiposanam",
+    purpose: "Cria os modelos de formulário usados nas anamneses: você monta as perguntas uma vez e depois preenche o modelo para cada paciente.",
+    steps: ["Prontuário ▾ → <b>Tipos de Anamnese</b> → <b>+ Incluir</b>: nome, descrição e <b>Validade (Meses)</b> (opcional: tempo até a anamnese precisar ser refeita).",
+      "Em <b>Perguntas</b>, escolha <b>+ Adicionar Pergunta…</b> e o tipo: Texto Curto, Texto Longo, Número, Data, Hora, Escolha Única, Múltipla Escolha, Sim ou Não, Escala, Arquivo ou Assinatura. Para organizar, use Título de Seção, Texto Explicativo, Separador e Nova Página.",
+      "Cada pergunta tem os botões ▲ ▼ (mudar a ordem), <b>Duplicar</b> e ✕ (remover), a caixa <b>Obrigatória</b> e o botão <b>Opções</b>, que abre o texto de apoio, as opções (uma por linha), os valores da escala, <b>Preencher com o Cadastro do Paciente</b> e <b>Mostrar Só Se</b> (a pergunta só aparece quando uma pergunta anterior tem a resposta escolhida).",
+      "<b>Prévia</b> mostra como o formulário aparece para quem preenche. <b>Duplicar Modelo</b> cria uma cópia para você ajustar."],
+    rules: ["Não pode haver dois tipos com o mesmo nome.", "Todo tipo precisa de pelo menos uma pergunta; perguntas de escolha precisam de pelo menos 2 opções.", "A condição só pode olhar para uma pergunta que vem antes.", "Mudar o modelo não altera anamneses já preenchidas."],
+    who: "Permissão <b>Tipos de Anamnese</b>."},
   {id: "escalas", group: "Prontuário", title: "Escalas", mod: "escalas", tab: "escalas",
     purpose: "Escalas usadas na Situação dos objetivos do Plano terapêutico (ex.: Likert de 0 a 5, ABA).",
     steps: ["Prontuário ▾ → <b>Escalas</b> → <b>+ Incluir</b>: nome e os níveis, do primeiro ao final.", "Cada nível tem nome e cor (clique no círculo para escolher). Use ▲▼ para mudar a ordem e <b>+ nível</b> para acrescentar.", "<b>Outras Opções ▾</b>: <b>Exportar Planilha</b> e <b>Importar Planilha</b> (uma linha por nível; veja o tópico Planilhas)."],
@@ -27020,7 +27044,7 @@ var HELP = {topic: "inicio", search: ""};
 var HELP_TAB_TOPIC = {crm: "crm", inicio: "inicio", planner: "planner", visaogeral: "visaogeral", agendamentos: "agendamentos", agendaplanner: "agenda-planner", resumo: "resumo", disponibilidade: "disponibilidade", agenda: "agenda", prontuario: "prontuario", relatorios: "relatorios",
   pacientes: "pacientes", tratamentos: "tratamentos", profissionais: "colaboradores", convenios: "convenios", servicos: "servicos",
   caixa: "crm-caixa", vendas: "lista-vendas", especialidades: "especialidades", motivos: "motivos", status: "agenda-status", medicos: "medicos", escolas: "escolas", diagnosticos: "diagnosticos", origens: "origens", motivosbloq: "motivosbloq", tipostrat: "tipostrat", cbo: "cbo", conselhos: "conselhos", fornecedores: "fornecedores", catfornecedor: "fornecedores", unidades: "unidades", contratos: "contratos", contas: "contas-bancarias", planocontas: "plano-de-contas", lancamentos: "lancamentos", pagar: "contas-pagar-receber", receber: "contas-pagar-receber", emptomados: "emprestimos", empconcedidos: "emprestimos", conciliacao: "conciliacao", automacoes: "crm-automacoes", demonstrativos: "demonstrativos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
-  planos: "plano-terapeutico", objetivos: "objetivos", atividades: "atividades", escalas: "escalas", habilidades: "habilidades"};
+  planos: "plano-terapeutico", objetivos: "objetivos", atividades: "atividades", tiposanam: "tipos-anamnese", escalas: "escalas", habilidades: "habilidades"};
 function helpCan(t){
   if (!t.mod) return true;
   if (!window.pipoAuth) return true;
@@ -27586,6 +27610,17 @@ var REG_CFG = {
     row: function(a){ var n = actGoalIds(a).length, sp = Array.isArray(a.specIds) ? a.specIds : [];
       return ['<b>' + esc(a.name) + '</b>', n, esc(ageBandText(a.faixas)), esc(sp.length ? planSpecNames(sp) : "Todas"), a.duracao ? esc(actDurText(a)) : '<span class="pt-muted">—</span>']; },
     vals: function(a){ var sp = Array.isArray(a.specIds) ? a.specIds : []; return [a.name, actGoalIds(a).length, ageBandText(a.faixas), planSpecNames(sp), a.duracao || 0]; }
+  },
+  tiposanam: {
+    title: "tipo de anamnese", plural: "tipos de anamnese", module: "tipos_anamnese", newLabel: "+ Incluir",
+    list: function(){ return anamTypesList(); },
+    write: function(l){ return writeSimpleList("tiposanam", l); },
+    open: function(item){ openAnamTypeModal(item); },
+    search: function(t){ return [t.name, t.descricao].join(" "); },
+    cols: ["Tipo de Anamnese", "Perguntas", "Validade", "Descrição"],
+    widths: [300, 110, 120, 360],
+    row: function(t){ return ['<b>' + esc(t.name) + '</b>', anamQCount(t), t.validadeMeses ? esc(t.validadeMeses + (+t.validadeMeses === 1 ? " mês" : " meses")) : '<span class="pt-muted">—</span>', esc(t.descricao || "—")]; },
+    vals: function(t){ return [t.name, anamQCount(t), +t.validadeMeses || 0, t.descricao || ""]; }
   },
   escalas: {
     title: "escala", plural: "escalas", module: "escalas", newLabel: "+ Incluir", fem: true,
@@ -28334,9 +28369,10 @@ var PR_ITEMS = [
   {sep: true, key: "habilidades", label: "Habilidades", tab: "habilidades", ok: function(){ return can("habilidades", "view"); }},
   {key: "escalas", label: "Escalas", tab: "escalas", ok: function(){ return can("escalas", "view"); }},
   {key: "objetivos", label: "Objetivos", tab: "objetivos", ok: function(){ return can("objetivos", "view"); }},
-  {key: "atividades", label: "Atividades", tab: "atividades", ok: function(){ return can("atividades", "view"); }}
+  {key: "atividades", label: "Atividades", tab: "atividades", ok: function(){ return can("atividades", "view"); }},
+  {sep: true, key: "tiposanam", label: "Tipos de Anamnese", tab: "tiposanam", ok: function(){ return can("tipos_anamnese", "view"); }}
 ];
-var PR_TABS = ["prontuario", "planos", "habilidades", "escalas", "objetivos", "atividades"];
+var PR_TABS = ["prontuario", "planos", "habilidades", "escalas", "objetivos", "atividades", "tiposanam"];
 // Financeiro ▾: lançamentos (e, nas próximas fases, fluxo de caixa e DRE).
 var FIN_ITEMS = [
   {key: "lancamentos", label: "Lançamentos", tab: "lancamentos", ok: function(){ return can("financeiro", "view"); }},
@@ -28609,7 +28645,7 @@ function wireMobileNav(){
   setTimeout(openNavFromHash, 0);
   wireMobileNav();
   wirePlansTab();
-  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "tipostrat", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contratos", "contas", "planocontas", "feriados", "tiposcolab", "objetivos", "atividades", "escalas", "habilidades", "status"].forEach(function(k){
+  ["convenios", "servicos", "especialidades", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "tipostrat", "cbo", "conselhos", "fornecedores", "catfornecedor", "unidades", "contratos", "contas", "planocontas", "feriados", "tiposcolab", "objetivos", "atividades", "tiposanam", "escalas", "habilidades", "status"].forEach(function(k){
     var s = document.getElementById("reg-" + k + "-search");
     if (s) s.addEventListener("input", function(){ renderRegistryTab(k); });
     var a = document.getElementById("reg-" + k + "-add");
@@ -30912,6 +30948,373 @@ function openActivityModal(item, opts){
       if (ok) save(activitiesList().filter(function(a){ return a.id !== item.id; }));
     });
   });
+}
+
+/* ---- Anamnese: Tipos de Anamnese (Prontuário ▾ → Tipos de Anamnese; config/anamnesis_types) ----
+ * Modelo {id, name, descricao, validadeMeses (vazio = sem aviso de reavaliação), versao, inativo,
+ *         perguntas: [{id, tipo, titulo, ajuda, obrigatoria, opcoes:[{id,label}], min, max, rotMin, rotMax, campo, cond:{q, op, v}}]}.
+ * tipo = ANAM_KINDS[].k. cond = "mostrar só se": q (pergunta anterior), op igual|diferente|preenchido|vazio, v (id da opção, "sim"/"nao" ou texto).
+ * O renderizador (anamFormHtml / anamWire / anamRead) é o mesmo da prévia e do preenchimento da anamnese de cada paciente.
+ */
+var ANAM_KINDS = [
+  {k: "texto", label: "Texto Curto", q: true},
+  {k: "textolongo", label: "Texto Longo", q: true},
+  {k: "numero", label: "Número", q: true},
+  {k: "data", label: "Data", q: true},
+  {k: "hora", label: "Hora", q: true},
+  {k: "escolha", label: "Escolha Única", q: true, opts: true},
+  {k: "multipla", label: "Múltipla Escolha", q: true, opts: true},
+  {k: "simnao", label: "Sim ou Não", q: true},
+  {k: "escala", label: "Escala", q: true},
+  {k: "arquivo", label: "Arquivo", q: true},
+  {k: "assinatura", label: "Assinatura", q: true},
+  {k: "secao", label: "Título de Seção"},
+  {k: "bloco", label: "Texto Explicativo"},
+  {k: "separador", label: "Separador"},
+  {k: "pagina", label: "Nova Página"}
+];
+// Dados do cadastro do paciente que podem vir preenchidos numa pergunta (a leitura do cadastro entra com o preenchimento da anamnese).
+var ANAM_PREFILL = [
+  {k: "nome", label: "Nome do Paciente"}, {k: "nascimento", label: "Data de Nascimento"}, {k: "idade", label: "Idade"},
+  {k: "sexo", label: "Sexo"}, {k: "telefone", label: "Telefone"}, {k: "email", label: "E-mail"},
+  {k: "mae", label: "Nome da Mãe"}, {k: "pai", label: "Nome do Pai"}, {k: "escola", label: "Escola"},
+  {k: "diagnostico", label: "Diagnóstico"}, {k: "suporte", label: "Nível de Suporte"}, {k: "comunicacao", label: "Comunicação"},
+  {k: "alergias", label: "Alergias"}, {k: "medicacoes", label: "Medicações em Uso"}, {k: "restricoes", label: "Restrições Alimentares"}
+];
+function anamKind(k){ return ANAM_KINDS.filter(function(x){ return x.k === k; })[0] || null; }
+function anamIsQ(q){ var k = anamKind(q && q.tipo); return !!(k && k.q); }
+function anamTypesList(){ return (state.anamTypes || []).slice(); }
+function anamTypeById(id){ return id ? anamTypesList().filter(function(t){ return t.id === id; })[0] || null : null; }
+function anamQCount(t){ return (t.perguntas || []).filter(anamIsQ).length; }
+function anamCondEmpty(v){ return v == null || v === "" || (Array.isArray(v) && !v.length); }
+// A pergunta aparece? (a de origem também precisa estar visível)
+function anamVisible(q, ans, byId, depth){
+  var c = q && q.cond; if (!c || !c.q) return true;
+  var src = byId[c.q]; if (!src || (depth || 0) > 20) return true;
+  if (!anamVisible(src, ans, byId, (depth || 0) + 1)) return false;
+  var v = ans[c.q], eq = Array.isArray(v) ? v.indexOf(c.v) !== -1 : String(v == null ? "" : v) === String(c.v == null ? "" : c.v);
+  if (c.op === "diferente") return !eq;
+  if (c.op === "preenchido") return !anamCondEmpty(v);
+  if (c.op === "vazio") return anamCondEmpty(v);
+  return eq;
+}
+function anamById(qs){ var m = {}; (qs || []).forEach(function(q){ m[q.id] = q; }); return m; }
+function anamEsc(s){ return esc(s == null ? "" : s); }
+// Formulário (prévia e preenchimento). opts: {readonly, preview}. answers: {idPergunta: valor}.
+function anamFormHtml(qs, ans, opts){
+  opts = opts || {}; ans = ans || {};
+  var dis = opts.readonly ? " disabled" : "", page = 1;
+  return (qs || []).map(function(q){
+    var id = "anq-" + q.id, v = ans[q.id], lab = anamEsc(q.titulo) + (q.obrigatoria && anamIsQ(q) ? ' <span class="req">*</span>' : "");
+    var hint = q.ajuda ? '<div class="pat-count" style="margin:2px 0 6px;font-weight:500">' + anamEsc(q.ajuda) + '</div>' : "";
+    var head = '<div class="field an-qf" data-qid="' + anamEsc(q.id) + '">';
+    switch (q.tipo){
+      case "secao": return '<div class="tr-sec an-qf" data-qid="' + anamEsc(q.id) + '">' + anamEsc(q.titulo || "Seção") + '</div>';
+      case "bloco": return head + '<div class="pat-count" style="white-space:pre-wrap;font-weight:500">' + anamEsc(q.titulo) + '</div></div>';
+      case "separador": return '<hr class="an-qf" data-qid="' + anamEsc(q.id) + '" style="border:0;border-top:1px solid var(--line);margin:14px 0">';
+      case "pagina": page++; return '<div class="pat-count an-qf an-page" data-qid="' + anamEsc(q.id) + '" style="text-align:center;border-top:1px dashed var(--line);padding-top:8px;margin:14px 0">— Página ' + page + ' —</div>';
+      case "texto": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<input type="text" id="' + id + '" value="' + anamEsc(v) + '"' + dis + '></div>';
+      case "textolongo": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<textarea id="' + id + '" rows="3"' + dis + '>' + anamEsc(v) + '</textarea></div>';
+      case "numero": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<input type="text" inputmode="decimal" id="' + id + '" value="' + anamEsc(v) + '"' + dis + '></div>';
+      case "data": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<input type="date" id="' + id + '" value="' + anamEsc(v) + '"' + dis + '></div>';
+      case "hora": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<input type="time" id="' + id + '" value="' + anamEsc(v) + '"' + dis + '></div>';
+      case "escolha": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<select id="' + id + '"' + dis + '><option value="">Escolha…</option>' +
+        (q.opcoes || []).map(function(o){ return '<option value="' + anamEsc(o.id) + '"' + (v === o.id ? " selected" : "") + '>' + anamEsc(o.label) + '</option>'; }).join("") + '</select></div>';
+      case "multipla": return head + '<label>' + lab + '</label>' + hint + '<div class="lib-grid" style="grid-template-columns:1fr" role="group" data-multi="' + anamEsc(q.id) + '">' +
+        (q.opcoes || []).map(function(o){ var on = Array.isArray(v) && v.indexOf(o.id) !== -1;
+          return '<label class="lib-opt' + (on ? " on" : "") + '"><input type="checkbox" value="' + anamEsc(o.id) + '"' + (on ? " checked" : "") + dis + '><span>' + anamEsc(o.label) + '</span></label>'; }).join("") + '</div></div>';
+      case "simnao": return head + '<label>' + lab + '</label>' + hint + '<div class="an-radios" data-radio="' + anamEsc(q.id) + '">' +
+        [["sim", "Sim"], ["nao", "Não"]].map(function(o){ return '<label class="kind-opt' + (v === o[0] ? " on" : "") + '"><input type="radio" name="' + id + '" value="' + o[0] + '"' + (v === o[0] ? " checked" : "") + dis + '>' + o[1] + '</label>'; }).join(" ") + '</div></div>';
+      case "escala": {
+        var mn = q.min == null ? 1 : +q.min, mx = q.max == null ? 5 : +q.max, nums = [];
+        for (var i = mn; i <= mx && nums.length < 11; i++) nums.push(i);
+        return head + '<label>' + lab + '</label>' + hint + '<div class="an-radios" data-radio="' + anamEsc(q.id) + '">' +
+          nums.map(function(n){ return '<label class="kind-opt' + (String(v) === String(n) ? " on" : "") + '"><input type="radio" name="' + id + '" value="' + n + '"' + (String(v) === String(n) ? " checked" : "") + dis + '>' + n + '</label>'; }).join(" ") + '</div>' +
+          ((q.rotMin || q.rotMax) ? '<div class="pat-count" style="margin-top:4px;font-weight:500">' + anamEsc(mn + (q.rotMin ? " = " + q.rotMin : "")) + ' · ' + anamEsc(mx + (q.rotMax ? " = " + q.rotMax : "")) + '</div>' : "") + '</div>';
+      }
+      case "arquivo": return head + '<label>' + lab + '</label>' + hint + (opts.preview
+        ? '<div class="pat-count" style="font-weight:500">Aqui a pessoa envia um ou mais arquivos (foto, laudo, PDF).</div>'
+        : '<input type="file" multiple data-file="' + anamEsc(q.id) + '"' + dis + '>') + '</div>';
+      case "assinatura": return head + '<label>' + lab + '</label>' + hint +
+        '<canvas class="an-sign" data-sign="' + anamEsc(q.id) + '" width="520" height="140" style="width:100%;max-width:520px;height:140px;border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:none;display:block"></canvas>' +
+        (opts.readonly ? "" : '<button type="button" class="btn ghost" data-sign-clear="' + anamEsc(q.id) + '" style="margin-top:6px">Limpar Assinatura</button>') + '</div>';
+    }
+    return "";
+  }).join("");
+}
+// Liga o formulário: mostra/esconde perguntas condicionais, destaca opções marcadas e desenha a assinatura.
+function anamWire(root, qs, ans, opts){
+  opts = opts || {};
+  var byId = anamById(qs);
+  function refresh(){
+    var cur = anamRead(root, qs, true);
+    (qs || []).forEach(function(q){
+      var el = root.querySelector('[data-qid="' + q.id + '"]'); if (!el) return;
+      el.hidden = !anamVisible(q, cur, byId);
+    });
+  }
+  root.addEventListener("change", function(e){
+    var t = e.target;
+    if (t.type === "radio"){ var wrap = t.closest(".an-radios"); if (wrap) Array.prototype.forEach.call(wrap.querySelectorAll(".kind-opt"), function(l){ var i = l.querySelector("input"); l.classList.toggle("on", !!(i && i.checked)); }); }
+    if (t.type === "checkbox"){ var lo = t.closest(".lib-opt"); if (lo) lo.classList.toggle("on", t.checked); }
+    refresh();
+  });
+  root.addEventListener("input", refresh);
+  Array.prototype.forEach.call(root.querySelectorAll("canvas[data-sign]"), function(cv){
+    var cx = cv.getContext("2d"), drawing = false, id = cv.getAttribute("data-sign");
+    cx.lineWidth = 2.2; cx.lineCap = "round"; cx.strokeStyle = "#111";
+    var saved = ans && ans[id];
+    if (saved){ var im = new Image(); im.onload = function(){ cx.drawImage(im, 0, 0, cv.width, cv.height); cv.dataset.has = "1"; }; im.src = saved; }
+    function pos(e){ var r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; }
+    if (!opts.readonly){
+      cv.addEventListener("pointerdown", function(e){ drawing = true; var p = pos(e); cx.beginPath(); cx.moveTo(p[0], p[1]); cv.setPointerCapture && cv.setPointerCapture(e.pointerId); });
+      cv.addEventListener("pointermove", function(e){ if (!drawing) return; var p = pos(e); cx.lineTo(p[0], p[1]); cx.stroke(); cv.dataset.has = "1"; });
+      cv.addEventListener("pointerup", function(){ drawing = false; refresh(); });
+      cv.addEventListener("pointercancel", function(){ drawing = false; });
+    }
+  });
+  root.addEventListener("click", function(e){
+    var b = e.target.closest("[data-sign-clear]"); if (!b) return;
+    var cv = root.querySelector('canvas[data-sign="' + b.getAttribute("data-sign-clear") + '"]');
+    if (cv){ cv.getContext("2d").clearRect(0, 0, cv.width, cv.height); delete cv.dataset.has; refresh(); }
+  });
+  refresh();
+  return refresh;
+}
+// Lê as respostas. keepHidden = não descarta as perguntas escondidas (uso interno do refresh).
+function anamRead(root, qs, keepHidden){
+  var out = {};
+  (qs || []).forEach(function(q){
+    if (!anamIsQ(q)) return;
+    var el = root.querySelector('[data-qid="' + q.id + '"]'); if (!el) return;
+    var v;
+    if (q.tipo === "multipla") v = Array.prototype.map.call(el.querySelectorAll("input:checked"), function(i){ return i.value; });
+    else if (q.tipo === "simnao" || q.tipo === "escala"){ var r = el.querySelector("input:checked"); v = r ? r.value : ""; }
+    else if (q.tipo === "assinatura"){ var cv = el.querySelector("canvas"); v = cv && cv.dataset.has ? cv.toDataURL("image/png") : ""; }
+    else if (q.tipo === "arquivo") return;
+    else { var f = el.querySelector("input,textarea,select"); v = f ? f.value : ""; }
+    out[q.id] = v;
+  });
+  if (!keepHidden){
+    var byId = anamById(qs);
+    Object.keys(out).forEach(function(id){ if (!anamVisible(byId[id], out, byId)) delete out[id]; });
+  }
+  return out;
+}
+// Perguntas obrigatórias visíveis sem resposta → títulos.
+function anamMissing(qs, ans){
+  var byId = anamById(qs);
+  return (qs || []).filter(function(q){ return anamIsQ(q) && q.obrigatoria && anamVisible(q, ans, byId) && anamCondEmpty(ans[q.id]) && q.tipo !== "arquivo"; })
+    .map(function(q){ return q.titulo || anamKind(q.tipo).label; });
+}
+function anamNewQ(tipo){
+  var q = {id: uid("aq"), tipo: tipo, titulo: "", ajuda: "", obrigatoria: false};
+  if (tipo === "escolha" || tipo === "multipla") q.opcoes = [{id: uid("ao"), label: "Opção 1"}, {id: uid("ao"), label: "Opção 2"}];
+  if (tipo === "escala"){ q.min = 1; q.max = 5; q.rotMin = ""; q.rotMax = ""; }
+  return q;
+}
+function anamCopyQs(qs){ return JSON.parse(JSON.stringify(qs || [])); }
+// Duplica uma lista de perguntas dando ids novos (e ajustando as condições entre elas).
+function anamCloneQs(qs){
+  var map = {}, out = anamCopyQs(qs);
+  out.forEach(function(q){ var n = uid("aq"); map[q.id] = n; q.id = n; (q.opcoes || []).forEach(function(o){ o.id = uid("ao"); }); });
+  out.forEach(function(q){ if (q.cond && q.cond.q){ if (map[q.cond.q]) q.cond.q = map[q.cond.q]; else delete q.cond; } });
+  return out;
+}
+
+function openAnamTypeModal(item, opts){
+  opts = opts || {};
+  var isNew = !item || !!opts.copy;
+  if (isNew && !can("tipos_anamnese", "create")){ showToast(permDeniedMsg("tipos_anamnese", "create"), true); return; }
+  var canSave = isNew || can("tipos_anamnese", "edit"), canDel = !isNew && can("tipos_anamnese", "delete");
+  var v = Object.assign({name: "", descricao: "", validadeMeses: "", perguntas: []}, item || {});
+  if (opts.copy){ v.name = (item.name || "") + " (cópia)"; v.perguntas = anamCloneQs(item.perguntas); }
+  var qs = anamCopyQs(v.perguntas), open = {}, mode = "montar";
+  var dis = canSave ? "" : " disabled";
+  var host = document.getElementById("modalHost");
+  host.innerHTML = '<div class="overlay" id="ovAnTipo"><div class="modal" style="max-width:820px">' +
+    '<div class="modal-head"><div><h3>' + (isNew ? "Novo Tipo de Anamnese" : (canSave ? "Editar Tipo de Anamnese" : "Tipo de Anamnese")) + '</h3>' +
+      '<div class="modal-sub">Monte o modelo do formulário. Cada anamnese de paciente é preenchida a partir dele.</div></div>' +
+      '<button class="modal-close" id="anClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body">' +
+      '<div class="tr-sec tr-sec-top">Tipo de Anamnese</div>' +
+      '<div class="field"><label for="anName">Nome</label><input type="text" id="anName" placeholder="Ex.: Anamnese Inicial" value="' + esc(v.name) + '"' + dis + '></div>' +
+      '<div class="field"><label for="anDesc">Descrição</label><textarea id="anDesc" rows="3" placeholder="Para que serve e quando aplicar"' + dis + '>' + esc(v.descricao || "") + '</textarea></div>' +
+      '<div class="field" style="max-width:260px"><label for="anVal">Validade (Meses)</label><input type="text" id="anVal" inputmode="numeric" maxlength="3" placeholder="Sem aviso de reavaliação" value="' + esc(v.validadeMeses || "") + '"' + dis + '></div>' +
+      '<div class="tr-sec" style="display:flex;align-items:center;gap:10px"><span>Perguntas</span><span class="spacer" style="flex:1"></span>' +
+        '<span class="seg" id="anSeg" role="group"><button type="button" class="active" data-m="montar">Montar</button><button type="button" data-m="previa">Prévia</button></span></div>' +
+      '<div id="anBuild"></div><div id="anPrev" hidden></div>' +
+    '</div>' +
+    '<div class="modal-foot">' + (!isNew && canDel ? '<button class="btn danger" id="anDel">Excluir</button>' : '') +
+      (!isNew && can("tipos_anamnese", "create") ? '<button class="btn ghost" id="anDup">Duplicar Modelo</button>' : '') +
+      '<div class="spacer"></div><button class="btn ghost" id="anCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' +
+      (canSave ? '<button class="btn primary" id="anSave">Salvar</button>' : '') + '</div></div></div>';
+  var ov = document.getElementById("ovAnTipo");
+  function $(id){ return document.getElementById(id); }
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  $("anClose").addEventListener("click", close);
+  $("anCancel").addEventListener("click", close);
+
+  function qLabel(q, i){ var k = anamKind(q.tipo); return (i + 1) + ". " + (k ? k.label : q.tipo); }
+  function titlePh(q){ return q.tipo === "secao" ? "Título da seção" : q.tipo === "bloco" ? "Texto explicativo" : "Digite a pergunta"; }
+  function condOptions(q, idx){
+    var prev = qs.slice(0, idx).filter(anamIsQ);
+    return prev;
+  }
+  function cardHtml(q, i){
+    var k = anamKind(q.tipo), isQ = anamIsQ(q), isOpen = !!open[q.id];
+    var simple = q.tipo === "separador" || q.tipo === "pagina";
+    var h = '<div class="room-row an-q" data-qi="' + i + '" style="flex-direction:column;align-items:stretch;gap:8px">' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        (canSave ? '<button type="button" class="col-move" data-mv="-1" title="Subir"' + (i === 0 ? " disabled" : "") + '>▲</button><button type="button" class="col-move" data-mv="1" title="Descer"' + (i === qs.length - 1 ? " disabled" : "") + '>▼</button>' : '') +
+        '<span class="pat-count" style="min-width:128px;font-weight:700">' + esc(qLabel(q, i)) + '</span>' +
+        (simple ? '<span class="pat-count" style="flex:1">' + (q.tipo === "pagina" ? "Quebra de página na impressão e divisor no formulário." : "Linha de separação.") + '</span>'
+          : '<input type="text" data-f="titulo" style="flex:1;min-width:0" placeholder="' + esc(titlePh(q)) + '" value="' + esc(q.titulo || "") + '"' + dis + '>') +
+        (isQ ? '<label class="kind-opt' + (q.obrigatoria ? " on" : "") + '"><input type="checkbox" data-f="obrigatoria"' + (q.obrigatoria ? " checked" : "") + dis + '>Obrigatória</label>' : '') +
+        (!simple ? '<button type="button" class="btn ghost" data-tg title="Mais opções da pergunta">' + (isOpen ? "Fechar" : "Opções") + '</button>' : '') +
+        (canSave ? '<button type="button" class="btn ghost" data-dup title="Duplicar pergunta">Duplicar</button><button type="button" class="rm" data-del title="Remover pergunta">✕</button>' : '') +
+      '</div>';
+    if (isOpen && !simple){
+      h += '<div class="an-more" style="padding:8px 4px 2px 4px;border-top:1px dashed var(--line)">';
+      if (isQ) h += '<div class="field"><label>Texto de Apoio</label><input type="text" data-f="ajuda" placeholder="Orientação que aparece embaixo da pergunta" value="' + esc(q.ajuda || "") + '"' + dis + '></div>';
+      if (k && k.opts) h += '<div class="field"><label>Opções (Uma por Linha)</label><textarea data-f="opcoes" rows="4"' + dis + '>' + esc((q.opcoes || []).map(function(o){ return o.label; }).join("\n")) + '</textarea></div>';
+      if (q.tipo === "escala") h += '<div class="field-row"><div class="field"><label>Valor Inicial</label><select data-f="min"' + dis + '>' + [0, 1].map(function(n){ return '<option value="' + n + '"' + (+q.min === n ? " selected" : "") + '>' + n + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field"><label>Valor Final</label><select data-f="max"' + dis + '>' + [3, 4, 5, 6, 7, 8, 9, 10].map(function(n){ return '<option value="' + n + '"' + (+q.max === n ? " selected" : "") + '>' + n + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field"><label>Rótulo do Início</label><input type="text" data-f="rotMin" placeholder="Ex.: Nada" value="' + esc(q.rotMin || "") + '"' + dis + '></div>' +
+        '<div class="field"><label>Rótulo do Fim</label><input type="text" data-f="rotMax" placeholder="Ex.: Muito" value="' + esc(q.rotMax || "") + '"' + dis + '></div></div>';
+      if (isQ && (q.tipo === "texto" || q.tipo === "textolongo" || q.tipo === "data" || q.tipo === "numero")){
+        h += '<div class="field"><label>Preencher com o Cadastro do Paciente</label><select data-f="campo"' + dis + '><option value="">Não preencher</option>' +
+          ANAM_PREFILL.map(function(p){ return '<option value="' + p.k + '"' + (q.campo === p.k ? " selected" : "") + '>' + esc(p.label) + '</option>'; }).join("") + '</select></div>';
+      }
+      var prev = condOptions(q, i), c = q.cond || {};
+      if (prev.length){
+        var src = c.q ? anamById(qs)[c.q] : null;
+        h += '<div class="field"><label>Mostrar Só Se</label><div class="field-row">' +
+          '<div class="field"><select data-c="q"' + dis + '><option value="">Sempre mostrar</option>' + prev.map(function(p){ return '<option value="' + esc(p.id) + '"' + (c.q === p.id ? " selected" : "") + '>' + esc((p.titulo || anamKind(p.tipo).label)) + '</option>'; }).join("") + '</select></div>';
+        if (c.q){
+          h += '<div class="field"><select data-c="op"' + dis + '>' + [["igual", "For igual a"], ["diferente", "For diferente de"], ["preenchido", "Estiver preenchida"], ["vazio", "Estiver vazia"]].map(function(o){ return '<option value="' + o[0] + '"' + ((c.op || "igual") === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>';
+          if (!c.op || c.op === "igual" || c.op === "diferente"){
+            if (src && (src.tipo === "escolha" || src.tipo === "multipla")) h += '<div class="field"><select data-c="v"' + dis + '><option value="">Escolha…</option>' + (src.opcoes || []).map(function(o){ return '<option value="' + esc(o.id) + '"' + (c.v === o.id ? " selected" : "") + '>' + esc(o.label) + '</option>'; }).join("") + '</select></div>';
+            else if (src && src.tipo === "simnao") h += '<div class="field"><select data-c="v"' + dis + '><option value="sim"' + (c.v !== "nao" ? " selected" : "") + '>Sim</option><option value="nao"' + (c.v === "nao" ? " selected" : "") + '>Não</option></select></div>';
+            else h += '<div class="field"><input type="text" data-c="v" placeholder="Valor" value="' + esc(c.v || "") + '"' + dis + '></div>';
+          }
+        }
+        h += '</div></div>';
+      }
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+  function draw(){
+    if (!$("anBuild")) return;
+    var addOpts = ANAM_KINDS.map(function(k){ return '<option value="' + k.k + '">' + esc(k.label) + '</option>'; }).join("");
+    $("anBuild").innerHTML = (qs.length ? '<div class="room-list" style="padding:0">' + qs.map(cardHtml).join("") + '</div>' : '<div class="pat-count" style="padding:8px 2px">Nenhuma pergunta ainda. Escolha um tipo abaixo para começar.</div>') +
+      (canSave ? '<div class="field" style="margin-top:10px;max-width:340px"><select id="anAdd"><option value="">+ Adicionar Pergunta…</option>' + addOpts + '</select></div>' : '');
+    if (typeof dpScan === "function") dpScan($("anBuild"));
+  }
+  function drawPrev(){
+    var el = $("anPrev");
+    el.innerHTML = qs.length ? '<div class="pat-count" style="margin-bottom:8px">Assim o formulário aparece para quem preenche. Nada aqui é gravado.</div>' + anamFormHtml(qs, {}, {preview: true}) : '<div class="pat-count">Adicione perguntas para ver a prévia.</div>';
+    anamWire(el, qs, {});
+    if (typeof dpScan === "function") dpScan(el);
+  }
+  draw();
+  $("anSeg").addEventListener("click", function(e){
+    var b = e.target.closest("[data-m]"); if (!b) return;
+    mode = b.getAttribute("data-m");
+    Array.prototype.forEach.call($("anSeg").children, function(x){ x.classList.toggle("active", x === b); });
+    $("anBuild").hidden = mode !== "montar"; $("anPrev").hidden = mode !== "previa";
+    if (mode === "previa") drawPrev();
+  });
+  function qOf(el){ var c = el.closest(".an-q"); return c ? qs[+c.getAttribute("data-qi")] : null; }
+  function readOpts(q, text){
+    var old = q.opcoes || [], lines = text.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
+    q.opcoes = lines.map(function(l, i){ return {id: old[i] ? old[i].id : uid("ao"), label: l}; });
+  }
+  $("anBuild").addEventListener("input", function(e){
+    var q = qOf(e.target); if (!q) return;
+    var f = e.target.getAttribute("data-f"); if (!f) return;
+    if (f === "opcoes") readOpts(q, e.target.value);
+    else if (f === "obrigatoria") { q.obrigatoria = e.target.checked; e.target.closest(".kind-opt").classList.toggle("on", e.target.checked); }
+    else q[f] = e.target.value;
+  });
+  $("anBuild").addEventListener("change", function(e){
+    var t = e.target;
+    if (t.id === "anAdd"){
+      if (!t.value) return;
+      var q = anamNewQ(t.value); qs.push(q); if (anamIsQ(q)) open[q.id] = false;
+      setTimeout(function(){ draw(); var last = $("anBuild").querySelector(".an-q:last-child [data-f=titulo]"); if (last) last.focus(); }, 0);
+      return;
+    }
+    var q2 = qOf(t); if (!q2) return;
+    var c = t.getAttribute("data-c");
+    if (c){
+      q2.cond = q2.cond || {};
+      if (c === "q"){ q2.cond = t.value ? {q: t.value, op: "igual", v: ""} : null; if (!q2.cond) delete q2.cond; }
+      else q2.cond[c] = t.value;
+      var src = q2.cond && q2.cond.q ? anamById(qs)[q2.cond.q] : null;
+      if (c === "q" && src && src.tipo === "simnao") q2.cond.v = "sim";
+      setTimeout(draw, 0); return;
+    }
+    var f = t.getAttribute("data-f");
+    if (f === "min" || f === "max") { q2[f] = +t.value; if (+q2.min >= +q2.max) q2.max = +q2.min + 1; setTimeout(draw, 0); }
+    else if (f === "campo") q2.campo = t.value;
+    else if (f === "opcoes") setTimeout(draw, 0);
+  });
+  $("anBuild").addEventListener("click", function(e){
+    var q = qOf(e.target); if (!q) return;
+    var i = qs.indexOf(q);
+    if (e.target.closest("[data-tg]")){ open[q.id] = !open[q.id]; draw(); return; }
+    var mv = e.target.closest("[data-mv]");
+    if (mv){ var j = i + (+mv.getAttribute("data-mv")); if (j < 0 || j >= qs.length) return; qs.splice(j, 0, qs.splice(i, 1)[0]); draw(); return; }
+    if (e.target.closest("[data-dup]")){ var cp = anamCopyQs([q])[0]; cp.id = uid("aq"); (cp.opcoes || []).forEach(function(o){ o.id = uid("ao"); }); qs.splice(i + 1, 0, cp); draw(); return; }
+    if (e.target.closest("[data-del]")){
+      qs.splice(i, 1);
+      qs.forEach(function(x){ if (x.cond && x.cond.q === q.id) delete x.cond; });
+      draw();
+    }
+  });
+  setTimeout(function(){ var n = $("anName"); if (canSave && n) n.focus(); }, 30);
+
+  function save(list, rec){
+    return writeSimpleList("tiposanam", list).then(function(ok){
+      if (!ok) return;
+      close(); if (state.tab === "tiposanam") renderRegistryTab("tiposanam");
+      if (rec) showToast("Tipo de anamnese salvo.");
+    });
+  }
+  if ($("anSave")) $("anSave").addEventListener("click", function(){
+    var name = $("anName").value.trim();
+    if (!name){ $("anName").focus(); showToast("Preencha o nome do tipo de anamnese.", true); return; }
+    var list = anamTypesList();
+    if (list.some(function(t){ return normText(t.name) === normText(name) && (!item || opts.copy || t.id !== item.id); })){ showToast("Já existe um tipo de anamnese com esse nome.", true); return; }
+    if (!qs.some(anamIsQ)){ showToast("Adicione pelo menos uma pergunta.", true); return; }
+    for (var i = 0; i < qs.length; i++){
+      var q = qs[i], k = anamKind(q.tipo);
+      if (q.tipo !== "separador" && q.tipo !== "pagina" && !String(q.titulo || "").trim()){ showToast("A pergunta " + (i + 1) + " (" + k.label + ") está sem texto.", true); open[q.id] = true; draw(); return; }
+      if (k.opts && (q.opcoes || []).length < 2){ showToast("A pergunta " + (i + 1) + " precisa de pelo menos 2 opções.", true); open[q.id] = true; draw(); return; }
+      if (q.cond && q.cond.q && (q.cond.op === "igual" || q.cond.op === "diferente" || !q.cond.op) && !q.cond.v){ showToast("Escolha o valor da condição da pergunta " + (i + 1) + ".", true); open[q.id] = true; draw(); return; }
+    }
+    var val = $("anVal").value.replace(/\D/g, "");
+    var oldSig = item && !opts.copy ? JSON.stringify(item.perguntas || []) : "";
+    var rec = Object.assign({}, opts.copy ? {} : (item || {}), {name: name, descricao: $("anDesc").value.trim(), validadeMeses: val ? +val : "", perguntas: anamCopyQs(qs)});
+    rec.versao = item && !opts.copy ? (item.versao || 1) + (oldSig === JSON.stringify(rec.perguntas) ? 0 : 1) : 1;
+    if (isNew) rec.id = uid("anam");
+    save(isNew ? list.concat([rec]) : list.map(function(t){ return t.id === rec.id ? rec : t; }), rec);
+  });
+  if ($("anDup")) $("anDup").addEventListener("click", function(){ close(); openAnamTypeModal(item, {copy: true}); });
+  if (!isNew) setupInactivate({btn: "anDel", mod: "tipos_anamnese", item: item, name: item.name, usage: USAGE.tiposanam,
+    save: function(rec){ return writeSimpleList("tiposanam", anamTypesList().map(function(t){ return t.id === rec.id ? rec : t; })); },
+    close: function(){ close(); if (state.tab === "tiposanam") renderRegistryTab("tiposanam"); }});
+  if ($("anDel")) $("anDel").addEventListener("click", function(){
+    if (delBlocked(this)) return;
+    if (!canDel){ showToast(permDeniedMsg("tipos_anamnese", "delete"), true); return; }
+    confirmDialog({title: "Confirmar Exclusão", message: "Excluir o tipo de anamnese <b>" + esc(item.name) + "</b>?", confirmLabel: "Confirmar Exclusão"}).then(function(ok){
+      if (ok) save(anamTypesList().filter(function(t){ return t.id !== item.id; }));
+    });
+  });
+  if (!canSave) modalReadOnly("ovAnTipo");
 }
 
 // Botão "Abrir Plano Terapêutico" (janela do Tratamento).

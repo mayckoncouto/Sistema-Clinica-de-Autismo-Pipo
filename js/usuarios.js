@@ -67,6 +67,7 @@
     { key: "plano_terapeutico", label: "Plano Terapêutico", hint: "ver: consultar; incluir: criar e revisar; editar: tudo. Profissional sem editar muda só situação/status nas especialidades dele" },
     { key: "objetivos", label: "Objetivos", hint: "objetivos prontos para usar no plano terapêutico" },
     { key: "atividades", label: "Atividades", hint: "atividades sugeridas para os objetivos do plano terapêutico" },
+    { key: "tipos_anamnese", label: "Tipos de Anamnese", hint: "modelos de formulário das anamneses (perguntas, regras e validade)" },
     { key: "escalas", label: "Escalas", hint: "escalas do plano terapêutico (níveis e cores)" },
     { key: "habilidades", label: "Habilidades", hint: "habilidades dos objetivos do plano terapêutico" },
     { key: "financeiro", label: "Financeiro", hint: "Lançamentos: movimentação das contas (valores, extrato, subcategorias)", group: "Financeiro" },
