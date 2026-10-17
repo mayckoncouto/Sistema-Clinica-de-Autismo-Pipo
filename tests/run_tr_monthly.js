@@ -68,7 +68,7 @@ const path = require('path');
     var all = Array.from(document.querySelectorAll("#ovTreat input[id]")).map(function(e){ return e.id; });
     var menu = Array.from(document.querySelectorAll("#trMoreMenu button")).map(function(b){ return b.textContent; });
     return {histHidden: document.getElementById("trHistBody").hidden, menu: menu, inBody: !!document.querySelector("#ovTreat .modal-body #trOpenPlan"),
-      order: all.indexOf("pConv") < all.indexOf("trVal") && all.indexOf("trVal") < all.indexOf("pPac"), val: document.getElementById("trVal").value, fin: document.getElementById("trFinal").value};
+      order: all.indexOf("pConv") < all.indexOf("pPac") && all.indexOf("pPac") < all.indexOf("trVal") && all.indexOf("trVal") < all.indexOf("pAba"), val: document.getElementById("trVal").value, fin: document.getElementById("trFinal").value};
   })()`);
   console.log('Histórico starts hidden?', win.histHidden);
   console.log('"Outras Opções" has patient and plan, plan link left the body?', win.menu.join('|') === 'Cadastro do Paciente|Abrir Plano Terapêutico|Criar Tarefa' && !win.inBody, win.menu);
