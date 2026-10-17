@@ -3019,7 +3019,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
     <div class="color-legend">
       <span><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
       <span data-age-legend hidden></span>
-      <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
+      <span data-meet-legend><i style="background:#F5E27A"></i>Reunião Clínica</span>
       <span data-svc-legend style="display:contents"></span>
       <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
       <span title="Profissional atendendo em outra sala ou grupo, ou paciente sem Intervenção ABA ocupando o horário"><i style="background:repeating-linear-gradient(135deg,#E4E7E6 0 3px,#FFFFFF 3px 6px);border:1px solid var(--line)"></i>Bloqueado por Regra</span>
@@ -3133,7 +3133,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <div class="color-legend agd-legend">
         <span><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
         <span data-age-legend hidden></span>
-        <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
+        <span data-meet-legend><i style="background:#F5E27A"></i>Reunião Clínica</span>
         <span data-svc-legend style="display:contents"></span>
         <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
       </div>
@@ -3168,7 +3168,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <div class="color-legend agd-legend">
         <span><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
         <span data-age-legend hidden></span>
-        <span><i style="background:#F5E27A"></i>Reunião Clínica</span>
+        <span data-meet-legend><i style="background:#F5E27A"></i>Reunião Clínica</span>
         <span data-svc-legend style="display:contents"></span>
         <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
         <span title="Profissional atendendo em outra sala ou grupo, ou paciente sem Intervenção ABA ocupando o horário"><i style="background:repeating-linear-gradient(135deg,#E4E7E6 0 3px,#FFFFFF 3px 6px);border:1px solid var(--line)"></i>Bloqueado por Regra</span>
@@ -4534,7 +4534,8 @@ function svcLegendHtml(){
   });
   return out;
 }
-function svcLegendFill(){ Array.prototype.forEach.call(document.querySelectorAll("[data-svc-legend]"), function(el){ el.innerHTML = svcLegendHtml(); }); }
+function svcLegendFill(){ Array.prototype.forEach.call(document.querySelectorAll("[data-svc-legend]"), function(el){ el.innerHTML = svcLegendHtml(); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-meet-legend] i"), function(i){ i.style.background = meetingColor(); }); }
 function ageLegendFill(){ Array.prototype.forEach.call(document.querySelectorAll("[data-age-legend]"), function(el){ el.outerHTML = ageLegendHtml(); }); }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ageLegendFill); else ageLegendFill();
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", svcLegendFill); else svcLegendFill();
@@ -4769,7 +4770,11 @@ var BLOCKED_COLOR = "#E4E7E6";   // cinza claro, igual ao horário bloqueado / f
 // the other fixed status colors above) unless someone books something else
 // over it — see effectiveBooking().
 var MEETING_LABEL = "Reunião Clínica";
-var MEETING_COLOR = "#F5E27A";
+var MEETING_COLOR = "#F5E27A"; // reserva: a cor vem do serviço Triagem (meetingColor)
+function meetingColor(){
+  var sv = (state.services || []).filter(function(x){ return x.id === "triagem"; })[0];
+  return sv && sv.color ? swatchVar(sv.color) : MEETING_COLOR;
+}
 var TRAINING_LABEL = "Treinamento";
 var TRAINING_COLOR = "#24E2FC"; // ciano: Treinamento e atendimentos com serviço que não é "Sessão"
 
@@ -4782,7 +4787,7 @@ var TRAINING_COLOR = "#24E2FC"; // ciano: Treinamento e atendimentos com serviç
  */
 var SLOT_KINDS = [
   {key:"bloqueado",   label:"Bloqueado",   color:BLOCKED_COLOR,  ink:"#182523"},
-  {key:"reuniao",     label:MEETING_LABEL, color:MEETING_COLOR,  ink:"#182523"},
+  {key:"reuniao",     label:MEETING_LABEL, get color(){ return meetingColor(); },  ink:"#182523"},
   {key:"treinamento", label:TRAINING_LABEL, color:TRAINING_COLOR, ink:"#182523"}
 ];
 /* Status dos atendimentos da Agenda (config/statuses: {list:[{id,name,color}]}).
@@ -10094,7 +10099,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
           var pCol = pRec ? (otherService(b) ? serviceFillColor(b.service) : patientColor(bookingPatient(pRec, b, t.professionalId, week))) : null;
           var roomMatch = (!isSpecialKind && !pRec) ? bookingRoomRef(b) : null;
           var roomCol = roomMatch ? roomFillColor(roomMatch) : null;
-          var fillCol = isBlocked ? BLOCKED_COLOR : (isMeetingDefault ? MEETING_COLOR : (isTraining ? TRAINING_COLOR : (pCol || roomCol)));
+          var fillCol = isBlocked ? BLOCKED_COLOR : (isMeetingDefault ? meetingColor() : (isTraining ? TRAINING_COLOR : (pCol || roomCol)));
           var mainStyle = 'border-left-color:'+swatchVar(r.color)+(fillCol ? ';background:'+fillCol : '');
           var fillClass = isBlocked ? ' blocked' : ((isMeetingDefault || isTraining || pCol || roomCol) ? ' pcolor' : '');
           html += '<div class="book filled'+(isMoveSource?' move-source':'')+'">' +
@@ -17061,7 +17066,7 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   var kind = bookingKind(row);
   var fill = null, cls = "";
   if (kind === "bloqueado"){ fill = BLOCKED_COLOR; cls = " blocked"; }
-  else if (kind === "reuniao"){ fill = MEETING_COLOR; cls = " pcolor"; }
+  else if (kind === "reuniao"){ fill = meetingColor(); cls = " pcolor"; }
   else if (kind === "treinamento"){ fill = TRAINING_COLOR; cls = " pcolor"; }
   else {
     var pRec = findPatientAt(row, row.date);   // cor/ABA da época do atendimento
