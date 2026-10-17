@@ -54,7 +54,8 @@ pacientes para arquivos do repositório. Termine sempre com o relatório (passo 
 - Testes: `run_crm_mobile`, `run_cad_sheets`, `run_toolbar_rows`, `run_sort_visible`, `run_nav_single`.
 
 ## 6. Desempenho das janelas
-- Medir com dados fictícios volumosos (ver "Planner mais leve" e "Fluidez" no CLAUDE.md): abrir Planner
+- Primeiro: `node tests/build.js && node tests/medir_telas.js` (tempo de abrir cada tela com CPU 4× mais lenta; LENTA > 1 s, ATENÇÃO > 400 ms).
+- Depois medir com dados fictícios volumosos (ver "Planner mais leve" e "Fluidez" no CLAUDE.md): abrir Planner
   (Todos × Todos), Agenda, CRM (2000 tarefas), Lançamentos, Prontuário; tempo de abertura e de uma gravação.
 - Listas grandes usam `GT_PAGED`; buscas com `debounce150`; grades trocam só células mudadas. Olhar `performance`
   dos advisors só para consultas lentas reais (`query_logs`).
