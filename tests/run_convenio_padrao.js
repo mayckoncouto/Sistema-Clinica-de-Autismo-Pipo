@@ -26,7 +26,7 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab=pacientes]', (b) => b.click()); await page.waitForTimeout(300);
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
   const secs = await page.$$eval('#ovPat .pm-sec-head .tr-sec', (a) => a.map((x) => x.textContent));
-  check('janela do paciente tem o grupo Convênio (depois do Responsável Financeiro)?', secs.indexOf('Convênio') === secs.indexOf('Responsável Financeiro') + 1, secs);
+  check('janela do paciente tem o grupo Convênio (depois da Medida Protetiva)?', secs.indexOf('Convênio') === secs.indexOf('Medida Protetiva') + 1, secs);
   check('campos do grupo: convênio, plano, carteirinha e validade?', await page.$('#pf-convenioPadrao') && await page.$('#pf-planoPadrao') && await page.$('#pf-carteirinha') && await page.$('#pf-carteirinhaValidade') ? true : false);
   await setv('#pf-cpf', '52998224725'); await setv('#pf-convenioPadrao', 'unimed'); await setv('#pf-planoPadrao', 'Plano Fictício'); await setv('#pf-carteirinha', '0001-FICT');
   await setv('#pf-carteirinhaValidade', '2026-09-01');
