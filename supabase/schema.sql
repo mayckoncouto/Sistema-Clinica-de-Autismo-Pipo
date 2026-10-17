@@ -3274,9 +3274,8 @@ begin
       raise exception 'Seu nível não pode trocar este status.' using errcode = '42501';
     end if;
     if old.status = 'finalizado' and not public.is_admin()
-       and public.sys_rule('ag_final_terapeuta', 'block') = 'block'
-       and exists (select 1 from public.profiles p where p.id = auth.uid() and p.professional_id is not null) then
-      raise exception 'Atendimento finalizado: o terapeuta não altera o status. A evolução é editada no Prontuário.' using errcode = '42501';
+       and public.sys_rule('ag_final_terapeuta', 'block') = 'block' then
+      raise exception 'Atendimento finalizado: só o Administrador altera o status. A evolução é editada no Prontuário.' using errcode = '42501';
     end if;
     if new.status = 'finalizado'
        and public.sys_rule('ag_final_evolucao', 'block') = 'block'
@@ -8740,9 +8739,8 @@ begin
       raise exception 'Seu nível não pode trocar este status.' using errcode = '42501';
     end if;
     if old.status = 'finalizado' and not public.is_admin()
-       and public.sys_rule('ag_final_terapeuta', 'block') = 'block'
-       and exists (select 1 from public.profiles p where p.id = auth.uid() and p.professional_id is not null) then
-      raise exception 'Atendimento finalizado: o terapeuta não altera o status. A evolução é editada no Prontuário.' using errcode = '42501';
+       and public.sys_rule('ag_final_terapeuta', 'block') = 'block' then
+      raise exception 'Atendimento finalizado: só o Administrador altera o status. A evolução é editada no Prontuário.' using errcode = '42501';
     end if;
     if new.status = 'finalizado'
        and public.sys_rule('ag_final_evolucao', 'block') = 'block'

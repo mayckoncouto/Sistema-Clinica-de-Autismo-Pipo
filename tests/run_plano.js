@@ -344,7 +344,7 @@ const path = require('path');
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; window.__planProfId = "bia-terapeuta"; state.statuses = [{id: "finalizado", name: "Finalizado", color: "#2E9E5B"}, {id: "nao-compareceu", name: "Não compareceu", color: "#999"}];
     AD.rows.r1.status = "finalizado"; agdOpenDetails(AD.rows.r1); })()`);
   const locked = await page.$eval('#agdDetStatus', (e) => e.disabled);
-  const lockMsg = await page.$eval('#ovAgdDet', (e) => /não pode ser alterado pelo terapeuta/.test(e.textContent));
+  const lockMsg = await page.$eval('#ovAgdDet', (e) => /só o Administrador altera o status/.test(e.textContent));
   await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; AD.rows.r1.status = ""; agdOpenDetails(AD.rows.r1); })()`);
   const open = await page.$eval('#agdDetStatus', (e) => !e.disabled);
   console.log('therapist cannot change a finalized status (others still can)?', locked && lockMsg && open, JSON.stringify({locked, lockMsg, open}));

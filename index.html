@@ -5952,7 +5952,7 @@ var SYS_RULES = [
   {id: "ag_area", g: "agenda", label: "Profissional Fora das Especialidades do Tratamento", desc: "Sessão com profissional cuja especialidade não está no tratamento.", def: "warn", modes: BWO},
   {id: "ag_objetivos", g: "agenda", label: "Sem Objetivos em Comum", desc: "Pacientes do mesmo profissional e horário sem nenhum objetivo em comum no plano terapêutico.", def: "warn", modes: BWO},
   {id: "ag_final_evolucao", g: "agenda", label: "Finalizado Exige Evolução", desc: "Para marcar Finalizado é preciso registrar a evolução no prontuário, e a evolução do atendimento Finalizado só é excluída depois de tirar o status. Avisar = pergunta e deixa finalizar sem evolução.", def: "block", modes: BWO, db: true},
-  {id: "ag_final_terapeuta", g: "agenda", label: "Finalizado Travado para o Terapeuta", desc: "O terapeuta não altera o status de um atendimento já finalizado.", def: "block", modes: ["block", "off"], db: true},
+  {id: "ag_final_terapeuta", g: "agenda", label: "Finalizado Travado (Só o Administrador Altera)", desc: "Só o Administrador altera o status de um atendimento já finalizado.", def: "block", modes: ["block", "off"], db: true},
   {id: "ag_evolucao_apagar", g: "agenda", label: "Atendimento com Status ou Evolução Não É Apagado", desc: "Só o Administrador exclui atendimento que tem status (qualquer um) ou evolução no prontuário.", def: "block", locked: true},
   {id: "ag_realizado_fixo", g: "agenda", label: "Atendimento com Status ou Evolução Não Muda", desc: "O paciente não pode ser trocado (por ninguém); data, horário e profissional só o Administrador muda, e a evolução acompanha.", def: "block", locked: true},
   {id: "pac_cpf_unico", g: "pacientes", label: "CPF do Paciente Válido e Único", desc: "Dois pacientes não podem ter o mesmo CPF.", def: "block", locked: true},
@@ -26625,7 +26625,7 @@ var HELP_TOPICS = [
       "Fora do horário de trabalho do profissional (cadastrado em Cadastros → Colaboradores) a célula é hachurada e não aceita marcação. A janela do atendimento também recusa profissional, data ou horário fora desse horário (atendimento antigo pode ser editado se continuar no mesmo profissional, data e horário).",
       "<b>Limpar Semana</b> apaga tudo da semana aberta (dupla confirmação); atendimentos com evolução ficam.",
       "Atendimento com <b>status</b> (qualquer um: Finalizado, Não compareceu, Falta justificada…) ou com <b>evolução no prontuário</b> só o <b>Administrador</b> exclui ou muda de data, horário ou profissional (a evolução acompanha a mudança). O <b>paciente</b> desse atendimento não pode ser trocado por ninguém: para corrigir, tire o status e apague a evolução antes.",
-      "Atendimento <b>Finalizado</b>: o terapeuta (usuário ligado a um profissional) não altera o status; a evolução é corrigida no Prontuário.",
+      "Atendimento <b>Finalizado</b>: só o <b>Administrador</b> altera o status (os demais níveis, inclusive terapeutas, não); a evolução é corrigida no Prontuário. A regra pode ser desligada em Acesso → Sistema.",
       "Datas passadas mostram a cor do tratamento que valia na época.",
       "Feriados e Recessos (Cadastros → Feriados e Recessos): os horários ficam cinza com o nome do feriado; marcar neles pede confirmação.",
       "Paciente com <b>medida protetiva</b>: o último atendimento dele no dia fica com borda e escudo vermelhos. Ao abrir o atendimento aparece quem NÃO pode retirar e quem pode (cadastro do paciente)."
@@ -30224,15 +30224,15 @@ function agdGroupGoalsFill(host, items){
     });
   });
 }
-// Atendimento finalizado: usuário ligado a um profissional (terapeuta), que não seja
-// Administrador, não troca o status (a evolução continua editável no Prontuário).
+// Atendimento finalizado: quem não é Administrador não troca o status (a evolução continua editável no Prontuário).
 // O banco confere a mesma regra (migração 2026-10-06d).
 function agdTherapistUser(){
   var me = prMe();
   return !!((me && me.professional_id) || window.__planProfId) && !(window.pipoAuth && window.pipoAuth.isAdmin && window.pipoAuth.isAdmin());
 }
-function agdFinalLocked(status){ return status === FINAL_STATUS && agdTherapistUser() && sysOn("ag_final_terapeuta"); }
-var AGD_FINAL_LOCK_MSG = "Atendimento finalizado: o status não pode ser alterado pelo terapeuta. Para corrigir, edite a evolução em Prontuário.";
+function agdNonAdmin(){ return !!window.pipoAuth && !(window.pipoAuth.isAdmin && window.pipoAuth.isAdmin()); }
+function agdFinalLocked(status){ return status === FINAL_STATUS && (agdTherapistUser() || agdNonAdmin()) && sysOn("ag_final_terapeuta"); }
+var AGD_FINAL_LOCK_MSG = "Atendimento finalizado: só o Administrador altera o status. Para corrigir, edite a evolução em Prontuário.";
 
 // Dica ao passar o mouse nos pontos (delegado no contêiner dos gráficos).
 function planChartsWire(host){
