@@ -4463,6 +4463,18 @@ function ttl(s){
     return w.charAt(0).toUpperCase() + w.slice(1);
   }).join(" ");
 }
+// Erro de rede (sem internet, "Load failed" do iPhone, "Failed to fetch"...) → texto claro.
+function isNetErr(msg){
+  return (typeof navigator !== "undefined" && navigator.onLine === false) || /load failed|failed to fetch|networkerror|network request failed|fetch failed/i.test(String(msg || ""));
+}
+function netErrText(msg){
+  return isNetErr(msg) ? "Sem conexão com a internet. Confira o Wi-Fi ou os dados móveis e tente de novo." : String(msg || "");
+}
+document.addEventListener("click", function(e){
+  var b = e.target && e.target.closest && e.target.closest("[data-net-retry]");
+  if (!b) return;
+  AD.error = ""; agdLoadWeek();
+});
 function normText(s){
   var k = s==null ? "" : String(s), v = _normCache.get(k);
   if (v !== undefined) return v;
@@ -17123,7 +17135,7 @@ function agdRender(){
 
   gridHost.classList.remove("agd-loading");
   if (AD.error === "offline"){ gridHost.innerHTML = '<div class="empty-state"><b>Agenda indisponível</b>A agenda por data funciona no sistema online.</div>'; return; }
-  if (AD.error){ gridHost.innerHTML = '<div class="empty-state"><b>Não foi possível carregar a agenda</b>'+esc(AD.error)+'</div>'; return; }
+  if (AD.error){ gridHost.innerHTML = '<div class="empty-state"><b>Não foi possível carregar a agenda</b>'+esc(netErrText(AD.error))+'<div style="margin-top:10px"><button class="btn" type="button" data-net-retry>Tentar de Novo</button></div></div>'; return; }
   // Trocando de semana: a grade da semana nova aparece na hora, apagada e sem clique, com
   // "Carregando…" no título, até os atendimentos chegarem (antes a grade sumia e voltava).
   var agdBusy = !AD.loaded;
@@ -18643,7 +18655,7 @@ function agpRender(){
   if (dHols.length) titleEl.insertAdjacentHTML("beforeend", ' <span class="agd-hol-tag">' + esc(dHols.map(function(h){ return h.name + (h.periodo === "manha" ? " (manhã)" : h.periodo === "tarde" ? " (tarde)" : ""); }).join(", ")) + '</span>');
   gridHost.classList.remove("agd-loading");
   if (AD.error === "offline"){ gridHost.innerHTML = '<div class="empty-state"><b>Agenda indisponível</b>A agenda por data funciona no sistema online.</div>'; return; }
-  if (AD.error){ gridHost.innerHTML = '<div class="empty-state"><b>Não foi possível carregar a agenda</b>' + esc(AD.error) + '</div>'; return; }
+  if (AD.error){ gridHost.innerHTML = '<div class="empty-state"><b>Não foi possível carregar a agenda</b>' + esc(netErrText(AD.error)) + '<div style="margin-top:10px"><button class="btn" type="button" data-net-retry>Tentar de Novo</button></div></div>'; return; }
   var busy = !AD.loaded;
   gridHost.classList.toggle("agd-loading", busy);
   if (busy) titleEl.insertAdjacentHTML("beforeend", ' <span class="agd-loading-tag">Carregando…</span>');

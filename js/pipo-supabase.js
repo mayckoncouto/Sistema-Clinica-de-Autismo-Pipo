@@ -715,7 +715,13 @@
         if (!r.data.session) { var m = ssGet(LOGIN_MSG_KEY); ssSet(LOGIN_MSG_KEY, null); showLogin(m || ""); }
       });
     }).catch(function (e) {
-      showLogin("Sistema não configurado corretamente (" + (e.message || e) + "). Avise o administrador.");
+      var net = (navigator.onLine === false) || /load failed|failed to fetch|networkerror|network request failed|fetch failed/i.test(String((e && e.message) || e));
+      if (net) {
+        showLogin("Sem conexão com a internet. Confira o Wi-Fi ou os dados móveis; o sistema abre sozinho quando a conexão voltar.");
+        window.addEventListener("online", function () { location.reload(); }, { once: true });
+      } else {
+        showLogin("Sistema não configurado corretamente (" + (e.message || e) + "). Avise o administrador.");
+      }
       var f = loginEl && loginEl.querySelector("button");
       if (f) f.disabled = true;
     });
