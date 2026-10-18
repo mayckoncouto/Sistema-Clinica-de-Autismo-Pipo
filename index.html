@@ -5254,7 +5254,7 @@ var state = {
   services: [],          // serviços [{id,name}] (Sessão, Triagem…), from db — tela Profissionais › Serviços
   professionals: [],     // staff registry [{id,name,specialtyId}], from db
   reportDocs: {},         // docId -> {bookings:{...}} for ALL 20 day/week docs, for the Relatório tab
-  activeRoomFilter: null, // null = all
+  activeRoomFilter: null, // null = todas; senão lista de ids de sala (várias salas)
   search: "",
   scheduleDocs: {},      // docId -> {bookings:{...}} for every currently-active day/week doc
   scheduleSubs: {},      // docId -> {active, unsub} live subscriptions
@@ -10123,11 +10123,19 @@ function currentDayObj(){
 }
 function visibleRooms(){
   var rs = plannerRooms();
-  if (state.activeRoomFilter){
+  var sel = roomFilterIds();
+  if (sel.length){
     // Grupos de Suporte continuam visíveis com o filtro de sala.
-    rs = rs.filter(function(r){ return isGroup(r) || r.id===state.activeRoomFilter; });
+    rs = rs.filter(function(r){ return isGroup(r) || sel.indexOf(r.id) !== -1; });
   }
   return rs;
+}
+// Salas escolhidas no filtro do Planner (vazio = todas). Aceita o formato antigo (um id só).
+function roomFilterIds(){
+  var f = state.activeRoomFilter;
+  if (!f) return [];
+  var ids = Array.isArray(f) ? f : [f];
+  return ids.filter(function(id){ return !!findRoom(id); });
 }
 function renderAgendaShell(){
   var sendBtn = document.getElementById("sendToAgendaBtn");
@@ -10162,21 +10170,24 @@ function renderClipboardBar(){
   });
 }
 // Filtro de salas do Planner: menu suspenso (antes da busca) com "Todas as
-// salas" + cada sala com a bolinha da sua cor. Uma sala por vez, como antes.
+// salas" + cada sala com a bolinha da sua cor. Várias salas ao mesmo tempo: clicar marca/desmarca
+// (a lista fica aberta); "Todas as salas" limpa.
 function renderRoomChips(){
   var host = document.getElementById("roomChips");
   if (!state.rooms.length){ host.innerHTML = ""; return; }
-  var sel = state.activeRoomFilter ? state.rooms.filter(function(r){ return r.id === state.activeRoomFilter; })[0] : null;
+  var ids = roomFilterIds(), selRooms = ids.map(findRoom);
+  var sel = selRooms.length === 1 ? selRooms[0] : null;
+  var label = !ids.length ? "Todas as salas" : (sel ? sel.name : ids.length + " salas");
   function opt(id, name, color){
-    var on = (id || null) === (state.activeRoomFilter || null);
+    var on = id ? ids.indexOf(id) !== -1 : !ids.length;
     return '<button type="button" class="rf-opt'+(on?' on':'')+'" role="option" aria-selected="'+on+'" data-room="'+esc(id)+'">' +
       '<span class="dot" style="background:'+color+'"></span><span class="rf-name">'+esc(name)+'</span></button>';
   }
   host.innerHTML =
-    '<button type="button" class="rf-btn" aria-haspopup="listbox" aria-expanded="false" title="Filtrar por sala">' +
+    '<button type="button" class="rf-btn" aria-haspopup="listbox" aria-expanded="false" title="'+esc(ids.length > 1 ? selRooms.map(function(r){ return r.name; }).join(", ") : "Filtrar por sala")+'">' +
       '<span class="dot" style="background:'+(sel ? swatchVar(sel.color) : 'var(--ink-2)')+'"></span>' +
-      '<span class="rf-name">'+esc(sel ? sel.name : "Todas as salas")+'</span><span class="rf-caret">▾</span></button>' +
-    '<div class="rf-panel" role="listbox" hidden>' +
+      '<span class="rf-name">'+esc(label)+'</span><span class="rf-caret">▾</span></button>' +
+    '<div class="rf-panel" role="listbox" aria-multiselectable="true" hidden>' +
       opt("", "Todas as salas", "var(--ink-2)") +
       plannerRooms().map(function(r){ return opt(r.id, r.name, swatchVar(r.color)); }).join("") +
     '</div>';
@@ -10190,9 +10201,14 @@ function renderRoomChips(){
   panel.addEventListener("click", function(e){
     var o = e.target.closest(".rf-opt"); if (!o) return;
     var r = o.getAttribute("data-room");
-    state.activeRoomFilter = r ? r : null;
-    open(false);
+    if (!r){ state.activeRoomFilter = null; open(false); renderAgendaShell(); return; }
+    var cur = roomFilterIds(), i = cur.indexOf(r);
+    if (i === -1) cur.push(r); else cur.splice(i, 1);
+    state.activeRoomFilter = cur.length ? cur : null;
     renderAgendaShell();
+    // Continua aberto para marcar outras salas.
+    var host2 = document.getElementById("roomChips"), p2 = host2 && host2.querySelector(".rf-panel"), b2 = host2 && host2.querySelector(".rf-btn");
+    if (p2){ p2.hidden = false; if (b2) b2.setAttribute("aria-expanded", "true"); var f2 = p2.querySelector('.rf-opt[data-room="' + r + '"]'); if (f2) f2.focus(); }
   });
   panel.addEventListener("keydown", function(e){
     var items = Array.prototype.slice.call(panel.querySelectorAll(".rf-opt"));
@@ -19838,7 +19854,7 @@ function plannerExportCsv(){
       maxCols = Math.max(maxCols, seats.length + 1);
     });
     var widths = [14]; for (var wi = 1; wi < maxCols; wi++) widths.push(22);
-    var fname = (PLA.on ? "autoplanner" : "planner") + (state.activeRoomFilter ? "-" + slugify((findRoom(state.activeRoomFilter) || {}).name || "sala") : "") + ".xlsx";
+    var fname = (PLA.on ? "autoplanner" : "planner") + (roomFilterIds().length === 1 ? "-" + slugify((findRoom(roomFilterIds()[0]) || {}).name || "sala") : (roomFilterIds().length ? "-salas" : "")) + ".xlsx";
     xlDownload(fname, [
       {name: "Lista", rows: [head].concat(rows.map(function(r){ return r.cells; })), widths: [12, 16, 8, 24, 22, 28, 14, 18, 30]},
       {name: "Grade do Planner", rows: [gridHead].concat(grid), widths: widths, noFreeze: true, wrap: true}
@@ -27739,7 +27755,7 @@ var HELP_TOPICS = [
   {id: "planner", group: "Planner", title: "Planner: A Grade Modelo", mod: "planner", tab: "planner",
     purpose: "Grade de 4 semanas que se repetem (dias × salas × terapeutas × horários): o modelo da rotina da clínica.",
     steps: [
-      "Planner ▾ → <b>Planner</b>. Escolha o dia e a semana (ou \"Todos\"), filtre por sala e busque o paciente.",
+      "Planner ▾ → <b>Planner</b>. Escolha o dia e a semana (ou \"Todos\"), filtre por sala (marque uma ou várias; “Todas as Salas” limpa o filtro; os Grupos de Suporte continuam aparecendo) e busque o paciente.",
       "Clique numa célula vazia (+) para agendar: paciente, serviço, observação, ou marque Bloqueado / Reunião Clínica / Treinamento.",
       "Passe o mouse no agendamento para Excluir, Mover ou Copiar. Também dá para arrastar e soltar (em cima de outro agendamento, troca os dois).",
       "Na linha antes das 07:20 e na do almoço: botões <b>liberar / bloquear / limpar</b> do período (dois cliques para confirmar). Ao lado de cada horário: liberar / bloquear / limpar a linha (os botões aparecem ao passar o mouse na linha).",
