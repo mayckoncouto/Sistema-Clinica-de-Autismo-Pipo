@@ -58,6 +58,14 @@ const fs = require('fs');
   const t1 = await page.$eval('#anBuild .an-q[data-qi="1"] .rn', (e) => e.textContent);
   check('dragging a card changes the order?', t1.replace(/^\d+\.\s*/, '') === t0.replace(/^\d+\.\s*/, ''), t0 + ' -> ' + t1);
   await (await page.$('#anBuild .an-q[data-qi="1"] [data-mv="1"]')).click(); await page.waitForTimeout(80); await (await page.$('#anBuild .an-q[data-qi="2"] [data-mv="1"]')).click(); await page.waitForTimeout(80);
+  // trocar o tipo na janela da pergunta (texto -> escolha única) mantém o título
+  await (await page.$('#anBuild .an-q[data-qi="2"] [data-ed]')).click(); await page.waitForSelector('#ovAnQ');
+  const tit0 = await page.inputValue('#aqTit');
+  await page.evaluate(() => { const e = document.getElementById('aqTipo'); e.value = 'escolha'; e.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.waitForTimeout(150);
+  check('changing type keeps the title and shows options?', (await page.inputValue('#aqTit')) === tit0 && !!(await page.$('#aqOpc')), tit0);
+  await page.click('#aqCancel'); await page.waitForTimeout(100);
+  check('cancel keeps the old type?', /Texto Curto/.test(await page.$eval('#anBuild .an-q[data-qi="2"] .rs', (e) => e.textContent)));
   // duplicar a pergunta de texto
   await (await page.$('#anBuild .an-q[data-qi="2"] [data-dup]')).click(); await page.waitForTimeout(60);
   check('duplicate adds a block with new id?', (await page.$$('#anBuild .an-q')).length === 7);

@@ -26501,7 +26501,7 @@ var HELP_TOPICS = [
     purpose: "Cria os modelos de formulário usados nas anamneses: você monta as perguntas uma vez e depois preenche o modelo para cada paciente.",
     steps: ["Prontuário ▾ → <b>Anamneses</b> → <b>Outras Opções ▾</b> → <b>Modelos</b> → <b>+ Incluir</b>: nome, descrição e <b>Validade</b> (3 Meses, 6 Meses ou 1 Ano: tempo até a anamnese precisar ser refeita).",
       "Em <b>Perguntas</b>, escolha <b>+ Adicionar Pergunta…</b> e o tipo: Texto Curto, Texto Longo, Número, Data, Hora, Escolha Única, Múltipla Escolha, Sim ou Não, Escala, Arquivo ou Assinatura. Para organizar, use Título de Seção (numerado sozinho: 1., 2., 3. pela ordem, no formulário, na prévia e na impressão; não digite o número), Texto Explicativo, Separador e Nova Página.",
-      "Cada pergunta é um quadro que pode ser arrastado com o mouse (ou usar ▲ ▼) para mudar a ordem, com <b>Editar</b>, <b>Duplicar</b> e <b>Remover</b>. <b>Editar</b> abre a janela da pergunta: texto, texto de apoio, <b>Resposta Obrigatória</b>, opções (uma por linha), valores da escala e <b>Preencher com o Cadastro do Paciente</b>.",
+      "Cada pergunta é um quadro que pode ser arrastado com o mouse (ou usar ▲ ▼) para mudar a ordem, com <b>Editar</b>, <b>Duplicar</b> e <b>Remover</b>. <b>Editar</b> abre a janela da pergunta: <b>tipo</b> (pode ser trocado; as condições de outras perguntas que usavam esta saem), texto, texto de apoio, <b>Resposta Obrigatória</b>, opções (uma por linha), valores da escala e <b>Preencher com o Cadastro do Paciente</b>.",
       "Em <b>Lógica Condicional</b>, escolha <b>Mostrar esta pergunta só se</b> ou <b>Ocultar esta pergunta se</b> e inclua uma ou mais condições com <b>+ Incluir Condição</b>: pergunta anterior, comparação (for igual a, for diferente de, contiver, não contiver, for maior que, for menor que, estiver preenchida, estiver vazia) e valor. Com 2 ou mais condições, escolha se <b>todas</b> (E) ou <b>qualquer uma</b> (OU) precisam valer.",
       "<b>Prévia</b> mostra como o formulário aparece para quem preenche. <b>Duplicar Modelo</b> cria uma cópia para você ajustar."],
     rules: ["Não pode haver dois modelos com o mesmo nome.", "Todo modelo precisa de pelo menos uma pergunta; perguntas de escolha precisam de pelo menos 2 opções.", "A condição só pode olhar para uma pergunta que vem antes; ao mover uma pergunta, condições que passam a apontar para frente são retiradas.", "Mudar o modelo não altera anamneses já preenchidas."],
@@ -31264,6 +31264,15 @@ function anamCondProblem(q, qs){
   }
   return "";
 }
+// Troca o tipo de uma pergunta mantendo texto, apoio e condições; o que não serve ao tipo novo sai.
+function anamConvertQ(q, tipo){
+  var n = anamCopyQs([q])[0], k = anamKind(tipo); n.tipo = tipo;
+  if (k.opts){ if (!n.opcoes || n.opcoes.length < 2) n.opcoes = [{id: uid("ao"), label: "Opção 1"}, {id: uid("ao"), label: "Opção 2"}]; } else delete n.opcoes;
+  if (tipo === "escala"){ if (n.min == null) n.min = 1; if (!n.max) n.max = 5; } else { delete n.min; delete n.max; delete n.rotMin; delete n.rotMax; }
+  if (!k.q){ delete n.obrigatoria; delete n.ajuda; }
+  if (["texto", "textolongo", "data", "numero"].indexOf(tipo) === -1) delete n.campo;
+  return n;
+}
 // Janela de uma pergunta do modelo (campos, opções e lógica condicional: mostrar ou ocultar conforme respostas anteriores).
 function openAnamQuestionModal(ctx){
   var q = anamCopyQs([ctx.q])[0], qs = ctx.qs, idx = ctx.index, k = anamKind(q.tipo), isQ = anamIsQ(q), canSave = ctx.canSave, dis = canSave ? "" : " disabled";
@@ -31298,6 +31307,7 @@ function openAnamQuestionModal(ctx){
     '<div class="modal-head"><div><h3>' + (ctx.isNew ? "Incluir Pergunta" : (canSave ? "Editar Pergunta" : "Pergunta")) + '</h3><div class="modal-sub">' + esc(qKindLabel(q)) + '</div></div>' +
       '<button class="modal-close" id="aqX" aria-label="Fechar">✕</button></div><div class="modal-body">' +
     '<div class="tr-sec tr-sec-top">Pergunta</div>' +
+    '<div class="field"><label for="aqTipo">Tipo</label><select id="aqTipo"' + dis + '>' + ANAM_KINDS.filter(function(x){ return x.k !== "separador" && x.k !== "pagina"; }).map(function(x){ return opt(x.k, x.label, q.tipo); }).join("") + '</select></div>' +
     (q.tipo === "bloco" ? '<div class="field"><label for="aqTit">Texto</label><textarea id="aqTit" rows="3" placeholder="' + esc(titlePh()) + '"' + dis + '>' + esc(q.titulo || "") + '</textarea></div>'
       : '<div class="field"><label for="aqTit">' + (q.tipo === "secao" ? "Título" : "Pergunta") + '</label><input type="text" id="aqTit" placeholder="' + esc(titlePh()) + '" value="' + esc(q.titulo || "") + '"' + dis + '></div>') +
     (isQ ? '<div class="field"><label for="aqAjuda">Texto de Apoio</label><input type="text" id="aqAjuda" placeholder="Orientação que aparece embaixo da pergunta" value="' + esc(q.ajuda || "") + '"' + dis + '></div>' +
@@ -31341,6 +31351,20 @@ function openAnamQuestionModal(ctx){
     var d = e.target.closest("[data-cdel]"); if (d){ readConds(); conds.splice(+d.closest(".an-cond-row").getAttribute("data-cn"), 1); redrawCond(); }
   });
   setTimeout(function(){ var t = $("aqTit"); if (canSave && t) t.focus(); }, 30);
+  // Trocar o tipo reabre a janela com os campos do tipo novo (texto e opções já digitados ficam).
+  if ($("aqTipo")) $("aqTipo").addEventListener("change", function(){
+    var nt = this.value; if (!nt || nt === q.tipo) return;
+    readConds();
+    var cur = anamCopyQs([q])[0];
+    cur.titulo = $("aqTit").value.trim();
+    if ($("aqAjuda")) cur.ajuda = $("aqAjuda").value.trim();
+    if ($("aqObr")) cur.obrigatoria = $("aqObr").checked;
+    if ($("aqOpc")){ var old = cur.opcoes || []; cur.opcoes = $("aqOpc").value.split("\n").map(function(x){ return x.trim(); }).filter(Boolean).map(function(l, i){ return {id: old[i] ? old[i].id : uid("ao"), label: l}; }); }
+    anamCondSet(cur, conds.filter(function(c){ return c.q; }), modo, acao);
+    var orig = ctx.origTipo || ctx.q.tipo;
+    close();
+    openAnamQuestionModal(Object.assign({}, ctx, {q: anamConvertQ(cur, nt), origTipo: orig}));
+  });
   if ($("aqSave")) $("aqSave").addEventListener("click", function(){
     readConds();
     var tit = $("aqTit").value.trim();
@@ -31363,6 +31387,14 @@ function openAnamQuestionModal(ctx){
     anamCondSet(q, cs, modo, acao);
     var pr = anamCondProblem(q, qs.slice(0, idx).concat([q]));
     if (pr){ showToast(pr, true); return; }
+    if (ctx.origTipo && ctx.origTipo !== q.tipo && !ctx.isNew){
+      var removed = false;
+      qs.forEach(function(x){
+        var l = anamCondList(x);
+        if (x.id !== q.id && l.some(function(c){ return c.q === q.id; })){ anamCondSet(x, l.filter(function(c){ return c.q !== q.id; }), x.cond.modo, x.cond.acao); removed = true; }
+      });
+      if (removed) showToast("Condições de outras perguntas que usavam esta foram removidas.");
+    }
     close(); ctx.onSave(q);
   });
   if (!canSave) modalReadOnly("ovAnQ");
