@@ -4919,3 +4919,4 @@ Pedido do usuário: janela igual a Agendamentos, listando os atendimentos do Pla
 - Ajuda: tópico `planner-list`. Testes: `tests/run_planner_list.js` (no `npm test`); a aba entra em `run_toolbar_rows`, `run_sticky_headers`, `run_cad_titles`. `run_nav_single.js` agora usa Resumo como a única opção do menu Planner (com Planner e Planner List o menu tem duas).
 
 - (2026-10-18, pedido do usuário) **Divergência "não há quadro" de serviço Devolutiva vira informação** (nível `info`, não `erro`): Devolutiva pode acontecer sem estar no quadro do tratamento (`trMonthView`, serviço cujo nome tem "devolutiva"). Outros serviços/especialidades sem quadro continuam erro. Sem SQL.
+- Produção (2026-10-18): usuário apagou `evo_rev_20261018` e as funções `tmp_evo_*` (conferido 0 | 0). A revisão não pode mais ser desfeita. Segue pendente a evolução com convite de Zoom (procurar `content ilike '%zoom.us%'`).
