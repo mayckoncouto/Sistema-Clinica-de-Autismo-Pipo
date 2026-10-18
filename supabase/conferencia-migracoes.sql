@@ -145,6 +145,7 @@ chk (ordem, migracao, aplicada, obs) as (values
  (137, '2026-10-18b-anamneses', to_regclass('public.anamneses') is not null, 'Anamneses preenchidas por paciente (tabela anamneses, permissão por tipo)'),
  (138, '2026-10-18c-anamnese-link-e-reavaliacao', to_regclass('public.anamnesis_links') is not null and exists (select 1 from pg_proc where proname = 'crm_auto_r_anamnese'), 'Link da família para a anamnese + automação de reavaliação'),
  (139, '2026-10-18d-modelos-de-anamnese', exists (select 1 from public.documents d, jsonb_array_elements(d.data -> 'list') e where d.path = 'config/anamnesis_types' and e ->> 'id' = 'anam-multidisciplinar'), 'Modelos de anamnese prontos (Multidisciplinar, TEA/TGD, Acompanhamento)'),
+(141, '2026-10-18f-historico-extras', exists(select 1 from pg_proc where proname = 'change_log_unread') and exists(select 1 from pg_trigger where tgname = 'change_log_push_del'), 'Histórico de Alterações: contador de não lidas e aviso de exclusão em lote'),
 (140, '2026-10-18e-historico-de-alteracoes', exists(select 1 from pg_proc where proname = 'change_log_list'), 'Histórico de Alterações (change_log, gatilhos e permissões historico_planner/historico_agenda)'),
  (132, '2026-10-16-auto-planner', exists(select 1 from pg_proc where proname = 'documents_enforce' and prosrc like '%autoplan%'), 'Auto Planner (caminho autoplan/*, módulo autoplanner, bloqueios extras)'),
  (131, '2026-10-15c-metas-de-vendas', to_regclass('public.sale_goals') is not null, 'Metas de vendas (sale_goals)'),

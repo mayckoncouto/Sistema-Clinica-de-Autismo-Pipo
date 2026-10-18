@@ -4,6 +4,7 @@
 //   {acao: "teste"} + login da pessoa       → aviso de teste para os aparelhos dela
 //   {tipo: "mencao", evento} + x-pipo-push  → @menção num comentário (chamado pelo gatilho do banco)
 //   {tipo: "seguindo", evento} + x-pipo-push → comentário/mudança em tarefa que a pessoa segue (gatilho do banco)
+//   {tipo: "exclusao", log} + x-pipo-push  → muitas exclusões de uma vez no Planner/Agenda (gatilho do histórico)
 //   {tipo: "vencidas"}       + x-pipo-push  → resumo diário das vencidas (chamado pelo agendamento)
 import { sendPush, vapidGenerate, type PushSub } from "./webpush.ts";
 
@@ -15,6 +16,7 @@ export type Db = {
   subsFor(userIds: string[]): Promise<Sub[]>;
   mentionTargets(eventId: string): Promise<{ user_id: string; task_id: string; title: string; author: string }[]>;
   followTargets(eventId: string): Promise<{ user_id: string; task_id: string; title: string; author: string; acao: string }[]>;
+  deleteTargets(logId: number): Promise<{ user_id: string; area: string; author: string; n: number }[]>;
   overdue(): Promise<{ user_id: string; n: number }[]>;
   deleteSub(id: string): Promise<void>;
   markSub(id: string, ok: boolean): Promise<void>;
@@ -88,6 +90,12 @@ export function createHandler(o: Opts) {
         const t = await o.db.followTargets(body.evento);
         return json(await deliver(t.map((x) => ({ user_id: x.user_id, pref: "seguindo", data: {
           title: x.author + " " + x.acao, body: x.title, url: "/?tarefa=" + x.task_id + "#crm", tag: "seguindo-" + x.task_id } }))));
+      }
+      if (body.tipo === "exclusao" && typeof body.log === "number") {
+        const t = await o.db.deleteTargets(body.log);
+        return json(await deliver(t.map((x) => ({ user_id: x.user_id, pref: "exclusoes", data: {
+          title: x.author + " excluiu " + x.n + " " + (x.area === "agenda" ? "atendimentos da Agenda" : "agendamentos do Planner"),
+          body: "Confira em Outras Opções → Histórico de Alterações. Dá para restaurar.", url: "/#" + (x.area === "agenda" ? "agenda" : "planner"), tag: "exclusao-" + body.log } }))));
       }
       if (body.tipo === "vencidas") {
         const t = await o.db.overdue();

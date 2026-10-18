@@ -38,6 +38,7 @@ const db: Db = {
   async subsFor(ids) { return subs.filter((s) => ids.includes(s.user_id)); },
   async followTargets(ev) { return ev === "ev2" ? [{ user_id: "ana", task_id: "t1", title: "Ligar para a família", author: "Bia", acao: "comentou" }] : []; },
   async mentionTargets(ev) { return ev === "ev1" ? [{ user_id: "ana", task_id: "t1", title: "Ligar para a família", author: "Bia" }, { user_id: "caio", task_id: "t1", title: "Ligar para a família", author: "Bia" }] : []; },
+  async deleteTargets(id) { return id === 7 ? [{ user_id: "ana", area: "agenda", author: "Bia", n: 12 }] : []; },
   async overdue() { return [{ user_id: "ana", n: 3 }, { user_id: "bia", n: 1 }, { user_id: "zé", n: 0 }]; },
   async deleteSub(id) { subs = subs.filter((s) => s.id !== id); },
   async markSub(id, ok) { marks.push(id + ":" + ok); },
@@ -65,6 +66,8 @@ check("quem tem 0 vencidas não recebe?", !got["zé"]);
 const sg = await (await call({ tipo: "seguindo", evento: "ev2" }, { "x-pipo-push": "s3gr3d0" })).json();
 const sga = got.a2.map((x: string) => JSON.parse(x)).filter((x: { tag?: string }) => x.tag === "seguindo-t1")[0];
 check("seguindo: quem segue recebe 'Bia comentou' no aparelho que aceita?", sg.enviados >= 1 && sga && sga.title === "Bia comentou" && sga.url === "/?tarefa=t1#crm", { sg, sga });
+const ex = await (await call({ tipo: "exclusao", log: 7 }, { "x-pipo-push": "s3gr3d0" })).json();
+check("aviso de exclusão em lote chega para quem tem permissão?", ex.enviados >= 1, ex);
 check("pedido desconhecido = 400?", (await call({ tipo: "x" }, { "x-pipo-push": "s3gr3d0" })).status === 400);
 await srv.shutdown();
 console.log(fails ? fails + " FAILED" : "ALL PASS");

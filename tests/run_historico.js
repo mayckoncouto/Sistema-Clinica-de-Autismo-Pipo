@@ -72,6 +72,22 @@ const path = require('path');
   console.log(await ev(`(document.getElementById('toastHost')||{}).textContent`), await ev(`!!document.getElementById('cfOk')`));
   const applied = await ev(`JSON.stringify(window.__applied)`);
   check('restaurar grava o antes', applied && applied.indexOf('Paciente Um') !== -1, applied);
+  // contador de não lidas
+  await ev(`haBadgeRefresh(true)`);
+  check('contador do Planner (14 não lidas)', await ev(`HA_BADGE.planner`) === 14, await ev(`HA_BADGE.planner`));
+  check('botão Histórico mostra o contador', /\(14\)/.test(await ev(`document.getElementById("plHistBtn").textContent`)));
+  check('botão Outras Opções ganha o número', await ev(`!!document.querySelector("#plToolsBtn [data-ha-badge]")`));
+  // histórico por paciente (Planner + Agenda)
+  await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; HA.mem.agenda = [{id: 100, at: new Date().toISOString(), user_id: "u-other", user_name: "Fulana", acao: "alterou", tipo: "atendimento", paciente: "Paciente Um", quando: "2030-01-07", hora: "08:00", sala_id: null, prof_id: null, ref: "a1", antes: {patient: "Paciente Um", note: "a"}, depois: {patient: "Paciente Um", note: "b"}, lote: "x", lida: false}]; openHistoricoAlteracoes("ambas", {paciente: "Paciente Um"}); })()`);
+  await page.waitForTimeout(300);
+  const pt = await ev(`Array.prototype.map.call(document.querySelectorAll("#haHost tr[data-ha-i]"), function(t){ return t.textContent; }).join("|")`);
+  check('paciente: traz Planner e Agenda só dele', /Planner/.test(pt) && /Agenda/.test(pt) && pt.indexOf('Bruno Verde') === -1, pt.slice(0, 200));
+  // comparar semanas
+  await ev(`document.getElementById("haMenuBtn").click()`);
+  await ev(`document.querySelector('.cx-menu [data-pick="cmp"], [data-pick="cmp"]').click()`);
+  await page.waitForTimeout(200);
+  check('comparar semanas abre com tabela', await ev(`!!document.getElementById("ovHaCmp") && document.querySelectorAll("#hcOut table").length >= 1`));
+  check('comparar: semana A tem lançamentos', await ev(`document.getElementById("hcOut").textContent.indexOf("Excluídos") !== -1`));
   check('sem erros de script', errors.length === 0, errors.join('|'));
   await browser.close();
   try { fs.unlinkSync(evPage); } catch (e) {}
