@@ -4159,6 +4159,13 @@ subcategorias (ex.: parcela = principal "Pagamento de Empréstimos" Saída + jur
 - Próximos: **Conciliação com o extrato** e a revisão de capitalização (“Contas a Receber”) em todo o sistema.
 
 ## Autorização permanente para rodar SQL (2026-10-12)
+**EXCEÇÃO (REGRA FIXA do usuário, 2026-10-18): o Planner só muda pela tela.** Nenhuma alteração no Planner de verdade
+(documentos `schedule/*`, e também `config/planner_blocks`) pode ser feita por SQL, pelo conector do Supabase, por
+importação, migração, script ou qualquer outro caminho que não seja a tela do sistema. Se uma mudança no Planner só puder
+ser feita por SQL, Claude NÃO roda: mostra o script inteiro no chat e o usuário roda manualmente, sozinho, depois de ler.
+Vale também para "limpezas" e correções de dados (ex.: renomear paciente, apagar coluna órfã). Migrações que mudam
+estrutura/funções do banco continuam como antes, mas sem tocar nos dados do Planner. O Auto Planner (`autoplan/*`) não
+entra nesta regra.
 Pedido do usuário: "A partir de agora não me pergunte mais, pode rodar os SQL". SQL de migração que altera dados ou
 estrutura pode ser rodado direto pelo conector do Supabase (em partes pequenas; comando com delete/drop trava no
 conector — nesses, o usuário roda no SQL Editor), sem pedir confirmação antes. Depois de rodar, conferir e relatar o
