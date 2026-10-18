@@ -66,7 +66,7 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab="planner"]', (b) => b.click());
   await page.waitForFunction(() => !document.getElementById('tab-planner').classList.contains('pl-auto'));
   await page.waitForTimeout(400);
-  check('Planner back: hash #planner, title hidden, books visible?', (await page.evaluate(() => location.hash)) === '#planner' && await page.$eval('#plAutoTitle', (b) => b.hidden) && (await books()) > 0);
+  check('Planner back: hash #planner, title is Planner, books visible?', (await page.evaluate(() => location.hash)) === '#planner' && (await page.$eval('#plAutoTitle', (b) => !b.hidden && b.textContent === 'Planner')) && (await books()) > 0);
   check('Planner reads schedule/* again?', await ev(`!PLA.on && schedPath("seg-1") === "schedule/seg-1"`));
   check('Planner and Auto Planner undo stacks swapped back?', await ev(`bookingHistory.undo.length === 0`));
 

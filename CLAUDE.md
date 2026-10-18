@@ -4883,3 +4883,6 @@ do Clínica Ágil, ligadas aos atendimentos. Feito direto no banco (dados reais 
 
 - (2026-10-18, pedido do usuário) **Aviso ao sair sem salvar em todas as janelas que editam**: `GUARD_IDS` ganhou `ovAnQ` (Editar Pergunta), `ovAnCols`, `ovComRule`, `ovCt` (Contratos), `ovMetas`, `ovSale`, `ovVnEd`, `ovPlb` (Bloquear/Liberar Horário), `ovPf` (Campos Obrigatórios), `ovPwd` (Senha), `ovCrma` (Automação), `ovFpb` (Baixa), `ovFpl`, `ovAtt`. Ficam de fora de propósito as janelas só de leitura, confirmações, assistentes de uma ação (mover, gerar, mesclar, prévias) e Editar Mensagem do CRM. Janela nova que edita: acrescentar o id em `GUARD_IDS`.
 - Produção (2026-10-18): tabelas temporárias da importação (imp_evo, imp_w, imp_prof, imp_dict, imp_ca) e a função imp_fix apagadas pelo usuário; conferido 0 | 0 e 4.855 evoluções importadas.
+
+
+- (2026-10-18, pedido do usuário) **Toda tela principal mostra o nome no começo da barra** (`h2.cad-title`): Planner (`#plAutoTitle`, vira "Auto Planner" no modo Auto Planner), Agenda e Agenda Planner (título fixo no HTML da `.agd-toolbar`), Prontuário e Plano Terapêutico (via `cadTitleText`/`cadTitlesInit`, chaves `prontuario` e `planos`). Resumo, Disponibilidade, Visão Geral e CRM já tinham o nome próprio (`<b>`). No celular o título ocupa a 1ª linha. Sem SQL.
