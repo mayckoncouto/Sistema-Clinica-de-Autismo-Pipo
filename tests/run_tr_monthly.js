@@ -42,6 +42,9 @@ const path = require('path');
   console.log('Agenda, done, justified, no status?', ps.ag === 4 && ps.real === 2 && ps.just === 1 && ps.semSt === 1);
   console.log('Dif. Agenda = contracted − Agenda + justified?', ps.difAg === 8 - 4 + 1);
   console.log('total row and other-service note?', /tr-month-tot/.test(r.html) && r.v.tot.contr === 8 && r.v.other === 1 && /não estão no tratamento/.test(r.html));
+  console.log('Agenda service without a quadro becomes a "Fora do Tratamento" row?', r.v.extra.length === 1 && r.v.extra[0].ag === 1 && /Fora do Tratamento/.test(r.html));
+  console.log('divergence panel lists the error with a link to the Agenda?', r.v.divs.some((d) => d.lvl === 'erro' && /Agenda: 1 atendimento/.test(d.text) && d.go && d.go.t === 'agenda') && /tr-div-go/.test(r.html), JSON.stringify(r.v.divs.map((d) => d.text)));
+  console.log('Agenda without Planner / Planner without Agenda / same-day duplicates are reported?', Array.isArray(r.v.divs) && r.v.divs.every((d) => d.text && d.lvl));
   console.log('months from the start to next month, opens on the current month?', r.rg.first === r.prevYm && r.rg.dflt === r.cur && r.rg.last > r.cur, JSON.stringify(r.rg));
 
   // Janela: começa fechada, abre pela seta, ‹ › trocam o mês.
@@ -53,7 +56,7 @@ const path = require('path');
   await page.click('#trMonthPrev');
   const label2 = await page.textContent('#trMonthLabel');
   const prevOff = await page.$eval('#trMonthPrev', (b) => b.disabled);
-  const rowsShown = await page.$$eval('#trMonthly tbody tr', (t) => t.length);
+  const rowsShown = await page.$$eval('#trMonthly tbody tr:not(.tr-month-x):not(.tr-month-xh)', (t) => t.length);
   console.log('section starts hidden and opens with the arrow?', closed && !(await page.$eval('#trMonthBody', (e) => e.hidden)));
   console.log('‹ goes to the previous month (first one, ‹ disabled)?', /\(atual\)/.test(label1) && !/\(atual\)/.test(label2) && prevOff && rowsShown === 3, label1, label2);
   const font = await page.$eval('#trMonthBody > .pat-count', (e) => getComputedStyle(e).fontSize);

@@ -1357,6 +1357,20 @@ button.tr-sec-toggle[aria-expanded="false"] .tr-sec-arrow{transform:rotate(-90de
 .tr-month td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
 .tr-month tr.tr-month-first td{border-top:2px solid var(--line)}
 .tr-month tr.tr-month-tot td{font-weight:800;background:var(--surface-2)}
+.tr-div{margin:0 0 8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.tr-div-ok{color:#1f6b45;background:#eaf6ef;border-color:#bfe0cd;font-size:12.5px}
+.tr-div-h{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;font-size:12.5px}
+.tr-div-chip{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid transparent}
+.tr-div-chip.tr-div-erro{background:#fde8e8;color:#9b1c1c;border-color:#f3b8b8}
+.tr-div-chip.tr-div-aviso{background:#fdf1dc;color:#8a5a10;border-color:#f0d49c}
+.tr-div-chip.tr-div-info{background:#e8f0fb;color:#1f4e8c;border-color:#b9cdea}
+.tr-div-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.tr-div-l li{display:flex;align-items:flex-start;gap:7px;font-size:12px;line-height:1.35}
+.tr-div-dot{flex:0 0 8px;height:8px;border-radius:50%;margin-top:5px;background:#8a5a10}
+li.tr-div-erro .tr-div-dot{background:#c0392b}li.tr-div-info .tr-div-dot{background:#2f6db5}
+.tr-div-go{margin-left:auto;flex:0 0 auto;padding:1px 8px;font-size:11px}
+.tr-month tr.tr-month-xh td{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#9b1c1c;background:#fdf3f3}
+.tr-warn.tr-warn-bad{background:#fde8e8;color:#9b1c1c;border-color:#f3b8b8}
 .tr-warns{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
 .tr-warn{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:999px;background:#fdf1dc;color:#8a5a10;border:1px solid #f0d49c;white-space:nowrap}
 .tr-month td.tr-falta{color:#a3352f;font-weight:800}.tr-month td.tr-sobra{color:#8a5a10;font-weight:800}
@@ -3304,6 +3318,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <option value="abavencendo">Revisão da Intervenção ABA vencendo (próximos 30 dias)</option>
         <option value="abavencida">Revisão da Intervenção ABA vencida</option>
         <option value="abaixo">Abaixo do contratado</option>
+        <option value="diverg">Com divergências no mês atual</option>
         <option value="sem">Pacientes ativos sem tratamento</option>
       </select>
       <span class="pat-count" id="trCount"></span>
@@ -24554,6 +24569,77 @@ function trPlannerCounts(p, lines){
   });
   return out;
 }
+// Sessões do paciente no Planner, uma a uma (dia, semana, hora, sala, profissional, serviço).
+function trPlannerItems(p){
+  var out = [];
+  if (!TR.plan || !p) return out;
+  Object.keys(TR.plan).forEach(function(docId){
+    var bk = TR.plan[docId] || {}, parts = String(docId).split("-");
+    Object.keys(bk).forEach(function(k){
+      var b = bkRec(bk[k]);
+      if (!b || !b.patient || bookingKind(b) || !recIsPatient(b, p)) return;
+      var kp = k.split("|"), room = findRoom(kp[1]), ther = room ? findTherapist(room, kp[2]) : null;
+      out.push({day: parts[0], week: +parts[1] || 0, time: kp[0], room: room, prof: ther ? ther.professionalId : "", svc: b.service || DEFAULT_SERVICE_ID});
+    });
+  });
+  return out;
+}
+var TR_WD = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+function trWdName(k){ var d = ALL_WEEKDAYS.filter(function(x){ return x.key === k; })[0]; return d ? d.full : k; }
+// Divergências entre tratamento (quadros), Planner e Agenda no mês. Devolve [{lvl: "erro"|"aviso"|"info", text, go}].
+function trDivergences(t, ym, ctx){
+  var p = ctx.p, lines = ctx.lines, out = [], today = trTodayIso();
+  function add(lvl, text, go){ out.push({lvl: lvl, text: text, go: go || null}); }
+  function who(pid){ var pr = pid && findProfessional(pid); return pr ? (profShortName(pr) || profNome(pr)) : "sem profissional"; }
+  function sname(svc){ var sv = servicesList().filter(function(x){ return x.id === svc; })[0]; return sv ? sv.name : svc; }
+  function weeksText(l){ return String(l.semanas).split(",").map(function(x){ return x + "ª"; }).join(" e ") + " semana(s)"; }
+  var pgo = function(it){ return {t: "planner", k: it.day + "|" + it.week + "|" + p.name}; };
+  var perWeek = {}, slotSeen = {};
+  ctx.pitems.forEach(function(it){
+    var line = ctx.lineOf(it.prof, it.svc, it.week), tag = " (" + trWdName(it.day) + " " + it.time + ", " + it.week + "ª semana)";
+    var sk = it.day + "|" + it.week + "|" + it.time;
+    if (slotSeen[sk] && slotSeen[sk] !== it){ add("erro", "Planner: o paciente está em dois lugares ao mesmo tempo" + tag + ".", pgo(it)); }
+    slotSeen[sk] = it;
+    if (!line){ return; }
+    (perWeek[line.id] = perWeek[line.id] || {})[it.week] = (perWeek[line.id][it.week] || 0) + 1;
+    if (line.semanas && !tlWeekOk(line, it.week)) add("aviso", "Planner: " + lineLabel(line, false) + " está na " + it.week + "ª semana, mas o quadro vale para " + weeksText(line) + tag + ".", pgo(it));
+    if (line.profId && it.prof && line.profId !== it.prof) add("aviso", "Planner: " + lineLabel(line, false) + " com " + who(it.prof) + ", mas o quadro pede " + who(line.profId) + tag + ".", pgo(it));
+    var dias = tlDays(line.dia);
+    if (dias.length && dias.indexOf(it.day) === -1) add("aviso", "Planner: " + lineLabel(line, false) + " na " + trWdName(it.day) + ", mas o quadro pede " + tlDaysText(line.dia) + tag + ".", pgo(it));
+    if (line.hora){
+      var okT = false, n = Math.max(1, +line.seguidas || 1);
+      for (var i = 0; i < n; i++) if (addMinutes(line.hora, SESSION_MINUTES * i) === it.time) okT = true;
+      if (!okT) add("aviso", "Planner: " + lineLabel(line, false) + " às " + it.time + ", mas o quadro pede " + line.hora + tag + ".", pgo(it));
+    }
+    if (line.roomId && it.room && line.roomId !== it.room.id) add("aviso", "Planner: " + lineLabel(line, false) + " na sala " + it.room.name + ", mas o quadro pede " + ((findRoom(line.roomId) || {}).name || "outra sala") + tag + ".", pgo(it));
+    if (!patientSlotOk(p, it.day, it.time)) add("aviso", "Planner: sessão fora do Horário de Atendimento do paciente" + tag + ".", pgo(it));
+  });
+  // Distribuição desigual entre as semanas permitidas do quadro.
+  lines.forEach(function(l){
+    var contr = Number(String(l.hours == null ? "" : l.hours).replace(",", ".")) || 0, pw = perWeek[l.id];
+    if (!contr || !pw) return;
+    var ws = String(l.semanas || "1,2,3,4").split(","), exp = contr / ws.length;
+    ws.forEach(function(w){
+      var c = pw[w] || 0;
+      if (c < Math.floor(exp) || c > Math.ceil(exp)) add("aviso", "Planner: " + lineLabel(l, false) + " tem " + c + " sessão(ões) na " + w + "ª semana; o esperado é cerca de " + (Math.round(exp * 10) / 10) + ".");
+    });
+  });
+  var byDay = {};
+  ctx.aitems.forEach(function(a){
+    var wk = tlWeekOfDate(a.d), line = ctx.lineOf(a.prof, a.svc, wk), tag = " (" + trBr(a.d).slice(0, 5) + ")", go = {t: "agenda", d: a.d};
+    var k = a.d + "|" + (line ? line.id : "x:" + a.svc);
+    byDay[k] = (byDay[k] || 0) + 1;
+    if (byDay[k] === 2 && !(line && (+line.seguidas || 1) > 1)) add("aviso", "Agenda: mais de um atendimento de " + (line ? lineLabel(line, false) : sname(a.svc)) + " no mesmo dia" + tag + ".", go);
+    if (t.vencPor !== "sessoes" && t.vencPor !== "sem" && t.validoAte && a.d > t.validoAte) add("erro", "Agenda: atendimento depois do vencimento do tratamento (" + trBr(t.validoAte) + ")" + tag + ".", go);
+    if (!line) return;
+    if (wk && line.semanas && !tlWeekOk(line, wk)) add("aviso", "Agenda: " + lineLabel(line, false) + " na " + wk + "ª semana, mas o quadro vale para " + weeksText(line) + tag + ".", go);
+    if (line.profId && a.prof && line.profId !== a.prof) add("aviso", "Agenda: " + lineLabel(line, false) + " com " + who(a.prof) + ", mas o quadro pede " + who(line.profId) + tag + ".", go);
+    var dias = tlDays(line.dia), wd = TR_WD[agdParse(a.d).getDay()];
+    if (dias.length && dias.indexOf(wd) === -1) add("aviso", "Agenda: " + lineLabel(line, false) + " na " + trWdName(wd) + ", mas o quadro pede " + tlDaysText(line.dia) + tag + ".", go);
+    if (!a.st && a.d < today) add("info", "Agenda: atendimento que já passou ainda sem status" + tag + ".", go);
+  });
+  return out;
+}
 // Planner mudou (tempo real): atualiza a cópia do quadro Contratado × Realizado e redesenha a janela aberta.
 var TR_PLAN_TIMER = null;
 function trPlanLive(docId){
@@ -24653,11 +24739,35 @@ function trMonthView(t, ym){
       plan: plan ? (plan[r.id] || 0) : null, ag: 0, real: 0, just: 0, semSt: 0};
     rows.push(row);
   });
-  var other = 0, loaded = !!TR.appts;
+  function lineOf(prof, svc, wk){ return treatLineFor(lines, prof, svc, wk) || null; }
+  // Linhas "fora do tratamento": Planner/Agenda de uma especialidade ou serviço sem quadro.
+  var extra = {}, extraList = [];
+  function orphan(prof, svc){
+    var pr = prof ? findProfessional(prof) : null, sp = pr ? profAreas(pr)[0] : "";
+    var key = (svc !== DEFAULT_SERVICE_ID ? "s:" + svc : "e:" + (sp || "?"));
+    if (!extra[key]){
+      var lbl = svc !== DEFAULT_SERVICE_ID ? (sp ? specialtyName(sp) + " · " : "") + ((servicesList().filter(function(x){ return x.id === svc; })[0] || {}).name || svc) : (sp ? specialtyName(sp) : "Sem especialidade") + " · Sessão";
+      extra[key] = {specId: sp, line: null, label: lbl, svc: svc, prof: prof, contr: 0, plan: plan ? 0 : null, ag: 0, real: 0, just: 0, semSt: 0, planGo: null, agGo: null};
+      extraList.push(extra[key]);
+    }
+    return extra[key];
+  }
+  var pitems = trPlannerItems(p), aitems = [];
+  if (plan) pitems.forEach(function(it){
+    if (!lineOf(it.prof, it.svc, it.week)){ var o = orphan(it.prof, it.svc); o.plan++; if (!o.planGo) o.planGo = {t: "planner", k: it.day + "|" + it.week + "|" + p.name}; }
+  });
+  var other = 0, loaded = !!TR.appts, before = 0;
   (TR.appts && TR.appts[p.id] || []).forEach(function(a){
-    if (a.d.slice(0, 7) !== ym || (t.inicio && a.d < t.inicio)) return;
+    if (a.d.slice(0, 7) !== ym) return;
+    if (t.inicio && a.d < t.inicio){ before++; return; }
     var x = treatmentAt(t.patientId, a.d); if (!x || x.id !== t.id) return;
-    var row = by[trLineKey(lines, a)]; if (!row){ other++; return; }
+    aitems.push(a);
+    var row = by[trLineKey(lines, a)];
+    if (!row){
+      other++; var o = orphan(a.prof, a.svc); o.ag++; if (!o.agGo) o.agGo = {t: "agenda", d: a.d};
+      if (TR_USED_STATUS.indexOf(a.st) !== -1) o.real++; else if (a.st === TR_JUST_STATUS) o.just++; else if (!a.st && a.d < today) o.semSt++;
+      return;
+    }
     row.ag++;
     if (TR_USED_STATUS.indexOf(a.st) !== -1) row.real++;
     else if (a.st === TR_JUST_STATUS) row.just++;
@@ -24672,13 +24782,59 @@ function trMonthView(t, ym){
   });
   tot.difPl = tot.plan === null ? null : tot.contr - tot.plan;
   tot.difAg = tot.contr - tot.ag + tot.just;
-  return {ym: ym, rows: rows, tot: tot, other: other, loaded: loaded};
+  extraList.forEach(function(r){ r.difPl = r.plan === null ? null : -r.plan; r.difAg = -r.ag + r.just; });
+  // Divergências.
+  var divs = [];
+  if (loaded && plan){
+    var ctx = {p: p, lines: lines, pitems: pitems, aitems: aitems, lineOf: lineOf};
+    divs = trDivergences(t, ym, ctx);
+    extraList.forEach(function(r){
+      if (r.plan) divs.unshift({lvl: "erro", text: "Planner: " + r.plan + " sessão(ões) de " + r.label + " e não há quadro dessa especialidade/serviço em Especialidades e Serviços.", go: r.planGo});
+      if (r.ag) divs.unshift({lvl: "erro", text: "Agenda: " + r.ag + " atendimento(s) de " + r.label + " e não há quadro dessa especialidade/serviço em Especialidades e Serviços" + (r.plan ? "." : " nem no Planner."), go: r.agGo});
+    });
+    var curYm = today.slice(0, 7);
+    rows.forEach(function(r){
+      var nm = lineLabel(r.line, false);
+      if (r.plan > 0 && r.ag === 0 && ym <= curYm && ym < curYm) divs.push({lvl: "aviso", text: nm + ": está no Planner (" + r.plan + ") mas não teve nenhum atendimento na Agenda neste mês.", go: null});
+      if (r.ag > 0 && r.plan === 0) divs.push({lvl: "aviso", text: nm + ": tem " + r.ag + " atendimento(s) na Agenda e nada no Planner.", go: null});
+      if (r.contr > 0 && r.plan === 0 && r.ag === 0 && ym >= curYm) divs.push({lvl: "aviso", text: nm + ": contratado (" + r.contr + ") e sem nenhuma sessão no Planner nem na Agenda.", go: null});
+      if (!r.contr && (r.plan || r.ag)) divs.push({lvl: "aviso", text: nm + ": o quadro está com 0 sessões/mês, mas há sessões marcadas.", go: null});
+      if (r.contr && r.plan > 0 && r.ag > 0 && r.plan !== r.ag && ym < curYm) divs.push({lvl: "info", text: nm + ": o Planner tem " + r.plan + " e a Agenda teve " + r.ag + " no mês.", go: null});
+    });
+    var sum = rows.reduce(function(n, r){ return n + r.contr; }, 0), pac = Number(String(t.sessoesMes == null ? "" : t.sessoesMes).replace(",", ".")) || 0;
+    if (lines.length && pac && sum !== pac) divs.push({lvl: "aviso", text: "A soma dos quadros (" + sum + ") é diferente de Sessão/Mês do tratamento (" + pac + ").", go: null});
+    if (!lines.length && (pitems.length || aitems.length)) divs.push({lvl: "aviso", text: "O tratamento não tem nenhum quadro em Especialidades e Serviços, mas há sessões no Planner ou na Agenda.", go: null});
+    if (before) divs.push({lvl: "info", text: before + " atendimento(s) neste mês ficam antes do início do tratamento (" + trBr(t.inicio) + ").", go: null});
+    var rank = {erro: 0, aviso: 1, info: 2}; divs.sort(function(a, b){ return rank[a.lvl] - rank[b.lvl]; });
+    var seen = {}; divs = divs.filter(function(d){ var k = d.lvl + d.text; if (seen[k]) return false; seen[k] = 1; return true; });
+  }
+  return {ym: ym, rows: rows, extra: extraList, tot: tot, other: other, loaded: loaded, divs: divs};
 }
 function trDifCell(v, what){
   if (v === null || v === undefined) return '<td><span class="pt-muted">…</span></td>';
   var cls = v > 0 ? "tr-falta" : (v < 0 ? "tr-sobra" : "tr-zero");
   var tip = v > 0 ? "Faltam " + v + " no " + what : (v < 0 ? (-v) + " a mais no " + what : "Igual ao contratado");
   return '<td class="' + cls + '" title="' + esc(tip) + '">' + (v < 0 ? "+" + (-v) : v) + '</td>';
+}
+var TR_DIV_LBL = {erro: "Erro", aviso: "Atenção", info: "Informação"};
+function trDivPanelHtml(v){
+  if (!v.loaded) return "";
+  var d = v.divs || [];
+  if (!d.length) return '<div class="tr-div tr-div-ok"><b>Sem divergências</b> entre o tratamento, o Planner e a Agenda neste mês.</div>';
+  var c = {erro: 0, aviso: 0, info: 0}; d.forEach(function(x){ c[x.lvl]++; });
+  return '<div class="tr-div"><div class="tr-div-h"><b>' + d.length + (d.length === 1 ? ' divergência' : ' divergências') + '</b>' +
+    ['erro', 'aviso', 'info'].filter(function(k){ return c[k]; }).map(function(k){ return '<span class="tr-div-chip tr-div-' + k + '">' + c[k] + ' ' + TR_DIV_LBL[k].toLowerCase() + '</span>'; }).join("") + '</div>' +
+    '<ul class="tr-div-l">' + d.map(function(x){
+      return '<li class="tr-div-' + x.lvl + '"><span class="tr-div-dot" title="' + TR_DIV_LBL[x.lvl] + '"></span><span>' + esc(x.text) + '</span>' +
+        (x.go ? '<button type="button" class="btn ghost tr-div-go" data-trgo="' + esc(x.go.t + "|" + (x.go.k || x.go.d)) + '">' + (x.go.t === "planner" ? 'Ver no Planner' : 'Ver na Agenda') + '</button>' : '') + '</li>';
+    }).join("") + '</ul></div>';
+}
+function trDivGo(val){
+  var i = val.indexOf("|"), t = val.slice(0, i), rest = val.slice(i + 1);
+  var close = document.querySelector("#ovTreat .modal-close"); if (close) close.click();
+  if (document.getElementById("ovTreat") && document.getElementById("ovTreat").isConnected && close) return;
+  if (t === "planner") rpGoPlanner(rest);
+  else { var tb = document.querySelector('#mainTabs button[data-tab="agenda"]'); if (tb){ AD.date = agdClampWeekday(agdParse(rest)); tb.click(); } }
 }
 function trMonthViewHtml(t, ym){
   var v = trMonthView(t, ym);
@@ -24699,9 +24855,17 @@ function trMonthViewHtml(t, ym){
       (r.semSt ? '<div class="tr-warns"><span class="tr-warn" title="Atendimentos que já passaram e ainda não têm status">' + r.semSt + ' sem status</span></div>' : '') +
       '</td>' + cells(r) + '</tr>';
   });
-  html += '<tr class="tr-month-tot"><td>Total</td>' + cells(v.tot) + '</tr></tbody></table></div>';
+  html += '<tr class="tr-month-tot"><td>Total</td>' + cells(v.tot) + '</tr>';
+  if ((v.extra || []).length){
+    html += '<tr class="tr-month-xh"><td colspan="8" title="Existem no Planner ou na Agenda, mas não em Especialidades e Serviços do tratamento">Fora do Tratamento (sem quadro)</td></tr>';
+    v.extra.forEach(function(r){
+      html += '<tr class="tr-month-x"><td>' + esc(r.label) + '<div class="tr-warns"><span class="tr-warn tr-warn-bad">Sem quadro no tratamento</span>' +
+        (r.semSt ? '<span class="tr-warn">' + r.semSt + ' sem status</span>' : '') + '</div></td>' + cells(r) + '</tr>';
+    });
+  }
+  html += '</tbody></table></div>';
   if (v.other) html += '<div class="pat-count" style="margin-top:4px">' + v.other + ' atendimento(s) neste mês em especialidades ou serviços que não estão no tratamento.</div>';
-  return html;
+  return trDivPanelHtml(v) + html;
 }
 // Seção recolhível genérica da janela do tratamento (título com seta; começa fechada;
 // aberta/fechada lembrada neste navegador pela chave `key`).
@@ -24754,6 +24918,7 @@ function trMonthSectionWire(t){
   document.getElementById("trMonthNext").addEventListener("click", function(){ if (ym < rg.last){ ym = trYmAdd(ym, 1); draw(); } });
   document.getElementById("trMonthToday").addEventListener("click", function(){ ym = rg.dflt; draw(); });
   var mHost = document.getElementById("trMonthly");
+  mHost.addEventListener("click", function(e){ var b = e.target.closest("[data-trgo]"); if (b) trDivGo(b.getAttribute("data-trgo")); });
   TR.monthRefresh = function(){ if (mHost && mHost.isConnected && document.getElementById("trMonthly") === mHost) draw(); };
   draw();
   return { refresh: draw };
@@ -24871,7 +25036,13 @@ function renderTreatmentsTab(){
   var shown = all.filter(function(t){
     if (t.status === "cancelado" && !showCanc) return false;
     if (t.status === "renegociado" && !showReneg) return false;
-    if (filter === "abaixo"){ if (t.status !== "ativo") return false; var ms = trMonthSummary(t); if (!ms || !ms.below) return false; }
+    if (filter === "diverg"){
+      if (t.status !== "ativo") return false;
+      if (!TR.plan){ if (!TR.divLoading){ TR.divLoading = true; trLoadPlanner().then(function(){ TR.divLoading = false; if (state.tab === "tratamentos") renderTreatmentsTab(); }); } return false; }
+      var dv = trMonthView(t, trTodayIso().slice(0, 7));
+      if (!dv || !dv.divs.some(function(x){ return x.lvl !== "info"; })) return false;
+    }
+    else if (filter === "abaixo"){ if (t.status !== "ativo") return false; var ms = trMonthSummary(t); if (!ms || !ms.below) return false; }
     else if (filter === "vencendo" || filter === "vencidos"){ var dd = trDue(t); if (!dd || dd.state !== (filter === "vencidos" ? "vencido" : "vencendo")) return false; }
     else if (filter === "abavencendo" || filter === "abavencida"){ if (trAbaRevState(t) !== (filter === "abavencida" ? "vencida" : "vencendo")) return false; }
     else if (filter === "semmotivo"){ if (t.status !== "cancelado" || t.motivoCancel) return false; }
@@ -26959,6 +27130,7 @@ var HELP_TOPICS = [
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
       "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre os quadros de <b>Sessão</b>; os quadros de outros serviços não mudam, mas as sessões deles são descontadas do total — 10 por mês com 2 de outro serviço = 8 divididas entre os de Sessão; o resto vai para os primeiros; se não der 1 para cada quadro de Sessão, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
+      "<b>Contratado × Realizado — Divergências</b>: acima da tabela, o painel lista tudo que não bate entre o tratamento (quadros), o Planner e a Agenda no mês: especialidade ou serviço no Planner ou na Agenda <b>sem quadro</b> em Especialidades e Serviços (também aparece na tabela em <b>Fora do Tratamento</b>), sessão em semana, dia, horário, sala ou terapeuta diferente do quadro, sessão fora do Horário de Atendimento do paciente, paciente em dois lugares no Planner, semanas com número de sessões desigual, Planner sem Agenda e Agenda sem Planner, quadro com 0 sessões/mês, soma dos quadros diferente de Sessão/Mês, mais de um atendimento no mesmo dia, atendimento depois do vencimento ou antes do início do tratamento e atendimentos que já passaram sem status. Cada item tem a cor do nível (vermelho = erro, âmbar = atenção, azul = informação) e o botão <b>Ver no Planner</b> / <b>Ver na Agenda</b>. Na lista de Tratamentos, o filtro <b>Com divergências no mês atual</b> mostra os tratamentos ativos que têm erro ou atenção.",
       "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",
       "<b>Não Agrupar com</b> (ao lado de Sessão/Mês): marque os pacientes que não devem ficar juntos na mesma sala e horário; o Auto Planner respeita nos dois sentidos.",
       "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava. A coluna <b>Sessões</b> mostra quantos horários da clínica cabem nas faixas de cada dia, e abaixo da tabela fica a soma: sessões disponíveis por semana × o <b>Período</b> do tratamento (campo ao lado de Sessão/Mês: Semanal × 4, Quinzenal × 2, Mensal × 1) = por mês. O Período já vem como Semanal."
