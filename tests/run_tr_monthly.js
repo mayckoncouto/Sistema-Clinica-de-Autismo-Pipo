@@ -149,6 +149,18 @@ const path = require('path');
   })()`);
   console.log('outside the patient hours (from the treatment) = Erro in Planner and Agenda?', outH === 'erro:Planner|erro:Agenda:', outH);
 
+  const outQ = await ev(`(function(){
+    var t = {horarios: {seg: {ativo: true, manha: {inicio: "08:00", fim: "09:00"}}}, vencPor: "sem"};
+    var p = {id: "p1", nome: "Paciente Teste"};
+    var lq = {id: "q1", service: "triagem", hora: "15:30", dia: "qua"};
+    var ctx = {p: p, lines: [lq], lineOf: function(prof, svc){ return svc === "triagem" ? lq : null; },
+      pitems: [{day: "qua", week: 1, time: "15:30", prof: "", svc: "triagem"}, {day: "qua", week: 2, time: "16:10", prof: "", svc: "triagem"}, {day: "qua", week: 3, time: "15:30", prof: "", svc: "sessao"}],
+      aitems: [{d: "2026-10-07", t: "15:30:00", prof: "", svc: "triagem", st: "finalizado"}]};
+    var d = trDivergences(t, "2026-10", ctx).filter(function(x){ return /Horário de Atendimento/.test(x.text); });
+    return d.map(function(x){ return x.text.slice(0, 7) + (/16:10/.test(x.text) ? "16:10" : /3ª/.test(x.text) ? "sessao" : "?"); }).join("|");
+  })()`);
+  console.log('service other than Sessão: quadro time matches = ignores patient hours; other time or Sessão still Erro?', outQ === 'Planner16:10|Plannersessao', outQ);
+
 console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);
