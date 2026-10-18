@@ -106,7 +106,7 @@ var TABLES = {
   anamneses: {
     key: "id",
     cols: ["unit_id", "id", "patient_id", "patient_name", "type_id", "type_name", "type_version", "perguntas", "answers", "status", "data", "versao", "prev_id",
-           "done_at", "done_by_name", "created_at", "created_by", "created_by_name", "updated_at", "updated_by", "updated_by_name"],
+           "done_at", "done_by_name", "created_at", "created_by", "created_by_name", "updated_at", "updated_by", "updated_by_name", "family_at"],
     users: ["created_by", "updated_by"]
   },
   treatment_sales: {

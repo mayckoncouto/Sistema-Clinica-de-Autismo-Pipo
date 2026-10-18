@@ -4801,3 +4801,20 @@ Prontuário ▾ → **Anamneses** (aba `anamneses`, `#tab-anamneses`, `reg-anamn
 - Ao gravar, respostas de saúde que diferem do cadastro (diagnóstico→`cid`, suporte, comunicação, alergias, medicações, restrições) perguntam se atualiza o cadastro (`anCadastroDiffs`/`anOfferCadastro`, só com `HEALTH.map` e editar saúde).
 - Tipo com anamneses vira Inativar (`USAGE.tiposanam`). Ajuda: tópico `anamneses`. Testes `tests/run_anamneses.js` e `run_anamnese_tipos.js` (no `npm test`); a aba entra em `run_cad_titles`, `run_toolbar_rows`, `run_sticky_headers`.
 - **NÃO feito (Etapa 3):** guardar o arquivo das perguntas tipo Arquivo (precisa do Drive, como os anexos do CRM), link para a família preencher, aviso de reavaliação pelo CRM, modelos prontos (Anamnese Inicial TEA etc.). Ideia não pedida: atalho "Nova Anamnese" na janela do paciente.
+
+## Anamnese — Etapa 3: link da família e aviso de reavaliação (2026-10-18)
+Pedido do usuário: "fazer somente link e aviso de reavaliação" (arquivos das perguntas tipo Arquivo e modelos prontos ficam para depois).
+- **Link para a família**: botão **Enviar Link para a Família** (`#amLink`) na janela da anamnese em rascunho (`openAnamLinkModal`, `anLinkCreate/Cancel/Active`, `anLinkMessage`;
+  telefone/e-mail do cadastro, copiar, WhatsApp, e-mail; gerar outro cancela o anterior). Endereço curto `/a/<10 letras e números>` (rewrite no `vercel.json`) → página pública
+  **`anamnese.html`** (sem login; lê `/api/config`, chama as RPC `anamnese_form` / `anamnese_send` com a chave pública; redes sociais só no agradecimento). Mostra as perguntas da CÓPIA
+  gravada na anamnese, com respostas já preenchidas, condições ("Mostrar só se"), assinatura em canvas, data dd/mm/aaaa e hora HH:MM digitadas (sem seletor do aparelho), escolha como
+  lista de opções; perguntas tipo Arquivo e estruturais de página não aparecem/contam. Obrigatórias e formatos são conferidos na página.
+- Banco (migração `supabase/2026-10-18c-anamnese-link-e-reavaliacao.sql`, rodada em produção pelo conector e testada ao vivo dentro de transação com rollback; linha 138 da
+  conferência de migrações; `schema.sql` atualizado; `conferencia-geral.sql` NÃO regerado): `anamneses.family_at`; `anamnesis_links` (token, anamnese_id, vale 7 dias e uma vez só, só
+  anamnese em rascunho, RLS = editar o tipo `anm_<tipo>`, unidade); `anamnese_form`/`anamnese_send` (security definer, `grant execute … to anon`; o envio grava só respostas de
+  perguntas que existem, ignora Arquivo, limita tamanhos e **não conclui**: marca `family_at`). Backup leva `family_at`.
+- App: a anamnese respondida fica **rascunho** com a etiqueta **Respondida pela Família** na lista e o aviso `.ik-note` na janela; **Concluir** limpa a marca (`anSave` zera `family_at`).
+- **Aviso de reavaliação**: automação nova `anamnese_reavaliacao` ("Reavaliação de Anamnese Vencendo", 28ª regra de `CRMA_RULES`, nasce DESLIGADA, lista padrão Atendimento, param dias
+  antes = 30) com `crm_auto_r_anamnese` no `crm_auto_run` diário: a mais recente CONCLUÍDA de cada paciente+tipo (tipo ativo com `validadeMeses`, paciente ativo) perto de vencer ou
+  vencida e sem rascunho de versão mais nova cria a tarefa “Reavaliar [tipo] de [paciente]” (chave `anamrev|<anamnese>|<vencimento>`: nunca repete). Cai na Caixa de Entrada de quem for responsável.
+- Ajuda: tópico `anamneses` (link e automação). Testes `tests/run_anamnese_link.js` (app + página pública com Supabase simulado, no `npm test`) e `run_crm_auto.js` (28 regras).

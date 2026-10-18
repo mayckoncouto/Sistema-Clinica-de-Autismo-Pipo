@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Anamnese</title>
+<link rel="icon" href="/favicon.png">
+<!--
+  Página pública do link de anamnese (sem login). Lê o link pelo endereço (/a/código ou ?t=código), busca as perguntas
+  na função anamnese_form e envia as respostas pela anamnese_send (Supabase, chave pública). As respostas entram na
+  anamnese em rascunho; a clínica revisa e conclui no sistema (Prontuário ▾ Anamneses).
+-->
+<style>
+:root{
+  --bg:#f4f6f8; --surface:#fff; --surface-2:#eef1f4; --ink:#1d2733; --muted:#5f6b78; --line:#d8dee5;
+  --accent:#2e7d6b; --accent-ink:#fff; --danger:#c62828; --ok:#2e7d32;
+  --ring:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent); --field-h:38px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#11161c; --surface:#1a2129; --surface-2:#222b35; --ink:#e7edf3; --muted:#9aa7b4; --line:#2f3a46; --danger:#ef6b6b; --ok:#6cc070}
+}
+*{box-sizing:border-box}
+html{accent-color:var(--accent)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:20px 16px 48px}
+.head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.head img{width:48px;height:48px;object-fit:contain}
+.head h1{margin:0;font-size:19px;line-height:1.2}
+.head .sub{color:var(--muted);font-size:13px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+.muted{color:var(--muted)}
+.intro{color:var(--muted);font-size:14px;margin:0 0 10px;white-space:pre-wrap}
+.sec{margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--line);color:var(--accent);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+.field{display:flex;flex-direction:column;gap:4px;margin:0 0 14px}
+.field>label,.field>.lab{font-size:13px;font-weight:600;color:var(--ink)}
+.req{color:var(--danger)}
+.hint{font-size:12px;color:var(--muted)}
+input[type=text],textarea{width:100%;height:var(--field-h);padding:0 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
+textarea{height:auto;min-height:90px;padding:9px 11px;resize:vertical}
+@media (max-width:760px){ :root{--field-h:44px} input[type=text],textarea{font-size:16px} }
+input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+.bad{border-color:var(--danger)!important}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opt{display:flex;align-items:center;gap:10px;min-height:var(--field-h);padding:6px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer}
+.opt.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.opt input{width:18px;height:18px;margin:0;flex:none}
+.row{display:flex;flex-wrap:wrap;gap:6px}
+.row .opt{flex:0 0 auto;min-width:var(--field-h);justify-content:center}
+.sign{width:100%;max-width:520px;height:140px;border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:none;display:block}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 22px;border:0;border-radius:10px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:700;font-size:16px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent);min-height:36px;font-size:14px;padding:0 14px;margin-top:6px}
+.btn[disabled]{opacity:.6;cursor:default}
+.msg{padding:12px 14px;border-radius:10px;font-size:14px;margin-top:12px}
+.msg.err{background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger)}
+.done{text-align:center;padding:28px 12px}
+.done h2{margin:0 0 8px;color:var(--ok)}
+.done .soc-t{margin:22px 0 10px;font-size:14px;color:var(--muted)}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+[hidden]{display:none!important}
+</style>
+<script src="/js/redes.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><img id="logo" src="/favicon.png" alt=""><div><h1 id="cName">Anamnese</h1><div class="sub" id="cSub"></div></div></div>
+  <div class="card" id="box"><p class="muted">Carregando…</p></div>
+</div>
+<script>
+(function(){
+  var CFG = null, FORM = null, token = new URLSearchParams(location.search).get("t") || ((/^\/a\/([A-Za-z0-9]+)/.exec(location.pathname) || [])[1]) || "";
+  var box = document.getElementById("box");
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]; }); }
+  function theme(cor, txt){
+    if (!/^#[0-9a-f]{6}$/i.test(cor || "")) return;
+    var r = document.documentElement.style; r.setProperty("--accent", cor);
+    if (/^#[0-9a-f]{6}$/i.test(txt || "")) r.setProperty("--accent-ink", txt);
+    else { var n = parseInt(cor.slice(1), 16), l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; r.setProperty("--accent-ink", l > 0.6 ? "#1d2733" : "#fff"); }
+  }
+  function rpc(fn, body){
+    var h = {apikey: CFG.supabaseAnonKey, "Content-Type": "application/json"};
+    if (!/^sb_/.test(CFG.supabaseAnonKey)) h.Authorization = "Bearer " + CFG.supabaseAnonKey;
+    return fetch(CFG.supabaseUrl + "/rest/v1/rpc/" + fn, {method: "POST", headers: h, body: JSON.stringify(body)}).then(function(r){
+      return r.json().then(function(j){ if (!r.ok) throw new Error((j && j.message) || "Erro " + r.status); return j; });
+    });
+  }
+  var STOP = {invalido: "Este link não existe. Confira o endereço ou peça um novo link à clínica.",
+    usado: "Este link já foi usado. Se precisar corrigir alguma informação, peça um novo link à clínica.",
+    vencido: "Este link venceu. Peça um novo link à clínica.",
+    cancelado: "Este link foi cancelado pela clínica. Peça um novo link, se precisar."};
+  function stop(msg){ box.innerHTML = '<div class="done"><h2 style="color:var(--ink)">Link Indisponível</h2><p class="muted">' + esc(msg) + '</p></div>'; }
+  function socHtml(){ return (window.PIPO_REDES && CFG && Array.isArray(CFG.redes)) ? window.PIPO_REDES.rowHtml(CFG.redes, {size: 28}) : ""; }
+
+  // ---- Perguntas (mesmas regras do sistema: anamVisible / anamRead) ----
+  var QS = [], ANS = {};
+  var SKIP = {arquivo: 1};
+  function isQ(q){ return ["texto", "textolongo", "numero", "data", "hora", "escolha", "multipla", "simnao", "escala", "assinatura"].indexOf(q.tipo) !== -1; }
+  function empty(v){ return v == null || v === "" || (Array.isArray(v) && !v.length); }
+  function byId(){ var m = {}; QS.forEach(function(q){ m[q.id] = q; }); return m; }
+  function visible(q, ans, map, depth){
+    var c = q && q.cond; if (!c || !c.q) return true;
+    var src = map[c.q]; if (!src || (depth || 0) > 20) return true;
+    if (!visible(src, ans, map, (depth || 0) + 1)) return false;
+    var v = ans[c.q], eq = Array.isArray(v) ? v.indexOf(c.v) !== -1 : String(v == null ? "" : v) === String(c.v == null ? "" : c.v);
+    if (c.op === "diferente") return !eq;
+    if (c.op === "preenchido") return !empty(v);
+    if (c.op === "vazio") return empty(v);
+    return eq;
+  }
+  function isoToBr(s){ var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? m[3] + "/" + m[2] + "/" + m[1] : (s || ""); }
+  function brToIso(s){
+    var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s || ""); if (!m) return null;
+    var d = new Date(+m[3], +m[2] - 1, +m[1]);
+    return d.getFullYear() === +m[3] && d.getMonth() === +m[2] - 1 && d.getDate() === +m[1] ? m[3] + "-" + m[2] + "-" + m[1] : null;
+  }
+  function render(){
+    var page = 1, html = QS.map(function(q){
+      var id = "q-" + q.id, v = ANS[q.id], lab = esc(q.titulo) + (q.obrigatoria && isQ(q) ? ' <span class="req">*</span>' : "");
+      var hint = q.ajuda ? '<div class="hint">' + esc(q.ajuda) + '</div>' : "";
+      var head = '<div class="field" data-qid="' + esc(q.id) + '">';
+      if (SKIP[q.tipo]) return "";
+      switch (q.tipo){
+        case "secao": return '<div class="sec" data-qid="' + esc(q.id) + '">' + esc(q.titulo || "Seção") + '</div>';
+        case "bloco": return head + '<div class="intro">' + esc(q.titulo) + '</div></div>';
+        case "separador": return '<hr data-qid="' + esc(q.id) + '">';
+        case "pagina": page++; return '<hr data-qid="' + esc(q.id) + '">';
+        case "texto": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<input type="text" id="' + id + '" value="' + esc(v) + '"></div>';
+        case "textolongo": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<textarea id="' + id + '" rows="3">' + esc(v) + '</textarea></div>';
+        case "numero": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<input type="text" inputmode="decimal" id="' + id + '" value="' + esc(v) + '"></div>';
+        case "data": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<input type="text" inputmode="numeric" data-mask="date" placeholder="dd/mm/aaaa" maxlength="10" id="' + id + '" value="' + esc(isoToBr(v)) + '"></div>';
+        case "hora": return head + '<label for="' + id + '">' + lab + '</label>' + hint + '<input type="text" inputmode="numeric" data-mask="time" placeholder="hh:mm" maxlength="5" id="' + id + '" value="' + esc(v) + '"></div>';
+        case "escolha": return head + '<div class="lab">' + lab + '</div>' + hint + '<div class="opts" data-kind="escolha">' +
+          (q.opcoes || []).map(function(o){ var on = v === o.id; return '<label class="opt' + (on ? " on" : "") + '"><input type="radio" name="' + id + '" value="' + esc(o.id) + '"' + (on ? " checked" : "") + '><span>' + esc(o.label) + '</span></label>'; }).join("") + '</div></div>';
+        case "multipla": return head + '<div class="lab">' + lab + '</div>' + hint + '<div class="opts" data-kind="multipla">' +
+          (q.opcoes || []).map(function(o){ var on = Array.isArray(v) && v.indexOf(o.id) !== -1; return '<label class="opt' + (on ? " on" : "") + '"><input type="checkbox" value="' + esc(o.id) + '"' + (on ? " checked" : "") + '><span>' + esc(o.label) + '</span></label>'; }).join("") + '</div></div>';
+        case "simnao": return head + '<div class="lab">' + lab + '</div>' + hint + '<div class="row" data-kind="simnao">' +
+          [["sim", "Sim"], ["nao", "Não"]].map(function(o){ var on = v === o[0]; return '<label class="opt' + (on ? " on" : "") + '"><input type="radio" name="' + id + '" value="' + o[0] + '"' + (on ? " checked" : "") + '><span>' + o[1] + '</span></label>'; }).join("") + '</div></div>';
+        case "escala": {
+          var mn = q.min == null ? 1 : +q.min, mx = q.max == null ? 5 : +q.max, nums = [];
+          for (var i = mn; i <= mx && nums.length < 11; i++) nums.push(i);
+          return head + '<div class="lab">' + lab + '</div>' + hint + '<div class="row" data-kind="escala">' +
+            nums.map(function(n){ var on = String(v) === String(n); return '<label class="opt' + (on ? " on" : "") + '"><input type="radio" name="' + id + '" value="' + n + '"' + (on ? " checked" : "") + '><span>' + n + '</span></label>'; }).join("") + '</div>' +
+            ((q.rotMin || q.rotMax) ? '<div class="hint">' + esc(mn + (q.rotMin ? " = " + q.rotMin : "")) + ' · ' + esc(mx + (q.rotMax ? " = " + q.rotMax : "")) + '</div>' : "") + '</div>';
+        }
+        case "assinatura": return head + '<div class="lab">' + lab + '</div>' + hint + '<canvas class="sign" width="520" height="140" data-sign="' + esc(q.id) + '"></canvas><button type="button" class="btn ghost" data-sign-clear="' + esc(q.id) + '">Limpar Assinatura</button></div>';
+      }
+      return "";
+    }).join("");
+    box.innerHTML = (FORM.descricao ? '<p class="intro">' + esc(FORM.descricao) + '</p>' : "") + '<form id="frm" novalidate>' + html +
+      '<div id="err"></div><button type="submit" class="btn" id="send">Enviar Anamnese</button></form>';
+    wire();
+  }
+  function read(keepHidden){
+    var out = {}, frm = document.getElementById("frm");
+    QS.forEach(function(q){
+      if (!isQ(q)) return;
+      var el = frm.querySelector('[data-qid="' + q.id + '"]'); if (!el) return;
+      var v;
+      if (q.tipo === "multipla") v = Array.prototype.map.call(el.querySelectorAll("input:checked"), function(i){ return i.value; });
+      else if (q.tipo === "simnao" || q.tipo === "escolha" || q.tipo === "escala"){ var r = el.querySelector("input:checked"); v = r ? r.value : ""; }
+      else if (q.tipo === "assinatura"){ var cv = el.querySelector("canvas"); v = cv && cv.dataset.has ? cv.toDataURL("image/png") : ""; }
+      else if (q.tipo === "data"){ var t = el.querySelector("input").value.trim(); v = t ? (brToIso(t) || "?" + t) : ""; }
+      else { var f = el.querySelector("input,textarea"); v = f ? f.value.trim() : ""; }
+      out[q.id] = v;
+    });
+    if (!keepHidden){ var m = byId(); Object.keys(out).forEach(function(id){ if (!visible(m[id], out, m)) delete out[id]; }); }
+    return out;
+  }
+  function wire(){
+    var frm = document.getElementById("frm"), map = byId();
+    function refresh(){
+      var cur = read(true);
+      QS.forEach(function(q){ var el = frm.querySelector('[data-qid="' + q.id + '"]'); if (el) el.hidden = !visible(q, cur, map); });
+    }
+    frm.addEventListener("change", function(e){
+      var t = e.target;
+      if (t.type === "radio"){ var w = t.closest(".opts,.row"); if (w) Array.prototype.forEach.call(w.querySelectorAll(".opt"), function(l){ var i = l.querySelector("input"); l.classList.toggle("on", !!(i && i.checked)); }); }
+      if (t.type === "checkbox"){ var lo = t.closest(".opt"); if (lo) lo.classList.toggle("on", t.checked); }
+      refresh();
+    });
+    frm.addEventListener("input", function(e){
+      var t = e.target, k = t.getAttribute && t.getAttribute("data-mask");
+      if (k === "date"){ var d = t.value.replace(/\D/g, "").slice(0, 8); t.value = d.replace(/^(\d{2})(\d)/, "$1/$2").replace(/^(\d{2}\/\d{2})(\d)/, "$1/$2"); }
+      if (k === "time"){ var h = t.value.replace(/\D/g, "").slice(0, 4); t.value = h.replace(/^(\d{2})(\d)/, "$1:$2"); }
+      t.classList.remove("bad"); refresh();
+    });
+    Array.prototype.forEach.call(frm.querySelectorAll("canvas[data-sign]"), function(cv){
+      var cx = cv.getContext("2d"), drawing = false, id = cv.getAttribute("data-sign"), saved = ANS[id];
+      cx.lineWidth = 2.2; cx.lineCap = "round"; cx.strokeStyle = "#111";
+      if (saved){ var im = new Image(); im.onload = function(){ cx.drawImage(im, 0, 0, cv.width, cv.height); cv.dataset.has = "1"; }; im.src = saved; }
+      function pos(e){ var r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; }
+      cv.addEventListener("pointerdown", function(e){ drawing = true; var p = pos(e); cx.beginPath(); cx.moveTo(p[0], p[1]); if (cv.setPointerCapture) cv.setPointerCapture(e.pointerId); });
+      cv.addEventListener("pointermove", function(e){ if (!drawing) return; var p = pos(e); cx.lineTo(p[0], p[1]); cx.stroke(); cv.dataset.has = "1"; });
+      cv.addEventListener("pointerup", function(){ drawing = false; refresh(); });
+      cv.addEventListener("pointercancel", function(){ drawing = false; });
+    });
+    frm.addEventListener("click", function(e){
+      var b = e.target.closest("[data-sign-clear]"); if (!b) return;
+      var cv = frm.querySelector('canvas[data-sign="' + b.getAttribute("data-sign-clear") + '"]');
+      if (cv){ cv.getContext("2d").clearRect(0, 0, cv.width, cv.height); delete cv.dataset.has; refresh(); }
+    });
+    refresh();
+    frm.addEventListener("submit", function(e){
+      e.preventDefault();
+      var ans = read(false), err = document.getElementById("err"), miss = [], bad = [];
+      Array.prototype.forEach.call(frm.querySelectorAll(".bad"), function(x){ x.classList.remove("bad"); });
+      QS.forEach(function(q){
+        if (!isQ(q) || !(q.id in ans)) return;
+        var el = frm.querySelector('[data-qid="' + q.id + '"]'), v = ans[q.id];
+        if (q.tipo === "data" && typeof v === "string" && v.charAt(0) === "?"){ bad.push(q); delete ans[q.id]; return; }
+        if (q.tipo === "hora" && v && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v)){ bad.push(q); delete ans[q.id]; return; }
+        if (q.tipo === "numero" && v && !/^-?\d+([.,]\d+)?$/.test(v)){ bad.push(q); delete ans[q.id]; return; }
+        if (q.obrigatoria && empty(v)) miss.push(q);
+      });
+      if (miss.length || bad.length){
+        miss.concat(bad).forEach(function(q){ var el = frm.querySelector('[data-qid="' + q.id + '"]'); if (el) el.classList.add("bad"); var f = el && el.querySelector("input[type=text],textarea,canvas,.opts,.row"); if (f) f.classList.add("bad"); });
+        var first = frm.querySelector('[data-qid].field .bad') || frm.querySelector(".bad");
+        if (first && first.scrollIntoView) first.scrollIntoView({block: "center", behavior: "smooth"});
+        err.innerHTML = '<div class="msg err">' + (miss.length ? 'Responda as perguntas marcadas com * (' + miss.length + ').' : 'Confira os campos marcados em vermelho (data, hora ou número inválidos).') + '</div>';
+        return;
+      }
+      var btn = document.getElementById("send"); btn.disabled = true; btn.textContent = "Enviando…"; err.innerHTML = "";
+      rpc("anamnese_send", {p_token: token, p_answers: ans}).then(function(r){
+        if (r && r.ok){ box.innerHTML = '<div class="done"><h2>Anamnese enviada!</h2><p class="muted">Obrigado. Nossa equipe irá analisar as respostas e continuar o atendimento.</p>' + (socHtml() ? '<p class="soc-t">Conheça mais sobre nosso trabalho em nossas redes sociais:</p>' + socHtml() : '') + '</div>'; window.scrollTo(0, 0); return; }
+        var m = r && r.motivo;
+        if (STOP[m]) { stop(STOP[m]); return; }
+        btn.disabled = false; btn.textContent = "Enviar Anamnese";
+        err.innerHTML = '<div class="msg err">Não foi possível enviar. Confira as respostas e tente de novo.</div>';
+      }, function(){ btn.disabled = false; btn.textContent = "Enviar Anamnese"; err.innerHTML = '<div class="msg err">Sem conexão com a clínica agora. Tente de novo em instantes.</div>'; });
+    });
+  }
+  if (!token){ stop(STOP.invalido); return; }
+  fetch("/api/config").then(function(r){ return r.json(); }).then(function(cfg){
+    CFG = cfg;
+    if (cfg.theme) theme(cfg.theme.corBotoes, cfg.theme.corTexto);
+    return rpc("anamnese_form", {p_token: token});
+  }).then(function(j){
+    if (!j || !j.ok){ stop(STOP[j && j.motivo] || STOP.invalido); return; }
+    FORM = j; QS = Array.isArray(j.perguntas) ? j.perguntas : []; ANS = j.respostas || {};
+    var c = j.clinica || {};
+    if (Array.isArray(c.redes) && CFG) CFG.redes = c.redes;
+    if (c.nome){ document.getElementById("cName").textContent = c.nome; document.title = (j.tipo || "Anamnese") + " — " + c.nome; }
+    document.getElementById("cSub").textContent = (j.tipo || "Anamnese") + (j.nome ? " — " + j.nome : "");
+    if (c.logo) document.getElementById("logo").src = c.logo;
+    theme(c.cor, c.corTexto);
+    render();
+  }).catch(function(){ box.innerHTML = '<div class="msg err">Não foi possível abrir a anamnese agora. Tente de novo em instantes.</div>'; });
+})();
+</script>
+</body>
+</html>

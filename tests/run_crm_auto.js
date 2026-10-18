@@ -1,4 +1,4 @@
-// CRM → Automações: tela com as 27 regras (ligar/desligar, lista de destino, responsáveis, dias), busca,
+// CRM → Automações: tela com as 28 regras (ligar/desligar, lista de destino, responsáveis, dias), busca,
 // grupos, Ligar/Desligar Todas, somente leitura e a Ajuda. Em memória (as regras rodam no banco: ver
 // supabase/2026-10-12h-crm-automacoes.sql, testado à parte).
 const { chromium } = require('playwright');
@@ -28,20 +28,20 @@ const path = require('path');
   check('CRM menu has Automações after Listas e Status?', items[items.length - 1] === 'Automações' && items.indexOf('Listas e Status') === items.length - 2, items);
   await page.click('#crmMenu [data-nav="crm-auto"]');
   await page.waitForSelector('#reg-automacoes-host .crma-row');
-  check('title Automações and 27 rules, none on?', (await page.$eval('#tab-automacoes .cad-title', (e) => e.textContent)) === 'Automações' &&
-    (await page.$$('#reg-automacoes-host .crma-row')).length === 27 && /^0 de 27 ligadas/.test(await page.$eval('#crmaCount', (e) => e.textContent)));
+  check('title Automações and 28 rules, none on?', (await page.$eval('#tab-automacoes .cad-title', (e) => e.textContent)) === 'Automações' &&
+    (await page.$$('#reg-automacoes-host .crma-row')).length === 28 && /^0 de 28 ligadas/.test(await page.$eval('#crmaCount', (e) => e.textContent)));
   const heads = await page.$$eval('#reg-automacoes-host thead th', (r) => r.map((x) => x.textContent.trim()));
   check('columns: Automação, Grupo, Lista, Responsáveis, Ligada, Criou (30 Dias)?', heads.join('|') === 'Automação|Grupo|Lista|Responsáveis|Ligada|Criou (30 Dias)', heads);
   check('every rule has a description and a group (5 groups)?', await ev(`CRMA_RULES.every(function(r){ return r.desc && r.name && CRMA_GROUPS[r.group]; }) && CRMA_GROUPS.length === 5`));
-  check('every rule id is unique and matches the database slugs?', await ev(`(function(){ var ids = CRMA_RULES.map(function(r){ return r.id; }); var want = ["lead_parado","link_respondido","link_segunda_cobranca","lead_perdido","contrato_assinado","rodizio_leads","trat_vencendo","trat_cancelado","abaixo_contratado","carteirinha_vencendo","sem_tratamento","falta","faltas_seguidas","pendencias_status","primeiro_atendimento","conta_vencendo","conta_vencida","saldo_baixo","mes_sem_fechar","conciliacao_pendente","rotinas_prontas","plano_vencendo","tarefa_parada","tarefa_atrasada","aniversario","encaminhamento_vencendo","aba_revisao_vencendo"]; return ids.length === 27 && want.every(function(w){ return ids.indexOf(w) !== -1; }); })()`));
+  check('every rule id is unique and matches the database slugs?', await ev(`(function(){ var ids = CRMA_RULES.map(function(r){ return r.id; }); var want = ["lead_parado","link_respondido","link_segunda_cobranca","lead_perdido","contrato_assinado","rodizio_leads","trat_vencendo","trat_cancelado","abaixo_contratado","carteirinha_vencendo","sem_tratamento","falta","faltas_seguidas","pendencias_status","primeiro_atendimento","conta_vencendo","conta_vencida","saldo_baixo","mes_sem_fechar","conciliacao_pendente","rotinas_prontas","plano_vencendo","tarefa_parada","tarefa_atrasada","aniversario","encaminhamento_vencendo","aba_revisao_vencendo","anamnese_reavaliacao"]; return ids.length === 28 && want.every(function(w){ return ids.indexOf(w) !== -1; }); })()`));
 
   // Ligar / desligar pela etiqueta
   await page.click('[data-crma-tg="falta"]'); await page.waitForTimeout(200);
   let doc = JSON.parse(await ev('JSON.stringify(window.__STORE__["config/crm_automations"] || {})'));
   check('toggle saves rules.falta.on = true in config/crm_automations?', doc.rules && doc.rules.falta && doc.rules.falta.on === true, doc);
-  check('count says 1 de 27 and the chip says Ligada?', /^1 de 27 ligadas/.test(await page.$eval('#crmaCount', (e) => e.textContent)) && /Ligada/.test(await page.$eval('[data-crma-tg="falta"]', (e) => e.textContent)));
+  check('count says 1 de 28 and the chip says Ligada?', /^1 de 28 ligadas/.test(await page.$eval('#crmaCount', (e) => e.textContent)) && /Ligada/.test(await page.$eval('[data-crma-tg="falta"]', (e) => e.textContent)));
   await page.click('[data-crma-tg="falta"]'); await page.waitForTimeout(200);
-  check('toggle again turns it off?', /^0 de 27/.test(await page.$eval('#crmaCount', (e) => e.textContent)));
+  check('toggle again turns it off?', /^0 de 28/.test(await page.$eval('#crmaCount', (e) => e.textContent)));
 
   // Janela da regra
   await page.click('.crma-row[data-crma="lead_parado"] td:first-child'); await page.waitForSelector('#ovCrma');
@@ -107,10 +107,10 @@ const path = require('path');
 
   // Ligar / desligar todas
   await page.click('#crmaMenuBtn'); await page.click('#crmaMenu [data-crma-act="on"]'); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(250);
-  check('Ligar Todas: 27 on?', /^27 de 27/.test(await page.$eval('#crmaCount', (e) => e.textContent)));
+  check('Ligar Todas: 28 on?', /^28 de 28/.test(await page.$eval('#crmaCount', (e) => e.textContent)));
   check('the settings of a rule survive Ligar Todas?', JSON.parse(await ev('JSON.stringify(window.__STORE__["config/crm_automations"].rules.lead_parado)')).dias === 5);
   await page.click('#crmaMenuBtn'); await page.click('#crmaMenu [data-crma-act="off"]'); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(250);
-  check('Desligar Todas: 0 on?', /^0 de 27/.test(await page.$eval('#crmaCount', (e) => e.textContent)));
+  check('Desligar Todas: 0 on?', /^0 de 28/.test(await page.$eval('#crmaCount', (e) => e.textContent)));
 
   // Rodar agora sem sistema online
   await page.click('[data-crma-tg="falta"]'); await page.waitForTimeout(150);

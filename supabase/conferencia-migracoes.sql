@@ -143,6 +143,7 @@ chk (ordem, migracao, aplicada, obs) as (values
  (135, '2026-10-17b-tipos-de-tratamento', (select pg_get_constraintdef(oid) like '%treatment_types%' from pg_constraint where conname = 'documents_path_valid'), 'Cadastro Tipos de Tratamento (config/treatment_types)'),
  (136, '2026-10-18-tipos-de-anamnese', (select pg_get_constraintdef(oid) like '%anamnesis_types%' from pg_constraint where conname = 'documents_path_valid'), 'Cadastro Tipos de Anamnese (config/anamnesis_types)'),
  (137, '2026-10-18b-anamneses', to_regclass('public.anamneses') is not null, 'Anamneses preenchidas por paciente (tabela anamneses, permissão por tipo)'),
+ (138, '2026-10-18c-anamnese-link-e-reavaliacao', to_regclass('public.anamnesis_links') is not null and exists (select 1 from pg_proc where proname = 'crm_auto_r_anamnese'), 'Link da família para a anamnese + automação de reavaliação'),
  (132, '2026-10-16-auto-planner', exists(select 1 from pg_proc where proname = 'documents_enforce' and prosrc like '%autoplan%'), 'Auto Planner (caminho autoplan/*, módulo autoplanner, bloqueios extras)'),
  (131, '2026-10-15c-metas-de-vendas', to_regclass('public.sale_goals') is not null, 'Metas de vendas (sale_goals)'),
  (130, '2026-10-15b-comissoes', to_regclass('public.sale_commissions') is not null and to_regclass('public.commission_rules') is not null, 'Comissões de venda (commission_rules, sale_commissions, permissão comissoes)'),

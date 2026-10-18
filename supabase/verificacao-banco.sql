@@ -20,7 +20,7 @@ with x as (
   union all select 'Dados desnecessários','Linhas nessas tabelas',
          (select coalesce(sum(n_live_tup),0) from pg_stat_user_tables where schemaname='public' and (relname ~ '(20261[0-9]{3}$|2026_10_[0-9]{2}$|_bkp|^backup_|_tmp|^imp_|^map_|^sheet_|^import_|^evolucoes_texto|^evo_|^agil_stage)')), 1
   union all select 'Segurança','Funções abertas para quem não fez login (esperado: 3 do link de cadastro)',
-         (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and has_function_privilege('anon', p.oid, 'execute') and p.prokind='f' and p.proname not in ('intake_form','intake_send','intake_link_state')
+         (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and has_function_privilege('anon', p.oid, 'execute') and p.prokind='f' and p.proname not in ('intake_form','intake_send','intake_link_state','anamnese_form','anamnese_send','anamnese_link_state')
             and p.prosecdef), 1
   union all select 'Segurança','Tabelas do app sem RLS',
          (select count(*) from pg_tables where schemaname='public' and not rowsecurity), 1
