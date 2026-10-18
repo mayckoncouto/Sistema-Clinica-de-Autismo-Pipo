@@ -27,34 +27,48 @@ const fs = require('fs');
   await page.fill('#anName', 'Anamnese Inicial'); await page.evaluate(() => { const e = document.getElementById('anVal'); e.value = '12'; e.dispatchEvent(new Event('change', {bubbles: true})); }); check('validity is a list with exactly 3 options (3 Meses, 6 Meses, 1 Ano) and 1 Ano by default?', await page.$$eval('#anVal option', (o) => o.map((x) => x.textContent).join('|')) === '3 Meses|6 Meses|1 Ano');
   await page.click('#anSave'); await page.waitForTimeout(100);
   check('no questions refused?', !!(await page.$('#ovAnTipo')) && (await ev('state.anamTypes.length')) === 0);
-  // perguntas
-  await add('secao'); await add('simnao'); await add('texto'); await add('escolha'); await add('escala'); await add('pagina');
+  // perguntas (cada uma abre a janela "Incluir Pergunta")
+  const addQ = async (kind, title, fn) => {
+    await add(kind); await page.waitForSelector('#ovAnQ'); await page.fill('#aqTit', title);
+    if (fn) await fn();
+    await page.click('#aqSave'); await page.waitForTimeout(120);
+  };
+  await addQ('secao', 'Dados Gerais'); await addQ('simnao', 'Toma medicação?');
+  await addQ('texto', 'Qual medicação?', async () => {
+    await page.click('#aqCondAdd'); await page.waitForTimeout(80);
+    await page.evaluate(() => { const s = document.querySelector('#ovAnQ select[data-cf=q]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); });
+    await page.waitForTimeout(120);
+    const v = await page.$eval('#ovAnQ select[data-cf=v]', (s) => s.value);
+    check('condition defaults to "Sim"?', v === 'sim', v);
+  });
+  await addQ('escolha', 'Como é o sono?'); await addQ('escala', 'Nível de atenção', async () => {
+    await page.evaluate(() => { const s = document.getElementById('aqMax'); s.value = '10'; s.dispatchEvent(new Event('change', {bubbles: true})); });
+  });
+  await add('pagina');
   check('6 blocks in the builder?', (await page.$$('#anBuild .an-q')).length === 6);
-  const t = await page.$$('#anBuild .an-q [data-f=titulo]');
-  await t[0].fill('Dados Gerais'); await t[1].fill('Toma medicação?'); await t[2].fill('Qual medicação?'); await t[3].fill('Como é o sono?'); await t[4].fill('Nível de atenção');
-  // condição da pergunta 3 (texto) depende da 2 (sim/não)
-  const cards = await page.$$('#anBuild .an-q');
-  await (await cards[2].$('[data-tg]')).click(); await page.waitForTimeout(60);
-  await page.evaluate(() => { const s = document.querySelector('#anBuild .an-q[data-qi="2"] select[data-c=q]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); });
-  await page.waitForTimeout(100);
-  const op = await page.$eval('#anBuild .an-q[data-qi="2"] select[data-c=v]', (s) => s.value);
-  check('condition defaults to "Sim"?', op === 'sim', op);
-  // opções da pergunta 4 (escolha): linhas
-  await (await (await page.$$('#anBuild .an-q'))[3].$('[data-tg]')).click(); await page.waitForTimeout(60);
-  await page.fill('#anBuild .an-q[data-qi="3"] textarea[data-f=opcoes]', 'Bom\nRegular\nRuim'); await page.waitForTimeout(60);
-  // escala 0–10 com rótulos
-  await (await (await page.$$('#anBuild .an-q'))[4].$('[data-tg]')).click(); await page.waitForTimeout(60);
-  await page.evaluate(() => { const s = document.querySelector('#anBuild .an-q[data-qi="4"] select[data-f=max]'); s.value = '10'; s.dispatchEvent(new Event('change', {bubbles: true})); });
-  await page.waitForTimeout(80);
+  check('card shows the condition summary?', /Só aparece se Toma medicação\? é “Sim”/.test(await page.$eval('#anBuild .an-q[data-qi="2"] .rs', (e) => e.textContent)), await page.$eval('#anBuild .an-q[data-qi="2"] .rs', (e) => e.textContent));
   // mover a escala para cima e voltar
   await (await page.$('#anBuild .an-q[data-qi="4"] [data-mv="-1"]')).click(); await page.waitForTimeout(60);
-  check('moving up swaps order?', (await page.$eval('#anBuild .an-q[data-qi="3"] [data-f=titulo]', (e) => e.value)) === 'Nível de atenção');
+  check('moving up swaps order?', /Nível de atenção/.test(await page.$eval('#anBuild .an-q[data-qi="3"] .rn', (e) => e.textContent)));
   await (await page.$('#anBuild .an-q[data-qi="3"] [data-mv="1"]')).click(); await page.waitForTimeout(60);
   // duplicar a pergunta de texto
   await (await page.$('#anBuild .an-q[data-qi="2"] [data-dup]')).click(); await page.waitForTimeout(60);
-  check('duplicate adds a block with new id?', (await page.$$('#anBuild .an-q')).length === 7 && (await ev("(function(){ return 1; })()")) === 1);
+  check('duplicate adds a block with new id?', (await page.$$('#anBuild .an-q')).length === 7);
   await (await page.$('#anBuild .an-q[data-qi="3"] [data-del]')).click(); await page.waitForTimeout(60);
   check('remove drops the block?', (await page.$$('#anBuild .an-q')).length === 6);
+  // lógica condicional: várias condições, E/OU e ocultar
+  const ev2 = await ev(`(function(){
+    var qs = [{id:"a",tipo:"numero",titulo:"Idade"},{id:"b",tipo:"texto",titulo:"Obs"},{id:"c",tipo:"texto",titulo:"X"}];
+    anamCondSet(qs[2], [{q:"a",op:"maior",v:"5"},{q:"b",op:"contem",v:"sono"}], "ou", "mostrar");
+    var m = anamById(qs), r = [];
+    r.push(anamVisible(qs[2], {a:"3", b:""}, m)); r.push(anamVisible(qs[2], {a:"8", b:""}, m)); r.push(anamVisible(qs[2], {a:"3", b:"Dorme mal, sono ruim"}, m));
+    anamCondSet(qs[2], [{q:"a",op:"maior",v:"5"},{q:"b",op:"contem",v:"sono"}], "e", "mostrar");
+    r.push(anamVisible(qs[2], {a:"8", b:""}, m)); r.push(anamVisible(qs[2], {a:"8", b:"sono"}, m));
+    anamCondSet(qs[2], [{q:"a",op:"menor",v:"5"}], "e", "ocultar");
+    r.push(anamVisible(qs[2], {a:"3"}, m)); r.push(anamVisible(qs[2], {a:"9"}, m));
+    return r.join(",");
+  })()`);
+  check('conditional logic: OR / AND / contains / greater / hide?', ev2 === 'false,true,true,false,true,false,true', ev2);
   // prévia: condição mostra/esconde
   await page.click('#anSeg [data-m=previa]'); await page.waitForTimeout(150);
   const hid = () => page.$eval('#anPrev [data-qid] input[type=text]', (e) => e.closest('[data-qid]').hidden);
@@ -67,10 +81,10 @@ const fs = require('fs');
   check('preview has scale 1..10 (10 options) and a page divider?', nr === 2 + 10 && np.length === 1, nr + ' ' + np.length);
   await page.click('#anSeg [data-m=montar]');
   // validação: pergunta de escolha com 1 opção
-  await page.fill('#anBuild .an-q[data-qi="3"] textarea[data-f=opcoes]', 'Só uma'); await page.waitForTimeout(60);
-  await page.click('#anSave'); await page.waitForTimeout(120);
-  check('choice with 1 option refused?', !!(await page.$('#ovAnTipo')) && (await ev('state.anamTypes.length')) === 0);
-  await page.fill('#anBuild .an-q[data-qi="3"] textarea[data-f=opcoes]', 'Bom\nRuim'); await page.waitForTimeout(60);
+  await (await page.$('#anBuild .an-q[data-qi="3"] [data-ed]')).click(); await page.waitForSelector('#ovAnQ');
+  await page.fill('#aqOpc', 'Só uma'); await page.click('#aqSave'); await page.waitForTimeout(120);
+  check('choice with 1 option refused?', !!(await page.$('#ovAnQ')));
+  await page.fill('#aqOpc', 'Bom\nRuim'); await page.click('#aqSave'); await page.waitForTimeout(120);
   await page.click('#anSave'); await page.waitForTimeout(300);
   const saved = await ev('state.anamTypes.map(function(t){ return {n: t.name, v: t.validadeMeses, q: t.perguntas.length, ver: t.versao, ct: t.perguntas[2].cond && t.perguntas[2].cond.op + ":" + t.perguntas[2].cond.v}; })');
   check('saved: months digits only, 6 blocks, version 1, condition kept?', saved.length === 1 && saved[0].v === 12 && saved[0].q === 6 && saved[0].ver === 1 && saved[0].ct === 'igual:sim', JSON.stringify(saved));
@@ -78,8 +92,8 @@ const fs = require('fs');
   check('list row shows name, 4 questions and 1 Ano?', /Anamnese Inicial/.test(row) && /\b4\b/.test(row) && /1 Ano/.test(row), row.replace(/\s+/g, ' '));
   // editar: mudar o modelo sobe a versão; duplicar modelo
   await page.click('#reg-tiposanam-host tbody tr'); await page.waitForSelector('#ovAnTipo');
-  await (await page.$('#anBuild .an-q[data-qi="1"] [data-tg]')).click(); await page.waitForTimeout(60);
-  await page.fill('#anBuild .an-q[data-qi="1"] [data-f=ajuda]', 'Inclua doses'); await page.waitForTimeout(60);
+  await (await page.$('#anBuild .an-q[data-qi="1"] [data-ed]')).click(); await page.waitForSelector('#ovAnQ');
+  await page.fill('#aqAjuda', 'Inclua doses'); await page.click('#aqSave'); await page.waitForTimeout(120);
   await page.click('#anSave'); await page.waitForTimeout(300);
   check('editing questions raises the model version to 2?', (await ev('state.anamTypes[0].versao')) === 2);
   await page.click('#reg-tiposanam-host tbody tr'); await page.waitForSelector('#ovAnTipo');

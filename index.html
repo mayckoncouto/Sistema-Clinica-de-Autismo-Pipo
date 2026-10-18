@@ -2036,6 +2036,7 @@ input[readonly]:not(.dp-in):focus,textarea[readonly]:focus{outline:none;box-shad
 .modal .btn.add-row-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;font-weight:700;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:8px;background:var(--accent-weak)}
 .modal .btn.add-row-btn:hover{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .therapist-row .dp-combo{flex:1}
+.an-cond-row > *:not(.rm){flex:1 1 0;min-width:0}
 .dp-btn.dp-combo.dp-empty .dp-in{color:var(--ink)}
 .dp-btn.dp-combo .dp-chev{cursor:pointer}
 .dp-opt.kb{background:var(--surface-2)}
@@ -26496,9 +26497,10 @@ var HELP_TOPICS = [
     purpose: "Cria os modelos de formulário usados nas anamneses: você monta as perguntas uma vez e depois preenche o modelo para cada paciente.",
     steps: ["Prontuário ▾ → <b>Anamneses</b> → <b>Outras Opções ▾</b> → <b>Modelos</b> → <b>+ Incluir</b>: nome, descrição e <b>Validade</b> (3 Meses, 6 Meses ou 1 Ano: tempo até a anamnese precisar ser refeita).",
       "Em <b>Perguntas</b>, escolha <b>+ Adicionar Pergunta…</b> e o tipo: Texto Curto, Texto Longo, Número, Data, Hora, Escolha Única, Múltipla Escolha, Sim ou Não, Escala, Arquivo ou Assinatura. Para organizar, use Título de Seção, Texto Explicativo, Separador e Nova Página.",
-      "Cada pergunta tem os botões ▲ ▼ (mudar a ordem), <b>Duplicar</b> e ✕ (remover), a caixa <b>Obrigatória</b> e o botão <b>Opções</b>, que abre o texto de apoio, as opções (uma por linha), os valores da escala, <b>Preencher com o Cadastro do Paciente</b> e <b>Mostrar Só Se</b> (a pergunta só aparece quando uma pergunta anterior tem a resposta escolhida).",
+      "Cada pergunta é um quadro com ▲ ▼ (mudar a ordem), <b>Editar</b>, <b>Duplicar</b> e <b>Remover</b>. <b>Editar</b> abre a janela da pergunta: texto, texto de apoio, <b>Resposta Obrigatória</b>, opções (uma por linha), valores da escala e <b>Preencher com o Cadastro do Paciente</b>.",
+      "Em <b>Lógica Condicional</b>, escolha <b>Mostrar esta pergunta só se</b> ou <b>Ocultar esta pergunta se</b> e inclua uma ou mais condições com <b>+ Incluir Condição</b>: pergunta anterior, comparação (for igual a, for diferente de, contiver, não contiver, for maior que, for menor que, estiver preenchida, estiver vazia) e valor. Com 2 ou mais condições, escolha se <b>todas</b> (E) ou <b>qualquer uma</b> (OU) precisam valer.",
       "<b>Prévia</b> mostra como o formulário aparece para quem preenche. <b>Duplicar Modelo</b> cria uma cópia para você ajustar."],
-    rules: ["Não pode haver dois modelos com o mesmo nome.", "Todo modelo precisa de pelo menos uma pergunta; perguntas de escolha precisam de pelo menos 2 opções.", "A condição só pode olhar para uma pergunta que vem antes.", "Mudar o modelo não altera anamneses já preenchidas."],
+    rules: ["Não pode haver dois modelos com o mesmo nome.", "Todo modelo precisa de pelo menos uma pergunta; perguntas de escolha precisam de pelo menos 2 opções.", "A condição só pode olhar para uma pergunta que vem antes; ao mover uma pergunta, condições que passam a apontar para frente são retiradas.", "Mudar o modelo não altera anamneses já preenchidas."],
     who: "Permissão <b>Modelos de Anamnese</b>."},
   {id: "escalas", group: "Prontuário", title: "Escalas", mod: "escalas", tab: "escalas",
     purpose: "Escalas usadas na Situação dos objetivos do Plano terapêutico (ex.: Likert de 0 a 5, ABA).",
@@ -31001,8 +31003,8 @@ function openActivityModal(item, opts){
 
 /* ---- Anamnese: Modelos (Prontuário ▾ → Anamneses → Outras Opções ▾ → Modelos; config/anamnesis_types) ----
  * Modelo {id, name, descricao, validadeMeses (vazio = sem aviso de reavaliação), versao, inativo,
- *         perguntas: [{id, tipo, titulo, ajuda, obrigatoria, opcoes:[{id,label}], min, max, rotMin, rotMax, campo, cond:{q, op, v}}]}.
- * tipo = ANAM_KINDS[].k. cond = "mostrar só se": q (pergunta anterior), op igual|diferente|preenchido|vazio, v (id da opção, "sim"/"nao" ou texto).
+ *         perguntas: [{id, tipo, titulo, ajuda, obrigatoria, opcoes:[{id,label}], min, max, rotMin, rotMax, campo, cond:{q, op, v, mais:[{q,op,v}], modo, acao}}]}.
+ * tipo = ANAM_KINDS[].k. cond = lógica condicional: q (pergunta anterior), op igual|diferente|contem|naocontem|maior|menor|preenchido|vazio, v (id da opção, "sim"/"nao" ou texto); mais = outras condições; modo "e"|"ou"; acao "mostrar" (padrão)|"ocultar".
  * O renderizador (anamFormHtml / anamWire / anamRead) é o mesmo da prévia e do preenchimento da anamnese de cada paciente.
  */
 var ANAM_KINDS = [
@@ -31036,16 +31038,51 @@ function anamTypesList(){ return (state.anamTypes || []).slice(); }
 function anamTypeById(id){ return id ? anamTypesList().filter(function(t){ return t.id === id; })[0] || null : null; }
 function anamQCount(t){ return (t.perguntas || []).filter(anamIsQ).length; }
 function anamCondEmpty(v){ return v == null || v === "" || (Array.isArray(v) && !v.length); }
+// Condições de uma pergunta (lógica condicional): a principal fica em cond.{q,op,v}; as demais em cond.mais.
+// cond.modo: "e" (todas) ou "ou" (qualquer uma); cond.acao: "mostrar" (padrão) ou "ocultar".
+function anamCondList(q){
+  var c = q && q.cond; if (!c || !c.q) return [];
+  return [{q: c.q, op: c.op || "igual", v: c.v}].concat((c.mais || []).filter(function(x){ return x && x.q; }).map(function(x){ return {q: x.q, op: x.op || "igual", v: x.v}; }));
+}
+function anamCondSet(q, list, modo, acao){
+  list = (list || []).filter(function(x){ return x && x.q; });
+  if (!list.length){ delete q.cond; return; }
+  var c = {q: list[0].q, op: list[0].op || "igual", v: list[0].v == null ? "" : list[0].v};
+  if (list.length > 1){ c.mais = list.slice(1).map(function(x){ return {q: x.q, op: x.op || "igual", v: x.v == null ? "" : x.v}; }); c.modo = modo === "ou" ? "ou" : "e"; }
+  if (acao === "ocultar") c.acao = "ocultar";
+  q.cond = c;
+}
+// Tira (ou troca) as condições que apontam para perguntas que saíram (map: id antigo -> id novo; ausente = some).
+function anamCondRemap(q, map){
+  var l = anamCondList(q); if (!l.length) return;
+  var modo = q.cond.modo, acao = q.cond.acao;
+  anamCondSet(q, l.filter(function(c){ return map ? map[c.q] : false; }).map(function(c){ return {q: map[c.q], op: c.op, v: c.v}; }), modo, acao);
+}
+function anamCondOne(c, ans, byId, depth){
+  var src = byId[c.q]; if (!src) return null;   // origem apagada: não conta
+  if (depth > 20 || !anamVisible(src, ans, byId, depth + 1)) return false;
+  var v = ans[c.q], op = c.op || "igual", cv = c.v == null ? "" : String(c.v), arr = Array.isArray(v);
+  if (op === "preenchido") return !anamCondEmpty(v);
+  if (op === "vazio") return anamCondEmpty(v);
+  var eq = arr ? v.indexOf(c.v) !== -1 : String(v == null ? "" : v) === cv;
+  if (op === "diferente") return !eq;
+  if (op === "contem" || op === "naocontem"){
+    var has = arr ? v.indexOf(c.v) !== -1 : String(v == null ? "" : v).toLowerCase().indexOf(cv.toLowerCase()) !== -1;
+    return op === "contem" ? has : !has;
+  }
+  if (op === "maior" || op === "menor"){
+    var a = parseFloat(String(v == null ? "" : v).replace(",", ".")), b = parseFloat(cv.replace(",", "."));
+    if (isNaN(a) || isNaN(b)) return false;
+    return op === "maior" ? a > b : a < b;
+  }
+  return eq;
+}
 // A pergunta aparece? (a de origem também precisa estar visível)
 function anamVisible(q, ans, byId, depth){
-  var c = q && q.cond; if (!c || !c.q) return true;
-  var src = byId[c.q]; if (!src || (depth || 0) > 20) return true;
-  if (!anamVisible(src, ans, byId, (depth || 0) + 1)) return false;
-  var v = ans[c.q], eq = Array.isArray(v) ? v.indexOf(c.v) !== -1 : String(v == null ? "" : v) === String(c.v == null ? "" : c.v);
-  if (c.op === "diferente") return !eq;
-  if (c.op === "preenchido") return !anamCondEmpty(v);
-  if (c.op === "vazio") return anamCondEmpty(v);
-  return eq;
+  var d = depth || 0, res = anamCondList(q).map(function(c){ return anamCondOne(c, ans, byId, d); }).filter(function(x){ return x !== null; });
+  if (!res.length) return true;
+  var ok = q.cond.modo === "ou" ? res.some(Boolean) : res.every(Boolean);
+  return q.cond.acao === "ocultar" ? !ok : ok;
 }
 function anamById(qs){ var m = {}; (qs || []).forEach(function(q){ m[q.id] = q; }); return m; }
 function anamEsc(s){ return esc(s == null ? "" : s); }
@@ -31167,8 +31204,160 @@ function anamCopyQs(qs){ return JSON.parse(JSON.stringify(qs || [])); }
 function anamCloneQs(qs){
   var map = {}, out = anamCopyQs(qs);
   out.forEach(function(q){ var n = uid("aq"); map[q.id] = n; q.id = n; (q.opcoes || []).forEach(function(o){ o.id = uid("ao"); }); });
-  out.forEach(function(q){ if (q.cond && q.cond.q){ if (map[q.cond.q]) q.cond.q = map[q.cond.q]; else delete q.cond; } });
+  out.forEach(function(q){ anamCondRemap(q, map); });
   return out;
+}
+
+var ANAM_OPS = {
+  igual: "For Igual a", diferente: "For Diferente de", contem: "Contiver", naocontem: "Não Contiver", maior: "For Maior que", menor: "For Menor que",
+  preenchido: "Estiver Preenchida", vazio: "Estiver Vazia"
+};
+function anamOpsFor(src){
+  var t = src && src.tipo;
+  if (t === "escolha" || t === "multipla" || t === "simnao") return ["igual", "diferente", "preenchido", "vazio"];
+  if (t === "texto" || t === "textolongo") return ["igual", "diferente", "contem", "naocontem", "preenchido", "vazio"];
+  if (t === "numero" || t === "escala") return ["igual", "diferente", "maior", "menor", "preenchido", "vazio"];
+  if (t === "data" || t === "hora") return ["igual", "diferente", "preenchido", "vazio"];
+  return ["preenchido", "vazio"];
+}
+function anamCondNeedsValue(op){ return op !== "preenchido" && op !== "vazio"; }
+function anamCondValueText(c, src){
+  if (!src) return "";
+  if (src.tipo === "escolha" || src.tipo === "multipla"){ var o = (src.opcoes || []).filter(function(x){ return x.id === c.v; })[0]; return o ? o.label : ""; }
+  if (src.tipo === "simnao") return c.v === "nao" ? "Não" : "Sim";
+  return c.v == null ? "" : String(c.v);
+}
+function anamCondText(q, qs){
+  var l = anamCondList(q); if (!l.length) return "";
+  var byId = anamById(qs);
+  var parts = l.map(function(c){
+    var src = byId[c.q], nm = src ? (src.titulo || qKindLabel(src)) : "?";
+    return nm + " " + ({igual: "é", diferente: "não é", contem: "contém", naocontem: "não contém", maior: "é maior que", menor: "é menor que", preenchido: "está preenchida", vazio: "está vazia"}[c.op] || "") + (anamCondNeedsValue(c.op) ? " “" + anamCondValueText(c, src) + "”" : "");
+  });
+  return (q.cond.acao === "ocultar" ? "Oculta se " : "Só aparece se ") + parts.join(q.cond.modo === "ou" ? " ou " : " e ");
+}
+function qKindLabel(q){ var k = anamKind(q.tipo); return k ? k.label : q.tipo; }
+// Uma condição só pode apontar para pergunta ANTERIOR: ao mover, condições que ficaram para a frente saem.
+function anamCondFixOrder(qs){
+  var seen = {};
+  qs.forEach(function(q){
+    var l = anamCondList(q);
+    if (l.length){ var keep = l.filter(function(c){ return seen[c.q]; }); if (keep.length !== l.length) anamCondSet(q, keep, q.cond.modo, q.cond.acao); }
+    seen[q.id] = 1;
+  });
+}
+function anamCondProblem(q, qs){
+  var byId = anamById(qs), l = anamCondList(q);
+  for (var i = 0; i < l.length; i++){
+    var c = l[i], src = byId[c.q];
+    if (!src) return "A condição aponta para uma pergunta que não existe mais.";
+    if (anamOpsFor(src).indexOf(c.op) === -1) return "Escolha uma condição válida para a pergunta “" + (src.titulo || qKindLabel(src)) + "”.";
+    if (anamCondNeedsValue(c.op) && (c.v == null || c.v === "")) return "Informe o valor da condição " + (l.length > 1 ? (i + 1) + " " : "") + "(“" + (src.titulo || qKindLabel(src)) + "”).";
+  }
+  return "";
+}
+// Janela de uma pergunta do modelo (campos, opções e lógica condicional: mostrar ou ocultar conforme respostas anteriores).
+function openAnamQuestionModal(ctx){
+  var q = anamCopyQs([ctx.q])[0], qs = ctx.qs, idx = ctx.index, k = anamKind(q.tipo), isQ = anamIsQ(q), canSave = ctx.canSave, dis = canSave ? "" : " disabled";
+  var prev = qs.slice(0, idx).filter(anamIsQ);
+  var conds = anamCondList(q), modo = q.cond && q.cond.modo === "ou" ? "ou" : "e", acao = q.cond && q.cond.acao === "ocultar" ? "ocultar" : "mostrar";
+  var host = regQuickHost();
+  function $(id){ return document.getElementById(id); }
+  function opt(v, label, cur){ return '<option value="' + esc(v) + '"' + (String(v) === String(cur) ? " selected" : "") + '>' + esc(label) + '</option>'; }
+  function titlePh(){ return q.tipo === "secao" ? "Título da seção" : q.tipo === "bloco" ? "Texto explicativo" : "Digite a pergunta"; }
+  function condRowHtml(c, n){
+    var src = prev.filter(function(p){ return p.id === c.q; })[0] || null, ops = anamOpsFor(src), v = "";
+    if (anamCondNeedsValue(c.op) && src){
+      if (src.tipo === "escolha" || src.tipo === "multipla") v = '<select data-cf="v"' + dis + '>' + opt("", "Escolha…", c.v) + (src.opcoes || []).map(function(o){ return opt(o.id, o.label, c.v); }).join("") + '</select>';
+      else if (src.tipo === "simnao") v = '<select data-cf="v"' + dis + '>' + opt("sim", "Sim", c.v === "nao" ? "nao" : "sim") + opt("nao", "Não", c.v) + '</select>';
+      else v = '<input type="text" data-cf="v" placeholder="Valor" value="' + esc(c.v == null ? "" : c.v) + '"' + dis + '>';
+    }
+    return '<div class="therapist-row an-cond-row" data-cn="' + n + '">' +
+      '<select data-cf="q"' + dis + '>' + opt("", "Escolha a pergunta…", c.q) + prev.map(function(p){ return opt(p.id, p.titulo || qKindLabel(p), c.q); }).join("") + '</select>' +
+      '<select data-cf="op"' + dis + '>' + ops.map(function(o){ return opt(o, ANAM_OPS[o], c.op); }).join("") + '</select>' + v +
+      (canSave ? '<button type="button" class="rm" data-cdel title="Remover condição">✕</button>' : '') + '</div>';
+  }
+  function condBox(){
+    if (!prev.length) return '<div class="pat-count">Não há perguntas anteriores para usar como condição. Mova esta pergunta para depois de outra.</div>';
+    return '<div class="field"><label for="aqAcao">Quando as respostas anteriores…</label><div class="field-row">' +
+        '<div class="field"><select id="aqAcao"' + dis + '>' + opt("mostrar", "Mostrar esta pergunta só se", acao) + opt("ocultar", "Ocultar esta pergunta se", acao) + '</select></div>' +
+        (conds.length > 1 ? '<div class="field"><select id="aqModo"' + dis + '>' + opt("e", "Todas as condições forem verdadeiras (E)", modo) + opt("ou", "Qualquer condição for verdadeira (OU)", modo) + '</select></div>' : '') +
+      '</div></div>' +
+      '<div class="therapist-rows" id="aqConds">' + (conds.length ? conds.map(condRowHtml).join("") : '<div class="pat-count">Sem condição: a pergunta sempre aparece.</div>') + '</div>' +
+      (canSave ? '<button type="button" class="btn ghost add-row-btn" id="aqCondAdd">+ Incluir Condição</button>' : '');
+  }
+  var h = '<div class="overlay confirm-overlay" id="ovAnQ" role="dialog" aria-modal="true"><div class="modal" style="max-width:680px">' +
+    '<div class="modal-head"><div><h3>' + (ctx.isNew ? "Incluir Pergunta" : (canSave ? "Editar Pergunta" : "Pergunta")) + '</h3><div class="modal-sub">' + esc(qKindLabel(q)) + '</div></div>' +
+      '<button class="modal-close" id="aqX" aria-label="Fechar">✕</button></div><div class="modal-body">' +
+    '<div class="tr-sec tr-sec-top">Pergunta</div>' +
+    (q.tipo === "bloco" ? '<div class="field"><label for="aqTit">Texto</label><textarea id="aqTit" rows="3" placeholder="' + esc(titlePh()) + '"' + dis + '>' + esc(q.titulo || "") + '</textarea></div>'
+      : '<div class="field"><label for="aqTit">' + (q.tipo === "secao" ? "Título" : "Pergunta") + '</label><input type="text" id="aqTit" placeholder="' + esc(titlePh()) + '" value="' + esc(q.titulo || "") + '"' + dis + '></div>') +
+    (isQ ? '<div class="field"><label for="aqAjuda">Texto de Apoio</label><input type="text" id="aqAjuda" placeholder="Orientação que aparece embaixo da pergunta" value="' + esc(q.ajuda || "") + '"' + dis + '></div>' +
+      '<div class="field"><label class="chk-line"><input type="checkbox" id="aqObr"' + (q.obrigatoria ? " checked" : "") + dis + '> <span>Resposta Obrigatória</span></label></div>' : '') +
+    (k && k.opts ? '<div class="field"><label for="aqOpc">Opções (Uma por Linha)</label><textarea id="aqOpc" rows="5"' + dis + '>' + esc((q.opcoes || []).map(function(o){ return o.label; }).join("\n")) + '</textarea></div>' : '') +
+    (q.tipo === "escala" ? '<div class="field-row"><div class="field"><label for="aqMin">Valor Inicial</label><select id="aqMin"' + dis + '>' + [0, 1].map(function(n){ return opt(n, n, q.min); }).join("") + '</select></div>' +
+      '<div class="field"><label for="aqMax">Valor Final</label><select id="aqMax"' + dis + '>' + [3, 4, 5, 6, 7, 8, 9, 10].map(function(n){ return opt(n, n, q.max); }).join("") + '</select></div></div>' +
+      '<div class="field-row"><div class="field"><label for="aqRotMin">Rótulo do Início</label><input type="text" id="aqRotMin" placeholder="Ex.: Nada" value="' + esc(q.rotMin || "") + '"' + dis + '></div>' +
+      '<div class="field"><label for="aqRotMax">Rótulo do Fim</label><input type="text" id="aqRotMax" placeholder="Ex.: Muito" value="' + esc(q.rotMax || "") + '"' + dis + '></div></div>' : '') +
+    (isQ && (q.tipo === "texto" || q.tipo === "textolongo" || q.tipo === "data" || q.tipo === "numero") ? '<div class="field"><label for="aqCampo">Preencher com o Cadastro do Paciente</label><select id="aqCampo"' + dis + '>' + opt("", "Não preencher", q.campo || "") +
+      ANAM_PREFILL.map(function(p){ return opt(p.k, p.label, q.campo || ""); }).join("") + '</select></div>' : '') +
+    '<div class="tr-sec">Lógica Condicional</div><div id="aqCond">' + condBox() + '</div>' +
+    '</div><div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="aqCancel">' + (canSave ? "Cancelar" : "Fechar") + '</button>' + (canSave ? '<button class="btn primary" id="aqSave">Salvar</button>' : '') + '</div></div></div>';
+  var wrap = document.createElement("div"); wrap.innerHTML = h; var ov = wrap.firstChild; host.appendChild(ov);
+  function close(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  $("aqX").addEventListener("click", close); $("aqCancel").addEventListener("click", close);
+  if (typeof dpScan === "function") dpScan(ov);
+  function redrawCond(){ $("aqCond").innerHTML = condBox(); if (typeof dpScan === "function") dpScan($("aqCond")); }
+  function readConds(){
+    conds = Array.prototype.map.call(ov.querySelectorAll(".an-cond-row"), function(r){
+      var g = function(f){ var el = r.querySelector('[data-cf="' + f + '"]'); return el ? el.value : ""; };
+      return {q: g("q"), op: g("op") || "igual", v: g("v")};
+    });
+    var a = $("aqAcao"), m = $("aqModo"); if (a) acao = a.value; if (m) modo = m.value;
+  }
+  ov.addEventListener("change", function(e){
+    var t = e.target;
+    if (t.id === "aqAcao" || t.id === "aqModo"){ readConds(); return; }
+    var f = t.getAttribute("data-cf"); if (!f) return;
+    var row = t.closest(".an-cond-row"), n = +row.getAttribute("data-cn");
+    readConds();
+    if (f === "q"){
+      var src = prev.filter(function(p){ return p.id === conds[n].q; })[0], ops = anamOpsFor(src);
+      conds[n].op = ops[0]; conds[n].v = src && src.tipo === "simnao" ? "sim" : "";
+      setTimeout(redrawCond, 0);
+    } else if (f === "op"){ if (!anamCondNeedsValue(conds[n].op)) conds[n].v = ""; setTimeout(redrawCond, 0); }
+  });
+  ov.addEventListener("click", function(e){
+    if (e.target.closest("#aqCondAdd")){ readConds(); conds.push({q: "", op: "igual", v: ""}); redrawCond(); return; }
+    var d = e.target.closest("[data-cdel]"); if (d){ readConds(); conds.splice(+d.closest(".an-cond-row").getAttribute("data-cn"), 1); redrawCond(); }
+  });
+  setTimeout(function(){ var t = $("aqTit"); if (canSave && t) t.focus(); }, 30);
+  if ($("aqSave")) $("aqSave").addEventListener("click", function(){
+    readConds();
+    var tit = $("aqTit").value.trim();
+    if (!tit){ $("aqTit").focus(); showToast("Preencha o texto da pergunta.", true); return; }
+    q.titulo = tit;
+    if (isQ){ q.ajuda = $("aqAjuda").value.trim(); q.obrigatoria = $("aqObr").checked; }
+    if (k && k.opts){
+      var old = q.opcoes || [], lines = $("aqOpc").value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
+      if (lines.length < 2){ $("aqOpc").focus(); showToast("A pergunta precisa de pelo menos 2 opções.", true); return; }
+      var oldByLabel = {}; old.forEach(function(o){ oldByLabel[o.label] = o; });
+      q.opcoes = lines.map(function(l, i){ var m = oldByLabel[l] || old[i]; return {id: m ? m.id : uid("ao"), label: l}; });
+    }
+    if (q.tipo === "escala"){
+      q.min = +$("aqMin").value; q.max = +$("aqMax").value; if (q.min >= q.max) q.max = q.min + 1;
+      q.rotMin = $("aqRotMin").value.trim(); q.rotMax = $("aqRotMax").value.trim();
+    }
+    if ($("aqCampo")) q.campo = $("aqCampo").value;
+    var cs = conds.filter(function(c){ return c.q; });
+    if (conds.length !== cs.length){ showToast("Escolha a pergunta de cada condição (ou remova a linha).", true); return; }
+    anamCondSet(q, cs, modo, acao);
+    var pr = anamCondProblem(q, qs.slice(0, idx).concat([q]));
+    if (pr){ showToast(pr, true); return; }
+    close(); ctx.onSave(q);
+  });
+  if (!canSave) modalReadOnly("ovAnQ");
 }
 
 function openAnamTypeModal(item, opts){
@@ -31208,55 +31397,20 @@ function openAnamTypeModal(item, opts){
   $("anClose").addEventListener("click", close);
   $("anCancel").addEventListener("click", close);
 
-  function qLabel(q, i){ var k = anamKind(q.tipo); return (i + 1) + ". " + (k ? k.label : q.tipo); }
-  function titlePh(q){ return q.tipo === "secao" ? "Título da seção" : q.tipo === "bloco" ? "Texto explicativo" : "Digite a pergunta"; }
-  function condOptions(q, idx){
-    var prev = qs.slice(0, idx).filter(anamIsQ);
-    return prev;
-  }
+  function qLabel(q){ var k = anamKind(q.tipo); return k ? k.label : q.tipo; }
   function cardHtml(q, i){
-    var k = anamKind(q.tipo), isQ = anamIsQ(q), isOpen = !!open[q.id];
-    var simple = q.tipo === "separador" || q.tipo === "pagina";
-    var h = '<div class="room-row an-q" data-qi="' + i + '" style="flex-direction:column;align-items:stretch;gap:8px">' +
-      '<div style="display:flex;align-items:center;gap:8px">' +
-        (canSave ? '<button type="button" class="col-move" data-mv="-1" title="Subir"' + (i === 0 ? " disabled" : "") + '>▲</button><button type="button" class="col-move" data-mv="1" title="Descer"' + (i === qs.length - 1 ? " disabled" : "") + '>▼</button>' : '') +
-        '<span class="pat-count" style="min-width:128px;font-weight:700">' + esc(qLabel(q, i)) + '</span>' +
-        (simple ? '<span class="pat-count" style="flex:1">' + (q.tipo === "pagina" ? "Quebra de página na impressão e divisor no formulário." : "Linha de separação.") + '</span>'
-          : '<input type="text" data-f="titulo" style="flex:1;min-width:0" placeholder="' + esc(titlePh(q)) + '" value="' + esc(q.titulo || "") + '"' + dis + '>') +
-        (isQ ? '<label class="kind-opt' + (q.obrigatoria ? " on" : "") + '"><input type="checkbox" data-f="obrigatoria"' + (q.obrigatoria ? " checked" : "") + dis + '>Obrigatória</label>' : '') +
-        (!simple ? '<button type="button" class="btn ghost" data-tg title="Mais opções da pergunta">' + (isOpen ? "Fechar" : "Opções") + '</button>' : '') +
-        (canSave ? '<button type="button" class="btn ghost" data-dup title="Duplicar pergunta">Duplicar</button><button type="button" class="rm" data-del title="Remover pergunta">✕</button>' : '') +
-      '</div>';
-    if (isOpen && !simple){
-      h += '<div class="an-more" style="padding:8px 4px 2px 4px;border-top:1px dashed var(--line)">';
-      if (isQ) h += '<div class="field"><label>Texto de Apoio</label><input type="text" data-f="ajuda" placeholder="Orientação que aparece embaixo da pergunta" value="' + esc(q.ajuda || "") + '"' + dis + '></div>';
-      if (k && k.opts) h += '<div class="field"><label>Opções (Uma por Linha)</label><textarea data-f="opcoes" rows="4"' + dis + '>' + esc((q.opcoes || []).map(function(o){ return o.label; }).join("\n")) + '</textarea></div>';
-      if (q.tipo === "escala") h += '<div class="field-row"><div class="field"><label>Valor Inicial</label><select data-f="min"' + dis + '>' + [0, 1].map(function(n){ return '<option value="' + n + '"' + (+q.min === n ? " selected" : "") + '>' + n + '</option>'; }).join("") + '</select></div>' +
-        '<div class="field"><label>Valor Final</label><select data-f="max"' + dis + '>' + [3, 4, 5, 6, 7, 8, 9, 10].map(function(n){ return '<option value="' + n + '"' + (+q.max === n ? " selected" : "") + '>' + n + '</option>'; }).join("") + '</select></div>' +
-        '<div class="field"><label>Rótulo do Início</label><input type="text" data-f="rotMin" placeholder="Ex.: Nada" value="' + esc(q.rotMin || "") + '"' + dis + '></div>' +
-        '<div class="field"><label>Rótulo do Fim</label><input type="text" data-f="rotMax" placeholder="Ex.: Muito" value="' + esc(q.rotMax || "") + '"' + dis + '></div></div>';
-      if (isQ && (q.tipo === "texto" || q.tipo === "textolongo" || q.tipo === "data" || q.tipo === "numero")){
-        h += '<div class="field"><label>Preencher com o Cadastro do Paciente</label><select data-f="campo"' + dis + '><option value="">Não preencher</option>' +
-          ANAM_PREFILL.map(function(p){ return '<option value="' + p.k + '"' + (q.campo === p.k ? " selected" : "") + '>' + esc(p.label) + '</option>'; }).join("") + '</select></div>';
-      }
-      var prev = condOptions(q, i), c = q.cond || {};
-      if (prev.length){
-        var src = c.q ? anamById(qs)[c.q] : null;
-        h += '<div class="field"><label>Mostrar Só Se</label><div class="field-row">' +
-          '<div class="field"><select data-c="q"' + dis + '><option value="">Sempre mostrar</option>' + prev.map(function(p){ return '<option value="' + esc(p.id) + '"' + (c.q === p.id ? " selected" : "") + '>' + esc((p.titulo || anamKind(p.tipo).label)) + '</option>'; }).join("") + '</select></div>';
-        if (c.q){
-          h += '<div class="field"><select data-c="op"' + dis + '>' + [["igual", "For igual a"], ["diferente", "For diferente de"], ["preenchido", "Estiver preenchida"], ["vazio", "Estiver vazia"]].map(function(o){ return '<option value="' + o[0] + '"' + ((c.op || "igual") === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>';
-          if (!c.op || c.op === "igual" || c.op === "diferente"){
-            if (src && (src.tipo === "escolha" || src.tipo === "multipla")) h += '<div class="field"><select data-c="v"' + dis + '><option value="">Escolha…</option>' + (src.opcoes || []).map(function(o){ return '<option value="' + esc(o.id) + '"' + (c.v === o.id ? " selected" : "") + '>' + esc(o.label) + '</option>'; }).join("") + '</select></div>';
-            else if (src && src.tipo === "simnao") h += '<div class="field"><select data-c="v"' + dis + '><option value="sim"' + (c.v !== "nao" ? " selected" : "") + '>Sim</option><option value="nao"' + (c.v === "nao" ? " selected" : "") + '>Não</option></select></div>';
-            else h += '<div class="field"><input type="text" data-c="v" placeholder="Valor" value="' + esc(c.v || "") + '"' + dis + '></div>';
-          }
-        }
-        h += '</div></div>';
-      }
-      h += '</div>';
-    }
-    return h + '</div>';
+    var k = anamKind(q.tipo), simple = q.tipo === "separador" || q.tipo === "pagina";
+    var title = simple ? (q.tipo === "pagina" ? "Nova Página" : "Separador") : (q.titulo || "(Sem Texto)");
+    var sub = [qLabel(q)];
+    if (anamIsQ(q) && q.obrigatoria) sub.push("Obrigatória");
+    if (k && k.opts) sub.push((q.opcoes || []).length + " opções");
+    var ct = anamCondText(q, qs); if (ct) sub.push(ct);
+    return '<div class="room-row tl-row an-q" data-qi="' + i + '">' +
+      (canSave ? '<div class="move-col"><button type="button" data-mv="-1" aria-label="Subir"' + (i === 0 ? " disabled" : "") + '>▲</button><button type="button" data-mv="1" aria-label="Descer"' + (i === qs.length - 1 ? " disabled" : "") + '>▼</button></div>' : '') +
+      '<div class="room-info"><div class="rn">' + (simple ? "" : (i + 1) + ". ") + esc(title) + '</div><div class="rs">' + esc(sub.join(" · ")) + '</div></div>' +
+      (simple ? '' : '<button type="button" class="btn ghost" data-ed>' + (canSave ? "Editar" : "Ver") + '</button>') +
+      (canSave ? '<button type="button" class="btn ghost" data-dup title="Duplicar pergunta">Duplicar</button><button type="button" class="btn danger" data-del title="Remover pergunta">Remover</button>' : '') +
+    '</div>';
   }
   function draw(){
     if (!$("anBuild")) return;
@@ -31280,50 +31434,27 @@ function openAnamTypeModal(item, opts){
     if (mode === "previa") drawPrev();
   });
   function qOf(el){ var c = el.closest(".an-q"); return c ? qs[+c.getAttribute("data-qi")] : null; }
-  function readOpts(q, text){
-    var old = q.opcoes || [], lines = text.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
-    q.opcoes = lines.map(function(l, i){ return {id: old[i] ? old[i].id : uid("ao"), label: l}; });
-  }
-  $("anBuild").addEventListener("input", function(e){
-    var q = qOf(e.target); if (!q) return;
-    var f = e.target.getAttribute("data-f"); if (!f) return;
-    if (f === "opcoes") readOpts(q, e.target.value);
-    else if (f === "obrigatoria") { q.obrigatoria = e.target.checked; e.target.closest(".kind-opt").classList.toggle("on", e.target.checked); }
-    else q[f] = e.target.value;
-  });
   $("anBuild").addEventListener("change", function(e){
     var t = e.target;
-    if (t.id === "anAdd"){
-      if (!t.value) return;
-      var q = anamNewQ(t.value); qs.push(q); if (anamIsQ(q)) open[q.id] = false;
-      setTimeout(function(){ draw(); var last = $("anBuild").querySelector(".an-q:last-child [data-f=titulo]"); if (last) last.focus(); }, 0);
-      return;
-    }
-    var q2 = qOf(t); if (!q2) return;
-    var c = t.getAttribute("data-c");
-    if (c){
-      q2.cond = q2.cond || {};
-      if (c === "q"){ q2.cond = t.value ? {q: t.value, op: "igual", v: ""} : null; if (!q2.cond) delete q2.cond; }
-      else q2.cond[c] = t.value;
-      var src = q2.cond && q2.cond.q ? anamById(qs)[q2.cond.q] : null;
-      if (c === "q" && src && src.tipo === "simnao") q2.cond.v = "sim";
-      setTimeout(draw, 0); return;
-    }
-    var f = t.getAttribute("data-f");
-    if (f === "min" || f === "max") { q2[f] = +t.value; if (+q2.min >= +q2.max) q2.max = +q2.min + 1; setTimeout(draw, 0); }
-    else if (f === "campo") q2.campo = t.value;
-    else if (f === "opcoes") setTimeout(draw, 0);
+    if (t.id !== "anAdd" || !t.value) return;
+    var q = anamNewQ(t.value), simple = t.value === "separador" || t.value === "pagina";
+    t.value = "";
+    if (simple){ qs.push(q); draw(); return; }
+    openAnamQuestionModal({q: q, index: qs.length, qs: qs, isNew: true, canSave: canSave, onSave: function(o){ qs.push(o); draw(); }});
   });
   $("anBuild").addEventListener("click", function(e){
     var q = qOf(e.target); if (!q) return;
     var i = qs.indexOf(q);
-    if (e.target.closest("[data-tg]")){ open[q.id] = !open[q.id]; draw(); return; }
+    if (e.target.closest("[data-ed]")){
+      openAnamQuestionModal({q: q, index: i, qs: qs, isNew: false, canSave: canSave, onSave: function(o){ qs[i] = o; draw(); }}); return;
+    }
     var mv = e.target.closest("[data-mv]");
-    if (mv){ var j = i + (+mv.getAttribute("data-mv")); if (j < 0 || j >= qs.length) return; qs.splice(j, 0, qs.splice(i, 1)[0]); draw(); return; }
+    if (mv){ var j = i + (+mv.getAttribute("data-mv")); if (j < 0 || j >= qs.length) return; qs.splice(j, 0, qs.splice(i, 1)[0]); anamCondFixOrder(qs); draw(); return; }
     if (e.target.closest("[data-dup]")){ var cp = anamCopyQs([q])[0]; cp.id = uid("aq"); (cp.opcoes || []).forEach(function(o){ o.id = uid("ao"); }); qs.splice(i + 1, 0, cp); draw(); return; }
     if (e.target.closest("[data-del]")){
       qs.splice(i, 1);
-      qs.forEach(function(x){ if (x.cond && x.cond.q === q.id) delete x.cond; });
+      var keep = {}; qs.forEach(function(x){ keep[x.id] = x.id; });
+      qs.forEach(function(x){ anamCondRemap(x, keep); });
       draw();
     }
   });
@@ -31346,7 +31477,7 @@ function openAnamTypeModal(item, opts){
       var q = qs[i], k = anamKind(q.tipo);
       if (q.tipo !== "separador" && q.tipo !== "pagina" && !String(q.titulo || "").trim()){ showToast("A pergunta " + (i + 1) + " (" + k.label + ") está sem texto.", true); open[q.id] = true; draw(); return; }
       if (k.opts && (q.opcoes || []).length < 2){ showToast("A pergunta " + (i + 1) + " precisa de pelo menos 2 opções.", true); open[q.id] = true; draw(); return; }
-      if (q.cond && q.cond.q && (q.cond.op === "igual" || q.cond.op === "diferente" || !q.cond.op) && !q.cond.v){ showToast("Escolha o valor da condição da pergunta " + (i + 1) + ".", true); open[q.id] = true; draw(); return; }
+      var cpb = anamCondProblem(q, qs); if (cpb){ showToast("Pergunta " + (i + 1) + ": " + cpb, true); return; }
     }
     var val = $("anVal").value.replace(/\D/g, "");
     var oldSig = item && !opts.copy ? JSON.stringify(item.perguntas || []) : "";

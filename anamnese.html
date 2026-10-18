@@ -97,15 +97,34 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
   function isQ(q){ return ["texto", "textolongo", "numero", "data", "hora", "escolha", "multipla", "simnao", "escala", "assinatura"].indexOf(q.tipo) !== -1; }
   function empty(v){ return v == null || v === "" || (Array.isArray(v) && !v.length); }
   function byId(){ var m = {}; QS.forEach(function(q){ m[q.id] = q; }); return m; }
-  function visible(q, ans, map, depth){
-    var c = q && q.cond; if (!c || !c.q) return true;
-    var src = map[c.q]; if (!src || (depth || 0) > 20) return true;
-    if (!visible(src, ans, map, (depth || 0) + 1)) return false;
-    var v = ans[c.q], eq = Array.isArray(v) ? v.indexOf(c.v) !== -1 : String(v == null ? "" : v) === String(c.v == null ? "" : c.v);
-    if (c.op === "diferente") return !eq;
-    if (c.op === "preenchido") return !empty(v);
-    if (c.op === "vazio") return empty(v);
+  function condList(q){
+    var c = q && q.cond; if (!c || !c.q) return [];
+    return [{q: c.q, op: c.op || "igual", v: c.v}].concat((c.mais || []).filter(function(x){ return x && x.q; }));
+  }
+  function condOne(c, ans, map, depth){
+    var src = map[c.q]; if (!src) return null;
+    if (depth > 20 || !visible(src, ans, map, depth + 1)) return false;
+    var v = ans[c.q], op = c.op || "igual", cv = c.v == null ? "" : String(c.v), arr = Array.isArray(v);
+    if (op === "preenchido") return !empty(v);
+    if (op === "vazio") return empty(v);
+    var eq = arr ? v.indexOf(c.v) !== -1 : String(v == null ? "" : v) === cv;
+    if (op === "diferente") return !eq;
+    if (op === "contem" || op === "naocontem"){
+      var has = arr ? v.indexOf(c.v) !== -1 : String(v == null ? "" : v).toLowerCase().indexOf(cv.toLowerCase()) !== -1;
+      return op === "contem" ? has : !has;
+    }
+    if (op === "maior" || op === "menor"){
+      var a = parseFloat(String(v == null ? "" : v).replace(",", ".")), b = parseFloat(cv.replace(",", "."));
+      if (isNaN(a) || isNaN(b)) return false;
+      return op === "maior" ? a > b : a < b;
+    }
     return eq;
+  }
+  function visible(q, ans, map, depth){
+    var d = depth || 0, res = condList(q).map(function(c){ return condOne(c, ans, map, d); }).filter(function(x){ return x !== null; });
+    if (!res.length) return true;
+    var ok = q.cond.modo === "ou" ? res.some(Boolean) : res.every(Boolean);
+    return q.cond.acao === "ocultar" ? !ok : ok;
   }
   function isoToBr(s){ var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? m[3] + "/" + m[2] + "/" + m[1] : (s || ""); }
   function brToIso(s){
