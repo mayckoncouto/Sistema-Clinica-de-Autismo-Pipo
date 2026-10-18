@@ -305,7 +305,7 @@
     profile = p;
     if (!profile.active) {
       showLogin("Seu acesso foi desativado. Fale com o administrador da clínica.");
-      client.auth.signOut();
+      client.auth.signOut({ scope: "local" });
       return;
     }
     renderUserPill();
@@ -557,7 +557,7 @@
       if (act === "sair") {
         // Este aparelho para de receber notificações de quem saiu.
         (window.pipoNotifSignOut ? window.pipoNotifSignOut() : Promise.resolve())
-          .then(function () { return client.auth.signOut(); }).then(function () { location.reload(); });
+          .then(function () { return client.auth.signOut({ scope: "local" }); }).then(function () { location.reload(); });
       } else if (act === "clinica") {
         if (window.pipoOpenClinic) window.pipoOpenClinic();
       } else if (act === "notificacoes") {
@@ -652,7 +652,7 @@
     session = s;
     return loadProfile().then(function (p) {
       if (!p.active) {
-        client.auth.signOut();
+        client.auth.signOut({ scope: "local" });
         showLogin("Seu acesso foi desativado. Fale com o administrador da clínica.");
         return;
       }
@@ -660,7 +660,7 @@
         var u = resolveUnit(p);
         if (u.erro) {
           ssSet(LOGIN_MSG_KEY, "Você não tem acesso a esta unidade.");
-          (window.pipoNotifSignOut ? window.pipoNotifSignOut() : Promise.resolve()).then(function () { return client.auth.signOut(); });
+          (window.pipoNotifSignOut ? window.pipoNotifSignOut() : Promise.resolve()).then(function () { return client.auth.signOut({ scope: "local" }); });
           showLogin("Você não tem acesso a esta unidade.");
           return;
         }
@@ -771,7 +771,7 @@
     profile: function () { return profile; },
     session: function () { return session; },
     onProfile: function (fn) { profileListeners.push(fn); if (profile) fn(profile); },
-    signOut: function () { return client.auth.signOut(); }
+    signOut: function () { return client.auth.signOut({ scope: "local" }); }
   };
 
   // Mesma API que o Claude Artifact oferecia — o app não precisa saber a diferença.
