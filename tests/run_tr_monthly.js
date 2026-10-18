@@ -138,6 +138,17 @@ const path = require('path');
     return [trAbaRevState({status: "ativo", abaRevisao: d(-1)}), trAbaRevState({status: "ativo", abaRevisao: d(10)}), trAbaRevState({status: "ativo", abaRevisao: d(90)}), trAbaRevState({status: "cancelado", abaRevisao: d(-1)}), trAbaRevState({status: "ativo"})].join("|"); })()`);
   console.log('ABA revision state: vencida, vencendo, none, cancelled none, empty none?', abaSt === 'vencida|vencendo|||', abaSt);
 
+  const outH = await ev(`(function(){
+    var t = {horarios: {seg: {ativo: true, manha: {inicio: "08:00", fim: "09:00"}}}, vencPor: "sem"};
+    var p = {id: "p1", nome: "Paciente Teste"};
+    var ctx = {p: p, lines: [], lineOf: function(){ return null; },
+      pitems: [{day: "seg", week: 1, time: "08:00", prof: "", svc: "sessao"}, {day: "ter", week: 1, time: "08:00", prof: "", svc: "sessao"}],
+      aitems: [{d: "2026-10-06", t: "10:00:00", prof: "", svc: "sessao", st: "finalizado"}]};
+    var d = trDivergences(t, "2026-10", ctx).filter(function(x){ return /Horário de Atendimento/.test(x.text); });
+    return d.map(function(x){ return x.lvl + ":" + x.text.slice(0, 7); }).join("|");
+  })()`);
+  console.log('outside the patient hours (from the treatment) = Erro in Planner and Agenda?', outH === 'erro:Planner|erro:Agenda:', outH);
+
 console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

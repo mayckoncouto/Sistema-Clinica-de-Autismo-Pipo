@@ -24806,6 +24806,8 @@ function trWdName(k){ var d = ALL_WEEKDAYS.filter(function(x){ return x.key === 
 // Divergências entre tratamento (quadros), Planner e Agenda no mês. Devolve [{lvl: "erro"|"aviso"|"info", text, go}].
 function trDivergences(t, ym, ctx){
   var p = ctx.p, lines = ctx.lines, out = [], today = trTodayIso();
+  // Horário de Atendimento vem do tratamento (como está na janela), não do cadastro do paciente.
+  var hp = {horarios: t.horarios || null};
   function add(lvl, text, go){ out.push({lvl: lvl, text: text, go: go || null}); }
   function who(pid){ var pr = pid && findProfessional(pid); return pr ? (profShortName(pr) || profNome(pr)) : "sem profissional"; }
   function sname(svc){ var sv = servicesList().filter(function(x){ return x.id === svc; })[0]; return sv ? sv.name : svc; }
@@ -24819,6 +24821,7 @@ function trDivergences(t, ym, ctx){
     var ssk = sk + "|" + it.svc;
     if (slotSeen[ssk] && slotSeen[ssk] !== it){ add("erro", "Planner: o paciente está em dois lugares ao mesmo tempo, com o mesmo serviço" + tag + ".", pgo(it)); }
     slotSeen[ssk] = it;
+    if (!patientSlotOk(hp, it.day, it.time)) add("erro", "Planner: sessão fora do Horário de Atendimento do paciente" + tag + ".", pgo(it));
     if (!line){ return; }
     (perWeek[line.id] = perWeek[line.id] || {})[it.week] = (perWeek[line.id][it.week] || 0) + 1;
     if (line.semanas && !tlWeekOk(line, it.week)) add("aviso", "Planner: " + lineLabel(line, false) + " está na " + it.week + "ª semana, mas o quadro vale para " + weeksText(line) + tag + ".", pgo(it));
@@ -24831,7 +24834,6 @@ function trDivergences(t, ym, ctx){
       if (!okT) add("aviso", "Planner: " + lineLabel(line, false) + " às " + it.time + ", mas o quadro pede " + line.hora + tag + ".", pgo(it));
     }
     if (line.roomId && it.room && line.roomId !== it.room.id) add("aviso", "Planner: " + lineLabel(line, false) + " na sala " + it.room.name + ", mas o quadro pede " + ((findRoom(line.roomId) || {}).name || "outra sala") + tag + ".", pgo(it));
-    if (!patientSlotOk(p, it.day, it.time)) add("aviso", "Planner: sessão fora do Horário de Atendimento do paciente" + tag + ".", pgo(it));
   });
   // Distribuição desigual entre as semanas permitidas do quadro.
   lines.forEach(function(l){
@@ -24849,6 +24851,7 @@ function trDivergences(t, ym, ctx){
     var k = a.d + "|" + (line ? line.id : "x:" + a.svc);
     byDay[k] = (byDay[k] || 0) + 1;
     if (byDay[k] === 2 && !(line && (+line.seguidas || 1) > 1)) add("aviso", "Agenda: mais de um atendimento de " + (line ? lineLabel(line, false) : sname(a.svc)) + " no mesmo dia" + tag + ".", go);
+    if (a.t && !patientSlotOk(hp, TR_WD[agdParse(a.d).getDay()], a.t.slice(0, 5))) add("erro", "Agenda: atendimento fora do Horário de Atendimento do paciente (" + trBr(a.d).slice(0, 5) + " " + a.t.slice(0, 5) + ").", go);
     if (t.vencPor !== "sessoes" && t.vencPor !== "sem" && t.validoAte && a.d > t.validoAte) add("erro", "Agenda: atendimento depois do vencimento do tratamento (" + trBr(t.validoAte) + ")" + tag + ".", go);
     if (!line) return;
     if (wk && line.semanas && !tlWeekOk(line, wk)) add("aviso", "Agenda: " + lineLabel(line, false) + " na " + wk + "ª semana, mas o quadro vale para " + weeksText(line) + tag + ".", go);
@@ -24894,11 +24897,11 @@ function trLoadPatient(p){
   TR.pAppts = TR.pAppts || {};
   var d = agdParse(trTodayIso()), monthEnd = agdIso(new Date(d.getFullYear(), d.getMonth() + 2, 0)), out = [], page = 1000;
   function next(from){
-    return c.from("appointments").select("date,status,professional_id,service").eq("blocked", false).lte("date", monthEnd)
+    return c.from("appointments").select("date,time,status,professional_id,service").eq("blocked", false).lte("date", monthEnd)
       .or("patient_id.eq." + p.id + ",and(patient_id.is.null,patient.eq." + JSON.stringify(p.nome || "") + ")")
       .order("date").range(from, from + page - 1).then(function(r){
         if (r.error) throw r.error;
-        (r.data || []).forEach(function(a){ out.push({d: a.date, prof: a.professional_id || "", svc: a.service || DEFAULT_SERVICE_ID, st: a.status || ""}); });
+        (r.data || []).forEach(function(a){ out.push({d: a.date, t: a.time || "", prof: a.professional_id || "", svc: a.service || DEFAULT_SERVICE_ID, st: a.status || ""}); });
         return (r.data || []).length === page ? next(from + page) : null;
       });
   }
@@ -25653,7 +25656,7 @@ function openTreatmentModal(t, opts){
   syncVencPor();
   var trMonthSec = trMonthSectionWire(t, function(){
     var r0 = ed.read(), ini0 = document.getElementById("trIni"), fim0 = document.getElementById("trFim");
-    return Object.assign({}, t, {specHours: r0.fields.specHours, inicio: (ini0 && ini0.value) || t.inicio, termino: fim0 ? (fim0.value || undefined) : t.termino});
+    return Object.assign({}, t, {specHours: r0.fields.specHours, horarios: r0.fields.horarios !== undefined ? r0.fields.horarios : t.horarios, inicio: (ini0 && ini0.value) || t.inicio, termino: fim0 ? (fim0.value || undefined) : t.termino});
   });
   // Mudou quadro, início ou término na janela (mesmo sem salvar): o Contratado × Realizado se refaz.
   (function(){
@@ -25661,6 +25664,7 @@ function openTreatmentModal(t, opts){
     var go = function(){ if (tm) clearTimeout(tm); tm = setTimeout(function(){ tm = null; if (!document.getElementById("ovTreat")) return; trMonthSec.refresh(); if (mo) mo.takeRecords(); }, 250); };
     if (sr && window.MutationObserver){ mo = new MutationObserver(go); mo.observe(sr, {childList: true, subtree: true}); }
     ["trIni", "trFim"].forEach(function(id){ var el = document.getElementById(id); if (el) el.addEventListener("change", go); });
+    var ph = document.getElementById("pHours"); if (ph){ ph.addEventListener("change", go); ph.addEventListener("input", go); ph.addEventListener("click", go); }
   })();
   trCollapseWire("trHist", TR_HIST_OPEN_KEY);
   if (!isNew && slCan("view")){
