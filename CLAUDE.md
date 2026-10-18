@@ -4873,8 +4873,7 @@ do Clínica Ágil, ligadas aos atendimentos. Feito direto no banco (dados reais 
 - Horários do Clínica Ágil na grade antiga da tarde (13:00, 13:40…) +30 min; acentos perdidos restaurados por dicionário (palavras
   acentuadas do próprio texto) e "no consegue" → "não consegue".
 - 20 atendimentos "Não compareceu" que tinham evolução viraram Finalizado.
-- 247 evoluções ficaram sem atendimento correspondente (188 do prontuário, quase todas jul e out; 59 antigas, quase todas abr) e NÃO
-  foram gravadas: estão em `imp_w` (appt_id nulo).
+- 247 evoluções sem atendimento correspondente (188 do prontuário, 59 antigas) gravadas como evolução AVULSA (sem appointment_id, com a data/horário do Clínica Ágil), a pedido do usuário. Total importado: 4.855.
 - Tabelas/funções temporárias da importação (apagar no SQL Editor quando o usuário aprovar; `imp_w.orig` e `imp_evo` guardam os textos
   originais): `imp_evo`, `imp_w`, `imp_prof`, `imp_dict`, `imp_ca`, função `imp_fix`. Desfazer: apagar de `clinical_records` as linhas
   cujo `appointment_id` está em `imp_w` e criadas em 2026-10-18.
