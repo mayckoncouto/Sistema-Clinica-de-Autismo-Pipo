@@ -17146,6 +17146,7 @@ function agdEnsureChannel(){
     .on("postgres_changes", {event: "*", schema: "public", table: "appointments"}, function(payload){
       vgOnRealtime(payload);
       lgOnRealtime(payload);
+      trAgendaLive();
       if (payload.eventType === "DELETE"){
         if (payload.old && AD.rows[payload.old.id]){ delete AD.rows[payload.old.id]; agdRenderIfVisible(); }
         return;
@@ -24652,6 +24653,21 @@ function trPlanLive(docId){
   if (TR_PLAN_TIMER) clearTimeout(TR_PLAN_TIMER);
   TR_PLAN_TIMER = setTimeout(function(){ TR_PLAN_TIMER = null; if (typeof TR.monthRefresh === "function") TR.monthRefresh(); }, 300);
 }
+// Agenda mudou (tempo real): relê o resumo dos atendimentos e redesenha o quadro Contratado × Realizado se a janela está aberta.
+var TR_AGD_TIMER = null;
+function trAgendaLive(){
+  if (typeof TR === "undefined" || !TR || typeof TR.monthRefresh !== "function") return;
+  var host = document.getElementById("trMonthly");
+  if (!host || !host.isConnected) return;
+  if (TR_AGD_TIMER) clearTimeout(TR_AGD_TIMER);
+  TR_AGD_TIMER = setTimeout(function(){
+    TR_AGD_TIMER = null;
+    var go = function(){
+      trLoadLast(true).then(function(){ if (typeof TR.monthRefresh === "function") TR.monthRefresh(); });
+    };
+    if (TR.loading && TR.loadP) TR.loadP.then(go, go); else go();
+  }, 1200);
+}
 function trLoadPlanner(){
   if (TR.plan && Date.now() - (TR.planAt || 0) < 120000) return Promise.resolve();
   return plannerLoadDocs().then(function(all){ TR.plan = all || {}; TR.planAt = Date.now(); }).catch(function(){});
@@ -24921,6 +24937,7 @@ function trMonthSectionWire(t){
   document.getElementById("trMonthToday").addEventListener("click", function(){ ym = rg.dflt; draw(); });
   var mHost = document.getElementById("trMonthly");
   mHost.addEventListener("click", function(e){ var b = e.target.closest("[data-trgo]"); if (b) trDivGo(b.getAttribute("data-trgo")); });
+  if (typeof agdEnsureChannel === "function") agdEnsureChannel();
   TR.monthRefresh = function(){ if (mHost && mHost.isConnected && document.getElementById("trMonthly") === mHost) draw(); };
   draw();
   return { refresh: draw };
