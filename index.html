@@ -3048,7 +3048,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="freeSlotBtn" title="Ver os horários livres para agendar um paciente">Horário Livre</button>
         <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar Agendamento</button>
         <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar Profissional</button>
-        <button class="btn ghost" id="plExportBtn" title="Baixa o Planner (4 semanas) em planilha para abrir no Excel">Exportar Excel</button>
+        <button class="btn ghost" id="plExportBtn" title="Baixa o Planner (4 semanas) em planilha do Excel, com a lista e a grade">Exportar Excel</button>
         <button class="btn ghost" id="plHistBtn" title="Quem criou, alterou ou excluiu agendamentos no Planner">Histórico de Alterações</button>
         <button class="btn ghost" id="plClearWeekBtn" title="Apaga todos os agendamentos da semana escolhida (segunda a sexta)" hidden>Limpar Semana</button>
       </div></div>
@@ -7373,7 +7373,7 @@ function lgRender(){
 function lgRowById(id){ return LG.rows[id] || null; }
 function lgExportCsv(){
   var rows = LG.last; if (!rows || !rows.length){ showToast("Não há agendamentos para exportar.", true); return; }
-  function cell(v){ v = v == null ? "" : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  
   var lines = [["Data", "Dia", "Hora", "Paciente", "Profissional", "Especialidade", "Serviço", "Sala", "Status", "Observação"].map(cell).join(";")].concat(rows.map(function(r){
     var room = r.room_id ? findRoom(r.room_id) : null, spec = vgSpecOf(r);
     return [agdBrDate(r.date), lgWeekday(r.date), r.time, r.patient, professionalName(r.professional_id) || "", spec ? specialtyName(spec) : "", bookingServiceName(r) || "", room ? room.name : "", rpStatusName(r.status), r.note || ""].map(cell).join(";");
@@ -19571,7 +19571,7 @@ function plannerExportCsv(){
   WEEKS.forEach(function(w){ DAYS.forEach(function(d){ docIds.push(d.key + "-" + w); }); });
   var shownRooms = {}; visibleRooms().forEach(function(r){ shownRooms[r.id] = true; });
   Promise.all(docIds.map(function(id){ return db.doc(schedPath(id)).get(); })).then(function(snaps){
-    function cell(v){ v = v == null ? "" : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    
     var rows = [];
     var roomOrder = {}; plannerRooms().forEach(function(r, i){ roomOrder[r.id] = i; });
     snaps.forEach(function(snap, i){
@@ -19590,14 +19590,41 @@ function plannerExportCsv(){
     });
     rows.sort(function(a, b){ for (var i = 0; i < a.sort.length; i++){ if (a.sort[i] < b.sort[i]) return -1; if (a.sort[i] > b.sort[i]) return 1; } return 0; });
     if (!rows.length){ showToast("Nenhum agendamento no " + (PLA.on ? "Auto Planner" : "Planner") + " para exportar.", true); return; }
-    var lines = [["Semana", "Dia", "Hora", "Sala / grupo", "Profissional", "Agendamento", "Tipo", "Serviço", "Observação"].map(cell).join(";")]
-      .concat(rows.map(function(r){ return r.cells.map(cell).join(";"); }));
-    var blob = new Blob(["﻿" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"});
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = (PLA.on ? "autoplanner" : "planner") + (state.activeRoomFilter ? "-" + slugify((findRoom(state.activeRoomFilter) || {}).name || "sala") : "") + ".csv";
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    var head = ["Semana", "Dia", "Hora", "Sala / grupo", "Profissional", "Agendamento", "Tipo", "Serviço", "Observação"];
+    // Aba 2: a grade como aparece no Planner (cada semana e dia, salas e colunas lado a lado).
+    var grid = [], rooms = visibleRooms().filter(function(r){ return r.therapists && r.therapists.length; });
+    var gridHead = ["Grade do Planner — " + (PLA.on ? "Auto Planner" : "Planner")];
+    var maxCols = 1;
+    snaps.forEach(function(snap, i){
+      var parts = docIds[i].split("-"), dayKey = parts[0], week = +parts[1], dObj = findDayObj(dayKey);
+      if (!dObj) return;
+      var bk = (snap && snap.exists && snap.data() && snap.data().bookings) || {};
+      var seats = []; rooms.forEach(function(r){ r.therapists.forEach(function(t){ seats.push({room: r, t: t}); }); });
+      if (!seats.length) return;
+      if (grid.length) grid.push([]);
+      grid.push([WEEK_LABEL[week] + " — " + dObj.full]);
+      grid.push(["Sala / grupo"].concat(seats.map(function(x){ return x.room.name + (isGroup(x.room) ? " (grupo)" : ""); })));
+      grid.push(["Profissional"].concat(seats.map(function(x){ return seatShortName(x.t); })));
+      timeRows(dObj).forEach(function(tr){
+        if (tr.divider) return;
+        grid.push([tr.time].concat(seats.map(function(x){
+          var b = effectiveBooking(bk, tr.time + "|" + x.room.id + "|" + x.t.id, dayKey, tr.time);
+          if (!b) return "";
+          var kind = bookingKind(b);
+          if (kind) return SLOT_KINDS.filter(function(k){ return k.key === kind; })[0].label + (b.note ? " — " + b.note : "");
+          if (!b.patient) return b.lock ? "Bloqueado" : "";
+          var svc = bookingServiceName(b);
+          return b.patient + (svc && !isGroup(x.room) && b.service && b.service !== DEFAULT_SERVICE_ID ? " · " + svc : "") + (b.note ? " — " + b.note : "");
+        })));
+      });
+      maxCols = Math.max(maxCols, seats.length + 1);
+    });
+    var widths = [14]; for (var wi = 1; wi < maxCols; wi++) widths.push(22);
+    var fname = (PLA.on ? "autoplanner" : "planner") + (state.activeRoomFilter ? "-" + slugify((findRoom(state.activeRoomFilter) || {}).name || "sala") : "") + ".xlsx";
+    xlDownload(fname, [
+      {name: "Lista", rows: [head].concat(rows.map(function(r){ return r.cells; })), widths: [12, 16, 8, 24, 22, 28, 14, 18, 30]},
+      {name: "Grade do Planner", rows: [gridHead].concat(grid), widths: widths, noFreeze: true, wrap: true}
+    ]);
     showToast(rows.length + " agendamentos exportados.");
   }).catch(function(){ showToast("Não foi possível ler o Planner.", true); });
 }
@@ -22904,7 +22931,7 @@ function agdOpenExport(){
         return (!profs.length || profs.indexOf(r.professional_id) !== -1) && (!rooms.length || rooms.indexOf(r.room_id) !== -1) && (kinds || !bookingKind(r));
       }).sort(function(a, b){ return (a.date + a.time).localeCompare(b.date + b.time) || (professionalName(a.professional_id) || "").localeCompare(professionalName(b.professional_id) || "", "pt-BR"); });
       if (!rows.length){ showToast("Nenhum atendimento nesse período e filtros.", true); return; }
-      function cell(v){ v = v == null ? "" : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+      
       var lines = [["Data", "Dia", "Hora", "Profissional", "Sala", "Paciente / grupo", "Tipo", "Serviço", "Status", "Observação", "Origem"].map(cell).join(";")]
         .concat(rows.map(function(r){
           var k = bookingKind(r), room = r.room_id ? findRoom(r.room_id) : null, d = agdParse(r.date);
@@ -24019,7 +24046,7 @@ function rpPrint(){
 function rpExportCsv(){
   var L = RP.last; if (!L) return;
   var t = RP_TYPES.filter(function(x){ return x.id === L.type; })[0];
-  function cell(v){ v = v == null ? "" : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  
   var lines = [cell(t.name), cell(agdBrDate(L.opts.from) + " a " + agdBrDate(L.opts.to) + " - " + (L.opts.prof ? rpProfName(L.opts.prof) : "Todos os profissionais")), ""];
   L.rep.sections.forEach(function(s){
     lines.push(cell(s.title));
@@ -27286,7 +27313,7 @@ var HELP_TOPICS = [
       "<b>Outras Opções ▾ → Enviar para a Agenda</b>: comece escolhendo o <b>Período</b>. <b>Mês</b>: escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda; a 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª; a prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
       "<b>Semana</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes. Na prévia, \"com aviso\" lista os que ficam fora do horário do paciente ou com terapeuta diferente do tratamento: desmarque os que não devem ir.",
       "<b>Limpar Semana</b>: apaga todos os agendamentos de uma semana do Planner (dupla confirmação, desfazível).",
-      "<b>Exportar Excel</b>: baixa uma planilha com os agendamentos das 4 semanas."
+      "<b>Exportar Excel</b>: baixa uma planilha (.xlsx) com duas abas: <b>Lista</b> (uma linha por agendamento das 4 semanas) e <b>Grade do Planner</b> (cada semana e dia com as salas e colunas lado a lado, como na tela)."
     ],
     rules: [
       "Enviar para a Agenda só acrescenta: nunca altera nem apaga o que já está na Agenda. Pula horários ocupados, bloqueados ou fora do horário.",
@@ -27307,7 +27334,7 @@ var HELP_TOPICS = [
       "<b>Outras Opções → Relatório de Qualidade</b>: confere o Auto Planner inteiro — sessões colocadas × contratadas por paciente, meta de grupo (80%), ocupação por terapeuta, turnos de sala sem horário vago, alertas (pacientes de Não Agrupar com juntos, fora do Horário de Atendimento) e o que não coube se rodar a Montar Proposta agora.",
       "<b>Outras Opções → Rascunhos</b>: guarde até 5 versões da grade com nome (<b>Salvar Rascunho</b>, em “Guardar em” escolha o número; escolher um que já existe substitui). <b>Carregar</b> troca a grade atual pelo rascunho (Ctrl+Z desfaz); <b>Excluir</b> apaga; <b>Só Renomear o Escolhido</b> muda o nome. Os bloqueios extras do Auto Planner não entram no rascunho.",
       "<b>Comparar</b> (na mesma janela): escolha A e B entre o Auto Planner atual, o Planner atual e os rascunhos; aparecem atendimentos, pacientes, tratamentos com todas as sessões, sessões que faltam, pacientes dentro da meta de grupo, ocupação dos terapeutas, turnos de sala sem horário vago e alertas, mais quantos atendimentos foram acrescentados, retirados ou trocados de paciente de A para B.",
-      "<b>Outras Opções → Imprimir e Exportar</b>: <b>Grade por Terapeuta</b> (uma página por terapeuta e semana, para entregar), <b>Horário da Família</b> (por paciente ou todos; <b>Copiar Texto</b> gera a mensagem para o WhatsApp, com os dias, horários, terapeutas, salas e semanas) e <b>Exportar Excel</b> (autoplanner.csv, uma linha por atendimento).",
+      "<b>Outras Opções → Imprimir e Exportar</b>: <b>Grade por Terapeuta</b> (uma página por terapeuta e semana, para entregar), <b>Horário da Família</b> (por paciente ou todos; <b>Copiar Texto</b> gera a mensagem para o WhatsApp, com os dias, horários, terapeutas, salas e semanas) e <b>Exportar Excel</b> (autoplanner.xlsx, com a lista e a grade).",
       "O que a proposta coloca fica marcado: <b>Remover o que a Proposta Colocou</b> (dentro da janela Montar Proposta) apaga só essas sessões do Auto Planner (do paciente escolhido ou de todos), sem tocar no que foi marcado à mão.",
       "<b>Outras Opções → Enviar para o Planner</b>: leva os atendimentos do Auto Planner para o Planner, só em horários livres e dentro das regras dele; mostra quantos vão e quantos ficam de fora (com o motivo) antes de confirmar. Não altera nem apaga o que já está no Planner; bloqueios de horário do Auto Planner não vão.",
       "<b>Outras Opções → Remover do Planner</b>: apaga do Planner só o que veio por esse envio (marcado internamente); o que foi marcado à mão no Planner fica.",

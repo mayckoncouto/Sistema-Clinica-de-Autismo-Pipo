@@ -126,7 +126,7 @@ const path = require('path');
   const copied = await page.evaluate(() => window.__copied);
   check('WhatsApp text copied (patient name, day, time, weeks)?', /Horários de Paciente A/.test(copied) && /•/.test(copied) && /semanas?/.test(copied), copied.replace(/\n/g, ' | ').slice(0, 200));
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#appExcel')]);
-  check('Excel export is named autoplanner.csv?', dl.suggestedFilename() === 'autoplanner.csv', dl.suggestedFilename());
+  check('Excel export is named autoplanner.xlsx?', dl.suggestedFilename() === 'autoplanner.xlsx', dl.suggestedFilename());
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

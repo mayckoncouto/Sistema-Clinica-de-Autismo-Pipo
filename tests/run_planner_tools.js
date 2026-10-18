@@ -22,12 +22,15 @@ const path = require('path');
 
   // ---- Exportar Excel ----
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#plToolsBtn').then(() => page.click('#plExportBtn'))]);
-  const csv = await new Promise((res) => { dl.createReadStream().then((s) => { let t = ''; s.on('data', (c) => (t += c)); s.on('end', () => res(t)); }); });
-  const lines = csv.replace(/^﻿/, '').split(/\r\n/);
-  console.log('export file name is planner.csv?', dl.suggestedFilename() === 'planner.csv');
-  console.log('export has the header row?', lines[0] === 'Semana;Dia;Hora;Sala / grupo;Profissional;Agendamento;Tipo;Serviço;Observação');
-  console.log('export lists Paciente Um on Monday 07:20 of the 1st week?', lines.some((l) => l.startsWith('1ª semana;Segunda-feira;07:20;Sala Teste;') && l.includes(';Paciente Um;Paciente;')));
-  console.log('export marks special slots by type (Bloqueado)?', lines.some((l) => /;Bloqueado;/.test(l)));
+  const xp = require('path').join(require('os').tmpdir(), 'planner-test.xlsx'); await dl.saveAs(xp);
+  const raw = require('fs').readFileSync(xp).toString('utf8'); require('fs').unlinkSync(xp);
+  console.log('export file name is planner.xlsx?', dl.suggestedFilename() === 'planner.xlsx');
+  console.log('export has two sheets (Lista, Grade do Planner)?', /name="Lista"/.test(raw) && /name="Grade do Planner"/.test(raw));
+  console.log('export has the header row?', ['Semana', 'Dia', 'Hora', 'Sala / grupo', 'Profissional', 'Agendamento', 'Tipo', 'Serviço', 'Observação'].every((h) => raw.includes('>' + h + '<')));
+  console.log('export lists Paciente Um and Segunda-feira 1ª semana?', raw.includes('>Paciente Um<') && raw.includes('>1ª semana<') && raw.includes('>Segunda-feira<'));
+  console.log('export marks special slots by type (Bloqueado)?', raw.includes('>Bloqueado<'));
+  console.log('grid has a block per week and day?', raw.includes('1ª semana — Segunda-feira') && raw.includes('4ª semana — Sexta-feira'));
+  console.log('grid shows room and professional headers?', raw.includes('>Sala / grupo<') && raw.includes('>Profissional<') && raw.includes('>Sala Teste<'));
 
   // ---- Editar Agendamento: resumo e pacote × Planner ----
   await page.click('#plToolsBtn'); await page.click('#fixPatientBtn'); // dentro do menu Ferramentas
