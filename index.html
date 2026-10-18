@@ -24709,11 +24709,19 @@ function trLoadLast(force){
   }
   // Resumo agrupado pelo banco (treatment_appt_summary). Sem a função (falta o SQL):
   // lê linha por linha como antes.
+  // Páginas lidas 6 de cada vez (antes uma por vez: ~17 idas ao banco seguidas).
   function nextSum(from){
-    return c.rpc("treatment_appt_summary", {p_until: monthEnd}).range(from, from + page - 1).then(function(r){
-      if (r.error) throw r.error;
-      (r.data || []).forEach(function(x){ add({patient: x.patient, patient_id: x.pid || null, date: x.d, professional_id: x.prof, service: x.svc, status: x.st}, x.n); });
-      return (r.data || []).length === page ? nextSum(from + page) : null;
+    var reqs = [];
+    for (var i = 0; i < 6; i++) reqs.push(c.rpc("treatment_appt_summary", {p_until: monthEnd}).range(from + i * page, from + (i + 1) * page - 1));
+    return Promise.all(reqs).then(function(rs){
+      var full = true;
+      rs.forEach(function(r){
+        if (r.error) throw r.error;
+        if (!full) return;
+        (r.data || []).forEach(function(x){ add({patient: x.patient, patient_id: x.pid || null, date: x.d, professional_id: x.prof, service: x.svc, status: x.st}, x.n); });
+        if ((r.data || []).length < page) full = false;
+      });
+      return full ? nextSum(from + 6 * page) : null;
     });
   }
   function next(from){
@@ -24870,14 +24878,44 @@ function trAgendaLive(){
   if (TR_AGD_TIMER) clearTimeout(TR_AGD_TIMER);
   TR_AGD_TIMER = setTimeout(function(){
     TR_AGD_TIMER = null;
+    // Relê só os atendimentos do paciente da janela (rápido); o resumo da clínica fica para depois.
     var go = function(){
-      trLoadLast(true).then(function(){ if (typeof TR.monthRefresh === "function") TR.monthRefresh(); });
+      var pp = TR.monthPat;
+      (pp ? trLoadPatient(pp) : trLoadLast(true)).then(function(){ if (typeof TR.monthRefresh === "function") TR.monthRefresh(); });
+      if (pp) TR.lastAt = 0;
     };
     if (TR.loading && TR.loadP) TR.loadP.then(go, go); else go();
   }, 1200);
 }
+// Atendimentos de UM paciente (janela do tratamento): rápido, não espera o resumo da clínica inteira.
+function trLoadPatient(p){
+  var c = agdClient();
+  if (!c || !p) return Promise.resolve();
+  TR.pAppts = TR.pAppts || {};
+  var d = agdParse(trTodayIso()), monthEnd = agdIso(new Date(d.getFullYear(), d.getMonth() + 2, 0)), out = [], page = 1000;
+  function next(from){
+    return c.from("appointments").select("date,status,professional_id,service").eq("blocked", false).lte("date", monthEnd)
+      .or("patient_id.eq." + p.id + ",and(patient_id.is.null,patient.eq." + JSON.stringify(p.nome || "") + ")")
+      .order("date").range(from, from + page - 1).then(function(r){
+        if (r.error) throw r.error;
+        (r.data || []).forEach(function(a){ out.push({d: a.date, prof: a.professional_id || "", svc: a.service || DEFAULT_SERVICE_ID, st: a.status || ""}); });
+        return (r.data || []).length === page ? next(from + page) : null;
+      });
+  }
+  return next(0).then(function(){ TR.pAppts[p.id] = out; }).catch(function(){});
+}
+function trApptsOf(p){
+  if (TR.pAppts && TR.pAppts[p.id]) return TR.pAppts[p.id];
+  return TR.appts ? (TR.appts[p.id] || []) : null;
+}
 function trLoadPlanner(){
   if (TR.plan && Date.now() - (TR.planAt || 0) < 120000) return Promise.resolve();
+  // As 4 semanas do Planner já ficam ao vivo para o Resumo: usa essa cópia (sem ir ao banco).
+  var ids = plannerAllDocIds(), live = ids.length && ids.every(function(id){ return state.reportDocs[id]; });
+  if (live){
+    TR.plan = {}; ids.forEach(function(id){ TR.plan[id] = JSON.parse(JSON.stringify(state.reportDocs[id].bookings || {})); });
+    TR.planAt = Date.now(); return Promise.resolve();
+  }
   return plannerLoadDocs().then(function(all){ TR.plan = all || {}; TR.planAt = Date.now(); }).catch(function(){});
 }
 function trMonthly(t){
@@ -24982,8 +25020,8 @@ function trMonthView(t, ym){
   if (plan) pitems.forEach(function(it){
     if (!lineOf(it.prof, it.svc, it.week)){ var o = orphan(it.prof, it.svc); o.plan++; if (!o.planGo) o.planGo = {t: "planner", k: it.day + "|" + it.week + "|" + p.nome}; }
   });
-  var other = 0, loaded = !!TR.appts, before = 0;
-  (TR.appts && TR.appts[p.id] || []).forEach(function(a){
+  var mineA = trApptsOf(p), other = 0, loaded = !!mineA, before = 0;
+  (mineA || []).forEach(function(a){
     if (a.d.slice(0, 7) !== ym) return;
     if (t.inicio && a.d < t.inicio){ before++; return; }
     var x = treatmentAt(t.patientId, a.d); if (!x || x.id !== t.id) return;
@@ -25649,6 +25687,7 @@ function openTreatmentModal(t, opts){
     trMonthSec.refresh();
   });
   if (!isNew) trLoadPlanner().then(function(){ if (document.getElementById("ovTreat")) trMonthSec.refresh(); });
+  if (!isNew && agdClient()){ var trPat = rawPatient(t.patientId); TR.monthPat = trPat; trLoadPatient(trPat).then(function(){ if (document.getElementById("ovTreat")) trMonthSec.refresh(); }); }
   // Com atendimentos Finalizados: não exclui e não muda a quantidade de sessões
   // (pacote e especialidades/serviços) — para isso, Renegociar ou Cancelar.
   var doneN = isNew ? 0 : trDoneCount(t);
