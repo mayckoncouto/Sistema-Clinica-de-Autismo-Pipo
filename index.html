@@ -2037,6 +2037,10 @@ input[readonly]:not(.dp-in):focus,textarea[readonly]:focus{outline:none;box-shad
 .modal .btn.add-row-btn:hover{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .therapist-row .dp-combo{flex:1}
 .an-cond-row > *:not(.rm){flex:1 1 0;min-width:0}
+.an-q[draggable=true]{cursor:grab}
+.an-q.an-dragging{opacity:.45}
+.an-q.an-drop-top{outline:2px dashed var(--accent);outline-offset:-2px;box-shadow:0 -3px 0 var(--accent)}
+.an-q.an-drop-bottom{outline:2px dashed var(--accent);outline-offset:-2px;box-shadow:0 3px 0 var(--accent)}
 .dp-btn.dp-combo.dp-empty .dp-in{color:var(--ink)}
 .dp-btn.dp-combo .dp-chev{cursor:pointer}
 .dp-opt.kb{background:var(--surface-2)}
@@ -26497,7 +26501,7 @@ var HELP_TOPICS = [
     purpose: "Cria os modelos de formulário usados nas anamneses: você monta as perguntas uma vez e depois preenche o modelo para cada paciente.",
     steps: ["Prontuário ▾ → <b>Anamneses</b> → <b>Outras Opções ▾</b> → <b>Modelos</b> → <b>+ Incluir</b>: nome, descrição e <b>Validade</b> (3 Meses, 6 Meses ou 1 Ano: tempo até a anamnese precisar ser refeita).",
       "Em <b>Perguntas</b>, escolha <b>+ Adicionar Pergunta…</b> e o tipo: Texto Curto, Texto Longo, Número, Data, Hora, Escolha Única, Múltipla Escolha, Sim ou Não, Escala, Arquivo ou Assinatura. Para organizar, use Título de Seção (numerado sozinho: 1., 2., 3. pela ordem, no formulário, na prévia e na impressão; não digite o número), Texto Explicativo, Separador e Nova Página.",
-      "Cada pergunta é um quadro com ▲ ▼ (mudar a ordem), <b>Editar</b>, <b>Duplicar</b> e <b>Remover</b>. <b>Editar</b> abre a janela da pergunta: texto, texto de apoio, <b>Resposta Obrigatória</b>, opções (uma por linha), valores da escala e <b>Preencher com o Cadastro do Paciente</b>.",
+      "Cada pergunta é um quadro que pode ser arrastado com o mouse (ou usar ▲ ▼) para mudar a ordem, com <b>Editar</b>, <b>Duplicar</b> e <b>Remover</b>. <b>Editar</b> abre a janela da pergunta: texto, texto de apoio, <b>Resposta Obrigatória</b>, opções (uma por linha), valores da escala e <b>Preencher com o Cadastro do Paciente</b>.",
       "Em <b>Lógica Condicional</b>, escolha <b>Mostrar esta pergunta só se</b> ou <b>Ocultar esta pergunta se</b> e inclua uma ou mais condições com <b>+ Incluir Condição</b>: pergunta anterior, comparação (for igual a, for diferente de, contiver, não contiver, for maior que, for menor que, estiver preenchida, estiver vazia) e valor. Com 2 ou mais condições, escolha se <b>todas</b> (E) ou <b>qualquer uma</b> (OU) precisam valer.",
       "<b>Prévia</b> mostra como o formulário aparece para quem preenche. <b>Duplicar Modelo</b> cria uma cópia para você ajustar."],
     rules: ["Não pode haver dois modelos com o mesmo nome.", "Todo modelo precisa de pelo menos uma pergunta; perguntas de escolha precisam de pelo menos 2 opções.", "A condição só pode olhar para uma pergunta que vem antes; ao mover uma pergunta, condições que passam a apontar para frente são retiradas.", "Mudar o modelo não altera anamneses já preenchidas."],
@@ -31409,7 +31413,7 @@ function openAnamTypeModal(item, opts){
     if (anamIsQ(q) && q.obrigatoria) sub.push("Obrigatória");
     if (k && k.opts) sub.push((q.opcoes || []).length + " opções");
     var ct = anamCondText(q, qs); if (ct) sub.push(ct);
-    return '<div class="room-row tl-row an-q" data-qi="' + i + '">' +
+    return '<div class="room-row tl-row an-q" data-qi="' + i + '"' + (canSave ? ' draggable="true" title="Arraste para mudar a ordem"' : '') + '>' +
       (canSave ? '<div class="move-col"><button type="button" data-mv="-1" aria-label="Subir"' + (i === 0 ? " disabled" : "") + '>▲</button><button type="button" data-mv="1" aria-label="Descer"' + (i === qs.length - 1 ? " disabled" : "") + '>▼</button></div>' : '') +
       '<div class="room-info"><div class="rn">' + (simple || q.tipo === "secao" ? "" : (i + 1) + ". ") + esc(title) + '</div><div class="rs">' + esc(sub.join(" · ")) + '</div></div>' +
       (simple ? '' : '<button type="button" class="btn ghost" data-ed>' + (canSave ? "Editar" : "Ver") + '</button>') +
@@ -31438,6 +31442,32 @@ function openAnamTypeModal(item, opts){
     if (mode === "previa") drawPrev();
   });
   function qOf(el){ var c = el.closest(".an-q"); return c ? qs[+c.getAttribute("data-qi")] : null; }
+  // Arrastar os quadros para mudar a ordem (segurando com o mouse).
+  var dragFrom = -1;
+  function dropClear(){ Array.prototype.forEach.call($("anBuild").querySelectorAll(".an-dragging,.an-drop-top,.an-drop-bottom"), function(c){ c.classList.remove("an-dragging", "an-drop-top", "an-drop-bottom"); }); }
+  $("anBuild").addEventListener("dragstart", function(e){
+    var c = e.target.closest && e.target.closest(".an-q"); if (!c || !canSave) return;
+    dragFrom = +c.getAttribute("data-qi");
+    try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(dragFrom)); } catch (x) {}
+    setTimeout(function(){ c.classList.add("an-dragging"); }, 0);
+  });
+  $("anBuild").addEventListener("dragover", function(e){
+    var c = e.target.closest && e.target.closest(".an-q"); if (!c || dragFrom < 0) return;
+    e.preventDefault();
+    var r = c.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+    Array.prototype.forEach.call($("anBuild").querySelectorAll(".an-drop-top,.an-drop-bottom"), function(x){ x.classList.remove("an-drop-top", "an-drop-bottom"); });
+    c.classList.add(after ? "an-drop-bottom" : "an-drop-top");
+  });
+  $("anBuild").addEventListener("drop", function(e){
+    var c = e.target.closest && e.target.closest(".an-q"); if (!c || dragFrom < 0) return;
+    e.preventDefault();
+    var r = c.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2, to = +c.getAttribute("data-qi") + (after ? 1 : 0), from = dragFrom;
+    dragFrom = -1; dropClear();
+    if (to === from || to === from + 1) return;
+    var item = qs.splice(from, 1)[0]; qs.splice(to > from ? to - 1 : to, 0, item);
+    anamCondFixOrder(qs); draw();
+  });
+  $("anBuild").addEventListener("dragend", function(){ dragFrom = -1; dropClear(); });
   $("anBuild").addEventListener("change", function(e){
     var t = e.target;
     if (t.id !== "anAdd" || !t.value) return;

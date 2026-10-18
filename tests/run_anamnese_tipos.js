@@ -51,6 +51,13 @@ const fs = require('fs');
   await (await page.$('#anBuild .an-q[data-qi="4"] [data-mv="-1"]')).click(); await page.waitForTimeout(60);
   check('moving up swaps order?', /Nível de atenção/.test(await page.$eval('#anBuild .an-q[data-qi="3"] .rn', (e) => e.textContent)));
   await (await page.$('#anBuild .an-q[data-qi="3"] [data-mv="1"]')).click(); await page.waitForTimeout(60);
+  // arrastar o 4º quadro para cima do 2º
+  const t0 = await page.$eval('#anBuild .an-q[data-qi="3"] .rn', (e) => e.textContent);
+  await page.dragAndDrop('#anBuild .an-q[data-qi="3"] .rn', '#anBuild .an-q[data-qi="1"] .rn', {targetPosition: {x: 20, y: 2}});
+  await page.waitForTimeout(150);
+  const t1 = await page.$eval('#anBuild .an-q[data-qi="1"] .rn', (e) => e.textContent);
+  check('dragging a card changes the order?', t1.replace(/^\d+\.\s*/, '') === t0.replace(/^\d+\.\s*/, ''), t0 + ' -> ' + t1);
+  await (await page.$('#anBuild .an-q[data-qi="1"] [data-mv="1"]')).click(); await page.waitForTimeout(80); await (await page.$('#anBuild .an-q[data-qi="2"] [data-mv="1"]')).click(); await page.waitForTimeout(80);
   // duplicar a pergunta de texto
   await (await page.$('#anBuild .an-q[data-qi="2"] [data-dup]')).click(); await page.waitForTimeout(60);
   check('duplicate adds a block with new id?', (await page.$$('#anBuild .an-q')).length === 7);
