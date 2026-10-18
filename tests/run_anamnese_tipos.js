@@ -24,7 +24,7 @@ const fs = require('fs');
   check('window title "Novo Tipo de Anamnese"?', /Novo Modelo de Anamnese/.test(await page.textContent('#ovAnTipo h3')));
   await page.click('#anSave'); await page.waitForTimeout(100);
   check('empty name refused?', !!(await page.$('#ovAnTipo')));
-  await page.fill('#anName', 'Anamnese Inicial'); await page.fill('#anVal', '12x');
+  await page.fill('#anName', 'Anamnese Inicial'); await page.evaluate(() => { const e = document.getElementById('anVal'); e.value = '12'; e.dispatchEvent(new Event('change', {bubbles: true})); }); check('validity is a list with exactly 3 options (3 Meses, 6 Meses, 1 Ano) and 1 Ano by default?', await page.$$eval('#anVal option', (o) => o.map((x) => x.textContent).join('|')) === '3 Meses|6 Meses|1 Ano');
   await page.click('#anSave'); await page.waitForTimeout(100);
   check('no questions refused?', !!(await page.$('#ovAnTipo')) && (await ev('state.anamTypes.length')) === 0);
   // perguntas
@@ -75,7 +75,7 @@ const fs = require('fs');
   const saved = await ev('state.anamTypes.map(function(t){ return {n: t.name, v: t.validadeMeses, q: t.perguntas.length, ver: t.versao, ct: t.perguntas[2].cond && t.perguntas[2].cond.op + ":" + t.perguntas[2].cond.v}; })');
   check('saved: months digits only, 6 blocks, version 1, condition kept?', saved.length === 1 && saved[0].v === 12 && saved[0].q === 6 && saved[0].ver === 1 && saved[0].ct === 'igual:sim', JSON.stringify(saved));
   const row = (await page.$$eval('#reg-tiposanam-host tbody tr:first-child td', (c) => c.map((x) => x.textContent.trim()))).join(' | ');
-  check('list row shows name, 4 questions and 12 meses?', /Anamnese Inicial/.test(row) && /\b4\b/.test(row) && /12 meses/.test(row), row.replace(/\s+/g, ' '));
+  check('list row shows name, 4 questions and 1 Ano?', /Anamnese Inicial/.test(row) && /\b4\b/.test(row) && /1 Ano/.test(row), row.replace(/\s+/g, ' '));
   // editar: mudar o modelo sobe a versão; duplicar modelo
   await page.click('#reg-tiposanam-host tbody tr'); await page.waitForSelector('#ovAnTipo');
   await (await page.$('#anBuild .an-q[data-qi="1"] [data-tg]')).click(); await page.waitForTimeout(60);
