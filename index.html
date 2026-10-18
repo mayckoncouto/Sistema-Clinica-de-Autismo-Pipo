@@ -2749,7 +2749,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
   #reg-automacoes-host .crma-when{display:none}
   #reg-automacoes-host .pat-table td:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #tab-agendamentos .pat-toolbar > .search-wrap{flex:1 1 100%!important;max-width:none!important}
-  #tab-agendamentos .pat-toolbar > .dp-btn{flex:1 1 30%;min-width:0}
+  #tab-agendamentos .pat-toolbar > .dp-btn{flex:1 1 22%;min-width:0}
   #tab-agendamentos .pat-toolbar > .pat-count{display:none!important}   /* celular: o total já está nos cartões */
   #tab-agendamentos .pat-toolbar > .dp-date{display:none}   /* celular: o período vem pela lista; De/Até só no computador */
   #tab-agendamentos .pat-toolbar > .dp-btn .dp-txt{overflow:hidden;text-overflow:ellipsis}
@@ -3120,6 +3120,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <input type="date" id="lgTo" aria-label="Até">
       <select id="lgProf" aria-label="Profissional"></select>
       <select id="lgSpec" aria-label="Especialidade"></select>
+      <select id="lgSvc" aria-label="Serviço"></select>
       <select id="lgStatus" aria-label="Status"></select>
       <span class="pat-count" id="lgCount"></span>
       <div class="spacer"></div>
@@ -7252,16 +7253,18 @@ function lgFillFilters(){
   if (per){ var cur = per.value || LG.per; per.innerHTML = LG_PERIODS.map(function(p){ return '<option value="' + p[0] + '">' + p[1] + '</option>'; }).join(""); per.value = LG.per; if (cur !== LG.per) per.value = LG.per; }
   fill("lgProf", sm ? "Profissional" : "Todos os Profissionais", activeOnly(state.professionals).slice().sort(function(a, b){ return profNome(a).localeCompare(profNome(b), "pt-BR"); }).map(function(p){ return [p.id, profNome(p)]; }));
   fill("lgSpec", sm ? "Especialidade" : "Todas as Especialidades", activeOnly(state.specialties).map(function(s){ return [s.id, s.name]; }));
+  fill("lgSvc", sm ? "Serviço" : "Todos os Serviços", activeOnly(servicesList()).map(function(s){ return [s.id, s.name]; }));
   fill("lgStatus", sm ? "Status" : "Todos os Status", [["__sem", "Sem Status"]].concat(statusesList().map(function(s){ return [s.id, s.name]; })));
 }
 function lgFilters(){
   function v(id){ var el = document.getElementById(id); return el ? el.value : ""; }
-  return {q: normText(v("lgQ")), prof: v("lgProf"), spec: v("lgSpec"), status: v("lgStatus")};
+  return {q: normText(v("lgQ")), prof: v("lgProf"), spec: v("lgSpec"), svc: v("lgSvc"), status: v("lgStatus")};
 }
 function lgPass(r, f){
   if (f.q && normText(r.patient || "").indexOf(f.q) === -1) return false;
   if (f.prof && r.professional_id !== f.prof) return false;
   if (f.spec && vgSpecOf(r) !== f.spec) return false;
+  if (f.svc && (bookingKind(r) || (r.service || DEFAULT_SERVICE_ID) !== f.svc)) return false;
   if (f.status === "__sem" ? !!r.status : (f.status && r.status !== f.status)) return false;
   return true;
 }
@@ -7388,6 +7391,7 @@ function lgPrint(){
   var q = (document.getElementById("lgQ") || {}).value; if (q) parts.push("Paciente: " + q);
   if (f.prof) parts.push("Profissional: " + professionalName(f.prof));
   if (f.spec) parts.push("Especialidade: " + specialtyName(f.spec));
+  if (f.svc) parts.push("Serviço: " + ((servicesList().filter(function(x){ return x.id === f.svc; })[0] || {}).name || f.svc));
   if (f.status) parts.push("Status: " + (f.status === "__sem" ? "Sem Status" : rpStatusName(f.status)));
   var a = lgAnalyse(rows);
   var css = "@page{size:A4 landscape;margin:12mm}body{font:11px/1.35 Arial,sans-serif;color:#1c2b28}h1{font-size:16px;margin:0 0 2px;color:#2f7a6d}.f{color:#5b6b68;margin-bottom:8px}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #d9e0de;padding:3px 5px;text-align:left}th{background:#eef3f2;font-size:10px}";
@@ -7450,7 +7454,7 @@ function wireAgendamentos(){
   var host = document.getElementById("reg-agendamentos-host"); if (!host) return;
   function setPer(k){ LG.per = k; var p = lgPeriod(k); if (p){ LG.from = p[0]; LG.to = p[1]; } }
   var q = document.getElementById("lgQ"); q.addEventListener("input", debounce150(function(){ gtMoreReset("agendamentos"); lgRender(); }));
-  ["lgProf", "lgSpec", "lgStatus"].forEach(function(id){ document.getElementById(id).addEventListener("change", function(){ gtMoreReset("agendamentos"); lgRender(); }); });
+  ["lgProf", "lgSpec", "lgSvc", "lgStatus"].forEach(function(id){ document.getElementById(id).addEventListener("change", function(){ gtMoreReset("agendamentos"); lgRender(); }); });
   document.getElementById("lgPer").addEventListener("change", function(){ setPer(this.value); gtMoreReset("agendamentos"); lgLoad(); });
   ["lgFrom", "lgTo"].forEach(function(id){
     document.getElementById(id).addEventListener("change", function(){
@@ -27425,7 +27429,7 @@ var HELP_TOPICS = [
     steps: [
       "Abra <b>Agenda ▾ → Agendamentos</b>. O período começa em <b>Este Mês</b>; troque por Hoje, Esta Semana, Próximos 30 Dias, Mês Passado… ou digite as datas De e Até.",
       "Digite o nome na busca para ver só aquele paciente: o resumo mostra o próximo e o último atendimento dele.",
-      "Filtre também por profissional, especialidade e status. Clique no título de uma coluna para ordenar.",
+      "Filtre também por profissional, especialidade, serviço e status (escolher um serviço tira Reunião Clínica e Treinamento da lista). Clique no título de uma coluna para ordenar.",
       "Clique numa linha para abrir os <b>Detalhes do Agendamento</b>; o botão <b>Ver na Agenda</b> leva à Agenda na data e no horário do atendimento. Na própria linha, <b>Status</b> muda o status e <b>Ver na Agenda</b> faz o mesmo caminho.",
       "Os botões de alerta (sem status já passado, 2 ou mais faltas, sem próximo atendimento, paciente bloqueado) filtram a lista; clique de novo para voltar.",
       "<b>Outras Opções</b> exporta a lista para Excel ou imprime/PDF, com o resumo e os filtros usados.",
