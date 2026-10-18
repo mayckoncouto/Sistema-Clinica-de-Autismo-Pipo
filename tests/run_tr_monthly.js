@@ -60,6 +60,19 @@ const path = require('path');
   const ref = await ev(`(function(){ var d = document.createElement("div"); d.className = "pat-count"; document.body.appendChild(d); var f = getComputedStyle(d).fontSize; d.remove(); return f; })()`);
   console.log('explanation uses the same text style as the hours note?', font === ref, font);
 
+  // Mudança no Planner com a janela aberta: a coluna Planner atualiza sozinha.
+  const before = await ev(`trMonthView(state.treatments[0], trTodayIso().slice(0, 7)).rows[0].plan`);
+  const htmlBefore = await page.innerHTML('#trMonthly');
+  await ev(`(function(){
+    var bk = JSON.parse(JSON.stringify(TR.plan["seg-1"]));
+    bk["13:30|r1|r1-t1"] = {patient: "Ana Azul", patientId: "ana-azul"};
+    return window.claude.use("db").then(function(db){ return db.doc("schedule/seg-1").set({bookings: bk}); });
+  })()`);
+  await page.waitForTimeout(900);
+  const after = await ev(`trMonthView(state.treatments[0], trTodayIso().slice(0, 7)).rows[0].plan`);
+  const htmlAfter = await page.innerHTML('#trMonthly');
+  console.log('Planner change with the window open updates the table?', before === 6 && after === 7 && htmlAfter !== htmlBefore, before, after);
+
   // Janela: Histórico recolhido, "Outras Opções" no topo, valores em R$ depois de Convênio/Plano.
   const win = await ev(`(function(){
     var t = state.treatments[0]; t.valor = 1500; t.descontos = 100;
