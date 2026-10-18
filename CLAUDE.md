@@ -4861,3 +4861,18 @@ Pedido do usuário: em Outras Opções do Planner e da Agenda, **Histórico de A
 - Permissões `historico_planner` e `historico_agenda` (só ver, grupos Planner e Agenda de Níveis de Permissão; nenhum nível recebe, o Administrador libera).
 - App (bloco "Histórico de Alterações" antes de "Agenda: menu Outras Opções"): `HA`, `openHistoricoAlteracoes(area)`, `haLoad`, `haRender`, `haGroup` (alterações seguidas da mesma pessoa e ação, até 90 s entre uma e outra, viram uma linha; ≥10 = etiqueta “em lote”), `haDetails` (camada `#quickHost`, antes/depois campo a campo), `haGo` (Ver no dia/horário), `haRestore` (`haRestoreAgenda` reinsere/volta/apaga; `haRestorePlanner` usa `applyBookingChanges`; pergunta antes se o registro mudou depois), `haExport` (Excel), filtros ação/pessoa/período (7–180 dias) e pesquisa. Principal não mostra mudança de status (só no Histórico). Botão `#plHistBtn` no menu do Planner (escondido no Auto Planner) e item `historico` em `AGD_TOOLS` (inclui o ☰ do celular). Sem sistema online (testes) lê `HA.mem[area]`. Ajuda: tópicos `historico-agenda` e `historico-planner`. Teste `tests/run_historico.js` (no `npm test`).
 - Ideias ainda não feitas: contador de não lidas no menu, aviso por push de exclusão em lote, comparar semana a semana, histórico por paciente na janela do paciente.
+
+## Importação das evoluções do Clínica Ágil (2026-10-18)
+Pedido do usuário: evoluções dos pacientes ativos com atendimentos desde 01/01/2026, do Prontuário e de Cadastro → Dados Complementares
+do Clínica Ágil, ligadas aos atendimentos. Feito direto no banco (dados reais nunca no repositório):
+- 4.608 evoluções novas em `clinical_records` (741 do prontuário + 3.867 antigas dos Dados Complementares), 111 pacientes, cada uma com
+  autor = usuário do profissional (`profiles.professional_id`), ligada ao atendimento (data, horário e profissional do atendimento).
+  Atendimento que já tinha evolução ficou como estava (as revisadas foram mantidas); antiga não entra onde há uma do prontuário.
+- Horários do Clínica Ágil na grade antiga da tarde (13:00, 13:40…) +30 min; acentos perdidos restaurados por dicionário (palavras
+  acentuadas do próprio texto) e "no consegue" → "não consegue".
+- 20 atendimentos "Não compareceu" que tinham evolução viraram Finalizado.
+- 247 evoluções ficaram sem atendimento correspondente (188 do prontuário, quase todas jul e out; 59 antigas, quase todas abr) e NÃO
+  foram gravadas: estão em `imp_w` (appt_id nulo).
+- Tabelas/funções temporárias da importação (apagar no SQL Editor quando o usuário aprovar; `imp_w.orig` e `imp_evo` guardam os textos
+  originais): `imp_evo`, `imp_w`, `imp_prof`, `imp_dict`, `imp_ca`, função `imp_fix`. Desfazer: apagar de `clinical_records` as linhas
+  cujo `appointment_id` está em `imp_w` e criadas em 2026-10-18.
