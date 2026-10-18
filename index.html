@@ -22973,26 +22973,42 @@ function prOnShow(){
   if (!PR.loaded && !PR.loading) prLoadSummary();
   renderProntuarioTab();
 }
+// Resumo por paciente (registros, último atendimento, profissionais): o banco já devolve agrupado
+// (RPC clinical_records_summary, ~150 linhas em vez de todas as evoluções); sem a função, lê tudo em páginas.
+function prFinishSummary(sum){
+  PR.loading = false; PR.loaded = true; PR.error = ""; PR.summary = sum; renderProntuarioTab();
+}
 function prLoadSummary(){
   var c = agdClient();
   if (!c){ PR.loaded = true; PR.error = "O prontuário funciona no sistema online."; renderProntuarioTab(); return Promise.resolve(); }
   PR.loading = true;
-  return dbAll(function(){ return c.from("clinical_records").select("id,patient_id,professional_id,author_name,appointment_date,created_at").order("id"); }).then(function(r){
-    PR.loading = false; PR.loaded = true;
-    if (r.error){ PR.error = prErrMsg(r.error); PR.summary = {}; renderProntuarioTab(); return; }
-    PR.error = "";
-    var sum = {};
-    (r.data || []).forEach(function(x){
-      var s = sum[x.patient_id] = sum[x.patient_id] || {count: 0, last: "", profs: []};
-      s.count++;
-      var d = x.appointment_date || String(x.created_at || "").slice(0, 10);
-      if (d > s.last) s.last = d;
-      var pn = prRecordProfName(x);
-      if (pn && s.profs.indexOf(pn) === -1) s.profs.push(pn);
+  function slow(){
+    return dbAll(function(){ return c.from("clinical_records").select("id,patient_id,professional_id,author_name,appointment_date,created_at").order("id"); }).then(function(r){
+      if (r.error){ PR.loading = false; PR.loaded = true; PR.error = prErrMsg(r.error); PR.summary = {}; renderProntuarioTab(); return; }
+      var sum = {};
+      (r.data || []).forEach(function(x){
+        var s = sum[x.patient_id] = sum[x.patient_id] || {count: 0, last: "", profs: []};
+        s.count++;
+        var d = x.appointment_date || String(x.created_at || "").slice(0, 10);
+        if (d > s.last) s.last = d;
+        var pn = prRecordProfName(x);
+        if (pn && s.profs.indexOf(pn) === -1) s.profs.push(pn);
+      });
+      prFinishSummary(sum);
     });
-    PR.summary = sum;
-    renderProntuarioTab();
-  });
+  }
+  return Promise.resolve(c.rpc("clinical_records_summary")).then(function(r){
+    if (!r || r.error || !Array.isArray(r.data)) return slow();
+    var sum = {};
+    r.data.forEach(function(x){
+      var s = sum[x.patient_id] = {count: x.n || 0, last: x.ultimo || "", profs: []};
+      (x.profs || []).forEach(function(pr){
+        var pn = prRecordProfName(pr);
+        if (pn && s.profs.indexOf(pn) === -1) s.profs.push(pn);
+      });
+    });
+    prFinishSummary(sum);
+  }).catch(slow);
 }
 function renderProntuarioTab(){
   var listV = document.getElementById("prListView"), detV = document.getElementById("prDetailView");
