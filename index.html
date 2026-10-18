@@ -7311,20 +7311,21 @@ function lgRender(){
     }).join("") + (LG.alert ? '<button type="button" class="btn ghost" data-lg-alert="">Limpar Alerta</button>' : '');
   }
   if (!list.length){ host.innerHTML = '<div class="empty-state"><b>Nenhum agendamento' + (Object.keys(LG.rows).length ? " com esses filtros" : " neste período") + '.</b></div>'; return; }
-  var cap = list.length > LG.cap, view = cap ? list.slice(0, LG.cap) : list;
   var cols = [{key: "data", label: "Data", width: 110}, {key: "hora", label: "Hora", width: 70}, {key: "pac", label: "Paciente", width: 260, min: 140, cls: "pt-nome"},
     {key: "prof", label: "Profissional", width: 180, min: 100}, {key: "esp", label: "Especialidade", width: 150, min: 90}, {key: "svc", label: "Serviço", width: 140, min: 80},
     {key: "sala", label: "Sala", width: 130, min: 70}, {key: "status", label: "Status", width: 150, min: 90}, {key: "acoes", label: "Ações", width: 150, min: 120}];
   var canSt = statusesList().some(function(s){ return canUseStatus(s.id); });
-  gtRender(host, "agendamentos", cols, view.map(function(r){
-    var room = r.room_id ? findRoom(r.room_id) : null, spec = vgSpecOf(r), pat = findPatientAt(r, r.date), bl = pat && patBlocked(pat);
-    var acts = (canSt && !bookingKind(r) ? '<button type="button" class="btn ghost cn-btn" data-lg-st="' + esc(String(r.id)) + '">Status</button> ' : '') + '<button type="button" class="btn ghost cn-btn" data-lg-go="' + esc(String(r.id)) + '">Ver na Agenda</button>';
+  gtRender(host, "agendamentos", cols, list.map(function(r){
+    var room = r.room_id ? findRoom(r.room_id) : null, spec = vgSpecOf(r);
     return {attrs: 'class="pr-row" data-lg-id="' + esc(String(r.id)) + '" tabindex="0"',
-      cells: [esc(agdBrDate(r.date)) + ' <span class="pt-muted">' + esc(lgWeekday(r.date)) + '</span>', esc(r.time), '<b>' + esc(r.patient) + '</b>' + (bl ? ' <span class="tr-chip st-inativo" title="' + esc(patBlockNote(pat)) + '">Bloqueado</span>' : ''),
-        esc(professionalName(r.professional_id) || "—"), esc(spec ? specialtyName(spec) : "—"), esc(bookingServiceName(r) || "—"), esc(room ? room.name : "—"), lgStatusCell(r), acts],
+      cells: function(){
+    var pat = findPatientAt(r, r.date), bl = pat && patBlocked(pat);
+    var acts = (canSt && !bookingKind(r) ? '<button type="button" class="btn ghost cn-btn" data-lg-st="' + esc(String(r.id)) + '">Status</button> ' : '') + '<button type="button" class="btn ghost cn-btn" data-lg-go="' + esc(String(r.id)) + '">Ver na Agenda</button>';
+    return [esc(agdBrDate(r.date)) + ' <span class="pt-muted">' + esc(lgWeekday(r.date)) + '</span>', esc(r.time), '<b>' + esc(r.patient) + '</b>' + (bl ? ' <span class="tr-chip st-inativo" title="' + esc(patBlockNote(pat)) + '">Bloqueado</span>' : ''),
+        esc(professionalName(r.professional_id) || "—"), esc(spec ? specialtyName(spec) : "—"), esc(bookingServiceName(r) || "—"), esc(room ? room.name : "—"), lgStatusCell(r), acts];
+      },
       vals: [r.date, r.time, normText(r.patient), normText(professionalName(r.professional_id) || ""), normText(spec ? specialtyName(spec) : ""), normText(bookingServiceName(r) || ""), normText(room ? room.name : ""), r.status ? (statusById(r.status) || {}).name || r.status : "", ""]};
   }), lgRender, "reg-table");
-  if (cap) host.insertAdjacentHTML("beforeend", '<div class="field-hint" style="padding:8px 2px">Mostrando os primeiros ' + LG.cap + ' de ' + list.length + ' agendamentos. Use a busca, o período ou os filtros para ver o restante (a planilha leva todos).</div>');
 }
 function lgRowById(id){ return LG.rows[id] || null; }
 function lgExportCsv(){
@@ -7408,21 +7409,21 @@ function lgGoToAgenda(row){ prGoToAppointment({appointment_date: row.date, profe
 function wireAgendamentos(){
   var host = document.getElementById("reg-agendamentos-host"); if (!host) return;
   function setPer(k){ LG.per = k; var p = lgPeriod(k); if (p){ LG.from = p[0]; LG.to = p[1]; } }
-  var q = document.getElementById("lgQ"); q.addEventListener("input", lgRender);
-  ["lgProf", "lgSpec", "lgStatus"].forEach(function(id){ document.getElementById(id).addEventListener("change", lgRender); });
-  document.getElementById("lgPer").addEventListener("change", function(){ setPer(this.value); lgLoad(); });
+  var q = document.getElementById("lgQ"); q.addEventListener("input", debounce150(function(){ gtMoreReset("agendamentos"); lgRender(); }));
+  ["lgProf", "lgSpec", "lgStatus"].forEach(function(id){ document.getElementById(id).addEventListener("change", function(){ gtMoreReset("agendamentos"); lgRender(); }); });
+  document.getElementById("lgPer").addEventListener("change", function(){ setPer(this.value); gtMoreReset("agendamentos"); lgLoad(); });
   ["lgFrom", "lgTo"].forEach(function(id){
     document.getElementById(id).addEventListener("change", function(){
       var f = document.getElementById("lgFrom").value, t = document.getElementById("lgTo").value;
       if (!f || !t) return;
       if (f > t){ showToast("A data inicial vem depois da final.", true); return; }
       if ((agdParse(t) - agdParse(f)) / 86400000 > 400){ showToast("Escolha um período de até 13 meses.", true); return; }
-      LG.per = "custom"; LG.from = f; LG.to = t; lgLoad();
+      LG.per = "custom"; LG.from = f; LG.to = t; gtMoreReset("agendamentos"); lgLoad();
     });
   });
   document.getElementById("lgAlerts").addEventListener("click", function(e){
     var b = e.target.closest("[data-lg-alert]"); if (!b) return;
-    var k = b.getAttribute("data-lg-alert"); LG.alert = LG.alert === k ? "" : k; lgRender();
+    var k = b.getAttribute("data-lg-alert"); LG.alert = LG.alert === k ? "" : k; gtMoreReset("agendamentos"); lgRender();
   });
   host.addEventListener("click", function(e){
     var st = e.target.closest("[data-lg-st]");
@@ -12040,7 +12041,7 @@ function gtSortRows(id, cols, rows){
   });
 }
 // Listas grandes (Financeiro e CRM) mostram as primeiras 300 linhas e um botão “Mostrar Mais”.
-var GT_PAGE = 300, GT_PAGED = {anamneses: 1, vendas: 1, lancamentos: 1, conciliacao: 1, pagar: 1, receber: 1, "crm-lista": 1, "crm-mine": 1, "crm-all": 1}, GT_MORE = {};
+var GT_PAGE = 300, GT_PAGED = {agendamentos: 1, anamneses: 1, vendas: 1, lancamentos: 1, conciliacao: 1, pagar: 1, receber: 1, "crm-lista": 1, "crm-mine": 1, "crm-all": 1}, GT_MORE = {};
 function gtMoreReset(id){ delete GT_MORE[id]; }
 function debounce150(fn){ var t = 0; return function(){ var a = arguments, self = this; clearTimeout(t); t = setTimeout(function(){ fn.apply(self, a); }, 150); }; }
 function gtRender(host, id, cols, rows, render, extraClass){
@@ -12060,7 +12061,7 @@ function gtRender(host, id, cols, rows, render, extraClass){
         '<button type="button" class="sort-btn' + (active ? ' active' : '') + '" data-gt-sort="' + c.key + '" title="Ordenar por ' + c.label + '" aria-label="Ordenar por ' + c.label + '">' + glyph + '</button>' +
         '<span class="pat-col-resizer" data-col="' + c.key + '" title="Arrastar para ajustar a largura" aria-hidden="true"></span></th>';
     }).join("") + '</tr></thead><tbody>' +
-    rows.map(function(r){ return '<tr ' + r.attrs + '>' + r.cells.map(function(v, i){ return '<td' + (cols[i].cls ? ' class="' + cols[i].cls + '"' : '') + '>' + v + '</td>'; }).join("") + '</tr>'; }).join("") +
+    rows.map(function(r){ return '<tr ' + r.attrs + '>' + (typeof r.cells === "function" ? r.cells() : r.cells).map(function(v, i){ return '<td' + (cols[i].cls ? ' class="' + cols[i].cls + '"' : '') + '>' + v + '</td>'; }).join("") + '</tr>'; }).join("") +
     '</tbody></table>' + (restantes ? '<div class="gt-more"><button type="button" class="btn" data-gt-more>Mostrar Mais (' + restantes + ' Restantes)</button></div>' : '') + '</div>';
   var mb = host.querySelector("[data-gt-more]");
   if (mb) mb.addEventListener("click", function(){ GT_MORE[id] = (GT_MORE[id] || 0) + GT_PAGE; render(); });
@@ -21825,15 +21826,28 @@ function agdTimesFor(iso, per){
   return per === "manha" ? o.morning.slice() : per === "tarde" ? o.afternoon.slice() : o.morning.concat(o.afternoon);
 }
 function agdFetchRange(from, to){
-  var c = agdClient(), all = [];
-  function page(off){
-    return c.from("appointments").select("*").gte("date", from).lte("date", to).order("id").range(off, off + 999).then(function(r){
-      if (r.error) throw r.error;
-      all = all.concat(r.data || []);
-      return (r.data || []).length === 1000 ? page(off + 1000) : all;
-    });
+  var c = agdClient();
+  function page(off, count){
+    var q = c.from("appointments").select("*", count ? {count: "exact"} : undefined).gte("date", from).lte("date", to).order("id").range(off, off + 999);
+    return q.then(function(r){ if (r.error) throw r.error; return r; });
   }
-  return page(0);
+  // Primeira página traz o total; as demais vêm juntas (em lotes de 6), em vez de uma depois da outra.
+  return page(0, true).then(function(first){
+    var all = first.data || [], total = first.count;
+    if (all.length < 1000) return all;
+    if (typeof total !== "number"){
+      var serial = function(off){ return page(off).then(function(r){ all = all.concat(r.data || []); return (r.data || []).length === 1000 ? serial(off + 1000) : all; }); };
+      return serial(1000);
+    }
+    var offs = []; for (var o = 1000; o < total; o += 1000) offs.push(o);
+    var chain = Promise.resolve();
+    for (var i = 0; i < offs.length; i += 6){
+      (function(part){
+        chain = chain.then(function(){ return Promise.all(part.map(function(off){ return page(off); })).then(function(rs){ rs.forEach(function(r){ all = all.concat(r.data || []); }); }); });
+      })(offs.slice(i, i + 6));
+    }
+    return chain.then(function(){ return all; });
+  });
 }
 // Ids com evolução no prontuário (sempre confere, inclusive para o Administrador).
 function agdRecordsMap(rows){
