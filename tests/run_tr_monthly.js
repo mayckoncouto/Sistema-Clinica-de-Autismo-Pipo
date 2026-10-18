@@ -45,6 +45,14 @@ const path = require('path');
   console.log('Agenda service without a quadro becomes a "Fora do Tratamento" row?', r.v.extra.length === 1 && r.v.extra[0].ag === 1 && /Fora do Tratamento/.test(r.html));
   console.log('divergence panel lists the error with a link to the Agenda?', r.v.divs.some((d) => d.lvl === 'erro' && /Agenda: 1 atendimento/.test(d.text) && d.go && d.go.t === 'agenda') && /tr-div-go/.test(r.html), JSON.stringify(r.v.divs.map((d) => d.text)));
   console.log('Agenda without Planner / Planner without Agenda / same-day duplicates are reported?', Array.isArray(r.v.divs) && r.v.divs.every((d) => d.text && d.lvl));
+  const dv = await ev(`(function(){
+    var t = state.treatments[0], ym = t.inicio.slice(0, 7);
+    state.services = (state.services || []).concat([{id: "devolutivas-x", name: "Devolutiva"}]);
+    TR.appts["ana-azul"].push({d: ym + "-10", prof: "x", svc: "devolutivas-x", st: ""});
+    var v = trMonthView(t, ym);
+    return v.divs.filter(function(d){ return /Devolutiva/.test(d.text); }).map(function(d){ return d.lvl; }).concat(v.divs.filter(function(d){ return /triagem/i.test(d.text); }).map(function(d){ return "t:" + d.lvl; }));
+  })()`);
+  console.log('Devolutiva without a quadro is "info", Triagem stays "erro"?', dv.indexOf('info') !== -1 && dv.indexOf('erro') === -1 && dv.indexOf('t:erro') !== -1, JSON.stringify(dv));
   console.log('months from the start to next month, opens on the current month?', r.rg.first === r.prevYm && r.rg.dflt === r.cur && r.rg.last > r.cur, JSON.stringify(r.rg));
 
   // Janela: começa fechada, abre pela seta, ‹ › trocam o mês.
