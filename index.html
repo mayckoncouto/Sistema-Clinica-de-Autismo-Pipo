@@ -4072,7 +4072,7 @@ function openClinicModal(){
         '<div class="tr-sec">Redes Sociais</div>' +
         '<div class="field"><div class="therapist-rows cl-socs" id="clSocs"></div>' +
           (clCanEdit ? '<button type="button" class="btn ghost add-row-btn" id="clSocAdd">+ Inserir</button>' : '') +
-          '<div class="color-hex-label" style="margin-top:6px">Aparecem na página do link de cadastro (só depois do envio, no agradecimento), nas mensagens com o link de cadastro e nas impressões. Linha sem link não aparece.</div></div>' +
+          '<div class="color-hex-label" style="margin-top:6px">Aparecem na página do link de cadastro (só depois do envio, no agradecimento), e nas mensagens com o link de cadastro. Linha sem link não aparece.</div></div>' +
         // Aparência e Atendimento em linhas (um cartão embaixo do outro).
         '<div class="cl-cards">' +
           '<div class="cl-card"><div class="cl-card-title">Aparência</div>' +
@@ -7360,7 +7360,7 @@ function lgPrint(){
   if (f.spec) parts.push("Especialidade: " + specialtyName(f.spec));
   if (f.status) parts.push("Status: " + (f.status === "__sem" ? "Sem Status" : rpStatusName(f.status)));
   var a = lgAnalyse(rows);
-  var css = "@page{size:A4 landscape;margin:12mm}body{font:11px/1.35 Arial,sans-serif;color:#1c2b28}h1{font-size:16px;margin:0 0 2px}.f{color:#5b6b68;margin-bottom:8px}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #d9e0de;padding:3px 5px;text-align:left}th{background:#eef3f2;font-size:10px}";
+  var css = "@page{size:A4 landscape;margin:12mm}body{font:11px/1.35 Arial,sans-serif;color:#1c2b28}h1{font-size:16px;margin:0 0 2px;color:#2f7a6d}.f{color:#5b6b68;margin-bottom:8px}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #d9e0de;padding:3px 5px;text-align:left}th{background:#eef3f2;font-size:10px}";
   var body = "<h1>" + esc(clinicName()) + " — Agendamentos</h1><div class='f'>" + esc(parts.join(" · ")) + "<br>" + a.n + " agendamentos · " + a.pats + " pacientes · " + a.real + " realizados · " + a.absent + " faltas</div>" +
     "<table><thead><tr><th>Data</th><th>Hora</th><th>Paciente</th><th>Profissional</th><th>Especialidade</th><th>Serviço</th><th>Sala</th><th>Status</th></tr></thead><tbody>" +
     rows.map(function(r){
@@ -14339,13 +14339,14 @@ function patientFichaHtml(p){
 // Rodapé das impressões com as redes sociais da clínica (vazio sem redes cadastradas).
 var PRINT_SOC_CSS = ".psoc{margin-top:16px;padding-top:8px;border-top:1px solid #d9e0de;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:9.5px;color:#3d4a47;page-break-inside:avoid}" +
   ".psoc-t{font-weight:700;color:#5b6b68}.psoc-i{display:inline-flex;align-items:center;gap:4px}.psoc-i svg{display:block}";
-function printSocialHtml(){
-  var R = window.PIPO_REDES, list = R ? R.clean((state.clinic || {}).redes) : [];
-  if (!list.length) return "";
-  return '<div class="psoc"><span class="psoc-t">Conheça mais sobre nosso trabalho:</span>' + list.map(function(it){
-    var u = R.url(it).replace(/^mailto:/, "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
-    return '<span class="psoc-i">' + R.icon(it.rede, 14) + '<b>' + esc(R.label(it)) + '</b> ' + esc(u) + '</span>';
-  }).join("") + '</div>';
+// As redes sociais não saem mais nas impressões (pedido do usuário); a função ficou para os chamadores antigos.
+function printSocialHtml(){ return ""; }
+// Impressões e PDFs usam a cor do sistema (cor dos botões da Clínica) nos títulos, linhas e destaques.
+function printAccent(){ var c = String(((state.clinic || {}).corBotoes) || "").trim(); return /^#[0-9a-f]{6}$/i.test(c) ? c : "#2c7a72"; }
+function printTheme(css){
+  var a = printAccent();
+  function tint(pc){ return "color-mix(in srgb, " + a + " " + pc + "%, #ffffff)"; }
+  return String(css).replace(/#2f7a6d/gi, a).replace(/#eef1f0|#eef3f2|#eee\b/gi, tint(14)).replace(/#c9d1cf|#999\b|#888\b/gi, tint(55)).replace(/#e3e8e6|#d9e0de/gi, tint(32));
 }
 function patientPrint(p){
   var logo = (document.querySelector(".brand-mark") || {}).src || "";
@@ -14364,7 +14365,7 @@ function patientPrint(p){
   document.body.appendChild(f);
   var d = f.contentWindow.document;
   d.open();
-  d.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>Ficha cadastral - " + esc(p.nome) + "</title><style>" + css + "</style></head><body>" + body + "</body></html>");
+  d.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>Ficha cadastral - " + esc(p.nome) + "</title><style>" + printTheme(css) + "</style></head><body>" + body + "</body></html>");
   d.close();
   setTimeout(function(){
     try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e){ showToast("Não foi possível abrir a impressão.", true); }
@@ -20563,7 +20564,7 @@ function openApDraftsModal(){
   });
 }
 // ---- Imprimir e exportar ----
-var AP_PRINT_CSS = "body{font:12px Arial,sans-serif;color:#111;margin:0}h1{font-size:16px;margin:0 0 2px}h2{font-size:13px;margin:0 0 8px;color:#444}.pg{page-break-after:always;padding:6mm}.pg:last-child{page-break-after:auto}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:3px 5px;text-align:left;vertical-align:top}th{background:#eee}td.t{white-space:nowrap;width:46px;font-weight:bold}.mut{color:#666}@page{size:A4 landscape;margin:8mm}";
+var AP_PRINT_CSS = "body{font:12px Arial,sans-serif;color:#111;margin:0}h1{font-size:16px;margin:0 0 2px;color:#2f7a6d}h2{font-size:13px;margin:0 0 8px;color:#2f7a6d}.pg{page-break-after:always;padding:6mm}.pg:last-child{page-break-after:auto}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:3px 5px;text-align:left;vertical-align:top}th{background:#eee}td.t{white-space:nowrap;width:46px;font-weight:bold}.mut{color:#666}@page{size:A4 landscape;margin:8mm}";
 function apPersonBookings(){   // sessões de pacientes da grade atual: [{p, w, day, dayFull, time, room, prof, svc}]
   var out = [];
   WEEKS.forEach(function(w){ DAYS.forEach(function(d){
@@ -21476,7 +21477,7 @@ function contractRender(html, ctx){
   });
   return {html: out, unknown: unknown};
 }
-var CONTRACT_PRINT_CSS = "body{font:12pt/1.5 Arial,Helvetica,sans-serif;color:#111;margin:0;padding:24px 32px}h1,h2,h3{text-align:center}h3{font-size:14pt}p{margin:0 0 10px;text-align:justify}table{border-collapse:collapse;width:100%;font-size:10.5pt}th,td{border:1px solid #888;padding:4px 8px;text-align:left}th{background:#eee}@page{size:A4;margin:16mm}";
+var CONTRACT_PRINT_CSS = "body{font:12pt/1.5 Arial,Helvetica,sans-serif;color:#111;margin:0;padding:24px 32px}h1,h2,h3{text-align:center;color:#2f7a6d}h3{font-size:14pt}p{margin:0 0 10px;text-align:justify}table{border-collapse:collapse;width:100%;font-size:10.5pt}th,td{border:1px solid #888;padding:4px 8px;text-align:left}th{background:#eee}@page{size:A4;margin:16mm}";
 function contractPrint(html, title){ demPrintFrame(title || "Contrato", CONTRACT_PRINT_CSS, '<div class="ct-doc">' + prSanitize(html) + '</div>'); }
 // Termo do empréstimo: escolhe o modelo (se houver mais de um), mostra uma prévia e imprime/baixa em PDF.
 function lnTermoDialog(loan){
@@ -23336,7 +23337,7 @@ function rpPrint(){
   document.body.appendChild(f);
   var d = f.contentWindow.document;
   d.open();
-  d.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>" + esc(t.name) + " - " + esc(clinicName()) + "</title><style>" + css + "</style></head><body>" + body + "</body></html>");
+  d.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>" + esc(t.name) + " - " + esc(clinicName()) + "</title><style>" + printTheme(css) + "</style></head><body>" + body + "</body></html>");
   d.close();
   setTimeout(function(){
     try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e){ showToast("Não foi possível abrir a impressão.", true); }
@@ -27006,7 +27007,7 @@ var HELP_TOPICS = [
     steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve.",
       "<b>Redes Sociais</b>: clique em <b>+ Inserir</b>, escolha a rede (Instagram, Facebook, YouTube, TikTok, WhatsApp, Google Maps, Site, LinkedIn, E-mail ou Outro) e cole o link. ▲▼ mudam a ordem e ✕ tira a linha. Em “Outro”, escreva também o nome (ex.: Blog)."],
     rules: [
-      "As redes sociais aparecem, com a logo colorida de cada uma, na página do link de cadastro (só depois do envio, no agradecimento), no fim das mensagens com o link de cadastro e no rodapé das impressões (relatórios, ficha do paciente e Plano Terapêutico). Sem redes cadastradas, nada disso aparece.",
+      "As redes sociais aparecem, com a logo colorida de cada uma, na página do link de cadastro (só depois do envio, no agradecimento), no fim das mensagens com o link de cadastro (as impressões e os PDFs não levam as redes). Sem redes cadastradas, nada disso aparece.",
       "No WhatsApp basta o número com DDD; no E-mail, o endereço. Os outros aceitam o endereço com ou sem “https://”. Link inválido não deixa salvar.",
       "Os dias e horários abertos definem as linhas do Planner e da Agenda.",
       "Fechar um dia ou mudar horários e duração: se houver agendamentos do Planner em dias ou horários que deixam de existir, o Salvar mostra quantos e onde, e oferece apagá-los. Mantidos, ficam guardados e voltam a aparecer se o dia ou horário reabrir.",
@@ -30613,7 +30614,7 @@ function planPrint(plan){
   document.body.appendChild(f);
   var doc = f.contentWindow.document;
   doc.open();
-  doc.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>Plano terapêutico - " + esc(p ? p.nome : plan.patient_name) + "</title><style>" + css + "</style></head><body>" + body + "</body></html>");
+  doc.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>Plano terapêutico - " + esc(p ? p.nome : plan.patient_name) + "</title><style>" + printTheme(css) + "</style></head><body>" + body + "</body></html>");
   doc.close();
   setTimeout(function(){
     try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e){ showToast("Não foi possível abrir a impressão.", true); }
@@ -37060,7 +37061,7 @@ function demPrint(){
   f.setAttribute("aria-hidden", "true"); f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
   document.body.appendChild(f);
   var d = f.contentWindow.document; d.open();
-  d.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>" + esc(m.title) + " - " + esc(clinicName()) + "</title><style>" + css + "</style></head><body>" + body + "</body></html>"); d.close();
+  d.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>" + esc(m.title) + " - " + esc(clinicName()) + "</title><style>" + printTheme(css) + "</style></head><body>" + body + "</body></html>"); d.close();
   setTimeout(function(){ try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e){ showToast("Não foi possível abrir a impressão.", true); } setTimeout(function(){ f.remove(); }, 2000); }, 250);
 }
 function demMenuAct(a){
@@ -37330,7 +37331,7 @@ function demPrintFrame(title, css, body){
   f.setAttribute("aria-hidden", "true"); f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
   document.body.appendChild(f);
   var d = f.contentWindow.document; d.open();
-  d.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>" + esc(title) + " - " + esc(clinicName()) + "</title><style>" + css + (typeof PRINT_SOC_CSS === "string" ? PRINT_SOC_CSS : "") + "</style></head><body>" + body + "</body></html>"); d.close();
+  d.write("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>" + esc(title) + " - " + esc(clinicName()) + "</title><style>" + printTheme(css) + (typeof PRINT_SOC_CSS === "string" ? PRINT_SOC_CSS : "") + "</style></head><body>" + body + "</body></html>"); d.close();
   setTimeout(function(){ try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e){ showToast("Não foi possível abrir a impressão.", true); } setTimeout(function(){ f.remove(); }, 2000); }, 250);
 }
 function openResumoMensal(){

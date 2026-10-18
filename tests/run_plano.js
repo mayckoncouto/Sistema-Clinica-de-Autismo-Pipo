@@ -37,7 +37,7 @@ const path = require('path');
   const menus = await ev(`(function(){ renderNavMenus(); return {
     pr: Array.prototype.map.call(document.querySelectorAll("#prMenu [data-nav]"), function(b){ return b.textContent; }),
     cad: Array.prototype.map.call(document.querySelectorAll("#cadMenu [data-nav]"), function(b){ return b.getAttribute("data-nav"); }) }; })()`);
-  console.log('Prontuário menu has Prontuário, Plano terapêutico and its registries?', JSON.stringify(menus.pr) === '["Prontuário","Plano Terapêutico","Habilidades","Escalas","Objetivos","Atividades"]', JSON.stringify(menus.pr));
+  console.log('Prontuário menu has Prontuário, Plano terapêutico and its registries?', JSON.stringify(menus.pr) === '["Prontuário","Plano Terapêutico","Anamneses","Habilidades","Escalas","Objetivos","Atividades"]', JSON.stringify(menus.pr));
   console.log('Escalas and Habilidades left Cadastros?', menus.cad.indexOf('escalas') === -1 && menus.cad.indexOf('habilidades') === -1);
 
   // Escalas: Likert e ABA pré-cadastradas, com cor; habilidades pré-cadastradas.
@@ -327,7 +327,7 @@ const path = require('path');
   const goalsFirst = await page.$eval('#ovAgdDet .modal-body', (b) => { var g = b.querySelector('#agdDetGoals'), st = b.querySelector('#agdDetStatus'); return !st || !!(g.compareDocumentPosition(st) & Node.DOCUMENT_POSITION_FOLLOWING); });
   const objTitle = await page.$eval('#agdDetGoals .ag-obj-title', (e) => e.textContent);
   console.log('details: Agendamento/Saúde/Tratamento selector, panes with the asked fields, Objetivos before Status?',
-    tabs.join() === 'Agendamento,Saúde,Tratamento' && agPane === 'Serviço|Sala|Data/Hora|Observação' && saPane.vis && agHidden && saPane.keys === 'Diagnóstico (CID)|Alergias|Medicações em Uso|Restrições Alimentares' && trKeys === 'Plano|Intervenção ABA|Horários'&& goalsFirst && objTitle === 'Objetivos',
+    tabs.join() === 'Agendamento,Saúde,Tratamento' && agPane === 'Serviço|Sala|Data/Hora|Observação' && saPane.vis && agHidden && saPane.keys === 'Diagnóstico (CID)|Alergias|Medicações em Uso|Restrições Alimentares' && trKeys === 'Intervenção ABA|Horários'&& goalsFirst && objTitle === 'Objetivos',
     JSON.stringify({tabs, agPane, saPane, trKeys, goalsFirst, objTitle}));
   await page.click('[data-ag-box="own"] [data-ag-toggle]');
   const nOpen = await page.$$eval('#agdDetGoals .ag-obj-line', (r) => r.filter((l) => !l.closest('[hidden]')).length);
