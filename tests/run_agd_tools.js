@@ -75,7 +75,7 @@ const path = require('path');
     var items = Array.prototype.map.call(document.querySelectorAll("#agdToolsMenu [data-agd-tool]"), function(b){ return b.textContent; });
     document.getElementById("agdToolsBtn").click();
     return {wrap: !document.getElementById("agdToolsWrap").hidden, old: !!document.getElementById("agdClearWeekBtn"), items: items}; })()`);
-  check('Agenda has "Outras Opções" with the tools (no Limpar Semana button)?', menu.wrap && !menu.old && menu.items.length === 7 && menu.items[0] === 'Limpar por Período', JSON.stringify(menu));
+  check('Agenda has "Outras Opções" with the tools (no Limpar Semana button)?', menu.wrap && !menu.old && menu.items.length === 8 && menu.items[0] === 'Limpar por Período', JSON.stringify(menu));
 
   // Limpar por Período: só Ana, tudo; protege status e evolução
   await ev(`agdOpenClearPeriod()`);
@@ -165,7 +165,7 @@ const path = require('path');
 
   // Mobile ☰ has the same tools
   const mob = await ev(`(function(){ document.getElementById("agdMoreBtn").click(); var n = document.querySelectorAll("#agdMoreMenu [data-agd-tool]").length; document.getElementById("agdMoreBtn").click(); return n; })()`);
-  check('☰ (celular) has the same tools?', mob === 7, mob);
+  check('☰ (celular) has the same tools?', mob === 8, mob);
 
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();

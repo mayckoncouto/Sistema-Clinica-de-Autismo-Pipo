@@ -3045,6 +3045,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar Agendamento</button>
         <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar Profissional</button>
         <button class="btn ghost" id="plExportBtn" title="Baixa o Planner (4 semanas) em planilha para abrir no Excel">Exportar Excel</button>
+        <button class="btn ghost" id="plHistBtn" title="Quem criou, alterou ou excluiu agendamentos no Planner">Histórico de Alterações</button>
         <button class="btn ghost" id="plClearWeekBtn" title="Apaga todos os agendamentos da semana escolhida (segunda a sexta)" hidden>Limpar Semana</button>
       </div></div>
     </div>
@@ -5231,7 +5232,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {tipos_tratamento:"Tipos de Tratamento", comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", visao_geral:"Visão Geral", gerenciar_status:"Gerenciar Status", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", anamneses:"Anamneses", tipos_anamnese:"Tipos de Anamnese", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
+var PERM_MODULE_LABELS = {historico_planner:"Histórico de Alterações – Planner", historico_agenda:"Histórico de Alterações – Agenda", tipos_tratamento:"Tipos de Tratamento", comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", visao_geral:"Visão Geral", gerenciar_status:"Gerenciar Status", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", anamneses:"Anamneses", tipos_anamnese:"Tipos de Anamnese", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 // Auto Planner aberto? (grade própria: ver "Auto Planner: grade própria" perto de subscribeSchedule)
 var PLA = {on: false, hist: {undo: [], redo: []}};
@@ -5389,6 +5390,7 @@ function applyPermissionsUI(){
   show("plBlockBtn", can("bloqueio_horario","create"));
   show("plUnblockBtn", can("bloqueio_horario","delete"));
   show("fixPatientBtn", can("planner","create") || can("planner","edit") || can("planner","delete"));
+  show("plHistBtn", !PLA.on && haCan("planner"));
   show("swapProfBtn", !PLA.on && (can("salas","edit") || can("grupos","edit")));
   permToolClasses();
   var agendaWrite = can("planner","create") || can("planner","edit") || can("planner","delete");
@@ -9876,6 +9878,7 @@ function wireControls(){
   document.getElementById("plBlockBtn").addEventListener("click", function(){ openPlBlockModal("lock"); });
   document.getElementById("plUnblockBtn").addEventListener("click", function(){ openPlBlockModal("unlock"); });
   document.getElementById("plExportBtn").addEventListener("click", function(){ plannerExportCsv(); });
+  document.getElementById("plHistBtn").addEventListener("click", function(){ openHistoricoAlteracoes("planner"); });
   document.getElementById("toggleGroupsBtn").addEventListener("click", function(){
     state.salasView = state.salasView === "grupos" ? "salas" : "grupos";
     var s = document.getElementById("roomListSearch"); if (s) s.value = "";
@@ -20363,6 +20366,7 @@ function plAutoUi(){
   show("apSendPlannerBtn", PLA.on && apSendCan() && real("planner", "create"));
   show("apUnsendBtn", PLA.on && apSendCan() && real("planner", "delete"));
   show("sendToAgendaBtn", can("agenda", "create") && (!PLA.on || apSendCan()));
+  show("plHistBtn", !PLA.on && haCan("planner"));
   show("swapProfBtn", !PLA.on && (can("salas", "edit") || can("grupos", "edit")));
 }
 // Grava direto nos documentos do Planner de verdade (sem passar pela grade aberta, que é a do Auto Planner).
@@ -21911,6 +21915,322 @@ function openGenMonthModal(){
  * de segunda a sexta da semana aberta, de todos os profissionais e salas.
  * Dupla confirmação; dá para desfazer com Ctrl+Z.
  */
+/* ---------------- Histórico de Alterações (Planner e Agenda) ----------------
+ * Outras Opções ▾ do Planner e da Agenda → janela com Principal | Histórico de Movimentações | Lidas,
+ * no mesmo formato da Caixa de Entrada do CRM. Os registros vêm da tabela change_log (gatilhos no
+ * banco: quem criou, alterou, excluiu ou mudou o status de cada atendimento). Permissões
+ * historico_planner / historico_agenda (ver). Movimento da própria pessoa nunca entra na Principal.
+ * Alterações em lote (muitas de uma vez, pela mesma pessoa) aparecem numa linha só.
+ */
+var HA = {area: "planner", rows: null, tab: "principal", q: "", acao: "", user: "", days: 30, groups: [], ov: null, mem: {planner: [], agenda: []}};
+var HA_ACOES = {criou: "Criou", alterou: "Alterou", excluiu: "Excluiu", status: "Mudou o Status"};
+var HA_TIPOS = {atendimento: "atendimento", bloqueio: "bloqueio", reuniao: "Reunião Clínica", treinamento: "treinamento", "horario-bloqueado": "horário bloqueado", grupo: "atendimento de grupo"};
+function haCan(area){ return !window.pipoAuth || can("historico_" + area, "view"); }
+function haAreaName(a){ return a === "agenda" ? "Agenda" : "Planner"; }
+function haDayName(key){ var d = ALL_WEEKDAYS.filter(function(x){ return x.key === key; })[0]; return d ? d.name : key; }
+function haWhen(r){
+  if (!r.quando) return "";
+  if (r.quando.indexOf("-") === 4){   // aaaa-mm-dd
+    var d = agdParse(r.quando); return haDayName(AD_WEEKDAY_KEYS[d.getDay()]) + " " + agdBrDate(r.quando);
+  }
+  var p = r.quando.split("-"); return haDayName(p[0]) + " · " + p[1] + "ª semana";
+}
+function haProfName(r){
+  if (!r.prof_id) return "";
+  if (r.area === "agenda" || /^\d{4}-/.test(r.quando || "")) return professionalName(r.prof_id) || "";
+  var room = r.sala_id ? findRoom(r.sala_id) : null, seat = room ? (room.therapists || []).filter(function(t){ return t.id === r.prof_id; })[0] : null;
+  return seat ? seatShortName(seat) : "";
+}
+function haRoomName(r){ var room = r.sala_id ? findRoom(r.sala_id) : null; return room ? room.name : ""; }
+function haWhere(r){ return [haWhen(r), r.hora, haProfName(r), haRoomName(r)].filter(Boolean).join(" · "); }
+function haStatusName(id){ var s = statusesList().filter(function(x){ return x.id === id; })[0]; return s ? s.name : (id || "sem status"); }
+function haFieldVal(k, v){
+  if (v === null || v === undefined || v === "") return "vazio";
+  if (k === "professional_id") return professionalName(v) || v;
+  if (k === "room_id"){ var rm = findRoom(v); return rm ? rm.name : v; }
+  if (k === "status") return haStatusName(v);
+  if (k === "service"){ var sv = servicesList().filter(function(x){ return x.id === v; })[0]; return sv ? sv.name : v; }
+  if (k === "date") return agdBrDate(String(v));
+  if (k === "blocked") return v ? "Sim" : "Não";
+  return String(v);
+}
+var HA_FIELDS = {patient: "Paciente", note: "Observação", date: "Data", time: "Horário", professional_id: "Profissional", room_id: "Sala", service: "Serviço", status: "Status", blocked: "Bloqueado"};
+// Lista de mudanças campo a campo de uma alteração: [{k, label, de, para}].
+function haDiff(r){
+  var a = r.antes || {}, b = r.depois || {}, out = [];
+  Object.keys(HA_FIELDS).forEach(function(k){
+    var x = a[k] === undefined ? "" : a[k], y = b[k] === undefined ? "" : b[k];
+    if (String(x) !== String(y)) out.push({k: k, label: HA_FIELDS[k], de: haFieldVal(k, a[k]), para: haFieldVal(k, b[k])});
+  });
+  return out;
+}
+function haItemText(r){
+  var who = esc(r.paciente || "(sem nome)"), what = HA_TIPOS[r.tipo] || "atendimento";
+  if (r.acao === "status"){ var d = haDiff(r)[0]; return 'Status de <b>' + who + '</b>: ' + esc(d ? d.de : "") + ' → <b>' + esc(d ? d.para : "") + '</b>'; }
+  if (r.acao === "alterou"){
+    var df = haDiff(r).map(function(d){ return esc(d.label) + ': ' + esc(d.de) + ' → <b>' + esc(d.para) + '</b>'; });
+    return 'Alterou ' + esc(what) + ' de <b>' + who + '</b>' + (df.length ? ' — ' + df.join('; ') : '');
+  }
+  return HA_ACOES[r.acao] + ' ' + esc(what) + (r.tipo === "atendimento" || r.tipo === "grupo" ? ' de <b>' + who + '</b>' : (r.paciente && r.paciente !== HA_TIPOS[r.tipo] ? ' <b>' + who + '</b>' : ''));
+}
+// Junta alterações seguidas da mesma pessoa e do mesmo tipo de ação (mesma gravação ou até 90 s de diferença).
+function haGroup(rows){
+  var out = [];
+  rows.forEach(function(r){
+    var g = out[out.length - 1];
+    if (g && g.user_id === r.user_id && g.acao === r.acao && (g.lote === r.lote || Math.abs(new Date(g.at) - new Date(r.at)) <= 90000) && Math.abs(new Date(g.oldest) - new Date(r.at)) <= 600000){
+      g.items.push(r); g.oldest = r.at; g.lida = g.lida && r.lida;
+    } else out.push({user_id: r.user_id, user_name: r.user_name, acao: r.acao, lote: r.lote, at: r.at, oldest: r.at, lida: r.lida, items: [r]});
+  });
+  return out;
+}
+function haMatches(r){
+  if (HA.acao && r.acao !== HA.acao) return false;
+  if (HA.user && r.user_id !== HA.user) return false;
+  var q = normText(HA.q || "");
+  if (q && normText([r.paciente, r.user_name, haProfName(r), haRoomName(r), HA_TIPOS[r.tipo] || ""].join(" ")).indexOf(q) === -1) return false;
+  return true;
+}
+function haTabGroups(tab){
+  var me = crmMe(), base = (HA.rows || []).filter(haMatches);
+  if (tab === "principal") base = base.filter(function(r){ return !r.lida && r.acao !== "status"; });
+  else if (tab === "lidas") base = base.filter(function(r){ return r.lida && r.user_id !== me; });
+  return haGroup(base);
+}
+function haGroupSummary(g){
+  if (g.items.length === 1) return haItemText(g.items[0]);
+  var what = {criou: "criou", alterou: "alterou", excluiu: "excluiu", status: "mudou o status de"}[g.acao];
+  var pats = {}; g.items.forEach(function(i){ pats[i.paciente || "(sem nome)"] = 1; });
+  var names = Object.keys(pats), sample = names.slice(0, 3).map(esc).join(", ") + (names.length > 3 ? " e mais " + (names.length - 3) : "");
+  return what.charAt(0).toUpperCase() + what.slice(1) + ' <b>' + g.items.length + '</b> ' + (g.acao === "status" ? 'atendimentos' : 'registros') + (g.items.length >= 10 ? ' <span class="pl-due vencendo">em lote</span>' : '') + ' — ' + sample;
+}
+function haLoad(force){
+  if (!force && HA.rows && HA._area === HA.area && HA._days === HA.days) return Promise.resolve();
+  var c = agdClient();
+  if (!c){ HA.rows = (HA.mem[HA.area] || []).slice(); HA._area = HA.area; HA._days = HA.days; return Promise.resolve(); }
+  HA.rows = null; haRender();
+  return c.rpc("change_log_list", {p_area: HA.area, p_days: HA.days}).then(function(r){
+    if (r.error) throw r.error;
+    HA.rows = (r.data || []).map(function(x){ x.area = HA.area; return x; }); HA._area = HA.area; HA._days = HA.days;
+  }).catch(function(err){ HA.rows = []; showToast("Não foi possível carregar o histórico: " + agdErr(err), true); });
+}
+function haSetRead(ids, read){
+  var rows = (HA.rows || []).filter(function(r){ return ids.indexOf(r.id) !== -1; });
+  rows.forEach(function(r){ r.lida = read; });
+  var c = agdClient(); if (!c) return Promise.resolve();
+  return agdChunks(ids, 200).reduce(function(p, part){
+    return p.then(function(){
+      var q = read ? c.from("change_log_read").upsert(part.map(function(id){ return {log_id: id}; }), {onConflict: "user_id,log_id", ignoreDuplicates: true})
+                   : c.from("change_log_read").delete().in("log_id", part);
+      return q.then(function(r){ if (r.error) throw r.error; });
+    });
+  }, Promise.resolve()).catch(function(err){ showToast("Não foi possível marcar: " + agdErr(err), true); });
+}
+function haRowHtml(g, tab, idx){
+  var first = g.items[0], many = g.items.length > 1;
+  var title = many ? '<b>' + g.items.length + ' registros</b><small>' + esc(haAreaName(HA.area)) + ' · ' + esc(HA_ACOES[g.acao]) + '</small>'
+    : '<b>' + esc(first.paciente || HA_TIPOS[first.tipo] || "(sem nome)") + '</b><small>' + esc(haWhere(first)) + '</small>';
+  var acts = '<button type="button" class="btn ghost cx-sec" data-ha-act="det">Detalhes</button>';
+  if (!many) acts += '<button type="button" class="btn ghost cx-sec" data-ha-act="go">Ver</button>';
+  if (tab === "lidas") acts += '<button type="button" class="btn ghost" data-ha-act="unread">Voltar à Principal</button>';
+  else {
+    if (tab === "historico" && haRestorable(g)) acts += '<button type="button" class="btn ghost cx-sec" data-ha-act="restore">Restaurar</button>';
+    if (!g.lida) acts += '<button type="button" class="btn primary" data-ha-act="read">✓ Marcar como Lida</button>';
+  }
+  return '<tr class="cx-row' + (g.lida && tab === "principal" ? ' cx-read' : '') + '" data-ha-i="' + idx + '">' +
+    '<td class="cx-t">' + title + '</td><td class="cx-sum">' + haGroupSummary(g) + '</td>' +
+    '<td class="cx-resp">' + esc(g.user_name || "—") + '</td>' +
+    '<td class="cx-c"><span class="pat-count">' + g.items.length + '</span></td>' +
+    '<td class="cx-w" title="' + esc(crmWhen(g.at)) + '">' + esc(cxShort(g.at)) + '</td><td class="cx-a">' + acts + '</td></tr>';
+}
+function haRender(){
+  var ov = HA.ov; if (!ov || !document.body.contains(ov)) return;
+  var host = ov.querySelector("#haHost"); if (!host) return;
+  if (!HA.rows){ host.innerHTML = '<div class="empty-state"><b>Carregando…</b></div>'; return; }
+  var tabs = {principal: haTabGroups("principal"), historico: haTabGroups("historico"), lidas: haTabGroups("lidas")};
+  ["principal", "historico", "lidas"].forEach(function(k){
+    var n = ov.querySelector("#haN-" + k); if (n) n.textContent = k === "historico" ? "" : (tabs[k].length ? String(tabs[k].length) : "");
+    var b = ov.querySelector('#haTabs [data-ha="' + k + '"]'); if (b){ b.classList.toggle("active", HA.tab === k); b.setAttribute("aria-selected", HA.tab === k ? "true" : "false"); }
+  });
+  // usuários para o filtro (refaz só quando a lista muda)
+  var us = {}; HA.rows.forEach(function(r){ if (r.user_id) us[r.user_id] = r.user_name || "—"; });
+  var sel = ov.querySelector("#haUser"), key = Object.keys(us).sort().join("|");
+  if (sel && sel.__key !== key){
+    sel.__key = key;
+    sel.innerHTML = '<option value="">Todos</option>' + Object.keys(us).sort(function(a, b){ return us[a].localeCompare(us[b], "pt-BR"); }).map(function(id){ return '<option value="' + esc(id) + '">' + esc(us[id]) + '</option>'; }).join("");
+    sel.value = HA.user; sel.dispatchEvent(new Event("pipo-refresh"));
+  }
+  var list = tabs[HA.tab] || [], all = HA.rows.filter(haMatches);
+  var cnt = function(a){ return all.filter(function(r){ return r.acao === a; }).length; };
+  ov.querySelector("#haSum").textContent = all.length + (all.length === 1 ? " alteração" : " alterações") + " no período · " + cnt("criou") + " criadas · " + cnt("alterou") + " alteradas · " + cnt("excluiu") + " excluídas · " + cnt("status") + " de status";
+  HA.groups = list;
+  if (!list.length){
+    host.innerHTML = '<div class="empty-state"><b>' + (HA.tab === "principal" ? "Nada novo" : HA.tab === "lidas" ? "Nada nas Lidas" : "Nenhuma alteração") + '</b>' +
+      (HA.tab === "principal" ? "Você está em dia com as alterações dos outros usuários." : (HA.q || HA.acao || HA.user ? "Ajuste a pesquisa ou os filtros." : "")) + '</div>';
+    return;
+  }
+  var html = '', last = "";
+  list.forEach(function(g, i){
+    var gn = cxGroupName(g.at);
+    if (gn !== last){ html += '<tr class="cx-grp"><td colspan="6">' + esc(gn) + '</td></tr>'; last = gn; }
+    html += haRowHtml(g, HA.tab, i);
+  });
+  host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table cx-tbl"><colgroup><col style="width:24%"><col><col style="width:140px"><col style="width:56px"><col style="width:64px"><col style="width:330px"></colgroup>' +
+    '<thead><tr><th>Registro</th><th>O que Mudou</th><th>Feito por</th><th>Qtd</th><th>Quando</th><th></th></tr></thead><tbody>' + html + '</tbody></table></div>';
+}
+function haRestorable(g){
+  if (g.acao === "status") return false;
+  var area = HA.area;
+  if (area === "agenda") return g.acao === "excluiu" ? can("agenda", "create") : g.acao === "alterou" ? can("agenda", "edit") : can("agenda", "delete");
+  return g.acao === "excluiu" ? can("planner", "create") : g.acao === "alterou" ? can("planner", "edit") : can("planner", "delete");
+}
+function haDetails(g){
+  var rows = g.items.slice(0, 300).map(function(r){
+    return '<tr><td>' + esc(cxShort(r.at)) + '</td><td>' + haItemText(r) + '</td><td>' + esc(haWhere(r)) + '</td></tr>';
+  }).join("");
+  var host = regQuickHost(), title = g.items.length === 1 ? "Detalhes da Alteração" : g.items.length + " Registros";
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovHaDet"><div class="modal wide" style="max-width:900px"><div class="modal-head"><div><h3>' + esc(title) + '</h3><div class="modal-sub">' +
+    esc(g.user_name || "") + " · " + esc(HA_ACOES[g.acao]) + " · " + esc(crmWhen(g.at)) + '</div></div><button class="modal-close" data-hdclose aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="pat-table-wrap"><table class="pat-table"><thead><tr><th>Hora</th><th>O que Mudou</th><th>Onde</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    (g.items.length > 300 ? '<div class="pat-count">Mostrando 300 de ' + g.items.length + '. Exporte para ver todos.</div>' : '') +
+    '</div><div class="modal-foot"><button class="btn ghost" data-hdclose>Fechar</button></div></div></div>';
+  var ov = document.getElementById("ovHaDet");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  Array.prototype.forEach.call(ov.querySelectorAll("[data-hdclose]"), function(b){ b.addEventListener("click", close); });
+}
+function haGo(r){
+  if (HA.area === "agenda"){
+    var tab = document.querySelector('#mainTabs button[data-tab="agenda"]'); if (!tab) return;
+    var close = document.querySelector("#ovHa [data-tclose]"); if (close) close.click();
+    if (r.quando) AD.date = agdClampWeekday(agdParse(r.quando));
+    if (r.prof_id && !agdOwnProfId()){ AD.mode = "prof"; AD.sel = r.prof_id; }
+    tab.click(); Promise.resolve(agdLoadWeek()).then(function(){
+      var cell = r.ref ? document.querySelector('#agdGrid .book[data-id="' + r.ref + '"]') : null;
+      if (cell){ cell.scrollIntoView({block: "center", behavior: "smooth"}); cell.classList.add("pr-flash"); setTimeout(function(){ cell.classList.remove("pr-flash"); }, 2200); }
+    });
+    return;
+  }
+  var p = (r.quando || "").split("-"), close2 = document.querySelector("#ovHa [data-tclose]"); if (close2) close2.click();
+  var db1 = document.querySelector('#daySeg button[data-day="' + p[0] + '"]'); if (db1) db1.click();
+  var wb = document.querySelector('#weekSeg button[data-week="' + p[1] + '"]'); if (wb) wb.click();
+  var s = document.getElementById("patientSearch"); if (s && r.paciente){ s.value = r.paciente; s.dispatchEvent(new Event("input", {bubbles: true})); }
+}
+function haSame(a, b){
+  function clean(x){ var o = JSON.parse(JSON.stringify(x || {})); delete o.auto; delete o.via; delete o.porque; return JSON.stringify(Object.keys(o).sort().map(function(k){ return [k, o[k]]; })); }
+  return clean(a) === clean(b);
+}
+// Restaura o "antes" de cada registro do grupo (excluído volta, alterado volta ao que era, criado é desfeito).
+function haRestore(g){
+  var items = g.items.filter(function(r){ return r.acao !== "status"; });
+  if (!items.length) return;
+  confirmDialog({title: "Restaurar Alterações", message: "Desfazer <b>" + items.length + "</b> " + (items.length === 1 ? "alteração" : "alterações") + " feita" + (items.length === 1 ? "" : "s") + " por <b>" + esc(g.user_name || "—") + "</b>? Se o registro já foi mexido depois, o sistema pergunta antes de sobrescrever.", confirmLabel: "Restaurar"}).then(function(ok){
+    if (!ok) return;
+    (HA.area === "agenda" ? haRestoreAgenda(items) : haRestorePlanner(items)).then(function(n){
+      if (n === null) return;
+      showToast(n + (n === 1 ? " registro restaurado." : " registros restaurados."));
+      HA.rows = null; haLoad(true).then(haRender);
+    });
+  });
+}
+function haRestoreAgenda(items){
+  var c = agdClient(); if (!c){ showToast("Restaurar precisa do sistema online.", true); return Promise.resolve(null); }
+  var ids = items.map(function(r){ return r.ref; });
+  return c.from("appointments").select("*").in("id", ids).then(function(res){
+    if (res.error) throw res.error;
+    var cur = {}; (res.data || []).forEach(function(x){ cur[x.id] = x; });
+    var changed = items.filter(function(r){ var x = cur[r.ref]; return x && r.depois && !haSame(haPick(x), haPick(r.depois)); }).length;
+    return (changed ? confirmDialog({title: "Já Foi Alterado Depois", message: changed + " dos registros foram mexidos depois desta alteração. Restaurar mesmo assim?", confirmLabel: "Restaurar Mesmo Assim"}) : Promise.resolve(true)).then(function(ok){
+      if (!ok) return null;
+      var ins = [], ups = [], dels = [];
+      items.forEach(function(r){
+        var x = cur[r.ref], b = r.antes ? haPick(r.antes) : null;
+        if (r.acao === "excluiu"){ if (!x && b) ins.push(Object.assign({id: r.ref}, b)); }
+        else if (r.acao === "alterou"){ if (x && b) ups.push({id: r.ref, b: b}); }
+        else if (r.acao === "criou"){ if (x) dels.push(r.ref); }
+      });
+      var p = Promise.resolve();
+      if (ins.length) p = p.then(function(){ return agdInsertBatches(ins); });
+      ups.forEach(function(u){ p = p.then(function(){ return c.from("appointments").update(u.b).eq("id", u.id).then(function(r){ if (r.error) throw r.error; }); }); });
+      if (dels.length) p = p.then(function(){ return c.from("appointments").delete().in("id", dels).then(function(r){ if (r.error) throw r.error; }); });
+      return p.then(function(){ if (AD.loaded) agdLoadWeek(); return ins.length + ups.length + dels.length; });
+    });
+  }).catch(function(err){ showToast("Não foi possível restaurar: " + agdErr(err), true); return null; });
+}
+// Campos do atendimento que o app grava (sem id, status e carimbos).
+function haPick(r){
+  var o = {}; ["date", "time", "professional_id", "room_id", "patient", "note", "blocked", "service", "patient_id", "group_id", "source"].forEach(function(k){ if (r[k] !== undefined) o[k] = r[k]; });
+  return o;
+}
+function haRestorePlanner(items){
+  var docIds = {}; items.forEach(function(r){ docIds[r.quando] = 1; });
+  return currentBookingsFor(Object.keys(docIds)).then(function(cur){
+    var changes = {}, changed = 0;
+    items.forEach(function(r){
+      var key = (r.ref || "").split("#")[1], day = r.quando.split("-")[0], now = (cur[r.quando] || {})[key];
+      if (!key) return;
+      if (now && !chgEmptyBk(now) && r.depois && !haSame(now, r.depois)) changed++;
+      (changes[r.quando] = changes[r.quando] || {})[key] = r.acao === "criou" ? clearValueFor(day, r.hora) : (r.antes || null);
+    });
+    return (changed ? confirmDialog({title: "Já Foi Alterado Depois", message: changed + " dos horários foram mexidos depois desta alteração. Restaurar mesmo assim?", confirmLabel: "Restaurar Mesmo Assim"}) : Promise.resolve(true)).then(function(ok){
+      if (!ok) return null;
+      return applyBookingChanges(changes).then(function(res){ return res === false ? null : items.length; });
+    });
+  }).catch(function(err){ showToast("Não foi possível restaurar: " + agdErr(err), true); return null; });
+}
+function chgEmptyBk(b){ return !b || (!b.patient && !b.blocked && !b.lock && !b.training); }
+function haExport(){
+  var rows = (HA.rows || []).filter(haMatches).map(function(r){
+    return [new Date(r.at).toLocaleString("pt-BR"), r.user_name || "", HA_ACOES[r.acao], HA_TIPOS[r.tipo] || r.tipo, r.paciente || "", haWhen(r), r.hora || "", haProfName(r), haRoomName(r),
+      haDiff(r).map(function(d){ return d.label + ": " + d.de + " → " + d.para; }).join("; ")];
+  });
+  if (!rows.length){ showToast("Não há nada para exportar.", true); return; }
+  xlDownload("historico-" + HA.area + ".xlsx", [{name: "Histórico", rows: [["Quando", "Feito por", "Ação", "Tipo", "Paciente", "Dia", "Hora", "Profissional", "Sala", "O que Mudou"]].concat(rows)}]);
+}
+function openHistoricoAlteracoes(area){
+  if (!haCan(area)){ showToast("Seu nível de permissão não dá acesso ao Histórico de Alterações.", true); return; }
+  HA.area = area; HA.rows = null; HA.tab = "principal"; HA.q = ""; HA.acao = ""; HA.user = "";
+  var body = '<div class="pat-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:8px">' +
+    '<div class="seg cx-tabs" id="haTabs" role="tablist"><button type="button" role="tab" data-ha="principal">Principal <span class="cx-n" id="haN-principal"></span></button>' +
+    '<button type="button" role="tab" data-ha="historico">Histórico de Movimentações</button>' +
+    '<button type="button" role="tab" data-ha="lidas">Lidas <span class="cx-n" id="haN-lidas"></span></button></div>' +
+    '<input type="search" id="haSearch" placeholder="Pesquisar paciente, profissional ou sala…" style="flex:1 1 220px;min-width:140px">' +
+    '<select id="haAcao" aria-label="Ação"><option value="">Todas as Ações</option><option value="criou">Criou</option><option value="alterou">Alterou</option><option value="excluiu">Excluiu</option><option value="status">Mudou o Status</option></select>' +
+    '<select id="haUser" aria-label="Feito por"><option value="">Todos</option></select>' +
+    '<select id="haDays" aria-label="Período"><option value="7">Últimos 7 Dias</option><option value="30" selected>Últimos 30 Dias</option><option value="90">Últimos 90 Dias</option><option value="180">Últimos 180 Dias</option></select>' +
+    '<button type="button" class="btn ghost" id="haMenuBtn">Opções ▾</button></div>' +
+    '<div class="pat-count" id="haSum" style="margin-bottom:6px"></div><div id="haHost"></div>';
+  var m = agdToolModal("ovHa", "Histórico de Alterações — " + haAreaName(area), "Quem criou, alterou ou excluiu atendimentos. As alterações de status ficam só no Histórico de Movimentações.", body, '<button class="btn ghost" data-tclose>Fechar</button>', 1180);
+  HA.ov = m.ov; HA.days = 30;
+  m.ov.addEventListener("click", function(e){
+    var t = e.target.closest("[data-ha]"); if (t){ HA.tab = t.getAttribute("data-ha"); haRender(); return; }
+    var b = e.target.closest("[data-ha-act]"); if (!b) return;
+    var tr = b.closest("tr[data-ha-i]"), g = tr ? HA.groups[+tr.getAttribute("data-ha-i")] : null; if (!g) return;
+    var act = b.getAttribute("data-ha-act"), ids = g.items.map(function(r){ return r.id; });
+    if (act === "det") haDetails(g);
+    else if (act === "go") haGo(g.items[0]);
+    else if (act === "restore") haRestore(g);
+    else if (act === "read"){ haSetRead(ids, true).then(haRender); haRender(); }
+    else if (act === "unread"){ haSetRead(ids, false).then(haRender); haRender(); }
+  });
+  m.$("#haSearch").addEventListener("input", debounce150(function(){ HA.q = m.$("#haSearch").value; haRender(); }));
+  m.$("#haAcao").addEventListener("change", function(){ HA.acao = this.value; haRender(); });
+  m.$("#haUser").addEventListener("change", function(){ HA.user = this.value; haRender(); });
+  m.$("#haDays").addEventListener("change", function(){ HA.days = +this.value; haLoad(true).then(haRender); });
+  m.$("#haMenuBtn").addEventListener("click", function(){
+    crmPop(this, "cx-menu", '<button type="button" role="menuitem" data-pick="all">Marcar Tudo da Principal como Lido</button><button type="button" role="menuitem" data-pick="xls">Exportar Excel</button><button type="button" role="menuitem" data-pick="reload">Atualizar</button>',
+      {title: "Opções", onPick: function(id, close){
+        close();
+        if (id === "all"){
+          var ids = []; haTabGroups("principal").forEach(function(g){ g.items.forEach(function(r){ ids.push(r.id); }); });
+          if (!ids.length){ showToast("Não há nada para marcar.", true); return; }
+          confirmDialog({title: "Marcar Tudo como Lido", message: "Marcar <b>" + ids.length + "</b> alterações como lidas?", confirmLabel: "Marcar Tudo"}).then(function(ok){ if (ok) haSetRead(ids, true).then(haRender); });
+        } else if (id === "xls") haExport(); else haLoad(true).then(haRender);
+      }});
+  });
+  haLoad(true).then(haRender);
+}
+
 /* ---------------- Agenda: menu "Outras Opções ▾" ----------------
  * Limpar por período, Bloquear período, Trocar profissional no período, Copiar dia ou
  * semana, Pendências de status, Status em lote e Exportar Excel. As mesmas opções
@@ -21926,7 +22246,8 @@ var AGD_TOOLS = [
   {k: "copiar", label: "Copiar Dia ou Semana", ok: function(){ return can("agenda", "create"); }, run: function(){ agdOpenCopyPeriod(); }, sep: true},
   {k: "pendencias", label: "Pendências de Status", ok: function(){ return true; }, run: function(){ agdOpenStatusTool("pend"); }},
   {k: "lote", label: "Status em Lote", ok: agdCanStatusBatch, run: function(){ agdOpenStatusTool("lote"); }},
-  {k: "exportar", label: "Exportar Excel", ok: function(){ return true; }, run: function(){ agdOpenExport(); }, sep: true}
+  {k: "exportar", label: "Exportar Excel", ok: function(){ return true; }, run: function(){ agdOpenExport(); }, sep: true},
+  {k: "historico", label: "Histórico de Alterações", ok: function(){ return haCan("agenda"); }, run: function(){ openHistoricoAlteracoes("agenda"); }}
 ];
 function agdToolsVisible(){ return agdClient() ? AGD_TOOLS.filter(function(t){ return t.ok(); }) : []; }
 function agdToolsMenuHtml(){
@@ -27005,6 +27326,40 @@ var HELP_TOPICS = [
       "No celular: busca, filtros, e a lista com Data, Hora, Paciente e Status; os alertas aparecem só no computador."
     ],
     who: "Permissão <b>Agenda</b> (ver). Quem só vê a própria agenda enxerga apenas os atendimentos dele."},
+  {id: "historico-agenda", group: "Agenda", title: "Histórico de Alterações da Agenda", mod: "historico_agenda",
+    purpose: "Ver quem criou, alterou ou excluiu atendimentos da Agenda, no mesmo formato da Caixa de Entrada do CRM.",
+    steps: [
+      "Abra <b>Outras Opções ▾ → Histórico de Alterações</b>.",
+      "<b>Principal</b> mostra o que outras pessoas mudaram e você ainda não marcou como lido (as suas próprias alterações nunca aparecem aqui, e a mudança de status fica só no histórico). <b>Histórico de Movimentações</b> mostra tudo do período. <b>Lidas</b> guarda o que você já marcou.",
+      "Use <b>✓ Marcar como Lida</b> na linha, ou <b>Opções ▾ → Marcar Tudo da Principal como Lido</b>. Em Lidas, <b>Voltar à Principal</b> traz a linha de volta.",
+      "Filtre por ação (criou, alterou, excluiu, status), por quem fez e pelo período (7 a 180 dias); a pesquisa procura paciente, profissional e sala. A linha de resumo conta as alterações do que está na tela.",
+      "<b>Detalhes</b> abre a lista completa do grupo, com o antes e o depois de cada campo. <b>Ver</b> leva ao dia e ao horário.",
+      "<b>Restaurar</b> (no Histórico de Movimentações) desfaz a alteração: devolve o atendimento excluído, volta o alterado ao que era ou remove o criado. Se o horário já foi mexido depois, o sistema avisa antes de sobrescrever.",
+      "<b>Opções ▾ → Exportar Excel</b> baixa o que está na tela."
+    ],
+    rules: [
+      "Várias alterações seguidas da mesma pessoa, do mesmo tipo, viram uma linha só (com a etiqueta “em lote” quando são 10 ou mais).",
+      "Importações e rotinas automáticas do servidor não entram. O histórico guarda 180 dias.",
+      "Restaurar respeita as suas permissões de incluir, editar e excluir; atendimento com status ou evolução continua protegido pelas regras de sempre."
+    ],
+    who: "Permissão <b>Histórico de Alterações – Agenda</b> (ver), liberada pelo Administrador em Níveis de Permissão."},
+  {id: "historico-planner", group: "Planner", title: "Histórico de Alterações do Planner", mod: "historico_planner",
+    purpose: "Ver quem criou, alterou ou excluiu atendimentos do Planner, no mesmo formato da Caixa de Entrada do CRM.",
+    steps: [
+      "Abra <b>Outras Opções ▾ → Histórico de Alterações</b>.",
+      "<b>Principal</b> mostra o que outras pessoas mudaram e você ainda não marcou como lido (as suas próprias alterações nunca aparecem aqui, e a mudança de status fica só no histórico). <b>Histórico de Movimentações</b> mostra tudo do período. <b>Lidas</b> guarda o que você já marcou.",
+      "Use <b>✓ Marcar como Lida</b> na linha, ou <b>Opções ▾ → Marcar Tudo da Principal como Lido</b>. Em Lidas, <b>Voltar à Principal</b> traz a linha de volta.",
+      "Filtre por ação (criou, alterou, excluiu, status), por quem fez e pelo período (7 a 180 dias); a pesquisa procura paciente, profissional e sala. A linha de resumo conta as alterações do que está na tela.",
+      "<b>Detalhes</b> abre a lista completa do grupo, com o antes e o depois de cada campo. <b>Ver</b> leva ao dia e ao horário.",
+      "<b>Restaurar</b> (no Histórico de Movimentações) desfaz a alteração: devolve o atendimento excluído, volta o alterado ao que era ou remove o criado. Se o horário já foi mexido depois, o sistema avisa antes de sobrescrever.",
+      "<b>Opções ▾ → Exportar Excel</b> baixa o que está na tela."
+    ],
+    rules: [
+      "Várias alterações seguidas da mesma pessoa, do mesmo tipo, viram uma linha só (com a etiqueta “em lote” quando são 10 ou mais).",
+      "Importações e rotinas automáticas do servidor não entram. O histórico guarda 180 dias.",
+      "Restaurar respeita as suas permissões de incluir, editar e excluir; atendimento com status ou evolução continua protegido pelas regras de sempre."
+    ],
+    who: "Permissão <b>Histórico de Alterações – Planner</b> (ver), liberada pelo Administrador em Níveis de Permissão."},
   {id: "visaogeral", group: "Agenda", title: "Visão Geral do Dia", mod: "visao_geral", tab: "visaogeral",
     purpose: "Ver todos os atendimentos de um dia da Agenda numa tela só, por horário.",
     steps: [
