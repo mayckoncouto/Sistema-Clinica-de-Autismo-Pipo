@@ -4863,3 +4863,18 @@ Pedido do usuário: em Outras Opções do Planner e da Agenda, **Histórico de A
 - Ideias ainda não feitas: contador de não lidas no menu, aviso por push de exclusão em lote, comparar semana a semana, histórico por paciente na janela do paciente.
 - (2026-10-18, quatro melhorias do Histórico, migração `supabase/2026-10-18f-historico-extras.sql` rodada em produção pelo conector; linha 141 da conferência; `schema.sql` atualizado) **Contador de não lidas** (`change_log_unread`, `HA_BADGE`, `haBadgeRefresh/Render`: número no botão Outras Opções e no item, atualiza ao abrir o menu, ao marcar lido e a cada 3 min). **Aviso de exclusão em lote**: gatilho `change_log_push_del` (a 10ª exclusão da mesma gravação chama `push_call` com `tipo: "exclusao"`), RPC `push_delete_targets` (usuários ativos da unidade com ver o histórico daquela área, menos o autor), preferência de notificação `exclusoes` ("Exclusões em Lote"); função `pipo-push` precisa ser publicada de novo (ramo `exclusao` em `app.ts`, `deleteTargets` em `index.ts`). **Histórico por paciente**: Outras Opções do cadastro do paciente (`#pHist`) abre `openHistoricoAlteracoes("ambas", {paciente})` (Planner + Agenda, filtro `HA.pat` por nome; `HA.areas`, cada linha tem `area`). **Comparar Semanas** (`haCompare`): duas semanas lado a lado por ação, saldo e pessoa.
 - (2026-10-18, pedido do usuário) Montar Proposta só funciona dentro do Auto Planner: além de o botão só aparecer lá, `openAutoPlannerModal`, Aplicar e Remover recusam quando `PLA.on` é falso. Conferido no banco: o Planner de verdade não tem nenhum registro com a marca `auto`/`via`/`porque` (o Auto Planner tem os próprios documentos `autoplan/*`, sem nenhuma gravação desde 16/10 04:29 UTC). Há 13 semanas do Planner gravadas sem usuário em 16/10 20:39–20:42 UTC (SQL direto), origem não identificada.
+
+## Importação das evoluções do Clínica Ágil (2026-10-18)
+Pedido do usuário: evoluções dos pacientes ativos com atendimentos desde 01/01/2026, do Prontuário e de Cadastro → Dados Complementares
+do Clínica Ágil, ligadas aos atendimentos. Feito direto no banco (dados reais nunca no repositório):
+- 4.608 evoluções novas em `clinical_records` (741 do prontuário + 3.867 antigas dos Dados Complementares), 111 pacientes, cada uma com
+  autor = usuário do profissional (`profiles.professional_id`), ligada ao atendimento (data, horário e profissional do atendimento).
+  Atendimento que já tinha evolução ficou como estava (as revisadas foram mantidas); antiga não entra onde há uma do prontuário.
+- Horários do Clínica Ágil na grade antiga da tarde (13:00, 13:40…) +30 min; acentos perdidos restaurados por dicionário (palavras
+  acentuadas do próprio texto) e "no consegue" → "não consegue".
+- 20 atendimentos "Não compareceu" que tinham evolução viraram Finalizado.
+- 247 evoluções ficaram sem atendimento correspondente (188 do prontuário, quase todas jul e out; 59 antigas, quase todas abr) e NÃO
+  foram gravadas: estão em `imp_w` (appt_id nulo).
+- Tabelas/funções temporárias da importação (apagar no SQL Editor quando o usuário aprovar; `imp_w.orig` e `imp_evo` guardam os textos
+  originais): `imp_evo`, `imp_w`, `imp_prof`, `imp_dict`, `imp_ca`, função `imp_fix`. Desfazer: apagar de `clinical_records` as linhas
+  cujo `appointment_id` está em `imp_w` e criadas em 2026-10-18.
