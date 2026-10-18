@@ -26496,7 +26496,7 @@ var HELP_TOPICS = [
   {id: "tipos-anamnese", group: "Prontuário", title: "Modelos de Anamnese", mod: "tipos_anamnese", tab: "tiposanam",
     purpose: "Cria os modelos de formulário usados nas anamneses: você monta as perguntas uma vez e depois preenche o modelo para cada paciente.",
     steps: ["Prontuário ▾ → <b>Anamneses</b> → <b>Outras Opções ▾</b> → <b>Modelos</b> → <b>+ Incluir</b>: nome, descrição e <b>Validade</b> (3 Meses, 6 Meses ou 1 Ano: tempo até a anamnese precisar ser refeita).",
-      "Em <b>Perguntas</b>, escolha <b>+ Adicionar Pergunta…</b> e o tipo: Texto Curto, Texto Longo, Número, Data, Hora, Escolha Única, Múltipla Escolha, Sim ou Não, Escala, Arquivo ou Assinatura. Para organizar, use Título de Seção, Texto Explicativo, Separador e Nova Página.",
+      "Em <b>Perguntas</b>, escolha <b>+ Adicionar Pergunta…</b> e o tipo: Texto Curto, Texto Longo, Número, Data, Hora, Escolha Única, Múltipla Escolha, Sim ou Não, Escala, Arquivo ou Assinatura. Para organizar, use Título de Seção (numerado sozinho: 1., 2., 3. pela ordem, no formulário, na prévia e na impressão; não digite o número), Texto Explicativo, Separador e Nova Página.",
       "Cada pergunta é um quadro com ▲ ▼ (mudar a ordem), <b>Editar</b>, <b>Duplicar</b> e <b>Remover</b>. <b>Editar</b> abre a janela da pergunta: texto, texto de apoio, <b>Resposta Obrigatória</b>, opções (uma por linha), valores da escala e <b>Preencher com o Cadastro do Paciente</b>.",
       "Em <b>Lógica Condicional</b>, escolha <b>Mostrar esta pergunta só se</b> ou <b>Ocultar esta pergunta se</b> e inclua uma ou mais condições com <b>+ Incluir Condição</b>: pergunta anterior, comparação (for igual a, for diferente de, contiver, não contiver, for maior que, for menor que, estiver preenchida, estiver vazia) e valor. Com 2 ou mais condições, escolha se <b>todas</b> (E) ou <b>qualquer uma</b> (OU) precisam valer.",
       "<b>Prévia</b> mostra como o formulário aparece para quem preenche. <b>Duplicar Modelo</b> cria uma cópia para você ajustar."],
@@ -31086,16 +31086,20 @@ function anamVisible(q, ans, byId, depth){
 }
 function anamById(qs){ var m = {}; (qs || []).forEach(function(q){ m[q.id] = q; }); return m; }
 function anamEsc(s){ return esc(s == null ? "" : s); }
+// Numeração automática dos títulos de seção (1., 2., …) pela ordem no modelo; "1." digitado no texto é ignorado.
+function anamSecClean(t){ return String(t == null ? "" : t).replace(/^\s*\d+\s*[.)\-–]\s*/, ""); }
+function anamSecNums(qs){ var m = {}, n = 0; (qs || []).forEach(function(q){ if (q.tipo === "secao") m[q.id] = ++n; }); return m; }
+function anamSecTitle(q, nums){ return (nums[q.id] ? nums[q.id] + ". " : "") + (anamSecClean(q.titulo) || "Seção"); }
 // Formulário (prévia e preenchimento). opts: {readonly, preview}. answers: {idPergunta: valor}.
 function anamFormHtml(qs, ans, opts){
   opts = opts || {}; ans = ans || {};
-  var dis = opts.readonly ? " disabled" : "", page = 1;
+  var dis = opts.readonly ? " disabled" : "", page = 1, secN = anamSecNums(qs);
   return (qs || []).map(function(q){
     var id = "anq-" + q.id, v = ans[q.id], lab = anamEsc(q.titulo) + (q.obrigatoria && anamIsQ(q) ? ' <span class="req">*</span>' : "");
     var hint = q.ajuda ? '<div class="pat-count" style="margin:2px 0 6px;font-weight:500">' + anamEsc(q.ajuda) + '</div>' : "";
     var head = '<div class="field an-qf" data-qid="' + anamEsc(q.id) + '">';
     switch (q.tipo){
-      case "secao": return '<div class="tr-sec an-qf" data-qid="' + anamEsc(q.id) + '">' + anamEsc(q.titulo || "Seção") + '</div>';
+      case "secao": return '<div class="tr-sec an-qf" data-qid="' + anamEsc(q.id) + '">' + anamEsc(anamSecTitle(q, secN)) + '</div>';
       case "bloco": return head + '<div class="pat-count" style="white-space:pre-wrap;font-weight:500">' + anamEsc(q.titulo) + '</div></div>';
       case "separador": return '<hr class="an-qf" data-qid="' + anamEsc(q.id) + '" style="border:0;border-top:1px solid var(--line);margin:14px 0">';
       case "pagina": page++; return '<div class="pat-count an-qf an-page" data-qid="' + anamEsc(q.id) + '" style="text-align:center;border-top:1px dashed var(--line);padding-top:8px;margin:14px 0">— Página ' + page + ' —</div>';
@@ -31337,7 +31341,7 @@ function openAnamQuestionModal(ctx){
     readConds();
     var tit = $("aqTit").value.trim();
     if (!tit){ $("aqTit").focus(); showToast("Preencha o texto da pergunta.", true); return; }
-    q.titulo = tit;
+    q.titulo = q.tipo === "secao" ? (anamSecClean(tit) || tit) : tit;
     if (isQ){ q.ajuda = $("aqAjuda").value.trim(); q.obrigatoria = $("aqObr").checked; }
     if (k && k.opts){
       var old = q.opcoes || [], lines = $("aqOpc").value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
@@ -31400,14 +31404,14 @@ function openAnamTypeModal(item, opts){
   function qLabel(q){ var k = anamKind(q.tipo); return k ? k.label : q.tipo; }
   function cardHtml(q, i){
     var k = anamKind(q.tipo), simple = q.tipo === "separador" || q.tipo === "pagina";
-    var title = simple ? (q.tipo === "pagina" ? "Nova Página" : "Separador") : (q.titulo || "(Sem Texto)");
+    var title = simple ? (q.tipo === "pagina" ? "Nova Página" : "Separador") : (q.tipo === "secao" ? anamSecTitle(q, anamSecNums(qs)) : (q.titulo || "(Sem Texto)"));
     var sub = [qLabel(q)];
     if (anamIsQ(q) && q.obrigatoria) sub.push("Obrigatória");
     if (k && k.opts) sub.push((q.opcoes || []).length + " opções");
     var ct = anamCondText(q, qs); if (ct) sub.push(ct);
     return '<div class="room-row tl-row an-q" data-qi="' + i + '">' +
       (canSave ? '<div class="move-col"><button type="button" data-mv="-1" aria-label="Subir"' + (i === 0 ? " disabled" : "") + '>▲</button><button type="button" data-mv="1" aria-label="Descer"' + (i === qs.length - 1 ? " disabled" : "") + '>▼</button></div>' : '') +
-      '<div class="room-info"><div class="rn">' + (simple ? "" : (i + 1) + ". ") + esc(title) + '</div><div class="rs">' + esc(sub.join(" · ")) + '</div></div>' +
+      '<div class="room-info"><div class="rn">' + (simple || q.tipo === "secao" ? "" : (i + 1) + ". ") + esc(title) + '</div><div class="rs">' + esc(sub.join(" · ")) + '</div></div>' +
       (simple ? '' : '<button type="button" class="btn ghost" data-ed>' + (canSave ? "Editar" : "Ver") + '</button>') +
       (canSave ? '<button type="button" class="btn ghost" data-dup title="Duplicar pergunta">Duplicar</button><button type="button" class="btn danger" data-del title="Remover pergunta">Remover</button>' : '') +
     '</div>';
@@ -31788,9 +31792,10 @@ function anPrint(rec){
   var logo = (document.querySelector(".brand-mark") || {}).src || "", byId = anamById(rec.perguntas), ans = rec.answers || {};
   var body = '<header><div class="brand">' + (logo ? '<img src="' + logo + '" alt="">' : "") + '<div><div class="clinic">' + esc(clinicName()) + '</div><div class="rname">' + esc(rec.typeName || "Anamnese") + '</div></div></div>' +
     '<div class="sub">' + esc(rec.patientName || "") + ' · ' + esc(trBr(String(rec.data).slice(0, 10))) + ' · versão ' + (rec.versao || 1) + (rec.status === "concluida" ? "" : " · RASCUNHO") + '</div></header>';
+  var secN = anamSecNums(rec.perguntas);
   (rec.perguntas || []).forEach(function(q){
     if (anamIsQ(q) && !anamVisible(q, ans, byId)) return;
-    if (q.tipo === "secao") body += '<h3>' + esc(q.titulo) + '</h3>';
+    if (q.tipo === "secao") body += '<h3>' + esc(anamSecTitle(q, secN)) + '</h3>';
     else if (q.tipo === "bloco") body += '<p class="note">' + esc(q.titulo) + '</p>';
     else if (q.tipo === "separador") body += '<hr>';
     else if (q.tipo === "pagina") body += '<div class="pb"></div>';

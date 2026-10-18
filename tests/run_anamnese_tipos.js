@@ -71,6 +71,9 @@ const fs = require('fs');
   check('conditional logic: OR / AND / contains / greater / hide?', ev2 === 'false,true,true,false,true,false,true', ev2);
   // prévia: condição mostra/esconde
   await page.click('#anSeg [data-m=previa]'); await page.waitForTimeout(150);
+  check('section title numbered automatically in the preview?', (await page.$eval('#anPrev .tr-sec', (e) => e.textContent.trim())) === '1. Dados Gerais');
+  const cl = await ev('[anamSecClean("3. Rotina"), anamSecClean("2) Medicação"), anamSecClean("Sem número")].join("|")');
+  check('typed number is ignored?', cl === 'Rotina|Medicação|Sem número', cl);
   const hid = () => page.$eval('#anPrev [data-qid] input[type=text]', (e) => e.closest('[data-qid]').hidden);
   check('preview hides conditional question at first?', await hid());
   await page.click('#anPrev .an-radios input[value=sim]'); await page.waitForTimeout(80);
