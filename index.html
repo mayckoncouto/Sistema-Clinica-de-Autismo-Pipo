@@ -12263,8 +12263,12 @@ function wirePatHours(){
       c.title = !day ? "Clínica fechada neste dia" : n + (n === 1 ? " sessão disponível" : " sessões disponíveis") + " neste dia";
     });
     var tot = document.getElementById("pHoursTotal");
-    if (tot) tot.innerHTML = "<b>Sessões disponíveis:</b> " + week + (week === 1 ? " por semana" : " por semana") + " × 4 semanas = <b>" + (week * 4) + " por mês</b>";
+    var ps = document.getElementById("pPeriodo"), per = TR_PERIODOS.filter(function(x){ return ps && x.id === ps.value; })[0] || TR_PERIODOS[0];
+    var lbl = per.id === "semanal" ? " × 4 semanas" : per.id === "quinzenal" ? " × 2 (quinzenal)" : " × 1 (mensal)";
+    if (tot) tot.innerHTML = "<b>Sessões disponíveis:</b> " + week + " por semana" + lbl + " = <b>" + (week * per.mult) + " por mês</b>";
   };
+  var psel = document.getElementById("pPeriodo");
+  if (psel) psel.addEventListener("change", function(){ tbl.__recount(); });
   tbl.__recount();
   wirePatHoursMenu(tbl);
 }
@@ -12426,7 +12430,10 @@ function areaConfirm(msgs){
   return confirmDialog({title: "Profissional Fora das Especialidades do Tratamento",
     message: msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : "") + "<br>Agendar mesmo assim?", confirmLabel: "Agendar Assim Mesmo"});
 }
-var TREAT_FIELDS = ["convenioId", "convenio", "sessoesMes", "aba", "abaAntigo", "abaRevisao", "naoAgrupar", "specHours", "horarios"];
+// Período do Horário de Atendimento: quantas vezes o total semanal se repete no mês (semanal 4, quinzenal 2, mensal 1).
+var TR_PERIODOS = [{id: "semanal", name: "Semanal", mult: 4}, {id: "quinzenal", name: "Quinzenal", mult: 2}, {id: "mensal", name: "Mensal", mult: 1}];
+function trPeriodo(t){ var p = t && t.periodo; return TR_PERIODOS.some(function(x){ return x.id === p; }) ? p : "semanal"; }
+var TREAT_FIELDS = ["convenioId", "convenio", "sessoesMes", "periodo", "aba", "abaAntigo", "abaRevisao", "naoAgrupar", "specHours", "horarios"];
 // ---- Convênios: especialidades cobertas, valor por sessão e especialidades que liberam outras ----
 // Cadastro de Especialidades: libera = [ids] — "dentro de Psicologia posso atender
 // Musicoterapia, Psicopedagogia…" (igual para todos os convênios).
@@ -12714,6 +12721,9 @@ function treatFieldsEditor(v, opts){
             '<div class="autolist floating" id="pConvSuggest" hidden></div>' +
           '</div></div>' +
           '<div class="field"><label for="pPac">Sessão/Mês</label><input id="pPac" type="text" value="'+esc(v.sessoesMes == null ? "" : v.sessoesMes)+'"></div>' +
+          '<div class="field"><label for="pPeriodo">Período</label><select id="pPeriodo">' +
+            TR_PERIODOS.map(function(p){ return '<option value="'+p.id+'"'+(trPeriodo(v) === p.id ? ' selected' : '')+'>'+p.name+'</option>'; }).join("") +
+          '</select></div>' +
         '</div>' +
         (opts && opts.afterConv || "") +
         '<div class="field-row">' +
@@ -12992,7 +13002,8 @@ function treatFieldsEditor(v, opts){
         convenioId: convenioId,
         convenio: "",
         sessoesMes: document.getElementById("pPac").value.trim(),
-        aba: undefined,                              // o ABA geral fica em abaAntigo; cada quadro pode ter o seu
+        periodo: document.getElementById("pPeriodo").value || "semanal",
+        aba: undefined,                             // o ABA geral fica em abaAntigo; cada quadro pode ter o seu
         abaRevisao: (function(){ var r = document.getElementById("pAbaRev"); return r && r.value ? r.value : undefined; })(),
         naoAgrupar: (function(){ var pn = document.getElementById("pNaoAg"); if (!pn) return v.naoAgrupar; var ids = Array.prototype.map.call(pn.querySelectorAll("input:checked"), function(c){ return c.value; }); return ids.length ? ids : undefined; })(),
         abaAntigo: (function(){ var cb = document.getElementById("pAba"); return cb ? (cb.checked ? "Sim" : "Não") : (abaLegacy(v) || undefined); })(),
@@ -26251,7 +26262,7 @@ var HELP_TOPICS = [
       "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre os quadros de <b>Sessão</b>; os quadros de outros serviços não mudam, mas as sessões deles são descontadas do total — 10 por mês com 2 de outro serviço = 8 divididas entre os de Sessão; o resto vai para os primeiros; se não der 1 para cada quadro de Sessão, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
       "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",
       "<b>Não Agrupar com</b> (ao lado de Sessão/Mês): marque os pacientes que não devem ficar juntos na mesma sala e horário; o Auto Planner respeita nos dois sentidos.",
-      "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava. A coluna <b>Sessões</b> mostra quantos horários da clínica cabem nas faixas de cada dia, e abaixo da tabela fica a soma: sessões disponíveis por semana × 4 semanas = por mês."
+      "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava. A coluna <b>Sessões</b> mostra quantos horários da clínica cabem nas faixas de cada dia, e abaixo da tabela fica a soma: sessões disponíveis por semana × o <b>Período</b> do tratamento (campo ao lado de Sessão/Mês: Semanal × 4, Quinzenal × 2, Mensal × 1) = por mês. O Período já vem como Semanal."
     ],
     rules: [
       "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda).",
