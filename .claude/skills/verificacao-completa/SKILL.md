@@ -53,13 +53,17 @@ pacientes para arquivos do repositório. Termine sempre com o relatório (passo 
   baixo; campos com 16px; Planner, Auto Planner, Resumo, Disponibilidade e Agenda Planner fora do ☰.
 - Testes: `run_crm_mobile`, `run_cad_sheets`, `run_toolbar_rows`, `run_sort_visible`, `run_nav_single`.
 
-## 6. Desempenho das janelas
-- Primeiro: `node tests/build.js && node tests/medir_telas.js` (tempo de abrir cada tela com CPU 4× mais lenta; LENTA > 1 s, ATENÇÃO > 400 ms).
-- Depois medir com dados fictícios volumosos (ver "Planner mais leve" e "Fluidez" no CLAUDE.md): abrir Planner
-  (Todos × Todos), Agenda, CRM (2000 tarefas), Lançamentos, Prontuário; tempo de abertura e de uma gravação.
-- Listas grandes usam `GT_PAGED`; buscas com `debounce150`; grades trocam só células mudadas. Olhar `performance`
-  dos advisors só para consultas lentas reais (`query_logs`).
-- Relatar o que passar de ~1 s; não otimizar às cegas.
+## 6. Desempenho de telas E janelas (medir e, quando possível, melhorar)
+- `node tests/build.js && node tests/medir_telas.js` mede, com CPU 4× mais lenta, o tempo de abrir CADA tela e CADA janela
+  (a do "+ Incluir" e a da 1ª linha de cada lista). Classificação: ok ≤ 400 ms, ATENÇÃO > 400 ms, LENTA > 1 s.
+  Janela nova que o script não alcança (aberta por menu, Outras Opções ou botão interno): acrescentar ao script.
+- Depois medir com dados fictícios volumosos (ver "Planner mais leve" e "Fluidez" no CLAUDE.md): Planner (Todos × Todos), Agenda,
+  CRM (2000 tarefas), Lançamentos, Prontuário, Planner List; tempo de abertura e de uma gravação.
+- **Melhorar o que passar de ATENÇÃO**: achar a causa (perfil/medição, não palpite) e corrigir quando for seguro — ler menos
+  dados do banco (agrupar no banco, `GT_PAGED`, busca com `debounce150`), montar menos elementos, trocar só as células que mudaram,
+  carregar sob demanda. Medir antes e depois, rodar os testes da área e registrar o ganho no relatório e no CLAUDE.md.
+  Mudança grande ou de risco: propor ao usuário em vez de aplicar.
+- Olhar também `query_logs`/advisors de desempenho só para consultas lentas reais. Relatar tudo que passar de ~400 ms.
 
 ## 7. Dados desnecessários
 - No banco (passo 3) e no repositório: arquivos sem uso (`tests/page*.html` gerados, restos de `tests/`),
