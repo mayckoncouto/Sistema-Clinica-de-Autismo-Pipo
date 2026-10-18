@@ -6583,6 +6583,7 @@ function subscribeReportDocs(){
       if (!holder.active) return;
       state.reportDocs[docId] = (snap.exists && snap.data()) ? snap.data() : {bookings:{}};
       scheduleRelatorioRender();
+      trPlanLive(docId);
     }, function(){
       if (!holder.active) return;
       state.reportDocs[docId] = {bookings:{}};
@@ -23883,6 +23884,16 @@ function trPlannerCounts(p, lines){
   });
   return out;
 }
+// Planner mudou (tempo real): atualiza a cópia do quadro Contratado × Realizado e redesenha a janela aberta.
+var TR_PLAN_TIMER = null;
+function trPlanLive(docId){
+  if (typeof TR === "undefined" || !TR || !TR.plan) return;
+  var d = state.reportDocs[docId];
+  TR.plan[docId] = JSON.parse(JSON.stringify((d && d.bookings) || {}));
+  TR.planAt = Date.now();
+  if (TR_PLAN_TIMER) clearTimeout(TR_PLAN_TIMER);
+  TR_PLAN_TIMER = setTimeout(function(){ TR_PLAN_TIMER = null; if (typeof TR.monthRefresh === "function") TR.monthRefresh(); }, 300);
+}
 function trLoadPlanner(){
   if (TR.plan && Date.now() - (TR.planAt || 0) < 120000) return Promise.resolve();
   return plannerLoadDocs().then(function(all){ TR.plan = all || {}; TR.planAt = Date.now(); }).catch(function(){});
@@ -24072,6 +24083,8 @@ function trMonthSectionWire(t){
   document.getElementById("trMonthPrev").addEventListener("click", function(){ if (ym > rg.first){ ym = trYmAdd(ym, -1); draw(); } });
   document.getElementById("trMonthNext").addEventListener("click", function(){ if (ym < rg.last){ ym = trYmAdd(ym, 1); draw(); } });
   document.getElementById("trMonthToday").addEventListener("click", function(){ ym = rg.dflt; draw(); });
+  var mHost = document.getElementById("trMonthly");
+  TR.monthRefresh = function(){ if (mHost && mHost.isConnected && document.getElementById("trMonthly") === mHost) draw(); };
   draw();
   return { refresh: draw };
 }
