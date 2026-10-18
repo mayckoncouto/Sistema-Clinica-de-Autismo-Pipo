@@ -120,6 +120,7 @@
     { key: "lista", label: "Lista de Atendimentos" },
     { key: "elegibilidade", label: "Elegibilidade" },
     { key: "planner-fora-horario", label: "Planner Fora do Horário do Paciente" },
+    { key: "planner-sem-horario", label: "Planner Sem Horário de Atendimento" },
     { key: "produtividade", label: "Produtividade por Profissional" },
     { key: "frequencia", label: "Frequência por Paciente" },
     { key: "convenios", label: "Atendimentos por Convênio" },

@@ -23677,6 +23677,7 @@ var RP_TYPES = [
   {id: "tratamentos",     name: "Tratamentos Novos e Renegociados", desc: "Tratamentos iniciados e encerrados no período, com valores (Novo × Renegociado).", filters: []},
   {id: "evolucao-habilidade", name: "Evolução por Habilidade",   desc: "Planos Terapêuticos vigentes: objetivos por paciente e habilidade, % atingidos e atingidos no período.", filters: ["paciente"]},
   {id: "planner-fora-horario", name: "Planner Fora do Horário do Paciente", desc: "Pacientes agendados no Planner (4 semanas) fora do Horário de Atendimento do tratamento. Não usa o período.", filters: ["paciente"], noPeriod: true},
+  {id: "planner-sem-horario", name: "Planner Sem Horário de Atendimento", desc: "Pacientes com tratamento ativo e Horário de Atendimento preenchido que não têm agendamento no Planner (4 semanas) nos dias e horários cadastrados. Não usa o período.", filters: ["paciente"], noPeriod: true},
   {id: "financeiro",      name: "Relatório Financeiro",               desc: "Uma linha por mês: tratamentos ativos, novos, renegociados, cancelados, receita prevista e ticket médio; lista dos ativos com valor.", filters: []}
 ];
 var RP = {last: null};
@@ -23842,6 +23843,50 @@ var RP_BUILDERS = {
       sections: [{title: out.length + (out.length === 1 ? " Agendamento" : " Agendamentos") + " Fora do Horário (Clique para Abrir no Planner)", goKey: true,
         head: ["Paciente", "Semana", "Dia", "Hora", "Sala", "Profissional", "Especialidade", "Horário do Paciente", "Motivo"],
         rows: out.map(function(r){ return [r.nome, r.week + "ª", r.dia, r.hora, r.sala, r.prof, r.esp, r.hor, r.motivo]; })}]};
+  },
+  // Não usa os atendimentos da Agenda: lê o Planner (4 semanas) e, para cada paciente ativo com tratamento ativo e
+  // Horário de Atendimento preenchido, lista os dias/semanas em que ele não tem agendamento de sala dentro da faixa.
+  "planner-sem-horario": function(rows, o, recIds, all){
+    all = all || {};
+    var byPat = {};
+    Object.keys(all).forEach(function(docId){
+      var bk = all[docId] || {};
+      Object.keys(bk).forEach(function(k){
+        var rec = bk[k];
+        if (!rec || !rec.patient || bookingKind(rec)) return;
+        var kp = k.split("|"), room = findRoom(kp[1]);
+        if (!room || isGroup(room)) return;
+        var pat = findPatientByName(rec); if (!pat) return;
+        (byPat[pat.id] = byPat[pat.id] || {})[docId] = (byPat[pat.id][docId] || []).concat(kp[0]);
+      });
+    });
+    var out = [], nPac = 0, nSemHor = 0;
+    state.patients.slice().forEach(function(pat){
+      if (!isActive(pat) || !activeTreatment(pat.id)) return;
+      if (!pat.horarios){ nSemHor++; return; }
+      if (o.pac && normText(pat.nome).indexOf(o.pac) === -1) return;
+      var had = false;
+      ALL_WEEKDAYS.forEach(function(d, di){
+        var h = pat.horarios[d.key]; if (!h || !h.ativo) return;
+        var faixas = [h.manha, h.tarde].filter(function(x){ return x && x.inicio && x.fim; });
+        if (!faixas.length) return;
+        var txt = faixas.map(function(x){ return x.inicio + "–" + x.fim; }).join(" e ");
+        for (var w = 1; w <= 4; w++){
+          var times = ((byPat[pat.id] || {})[d.key + "-" + w]) || [];
+          if (times.some(function(t){ return patientSlotOk(pat, d.key, t); })) continue;
+          had = true;
+          out.push({nome: pat.nome, week: w, dayIdx: di, dia: d.full, hor: txt,
+            sit: times.length ? "Agendado só fora do horário (" + times.sort().join(", ") + ")" : "Sem agendamento no dia"});
+        }
+      });
+      if (had) nPac++;
+    });
+    out.sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR") || a.week - b.week || a.dayIdx - b.dayIdx; });
+    return {note: "Planner de verdade, 4 semanas. Compara cada paciente ativo com tratamento ativo e Horário de Atendimento preenchido: um dia/semana entra quando não há agendamento de sala dentro da faixa cadastrada" +
+        (nSemHor ? " (" + nSemHor + (nSemHor === 1 ? " paciente sem horário preenchido ficou fora da conta)" : " pacientes sem horário preenchido ficaram fora da conta)") : "") + ". O período acima não é usado.",
+      sections: [{title: out.length + (out.length === 1 ? " Dia/Semana" : " Dias/Semanas") + " Sem Agendamento · " + nPac + (nPac === 1 ? " Paciente" : " Pacientes") + " (Clique para Abrir no Planner)", goKey: true,
+        head: ["Paciente", "Semana", "Dia", "Horário do Paciente", "Situação"],
+        rows: out.map(function(r){ return [r.nome, r.week + "ª", r.dia, r.hor, r.sit]; })}]};
   },
   // Não usa os atendimentos: lê os planos terapêuticos vigentes (PLAN.rows, carregados antes).
   "evolucao-habilidade": function(rows, o){
@@ -28202,6 +28247,7 @@ var HELP_TOPICS = [
       "<b>Relatório Financeiro</b>: uma linha por mês do período com tratamentos ativos (que valeram em algum dia do mês), novos, renegociados, cancelados, receita prevista (soma do valor final mensal dos ativos) e ticket médio (receita ÷ ativos), com a linha de totais; embaixo, a lista dos tratamentos ativos no período com o valor do mês, os meses no período e o total.",
       "<b>Lista de Atendimentos</b> e <b>Produtividade</b> contam também Reunião Clínica e Treinamento (com status); Bloqueado nunca conta. Na Produtividade eles entram em Agendados e seguem o status como os demais. Os demais relatórios são de pacientes e não os incluem.",
       "<b>Planner Fora do Horário do Paciente</b>: lê o Planner (as 4 semanas) e lista os pacientes agendados em sala fora do Horário de Atendimento do tratamento (dia não disponível ou fora da faixa), com semana, dia, hora, sala, profissional, especialidade e o horário do paciente. Só entra paciente com horário preenchido; o período não é usado. Clicar numa linha dos agendamentos abre o Planner naquele dia e semana, com o paciente em destaque na busca. Filtros: profissional e paciente.",
+      "<b>Planner Sem Horário de Atendimento</b>: lê o Planner (as 4 semanas) e lista, para cada paciente ativo com tratamento ativo e Horário de Atendimento preenchido, os dias e semanas em que ele não tem nenhum agendamento de sala dentro da faixa cadastrada (ou só tem fora dela). O período não é usado; clicar numa linha abre o Planner naquele dia e semana. Filtro: paciente.",
       "Convênio, plano e sessões vêm do tratamento que valia na data de cada atendimento.",
       "Cada nível vê só os tipos liberados; o Profissional vê só os próprios atendimentos."
     ],
