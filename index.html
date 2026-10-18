@@ -2037,6 +2037,11 @@ input[readonly]:not(.dp-in):focus,textarea[readonly]:focus{outline:none;box-shad
 .modal .btn.add-row-btn:hover{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .therapist-row .dp-combo{flex:1}
 .an-cond-row > *:not(.rm){flex:1 1 0;min-width:0}
+.an-cols{display:grid;grid-template-columns:repeat(var(--n,2),minmax(0,1fr));gap:0 14px}
+.an-col{min-width:0}
+@media (max-width:760px){.an-cols{grid-template-columns:1fr}}
+.an-colbox{display:flex;flex-direction:column;gap:8px;min-width:0;border:1px dashed var(--line);border-radius:9px;padding:8px;min-height:64px}
+.an-colbox.an-drop-col{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-weak)}
 .an-q[draggable=true]{cursor:grab}
 .an-q.an-dragging{opacity:.45}
 .an-q.an-drop-top{outline:2px dashed var(--accent);outline-offset:-2px;box-shadow:0 -3px 0 var(--accent)}
@@ -26500,7 +26505,7 @@ var HELP_TOPICS = [
   {id: "tipos-anamnese", group: "Prontuário", title: "Modelos de Anamnese", mod: "tipos_anamnese", tab: "tiposanam",
     purpose: "Cria os modelos de formulário usados nas anamneses: você monta as perguntas uma vez e depois preenche o modelo para cada paciente.",
     steps: ["Prontuário ▾ → <b>Anamneses</b> → <b>Outras Opções ▾</b> → <b>Modelos</b> → <b>+ Incluir</b>: nome, descrição e <b>Validade</b> (3 Meses, 6 Meses ou 1 Ano: tempo até a anamnese precisar ser refeita).",
-      "Em <b>Perguntas</b>, escolha <b>+ Adicionar Pergunta…</b> e o tipo: Texto Curto, Texto Longo, Número, Data, Hora, Escolha Única, Múltipla Escolha, Sim ou Não, Escala, Arquivo ou Assinatura. Para organizar, use Título de Seção (numerado sozinho: 1., 2., 3. pela ordem, no formulário, na prévia e na impressão; não digite o número), Texto Explicativo, Separador e Nova Página.",
+      "Em <b>Perguntas</b>, escolha <b>+ Adicionar Pergunta…</b> e o tipo: Texto Curto, Texto Longo, Número, Data, Hora, Escolha Única, Múltipla Escolha, Sim ou Não, Escala, Arquivo ou Assinatura. Para organizar, use Colunas (2 a 4 colunas lado a lado: em cada coluna você inclui perguntas com “+ Pergunta na Coluna…” ou arrasta perguntas de uma coluna para outra; serve para montar linhas de tabela como Manhã | Tarde, e Duplicar repete o quadro para outro dia), Título de Seção (numerado sozinho: 1., 2., 3. pela ordem, no formulário, na prévia e na impressão; não digite o número), Texto Explicativo, Separador e Nova Página.",
       "Cada pergunta é um quadro que pode ser arrastado com o mouse (ou usar ▲ ▼) para mudar a ordem, com <b>Editar</b>, <b>Duplicar</b> e <b>Remover</b>. <b>Editar</b> abre a janela da pergunta: <b>tipo</b> (pode ser trocado; as condições de outras perguntas que usavam esta saem), texto, texto de apoio, <b>Resposta Obrigatória</b>, opções (uma por linha), valores da escala e <b>Preencher com o Cadastro do Paciente</b>.",
       "Em <b>Lógica Condicional</b>, escolha <b>Mostrar esta pergunta só se</b> ou <b>Ocultar esta pergunta se</b> e inclua uma ou mais condições com <b>+ Incluir Condição</b>: pergunta anterior, comparação (for igual a, for diferente de, contiver, não contiver, for maior que, for menor que, estiver preenchida, estiver vazia) e valor. Com 2 ou mais condições, escolha se <b>todas</b> (E) ou <b>qualquer uma</b> (OU) precisam valer.",
       "<b>Prévia</b> mostra como o formulário aparece para quem preenche. <b>Duplicar Modelo</b> cria uma cópia para você ajustar."],
@@ -31026,6 +31031,7 @@ var ANAM_KINDS = [
   {k: "secao", label: "Título de Seção"},
   {k: "bloco", label: "Texto Explicativo"},
   {k: "separador", label: "Separador"},
+  {k: "colunas", label: "Colunas"},
   {k: "pagina", label: "Nova Página"}
 ];
 // Dados do cadastro do paciente que podem vir preenchidos numa pergunta (a leitura do cadastro entra com o preenchimento da anamnese).
@@ -31094,11 +31100,31 @@ function anamEsc(s){ return esc(s == null ? "" : s); }
 function anamSecClean(t){ return String(t == null ? "" : t).replace(/^\s*\d+\s*[.)\-–]\s*/, ""); }
 function anamSecNums(qs){ var m = {}, n = 0; (qs || []).forEach(function(q){ if (q.tipo === "secao") m[q.id] = ++n; }); return m; }
 function anamSecTitle(q, nums){ return (nums[q.id] ? nums[q.id] + ". " : "") + (anamSecClean(q.titulo) || "Seção"); }
+// Colunas: o item "colunas" (n = 2 a 4) agrupa perguntas que têm grupo = id dele e coluna = 0..n-1 (lista continua plana).
+function anamUnits(qs){
+  var blocks = {}, kids = {}, units = [];
+  (qs || []).forEach(function(q){ if (q.tipo === "colunas"){ blocks[q.id] = q; q.n = Math.max(2, Math.min(4, +q.n || 2)); } });
+  (qs || []).forEach(function(q){
+    if (q.grupo && blocks[q.grupo]){ var b = blocks[q.grupo]; q.coluna = Math.max(0, Math.min(b.n - 1, +q.coluna || 0)); (kids[b.id] = kids[b.id] || []).push(q); }
+  });
+  (qs || []).forEach(function(q){
+    if (q.grupo && blocks[q.grupo]) return;
+    delete q.grupo; delete q.coluna;
+    var u = [q];
+    if (q.tipo === "colunas"){ var ks = kids[q.id] || []; for (var c = 0; c < q.n; c++) ks.forEach(function(k){ if (k.coluna === c) u.push(k); }); }
+    units.push(u);
+  });
+  return units;
+}
+function anamFlatten(units){ var out = []; units.forEach(function(u){ u.forEach(function(q){ out.push(q); }); }); return out; }
+function anamNormalize(qs){ var flat = anamFlatten(anamUnits(qs)); qs.splice.apply(qs, [0, qs.length].concat(flat)); return qs; }
+function anamIsKid(q, blocks){ return !!(q.grupo && blocks[q.grupo]); }
+function anamBlocksOf(qs){ var m = {}; (qs || []).forEach(function(q){ if (q.tipo === "colunas") m[q.id] = q; }); return m; }
 // Formulário (prévia e preenchimento). opts: {readonly, preview}. answers: {idPergunta: valor}.
 function anamFormHtml(qs, ans, opts){
   opts = opts || {}; ans = ans || {};
-  var dis = opts.readonly ? " disabled" : "", page = 1, secN = anamSecNums(qs);
-  return (qs || []).map(function(q){
+  var dis = opts.readonly ? " disabled" : "", page = 1, secN = anamSecNums(qs), blocks = anamBlocksOf(qs);
+  function one(q){
     var id = "anq-" + q.id, v = ans[q.id], lab = anamEsc(q.titulo) + (q.obrigatoria && anamIsQ(q) ? ' <span class="req">*</span>' : "");
     var hint = q.ajuda ? '<div class="pat-count" style="margin:2px 0 6px;font-weight:500">' + anamEsc(q.ajuda) + '</div>' : "";
     var head = '<div class="field an-qf" data-qid="' + anamEsc(q.id) + '">';
@@ -31134,6 +31160,12 @@ function anamFormHtml(qs, ans, opts){
         (opts.readonly ? "" : '<button type="button" class="btn ghost" data-sign-clear="' + anamEsc(q.id) + '" style="margin-top:6px">Limpar Assinatura</button>') + '</div>';
     }
     return "";
+  }
+  return (qs || []).filter(function(q){ return !anamIsKid(q, blocks); }).map(function(q){
+    if (q.tipo !== "colunas") return one(q);
+    var n = Math.max(2, Math.min(4, +q.n || 2)), cols = "";
+    for (var c = 0; c < n; c++) cols += '<div class="an-col">' + (qs || []).filter(function(k){ return k.grupo === q.id && (+k.coluna || 0) === c; }).map(one).join("") + '</div>';
+    return (q.titulo ? '<div class="pat-count" style="font-weight:600;margin:10px 0 2px">' + anamEsc(q.titulo) + '</div>' : "") + '<div class="an-cols" style="--n:' + n + '">' + cols + '</div>';
   }).join("");
 }
 // Liga o formulário: mostra/esconde perguntas condicionais, destaca opções marcadas e desenha a assinatura.
@@ -31205,6 +31237,7 @@ function anamNewQ(tipo){
   var q = {id: uid("aq"), tipo: tipo, titulo: "", ajuda: "", obrigatoria: false};
   if (tipo === "escolha" || tipo === "multipla") q.opcoes = [{id: uid("ao"), label: "Opção 1"}, {id: uid("ao"), label: "Opção 2"}];
   if (tipo === "escala"){ q.min = 1; q.max = 5; q.rotMin = ""; q.rotMax = ""; }
+  if (tipo === "colunas") q.n = 2;
   return q;
 }
 function anamCopyQs(qs){ return JSON.parse(JSON.stringify(qs || [])); }
@@ -31212,7 +31245,7 @@ function anamCopyQs(qs){ return JSON.parse(JSON.stringify(qs || [])); }
 function anamCloneQs(qs){
   var map = {}, out = anamCopyQs(qs);
   out.forEach(function(q){ var n = uid("aq"); map[q.id] = n; q.id = n; (q.opcoes || []).forEach(function(o){ o.id = uid("ao"); }); });
-  out.forEach(function(q){ anamCondRemap(q, map); });
+  out.forEach(function(q){ anamCondRemap(q, map); if (q.grupo) q.grupo = map[q.grupo] || ""; });
   return out;
 }
 
@@ -31264,6 +31297,24 @@ function anamCondProblem(q, qs){
   }
   return "";
 }
+// Janela do item Colunas: título (opcional) e quantas colunas lado a lado.
+function openAnamColsModal(ctx){
+  var q = anamCopyQs([ctx.q])[0], host = regQuickHost(), dis = ctx.canSave ? "" : " disabled";
+  function $(id){ return document.getElementById(id); }
+  var wrap = document.createElement("div");
+  wrap.innerHTML = '<div class="overlay confirm-overlay" id="ovAnCols" role="dialog" aria-modal="true"><div class="modal" style="max-width:480px">' +
+    '<div class="modal-head"><div><h3>' + (ctx.canSave ? "Editar Colunas" : "Colunas") + '</h3><div class="modal-sub">Perguntas lado a lado, como uma linha de tabela.</div></div><button class="modal-close" id="acX" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="tr-sec tr-sec-top">Colunas</div>' +
+    '<div class="field"><label for="acTit">Título (Opcional)</label><input type="text" id="acTit" placeholder="Ex.: Segunda-feira" value="' + esc(q.titulo || "") + '"' + dis + '></div>' +
+    '<div class="field"><label for="acN">Número de Colunas</label><select id="acN"' + dis + '>' + [2, 3, 4].map(function(n){ return '<option value="' + n + '"' + (n === (+q.n || 2) ? " selected" : "") + '>' + n + '</option>'; }).join("") + '</select></div>' +
+    '</div><div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="acCancel">' + (ctx.canSave ? "Cancelar" : "Fechar") + '</button>' + (ctx.canSave ? '<button class="btn primary" id="acSave">Salvar</button>' : '') + '</div></div></div>';
+  var ov = wrap.firstChild; host.appendChild(ov);
+  function close(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  $("acX").addEventListener("click", close); $("acCancel").addEventListener("click", close);
+  if (typeof dpScan === "function") dpScan(ov);
+  if ($("acSave")) $("acSave").addEventListener("click", function(){ q.titulo = $("acTit").value.trim(); q.n = +$("acN").value || 2; close(); ctx.onSave(q); });
+}
 // Troca o tipo de uma pergunta mantendo texto, apoio e condições; o que não serve ao tipo novo sai.
 function anamConvertQ(q, tipo){
   var n = anamCopyQs([q])[0], k = anamKind(tipo); n.tipo = tipo;
@@ -31307,7 +31358,7 @@ function openAnamQuestionModal(ctx){
     '<div class="modal-head"><div><h3>' + (ctx.isNew ? "Incluir Pergunta" : (canSave ? "Editar Pergunta" : "Pergunta")) + '</h3><div class="modal-sub">' + esc(qKindLabel(q)) + '</div></div>' +
       '<button class="modal-close" id="aqX" aria-label="Fechar">✕</button></div><div class="modal-body">' +
     '<div class="tr-sec tr-sec-top">Pergunta</div>' +
-    '<div class="field"><label for="aqTipo">Tipo</label><select id="aqTipo"' + dis + '>' + ANAM_KINDS.filter(function(x){ return x.k !== "separador" && x.k !== "pagina"; }).map(function(x){ return opt(x.k, x.label, q.tipo); }).join("") + '</select></div>' +
+    '<div class="field"><label for="aqTipo">Tipo</label><select id="aqTipo"' + dis + '>' + ANAM_KINDS.filter(function(x){ return x.k !== "separador" && x.k !== "pagina" && x.k !== "colunas"; }).map(function(x){ return opt(x.k, x.label, q.tipo); }).join("") + '</select></div>' +
     (q.tipo === "bloco" ? '<div class="field"><label for="aqTit">Texto</label><textarea id="aqTit" rows="3" placeholder="' + esc(titlePh()) + '"' + dis + '>' + esc(q.titulo || "") + '</textarea></div>'
       : '<div class="field"><label for="aqTit">' + (q.tipo === "secao" ? "Título" : "Pergunta") + '</label><input type="text" id="aqTit" placeholder="' + esc(titlePh()) + '" value="' + esc(q.titulo || "") + '"' + dis + '></div>') +
     (isQ ? '<div class="field"><label for="aqAjuda">Texto de Apoio</label><input type="text" id="aqAjuda" placeholder="Orientação que aparece embaixo da pergunta" value="' + esc(q.ajuda || "") + '"' + dis + '></div>' +
@@ -31438,6 +31489,13 @@ function openAnamTypeModal(item, opts){
   $("anCancel").addEventListener("click", close);
 
   function qLabel(q){ var k = anamKind(q.tipo); return k ? k.label : q.tipo; }
+  function canMv(q, dir){
+    var sib = q.grupo ? qs.filter(function(x){ return x.grupo === q.grupo && x.coluna === q.coluna; }) : qs.filter(function(x){ return !x.grupo; });
+    return !!sib[sib.indexOf(q) + dir];
+  }
+  function ctrlHtml(q){
+    return (canSave ? '<div class="move-col"><button type="button" data-mv="-1" aria-label="Subir"' + (canMv(q, -1) ? "" : " disabled") + '>▲</button><button type="button" data-mv="1" aria-label="Descer"' + (canMv(q, 1) ? "" : " disabled") + '>▼</button></div>' : '');
+  }
   function cardHtml(q, i){
     var k = anamKind(q.tipo), simple = q.tipo === "separador" || q.tipo === "pagina";
     var title = simple ? (q.tipo === "pagina" ? "Nova Página" : "Separador") : (q.tipo === "secao" ? anamSecTitle(q, anamSecNums(qs)) : (q.titulo || "(Sem Texto)"));
@@ -31445,17 +31503,33 @@ function openAnamTypeModal(item, opts){
     if (anamIsQ(q) && q.obrigatoria) sub.push("Obrigatória");
     if (k && k.opts) sub.push((q.opcoes || []).length + " opções");
     var ct = anamCondText(q, qs); if (ct) sub.push(ct);
-    return '<div class="room-row tl-row an-q" data-qi="' + i + '"' + (canSave ? ' draggable="true" title="Arraste para mudar a ordem"' : '') + '>' +
-      (canSave ? '<div class="move-col"><button type="button" data-mv="-1" aria-label="Subir"' + (i === 0 ? " disabled" : "") + '>▲</button><button type="button" data-mv="1" aria-label="Descer"' + (i === qs.length - 1 ? " disabled" : "") + '>▼</button></div>' : '') +
+    return '<div class="room-row tl-row an-q" data-qi="' + i + '"' + (canSave ? ' draggable="true" title="Arraste para mudar a ordem"' : '') + '>' + ctrlHtml(q) +
       '<div class="room-info"><div class="rn">' + (simple || q.tipo === "secao" ? "" : (i + 1) + ". ") + esc(title) + '</div><div class="rs">' + esc(sub.join(" · ")) + '</div></div>' +
       (simple ? '' : '<button type="button" class="btn ghost" data-ed>' + (canSave ? "Editar" : "Ver") + '</button>') +
       (canSave ? '<button type="button" class="btn ghost" data-dup title="Duplicar pergunta">Duplicar</button><button type="button" class="btn danger" data-del title="Remover pergunta">Remover</button>' : '') +
     '</div>';
   }
+  function colKinds(){ return ANAM_KINDS.filter(function(k){ return k.k !== "colunas" && k.k !== "pagina" && k.k !== "secao"; }); }
+  function blockHtml(q, i){
+    var cols = "";
+    for (var c = 0; c < q.n; c++){
+      var kids = qs.filter(function(x){ return x.grupo === q.id && x.coluna === c; });
+      cols += '<div class="an-colbox" data-blk="' + esc(q.id) + '" data-col="' + c + '">' + kids.map(function(x){ return cardHtml(x, qs.indexOf(x)); }).join("") +
+        (kids.length ? "" : '<div class="pat-count" style="text-align:center">Coluna ' + (c + 1) + ' vazia</div>') +
+        (canSave ? '<select data-addcol="' + esc(q.id) + '|' + c + '"><option value="">+ Pergunta na Coluna ' + (c + 1) + '…</option>' + colKinds().map(function(k){ return '<option value="' + k.k + '">' + esc(k.label) + '</option>'; }).join("") + '</select>' : '') + '</div>';
+    }
+    return '<div class="room-row tl-row an-q an-blk" data-qi="' + i + '" style="flex-direction:column;align-items:stretch"' + (canSave ? ' draggable="true" title="Arraste para mudar a ordem"' : '') + '>' +
+      '<div style="display:flex;align-items:center;gap:10px">' + ctrlHtml(q) +
+      '<div class="room-info"><div class="rn">Colunas' + (q.titulo ? " — " + esc(q.titulo) : "") + '</div><div class="rs">' + q.n + ' colunas lado a lado · arraste as perguntas entre as colunas</div></div>' +
+      '<button type="button" class="btn ghost" data-ed>' + (canSave ? "Editar" : "Ver") + '</button>' +
+      (canSave ? '<button type="button" class="btn ghost" data-dup title="Duplicar colunas e perguntas">Duplicar</button><button type="button" class="btn danger" data-del title="Remover colunas e perguntas">Remover</button>' : '') + '</div>' +
+      '<div class="an-cols" style="--n:' + q.n + ';gap:10px;margin-top:8px">' + cols + '</div></div>';
+  }
   function draw(){
     if (!$("anBuild")) return;
+    anamNormalize(qs);
     var addOpts = ANAM_KINDS.map(function(k){ return '<option value="' + k.k + '">' + esc(k.label) + '</option>'; }).join("");
-    $("anBuild").innerHTML = (qs.length ? '<div class="room-list" style="padding:0">' + qs.map(cardHtml).join("") + '</div>' : '<div class="pat-count" style="padding:8px 2px">Nenhuma pergunta ainda. Escolha um tipo abaixo para começar.</div>') +
+    $("anBuild").innerHTML = (qs.length ? '<div class="room-list" style="padding:0">' + qs.filter(function(q){ return !q.grupo; }).map(function(q){ return q.tipo === "colunas" ? blockHtml(q, qs.indexOf(q)) : cardHtml(q, qs.indexOf(q)); }).join("") + '</div>' : '<div class="pat-count" style="padding:8px 2px">Nenhuma pergunta ainda. Escolha um tipo abaixo para começar.</div>') +
       (canSave ? '<div class="field" style="margin-top:10px;max-width:340px"><select id="anAdd"><option value="">+ Adicionar Pergunta…</option>' + addOpts + '</select></div>' : '');
     if (typeof dpScan === "function") dpScan($("anBuild"));
   }
@@ -31474,54 +31548,127 @@ function openAnamTypeModal(item, opts){
     if (mode === "previa") drawPrev();
   });
   function qOf(el){ var c = el.closest(".an-q"); return c ? qs[+c.getAttribute("data-qi")] : null; }
-  // Arrastar os quadros para mudar a ordem (segurando com o mouse).
+  // Arrastar os quadros para mudar a ordem (segurando com o mouse); dá para soltar dentro de uma coluna.
   var dragFrom = -1;
-  function dropClear(){ Array.prototype.forEach.call($("anBuild").querySelectorAll(".an-dragging,.an-drop-top,.an-drop-bottom"), function(c){ c.classList.remove("an-dragging", "an-drop-top", "an-drop-bottom"); }); }
+  function dropClear(){ Array.prototype.forEach.call($("anBuild").querySelectorAll(".an-dragging,.an-drop-top,.an-drop-bottom,.an-drop-col"), function(c){ c.classList.remove("an-dragging", "an-drop-top", "an-drop-bottom", "an-drop-col"); }); }
+  function removeFromUnits(units, item){
+    var removed = null;
+    return {units: units.filter(function(u){ if (u[0] === item){ removed = u; return false; } return true; }).map(function(u){ var k = u.indexOf(item); if (k > 0) u.splice(k, 1); return u; }), removed: removed};
+  }
+  function moveNear(from, tIdx, after){
+    var item = qs[from], tgt = qs[tIdx]; if (!item || !tgt || item === tgt) return;
+    var isBlk = item.tipo === "colunas", r = removeFromUnits(anamUnits(qs), item), units = r.units, ru = r.removed || [item];
+    var ti;
+    if (tgt.grupo){
+      ti = units.findIndex(function(u){ return u[0].id === tgt.grupo; }); if (ti < 0) return;
+      if (isBlk){ units.splice(after ? ti + 1 : ti, 0, ru); }
+      else { item.grupo = tgt.grupo; item.coluna = tgt.coluna; var u = units[ti], pos = u.indexOf(tgt); u.splice(after ? pos + 1 : pos, 0, item); }
+    } else {
+      ti = units.findIndex(function(u){ return u[0] === tgt; }); if (ti < 0) return;
+      if (!isBlk){ delete item.grupo; delete item.coluna; ru = [item]; }
+      units.splice(after ? ti + 1 : ti, 0, ru);
+    }
+    qs.splice.apply(qs, [0, qs.length].concat(anamFlatten(units))); anamNormalize(qs); anamCondFixOrder(qs); draw();
+  }
+  function moveToCol(from, blkId, col){
+    var item = qs[from]; if (!item || item.tipo === "colunas") return;
+    var r = removeFromUnits(anamUnits(qs), item), u = r.units.filter(function(x){ return x[0].id === blkId; })[0]; if (!u) return;
+    item.grupo = blkId; item.coluna = col; u.push(item);
+    qs.splice.apply(qs, [0, qs.length].concat(anamFlatten(r.units))); anamNormalize(qs); anamCondFixOrder(qs); draw();
+  }
   $("anBuild").addEventListener("dragstart", function(e){
     var c = e.target.closest && e.target.closest(".an-q"); if (!c || !canSave) return;
     dragFrom = +c.getAttribute("data-qi");
     try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(dragFrom)); } catch (x) {}
     setTimeout(function(){ c.classList.add("an-dragging"); }, 0);
   });
+  function dropTarget(e){
+    var c = e.target.closest && e.target.closest(".an-q"), cb = e.target.closest && e.target.closest(".an-colbox");
+    if (cb && c && c.classList.contains("an-blk")) return {col: cb};
+    if (c) return {card: c};
+    return null;
+  }
   $("anBuild").addEventListener("dragover", function(e){
-    var c = e.target.closest && e.target.closest(".an-q"); if (!c || dragFrom < 0) return;
+    if (dragFrom < 0) return;
+    var t = dropTarget(e); if (!t) return;
+    var item = qs[dragFrom];
+    if (t.col && item && item.tipo === "colunas") return;
     e.preventDefault();
-    var r = c.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
-    Array.prototype.forEach.call($("anBuild").querySelectorAll(".an-drop-top,.an-drop-bottom"), function(x){ x.classList.remove("an-drop-top", "an-drop-bottom"); });
-    c.classList.add(after ? "an-drop-bottom" : "an-drop-top");
+    Array.prototype.forEach.call($("anBuild").querySelectorAll(".an-drop-top,.an-drop-bottom,.an-drop-col"), function(x){ x.classList.remove("an-drop-top", "an-drop-bottom", "an-drop-col"); });
+    if (t.col){ t.col.classList.add("an-drop-col"); return; }
+    var r = t.card.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+    t.card.classList.add(after ? "an-drop-bottom" : "an-drop-top");
   });
   $("anBuild").addEventListener("drop", function(e){
-    var c = e.target.closest && e.target.closest(".an-q"); if (!c || dragFrom < 0) return;
+    if (dragFrom < 0) return;
+    var t = dropTarget(e); if (!t) return;
     e.preventDefault();
-    var r = c.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2, to = +c.getAttribute("data-qi") + (after ? 1 : 0), from = dragFrom;
-    dragFrom = -1; dropClear();
-    if (to === from || to === from + 1) return;
-    var item = qs.splice(from, 1)[0]; qs.splice(to > from ? to - 1 : to, 0, item);
-    anamCondFixOrder(qs); draw();
+    var from = dragFrom; dragFrom = -1; dropClear();
+    if (t.col){ moveToCol(from, t.col.getAttribute("data-blk"), +t.col.getAttribute("data-col")); return; }
+    var r = t.card.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+    moveNear(from, +t.card.getAttribute("data-qi"), after);
   });
   $("anBuild").addEventListener("dragend", function(){ dragFrom = -1; dropClear(); });
   $("anBuild").addEventListener("change", function(e){
     var t = e.target;
+    var ac = t.getAttribute && t.getAttribute("data-addcol");
+    if (ac && t.value){
+      var parts = ac.split("|"), kind = t.value; t.value = "";
+      var nq = anamNewQ(kind), blk = qs.filter(function(x){ return x.id === parts[0]; })[0]; if (!blk) return;
+      var place = function(o){ o.grupo = blk.id; o.coluna = +parts[1]; qs.push(o); draw(); };
+      if (kind === "separador") place(nq);
+      else openAnamQuestionModal({q: nq, index: qs.length, qs: qs, isNew: true, canSave: canSave, onSave: place});
+      return;
+    }
     if (t.id !== "anAdd" || !t.value) return;
-    var q = anamNewQ(t.value), simple = t.value === "separador" || t.value === "pagina";
+    var q = anamNewQ(t.value), simple = t.value === "separador" || t.value === "pagina" || t.value === "colunas";
     t.value = "";
     if (simple){ qs.push(q); draw(); return; }
     openAnamQuestionModal({q: q, index: qs.length, qs: qs, isNew: true, canSave: canSave, onSave: function(o){ qs.push(o); draw(); }});
   });
+  function moveItem(q, dir){
+    if (q.grupo){
+      var sib = qs.filter(function(x){ return x.grupo === q.grupo && x.coluna === q.coluna; }), o = sib[sib.indexOf(q) + dir]; if (!o) return;
+      var a = qs.indexOf(q), b = qs.indexOf(o); qs[a] = o; qs[b] = q;
+    } else {
+      var units = anamUnits(qs), p = units.findIndex(function(u){ return u[0] === q; }), n = p + dir; if (n < 0 || n >= units.length) return;
+      var tmp = units[p]; units[p] = units[n]; units[n] = tmp;
+      qs.splice.apply(qs, [0, qs.length].concat(anamFlatten(units)));
+    }
+    anamNormalize(qs); anamCondFixOrder(qs);
+  }
+  function removeOne(q){
+    var ids = {}; ids[q.id] = 1;
+    if (q.tipo === "colunas") qs.forEach(function(x){ if (x.grupo === q.id) ids[x.id] = 1; });
+    var left = qs.filter(function(x){ return !ids[x.id]; });
+    qs.splice.apply(qs, [0, qs.length].concat(left));
+    var keep = {}; qs.forEach(function(x){ keep[x.id] = x.id; });
+    qs.forEach(function(x){ anamCondRemap(x, keep); });
+    draw();
+  }
   $("anBuild").addEventListener("click", function(e){
     var q = qOf(e.target); if (!q) return;
     var i = qs.indexOf(q);
     if (e.target.closest("[data-ed]")){
+      if (q.tipo === "colunas"){ openAnamColsModal({q: q, canSave: canSave, onSave: function(o){ qs[i] = o; draw(); }}); return; }
       openAnamQuestionModal({q: q, index: i, qs: qs, isNew: false, canSave: canSave, onSave: function(o){ qs[i] = o; draw(); }}); return;
     }
     var mv = e.target.closest("[data-mv]");
-    if (mv){ var j = i + (+mv.getAttribute("data-mv")); if (j < 0 || j >= qs.length) return; qs.splice(j, 0, qs.splice(i, 1)[0]); anamCondFixOrder(qs); draw(); return; }
-    if (e.target.closest("[data-dup]")){ var cp = anamCopyQs([q])[0]; cp.id = uid("aq"); (cp.opcoes || []).forEach(function(o){ o.id = uid("ao"); }); qs.splice(i + 1, 0, cp); draw(); return; }
+    if (mv){ moveItem(q, +mv.getAttribute("data-mv")); draw(); return; }
+    if (e.target.closest("[data-dup]")){
+      if (q.tipo === "colunas"){
+        var units = anamUnits(qs), ui = units.findIndex(function(u){ return u[0] === q; }), cps = anamCopyQs(units[ui]), nb = uid("aq");
+        cps.forEach(function(c, ix){ c.id = ix === 0 ? nb : uid("aq"); (c.opcoes || []).forEach(function(o){ o.id = uid("ao"); }); delete c.cond; if (ix > 0) c.grupo = nb; });
+        units.splice(ui + 1, 0, cps); qs.splice.apply(qs, [0, qs.length].concat(anamFlatten(units))); draw(); return;
+      }
+      var cp = anamCopyQs([q])[0]; cp.id = uid("aq"); (cp.opcoes || []).forEach(function(o){ o.id = uid("ao"); }); qs.splice(i + 1, 0, cp); draw(); return;
+    }
     if (e.target.closest("[data-del]")){
-      qs.splice(i, 1);
-      var keep = {}; qs.forEach(function(x){ keep[x.id] = x.id; });
-      qs.forEach(function(x){ anamCondRemap(x, keep); });
-      draw();
+      if (q.tipo === "colunas" && qs.some(function(x){ return x.grupo === q.id; })){
+        confirmDialog({title: "Remover Colunas", message: "Remover estas colunas e as perguntas dentro delas?", confirmLabel: "Remover"}).then(function(ok){ if (ok) removeOne(q); });
+        return;
+      }
+      removeOne(q);
     }
   });
   setTimeout(function(){ var n = $("anName"); if (canSave && n) n.focus(); }, 30);
@@ -31541,13 +31688,13 @@ function openAnamTypeModal(item, opts){
     if (!qs.some(anamIsQ)){ showToast("Adicione pelo menos uma pergunta.", true); return; }
     for (var i = 0; i < qs.length; i++){
       var q = qs[i], k = anamKind(q.tipo);
-      if (q.tipo !== "separador" && q.tipo !== "pagina" && !String(q.titulo || "").trim()){ showToast("A pergunta " + (i + 1) + " (" + k.label + ") está sem texto.", true); open[q.id] = true; draw(); return; }
+      if (q.tipo !== "separador" && q.tipo !== "pagina" && q.tipo !== "colunas" && !String(q.titulo || "").trim()){ showToast("A pergunta " + (i + 1) + " (" + k.label + ") está sem texto.", true); open[q.id] = true; draw(); return; }
       if (k.opts && (q.opcoes || []).length < 2){ showToast("A pergunta " + (i + 1) + " precisa de pelo menos 2 opções.", true); open[q.id] = true; draw(); return; }
       var cpb = anamCondProblem(q, qs); if (cpb){ showToast("Pergunta " + (i + 1) + ": " + cpb, true); return; }
     }
     var val = $("anVal").value.replace(/\D/g, "");
     var oldSig = item && !opts.copy ? JSON.stringify(item.perguntas || []) : "";
-    var rec = Object.assign({}, opts.copy ? {} : (item || {}), {name: name, descricao: $("anDesc").value.trim(), validadeMeses: val ? +val : "", perguntas: anamCopyQs(qs)});
+    var rec = Object.assign({}, opts.copy ? {} : (item || {}), {name: name, descricao: $("anDesc").value.trim(), validadeMeses: val ? +val : "", perguntas: anamCopyQs(anamNormalize(qs))});
     rec.versao = item && !opts.copy ? (item.versao || 1) + (oldSig === JSON.stringify(rec.perguntas) ? 0 : 1) : 1;
     if (isNew) rec.id = uid("anam");
     save(isNew ? list.concat([rec]) : list.map(function(t){ return t.id === rec.id ? rec : t; }), rec);
@@ -31854,23 +32001,30 @@ function anPrint(rec){
   var logo = (document.querySelector(".brand-mark") || {}).src || "", byId = anamById(rec.perguntas), ans = rec.answers || {};
   var body = '<header><div class="brand">' + (logo ? '<img src="' + logo + '" alt="">' : "") + '<div><div class="clinic">' + esc(clinicName()) + '</div><div class="rname">' + esc(rec.typeName || "Anamnese") + '</div></div></div>' +
     '<div class="sub">' + esc(rec.patientName || "") + ' · ' + esc(trBr(String(rec.data).slice(0, 10))) + ' · versão ' + (rec.versao || 1) + (rec.status === "concluida" ? "" : " · RASCUNHO") + '</div></header>';
-  var secN = anamSecNums(rec.perguntas);
+  var secN = anamSecNums(rec.perguntas), blocks = anamBlocksOf(rec.perguntas);
+  function pr(q){
+    if (anamIsQ(q) && !anamVisible(q, ans, byId)) return "";
+    if (q.tipo === "secao") return '<h3>' + esc(anamSecTitle(q, secN)) + '</h3>';
+    if (q.tipo === "bloco") return '<p class="note">' + esc(q.titulo) + '</p>';
+    if (q.tipo === "separador") return '<hr>';
+    if (q.tipo === "pagina") return '<div class="pb"></div>';
+    if (q.tipo === "assinatura") return '<div class="q"><b>' + esc(q.titulo) + '</b>' + (ans[q.id] ? '<div><img class="sign" src="' + esc(ans[q.id]) + '" alt="Assinatura"></div>' : '<div class="a">—</div>') + '</div>';
+    if (q.tipo === "arquivo") return '<div class="q"><b>' + esc(q.titulo) + '</b><div class="a">(arquivos anexados não saem na impressão)</div></div>';
+    return '<div class="q"><b>' + esc(q.titulo) + '</b><div class="a">' + (esc(anAnswerText(q, ans[q.id])).replace(/\n/g, "<br>") || "—") + '</div></div>';
+  }
   (rec.perguntas || []).forEach(function(q){
-    if (anamIsQ(q) && !anamVisible(q, ans, byId)) return;
-    if (q.tipo === "secao") body += '<h3>' + esc(anamSecTitle(q, secN)) + '</h3>';
-    else if (q.tipo === "bloco") body += '<p class="note">' + esc(q.titulo) + '</p>';
-    else if (q.tipo === "separador") body += '<hr>';
-    else if (q.tipo === "pagina") body += '<div class="pb"></div>';
-    else if (q.tipo === "assinatura") body += '<div class="q"><b>' + esc(q.titulo) + '</b>' + (ans[q.id] ? '<div><img class="sign" src="' + esc(ans[q.id]) + '" alt="Assinatura"></div>' : '<div class="a">—</div>') + '</div>';
-    else if (q.tipo === "arquivo") body += '<div class="q"><b>' + esc(q.titulo) + '</b><div class="a">(arquivos anexados não saem na impressão)</div></div>';
-    else body += '<div class="q"><b>' + esc(q.titulo) + '</b><div class="a">' + (esc(anAnswerText(q, ans[q.id])).replace(/\n/g, "<br>") || "—") + '</div></div>';
+    if (anamIsKid(q, blocks)) return;
+    if (q.tipo !== "colunas"){ body += pr(q); return; }
+    var n = Math.max(2, Math.min(4, +q.n || 2)), row = "";
+    for (var c = 0; c < n; c++) row += '<td>' + (rec.perguntas || []).filter(function(k){ return k.grupo === q.id && (+k.coluna || 0) === c; }).map(pr).join("") + '</td>';
+    body += (q.titulo ? '<p class="note" style="margin:8px 0 0"><b>' + esc(q.titulo) + '</b></p>' : '') + '<table class="cols"><tr>' + row + '</tr></table>';
   });
   if (rec.status === "concluida") body += '<p class="sub" style="margin-top:14px">Concluída em ' + esc(trBr(String(rec.doneAt || "").slice(0, 10))) + (rec.doneBy ? ' por ' + esc(rec.doneBy) : '') + '</p>';
   body += printSocialHtml();
   var css = "@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Inter,'Segoe UI',Arial,sans-serif;color:#1f2b29;margin:0;font-size:11.5px}" +
     "header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:2px solid #2f7a6d;padding-bottom:8px;margin-bottom:10px}.brand{display:flex;align-items:center;gap:10px}.brand img{width:38px;height:38px}" +
     ".clinic{font-size:16px;font-weight:800}.rname{font-size:13px;font-weight:700;color:#2f7a6d;margin-top:2px}.sub{font-size:10px;color:#5b6b68}h3{font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:#2f7a6d;margin:14px 0 4px;border-bottom:1px solid #e3e8e6;padding-bottom:3px}" +
-    ".q{margin:7px 0;page-break-inside:avoid}.a{margin-top:2px;white-space:pre-wrap}.note{color:#5b6b68}hr{border:0;border-top:1px solid #e3e8e6;margin:10px 0}.pb{page-break-after:always}.sign{max-width:260px;max-height:90px;border-bottom:1px solid #999}" + PRINT_SOC_CSS;
+    ".cols{width:100%;border-collapse:collapse;table-layout:fixed}.cols td{vertical-align:top;padding:0 8px 0 0}.q{margin:7px 0;page-break-inside:avoid}.a{margin-top:2px;white-space:pre-wrap}.note{color:#5b6b68}hr{border:0;border-top:1px solid #e3e8e6;margin:10px 0}.pb{page-break-after:always}.sign{max-width:260px;max-height:90px;border-bottom:1px solid #999}" + PRINT_SOC_CSS;
   demPrintFrame("Anamnese " + (rec.patientName || ""), css, body);
 }
 

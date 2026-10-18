@@ -1,0 +1,61 @@
+// Colunas no editor de modelo de anamnese. Dados fictícios.
+const { chromium } = require('playwright');
+const path = require('path');
+const fs = require('fs');
+(async () => {
+  const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
+  const i = src.indexOf('"use strict";');
+  const evPage = path.join(__dirname, 'page_anamc.html');
+  fs.writeFileSync(evPage, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
+  const browser = await chromium.launch(require('./launch-opts'));
+  const page = await browser.newPage({ viewport: { width: 1300, height: 1000 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + evPage);
+  const ev = (c) => page.evaluate((x) => window.__ev(x), c);
+  await page.waitForSelector('td.slotcell');
+  let fails = 0;
+  const check = (label, ok, extra) => { console.log(label, !!ok, extra === undefined ? '' : extra); if (!ok) fails++; };
+  const add = async (kind) => { await page.evaluate((k) => { const s = document.getElementById('anAdd'); s.value = k; s.dispatchEvent(new Event('change', {bubbles: true})); }, kind); await page.waitForTimeout(80); };
+  await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="tiposanam"]').click());
+  await page.waitForTimeout(250);
+  check('screen opens with its title?', !(await page.$eval('#tab-tiposanam', (e) => e.hidden)) && /Modelos de Anamnese/.test(await page.textContent('#tab-tiposanam .cad-title')));
+  await page.evaluate(() => document.querySelector('#mainTabs button[data-tab="tiposanam"]').click());
+  await page.waitForTimeout(250);
+  await page.click('#reg-tiposanam-add'); await page.waitForSelector('#ovAnTipo');
+  await page.fill('#anName', 'Rotina');
+  await page.evaluate(() => { const s = document.getElementById('anAdd'); s.value = 'colunas'; s.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.waitForTimeout(120);
+  check('colunas block with 2 boxes?', (await page.$$('#anBuild .an-colbox')).length === 2);
+  const addCol = async (c, kind, title) => {
+    await page.evaluate(([c, k]) => { const s = document.querySelector('#anBuild select[data-addcol$="|' + c + '"]'); s.value = k; s.dispatchEvent(new Event('change', {bubbles: true})); }, [c, kind]);
+    await page.waitForSelector('#ovAnQ'); await page.fill('#aqTit', title); await page.click('#aqSave'); await page.waitForTimeout(150);
+  };
+  await addCol(0, 'texto', 'Manhã'); await addCol(1, 'texto', 'Tarde');
+  check('one question in each column?', (await page.$$('#anBuild .an-colbox:nth-child(1) .an-q')).length === 1 && (await page.$$('#anBuild .an-colbox:nth-child(2) .an-q')).length === 1);
+  // arrastar "Tarde" para a coluna 1 (embaixo de "Manhã")
+  await page.dragAndDrop('#anBuild .an-colbox:nth-child(2) .an-q .rn', '#anBuild .an-colbox:nth-child(1)', {targetPosition: {x: 4, y: 3}});
+  await page.waitForTimeout(150);
+  check('dragging into another column works?', (await page.$$('#anBuild .an-colbox:nth-child(1) .an-q')).length === 2);
+  await (await page.$('#anBuild .an-colbox:nth-child(1) .an-q:nth-child(2) [data-mv="-1"]')).click(); await page.waitForTimeout(100);
+  check('arrow moves inside the column?', /Tarde/.test(await page.$eval('#anBuild .an-colbox:nth-child(1) .an-q .rn', (e) => e.textContent)));
+  // editar colunas para 3
+  await (await page.$('#anBuild .an-blk > div [data-ed]')).click(); await page.waitForSelector('#ovAnCols');
+  await page.fill('#acTit', 'Segunda-feira');
+  await page.evaluate(() => { const s = document.getElementById('acN'); s.value = '3'; s.dispatchEvent(new Event('change', {bubbles: true})); });
+  await page.click('#acSave'); await page.waitForTimeout(150);
+  check('three columns now?', (await page.$$('#anBuild .an-colbox')).length === 3);
+  await page.click('#anSeg [data-m=previa]'); await page.waitForTimeout(150);
+  check('preview shows a 3-column grid with title?', (await page.$$eval('#anPrev .an-cols .an-col', (e) => e.length)) === 3 && /Segunda-feira/.test(await page.textContent('#anPrev')));
+  await page.click('#anSeg [data-m=montar]');
+  await page.click('#anSave'); await page.waitForTimeout(300);
+  const saved = await ev('(function(){ var p = state.anamTypes[0].perguntas; return p.map(function(q){ return q.tipo + ":" + (q.grupo ? "g" + q.coluna : "-"); }).join(","); })()');
+  check('saved flat list: block then its kids?', saved === 'colunas:-,texto:g0,texto:g0', saved);
+  const html = await ev('(function(){ var d = document.createElement("div"); d.innerHTML = anamFormHtml(state.anamTypes[0].perguntas, {}, {}); return d.querySelectorAll(".an-col").length + "|" + d.querySelectorAll("input[type=text]").length; })()');
+  check('form renders columns?', html === '3|2', html);
+  const errs = errors.filter((e) => !/ResizeObserver/.test(e));
+  check('no JS errors?', errs.length === 0, JSON.stringify(errs));
+  fs.unlinkSync(evPage);
+  await browser.close();
+  process.exit(fails ? 1 : 0);
+})();

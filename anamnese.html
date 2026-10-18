@@ -33,6 +33,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-ap
 .intro{color:var(--muted);font-size:14px;margin:0 0 10px;white-space:pre-wrap}
 .sec{margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--line);color:var(--accent);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
 .field{display:flex;flex-direction:column;gap:4px;margin:0 0 14px}
+.cols{display:grid;grid-template-columns:repeat(var(--n,2),minmax(0,1fr));gap:0 14px}.cols-c{min-width:0}
+@media (max-width:760px){.cols{grid-template-columns:1fr}}
 .field>label,.field>.lab{font-size:13px;font-weight:600;color:var(--ink)}
 .req{color:var(--danger)}
 .hint{font-size:12px;color:var(--muted)}
@@ -135,7 +137,9 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
   function secClean(t){ return String(t == null ? "" : t).replace(/^\s*\d+\s*[.)\-–]\s*/, ""); }
   function render(){
     var secN = 0;
-    var page = 1, html = QS.map(function(q){
+    var page = 1, blocks = {};
+    QS.forEach(function(q){ if (q.tipo === "colunas") blocks[q.id] = 1; });
+    function one(q){
       var id = "q-" + q.id, v = ANS[q.id], lab = esc(q.titulo) + (q.obrigatoria && isQ(q) ? ' <span class="req">*</span>' : "");
       var hint = q.ajuda ? '<div class="hint">' + esc(q.ajuda) + '</div>' : "";
       var head = '<div class="field" data-qid="' + esc(q.id) + '">';
@@ -166,6 +170,12 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
         case "assinatura": return head + '<div class="lab">' + lab + '</div>' + hint + '<canvas class="sign" width="520" height="140" data-sign="' + esc(q.id) + '"></canvas><button type="button" class="btn ghost" data-sign-clear="' + esc(q.id) + '">Limpar Assinatura</button></div>';
       }
       return "";
+    }
+    var html = QS.filter(function(q){ return !(q.grupo && blocks[q.grupo]); }).map(function(q){
+      if (q.tipo !== "colunas") return one(q);
+      var n = Math.max(2, Math.min(4, +q.n || 2)), cols = "";
+      for (var c = 0; c < n; c++) cols += '<div class="cols-c">' + QS.filter(function(k){ return k.grupo === q.id && (+k.coluna || 0) === c; }).map(one).join("") + '</div>';
+      return (q.titulo ? '<div class="hint" style="font-weight:600;margin:10px 0 2px">' + esc(q.titulo) + '</div>' : "") + '<div class="cols" style="--n:' + n + '">' + cols + '</div>';
     }).join("");
     box.innerHTML = (FORM.descricao ? '<p class="intro">' + esc(FORM.descricao) + '</p>' : "") + '<form id="frm" novalidate>' + html +
       '<div id="err"></div><button type="submit" class="btn" id="send">Enviar Anamnese</button></form>';
