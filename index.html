@@ -24933,7 +24933,7 @@ function trMonthSectionHtml(){
         'Dif. Agenda = Contratado − Agenda + Justificado. Vermelho = faltam sessões; âmbar com "+" = sessões a mais; verde = igual.</div>' +
     '</div>';
 }
-function trMonthSectionWire(t){
+function trMonthSectionWire(t, getDraft){
   var tg = document.getElementById("trMonthToggle"); if (!tg || !t) return { refresh: function(){} };
   var body = document.getElementById("trMonthBody"), rg = trMonthRange(t), ym = rg.dflt;
   function draw(){
@@ -24941,7 +24941,8 @@ function trMonthSectionWire(t){
     document.getElementById("trMonthPrev").disabled = ym <= rg.first;
     document.getElementById("trMonthNext").disabled = ym >= rg.last;
     document.getElementById("trMonthToday").hidden = ym === rg.dflt;
-    document.getElementById("trMonthly").innerHTML = trMonthViewHtml(t, ym);
+    var tt = t; if (getDraft){ try { tt = getDraft() || t; } catch(e){ tt = t; } }   // tratamento como está na janela (ainda sem salvar)
+    document.getElementById("trMonthly").innerHTML = trMonthViewHtml(tt, ym);
   }
   tg.addEventListener("click", function(){
     var open = body.hidden; body.hidden = !open; tg.setAttribute("aria-expanded", String(open));
@@ -25412,7 +25413,17 @@ function openTreatmentModal(t, opts){
   }
   document.getElementById("trVencPor").addEventListener("change", syncVencPor);
   syncVencPor();
-  var trMonthSec = trMonthSectionWire(t);
+  var trMonthSec = trMonthSectionWire(t, function(){
+    var r0 = ed.read(), ini0 = document.getElementById("trIni"), fim0 = document.getElementById("trFim");
+    return Object.assign({}, t, {specHours: r0.fields.specHours, inicio: (ini0 && ini0.value) || t.inicio, termino: fim0 ? (fim0.value || undefined) : t.termino});
+  });
+  // Mudou quadro, início ou término na janela (mesmo sem salvar): o Contratado × Realizado se refaz.
+  (function(){
+    var tm = null, sr = document.getElementById("specRowsHost"), mo = null;
+    var go = function(){ if (tm) clearTimeout(tm); tm = setTimeout(function(){ tm = null; if (!document.getElementById("ovTreat")) return; trMonthSec.refresh(); if (mo) mo.takeRecords(); }, 250); };
+    if (sr && window.MutationObserver){ mo = new MutationObserver(go); mo.observe(sr, {childList: true, subtree: true}); }
+    ["trIni", "trFim"].forEach(function(id){ var el = document.getElementById(id); if (el) el.addEventListener("change", go); });
+  })();
   trCollapseWire("trHist", TR_HIST_OPEN_KEY);
   if (!isNew && slCan("view")){
     trCollapseWire("trSales", TR_SALES_OPEN_KEY);

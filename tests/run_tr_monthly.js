@@ -63,6 +63,15 @@ const path = require('path');
   const ref = await ev(`(function(){ var d = document.createElement("div"); d.className = "pat-count"; document.body.appendChild(d); var f = getComputedStyle(d).fontSize; d.remove(); return f; })()`);
   console.log('explanation uses the same text style as the hours note?', font === ref, font);
 
+  // Quadro alterado na janela (ainda sem salvar): o Contratado × Realizado já mostra o valor novo.
+  await page.click('#trMonthToday');
+  const contrBefore = await page.$eval('#trMonthly tbody tr:not(.tr-month-x):not(.tr-month-xh) td:nth-child(2)', (e) => e.textContent.trim());
+  await require('./tl-helper').addLine(page, {hours: '9'}, 0);
+  await page.waitForTimeout(700);
+  const contrAfter = await page.$eval('#trMonthly tbody tr:not(.tr-month-x):not(.tr-month-xh) td:nth-child(2)', (e) => e.textContent.trim());
+  console.log('quadro edited in the window (unsaved) updates Contratado x Realizado?', contrAfter === '9' && contrBefore !== '9', contrBefore, contrAfter);
+  console.log('saved treatment untouched?', (await ev(`String(state.treatments[0].specHours[0].hours)`)) === contrBefore);
+
   // Mudança no Planner com a janela aberta: a coluna Planner atualiza sozinha.
   const before = await ev(`trMonthView(state.treatments[0], trTodayIso().slice(0, 7)).rows[0].plan`);
   const htmlBefore = await page.innerHTML('#trMonthly');
