@@ -7237,6 +7237,7 @@ function lgOnRealtime(payload){
 }
 function lgPatch(row){ if (row && LG.rows[row.id]){ LG.rows[row.id] = row; lgSchedule(); } }
 // Atendimentos de paciente + Reunião Clínica e Treinamento (contam e aparecem na lista); Bloqueado e grupo de suporte ficam de fora.
+function bookingHasStatus(r){ return bookingKind(r) !== "bloqueado"; }   // Reunião Clínica e Treinamento também têm status; só Bloqueado não
 function lgIsPatientRow(r){ return !!r.patient && bookingKind(r) !== "bloqueado" && !agdIsGroupRow(r); }
 function lgKey(r){ return r.patient_id || ("n:" + normText(r.patient || "")); }
 function lgFillFilters(){
@@ -7261,7 +7262,6 @@ function lgPass(r, f){
   if (f.q && normText(r.patient || "").indexOf(f.q) === -1) return false;
   if (f.prof && r.professional_id !== f.prof) return false;
   if (f.spec && vgSpecOf(r) !== f.spec) return false;
-  if (f.status && bookingKind(r)) return false;   // Reunião Clínica e Treinamento não têm status
   if (f.status === "__sem" ? !!r.status : (f.status && r.status !== f.status)) return false;
   return true;
 }
@@ -7269,7 +7269,10 @@ function lgPass(r, f){
 function lgAnalyse(shown){
   var today = vgToday(), pats = {}, a = {n: shown.length, pats: 0, real: 0, absent: 0, semStatus: 0, future: 0, past: 0};
   shown.forEach(function(r){
-    if (bookingKind(r)){   // Reunião Clínica / Treinamento: contam como agendamento, mas não são paciente nem ficam pendentes de status
+    if (bookingKind(r)){   // Reunião Clínica / Treinamento: contam como agendamento e têm status, mas não são paciente
+      if (r.status === FINAL_STATUS) a.real++;
+      if (LG_ABSENT.indexOf(r.status) !== -1) a.absent++;
+      if (!r.status && r.date < today) a.semStatus++;
       if (r.date >= today) a.future++; else a.past++;
       return;
     }
@@ -7285,7 +7288,7 @@ function lgAnalyse(shown){
 }
 function lgAlertRows(key, a, shown){
   var today = vgToday();
-  if (key === "semstatus") return shown.filter(function(r){ return !r.status && r.date < today && !bookingKind(r); });
+  if (key === "semstatus") return shown.filter(function(r){ return !r.status && r.date < today; });
   var keys = {};
   Object.keys(a.byPat).forEach(function(k){
     var p = a.byPat[k];
@@ -7306,7 +7309,6 @@ function lgShown(){
     .sort(function(a, b){ return (a.date + a.time).localeCompare(b.date + b.time) || String(a.patient).localeCompare(String(b.patient), "pt-BR"); });
 }
 function lgStatusCell(r){
-  if (bookingKind(r)) return '<span class="pt-muted">—</span>';
   var st = r.status ? statusById(r.status) : null;
   return st ? crmStDot({name: st.name, color: swatchVar(st.color || "slate")}) : '<span class="pt-muted">Em Aberto</span>';
 }
@@ -7358,7 +7360,7 @@ function lgRender(){
     return {attrs: 'class="pr-row" data-lg-id="' + esc(String(r.id)) + '" tabindex="0"',
       cells: function(){
     var pat = findPatientAt(r, r.date), bl = pat && patBlocked(pat);
-    var acts = (canSt && !bookingKind(r) ? '<button type="button" class="btn ghost cn-btn" data-lg-st="' + esc(String(r.id)) + '">Status</button> ' : '') + '<button type="button" class="btn ghost cn-btn" data-lg-go="' + esc(String(r.id)) + '">Ver na Agenda</button>';
+    var acts = (canSt ? '<button type="button" class="btn ghost cn-btn" data-lg-st="' + esc(String(r.id)) + '">Status</button> ' : '') + '<button type="button" class="btn ghost cn-btn" data-lg-go="' + esc(String(r.id)) + '">Ver na Agenda</button>';
     return [esc(agdBrDate(r.date)) + ' <span class="pt-muted">' + esc(lgWeekday(r.date)) + '</span>', esc(r.time), '<b>' + esc(r.patient) + '</b>' + (bl ? ' <span class="tr-chip st-inativo" title="' + esc(patBlockNote(pat)) + '">Bloqueado</span>' : ''),
         esc(professionalName(r.professional_id) || "—"), esc(spec ? specialtyName(spec) : "—"), esc(bookingServiceName(r) || "—"), esc(room ? room.name : "—"), lgStatusCell(r), acts];
       },
@@ -7371,7 +7373,7 @@ function lgExportCsv(){
   function cell(v){ v = v == null ? "" : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
   var lines = [["Data", "Dia", "Hora", "Paciente", "Profissional", "Especialidade", "Serviço", "Sala", "Status", "Observação"].map(cell).join(";")].concat(rows.map(function(r){
     var room = r.room_id ? findRoom(r.room_id) : null, spec = vgSpecOf(r);
-    return [agdBrDate(r.date), lgWeekday(r.date), r.time, r.patient, professionalName(r.professional_id) || "", spec ? specialtyName(spec) : "", bookingServiceName(r) || "", room ? room.name : "", bookingKind(r) ? "—" : rpStatusName(r.status), r.note || ""].map(cell).join(";");
+    return [agdBrDate(r.date), lgWeekday(r.date), r.time, r.patient, professionalName(r.professional_id) || "", spec ? specialtyName(spec) : "", bookingServiceName(r) || "", room ? room.name : "", rpStatusName(r.status), r.note || ""].map(cell).join(";");
   }));
   var blob = new Blob(["﻿" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"});
   var a = document.createElement("a");
@@ -7393,7 +7395,7 @@ function lgPrint(){
     "<table><thead><tr><th>Data</th><th>Hora</th><th>Paciente</th><th>Profissional</th><th>Especialidade</th><th>Serviço</th><th>Sala</th><th>Status</th></tr></thead><tbody>" +
     rows.map(function(r){
       var room = r.room_id ? findRoom(r.room_id) : null, spec = vgSpecOf(r);
-      return "<tr><td>" + esc(agdBrDate(r.date)) + "</td><td>" + esc(r.time) + "</td><td>" + esc(r.patient) + "</td><td>" + esc(professionalName(r.professional_id) || "") + "</td><td>" + esc(spec ? specialtyName(spec) : "") + "</td><td>" + esc(bookingServiceName(r) || "") + "</td><td>" + esc(room ? room.name : "") + "</td><td>" + esc(bookingKind(r) ? "—" : rpStatusName(r.status)) + "</td></tr>";
+      return "<tr><td>" + esc(agdBrDate(r.date)) + "</td><td>" + esc(r.time) + "</td><td>" + esc(r.patient) + "</td><td>" + esc(professionalName(r.professional_id) || "") + "</td><td>" + esc(spec ? specialtyName(spec) : "") + "</td><td>" + esc(bookingServiceName(r) || "") + "</td><td>" + esc(room ? room.name : "") + "</td><td>" + esc(rpStatusName(r.status)) + "</td></tr>";
     }).join("") + "</tbody></table>";
   demPrintFrame("Agendamentos", css, body);
 }
@@ -7407,7 +7409,7 @@ function lgStatusMenu(btn, row){
   menu.__row = row; menu.hidden = false; placeToolsMenu(btn, menu);
 }
 function lgManageStatus(){
-  var rows = (LG.last || []).filter(function(r){ return r && r.id && !bookingKind(r); });   // Reunião Clínica e Treinamento não têm status
+  var rows = (LG.last || []).filter(function(r){ return r && r.id && bookingHasStatus(r); });
   if (!rows.length){ showToast("Não há agendamentos na lista.", true); return; }
   if (!agdToolNeedsOnline()) return;
   var sts = statusesList().filter(function(s){ return s.id !== FINAL_STATUS && canUseStatus(s.id); });
@@ -17613,7 +17615,7 @@ function agdOpenDetails(row){
   var showPront = !!pat && prCan("view");
   var grpItems = grp ? agdGroupSlotRows(row) : [];
   var curStatus = row.status || "";
-  var showStatus = !kind && statusesList().length > 0;
+  var showStatus = (!kind || kind !== "bloqueado") && statusesList().length > 0;
   var stLocked = agdFinalLocked(curStatus);
   var canChange = showStatus && !stLocked && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
   function line(label, value){ return '<div class="k">' + label + '</div><div class="v">' + (value ? esc(value) : '<span class="pt-muted">—</span>') + '</div>'; }
@@ -17721,7 +17723,7 @@ function agdOpenModal(opts){
 
   // Status (só em atendimento já marcado, não em bloqueio/reunião/treinamento).
   var curStatus = (row && row.status) || "";
-  var showStatus = !!row && !rowKind && statusesList().length > 0;
+  var showStatus = !!row && rowKind !== "bloqueado" && statusesList().length > 0;
   var stLocked = agdFinalLocked(curStatus);
   var canChangeStatus = showStatus && !stLocked && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
   // Botão "Atendimento" (prontuário): só para paciente cadastrado e quem pode ver o prontuário.
@@ -22509,7 +22511,7 @@ function agdWho(ids, kind){ var names = ids.map(function(id){ return kind === "s
 /* ---- Limpar por período ---- */
 var AGD_CLEAR_KINDS = [
   {v: "tudo", t: "Tudo (atendimentos, bloqueios, reuniões e treinamentos)", ok: function(){ return true; }},
-  {v: "abertos", t: "Só atendimentos sem status", ok: function(r){ return !bookingKind(r) && !r.status; }},
+  {v: "abertos", t: "Só atendimentos sem status", ok: function(r){ return bookingHasStatus(r) && !r.status; }},
   {v: "bloqueios", t: "Só bloqueios", ok: function(r){ return bookingKind(r) === "bloqueado"; }},
   {v: "planner", t: "Só os que vieram do Planner", ok: function(r){ return r.source === "planner"; }}
 ];
@@ -23620,7 +23622,7 @@ var RP_BUILDERS = {
   },
   "lista": function(rows, o){
     var list = rpCountRows(rows).filter(function(a){
-      if ((o.status || o.serv) && bookingKind(a)) return false;   // Reunião Clínica/Treinamento não têm status nem serviço
+      if (o.serv && bookingKind(a)) return false;   // Reunião Clínica/Treinamento não têm serviço
       if (o.status === "__aberto" && a.status) return false;
       if (o.status && o.status !== "__aberto" && a.status !== o.status) return false;
       if (o.serv && (a.service || DEFAULT_SERVICE_ID) !== o.serv) return false;
@@ -23629,7 +23631,7 @@ var RP_BUILDERS = {
     });
     return {sections: [{title: list.length + (list.length === 1 ? " atendimento" : " atendimentos"),
       head: ["Data", "Hora", "Paciente / grupo", "Profissional", "Serviço", "Sala", "Status", "Observação"],
-      rows: list.map(function(a){ return [agdBrDate(a.date), a.time, a.patient, rpProfName(a.professional_id), bookingServiceName(a), rpRoomName(a.room_id), bookingKind(a) ? "—" : rpStatusName(a.status), a.note || ""]; })}]};
+      rows: list.map(function(a){ return [agdBrDate(a.date), a.time, a.patient, rpProfName(a.professional_id), bookingServiceName(a), rpRoomName(a.room_id), rpStatusName(a.status), a.note || ""]; })}]};
   },
   "produtividade": function(rows, o){
     var sts = statusesList(), by = {};
@@ -23637,8 +23639,7 @@ var RP_BUILDERS = {
       var k = a.professional_id || "";
       var s = by[k] = by[k] || {total: 0, aberto: 0, kind: 0, st: {}};
       s.total++;
-      if (bookingKind(a)) s.kind++;   // Reunião Clínica/Treinamento: contam em Agendados, sem status
-      else if (!a.status) s.aberto++; else s.st[a.status] = (s.st[a.status] || 0) + 1;
+      if (!a.status) s.aberto++; else s.st[a.status] = (s.st[a.status] || 0) + 1;
     });
     var tot = {total: 0, aberto: 0, kind: 0, st: {}};
     var list = Object.keys(by).map(function(k){
@@ -23650,7 +23651,7 @@ var RP_BUILDERS = {
       var fin = s.st["finalizado"] || 0, decided = s.total - s.aberto - (s.kind || 0);
       return [name, s.total].concat(sts.map(function(x){ return s.st[x.id] || 0; }), [s.aberto, rpPct(fin, decided), rpHours(fin)]);
     }
-    return {note: "Agendados inclui Reunião Clínica e Treinamento (sem status). Comparecimento = Finalizados ÷ atendimentos com status (Em Aberto não conta). Horas atendidas = Finalizados × " + CLINIC_SLOT_MIN + " min.",
+    return {note: "Agendados inclui Reunião Clínica e Treinamento (com status como os demais). Comparecimento = Finalizados ÷ atendimentos com status (Em Aberto não conta). Horas atendidas = Finalizados × " + CLINIC_SLOT_MIN + " min.",
       sections: [{title: "Por Profissional", head: ["Profissional", "Agendados"].concat(sts.map(function(x){ return x.name; }), ["Em Aberto", "Comparecimento", "Horas atendidas"]),
         rows: list.map(function(x){ return line(x.name, x.s); }), foot: list.length > 1 ? line("Total", tot) : null}]};
   },
@@ -27431,7 +27432,7 @@ var HELP_TOPICS = [
       "<b>Outras Opções → Gerenciar Status</b> (quem tem a permissão <b>Gerenciar Status</b>) abre os agendamentos da lista com caixas de marcar: escolha o status, marque os atendimentos e use <b>Aplicar aos Marcados</b>. Finalizado não entra (exige a evolução) e só aparecem os status que o seu nível pode usar."
     ],
     rules: [
-      "Entram os atendimentos de pacientes e também Reunião Clínica e Treinamento (sem status, com “—” na coluna Status e sem botão Status); bloqueios e grupos de suporte ficam de fora. Reunião e Treinamento contam em Agendamentos e em Próximos, mas não como paciente nem como “sem status”.",
+      "Entram os atendimentos de pacientes e também Reunião Clínica e Treinamento (com Status como os demais); bloqueios e grupos de suporte ficam de fora. Reunião e Treinamento contam em Agendamentos e em Próximos, mas não como paciente.",
       "Faltas = Não compareceu e Falta justificada. Realizados = Finalizado. “Finalizado” continua exigindo a evolução no prontuário.",
       "A tela mostra até 1500 linhas; a planilha leva todas. O período máximo é de 13 meses.",
       "No celular: busca, filtros, e a lista com Data, Hora, Paciente e Status; os alertas aparecem só no computador."
@@ -27624,7 +27625,7 @@ var HELP_TOPICS = [
       "Tipos: Lista de atendimentos, Elegibilidade, Produtividade, Frequência, Atendimentos por convênio, Pacote contratado × realizado, Evoluções pendentes, Ocupação, Bloqueios/reuniões/treinamentos, Pacientes sem atendimento, Tratamentos novos e renegociados, Relatório financeiro, Evolução por habilidade.",
       "<b>Evolução por Habilidade</b>: dos planos terapêuticos vigentes, uma linha por paciente e habilidade com objetivos, ativos, atingidos, suspensos, % atingidos e atingidos no período; com profissional escolhido, só os objetivos que ele pode trabalhar.",
       "<b>Relatório Financeiro</b>: uma linha por mês do período com tratamentos ativos (que valeram em algum dia do mês), novos, renegociados, cancelados, receita prevista (soma do valor final mensal dos ativos) e ticket médio (receita ÷ ativos), com a linha de totais; embaixo, a lista dos tratamentos ativos no período com o valor do mês, os meses no período e o total.",
-      "<b>Lista de Atendimentos</b> e <b>Produtividade</b> contam também Reunião Clínica e Treinamento (sem status); Bloqueado nunca conta. Na Produtividade eles entram em Agendados e ficam fora do Em Aberto e do Comparecimento. Os demais relatórios são de pacientes e não os incluem.",
+      "<b>Lista de Atendimentos</b> e <b>Produtividade</b> contam também Reunião Clínica e Treinamento (com status); Bloqueado nunca conta. Na Produtividade eles entram em Agendados e seguem o status como os demais. Os demais relatórios são de pacientes e não os incluem.",
       "Convênio, plano e sessões vêm do tratamento que valia na data de cada atendimento.",
       "Cada nível vê só os tipos liberados; o Profissional vê só os próprios atendimentos."
     ],
