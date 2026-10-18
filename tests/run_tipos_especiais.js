@@ -62,22 +62,22 @@ const path = require('path');
   check('lista: Treinamento aparece', await ev(`/Treinamento/.test(document.getElementById("reg-agendamentos-host").textContent)`));
   check('resumo: só 1 paciente (reunião/treinamento não são paciente)', await ev(`/Paciente Um/.test(document.getElementById("lgSum").textContent) && !/Pacientes/.test(document.getElementById("lgSum").textContent)`));
   check('resumo: 3 agendamentos', await ev(`/Agendamentos[\\s\\S]*?3/.test(document.getElementById("lgSum").textContent)`));
-  check('reunião sem botão Status', await ev(`!document.querySelector('#reg-agendamentos-host tr[data-lg-id="m1"] [data-lg-st]')`));
+  check('reunião com botão Status', await ev(`!!document.querySelector('#reg-agendamentos-host tr[data-lg-id="m1"] [data-lg-st]')`));
   check('paciente com botão Status', await ev(`!!document.querySelector('#reg-agendamentos-host tr[data-lg-id="p1"] [data-lg-st]')`));
   await ev(`(function(){ var s = document.getElementById("lgStatus"); s.value = "__sem"; s.dispatchEvent(new Event("change")); })()`);
-  check('filtro Sem Status não traz reunião/treinamento', (await rows()) === 0, await rows());
+  check('filtro Sem Status traz reunião e treinamento (têm status)', (await rows()) === 2, await rows());
   await ev(`(function(){ var s = document.getElementById("lgStatus"); s.value = ""; s.dispatchEvent(new Event("change")); })()`);
   await ev(`document.getElementById("lgMenuBtn").click(); document.querySelector('#lgMenu [data-lg-act="manage"]').click()`);
   await page.waitForTimeout(300);
-  check('Gerenciar Status lista só o paciente', (await ev(`document.querySelectorAll("#ovLgManage [data-lgm]").length`)) === 1);
+  check('Gerenciar Status lista paciente, reunião e treinamento', (await ev(`document.querySelectorAll("#ovLgManage [data-lgm]").length`)) === 3);
 
   // Relatórios
   const lista = await ev(`(function(){ var r = RP_BUILDERS.lista(Object.keys(window.__db.appointments).map(function(k){ return window.__db.appointments[k]; }), {}); return r.sections[0].rows.map(function(x){ return [x[2], x[6]]; }); })()`);
   check('Lista: 3 linhas (sem Bloqueado)', lista.length === 3, JSON.stringify(lista));
-  check('Lista: reunião com status —', lista.some(x => x[0] === 'Reunião Clínica' && x[1] === '—'));
+  check('Lista: reunião com status Em Aberto', lista.some(x => x[0] === 'Reunião Clínica' && x[1] === 'Em Aberto'));
   const prod = await ev(`(function(){ var r = RP_BUILDERS.produtividade(window.__db.appointments, {}); return r.sections[0].rows[0]; })()`);
   check('Produtividade: Agendados = 3', prod[1] === 3, JSON.stringify(prod));
-  check('Produtividade: Em Aberto = 0 (reunião não é pendência)', prod[prod.length - 3] === 0, JSON.stringify(prod));
+  check('Produtividade: Em Aberto = 2 (reunião e treinamento sem status)', prod[prod.length - 3] === 2, JSON.stringify(prod));
   check('Produtividade: Comparecimento 100%', /100/.test(String(prod[prod.length - 2])), prod[prod.length - 2]);
   const filt = await ev(`(function(){ var r = RP_BUILDERS.lista(window.__db.appointments, {status: "finalizado"}); return r.sections[0].rows.length; })()`);
   check('Lista com filtro de status: só o paciente', filt === 1, filt);
