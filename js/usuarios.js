@@ -118,6 +118,7 @@
   var REPORTS = [
     { key: "lista", label: "Lista de Atendimentos" },
     { key: "elegibilidade", label: "Elegibilidade" },
+    { key: "planner-fora-horario", label: "Planner Fora do Horário do Paciente" },
     { key: "produtividade", label: "Produtividade por Profissional" },
     { key: "frequencia", label: "Frequência por Paciente" },
     { key: "convenios", label: "Atendimentos por Convênio" },

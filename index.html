@@ -23409,6 +23409,7 @@ var RP_TYPES = [
   {id: "sem-atendimento", name: "Pacientes sem Atendimento",      desc: "Pacientes cadastrados sem nenhum atendimento no período.", filters: ["convenio"]},
   {id: "tratamentos",     name: "Tratamentos Novos e Renegociados", desc: "Tratamentos iniciados e encerrados no período, com valores (Novo × Renegociado).", filters: []},
   {id: "evolucao-habilidade", name: "Evolução por Habilidade",   desc: "Planos Terapêuticos vigentes: objetivos por paciente e habilidade, % atingidos e atingidos no período.", filters: ["paciente"]},
+  {id: "planner-fora-horario", name: "Planner Fora do Horário do Paciente", desc: "Pacientes agendados no Planner (4 semanas) fora do Horário de Atendimento do tratamento. Não usa o período.", filters: ["paciente"], noPeriod: true},
   {id: "financeiro",      name: "Relatório Financeiro",               desc: "Uma linha por mês: tratamentos ativos, novos, renegociados, cancelados, receita prevista e ticket médio; lista dos ativos com valor.", filters: []}
 ];
 var RP = {last: null};
@@ -23485,7 +23486,8 @@ function rpGenerate(){
   var from = document.getElementById("rpFrom").value, to = document.getElementById("rpTo").value;
   var out = document.getElementById("rpOut");
   if (!type || !rpCan(type)){ showToast("Seu nível de permissão não libera este relatório.", true); return; }
-  if (!from || !to || from > to){ showToast("Escolha o período (data inicial antes da final).", true); return; }
+  var noPer = (RP_TYPES.filter(function(x){ return x.id === type; })[0] || {}).noPeriod;
+  if (!noPer && (!from || !to || from > to)){ showToast("Escolha o período (data inicial antes da final).", true); return; }
   rpShowResult(true);
   var c = agdClient();
   if (!c){ out.innerHTML = '<div class="empty-state"><b>Relatórios indisponíveis</b>Funcionam no sistema online.</div>'; return; }
@@ -23510,7 +23512,7 @@ function rpGenerate(){
       return page(fromRow + 1000).then(function(r2){ return r2.error ? r2 : {data: got.concat(r2.data || [])}; });
     });
   }
-  var q = page(0);
+  var q = noPer ? plannerLoadDocs().then(function(all){ return {data: [], planner: all}; }) : page(0);
   // Relatório financeiro: garante os valores dos tratamentos carregados antes de montar.
   var finP = type === "financeiro" && !TR.fin ? trLoadFinance() : type === "evolucao-habilidade" ? planLoadAll(true) : Promise.resolve();
   var withRec = type === "pendentes"
@@ -23523,7 +23525,7 @@ function rpGenerate(){
     var rows = (r.data || []).sort(function(a, b){ return (a.date + a.time).localeCompare(b.date + b.time); });
     var recIds = {};
     (wr.data || []).forEach(function(x){ recIds[typeof x === "object" && x ? (x.report_appointments_with_records || x.appointment_id || Object.values(x)[0]) : x] = 1; });
-    var rep = RP_BUILDERS[type](rows, opts, recIds);
+    var rep = RP_BUILDERS[type](rows, opts, recIds, r.planner);
     RP.last = {type: type, opts: opts, rep: rep};
     rpRender();
   }).catch(function(err){
@@ -23538,6 +23540,43 @@ function rpPatientRows(rows){ return rows.filter(function(a){ return !bookingKin
 // Atendimentos + Reunião Clínica e Treinamento (contam nos relatórios de lista e produtividade); Bloqueado não conta.
 function rpCountRows(rows){ return rows.filter(function(a){ return a.patient && bookingKind(a) !== "bloqueado"; }); }
 var RP_BUILDERS = {
+  // Não usa os atendimentos da Agenda: lê o Planner (4 semanas) e compara cada paciente de sala com o
+  // Horário de Atendimento do tratamento (patientSlotOk). Paciente sem horário não tem restrição.
+  "planner-fora-horario": function(rows, o, recIds, all){
+    all = all || {};
+    var out = [], semHorario = {}, checked = 0;
+    Object.keys(all).forEach(function(docId){
+      var dp = docId.split("-"), dayKey = dp[0], week = dp[1];
+      var dd = ALL_WEEKDAYS.filter(function(x){ return x.key === dayKey; })[0];
+      var bk = all[docId] || {};
+      Object.keys(bk).forEach(function(k){
+        var rec = bk[k];
+        if (!rec || !rec.patient || bookingKind(rec)) return;
+        var kp = k.split("|"), room = findRoom(kp[1]);
+        if (!room || isGroup(room)) return;
+        var pat = findPatientByName(rec); if (!pat) return;
+        if (!pat.horarios){ semHorario[pat.id] = 1; return; }
+        checked++;
+        if (patientSlotOk(pat, dayKey, kp[0])) return;
+        var ther = findTherapist(room, kp[2]), profId = ther && ther.professionalId;
+        if (o.prof && profId !== o.prof) return;
+        if (o.pac && normText(pat.nome).indexOf(o.pac) === -1) return;
+        var h = pat.horarios[dayKey];
+        var prof = profId ? findProfessional(profId) : null;
+        out.push({nome: pat.nome, week: +week, dayIdx: ALL_WEEKDAYS.indexOf(dd), dia: dd ? dd.full : dayKey, hora: kp[0], sala: room.name,
+          prof: prof ? profNome(prof) : "", esp: profId ? specialtyName(professionalSpecialtyId(profId)) : "",
+          hor: trHoursText(pat) || "Nenhum dia disponível", motivo: (!h || !h.ativo) ? "Dia não disponível" : "Fora da faixa de horário"});
+      });
+    });
+    out.sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR") || a.week - b.week || a.dayIdx - b.dayIdx || a.hora.localeCompare(b.hora); });
+    var pats = {}; out.forEach(function(r){ pats[r.nome] = 1; });
+    var nSem = Object.keys(semHorario).length;
+    return {note: "Planner de verdade, 4 semanas. Compara só pacientes de sala com Horário de Atendimento preenchido no tratamento" +
+        (nSem ? " (" + nSem + (nSem === 1 ? " paciente agendado" : " pacientes agendados") + " sem horário preenchido ficou fora da conta)" : "") + ". O período acima não é usado.",
+      sections: [{title: out.length + (out.length === 1 ? " agendamento" : " agendamentos") + " em " + Object.keys(pats).length + (Object.keys(pats).length === 1 ? " paciente" : " pacientes"),
+        head: ["Paciente", "Semana", "Dia", "Hora", "Sala", "Profissional", "Especialidade", "Horário do Paciente", "Motivo"],
+        rows: out.map(function(r){ return [r.nome, r.week + "ª", r.dia, r.hora, r.sala, r.prof, r.esp, r.hor, r.motivo]; })}]};
+  },
   // Não usa os atendimentos: lê os planos terapêuticos vigentes (PLAN.rows, carregados antes).
   "evolucao-habilidade": function(rows, o){
     var prof = o.prof ? findProfessional(o.prof) : null, areas = prof ? profAreas(prof) : null;
@@ -23878,7 +23917,7 @@ function rpRender(){
   var t = RP_TYPES.filter(function(x){ return x.id === L.type; })[0];
   var o = L.opts;
   var filt = [];
-  filt.push(agdBrDate(o.from) + " a " + agdBrDate(o.to));
+  if (!t.noPeriod) filt.push(agdBrDate(o.from) + " a " + agdBrDate(o.to));
   filt.push(o.prof ? rpProfName(o.prof) : "Todos os profissionais");
   if (t.filters.indexOf("status") !== -1 && o.status) filt.push("Status: " + (o.status === "__aberto" ? "Em Aberto" : rpStatusName(o.status)));
   if (t.filters.indexOf("servico") !== -1 && o.serv) filt.push("Serviço: " + bookingServiceName({service: o.serv}));
@@ -27630,6 +27669,7 @@ var HELP_TOPICS = [
       "<b>Evolução por Habilidade</b>: dos planos terapêuticos vigentes, uma linha por paciente e habilidade com objetivos, ativos, atingidos, suspensos, % atingidos e atingidos no período; com profissional escolhido, só os objetivos que ele pode trabalhar.",
       "<b>Relatório Financeiro</b>: uma linha por mês do período com tratamentos ativos (que valeram em algum dia do mês), novos, renegociados, cancelados, receita prevista (soma do valor final mensal dos ativos) e ticket médio (receita ÷ ativos), com a linha de totais; embaixo, a lista dos tratamentos ativos no período com o valor do mês, os meses no período e o total.",
       "<b>Lista de Atendimentos</b> e <b>Produtividade</b> contam também Reunião Clínica e Treinamento (com status); Bloqueado nunca conta. Na Produtividade eles entram em Agendados e seguem o status como os demais. Os demais relatórios são de pacientes e não os incluem.",
+      "<b>Planner Fora do Horário do Paciente</b>: lê o Planner (as 4 semanas) e lista os pacientes agendados em sala fora do Horário de Atendimento do tratamento (dia não disponível ou fora da faixa), com semana, dia, hora, sala, profissional, especialidade e o horário do paciente. Só entra paciente com horário preenchido; o período não é usado. Filtros: profissional e paciente.",
       "Convênio, plano e sessões vêm do tratamento que valia na data de cada atendimento.",
       "Cada nível vê só os tipos liberados; o Profissional vê só os próprios atendimentos."
     ],

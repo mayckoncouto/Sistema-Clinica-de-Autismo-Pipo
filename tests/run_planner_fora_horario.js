@@ -1,0 +1,42 @@
+// Relatório Planner Fora do Horário do Paciente: compara o Planner com o Horário de Atendimento do tratamento.
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+(async () => {
+  const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
+  const i = src.indexOf('"use strict";');
+  const f = path.join(__dirname, 'page_pfh.html');
+  fs.writeFileSync(f, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
+  const browser = await chromium.launch(require('./launch-opts'));
+  const page = await browser.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + f);
+  await page.waitForTimeout(800);
+  let fails = 0;
+  const check = (l, ok, x) => { console.log(l, ok, x === undefined ? '' : x); if (!ok) fails++; };
+  const r = JSON.parse(await page.evaluate(() => window.__ev(`(function(){
+    var room = state.rooms.filter(function(r){ return !isGroup(r) && (r.therapists || []).length; })[0];
+    var seat = room.therapists[0];
+    var p = state.patients[0], q = state.patients[1], z = state.patients[2];
+    p.horarios = {seg: {ativo: true, manha: {inicio: "08:00", fim: "10:40"}, tarde: {inicio: "", fim: ""}}, ter: {ativo: false}};
+    q.horarios = null; z.horarios = null;
+    var all = {"seg-1": {}, "ter-2": {}};
+    all["seg-1"]["07:20|" + room.id + "|" + seat.id] = {patient: p.nome};
+    all["seg-1"]["08:00|" + room.id + "|" + seat.id] = {patient: p.nome};
+    all["ter-2"]["08:00|" + room.id + "|" + seat.id] = {patient: p.nome};
+    all["seg-1"]["09:00|" + room.id + "|" + seat.id] = {patient: q.nome};
+    var rep = RP_BUILDERS["planner-fora-horario"]([], {prof: "", pac: ""}, {}, all);
+    return JSON.stringify({p: p.nome, rep: rep, t: RP_TYPES.some(function(x){ return x.id === "planner-fora-horario" && x.noPeriod; })});
+  })()`)));
+  const sec = r.rep.sections[0];
+  check('tipo cadastrado', r.t);
+  check('cabeçalho', sec.head.join() === 'Paciente,Semana,Dia,Hora,Sala,Profissional,Especialidade,Horário do Paciente,Motivo', sec.head.join());
+  check('2 fora do horário (07:20 segunda e terça)', sec.rows.length === 2, JSON.stringify(sec.rows));
+  check('motivos', sec.rows.some((x) => x[8] === 'Fora da faixa de horário') && sec.rows.some((x) => x[8] === 'Dia não disponível'));
+  check('paciente sem horário não entra', !sec.rows.some((x) => x[0] !== r.p));
+  check('no JS errors?', errors.length === 0, errors.join('|'));
+  fs.unlinkSync(f);
+  await browser.close();
+  process.exit(fails ? 1 : 0);
+})();
