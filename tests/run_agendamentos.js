@@ -79,6 +79,13 @@ const path = require('path');
   await page.waitForTimeout(300);
   check('abre os Detalhes', await ev(`!!document.getElementById("ovAgdDet")`));
   check('botão Ver na Agenda nos Detalhes', await ev(`!!document.getElementById("agdDetGo")`));
+  // Ctrl+clique: abre outra aba (?ir=…) e mantém a janela dos Detalhes e a tela atual.
+  await ev(`window.__opened = []; window.open = function(u){ window.__opened.push(u); return null; }; document.getElementById("agdDetGo").dispatchEvent(new MouseEvent("click", {bubbles: true, ctrlKey: true}));`);
+  await page.waitForTimeout(200);
+  const op = await ev(`window.__opened`);
+  const spec = op.length ? JSON.parse(decodeURIComponent(new URL(op[0]).searchParams.get('ir'))) : {};
+  check('Ctrl+clique abre outra aba na Agenda (data e id)', op.length === 1 && spec.a === 'agenda' && spec.d === '2030-01-07' && spec.id === 'a1' && /#agenda$/.test(op[0]), JSON.stringify(op));
+  check('Ctrl+clique mantém a janela e a tela atuais', (await ev(`!!document.getElementById("ovAgdDet")`)) && (await ev(`state.tab`)) === 'agendamentos');
   await ev(`document.getElementById("agdDetGo").click()`);
   await page.waitForTimeout(800);
   check('foi para a Agenda', (await ev(`state.tab`)) === 'agenda');

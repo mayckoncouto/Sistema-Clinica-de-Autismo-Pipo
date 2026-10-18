@@ -5422,6 +5422,7 @@ function applyPermissionsUI(){
   // Perfil já carregado: última tentativa de abrir a tela do endereço.
   openNavFromHash(true);
   notifOpenFromUrl();
+  deepRunFromUrl();
 }
 var roomsLoaded = false, patientsLoaded = false, specialtiesLoaded = false, conveniosLoaded = false, professionalsLoaded = false;
 var reportSubs = {}; // docId -> {active, unsub}, independent of the Agenda tab's own day/week subscriptions
@@ -7466,7 +7467,7 @@ function lgManageStatus(){
     });
   });
 }
-function lgGoToAgenda(row){ prGoToAppointment({appointment_date: row.date, professional_id: row.professional_id, appointment_id: row.id}, true); }
+function lgGoToAgenda(row, ev){ if (deepWant(ev)){ deepOpen({a: "agenda", d: row.date, prof: row.professional_id, id: row.id}); return; } prGoToAppointment({appointment_date: row.date, professional_id: row.professional_id, appointment_id: row.id}, true); }
 function wireAgendamentos(){
   var host = document.getElementById("reg-agendamentos-host"); if (!host) return;
   function setPer(k){ LG.per = k; var p = lgPeriod(k); if (p){ LG.from = p[0]; LG.to = p[1]; } }
@@ -7490,7 +7491,7 @@ function wireAgendamentos(){
     var st = e.target.closest("[data-lg-st]");
     if (st){ e.stopPropagation(); var r1 = lgRowById(st.getAttribute("data-lg-st")); if (r1) lgStatusMenu(st, r1); return; }
     var go = e.target.closest("[data-lg-go]");
-    if (go){ e.stopPropagation(); var r2 = lgRowById(go.getAttribute("data-lg-go")); if (r2) lgGoToAgenda(r2); return; }
+    if (go){ e.stopPropagation(); var r2 = lgRowById(go.getAttribute("data-lg-go")); if (r2) lgGoToAgenda(r2, e); return; }
     var tr = e.target.closest("[data-lg-id]"); if (!tr) return;
     var r = lgRowById(tr.getAttribute("data-lg-id")); if (r) agdOpenDetails(r);
   });
@@ -14084,7 +14085,7 @@ function openPatientModal(p, opts){
     if (box && cur) box.innerHTML = treatCardHtml(cur);
   };
   var ot = $("pOpenTreat");
-  if (ot) ot.addEventListener("click", function(){ openTreatmentModal(activeTreatment(v.id) || tr, {stack: true}); });
+  if (ot) deepClick(ot, function(){ var tt = activeTreatment(v.id) || tr; return {a: "tratamento", id: tt && tt.id}; }, function(){ openTreatmentModal(activeTreatment(v.id) || tr, {stack: true}); });
   var nt = $("pNewTreat");
   if (nt) nt.addEventListener("click", function(){ openTreatmentModal(null, {patientId: v.id, stack: true}); });
 
@@ -17713,7 +17714,7 @@ function agdOpenDetails(row){
     Array.prototype.forEach.call(ov.querySelectorAll("[data-det-pane]"), function(p){ p.hidden = p.getAttribute("data-det-pane") !== k; });
   });
   var goBtn = document.getElementById("agdDetGo");
-  if (goBtn) goBtn.addEventListener("click", function(){ close(); prGoToAppointment({appointment_date: row.date, professional_id: row.professional_id, appointment_id: row.id}, true); });
+  if (goBtn) goBtn.addEventListener("click", function(e){ if (deepWant(e)){ deepOpen({a: "agenda", d: row.date, prof: row.professional_id, id: row.id}); return; } close(); prGoToAppointment({appointment_date: row.date, professional_id: row.professional_id, appointment_id: row.id}, true); });
   var edBtn = document.getElementById("agdDetEdit");
   if (edBtn) edBtn.addEventListener("click", function(){ agdOpenModal({row: AD.rows[row.id] || row}); });
   // Status: grava na hora em que escolhe.
@@ -19340,6 +19341,7 @@ function openFixPatientModal(back){
   document.getElementById("fxList").addEventListener("click", function(e){
     var it = e.target.closest(".fx-item"); if (!it) return;
     var p = selected();
+    if (deepWant(e)){ deepOpen({a: "planner", day: it.getAttribute("data-d"), week: +it.getAttribute("data-w") || 1, q: p ? p.nome : ""}); return; }
     // Esc no Planner volta para esta janela com o mesmo paciente e período.
     var back = {patientId: p ? p.id : "", scope: document.getElementById("fxScope").value, week: document.getElementById("fxWeek").value, day: document.getElementById("fxDay").value};
     close();
@@ -22172,7 +22174,12 @@ function haDetails(g){
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   Array.prototype.forEach.call(ov.querySelectorAll("[data-hdclose]"), function(b){ b.addEventListener("click", close); });
 }
-function haGo(r){
+function haGo(r, ev){
+  if (deepWant(ev)){
+    if (r.area === "agenda") deepOpen({a: "agenda", d: r.quando, prof: r.prof_id, id: r.ref});
+    else { var q0 = (r.quando || "").split("-"); deepOpen({a: "planner", day: q0[0], week: +q0[1] || 1, q: r.paciente || ""}); }
+    return;
+  }
   if (r.area === "agenda"){
     var tab = document.querySelector('#mainTabs button[data-tab="agenda"]'); if (!tab) return;
     var close = document.querySelector("#ovHa [data-tclose]"); if (close) close.click();
@@ -22354,7 +22361,7 @@ function openHistoricoAlteracoes(area, opts){
     var tr = b.closest("tr[data-ha-i]"), g = tr ? HA.groups[+tr.getAttribute("data-ha-i")] : null; if (!g) return;
     var act = b.getAttribute("data-ha-act"), ids = g.items.map(function(r){ return r.id; });
     if (act === "det") haDetails(g);
-    else if (act === "go") haGo(g.items[0]);
+    else if (act === "go") haGo(g.items[0], e);
     else if (act === "restore") haRestore(g);
     else if (act === "read"){ haSetRead(ids, true).then(haRender); haRender(); }
     else if (act === "unread"){ haSetRead(ids, false).then(haRender); haRender(); }
@@ -23197,8 +23204,9 @@ function prRenderDetail(){
   var nb = document.getElementById("prNew");
   if (nb) nb.addEventListener("click", function(){ prOpenEditor({patient: p}); });
   host.querySelectorAll("[data-pr-appt]").forEach(function(b){
-    b.addEventListener("click", function(){
+    b.addEventListener("click", function(e){
       var rec = PR.records.filter(function(x){ return x.id === b.getAttribute("data-pr-appt"); })[0];
+      if (rec && deepWant(e)){ deepOpen({a: "agenda", d: rec.appointment_date, prof: rec.professional_id, id: rec.appointment_id}); return; }
       if (rec) prGoToAppointment(rec);
     });
   });
@@ -24002,7 +24010,7 @@ function rpRender(){
       '</table></div>';
   });
   out.innerHTML = html;
-  out.querySelectorAll("tr[data-go]").forEach(function(tr){ tr.style.cursor = "pointer"; tr.addEventListener("click", function(){ rpGoPlanner(tr.getAttribute("data-go")); }); });
+  out.querySelectorAll("tr[data-go]").forEach(function(tr){ tr.style.cursor = "pointer"; tr.addEventListener("click", function(e){ var gk = tr.getAttribute("data-go"); if (deepWant(e)){ var kk = gk.split("|"); deepOpen({a: "planner", day: kk[0], week: +kk[1] || 1, q: kk.slice(2).join("|")}); return; } rpGoPlanner(gk); }); });
   document.getElementById("rpPrint").addEventListener("click", rpPrint);
   out.querySelectorAll("th[data-sort]").forEach(function(th){
     th.addEventListener("click", function(){
@@ -24849,18 +24857,17 @@ function trDivPanelHtml(v){
         (x.go ? '<button type="button" class="btn ghost tr-div-go" data-trgo="' + esc(x.go.t + "|" + (x.go.k || x.go.d)) + '">' + (x.go.t === "planner" ? 'Ver no Planner' : 'Ver na Agenda') + '</button>' : '') + '</li>';
     }).join("") + '</ul></div>';
 }
-function trDivGo(val){
-  var i = val.indexOf("|"), t = val.slice(0, i), rest = val.slice(i + 1);
+function trDivGo(val, ev){
+  var i = val.indexOf("|"), t = val.slice(0, i), rest = val.slice(i + 1), ap = rest.split("|");
+  if (deepWant(ev)){
+    if (t === "planner") deepOpen({a: "planner", day: ap[0], week: +ap[1] || 1, q: ap.slice(2).join("|")});
+    else deepOpen({a: "agenda", d: ap[0], q: ap.slice(1).join("|")});
+    return;
+  }
   var close = document.querySelector("#ovTreat .modal-close"); if (close) close.click();
   if (document.getElementById("ovTreat") && document.getElementById("ovTreat").isConnected && close) return;
   if (t === "planner") rpGoPlanner(rest);
-  else {
-    var tb = document.querySelector('#mainTabs button[data-tab="agenda"]'), ap = rest.split("|");
-    if (tb){
-      AD.date = agdClampWeekday(agdParse(ap[0])); AD.search = ap.slice(1).join("|"); tb.click();
-      var as = document.getElementById("agdSearch"); if (as){ as.value = AD.search; if (typeof agdRender === "function") agdRender(); }
-    }
-  }
+  else agendaGoSearch(ap[0], ap.slice(1).join("|"));
 }
 function trMonthViewHtml(t, ym){
   var v = trMonthView(t, ym);
@@ -24944,7 +24951,7 @@ function trMonthSectionWire(t){
   document.getElementById("trMonthNext").addEventListener("click", function(){ if (ym < rg.last){ ym = trYmAdd(ym, 1); draw(); } });
   document.getElementById("trMonthToday").addEventListener("click", function(){ ym = rg.dflt; draw(); });
   var mHost = document.getElementById("trMonthly");
-  mHost.addEventListener("click", function(e){ var b = e.target.closest("[data-trgo]"); if (b) trDivGo(b.getAttribute("data-trgo")); });
+  mHost.addEventListener("click", function(e){ var b = e.target.closest("[data-trgo]"); if (b) trDivGo(b.getAttribute("data-trgo"), e); });
   if (typeof agdEnsureChannel === "function") agdEnsureChannel();
   TR.monthRefresh = function(){ if (mHost && mHost.isConnected && document.getElementById("trMonthly") === mHost) draw(); };
   draw();
@@ -25313,7 +25320,9 @@ function openTreatmentModal(t, opts){
   if (trPatBtn){
     syncPatBtn();
     document.getElementById("trPat").addEventListener("change", syncPatBtn);
-    trPatBtn.addEventListener("click", function(){
+    trPatBtn.addEventListener("auxclick", function(e){ if (e.button === 1){ e.preventDefault(); deepOpen({a: "paciente", id: document.getElementById("trPat").value}); } });
+    trPatBtn.addEventListener("click", function(e){
+      if (deepWant(e)){ e.preventDefault(); deepOpen({a: "paciente", id: document.getElementById("trPat").value}); return; }
       var pid = document.getElementById("trPat").value;
       var p = state.patients.filter(function(x){ return x.id === pid; })[0];
       if (!p) return;
@@ -25356,7 +25365,7 @@ function openTreatmentModal(t, opts){
     crmCreateFrom({title: "Tratamento de " + (pr ? pr.nome : "paciente"), patient_id: pidNow || null});
   });
   var trPlanBtn = document.getElementById("trOpenPlan");
-  if (trPlanBtn) trPlanBtn.addEventListener("click", function(){ var pid = t.patientId; close(); planFromTreatment(pid); });
+  if (trPlanBtn) deepClick(trPlanBtn, function(){ return {a: "plano", pid: t.patientId}; }, function(){ var pid = t.patientId; close(); planFromTreatment(pid); });
   function upFinal(){
     document.getElementById("trFinal").value = fmtMoney(parseMoney(document.getElementById("trVal").value) - parseMoney(document.getElementById("trDesp").value));
   }
@@ -26687,7 +26696,7 @@ function openVendaDetalhe(id){
     slDeleteFlow(s).then(function(done){ if (done){ close(); if (state.tab === "vendas") renderVendas(); } });
   });
   $("vnDCt").addEventListener("click", function(){ close(); slContratoDialog(s); });
-  if ($("vnDTr")) $("vnDTr").addEventListener("click", function(){ close(); openTreatmentModal(t, {stack: true}); });
+  if ($("vnDTr")) deepClick($("vnDTr"), function(){ return {a: "tratamento", id: t.id}; }, function(){ close(); openTreatmentModal(t, {stack: true}); });
 }
 /* Editar venda (2026-10-16): data, vendedor, forma de pagamento e observações. Só venda ativa, permissão Vendas (editar) e sem parcela recebida.
  * Vendedor trocado: comissão em aberto é recalculada (regra do vendedor novo); já paga, só avisa. */
@@ -26987,6 +26996,7 @@ var HELP_TOPICS = [
     rules: [
       "Você só vê as telas e os botões que o seu nível de permissão libera. Se faltar algo, fale com o Administrador.",
       "Toda exclusão pede confirmação.",
+      "<b>Ctrl+clique</b> (ou <b>Cmd+clique</b> no Mac, ou o botão do meio do mouse) em um botão que leva a outra tela — <b>Ver no Planner</b>, <b>Ver na Agenda</b>, <b>Ir até o horário</b>, <b>Abrir Tratamento</b>, <b>Cadastro do Paciente</b>, <b>Abrir Plano Terapêutico</b>, o ícone de agenda da evolução, o histórico de alterações e as linhas de relatório que abrem o Planner — abre essa tela em <b>outra aba do navegador</b> e mantém a janela atual aberta, para você conferir a informação e depois continuar ou salvar o que estava fazendo.",
       "A tecla <b>Esc</b> fecha a janela aberta (a de cima, quando há várias) do mesmo jeito que o ✕ ou o Cancelar: se a janela tem alterações, o sistema pergunta se deseja salvar. Com uma lista ou menu aberto, o Esc fecha primeiro a lista.",
       "Ao sair de uma janela de cadastro depois de mudar algum campo (pelo ✕, Cancelar, Fechar, clique fora ou Esc), o sistema pergunta: <b>Salvar</b>, <b>Sair sem Salvar</b> ou <b>Continuar Editando</b>.",
       "Nas janelas de Paciente, Tratamento, Lançamento e Conta a Pagar ou a Receber já salvos, <b>Outras Opções ▾ → Criar Tarefa</b> escolhe a lista do CRM e abre a janela da tarefa já preenchida (título e paciente); ajuste e salve.",
@@ -28300,6 +28310,48 @@ window.pipoOpenNotif = function(){ openNotifModal(); };
 
 // Toque na notificação de menção abre "/?tarefa=<id>#crm": abre a tarefa quando o CRM carregar.
 var notifUrlDone = false;
+/* Ctrl+clique (ou Cmd/botão do meio) em um botão que "vai para outra tela" abre essa tela em OUTRA aba do navegador e mantém a janela atual
+ * aberta (para continuar ou salvar depois). O endereço leva ?ir={"a":"planner|agenda|paciente|tratamento|plano",...}; a aba nova lê, abre a
+ * tela certa e tira o parâmetro do endereço. Botão novo de "ver em outra tela": chamar deepWant(e) / deepOpen(spec) no clique. */
+var DEEP_HASH = {planner: "planner", agenda: "agenda", paciente: "pacientes", tratamento: "tratamentos", plano: "planos"};
+function deepWant(e){ return !!e && (e.ctrlKey || e.metaKey || e.button === 1); }
+function deepOpen(spec){
+  try { window.open(location.origin + location.pathname + "?ir=" + encodeURIComponent(JSON.stringify(spec)) + "#" + (DEEP_HASH[spec.a] || ""), "_blank", "noopener"); } catch(e){}
+}
+// Liga um botão: Ctrl/Cmd+clique e clique do meio abrem em outra aba; clique normal roda fn.
+function deepClick(el, specFn, fn){
+  if (!el) return;
+  el.addEventListener("click", function(e){ if (deepWant(e)){ e.preventDefault(); e.stopPropagation(); deepOpen(specFn()); return; } fn(e); });
+  el.addEventListener("auxclick", function(e){ if (e.button === 1){ e.preventDefault(); e.stopPropagation(); deepOpen(specFn()); } });
+}
+function agendaGoSearch(d, q, prof){
+  var tb = document.querySelector('#mainTabs button[data-tab="agenda"]'); if (!tb) return;
+  if (d) AD.date = agdClampWeekday(agdParse(d));
+  if (prof && !agdOwnProfId()){ AD.mode = "prof"; AD.sel = prof; }
+  AD.search = q || "";
+  tb.click();
+  var as = document.getElementById("agdSearch"); if (as){ as.value = AD.search; if (typeof agdRender === "function") agdRender(); }
+}
+var deepDone = false;
+function deepWait(ready, fn){ var n = 0; (function tick(){ var ok = false; try { ok = ready(); } catch(e){} if (ok){ setTimeout(fn, 300); return; } if (++n < 60) setTimeout(tick, 500); })(); }
+function deepRunFromUrl(){
+  if (deepDone) return;
+  var raw = null; try { raw = new URLSearchParams(location.search).get("ir"); } catch(e){}
+  if (!raw){ deepDone = true; return; }
+  if (!window.pipoAuth || !window.pipoAuth.profile || !window.pipoAuth.profile()) return;
+  deepDone = true;
+  var sp; try { sp = JSON.parse(raw); } catch(e){ return; }
+  try { history.replaceState(null, "", location.pathname + (location.hash || "")); } catch(e){}
+  var pats = function(){ return patientsLoaded && state.patients && state.patients.length; };
+  if (sp.a === "planner") deepWait(function(){ return document.querySelector("#daySeg button") && state.rooms && state.rooms.length; }, function(){ rpGoPlanner((sp.day || "") + "|" + (sp.week || 1) + "|" + (sp.q || "")); });
+  else if (sp.a === "agenda") deepWait(function(){ return professionalsLoaded && pats(); }, function(){
+    if (sp.id) prGoToAppointment({appointment_date: sp.d, professional_id: sp.prof, appointment_id: sp.id}, true);
+    else agendaGoSearch(sp.d, sp.q, sp.prof);
+  });
+  else if (sp.a === "paciente") deepWait(pats, function(){ var p = state.patients.filter(function(x){ return x.id === sp.id; })[0]; if (p) openPatientModal(p); else showToast("Paciente não encontrado.", true); });
+  else if (sp.a === "tratamento") deepWait(function(){ return pats() && state.treatments; }, function(){ var t = (state.treatments || []).filter(function(x){ return x.id === sp.id; })[0]; if (t) openTreatmentModal(t); else showToast("Tratamento não encontrado.", true); });
+  else if (sp.a === "plano") deepWait(pats, function(){ planFromTreatment(sp.pid); });
+}
 function notifOpenFromUrl(){
   if (notifUrlDone) return;
   var id = null;
