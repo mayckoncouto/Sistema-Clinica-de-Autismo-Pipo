@@ -68,7 +68,7 @@
     { key: "objetivos", label: "Objetivos", hint: "objetivos prontos para usar no plano terapêutico" },
     { key: "atividades", label: "Atividades", hint: "atividades sugeridas para os objetivos do plano terapêutico" },
     { key: "anamneses", label: "Anamneses", hint: "tela Anamneses (ver). Incluir, editar e excluir são dados em cada tipo, nas linhas \"Anamnese – …\" abaixo", actions: ["view"] },
-    { key: "tipos_anamnese", label: "Tipos de Anamnese", hint: "modelos de formulário das anamneses (perguntas, regras e validade)" },
+    { key: "tipos_anamnese", label: "Modelos de Anamnese", hint: "modelos de formulário das anamneses (perguntas, regras e validade)" },
     { key: "escalas", label: "Escalas", hint: "escalas do plano terapêutico (níveis e cores)" },
     { key: "habilidades", label: "Habilidades", hint: "habilidades dos objetivos do plano terapêutico" },
     { key: "financeiro", label: "Financeiro", hint: "Lançamentos: movimentação das contas (valores, extrato, subcategorias)", group: "Financeiro" },
@@ -241,7 +241,7 @@
     var cut = MODULES.findIndex(function (m) { return m.group === "Financeiro"; });
     if (cut === -1) cut = MODULES.findIndex(function (m) { return m.group === "Menu Acesso"; });
     var all = cut === -1 ? MODULES.concat(crm) : MODULES.slice(0, cut).concat(crm, MODULES.slice(cut));
-    // uma linha por tipo de anamnese, logo depois de "Tipos de Anamnese"
+    // uma linha por tipo de anamnese, logo depois de "Modelos de Anamnese"
     var anam = window.pipoAnamModules ? window.pipoAnamModules() : [];
     var at = all.findIndex(function (m) { return m.key === "tipos_anamnese"; });
     return at === -1 || !anam.length ? all : all.slice(0, at + 1).concat(anam, all.slice(at + 1));

@@ -4818,3 +4818,14 @@ Pedido do usuário: "fazer somente link e aviso de reavaliação" (arquivos das 
   antes = 30) com `crm_auto_r_anamnese` no `crm_auto_run` diário: a mais recente CONCLUÍDA de cada paciente+tipo (tipo ativo com `validadeMeses`, paciente ativo) perto de vencer ou
   vencida e sem rascunho de versão mais nova cria a tarefa “Reavaliar [tipo] de [paciente]” (chave `anamrev|<anamnese>|<vencimento>`: nunca repete). Cai na Caixa de Entrada de quem for responsável.
 - Ajuda: tópico `anamneses` (link e automação). Testes `tests/run_anamnese_link.js` (app + página pública com Supabase simulado, no `npm test`) e `run_crm_auto.js` (28 regras).
+
+## Anamnese: Modelos (ex-Tipos de Anamnese) e 3 modelos prontos (2026-10-18)
+- Pedido do usuário: **Tipos de Anamnese** saiu do menu Prontuário ▾ e agora fica em **Anamneses → Outras Opções ▾ → Modelos** (a aba continua `tiposanam`, endereço `#tiposanam`,
+  permissão `tipos_anamnese`, documento `config/anamnesis_types`; só os nomes na tela mudaram: título “Modelos de Anamnese”, janela “Novo/Editar Modelo de Anamnese”, coluna “Modelo”
+  na lista de Anamneses, filtro “Todos os Modelos”, escolha “Modelo” em + Incluir, Níveis de Permissão “Modelos de Anamnese”, Ajuda). Linhas por modelo continuam “Anamnese – <nome>”.
+- Três modelos criados a partir dos .docx do usuário, com os recursos do construtor (todos editáveis em Modelos): **Avaliação Multidisciplinar** (`anam-multidisciplinar`, 154 itens, 17 seções,
+  validade 12 meses), **Anamnese Avaliação TEA/TGD** (`anam-tea-tgd`, 322 itens, 24 seções, 12 meses) e **Atualização de Rotina e Acompanhamento Terapêutico** (`anam-acompanhamento`, 64 itens,
+  3 meses). Regras de conversão: lista de uma resposta = Escolha Única; “marque todas” = Múltipla Escolha; Sim/Não = Sim ou Não (ou Escolha quando há 3 respostas); tabelas viraram uma pergunta por
+  linha; perguntas de acompanhamento (“Quais?”, “Qual medicação?”) usam **Mostrar só se**; nome, nascimento, idade, telefone, escola, diagnóstico e medicações vêm preenchidos do cadastro (campo `campo`).
+  Dados no banco da EMPRESA (`unit_id = 'empresa'`); migração `supabase/2026-10-18d-modelos-de-anamnese.sql` (linha 139 da conferência) reaplica só o que falta, sem sobrescrever modelo editado.
+  Produção: inseridos pelo conector e conferidos por hash dos títulos e opções (batem com o arquivo).
