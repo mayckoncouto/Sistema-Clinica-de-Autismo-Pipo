@@ -24596,7 +24596,7 @@ function trDivergences(t, ym, ctx){
   function who(pid){ var pr = pid && findProfessional(pid); return pr ? (profShortName(pr) || profNome(pr)) : "sem profissional"; }
   function sname(svc){ var sv = servicesList().filter(function(x){ return x.id === svc; })[0]; return sv ? sv.name : svc; }
   function weeksText(l){ return String(l.semanas).split(",").map(function(x){ return x + "ª"; }).join(" e ") + " semana(s)"; }
-  var pgo = function(it){ return {t: "planner", k: it.day + "|" + it.week + "|" + p.name}; };
+  var pgo = function(it){ return {t: "planner", k: it.day + "|" + it.week + "|" + p.nome}; };
   var perWeek = {}, slotSeen = {};
   ctx.pitems.forEach(function(it){
     var line = ctx.lineOf(it.prof, it.svc, it.week), tag = " (" + trWdName(it.day) + " " + it.time + ", " + it.week + "ª semana)";
@@ -24631,7 +24631,7 @@ function trDivergences(t, ym, ctx){
   });
   var byDay = {};
   ctx.aitems.forEach(function(a){
-    var wk = tlWeekOfDate(a.d), line = ctx.lineOf(a.prof, a.svc, wk), tag = " (" + trBr(a.d).slice(0, 5) + ")", go = {t: "agenda", d: a.d};
+    var wk = tlWeekOfDate(a.d), line = ctx.lineOf(a.prof, a.svc, wk), tag = " (" + trBr(a.d).slice(0, 5) + ")", go = {t: "agenda", d: a.d, k: a.d + "|" + p.nome};
     var k = a.d + "|" + (line ? line.id : "x:" + a.svc);
     byDay[k] = (byDay[k] || 0) + 1;
     if (byDay[k] === 2 && !(line && (+line.seguidas || 1) > 1)) add("aviso", "Agenda: mais de um atendimento de " + (line ? lineLabel(line, false) : sname(a.svc)) + " no mesmo dia" + tag + ".", go);
@@ -24774,7 +24774,7 @@ function trMonthView(t, ym){
   }
   var pitems = trPlannerItems(p), aitems = [];
   if (plan) pitems.forEach(function(it){
-    if (!lineOf(it.prof, it.svc, it.week)){ var o = orphan(it.prof, it.svc); o.plan++; if (!o.planGo) o.planGo = {t: "planner", k: it.day + "|" + it.week + "|" + p.name}; }
+    if (!lineOf(it.prof, it.svc, it.week)){ var o = orphan(it.prof, it.svc); o.plan++; if (!o.planGo) o.planGo = {t: "planner", k: it.day + "|" + it.week + "|" + p.nome}; }
   });
   var other = 0, loaded = !!TR.appts, before = 0;
   (TR.appts && TR.appts[p.id] || []).forEach(function(a){
@@ -24784,7 +24784,7 @@ function trMonthView(t, ym){
     aitems.push(a);
     var row = by[trLineKey(lines, a)];
     if (!row){
-      other++; var o = orphan(a.prof, a.svc); o.ag++; if (!o.agGo) o.agGo = {t: "agenda", d: a.d};
+      other++; var o = orphan(a.prof, a.svc); o.ag++; if (!o.agGo) o.agGo = {t: "agenda", d: a.d, k: a.d + "|" + p.nome};
       if (TR_USED_STATUS.indexOf(a.st) !== -1) o.real++; else if (a.st === TR_JUST_STATUS) o.just++; else if (!a.st && a.d < today) o.semSt++;
       return;
     }
@@ -24854,7 +24854,13 @@ function trDivGo(val){
   var close = document.querySelector("#ovTreat .modal-close"); if (close) close.click();
   if (document.getElementById("ovTreat") && document.getElementById("ovTreat").isConnected && close) return;
   if (t === "planner") rpGoPlanner(rest);
-  else { var tb = document.querySelector('#mainTabs button[data-tab="agenda"]'); if (tb){ AD.date = agdClampWeekday(agdParse(rest)); tb.click(); } }
+  else {
+    var tb = document.querySelector('#mainTabs button[data-tab="agenda"]'), ap = rest.split("|");
+    if (tb){
+      AD.date = agdClampWeekday(agdParse(ap[0])); AD.search = ap.slice(1).join("|"); tb.click();
+      var as = document.getElementById("agdSearch"); if (as){ as.value = AD.search; if (typeof agdRender === "function") agdRender(); }
+    }
+  }
 }
 function trMonthViewHtml(t, ym){
   var v = trMonthView(t, ym);
