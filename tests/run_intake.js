@@ -80,7 +80,7 @@ const path = require('path');
   check('update saved with the chosen values and submission approved?', upd.rua === 'Rua Nova' && upd.tel.indexOf('47977776666') !== -1 && upd.st === 'aprovado', upd);
 
   // 4) Descartar Envio.
-  await ev(`(function(){ intakeMem().subs.push({id: "s3", kind: "geral", status: "pendente", created_at: new Date().toISOString(), data: {nome: "Spam", telefone: "11"}}); return intakeLoad().then(function(){ return true; }); })()`);
+  await ev(`(function(){ intakeMem().subs.push({id: "s3", kind: "novo", status: "pendente", created_at: new Date().toISOString(), data: {nome: "Spam", telefone: "11"}}); return intakeLoad().then(function(){ return true; }); })()`);
   await ev('intakeReview(INTAKE.subs[0])'); await page.waitForSelector('#ovPat');
   await page.click('#ikDiscard'); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(200);
   check('discard: window closed and submission marked as discarded?', !(await page.$('#ovPat')) && (await ev('intakeMem().subs[2].status')) === 'descartado');
@@ -165,7 +165,7 @@ const path = require('path');
     if (/\/cadastro\?|\/c\//.test(u)) return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(__dirname, '..', 'cadastro.html'), 'utf8')});
     if (/\/js\/redes\.js/.test(u)) return route.fulfill({contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, '..', 'js', 'redes.js'), 'utf8')});
     if (/\/api\/config/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({supabaseUrl: 'http://pipo.test/sb', supabaseAnonKey: 'sb_publishable_teste'})});
-    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'geral', nome: 'Link geral', prefill: {}, clinica: {nome: 'C'}, convenios: [], origens: [],
+    if (/rpc\/intake_form/.test(u)) return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, kind: 'novo', nome: 'Link geral', prefill: {}, clinica: {nome: 'C'}, convenios: [], origens: [],
       campos: {cpf: {show: false, req: false}, nascimento: {show: true, req: false}, responsavel: {show: false, req: false}, escola: {show: true, req: true}, endereco: {show: false, req: false}}})});
     if (/rpc\/intake_send/.test(u)) { sent = JSON.parse(route.request().postData()); return route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true})}); }
     return route.fulfill({status: 404, body: ''});
@@ -273,11 +273,11 @@ const path = require('path');
   await page.bringToFront();
   await ev('openPatientFieldsModal()'); await page.waitForSelector('#ovPf');
   const hd = await page.$$eval('#ovPf thead th', (a) => a.map((x) => x.textContent));
-  const freeNome = await page.evaluate(() => ['nome', 'telefones'].every((k) => ['rapido', 'fixo'].every((x) => { const e = document.querySelector('tr[data-pfk="' + k + '"] [data-pfx="' + x + '"]'); return e && !e.disabled && e.checked; })));
-  check('Campos Obrigatórios columns: Campo, Aparece, Link Rápido, Link Fixo, Obrigatório (Nome and Telefone can be chosen in both links)?', JSON.stringify(hd) === '["Campo","Aparece","Link Rápido","Link Fixo","ObrigatórioObrig."]' && freeNome, hd);
+  const freeNome = await page.evaluate(() => ['nome', 'telefones'].every((k) => ['rapido'].every((x) => { const e = document.querySelector('tr[data-pfk="' + k + '"] [data-pfx="' + x + '"]'); return e && !e.disabled && e.checked; })));
+  check('Campos Obrigatórios columns: Campo, Aparece, Link Rápido, Obrigatório (Nome and Telefone can be chosen in the link; no Link Fixo)?', JSON.stringify(hd) === '["Campo","Aparece","Link Rápido","ObrigatórioObrig."]' && freeNome, hd);
   check('link-only fields (Possui diagnóstico?) listed; Convênio now sits with the cadastro field?', (await page.$$('tr[data-lonly]')).length === 1 && !!(await page.$('tr[data-pfk="convenioPadrao"][data-lfk="convenio"]')));
-  const allLink = await page.evaluate(() => [...document.querySelectorAll('#ovPf tr[data-pfk]')].filter((tr) => tr.getAttribute('data-pfk') !== 'encaminhamento' && tr.getAttribute('data-pfk') !== 'redeSocial' && !/^bloqueio|^bloqueado/.test(tr.getAttribute('data-pfk'))).every((tr) => tr.querySelector('[data-pfx="rapido"]') && tr.querySelector('[data-pfx="fixo"]')));
-  const offNew = await page.evaluate(() => ['mae', 'rotinaAtual', 'medicoId', 'protetiva'].every((k) => { const tr = document.querySelector('tr[data-pfk="' + k + '"]'); return tr && !tr.querySelector('[data-pfx="rapido"]').checked && !tr.querySelector('[data-pfx="fixo"]').checked; }));
+  const allLink = await page.evaluate(() => [...document.querySelectorAll('#ovPf tr[data-pfk]')].filter((tr) => tr.getAttribute('data-pfk') !== 'encaminhamento' && tr.getAttribute('data-pfk') !== 'redeSocial' && !/^bloqueio|^bloqueado/.test(tr.getAttribute('data-pfk'))).every((tr) => tr.querySelector('[data-pfx="rapido"]') && !tr.querySelector('[data-pfx="fixo"]')));
+  const offNew = await page.evaluate(() => ['mae', 'rotinaAtual', 'medicoId', 'protetiva'].every((k) => { const tr = document.querySelector('tr[data-pfk="' + k + '"]'); return tr && !tr.querySelector('[data-pfx="rapido"]').checked ; }));
   check('every cadastro field (except Encaminhamento, which is not in the links) can be chosen for both links; the new ones start off?', allLink && offNew, {allLink, offNew});
   const stick = await page.evaluate(() => new Promise((res) => { const body = document.querySelector('#ovPf .modal-body'); body.scrollTop = 600;
     setTimeout(() => { const th = document.querySelector('#ovPf thead th').getBoundingClientRect(), bb = body.getBoundingClientRect(); res(Math.abs(th.top - bb.top) < 2 && body.scrollTop > 100); }, 100); }));
@@ -289,15 +289,14 @@ const path = require('path');
   const fitM = await page.evaluate(() => { const m = document.querySelector('#ovPf .modal-body'); return m.scrollWidth <= m.clientWidth + 1; });
   check('table fits a phone screen?', fitM);
   await page.setViewportSize({width: 1300, height: 850}); await page.waitForTimeout(200);
-  await page.uncheck('tr[data-pfk="cpf"] [data-pfx="fixo"]');
-  await page.uncheck('tr[data-pfk="nome"] [data-pfx="fixo"]');
+  await page.uncheck('tr[data-pfk="cpf"] [data-pfx="rapido"]');
   await page.check('tr[data-pfk="escolaId"] [data-pfx="req"]');
   await page.uncheck('tr[data-pfk="escolaId"] [data-pfx="rapido"]');
   await page.click('#pfSave'); await page.waitForTimeout(300);
   const lk = await ev('({link: state.patientLink, esc: state.patientFields.escolaId})');
-  check('saved: CPF out of the fixed link; escola required in the fixed link and in the cadastro, not in the quick link?', lk.link.geral.cpf.show === false && lk.link.individual.cpf.show === true &&
-    lk.link.geral.escola.req === true && lk.link.individual.escola.show === false && lk.link.individual.escola.req === false && lk.esc.req === true && lk.esc.show === true, lk);
-  check('saved: Nome out of the fixed link, still required in the quick link?', lk.link.geral.nome.show === false && lk.link.individual.nome.show === true && lk.link.individual.nome.req === true, lk.link.geral.nome);
+  check('saved: CPF out of the link; escola required in the cadastro, not in the link; no "geral" config?', lk.link.individual.cpf.show === false &&
+    lk.link.individual.escola.show === false && lk.link.individual.escola.req === false && lk.esc.req === true && lk.esc.show === true && !lk.link.geral, lk);
+  check('saved: Nome still shown and required in the link?', lk.link.individual.nome.show === true && lk.link.individual.nome.req === true, lk.link.individual.nome);
 
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();

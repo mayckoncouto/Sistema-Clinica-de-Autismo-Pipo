@@ -3231,7 +3231,6 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="patMergeBtn" hidden>Mesclar Cadastros</button>
         <button class="btn ghost" id="patPrintBtn">Imprimir Ficha Cadastral</button>
         <button class="btn ghost" id="patLinkBtn" hidden>Enviar Link de Cadastro</button>
-        <button class="btn ghost" id="patLinkGeralBtn" hidden>Link Geral da Clínica</button>
         <button class="btn ghost" id="patLinksBtn" hidden>Links Enviados</button>
       </div></div>
       <button class="btn primary" id="addPatientBtn">+ Incluir</button>
@@ -5199,7 +5198,7 @@ var state = {
   councils: [],          // conselhos [{id,sigla,name}] (config/councils); vazio = padrão (councilList)
   cbos: [],              // CBO [{id,code,name}] (config/cbo); vazio = sugestões (cboList)
   patientFields: {},     // {campo:{show,req}} (config/patient_fields)
-  patientLink: {},       // {individual: {campo:{show,req}}, geral: {...}} (config/patient_fields.link)
+  patientLink: {},       // {individual: {campo:{show,req}}} (config/patient_fields.link)
   cancelReasons: [],     // motivos de cancelamento dos tratamentos [{id,name}] (config/cancel_reasons)
   services: [],          // serviços [{id,name}] (Sessão, Triagem…), from db — tela Profissionais › Serviços
   professionals: [],     // staff registry [{id,name,specialtyId}], from db
@@ -5377,7 +5376,7 @@ function applyPermissionsUI(){
   }
   function show(id, on){ var el = document.getElementById(id); if (el) el.hidden = !on; }
   show("addPatientBtn", can("pacientes","create"));
-  ["patLinkBtn", "patLinkGeralBtn", "patLinksBtn"].forEach(function(id){ show(id, intakeCan()); });
+  ["patLinkBtn", "patLinksBtn"].forEach(function(id){ show(id, intakeCan()); });
   intakeBadge();
   show("addProfessionalBtn", can("colaboradores","create"));
   show("addRoomBtn", can(state.salasView === "grupos" ? "grupos" : "salas", "create"));
@@ -9844,7 +9843,6 @@ function wireControls(){
     document.getElementById("patMergeBtn").addEventListener("click", openPatientMergeModal);
     document.getElementById("patPrintBtn").addEventListener("click", openPatientPrintPick);
     document.getElementById("patLinkBtn").addEventListener("click", function(){ openIntakeLinkModal({kind: "novo"}); });
-    document.getElementById("patLinkGeralBtn").addEventListener("click", function(){ openIntakeLinkModal({kind: "geral"}); });
     document.getElementById("patLinksBtn").addEventListener("click", function(){ openIntakeLinksList(); });
   })();
   document.getElementById("profListSearch").addEventListener("input", renderProfissionaisTab);
@@ -14250,16 +14248,16 @@ function openPatientFieldsModal(){
   var host = document.getElementById("modalHost");
   var admin = patIsAdmin();
   // Uma tabela: Aparece (cadastro do paciente), Link rápido (link do paciente: Enviar link de cadastro,
-  // Pedir atualização, tarefa do CRM), Link fixo (link geral da clínica) e Obrigatório (vale no cadastro
+  // Pedir atualização, tarefa do CRM) e Obrigatório (vale no cadastro
   // e nos links em que o campo aparece). Nos links todos os campos podem ser escolhidos, nome e telefone também.
   function chk(x, on, dis, lbl){ return '<td class="pf-chk"><input type="checkbox" data-pfx="' + x + '"' + (on ? ' checked' : '') + (dis || !canEdit ? ' disabled' : '') + ' aria-label="' + esc(lbl) + '"></td>'; }
   function linkCells(lk, label){
-    if (!lk) return '<td class="pf-chk pf-na">—</td><td class="pf-chk pf-na">—</td>';
+    if (!lk) return '<td class="pf-chk pf-na">—</td>';
     var lf = LINK_FIELDS.filter(function(x){ return x.key === lk; })[0] || {};
-    return chk("rapido", linkFieldCfg("individual", lk).show, lf.lock, "Link Rápido: " + label) + chk("fixo", linkFieldCfg("geral", lk).show, lf.lock, "Link Fixo: " + label);
+    return chk("rapido", linkFieldCfg("individual", lk).show, lf.lock, "Link Rápido: " + label);
   }
   var rows = PAT_SECTIONS.map(function(sec){
-    return '<tr class="pf-sec"><td colspan="5">' + esc(sec.label) + '</td></tr>' + PAT_FIELDS.filter(function(f){ return f.sec === sec.id; }).map(function(f){
+    return '<tr class="pf-sec"><td colspan="4">' + esc(sec.label) + '</td></tr>' + PAT_FIELDS.filter(function(f){ return f.sec === sec.id; }).map(function(f){
       // Administrador: controle total (menos o Nome). Outros níveis não mexem no CPF nem em Filiação/Financeiro.
       var cfg = patFieldCfg(f.key, true), lk = LINK_OF_FIELD[f.key] || "";
       var lockShow = f.lock || (!admin && (f.fixed || f.dfltReq)), lockReq = f.lock || (!admin && f.dfltReq);
@@ -14267,16 +14265,16 @@ function openPatientFieldsModal(){
         chk("show", cfg.show, lockShow, "Aparece: " + f.label) + linkCells(lk, f.label) + chk("req", cfg.req, lockReq, "Obrigatório: " + f.label) + '</tr>';
     }).join("");
   }).join("") +
-  '<tr class="pf-sec"><td colspan="5">Só no link de cadastro</td></tr>' + LINK_ONLY.map(function(k){
+  '<tr class="pf-sec"><td colspan="4">Só no link de cadastro</td></tr>' + LINK_ONLY.map(function(k){
     var lf = LINK_FIELDS.filter(function(x){ return x.key === k; })[0];
-    var req = linkFieldCfg("individual", k).req || linkFieldCfg("geral", k).req;
+    var req = linkFieldCfg("individual", k).req;
     return '<tr data-lfk="' + k + '" data-lonly><td>' + esc(lf.label) + '</td><td class="pf-chk pf-na">—</td>' + linkCells(k, lf.label) + chk("req", req, false, "Obrigatório: " + lf.label) + '</tr>';
   }).join("");
   host.innerHTML = '<div class="overlay" id="ovPf"><div class="modal" style="max-width:640px">' +
-    '<div class="modal-head"><div><h3>Campos Obrigatórios</h3><div class="modal-sub">Escolha os campos de cada formulário: <b>Aparece</b> = cadastro do paciente; <b>Link Rápido</b> = link enviado ao paciente (Enviar link de cadastro, Pedir atualização e tarefa do CRM); <b>Link Fixo</b> = link geral da clínica. <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece. ' +
+    '<div class="modal-head"><div><h3>Campos Obrigatórios</h3><div class="modal-sub">Escolha os campos de cada formulário: <b>Aparece</b> = cadastro do paciente; <b>Link Rápido</b> = link enviado ao paciente (Enviar link de cadastro, Pedir atualização e tarefa do CRM). <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece. ' +
       (admin ? 'No cadastro o Nome é sempre obrigatório; nos links, todo campo do cadastro pode ser escolhido (os que não estão marcados ficam fora do link).' : 'No cadastro o Nome é sempre obrigatório; nos links, todo campo do cadastro pode ser escolhido (os que não estão marcados ficam fora do link). CPF, Filiação e Responsável financeiro só o Administrador muda.') + ' Esconder um campo não apaga o que já foi gravado nele.</div></div>' +
       '<button class="modal-close" id="pfClose" aria-label="Fechar">✕</button></div>' +
-    '<div class="modal-body"><table class="pf-table pf-table5"><thead><tr><th>Campo</th><th>Aparece</th><th>Link Rápido</th><th>Link Fixo</th><th><span class="pm-lg">Obrigatório</span><span class="pm-sm">Obrig.</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="modal-body"><table class="pf-table pf-table5"><thead><tr><th>Campo</th><th>Aparece</th><th>Link Rápido</th><th><span class="pm-lg">Obrigatório</span><span class="pm-sm">Obrig.</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="pfCancel">' + (canEdit ? "Cancelar" : "Fechar") + '</button>' +
       (canEdit ? '<button class="btn primary" id="pfSave">Salvar</button>' : '') + '</div></div></div>';
   var ov = document.getElementById("ovPf");
@@ -14292,14 +14290,13 @@ function openPatientFieldsModal(){
   });
   var sv = document.getElementById("pfSave");
   if (sv) sv.addEventListener("click", function(){
-    var fields = {}, link = {individual: {}, geral: {}};
+    var fields = {}, link = {individual: {}};
     ov.querySelectorAll("tr[data-pfk], tr[data-lfk]").forEach(function(tr){
       var k = tr.getAttribute("data-pfk"), lk = tr.getAttribute("data-lfk"), req = tr.querySelector('[data-pfx="req"]').checked;
       if (k && k !== "nome") fields[k] = {show: tr.querySelector('[data-pfx="show"]').checked, req: req};
       if (lk && !(LINK_FIELDS.filter(function(f){ return f.key === lk; })[0] || {}).lock){
-        var r = tr.querySelector('[data-pfx="rapido"]').checked, fx = tr.querySelector('[data-pfx="fixo"]').checked;
+        var r = tr.querySelector('[data-pfx="rapido"]').checked;
         link.individual[lk] = {show: r, req: r && req};
-        link.geral[lk] = {show: fx, req: fx && req};
       }
     });
     state.patientFields = fields; state.patientLink = link;
@@ -26156,15 +26153,14 @@ var HELP_TOPICS = [
       "Paciente novo: Cadastros → Pacientes → <b>Outras Opções</b> → <b>Enviar Link de Cadastro</b>. Escreva o telefone (e o nome, se souber), clique em <b>Gerar Link</b> e use <b>Copiar</b>, <b>Enviar por WhatsApp</b> ou <b>Enviar por E-mail</b>.",
       "Paciente Já Cadastrado: na janela dele, <b>Outras Opções → Pedir Atualização</b> manda o link já preenchido com o cadastro atual; a família só corrige o que mudou.",
       "Lead do CRM: na tarefa (já salva), <b>Outras Opções</b> → <b>Enviar Link de Cadastro</b>. O envio fica ligado à tarefa.",
-      "<b>Link Geral da Clínica</b> (Outras Opções): um link fixo para o Instagram, o site ou o WhatsApp da recepção. Cada envio cria um lead novo no CRM, na lista Atendimento.",
       "Quando chega um cadastro, o botão <b>Cadastros</b> mostra um número e a tela Pacientes mostra <b>Revisar Cadastro</b>. Clique para abrir a janela do paciente já preenchida: confira e salve. No paciente já cadastrado, os campos diferentes do envio ficam destacados, com <b>Usar Enviado</b> ou <b>Manter Atual</b>; telefone e e-mail novos entram na lista.",
       "<b>Descartar Envio</b> (no aviso do topo da janela, ou na lista de revisão) tira o envio da lista sem gravar nada.",
       "<b>Links Enviados</b> (Outras Opções) mostra a situação de cada link — Aguardando, Preenchido, Vencido ou Cancelado — com Copiar e Cancelar."
     ],
     rules: [
       "O formulário pode ter qualquer campo do cadastro do paciente — identificação (nome, nascimento, CPF, sexo, RG, Cartão SUS, data de entrada), mãe e pai (nome, CPF e profissão), endereço, responsáveis pela retirada, medida protetiva, telefone, e-mail, responsável financeiro, saúde (diagnóstico, data do diagnóstico, médico, nível de suporte, comunicação, alergias, medicações, restrições alimentares), escola (nome, série, turno, professor, mediador), rotina atual, como conheceu e observações — e ainda <b>Convênio</b> e <b>Possui diagnóstico?</b>, mais a autorização (LGPD), que é sempre obrigatória.",
-      "Quais campos aparecem e quais são obrigatórios: Pacientes → Outras Opções → <b>Campos Obrigatórios</b>, colunas <b>Link Rápido</b> (Enviar link de cadastro, Pedir atualização e o link da tarefa do CRM) e <b>Link Fixo</b> (link geral da clínica). <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece; Convênio e “Possui diagnóstico?” ficam no grupo “Só no link de cadastro”. Nos links todos os campos podem ser escolhidos, inclusive nome e telefone; o envio precisa ter pelo menos o nome, o telefone, o CPF ou o e-mail.",
-      "O link do paciente vale 1 dia e uma vez só; o link geral não vence (gerar um novo desativa o anterior).",
+      "Quais campos aparecem e quais são obrigatórios: Pacientes → Outras Opções → <b>Campos Obrigatórios</b>, colunas <b>Link Rápido</b> (Enviar link de cadastro, Pedir atualização e o link da tarefa do CRM). <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece; Convênio e “Possui diagnóstico?” ficam no grupo “Só no link de cadastro”. Nos links todos os campos podem ser escolhidos, inclusive nome e telefone; o envio precisa ter pelo menos o nome, o telefone, o CPF ou o e-mail.",
+      "O link vale 1 dia e uma vez só.",
       "Ao salvar um paciente novo vindo do link, nasce um tratamento <b>Ativo</b> só com o convênio informado (o resto do tratamento é preenchido depois). Se veio do CRM, a tarefa fica ligada ao paciente e os dados do lead saem da tarefa.",
       "CPF enviado igual ao de um paciente já cadastrado: o sistema pergunta se é uma atualização do cadastro dele.",
       "No link não há um campo separado de “responsável”: os dados vão direto para os campos do cadastro. <b>De quem é este telefone?</b> (nome e parentesco) vira o nome do contato do telefone, como WhatsApp. Com a mãe ou o pai no link, <b>Quem é o responsável financeiro?</b> (Mãe, Pai ou Outra pessoa) liga o financeiro à Filiação; com Outra pessoa, a família informa nome, CPF/CNPJ, telefone e e-mail.",
@@ -34033,7 +34029,7 @@ IO_KINDS.tarefas = {label: "Tarefas do CRM", file: "tarefas", mod: "crm_listas",
 // Pacientes revisar (botão "Revisar Cadastro" na tela Pacientes e na janela do paciente; número
 // no botão Cadastros). Sem sistema online (testes) tudo fica em INTAKE.mem.
 var INTAKE = {subs: [], loaded: false, mem: null, chan: null, reminded: false, missing: false};
-var INTAKE_KIND = {novo: "Paciente novo", atualizacao: "Atualização", crm: "Lead do CRM", geral: "Link geral"};
+var INTAKE_KIND = {novo: "Paciente novo", atualizacao: "Atualização", crm: "Lead do CRM"};
 function intakeCan(){ return can("pacientes", "create"); }
 function intakeMem(){ if (!INTAKE.mem) INTAKE.mem = {links: [], subs: []}; return INTAKE.mem; }
 // Link curto: /c/<código de 10 letras e números> (vercel.json leva para cadastro.html).
@@ -34073,12 +34069,10 @@ function intakeCreate(o){
   var c = agdClient();
   if (!c){
     var now = Date.now(), l = Object.assign({token: intakeToken(), created_at: new Date(now).toISOString(),
-      expires_at: o.kind === "geral" ? null : new Date(now + 864e5).toISOString(), used_at: null, canceled_at: null, created_by_name: trWho()}, o);
-    if (o.kind === "geral") intakeMem().links.forEach(function(x){ if (x.kind === "geral" && !x.canceled_at) x.canceled_at = new Date(now).toISOString(); });
+      expires_at: new Date(now + 864e5).toISOString(), used_at: null, canceled_at: null, created_by_name: trWho()}, o);
     intakeMem().links.push(l); return Promise.resolve(l);
   }
-  var go = o.kind === "geral" ? c.from("intake_links").update({canceled_at: new Date().toISOString()}).eq("kind", "geral").is("canceled_at", null) : Promise.resolve({});
-  return go.then(function(){ return c.from("intake_links").insert(Object.assign({token: intakeToken()}, o)).select().single(); }).then(function(r){ if (r.error) throw r.error; return r.data; });
+  return c.from("intake_links").insert(Object.assign({token: intakeToken()}, o)).select().single().then(function(r){ if (r.error) throw r.error; return r.data; });
 }
 function intakeLinks(kind){
   var c = agdClient();
@@ -34124,12 +34118,11 @@ function intakePrefillFrom(p){
 function clinicSocialText(){ return window.PIPO_REDES ? window.PIPO_REDES.text((state.clinic || {}).redes) : ""; }
 function intakeMessage(kind, nome, url){
   var cl = clinicName(), soc = clinicSocialText(), m;
-  if (kind === "geral") m = "Olá! Para fazer o cadastro na " + cl + ", preencha por este link: " + url;
-  else if (kind === "atualizacao") m = "Olá! Para atualizarmos o seu cadastro, confira e corrija por este link (vale 1 dia): " + url;
+  if (kind === "atualizacao") m = "Olá! Para atualizarmos o seu cadastro, confira e corrija por este link (vale 1 dia): " + url;
   else m = "Olá! Para que possamos realizar seu agendamento, preencha por este link (vale 1 dia): " + url;
   return soc ? m + "\n\nConheça mais sobre nosso trabalho:\n" + soc : m;
 }
-// Janela do link: opts {kind: "novo"|"atualizacao"|"crm"|"geral", patient, task}
+// Janela do link: opts {kind: "novo"|"atualizacao"|"crm", patient, task}
 function openIntakeLinkModal(opts){
   opts = opts || {};
   if (!intakeCan()){ showToast("Sem permissão: só quem pode incluir Pacientes envia links de cadastro.", true); return; }
@@ -34137,23 +34130,22 @@ function openIntakeLinkModal(opts){
   var nome = p ? p.nome : task ? (lead.nome || (findPatientById(task.patient_id) || {}).nome || task.title || "") : "";
   var tel = p ? digitsOnly(patFirstPhone(p) || "") : task ? digitsOnly(lead.telefone || "") : "";
   var mail = p ? (patFirstEmail(p) || "") : "";
-  var title = kind === "geral" ? "Link Geral da Clínica" : kind === "atualizacao" ? "Pedir atualização do cadastro" : "Enviar Link de Cadastro";
-  var sub = kind === "geral" ? "Para o Instagram, o WhatsApp da recepção ou o site. Não vence. Cada envio vira um lead novo no CRM (lista Atendimento) e fica esperando revisão."
-    : kind === "atualizacao" ? "A família recebe o formulário já preenchido com o cadastro atual e corrige o que mudou. Vale 1 dia e uma vez só; o envio fica esperando revisão."
+  var title = kind === "atualizacao" ? "Pedir atualização do cadastro" : "Enviar Link de Cadastro";
+  var sub = kind === "atualizacao" ? "A família recebe o formulário já preenchido com o cadastro atual e corrige o que mudou. Vale 1 dia e uma vez só; o envio fica esperando revisão."
     : "A família preenche os dados principais pelo celular. Vale 1 dia e uma vez só; o envio fica esperando revisão" + (task ? " e fica ligado a esta tarefa do CRM" : "") + ".";
   var host = regQuickHost();
   host.innerHTML = '<div class="overlay" id="ovIntake"><div class="modal" style="max-width:560px">' +
     '<div class="modal-head"><div><h3>' + esc(title) + '</h3><div class="modal-sub">' + esc(sub) + '</div></div><button class="modal-close" id="ikClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body">' +
-      (kind === "geral" ? '' : '<div class="field-row"><div class="field" style="flex:2"><label for="ikNome">Paciente (Opcional)</label><input id="ikNome" type="text" value="' + esc(nome) + '"' + (p ? ' readonly' : '') + '></div></div>') +
+      ('<div class="field-row"><div class="field" style="flex:2"><label for="ikNome">Paciente (Opcional)</label><input id="ikNome" type="text" value="' + esc(nome) + '"' + (p ? ' readonly' : '') + '></div></div>') +
       '<div class="field-row"><div class="field"><label for="ikTel">Telefone / WhatsApp</label><input id="ikTel" type="text" data-phone inputmode="tel" placeholder="(00) 00000-0000" value="' + esc(tel ? formatPhone(tel) : "") + '"></div>' +
         '<div class="field"><label for="ikMail">E-mail</label><input id="ikMail" type="text" inputmode="email" value="' + esc(mail) + '"></div></div>' +
       '<div id="ikLinkBox" hidden><div class="field"><label for="ikUrl">Link</label><div class="pm-inline"><input id="ikUrl" type="text" readonly><button type="button" class="btn ghost" id="ikCopy">Copiar</button></div></div>' +
         '<div class="pat-count" id="ikInfo"></div>' +
         '<div class="ik-acts"><button type="button" class="btn ghost" id="ikWa">Enviar por WhatsApp</button><button type="button" class="btn ghost" id="ikMailBtn">Enviar por E-mail</button></div></div>' +
     '</div>' +
-    '<div class="modal-foot"><button class="btn danger" id="ikCancelLink" hidden>' + (kind === "geral" ? "Desativar Link" : "Cancelar Link") + '</button><div class="spacer"></div>' +
-      '<button class="btn ghost" id="ikClose2">Fechar</button><button class="btn primary" id="ikGen">' + (kind === "geral" ? "Gerar Link" : "Gerar Link") + '</button></div>' +
+    '<div class="modal-foot"><button class="btn danger" id="ikCancelLink" hidden>' + "Cancelar Link" + '</button><div class="spacer"></div>' +
+      '<button class="btn ghost" id="ikClose2">Fechar</button><button class="btn primary" id="ikGen">' + "Gerar Link" + '</button></div>' +
   '</div></div>';
   var ov = document.getElementById("ovIntake"), cur = null;
   function $(id){ return document.getElementById(id); }
@@ -34163,9 +34155,8 @@ function openIntakeLinkModal(opts){
   function show(l){
     cur = l; var url = intakeUrl(l.token);
     $("ikLinkBox").hidden = false; $("ikUrl").value = url; $("ikCancelLink").hidden = false;
-    $("ikGen").textContent = kind === "geral" ? "Gerar novo link" : "Gerar outro link";
-    $("ikInfo").textContent = kind === "geral" ? "Link ativo desde " + crmWhen(l.created_at) + ". Gerar um novo desativa este." :
-      "Vale até " + crmWhen(l.expires_at) + ". " + intakeLinkState(l) + ".";
+    $("ikGen").textContent = "Gerar outro link";
+    $("ikInfo").textContent = "Vale até " + crmWhen(l.expires_at) + ". " + intakeLinkState(l) + ".";
   }
   function msg(){ return intakeMessage(kind, $("ikNome") ? $("ikNome").value.trim() : "", $("ikUrl").value); }
   $("ikCopy").onclick = function(){
@@ -34183,7 +34174,7 @@ function openIntakeLinkModal(opts){
   };
   $("ikGen").onclick = function(){
     var b = this; b.disabled = true;
-    var rec = {kind: kind, nome: $("ikNome") ? $("ikNome").value.trim() : "Link geral", telefone: digitsOnly($("ikTel").value)};
+    var rec = {kind: kind, nome: $("ikNome") ? $("ikNome").value.trim() : "", telefone: digitsOnly($("ikTel").value)};
     if (p) rec.patient_id = p.id;
     if (task) rec.task_id = task.id;
     if (kind === "atualizacao") rec.prefill = intakePrefillFrom(p);
@@ -34193,13 +34184,11 @@ function openIntakeLinkModal(opts){
   };
   $("ikCancelLink").onclick = function(){
     if (!cur) return;
-    confirmDialog({title: kind === "geral" ? "Desativar Link" : "Cancelar Link", message: "O link para de funcionar. Quem abrir verá que foi cancelado.", confirmLabel: kind === "geral" ? "Desativar" : "Cancelar Link", cancelLabel: "Voltar"}).then(function(ok){
+    confirmDialog({title: "Cancelar Link", message: "O link para de funcionar. Quem abrir verá que foi cancelado.", confirmLabel: "Cancelar Link", cancelLabel: "Voltar"}).then(function(ok){
       if (!ok) return;
       intakeCancelLink(cur.token).then(function(){ showToast("Link cancelado."); close(); }, function(e){ showToast("Não foi possível cancelar: " + ((e && e.message) || e), true); });
     });
   };
-  // Link geral: mostra o ativo, se houver.
-  if (kind === "geral") intakeLinks("geral").then(function(ls){ var a = ls.filter(function(l){ return !l.canceled_at; })[0]; if (a) show(a); }, function(){});
 }
 // Lista dos links enviados (situação de cada um), com cancelar e copiar.
 function openIntakeLinksList(){
