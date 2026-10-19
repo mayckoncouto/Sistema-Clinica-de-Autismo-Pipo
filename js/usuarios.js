@@ -158,6 +158,8 @@
       ".u-badge.off{background:var(--danger-weak);color:var(--danger)}" +
       ".u-badge.ok{background:#e3f1e2;color:#3d7a39}" +
       ".perm-grid{width:100%;border-collapse:collapse;font-size:12.5px}" +
+      ".perm-grid{table-layout:fixed}" +
+      ".perm-grid th:not(:first-child),.perm-grid td:not(:first-child){width:84px}" +
       ".perm-grid th,.perm-grid td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:center}" +
       ".perm-grid th:first-child,.perm-grid td:first-child{text-align:left}" +
       ".perm-grid th{font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted)}" +
