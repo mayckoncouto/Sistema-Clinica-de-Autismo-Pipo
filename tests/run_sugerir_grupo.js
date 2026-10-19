@@ -1,0 +1,37 @@
+// Sugerir Agendamento: ABA Não atende sozinho e ABA Sim só divide a sala com a mesma faixa etária (sgGroupCheck).
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+(async () => {
+  const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
+  const i = src.indexOf('"use strict";');
+  const evPage = path.join(__dirname, 'page_sgg.html');
+  fs.writeFileSync(evPage, src.slice(0, i + 13) + '\nwindow.__ev = function(x){ return eval(x); };\n' + src.slice(i + 13));
+  const browser = await chromium.launch(require('./launch-opts'));
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + evPage);
+  await page.waitForSelector('#gridHost .book');
+  const ev = (c) => page.evaluate((x) => window.__ev(x), c);
+  let fails = 0;
+  const check = (l, ok, x) => { console.log(l, !!ok, x === undefined ? '' : x); if (!ok) fails++; };
+  await ev(`(async function(){
+    var db = await window.claude.use('db');
+    await db.doc('config/specialties').set({list: [{id: 'fono', name: 'Fonoaudiologia', sigla: 'FN'}]});
+    await db.doc('config/professionals').set({list: [{id: 'f1', nome: 'Fono Um', name: 'Fono Um', specialtyId: 'fono'}, {id: 'f2', nome: 'Fono Dois', name: 'Fono Dois', specialtyId: 'fono'}]});
+    await db.doc('config/rooms').set({list: [{id: 'rA', name: 'Fonoaudiologia', aba: true, color: 'teal', therapists: [{id: 'a1', name: 'Fono Um', professionalId: 'f1'}, {id: 'a2', name: 'Fono Dois', professionalId: 'f2'}]}]});
+    await db.doc('patients/all').set({list: [{id: 'pa', nome: 'Paciente A', idade: 3}, {id: 'pb', nome: 'Paciente B', idade: 3}, {id: 'pc', nome: 'Paciente C', idade: 12}]});
+    var ids = []; ['seg','ter','qua','qui','sex'].forEach(function(d){ for (var w = 1; w <= 4; w++) ids.push(d + '-' + w); });
+    for (var k = 0; k < ids.length; k++) await db.doc('schedule/' + ids[k]).set({bookings: {}});
+    await db.doc('schedule/seg-1').set({bookings: {'07:20|rA|a2': {patient: 'Paciente B', note: '', service: 'sessao'}}});
+  })()`);
+  await page.waitForTimeout(700);
+  const run = (pid, aba) => ev(`(function(){ var p = findPatientById('${pid}'); var room = state.rooms[0]; var line = {id: 'l', specId: 'fono', hours: 4, service: 'sessao', aba: '${aba}'}; return sgGroupCheck(p, line, 'seg-1', '07:20', room, room.therapists[0]); })()`);
+  check('ABA Sim, mesma faixa etária: pode dividir a sala?', (await run('pa', 'Sim')) === '', await run('pa', 'Sim'));
+  check('ABA Sim, faixa etária diferente: recusa?', /Faixa/.test(await run('pc', 'Sim')), await run('pc', 'Sim'));
+  check('ABA Não: recusa dividir sala?', /sozinho/.test(await run('pa', 'Não')), await run('pa', 'Não'));
+  check('no JS errors?', errors.length === 0, JSON.stringify(errors));
+  fs.unlinkSync(evPage);
+  await browser.close();
+  process.exit(fails ? 1 : 0);
+})();

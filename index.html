@@ -21653,6 +21653,21 @@ function sgRemovable(p){
 }
 // Melhores lugares (até 6) para mais uma sessão do quadro na semana w (opcionalmente só num dia). Respeita o Horário de
 // Atendimento (regra dura, salvo opts.fora) e depois o quadro; todas as regras do Planner via pltTry.
+// Regra de grupo (igual ao Auto Planner): Sessão ABA Não fica sozinha na sala; ABA Sim só divide sala/horário com
+// ABA Sim da MESMA faixa etária e terapeutas compatíveis. Devolve "" se pode ou o motivo.
+function sgGroupCheck(p, line, docId, time, room, seat){
+  if (lineSvc(line) !== DEFAULT_SERVICE_ID) return "";
+  var others = apOcc(docId, time, room).filter(function(o){ return o.p.id !== p.id; });
+  if (!others.length) return "";
+  if (!apIsAbaSim(p, line)) return "Paciente sem Intervenção ABA atende sozinho na sala";
+  if (apOccAba(others).length !== others.length) return "Sala com paciente que não faz grupo";
+  var band = apBandId(p), me = findProfessional(seat.professionalId);
+  for (var i = 0; i < others.length; i++){
+    if (apBandId(others[i].p) !== band) return "Faixa etária diferente na sala";
+    if (!apProfCompat(me, findProfessional(others[i].prof))) return "Terapeutas incompatíveis na mesma sala";
+  }
+  return "";
+}
 function sgCands(p, line, w, have, opts, cols, onlyDay, why){
   var days = sgDays(line), mine = have.filter(function(h){ return h.lineId === line.id; }), raw = [];
   DAYS.forEach(function(d){
@@ -21678,6 +21693,7 @@ function sgCands(p, line, w, have, opts, cols, onlyDay, why){
           else { sc += 12; }
         }
         if (routineConflictMsg(p, d.key, time, "x")){ sc += 30; tags.push("rotina atual"); }
+        if (lineSvc(line) === DEFAULT_SERVICE_ID && roomAba(c.room) !== apIsAbaSim(p, line)) sc += 50;
         sc += ti * 0.1;
         raw.push({w: w, d: d, time: time, c: c, docId: docId, key: key, sc: sc, tags: tags});
       });
@@ -21687,7 +21703,7 @@ function sgCands(p, line, w, have, opts, cols, onlyDay, why){
   var good = [], tries = 0, rec = {patient: p.nome, note: "", service: lineSvc(line)};
   for (var ri = 0; ri < raw.length && good.length < 6 && tries < 500; ri++){
     tries++;
-    var wh = pltTry(raw[ri].docId, raw[ri].key, rec);
+    var wh = pltTry(raw[ri].docId, raw[ri].key, rec) || sgGroupCheck(p, line, raw[ri].docId, raw[ri].time, raw[ri].c.room, raw[ri].c.seat);
     if (wh){ if (why){ var k = pltWhyKey(wh); why[k] = (why[k] || 0) + 1; } continue; }
     good.push(raw[ri]);
   }
@@ -28667,7 +28683,7 @@ var HELP_TOPICS = [
     who: "Vale para todos que agendam."},
   {id: "planner-ferramentas", group: "Planner", title: "Outras Opções do Planner", mod: "planner", tab: "planner",
     purpose: "Menu <b>Outras Opções ▾</b> do Planner: mudanças em lote e envio para a Agenda. A montagem automática das sessões ficou no <b>Auto Planner</b> (menu Planner ▾), uma grade própria separada do Planner.",
-    steps: ["<b>Sugerir Agendamento:</b> escolha o paciente; o sistema lê cada quadro de Especialidades e Serviços do tratamento ativo, vê o que já está marcado e oferece onde marcar as sessões que faltam. Primeiro vale o <b>Horário de Atendimento</b> do paciente; depois o que o quadro pede (dia, horário, sala, semanas, sessões seguidas e o mesmo horário das outras semanas). Troque a opção na lista, desmarque o que não quiser e clique em <b>Agendar</b>. A caixa “mostrar também horários fora do Horário de Atendimento” só serve quando não há lugar dentro dele. Sessões do paciente que estão <b>fora do Horário de Atendimento e fora do quadro</b> aparecem numa lista à parte, para remover (nada vem marcado). Antes das sugestões novas, a ferramenta também oferece <b>correções nas sessões já marcadas</b>: onde uma especialidade tem sessões a mais e outra a menos que o quadro, troca a especialidade da sessão (no mesmo dia, quando possível); e onde o mês está desigual (por exemplo 2 Nutrição numa semana e nenhuma em outra), passa a sessão para a semana que está faltando. Elas vêm marcadas, a sessão continua existindo, e o ideal é repartir o total do quadro pelas semanas (não é regra fixa: só é feito quando há lugar que respeite as regras). Todas as regras do Planner valem e Ctrl+Z desfaz.", 
+    steps: ["<b>Sugerir Agendamento:</b> escolha o paciente; valem as regras de Intervenção ABA e de grupo do Auto Planner (Sessão sem Intervenção ABA fica sozinha na sala; com Intervenção ABA só divide sala e horário com a mesma faixa etária e terapeutas compatíveis); o sistema lê cada quadro de Especialidades e Serviços do tratamento ativo, vê o que já está marcado e oferece onde marcar as sessões que faltam. Primeiro vale o <b>Horário de Atendimento</b> do paciente; depois o que o quadro pede (dia, horário, sala, semanas, sessões seguidas e o mesmo horário das outras semanas). Troque a opção na lista, desmarque o que não quiser e clique em <b>Agendar</b>. A caixa “mostrar também horários fora do Horário de Atendimento” só serve quando não há lugar dentro dele. Sessões do paciente que estão <b>fora do Horário de Atendimento e fora do quadro</b> aparecem numa lista à parte, para remover (nada vem marcado). Antes das sugestões novas, a ferramenta também oferece <b>correções nas sessões já marcadas</b>: onde uma especialidade tem sessões a mais e outra a menos que o quadro, troca a especialidade da sessão (no mesmo dia, quando possível); e onde o mês está desigual (por exemplo 2 Nutrição numa semana e nenhuma em outra), passa a sessão para a semana que está faltando. Elas vêm marcadas, a sessão continua existindo, e o ideal é repartir o total do quadro pelas semanas (não é regra fixa: só é feito quando há lugar que respeite as regras). Todas as regras do Planner valem e Ctrl+Z desfaz.", 
       "<b>Editar Agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar Profissional</b>: passa as colunas de um profissional para outro.",
       "<b>Outras Opções ▾ → Enviar para a Agenda</b>: comece escolhendo o <b>Período</b>. <b>Mês</b>: escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda; a 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª; a prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
