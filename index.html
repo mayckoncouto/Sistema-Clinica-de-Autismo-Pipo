@@ -8668,6 +8668,7 @@ function crmPass(x, f){
   if (f.due === "sem" && x.due_date) return false;
   return true;
 }
+function crmSortAlpha(a, b){ return normText(a.title || "").localeCompare(normText(b.title || ""), "pt-BR") || crmSort(a, b); }
 function crmSort(a, b){ return (a.position || 0) - (b.position || 0) || String(a.created_at || "").localeCompare(String(b.created_at || "")); }
 function crmStDot(st, fallback){ return '<span class="crm-st-dot" style="--st:' + esc(st ? st.color : "#999") + '"><i></i>' + esc(st ? st.name : (fallback || "—")) + '</span>'; }
 function crmPrio(p){ return CRM_PRIOS.filter(function(x){ return x.id === p; })[0] || CRM_PRIOS[2]; }
@@ -8975,7 +8976,7 @@ function crmCalHtml(tasks, base, list){
   var weeks = Math.ceil((first.getDay() + new Date(y, m + 1, 0).getDate()) / 7);
   var cells = "";
   for (var i = 0; i < weeks * 7; i++){
-    var d = agdAddDays(start, i), iso = agdIso(d), xs = (byDay[iso] || []).sort(crmSort), open = CRM.calOpen === iso;
+    var d = agdAddDays(start, i), iso = agdIso(d), xs = (byDay[iso] || []).sort(crmSortAlpha), open = CRM.calOpen === iso;
     var shown = open ? xs : xs.slice(0, CRM_CAL_MAX);
     cells += '<div class="crm-cal-day' + (d.getMonth() !== m ? ' out' : '') + (iso === today ? ' today' : '') + '" data-cal-day="' + iso + '">' +
       '<div class="crm-cal-num">' + (canNew ? '<button type="button" class="crm-plus" data-cal-new="' + iso + '" title="Nova tarefa com vencimento em ' + esc(agdBrDate(iso)) + '">+</button>' : '') + '<span>' + d.getDate() + '</span></div>' +
@@ -9020,7 +9021,7 @@ function crmCalDaySheet(anchor, iso){
   var showDone = !!(document.getElementById("crmShowDone") || {}).checked || !!crmFilters().q;
   var xs = Object.keys(CRM.tasks).map(function(k){ return CRM.tasks[k]; }).filter(function(x){
     return x.due_date === iso && (home ? crmCan(x.list_id, "view") : mine ? crmCan(x.list_id, "view") && (x.assignees || []).indexOf(crmMe()) !== -1 : x.list_id === CRM.list) && (showDone || f.st || !crmIsDone(x)) && crmPass(x, f);
-  }).sort(crmSort);
+  }).sort(crmSortAlpha);
   var canNew = !!list && crmCan(list.id, "create");
   var html = (xs.length ? xs.map(function(x){
     var st = crmStatus(crmListById(x.list_id), x.status), who = crmWhoName(x);
