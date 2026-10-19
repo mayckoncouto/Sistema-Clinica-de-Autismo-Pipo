@@ -27,12 +27,12 @@ const path = require('path');
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
   const secs = await page.$$eval('#ovPat .pm-sec-head .tr-sec', (a) => a.map((x) => x.textContent));
   check('janela do paciente tem o grupo Convênio (depois da Medida Protetiva)?', secs.indexOf('Convênio') === secs.indexOf('Medida Protetiva') + 1, secs);
-  check('campos do grupo: convênio, plano, carteirinha e validade?', await page.$('#pf-convenioPadrao') && await page.$('#pf-planoPadrao') && await page.$('#pf-carteirinha') && await page.$('#pf-carteirinhaValidade') ? true : false);
-  await setv('#pf-cpf', '52998224725'); await setv('#pf-convenioPadrao', 'unimed'); await setv('#pf-planoPadrao', 'Plano Fictício'); await setv('#pf-carteirinha', '0001-FICT');
+  check('campos do grupo: convênio, plano, carteirinha e validade?', await page.$('#pf-convenioPadrao') && await page.$('#pf-carteirinha') && await page.$('#pf-carteirinhaValidade') ? true : false);
+  await setv('#pf-cpf', '52998224725'); await setv('#pf-convenioPadrao', 'unimed'); await setv('#pf-carteirinha', '0001-FICT');
   await setv('#pf-carteirinhaValidade', '2026-09-01');
   await page.click('#pSave'); await page.waitForTimeout(500);
   let p = await raw('ana-azul');
-  check('cadastro grava convênio, plano, carteirinha e validade?', p.convenioPadrao === 'unimed' && p.planoPadrao === 'Plano Fictício' && p.carteirinha === '0001-FICT' && p.carteirinhaValidade === '2026-09-01', p);
+  check('cadastro grava convênio, plano, carteirinha e validade?', p.convenioPadrao === 'unimed' && p.carteirinha === '0001-FICT' && p.carteirinhaValidade === '2026-09-01', p);
   check('sem tratamento ativo não pergunta nada?', !(await page.$('#ovConfirm')) && !(await page.$('#ovPat')));
   check('lista mostra a etiqueta de carteirinha vencida ao lado do nome?', /Cart\. vencida/.test(await page.textContent('#patListHost tbody tr:has-text("Ana Azul")')));
 
@@ -50,7 +50,7 @@ const path = require('path');
   await ev('writeTreatments([{id:"tr-cp", patientId:"ana-azul", status:"ativo", statusEm:"2026-01-01", inicio:"2026-01-01", tipo:"novo", convenioId:"unimed", convenio:"Unimed", sessoesMes:"", specHours:[], vencPor:"sem", criadoEm:"2026-01-01T00:00:00Z", atualizadoEm:"2026-01-01T00:00:00Z"}])');
   await page.waitForTimeout(300);
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
-  await setv('#pf-planoPadrao', 'Plano Novo');
+  await setv('#pf-carteirinha', '0002-NOVA');
   await page.click('#pSave'); await page.waitForTimeout(400);
   check('mudar só o plano do cadastro não pergunta nada?', !(await page.$('#ovConfirm')));
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
@@ -61,7 +61,7 @@ const path = require('path');
   let t = (await trs()).find((x) => x.id === 'tr-cp');
   check('"Só no cadastro" não mexe no tratamento?', t.convenioId === 'unimed' && t.convenio === 'Unimed', [t.convenioId]);
   p = await raw('ana-azul');
-  check('e o cadastro foi gravado?', p.planoPadrao === 'Plano Novo' && p.convenioPadrao === 'bradesco-saude');
+  check('e o cadastro foi gravado?', p.convenioPadrao === 'bradesco-saude');
 
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
   await setv('#pf-convenioPadrao', 'unimed'); await page.click('#pSave'); await page.waitForTimeout(400);
@@ -76,26 +76,26 @@ const path = require('path');
   check('histórico do tratamento registra a troca?', h.acao === 'convenio' && /Bradesco/.test(h.para) && /Unimed/.test(h.de), h);
   // Convênio igual ao do tratamento: não pergunta.
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForSelector('#ovPat');
-  await setv('#pf-planoPadrao', 'Gold'); await page.click('#pSave'); await page.waitForTimeout(400);
+  await setv('#pf-carteirinha', '0001-FICT'); await page.click('#pSave'); await page.waitForTimeout(400);
   check('sem mudança de convênio não pergunta?', !(await page.$('#ovConfirm')));
 
   // Link de Cadastro: o convênio cadastrado vira o convênio do paciente; plano/carteirinha/validade vêm junto.
   const m = await ev('intakeToPatient({nome:"Lia", convenio:"Unimed", plano:"P1", carteirinha:"99", carteirinhaValidade:"2027-02-01"})');
-  check('revisão do link: convênio cadastrado, plano, carteirinha e validade vão para o cadastro?', m.patch.convenioPadrao === 'unimed' && m.patch.planoPadrao === 'P1' && m.patch.carteirinha === '99' && m.patch.carteirinhaValidade === '2027-02-01', m.patch);
+  check('revisão do link: convênio cadastrado, plano, carteirinha e validade vão para o cadastro?', m.patch.convenioPadrao === 'unimed' && m.patch.carteirinha === '99' && m.patch.carteirinhaValidade === '2027-02-01', m.patch);
   const m2 = await ev('intakeToPatient({nome:"Lia", convenio:"Outro", convenioOutro:"Plano X"})');
   check('"Outro" não vira convênio padrão (fica na observação)?', !m2.patch.convenioPadrao && m2.notes.some((n) => /Outro — Plano X/.test(n)), m2);
   const pre = await ev('intakePrefillFrom(rawPatient("ana-azul"))');
-  check('Pedir Atualização leva convênio, plano e carteirinha?', pre.convenio === 'Bradesco Saúde' && pre.plano === 'Gold' && pre.carteirinha === '0001-FICT', pre);
+  check('Pedir Atualização leva convênio, plano e carteirinha?', pre.convenio === 'Bradesco Saúde' && pre.carteirinha === '0001-FICT', pre);
 
   // Campos Obrigatórios: o convênio do cadastro e o do link são a mesma linha.
   await ev('openPatientFieldsModal()'); await page.waitForSelector('#ovPf');
-  check('Campos Obrigatórios: Convênio, Plano, Carteirinha e Validade com colunas de link?', await page.$$eval('#ovPf tr[data-pfk="convenioPadrao"][data-lfk="convenio"], #ovPf tr[data-pfk="planoPadrao"][data-lfk="plano"], #ovPf tr[data-pfk="carteirinha"][data-lfk="carteirinha"], #ovPf tr[data-pfk="carteirinhaValidade"][data-lfk="carteirinhaValidade"]', (a) => a.length === 4));
+  check('Campos Obrigatórios: Convênio, Carteirinha e Validade com colunas de link?', await page.$$eval('#ovPf tr[data-pfk="convenioPadrao"][data-lfk="convenio"], #ovPf tr[data-pfk="carteirinha"][data-lfk="carteirinha"], #ovPf tr[data-pfk="carteirinhaValidade"][data-lfk="carteirinhaValidade"]', (a) => a.length === 3));
   check('"Só no link" fica só com Possui diagnóstico?', await page.$$eval('#ovPf tr[data-lonly]', (a) => a.length === 1));
   await page.click('#pfCancel');
 
   // Planilha de pacientes: colunas e importação.
   const cols = await ev('IO_KINDS.pacientes.cols.map(function(c){ return c.k; })');
-  check('planilha de pacientes tem Convênio, Plano, Carteirinha e Validade?', ['convenio', 'plano', 'carteirinha', 'carteirinhaValidade'].every((k) => cols.indexOf(k) !== -1));
+  check('planilha de pacientes tem Convênio, Plano, Carteirinha e Validade?', ['convenio', 'carteirinha', 'carteirinhaValidade'].every((k) => cols.indexOf(k) !== -1));
   const plan = await ev('(function(){ var r = ioPatPlan([{_line: 2, nome: "Ana Azul", convenio: "Unimed Inexistente", plano: "Z"}, {_line: 3, nome: "Paciente Novo Fictício", convenio: "Unimed", carteirinha: "7", carteirinhaValidade: "01/12/2027"}]); return r.items.map(function(x){ return {st: x.st, warn: x.warn, vals: x.vals}; }); })()');
   check('importação: convênio não cadastrado avisa; cadastrado e validade entram?', plan[0].warn.some((w) => /Convênio não cadastrado/.test(w)) && plan[1].vals.convenioPadrao === 'unimed' && plan[1].vals.carteirinhaValidade === '2027-12-01', plan);
 

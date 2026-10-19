@@ -17,7 +17,7 @@ const path = require('path');
   const check = (l, ok, x) => { console.log(l, ok, x === undefined ? '' : x); if (!ok) fails++; };
   const r = JSON.parse(await page.evaluate(() => window.__ev(`(function(){
     var p = state.patients[0], q = state.patients[1];
-    p.carteirinha = "123456"; p.planoPadrao = "Plano Ouro";
+    p.carteirinha = "123456";
     var rows = [
       {patient: p.nome, date: "2026-10-15", time: "08:00"},
       {patient: p.nome, date: "2026-10-15", time: "09:00"},
@@ -27,10 +27,10 @@ const path = require('path');
     return JSON.stringify({p: p.nome, res: RP_BUILDERS["elegibilidade"](rows, {from: "2026-10-15", to: "2026-10-15", conv: ""})});
   })()`)));
   const sec = r.res.sections[0];
-  check('cabeçalho Paciente/Convênio/Plano/Carteirinha', sec.head.join() === 'Paciente,Convênio,Plano,Carteirinha');
+  check('cabeçalho Paciente/Convênio/Carteirinha', sec.head.join() === 'Paciente,Convênio,Carteirinha');
   check('um registro por paciente (2 pacientes, 3 atendimentos)', sec.rows.length === 2, JSON.stringify(sec.rows));
   const row = sec.rows.find((x) => x[0] === r.p);
-  check('carteirinha e plano aparecem', row && row[3] === '123456' && row[2] === 'Plano Ouro', JSON.stringify(row));
+  check('carteirinha aparecem', row && row[2] === '123456', JSON.stringify(row));
   check('no JS errors?', errors.length === 0, errors.join('|'));
   fs.unlinkSync(f);
   await browser.close();
