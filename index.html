@@ -2602,7 +2602,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
   #tab-tratamentos .pat-toolbar > .inact-toggle{font-size:13px}
   #tab-tratamentos .pat-toolbar > :is(.pat-count,[data-io-wrap],#trAdd,.help-q){order:1}
   #tab-tratamentos .pat-toolbar > .inact-toggle{font-size:12.5px;gap:4px;white-space:nowrap}
-  #tab-tratamentos .pat-toolbar:has(> .cad-title) > .cad-title{flex:1 1 0!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #tab-tratamentos .pat-toolbar:has(> .cad-title) > .cad-title{flex:1 1 calc(100% - 110px)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #tab-tratamentos .pat-toolbar > .pat-count{flex:1 1 90px!important;min-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #tab-tratamentos .pat-toolbar > :is([data-io-wrap],#trAdd,.help-q){flex:none}
   /* Plano Terapêutico: busca / filtro, contador, Incluir, ? */
@@ -3363,9 +3363,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <option value="sem">Pacientes ativos sem tratamento</option>
       </select>
       <span class="pat-count" id="trCount"></span>
-      <label class="inact-toggle" title="Mostrar os tratamentos cancelados"><input type="checkbox" id="trShowCanc"> Cancelados</label>
-      <label class="inact-toggle" title="Mostrar os tratamentos renegociados"><input type="checkbox" id="trShowReneg"> Renegociados</label>
-      <label class="inact-toggle" title="Mostrar os tratamentos finalizados"><input type="checkbox" id="trShowFinal"> Finalizados</label>
+      <label class="inact-toggle" title="Mostrar os tratamentos cancelados, renegociados e finalizados"><input type="checkbox" id="trShowInact"> Inativos</label>
       <span id="trMissing"></span>
       <span id="trDue"></span>
       <div class="spacer"></div>
@@ -12421,7 +12419,7 @@ function renderPatientsTab(){
   // Busca por paciente, mãe, pai ou responsável financeiro: nome (sem acento) ou CPF.
   function hit(nome, doc){ return normText(nome || "").indexOf(q) !== -1 || (qd.length >= 3 && digitsOnly(doc).indexOf(qd) !== -1); }
   var list = state.patients.filter(function(p){
-    if (!SHOW_INACTIVE.pacientes && !isActive(p)) return false;
+    if (!q && !SHOW_INACTIVE.pacientes && !isActive(p)) return false;
     if (!q) return true;
     if (by === "paciente") return hit(p.nome, p.cpf);
     var n = patNormalize(p);
@@ -26431,9 +26429,11 @@ function renderTreatmentsTab(){
   var all = state.treatments.slice();
   // Cancelados e Renegociados ficam ocultos, a não ser que a caixa esteja marcada ou o
   // filtro de status peça exatamente por eles.
-  var showCanc = (document.getElementById("trShowCanc") || {}).checked || filter === "cancelado" || filter === "semmotivo";
-  var showReneg = (document.getElementById("trShowReneg") || {}).checked || filter === "renegociado";
-  var showFinal = (document.getElementById("trShowFinal") || {}).checked || filter === "finalizado";
+  // Pesquisando, o botão Inativos é ignorado: aparecem todos, mesmo os ocultos.
+  var showAll = !!q || (document.getElementById("trShowInact") || {}).checked;
+  var showCanc = showAll || filter === "cancelado" || filter === "semmotivo";
+  var showReneg = showAll || filter === "renegociado";
+  var showFinal = showAll || filter === "finalizado";
   var shown = all.filter(function(t){
     if (t.status === "finalizado" && !showFinal) return false;
     if (t.status === "cancelado" && !showCanc) return false;
@@ -26533,7 +26533,7 @@ function wireTreatmentsTab(){
   if (!h) return;
   if (s) s.addEventListener("input", renderTreatmentsTab);
   if (f) f.addEventListener("change", renderTreatmentsTab);
-  ["trShowCanc", "trShowReneg", "trShowFinal"].forEach(function(id){ var c = document.getElementById(id); if (c) c.addEventListener("change", renderTreatmentsTab); });
+  ["trShowInact"].forEach(function(id){ var c = document.getElementById(id); if (c) c.addEventListener("change", renderTreatmentsTab); });
   if (a) a.addEventListener("click", function(){ openTreatmentModal(null, {}); });
   function open(e){
     var tr = e.target.closest("tr[data-tr-id]");
@@ -28511,7 +28511,7 @@ var HELP_TOPICS = [
       "Ao lado da caixa <b>Intervenção ABA</b> fica a <b>Data de Revisão</b> do ABA. Na lista de Tratamentos, a coluna <b>Data de Revisão</b> mostra a data e, depois que ela passa, a etiqueta <b>(Vencida)</b> (só em tratamento Ativo).",
       "Para encerrar, mude o Status para <b>Cancelado</b> e escolha o motivo.",
       "<b>Outras Opções ▾</b>, no topo da janela: <b>Cadastro do Paciente</b> abre o cadastro do paciente do tratamento; <b>Abrir Plano Terapêutico</b> abre o plano dele.",
-      "Na tela, os tratamentos <b>Cancelados</b> e <b>Renegociados</b> ficam ocultos: marque as caixas ao lado do contador para mostrá-los. A coluna Vencimento mostra \"Sem vencimento\" quando o tratamento não vence.",
+      "Na tela, os tratamentos <b>Cancelados</b>, <b>Renegociados</b> e <b>Finalizados</b> ficam ocultos: marque <b>Inativos</b> ao lado do contador para mostrá-los. Ao pesquisar, o botão Inativos é ignorado e aparecem todos, mesmo os ocultos (vale também em Pacientes). A coluna Vencimento mostra \"Sem vencimento\" quando o tratamento não vence.",
       "Use também os filtros: status, Cancelados sem motivo, Vencendo, Vencidos, Abaixo do contratado e Pacientes ativos sem tratamento (pacientes inativos não entram no aviso nem no filtro).",
       "<b>Outras Opções ▾</b>: <b>Exportar Planilha</b> e <b>Importar Planilha</b> (veja o tópico Planilhas)."
     ],
