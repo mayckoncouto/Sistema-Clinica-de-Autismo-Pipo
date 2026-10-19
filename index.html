@@ -3364,6 +3364,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <span class="pat-count" id="trCount"></span>
       <label class="inact-toggle" title="Mostrar os tratamentos cancelados"><input type="checkbox" id="trShowCanc"> Cancelados</label>
       <label class="inact-toggle" title="Mostrar os tratamentos renegociados"><input type="checkbox" id="trShowReneg"> Renegociados</label>
+      <label class="inact-toggle" title="Mostrar os tratamentos finalizados"><input type="checkbox" id="trShowFinal"> Finalizados</label>
       <span id="trMissing"></span>
       <span id="trDue"></span>
       <div class="spacer"></div>
@@ -26431,7 +26432,9 @@ function renderTreatmentsTab(){
   // filtro de status peça exatamente por eles.
   var showCanc = (document.getElementById("trShowCanc") || {}).checked || filter === "cancelado" || filter === "semmotivo";
   var showReneg = (document.getElementById("trShowReneg") || {}).checked || filter === "renegociado";
+  var showFinal = (document.getElementById("trShowFinal") || {}).checked || filter === "finalizado";
   var shown = all.filter(function(t){
+    if (t.status === "finalizado" && !showFinal) return false;
     if (t.status === "cancelado" && !showCanc) return false;
     if (t.status === "renegociado" && !showReneg) return false;
     if (filter === "diverg"){
@@ -26529,7 +26532,7 @@ function wireTreatmentsTab(){
   if (!h) return;
   if (s) s.addEventListener("input", renderTreatmentsTab);
   if (f) f.addEventListener("change", renderTreatmentsTab);
-  ["trShowCanc", "trShowReneg"].forEach(function(id){ var c = document.getElementById(id); if (c) c.addEventListener("change", renderTreatmentsTab); });
+  ["trShowCanc", "trShowReneg", "trShowFinal"].forEach(function(id){ var c = document.getElementById(id); if (c) c.addEventListener("change", renderTreatmentsTab); });
   if (a) a.addEventListener("click", function(){ openTreatmentModal(null, {}); });
   function open(e){
     var tr = e.target.closest("tr[data-tr-id]");
@@ -27010,7 +27013,8 @@ function openTreatmentModal(t, opts){
             oldKey: isNew ? "" : slKey(t, money), newKey: slKey(rec, {valor: vMes, descontos: vDesc}), valorFinal: salePlan.valorFinal});
           var after = function(){
             // Cancelou ou renegociou (este ou o ativo anterior): pergunta se remove os agendamentos.
-            var cancelNow = st === "cancelado" && (isNew || t.status !== "cancelado");
+            var finalNow = st === "finalizado" && (isNew || t.status !== "finalizado");
+            var cancelNow = (st === "cancelado" && (isNew || t.status !== "cancelado")) || finalNow;
             if ((cancelNow && sysOn("tr_cancel_pendencias")) || (!cancelNow && (((st === "renegociado") && (isNew || t.status !== st)) || others.length))) trOfferRemoveBookings(patId);
             // Tratamento passou a Cancelado e o paciente não tem outro Ativo: inativa o paciente.
             if (cancelNow) trInactivatePatient(patId, list);
@@ -27036,8 +27040,8 @@ function trInactivatePatient(patId, list){
   var p = rawPatient(patId);
   if (!p || p.inativo) return;
   if ((list || state.treatments).some(function(x){ return x.patientId === patId && x.status === "ativo"; })) return;
-  if (!can("pacientes", "edit")){ showToast("Tratamento cancelado. O paciente continua ativo: seu nível não pode editar Pacientes.", true); return; }
-  showToast("Tratamento cancelado e paciente " + (p.nome || "") + " inativado.");
+  if (!can("pacientes", "edit")){ showToast("Tratamento encerrado. O paciente continua ativo: seu nível não pode editar Pacientes.", true); return; }
+  showToast("Tratamento encerrado e paciente " + (p.nome || "") + " inativado.");
   writePatients(state.patientsRaw.map(function(x){ return x.id === patId ? Object.assign({}, x, {inativo: true}) : x; }));
 }
 // Ao cancelar ou renegociar: pergunta se remove os agendamentos do paciente no Planner
@@ -28753,7 +28757,7 @@ var HELP_TOPICS = [
   {id: "tipostrat", group: "Cadastros", title: "Tipos de Tratamento", mod: "tipos_tratamento", tab: "tipostrat",
     purpose: "Os tipos que o tratamento do paciente pode ter (Multidisciplinar, Fonoaudiologia, Psicologia…). Cada tratamento pode ter vários tipos.",
     steps: ["Cadastros → <b>Tipos de Tratamento</b> → <b>+ Incluir</b>: nome do tipo (ex.: Multidisciplinar). A caixa <b>Padrão</b> faz o tipo já vir escolhido no tratamento novo.", "Todas as especialidades e serviços cadastrados aparecem na lista sozinhos: em Cadastros → Especialidades e Serviços há a caixa <b>Tratamento</b>; desligada, a especialidade ou o serviço deixa de ser tipo. Clicar numa especialidade ou serviço da lista abre o cadastro dele.", "No tratamento, o campo <b>Tipo de Tratamento</b> (logo depois do paciente) aceita escolher vários."],
-    rules: ["O <b>Status</b> do tratamento depende do tipo: tratamento de <b>serviço</b> fica <b>Ativo</b> ou <b>Finalizado</b>; tratamento de especialidade (ou Multidisciplinar) fica <b>Ativo</b>, <b>Renegociado</b> ou <b>Cancelado</b>.", "Ao marcar um tipo no tratamento, os quadros entram sozinhos: <b>Multidisciplinar</b> traz todas as especialidades (menos Aplicador ABA) e uma especialidade traz o quadro dela; você remove o que não quiser.", "Ao agendar uma Sessão (Planner e Agenda) ou salvar um quadro de especialidade, o sistema avisa se a especialidade não está no tipo. Multidisciplinar libera todas, serviços são sempre livres e, num tratamento só de serviço, agendar uma Sessão de especialidade também avisa. O aviso dos quadros continua valendo como segunda regra; no <b>Sistema</b> o Administrador escolhe Bloquear, Avisar ou Desligado.", "A lista mostra a origem (Tipo de Tratamento, Especialidade ou Serviço) e quantos tratamentos usam cada tipo.", "Tipo usado em tratamento não é excluído: é <b>Inativado</b>.", "Especialidade e serviço novos já vêm com Tratamento ligado."],
+    rules: ["O <b>Status</b> do tratamento depende do tipo: tratamento de <b>serviço</b> fica <b>Ativo</b> ou <b>Finalizado</b>; tratamento de especialidade (ou Multidisciplinar) fica <b>Ativo</b>, <b>Renegociado</b> ou <b>Cancelado</b>.", "<b>Finalizado</b> age como Cancelado: o tratamento some da lista (marque a caixa <b>Finalizados</b> ou use o filtro de status para vê-lo) e o paciente é inativado, se não tiver outro tratamento ativo.", "Ao marcar um tipo no tratamento, os quadros entram sozinhos: <b>Multidisciplinar</b> traz todas as especialidades (menos Aplicador ABA) e uma especialidade traz o quadro dela; você remove o que não quiser.", "Ao agendar uma Sessão (Planner e Agenda) ou salvar um quadro de especialidade, o sistema avisa se a especialidade não está no tipo. Multidisciplinar libera todas, serviços são sempre livres e, num tratamento só de serviço, agendar uma Sessão de especialidade também avisa. O aviso dos quadros continua valendo como segunda regra; no <b>Sistema</b> o Administrador escolhe Bloquear, Avisar ou Desligado.", "A lista mostra a origem (Tipo de Tratamento, Especialidade ou Serviço) e quantos tratamentos usam cada tipo.", "Tipo usado em tratamento não é excluído: é <b>Inativado</b>.", "Especialidade e serviço novos já vêm com Tratamento ligado."],
     who: "Permissão <b>Tipos de Tratamento</b>."},
   {id: "motivosbloq", group: "Cadastros", title: "Motivos de Bloqueio", mod: "motivos_bloqueio", tab: "motivosbloq",
     purpose: "Motivos para bloquear um paciente (Financeiro, Documentação pendente, Aguardando laudo…). Usados no grupo <b>Bloqueio de Agendamento</b> do cadastro do paciente.",
