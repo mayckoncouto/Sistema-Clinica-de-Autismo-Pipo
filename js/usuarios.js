@@ -65,6 +65,10 @@
     { key: "agenda", label: "Agenda", hint: "atendimentos por data", group: "Agenda" },
     { key: "agenda_planner", label: "Agenda Planner", hint: "Agenda ▾ → Agenda Planner: a Agenda do dia no visual do Planner (incluir, editar e excluir seguem a permissão da Agenda)", actions: ["view"] },
     { key: "agendamentos_lista", label: "Agendamentos", hint: "Agenda ▾ → Agendamentos: lista de todos os atendimentos dos pacientes", actions: ["view"] },
+    { key: "esp_bloqueado", label: "Atendimento Especial – Bloqueado", hint: "Planner e Agenda: horário marcado como Bloqueado (vale independente da permissão do Planner e da Agenda)", actions: ["create", "edit", "delete"] },
+    { key: "esp_reuniao", label: "Atendimento Especial – Reunião Clínica", hint: "Planner e Agenda: horário marcado como Reunião Clínica (vale independente da permissão do Planner e da Agenda)", actions: ["create", "edit", "delete"] },
+    { key: "esp_treinamento", label: "Atendimento Especial – Treinamento", hint: "Planner e Agenda: horário marcado como Treinamento (vale independente da permissão do Planner e da Agenda)", actions: ["create", "edit", "delete"] },
+    { key: "esp_reserva", label: "Atendimento Especial – Reserva", hint: "Planner e Agenda: horário marcado como Reserva (vale independente da permissão do Planner e da Agenda)", actions: ["create", "edit", "delete"] },
     { key: "visao_geral", label: "Visão Geral", hint: "Agenda ▾ → Visão Geral: todos os atendimentos do dia numa tela", actions: ["view"] },
     { key: "gerenciar_status", label: "Gerenciar Status", hint: "Agenda ▾ → Agendamentos → Outras Opções: mudar o status de vários atendimentos de uma vez (só os status que o nível pode usar; Finalizado não entra)", actions: ["view"] },
     { key: "historico_agenda", label: "Histórico de Alterações – Agenda", hint: "Agenda → Outras Opções: quem criou, alterou ou excluiu atendimentos", actions: ["view"] },
@@ -173,8 +177,11 @@
       ".perm-grid input:disabled{cursor:default}" +
       ".perm-grp{margin-bottom:6px}.perm-grp-head{display:flex;align-items:center;gap:8px}.perm-grp-head .tr-sec{flex:1;margin-bottom:6px}" +
       ".perm-grp-head .btn{padding:4px 10px;font-size:12px}" +
-      ".perm-quad{margin-bottom:8px}.perm-qrow .btn{padding:5px 10px;font-size:12px;flex:none}" +
-      ".perm-qbody{border:1px solid var(--line);border-top:0;border-radius:0 0 9px 9px;padding:6px 10px 10px;margin-top:-3px}" +
+      ".perm-quad{border-bottom:1px solid var(--line)}" +
+      ".perm-qrow{display:flex;align-items:center;gap:8px;padding:9px 4px;min-height:44px}.perm-qrow:hover{background:var(--surface-2)}" +
+      ".perm-qrow .room-info{flex:1;min-width:0}.perm-qrow .rn{font-weight:600;font-size:13.5px}.perm-qrow .rs{font-size:12px;color:var(--ink-3)}" +
+      ".perm-qrow .btn{padding:5px 10px;font-size:12px;flex:none;border:0;background:transparent;font-weight:600}" +
+      ".perm-qbody{padding:6px 4px 12px 4px;background:var(--surface-2)}" +
       ".perm-qbody .perm-section{margin-top:8px}" +
       "@media (max-width:760px){.perm-qrow{flex-wrap:wrap}.perm-qrow .room-info{flex:1 1 100%}.perm-grp-head{flex-wrap:wrap}}" +
       // Um nível por linha: bolinha · nome · resumo (cortado com "…", texto inteiro no title).
@@ -669,7 +676,8 @@
       ] },
       { title: "Agenda", panels: [
         { id: "agenda", keys: ["agenda", "gerenciar_status", "historico_agenda"], extra: "status" },
-        one("agenda_planner"), one("agendamentos_lista"), one("visao_geral")
+        one("agenda_planner"), one("agendamentos_lista"), one("visao_geral"),
+        { id: "especiais", title: "Atendimentos Especiais", keys: ["esp_bloqueado", "esp_reuniao", "esp_treinamento", "esp_reserva"] }
       ] },
       { title: "Prontuário", panels: [
         one("prontuario"), one("plano_terapeutico"), one("objetivos"), one("atividades"),
@@ -709,7 +717,7 @@
     if (pn.extra === "status") body += statusPermsHtml(perms, locked);
     if (pn.extra === "reports") body += reportPermsHtml(perms, locked);
     return '<div class="perm-quad" data-q="' + esc(pn.id) + '">' +
-      '<div class="room-row perm-qrow"><span class="room-dot" style="background:var(--accent)"></span>' +
+      '<div class="perm-qrow">' +
         '<div class="room-info"><div class="rn">' + esc(title) + '</div><div class="rs perm-qsum"></div></div>' +
         (locked ? "" : '<button type="button" class="btn ghost" data-qall="1">Ativar Tudo</button><button type="button" class="btn ghost" data-qall="0">Desativar Tudo</button>') +
         '<button type="button" class="btn ghost" data-qedit aria-expanded="false">Editar</button></div>' +

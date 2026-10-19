@@ -5300,7 +5300,7 @@ var db = null, userCap = null;
  * evitam a ida ao servidor e dão uma mensagem clara. Sem pipoAuth (testes),
  * vale só o state.writable antigo.
  */
-var PERM_MODULE_LABELS = {historico_planner:"Histórico de Alterações – Planner", historico_agenda:"Histórico de Alterações – Agenda", tipos_tratamento:"Tipos de Tratamento", comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", planner_list:"Planner List", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", agenda_planner:"Agenda Planner", agendamentos_lista:"Agendamentos", visao_geral:"Visão Geral", gerenciar_status:"Gerenciar Status", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", anamneses:"Anamneses", tipos_anamnese:"Tipos de Anamnese", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
+var PERM_MODULE_LABELS = {historico_planner:"Histórico de Alterações – Planner", historico_agenda:"Histórico de Alterações – Agenda", tipos_tratamento:"Tipos de Tratamento", comissoes:"Comissões", vendas:"Vendas", unidades:"Unidades", contratos:"Contratos", financeiro:"Financeiro", categorias_fornecedor:"Categorias de Fornecedor", contas_bancarias:"Contas Bancárias", plano_contas:"Plano de Contas", financeiro_valores:"Financeiro – Valores", fechamento_mes:"Fechamento de Mês", fornecedores:"Fornecedores", diagnosticos:"Diagnósticos", origens:"Origens", motivos_bloqueio:"Motivos de Bloqueio", planner:"Planner", planner_list:"Planner List", bloqueio_horario:"Bloqueio de Horário", autoplanner:"Auto Planner", autoplanner_enviar:"Auto Planner – Enviar", agenda:"Agenda", agenda_planner:"Agenda Planner", esp_bloqueado:"Atendimento Especial – Bloqueado", esp_reuniao:"Atendimento Especial – Reunião Clínica", esp_treinamento:"Atendimento Especial – Treinamento", esp_reserva:"Atendimento Especial – Reserva", agendamentos_lista:"Agendamentos", visao_geral:"Visão Geral", gerenciar_status:"Gerenciar Status", resumo:"Resumo", disponibilidade:"Disponibilidade", pacientes:"Pacientes", tratamentos:"Tratamentos", tratamentos_valores:"Tratamentos – Valores", motivos_cancelamento:"Motivos de Cancelamento", medicos:"Médicos", escolas:"Escolas", cbo:"CBO", conselhos:"Conselhos", feriados:"Feriados e Recessos", campos_paciente:"Campos do Paciente", convenios:"Convênios", servicos:"Serviços", especialidades:"Especialidades", salas:"Salas", grupos:"Grupos de Suporte", clinica:"Clínica", cadastro_status:"Status", prontuario:"Prontuário", plano_terapeutico:"Plano Terapêutico", objetivos:"Objetivos", atividades:"Atividades", anamneses:"Anamneses", tipos_anamnese:"Tipos de Anamnese", escalas:"Escalas", habilidades:"Habilidades", relatorios:"Relatórios", colaboradores:"Colaboradores", colaboradores_valores:"Colaboradores – Valores", conector_claude:"Conector Claude"};
 var PERM_ACTION_LABELS = {create:"incluir", edit:"editar", "delete":"excluir"};
 // Auto Planner aberto? (grade própria: ver "Auto Planner: grade própria" perto de subscribeSchedule)
 var PLA = {on: false, hist: {undo: [], redo: []}};
@@ -5313,6 +5313,18 @@ function can(module, action){
 function permDeniedMsg(module, action){
   return "Você não tem permissão para " + PERM_ACTION_LABELS[action] + " em " + PERM_MODULE_LABELS[module] + ".";
 }
+// Atendimentos especiais (Bloqueado, Reunião Clínica, Treinamento, Reserva): cada tipo tem permissão
+// PRÓPRIA (esp_*), no Planner e na Agenda, independente de "Planner" e "Agenda". Auto Planner não usa.
+var ESP_MODS = {bloqueado: "esp_bloqueado", reuniao: "esp_reuniao", treinamento: "esp_treinamento", reserva: "esp_reserva"};
+function espModOf(rec){
+  if (!rec || PLA.on) return "";
+  if (rec.blocked) return ESP_MODS.bloqueado;
+  return ESP_MODS[bookingKind(rec)] || "";
+}
+function recMod(base, rec){ return espModOf(rec) || base; }
+function recCan(base, rec, action){ return can(recMod(base, rec), action); }
+function espCanAny(action){ return !PLA.on && Object.keys(ESP_MODS).some(function(k){ return can(ESP_MODS[k], action); }); }
+function canOrEsp(base, action){ return can(base, action) || espCanAny(action); }
 function stableStr(v){
   if (v === null || typeof v !== "object") return JSON.stringify(v);
   if (Array.isArray(v)) return "[" + v.map(stableStr).join(",") + "]";
@@ -5348,7 +5360,7 @@ function listPermDenied(module, oldList, newList){
 // alterada = editar; bloquear/liberar horário conta como editar.
 function bookingPermDenied(changesByDoc){
   if (!window.pipoAuth) return null;
-  var need = {}, needB = {};
+  var need = {}, needB = {}, needE = [];
   Object.keys(changesByDoc).forEach(function(docId){
     var bk = (state.scheduleDocs[docId] && state.scheduleDocs[docId].bookings) || {};
     var changes = changesByDoc[docId];
@@ -5364,12 +5376,23 @@ function bookingPermDenied(changesByDoc){
         if (pl && next && !nl && String(next.patient || "").trim()) need.create = true;
         return;
       }
+      var pm = espModOf(prev), nm = espModOf(next);
+      if (pm || nm){
+        // Tipos especiais: permissão própria de cada tipo (o que sai e o que entra).
+        var need2 = function(m, a){ if (!can(m, a)) needE.push([m, a]); };
+        if (!prev) need2(nm, "create");
+        else if (!next) need2(pm, "delete");
+        else if (pm === nm) need2(pm, "edit");
+        else { need2(pm || "planner", "edit"); need2(nm || "planner", "edit"); }
+        return;
+      }
       if ((prev && prev.blocked) || (next && next.blocked)) need.edit = true;
       else if (!prev) need.create = true;
       else if (!next) need["delete"] = true;
       else need.edit = true;
     });
   });
+  if (needE.length) return permDeniedMsg(needE[0][0], needE[0][1]);
   var order = ["create","edit","delete"];
   for (var j=0;j<order.length;j++){
     if (needB[order[j]]) return permDeniedMsg("bloqueio_horario", order[j]);
@@ -5386,9 +5409,9 @@ function bookingPermDenied(changesByDoc){
 function permToolClasses(){
   [["tab-planner", "planner"], ["tab-agenda", "agenda"], ["tab-agendaplanner", "agenda"]].forEach(function(x){
     var sec = document.getElementById(x[0]); if (!sec) return;
-    sec.classList.toggle("perm-no-create", !can(x[1], "create"));
-    sec.classList.toggle("perm-no-edit", !can(x[1], "edit"));
-    sec.classList.toggle("perm-no-delete", !can(x[1], "delete"));
+    sec.classList.toggle("perm-no-create", !canOrEsp(x[1], "create"));
+    sec.classList.toggle("perm-no-edit", !canOrEsp(x[1], "edit"));
+    sec.classList.toggle("perm-no-delete", !canOrEsp(x[1], "delete"));
   });
   // Bloquear / liberar do Planner: permissão "Bloqueio de Horário".
   var pl = document.getElementById("tab-planner");
@@ -10454,9 +10477,9 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
               (b.note ? '<span class="pnote">'+esc(b.note)+'</span>' : '') +
               (pRec && patBlocked(pRec) ? blockTagHtml(pRec) : '') +
             '</button>' +
-            (can("planner","delete") ? '<button type="button" class="book-del" title="Excluir Agendamento" aria-label="Excluir Agendamento"></button>' : "") +
-            '<button type="button" class="book-move" title="Mover paciente" aria-label="Mover paciente"></button>' +
-            '<button type="button" class="book-copy" title="Copiar paciente" aria-label="Copiar paciente"></button>' +
+            (recCan("planner", b, "delete") ? '<button type="button" class="book-del" title="Excluir Agendamento" aria-label="Excluir Agendamento"></button>' : "") +
+            (recCan("planner", b, "create") && recCan("planner", b, "delete") ? '<button type="button" class="book-move" title="Mover paciente" aria-label="Mover paciente"></button>' : "") +
+            (recCan("planner", b, "create") ? '<button type="button" class="book-copy" title="Copiar paciente" aria-label="Copiar paciente"></button>' : "") +
           '</div>';
         } else {
           html += '<div class="book"><button type="button" class="book-main"><span class="empty-plus">+</span></button></div>';
@@ -11405,7 +11428,13 @@ function openBookingModal(ctx){
 
   var overlay = document.getElementById("ovBook");
   function close(){ host.innerHTML = ""; }
-  modalApplyPerms("planner", !existing, {ov: "ovBook", save: "bkSave", del: "bkClear", cancel: "bkCancel"});
+  // Tipos especiais têm permissão própria; sem "incluir" no Planner mas com algum tipo especial, só ele é permitido.
+  var bkEspOnly = !existing && !PLA.on && !can("planner", "create") && espCanAny("create");
+  if (bkEspOnly){
+    ["bkPatient", "bkService"].forEach(function(id){ var x = document.getElementById(id); if (x) x.disabled = true; });
+  } else {
+    modalApplyPerms((existing && espModOf(existing)) || "planner", !existing, {ov: "ovBook", save: "bkSave", del: "bkClear", cancel: "bkCancel"});
+  }
   overlay.addEventListener("mousedown", function(e){ if (e.target===overlay) close(); });
   document.getElementById("closeBook").addEventListener("click", close);
   document.getElementById("bkCancel").addEventListener("click", close);
@@ -17452,9 +17481,9 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
       (st ? '<span class="agd-status" style="background:'+esc(st.color || "#5b6b68")+'" title="Status: '+esc(st.name)+'">'+esc(st.name)+'</span>' : '') +
       (!kind && pRec && patBlocked(pRec) ? blockTagHtml(pRec, !!st) : '') +
     '</button>' +
-    (can("agenda","delete") ? '<button type="button" class="book-del" title="Excluir Agendamento" aria-label="Excluir Agendamento"></button>' : "") +
-    '<button type="button" class="book-move" title="Mover" aria-label="Mover"></button>' +
-    '<button type="button" class="book-copy" title="Copiar" aria-label="Copiar"></button>' +
+    (recCan("agenda", row, "delete") ? '<button type="button" class="book-del" title="Excluir Agendamento" aria-label="Excluir Agendamento"></button>' : "") +
+    (recCan("agenda", row, "edit") ? '<button type="button" class="book-move" title="Mover" aria-label="Mover"></button>' : "") +
+    (recCan("agenda", row, "create") ? '<button type="button" class="book-copy" title="Copiar" aria-label="Copiar"></button>' : "") +
   '</div>';
 }
 
@@ -17973,14 +18002,25 @@ function agdOpenDetails(row){
 }
 
 // ---- janela de atendimento ----
+// Permissão para gravar um atendimento: tipos especiais usam a permissão de cada tipo.
+function agdWriteDenied(oldRow, newRec){
+  var om = oldRow ? espModOf(oldRow) : "", nm = espModOf(newRec), chk = [];
+  if (!oldRow) chk.push([nm || "agenda", "create"]);
+  else if (om === nm) chk.push([om || "agenda", "edit"]);
+  else { chk.push([om || "agenda", "edit"]); chk.push([nm || "agenda", "edit"]); }
+  for (var i = 0; i < chk.length; i++) if (!can(chk[i][0], chk[i][1])) return permDeniedMsg(chk[i][0], chk[i][1]);
+  return null;
+}
 function agdOpenModal(opts){
   // opts: {row} para editar; ou {date, time, profId, roomId} para novo
   var row = opts.row || null, isNew = !row;
   var rowKind = bookingKind(row);
-  if (isNew && !can("agenda", "create")){ showToast(permDeniedMsg("agenda", "create"), true); return; }
-  var canSave = isNew ? true : can("agenda", "edit");
+  // Tipos especiais (Bloqueado, Reunião, Treinamento, Reserva) têm permissão própria.
+  var espOnly = isNew && !can("agenda", "create");
+  if (espOnly && !espCanAny("create")){ showToast(permDeniedMsg("agenda", "create"), true); return; }
+  var canSave = isNew ? true : recCan("agenda", row, "edit");
   if (!isNew && !canSave){ agdOpenDetails(row); return; }
-  var canDel = !isNew && can("agenda", "delete");
+  var canDel = !isNew && recCan("agenda", row, "delete");
   var date = row ? row.date : (opts.date || agdIso(AD.date));
   var time = row ? row.time : (opts.time || "");
   var profId = row ? row.professional_id : (opts.profId || "");
@@ -18150,7 +18190,8 @@ function agdOpenModal(opts){
       if (pick.err){ showToast(pick.err, true); pacEl.focus(); return; }
       if (AD.hasPid){ rec.patient_id = pick.id || null; rec.group_id = grpHit ? grpHit.id : null; }
     } else if (AD.hasPid){ rec.patient_id = null; rec.group_id = null; }
-    if (!isNew && !can("agenda","edit")){ showToast(permDeniedMsg("agenda","edit"), true); return; }
+    var wDenied = agdWriteDenied(row, rec);
+    if (wDenied){ showToast(wDenied, true); return; }
     // Atendimento com status ou evolução: paciente não troca; data/horário/profissional só o Administrador.
     if (!isNew && !doneOk){
       agdDoneCheck([{row: row, rec: rec}]).then(function(msg){
@@ -18576,7 +18617,7 @@ function wireAgendaDia(){
     var delBtn = e.target.closest(".book-del");
     if (delBtn && row){
       e.stopPropagation();
-      if (!can("agenda","delete")){ showToast(permDeniedMsg("agenda","delete"), true); return; }
+      if (!recCan("agenda", row, "delete")){ showToast(permDeniedMsg(recMod("agenda", row), "delete"), true); return; }
       confirmDialog({
         title: "Confirmar Exclusão",
         message: "Excluir <b>"+esc(row.blocked ? "o bloqueio" : row.patient)+"</b> em "+agdBrDate(row.date)+" às "+esc(row.time)+"?",
@@ -18590,8 +18631,8 @@ function wireAgendaDia(){
     var copyBtn = e.target.closest(".book-copy"), moveBtn = !copyBtn && e.target.closest(".book-move");
     if ((copyBtn || moveBtn) && row){
       e.stopPropagation();
-      if (copyBtn && !can("agenda","create")){ showToast(permDeniedMsg("agenda","create"), true); return; }
-      if (moveBtn && !can("agenda","edit")){ showToast(permDeniedMsg("agenda","edit"), true); return; }
+      if (copyBtn && !recCan("agenda", row, "create")){ showToast(permDeniedMsg(recMod("agenda", row), "create"), true); return; }
+      if (moveBtn && !recCan("agenda", row, "edit")){ showToast(permDeniedMsg(recMod("agenda", row), "edit"), true); return; }
       AD.clipboard = {mode: copyBtn ? "copy" : "move", id: row.id, row: JSON.parse(JSON.stringify(row))};
       agdRenderClipboardBar(); agdRender();
       return;
@@ -18600,7 +18641,7 @@ function wireAgendaDia(){
     // Com algo copiado/movendo, o clique cola naquele horário.
     if (AD.clipboard){ agdPasteTo(td); return; }
     if (row && !e.target.closest(".agd-add")){ agdOpenDetails(row); return; }
-    if (!can("agenda", "create")) return;
+    if (!canOrEsp("agenda", "create")) return;
     var resId = td.getAttribute("data-r");
     agdOpenModal({date: td.getAttribute("data-d"), time: td.getAttribute("data-t"),
       profId: AD.mode === "prof" ? resId : "", roomId: AD.mode === "sala" ? resId : ""});
@@ -18953,8 +18994,8 @@ function agdPlace(row, td, mode, swapWith, opts_doneOk){
   if (prof && !agdInHours(prof, target.time, agdParse(target.date))){ showToast("Fora do horário de atendimento do profissional.", true); return; }
   var occupant = (mode === "drag" && swapWith && swapWith.id !== row.id) ? swapWith : null;
   var isCopy = mode === "copy";
-  if (isCopy && !can("agenda","create")){ showToast(permDeniedMsg("agenda","create"), true); return; }
-  if (!isCopy && !can("agenda","edit")){ showToast(permDeniedMsg("agenda","edit"), true); return; }
+  if (isCopy && !recCan("agenda", row, "create")){ showToast(permDeniedMsg(recMod("agenda", row), "create"), true); return; }
+  if (!isCopy && !recCan("agenda", row, "edit")){ showToast(permDeniedMsg(recMod("agenda", row), "edit"), true); return; }
   if (!isCopy && row.date === target.date && row.time === target.time && row.professional_id === target.professional_id && (row.room_id||null) === target.room_id) return;
 
   function fail(r){ showToast("Não foi possível salvar: " + (r.error.code === "23505" ? DUP_SLOT_MSG : agdErr(r.error)), true); agdLoadWeek(); }
@@ -18978,7 +19019,7 @@ function agdPlace(row, td, mode, swapWith, opts_doneOk){
 
   // Destino ocupado ao arrastar: troca os dois (o outro vai para o lugar de origem).
   if (occupant && mode === "drag"){
-    if (!can("agenda","edit")){ showToast("Você não tem permissão para trocar atendimentos de lugar.", true); return; }
+    if (!recCan("agenda", row, "edit") || !recCan("agenda", occupant, "edit")){ showToast("Você não tem permissão para trocar atendimentos de lugar.", true); return; }
     var back = fromAp ? {date: row.date, time: row.time, professional_id: row.professional_id, room_id: row.room_id || null} : agdTargetFor(occupant, row.date, row.time, AD.mode === "prof" ? row.professional_id : (row.room_id || ""));
     var occPayload = {patient: occupant.patient, note: occupant.note || "", blocked: !!occupant.blocked, service: occupant.service || null,
       professional_id: back.professional_id, room_id: back.room_id, date: back.date, time: back.time};
@@ -19308,7 +19349,7 @@ function wireAgendaPlanner(){
     var delBtn = e.target.closest(".book-del");
     if (delBtn && row){
       e.stopPropagation();
-      if (!can("agenda", "delete")){ showToast(permDeniedMsg("agenda", "delete"), true); return; }
+      if (!recCan("agenda", row, "delete")){ showToast(permDeniedMsg(recMod("agenda", row), "delete"), true); return; }
       confirmDialog({
         title: "Confirmar Exclusão",
         message: "Excluir <b>" + esc(row.blocked ? "o bloqueio" : row.patient) + "</b> em " + agdBrDate(row.date) + " às " + esc(row.time) + "?",
@@ -19319,8 +19360,8 @@ function wireAgendaPlanner(){
     var copyBtn = e.target.closest(".book-copy"), moveBtn = !copyBtn && e.target.closest(".book-move");
     if ((copyBtn || moveBtn) && row){
       e.stopPropagation();
-      if (copyBtn && !can("agenda", "create")){ showToast(permDeniedMsg("agenda", "create"), true); return; }
-      if (moveBtn && !can("agenda", "edit")){ showToast(permDeniedMsg("agenda", "edit"), true); return; }
+      if (copyBtn && !recCan("agenda", row, "create")){ showToast(permDeniedMsg(recMod("agenda", row), "create"), true); return; }
+      if (moveBtn && !recCan("agenda", row, "edit")){ showToast(permDeniedMsg(recMod("agenda", row), "edit"), true); return; }
       AD.clipboard = {mode: copyBtn ? "copy" : "move", id: row.id, row: JSON.parse(JSON.stringify(row))};
       agdRenderClipboardBar(); agpRender();
       return;
@@ -19333,7 +19374,7 @@ function wireAgendaPlanner(){
       return;
     }
     if (row){ agdOpenDetails(row); return; }
-    if (!can("agenda", "create")) return;
+    if (!canOrEsp("agenda", "create")) return;
     var grp = td.getAttribute("data-grp") === "1";
     agdOpenModal({date: td.getAttribute("data-d"), time: td.getAttribute("data-t"),
       profId: td.getAttribute("data-p") || "", roomId: grp ? "" : (td.getAttribute("data-rm") || "")});
@@ -29068,6 +29109,7 @@ var HELP_TOPICS = [
     ],
     rules: [
       "É a mesma agenda da tela <b>Agenda</b>: o que se marca aqui aparece lá, e a data aberta é a mesma nas duas telas.",
+      "Bloqueado, Reunião Clínica, Treinamento e Reserva têm permissão própria (incluir, editar e excluir de cada tipo), no Planner e na Agenda: quem só pode incluir Reserva, por exemplo, não altera atendimentos nem os outros tipos.",
       "O profissional da coluna e a sala do grupo definem o atendimento. Atendimento de um profissional que não tem coluna naquela sala aparece na coluna <b>Outros</b> da sala; atendimento sem sala fica no grupo <b>Sem Sala</b>.",
       "Atendimento de grupo de suporte só vai para a coluna de um grupo, e atendimento de paciente só para coluna de sala. Bloqueio, reunião e treinamento valem em qualquer coluna.",
       "Células cinza são fora do horário do profissional ou com a clínica fechada; células <b>listradas</b> (cinza e branco) estão travadas pelas regras do Planner: profissional atendendo em outra sala ou grupo (ou em reunião/treinamento) e paciente que não faz ABA ocupando a sala. As mesmas regras da Agenda valem ao marcar (horário do profissional, conflitos, feriado, paciente bloqueado, atendimento realizado protegido).",
