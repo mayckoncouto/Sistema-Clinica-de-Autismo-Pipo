@@ -17879,8 +17879,10 @@ function agdOpenDetails(row){
   var showStatus = (!kind || kind !== "bloqueado") && statusesList().length > 0;
   var stLocked = agdFinalLocked(curStatus);
   var canChange = showStatus && !stLocked && canUseStatus(curStatus) && statusesList().some(function(s){ return canUseStatus(s.id); });
-  function line(label, value){ return '<div class="k">' + label + '</div><div class="v">' + (value ? esc(value) : '<span class="pt-muted">—</span>') + '</div>'; }
-  function lineHtml(label, html){ return '<div class="k">' + label + '</div><div class="v">' + (html || '<span class="pt-muted">—</span>') + '</div>'; }
+  // Linhas sem informação não aparecem; quadro sem nenhuma linha mostra um aviso.
+  function line(label, value){ return value ? '<div class="k">' + label + '</div><div class="v">' + esc(value) + '</div>' : ''; }
+  function lineHtml(label, html){ return html ? '<div class="k">' + label + '</div><div class="v">' + html + '</div>' : ''; }
+  function emptyNote(h){ return h || '<div class="pt-muted">Sem informações.</div>'; }
   var host = document.getElementById("modalHost");
   host.innerHTML =
     '<div class="overlay" id="ovAgdDet"><div class="modal agd-det-modal">' +
@@ -17902,11 +17904,11 @@ function agdOpenDetails(row){
         line("Data/Hora", agdBrDate(row.date) + " " + row.time + " até " + agdPlus40(row.time)) +
         line("Observação", row.note || "") +
         '</div>' +
-        (pat ? (healthCanSee() ? '<div class="agd-det" data-det-pane="sa" hidden>' +
-          line("Diagnóstico (CID)", pat.cid || "") + line("Alergias", pat.alergias || "") +
-          line("Medicações em Uso", pat.medicacoes || "") + line("Restrições Alimentares", pat.restricoes || "") + '</div>' : '') +
-          '<div class="agd-det" data-det-pane="tr" hidden>' +
-          line("Intervenção ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) + lineHtml("Horários", agdDetHoursHtml(trHoursText(pat))) + '</div>' : '') +
+        (pat ? (healthCanSee() ? '<div class="agd-det" data-det-pane="sa" hidden>' + emptyNote(
+          line("Diagnóstico (CID)", pat.cid || "") + line("Nível de Suporte", pat.suporte || "") + line("Alergias", pat.alergias || "") +
+          line("Medicações em Uso", pat.medicacoes || "") + line("Restrições Alimentares", pat.restricoes || "")) + '</div>' : '') +
+          '<div class="agd-det" data-det-pane="tr" hidden>' + emptyNote(
+          line("Intervenção ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) + lineHtml("Horários", trHoursText(pat) ? agdDetHoursHtml(trHoursText(pat)) : "")) + '</div>' : '') +
         (grp ? '<div class="agd-det-pane" data-det-pane="pa" hidden>' + agdGroupPatientsHtml(grpItems) + '</div>' : '') +
         (pat ? pickupProtHtml(pat, agdIsLastOfDay(row)) : '') +
         '<div id="agdDetGoals"></div>' +

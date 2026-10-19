@@ -327,7 +327,7 @@ const path = require('path');
   const goalsFirst = await page.$eval('#ovAgdDet .modal-body', (b) => { var g = b.querySelector('#agdDetGoals'), st = b.querySelector('#agdDetStatus'); return !st || !!(g.compareDocumentPosition(st) & Node.DOCUMENT_POSITION_FOLLOWING); });
   const objTitle = await page.$eval('#agdDetGoals .ag-obj-title', (e) => e.textContent);
   console.log('details: Agendamento/Saúde/Tratamento selector, panes with the asked fields, Objetivos before Status?',
-    tabs.join() === 'Agendamento,Saúde,Tratamento' && agPane === 'Serviço|Sala|Data/Hora|Observação' && saPane.vis && agHidden && saPane.keys === 'Diagnóstico (CID)|Alergias|Medicações em Uso|Restrições Alimentares' && trKeys === 'Intervenção ABA|Horários'&& goalsFirst && objTitle === 'Objetivos',
+    tabs.join() === 'Agendamento,Saúde,Tratamento' && agPane === 'Serviço|Data/Hora' && saPane.vis && agHidden && saPane.keys === '' && trKeys === 'Intervenção ABA'&& goalsFirst && objTitle === 'Objetivos',
     JSON.stringify({tabs, agPane, saPane, trKeys, goalsFirst, objTitle}));
   await page.click('[data-ag-box="own"] [data-ag-toggle]');
   const nOpen = await page.$$eval('#agdDetGoals .ag-obj-line', (r) => r.filter((l) => !l.closest('[hidden]')).length);

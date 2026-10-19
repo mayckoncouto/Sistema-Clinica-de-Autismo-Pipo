@@ -4978,3 +4978,5 @@ Pedido do usuário ("incluir todas"). Bloco "Planner: ferramentas de conferênci
 - (2026-10-19, pedido do usuário) **Finalizado age como Cancelado**: fica oculto na lista de Tratamentos (caixa `#trShowFinal` "Finalizados" ou filtro de status `finalizado`) e, ao salvar, inativa o paciente (`trInactivatePatient`, sem outro Ativo; pergunta dos agendamentos como no cancelamento). Sem SQL.
 
 - (2026-10-19, pedido do usuário) **Tratamentos: um só botão Inativos** (`#trShowInact`) no lugar de Cancelados/Renegociados/Finalizados (mostra os três). **Pesquisar ignora o botão** em Tratamentos e em Pacientes: com texto na busca aparecem todos, inclusive inativos e os ocultos (o filtro de status de Tratamentos continua valendo). Sem SQL. Substitui as caixas `#trShowCanc`/`#trShowReneg`/`#trShowFinal`.
+
+- (2026-10-19, pedido do usuário) **Detalhes do Agendamento: linhas sem informação não aparecem** nos quadros Agendamento, Saúde e Tratamento (quadro Saúde/Tratamento sem nenhuma linha mostra "Sem informações."); o quadro **Saúde** ganhou **Nível de Suporte** (depois do CID). Sem SQL.
