@@ -1305,7 +1305,7 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .rp-out{flex:1;min-width:0;overflow:auto;padding:14px 18px}
 .rp-back-bar{display:none}
 .tr-chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:800;color:#fff;background:#6b7a77}
-.tr-chip.st-ativo{background:var(--accent);color:var(--accent-ink)}.tr-chip.st-renegociado{background:#b7791f}.tr-chip.st-cancelado{background:#b6403a}.tr-chip.st-inativo{background:var(--muted);color:#fff}
+.tr-chip.st-ativo{background:var(--accent);color:var(--accent-ink)}.tr-chip.st-renegociado{background:#b7791f}.tr-chip.st-cancelado{background:#b6403a}.tr-chip.st-finalizado{background:#5b6b80;color:#fff}.tr-chip.st-inativo{background:var(--muted);color:#fff}
 .pat-table td.pt-ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tr-cancel{border:1px solid #f0c9c6;background:color-mix(in srgb,#b6403a 6%,var(--surface));border-radius:10px;padding:10px 12px 2px;margin-bottom:12px}
 .tr-cancel-note{font-size:12px;color:#9b3530;margin:0 0 8px}
@@ -3351,6 +3351,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <option value="ativo">Ativos</option>
         <option value="renegociado">Renegociados</option>
         <option value="cancelado">Cancelados</option>
+        <option value="finalizado">Finalizados</option>
         <option value="semmotivo">Cancelados sem motivo</option>
         <option value="vencendo">Vencendo (próximos 30 dias)</option>
         <option value="vencidos">Vencidos</option>
@@ -25414,8 +25415,15 @@ function rpExportCsv(){
 var TR_STATUS = [
   {id: "ativo", name: "Ativo", color: "#2c7a72"},
   {id: "renegociado", name: "Renegociado", color: "#b7791f"},
-  {id: "cancelado", name: "Cancelado", color: "#b6403a"}
+  {id: "cancelado", name: "Cancelado", color: "#b6403a"},
+  {id: "finalizado", name: "Finalizado", color: "#5b6b80"}
 ];
+// Status que cada tipo de tratamento aceita: serviço = Ativo ou Finalizado; especialidade (e outros) = Ativo, Renegociado ou Cancelado.
+function trStatusAllowed(tipos){ return trIsService({tipos: tipos}) ? ["ativo", "finalizado"] : ["ativo", "renegociado", "cancelado"]; }
+function trStatusOpts(tipos, cur){
+  var ok = trStatusAllowed(tipos);
+  return TR_STATUS.filter(function(x){ return ok.indexOf(x.id) !== -1 || x.id === cur; }).map(function(x){ return '<option value="' + x.id + '"' + (x.id === cur ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join("");
+}
 var TR_TIPOS = [{id: "novo", name: "Novo"}, {id: "renegociado", name: "Renegociado"}];
 // Motivos de Cancelamento (Cadastros → Motivos de Cancelamento, config/cancel_reasons).
 // "Outro" é fixo e exige a observação do cancelamento. Sem cadastro no banco
@@ -26631,7 +26639,7 @@ function openTreatmentModal(t, opts){
         '</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="trTipo">Contrato (Automático)</label><select id="trTipo" disabled>' + opt(TR_TIPOS, d.tipo) + '</select></div>' +
-          '<div class="field"><label for="trSt">Status</label><select id="trSt"' + (wasCancelled ? ' disabled' : '') + '>' + opt(TR_STATUS, d.status) + '</select></div>' +
+          '<div class="field"><label for="trSt">Status</label><select id="trSt"' + (wasCancelled ? ' disabled' : '') + '>' + trStatusOpts(d.tipos, d.status) + '</select></div>' +
         '</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="trVencPor">Vencimento por</label><select id="trVencPor">' +
@@ -26755,6 +26763,14 @@ function openTreatmentModal(t, opts){
     var now = trTiposRead(), added = now.filter(function(id){ return tpPrev.indexOf(id) === -1; });
     tpPrev = now;
     if (added.length && ed && ed.addForTypes) ed.addForTypes(added);
+    // o Status acompanha o tipo: serviço = Ativo/Finalizado; especialidade = Ativo/Renegociado/Cancelado
+    var stEl = document.getElementById("trSt");
+    if (stEl && !wasCancelled){
+      var cur = stEl.value, okSt = trStatusAllowed(now);
+      if (okSt.indexOf(cur) === -1) cur = "ativo";
+      stEl.innerHTML = trStatusOpts(now, cur); stEl.value = cur;
+      stEl.dispatchEvent(new Event("change", {bubbles: true}));
+    }
   });
   document.getElementById("ovTreat").addEventListener("mousedown", function(e){ if (!tpMs.contains(e.target)) trTiposOpen(false); });
   trTiposRefresh();
@@ -28737,7 +28753,7 @@ var HELP_TOPICS = [
   {id: "tipostrat", group: "Cadastros", title: "Tipos de Tratamento", mod: "tipos_tratamento", tab: "tipostrat",
     purpose: "Os tipos que o tratamento do paciente pode ter (Multidisciplinar, Fonoaudiologia, Psicologia…). Cada tratamento pode ter vários tipos.",
     steps: ["Cadastros → <b>Tipos de Tratamento</b> → <b>+ Incluir</b>: nome do tipo (ex.: Multidisciplinar). A caixa <b>Padrão</b> faz o tipo já vir escolhido no tratamento novo.", "Todas as especialidades e serviços cadastrados aparecem na lista sozinhos: em Cadastros → Especialidades e Serviços há a caixa <b>Tratamento</b>; desligada, a especialidade ou o serviço deixa de ser tipo. Clicar numa especialidade ou serviço da lista abre o cadastro dele.", "No tratamento, o campo <b>Tipo de Tratamento</b> (logo depois do paciente) aceita escolher vários."],
-    rules: ["Ao marcar um tipo no tratamento, os quadros entram sozinhos: <b>Multidisciplinar</b> traz todas as especialidades (menos Aplicador ABA) e uma especialidade traz o quadro dela; você remove o que não quiser.", "Ao agendar uma Sessão (Planner e Agenda) ou salvar um quadro de especialidade, o sistema avisa se a especialidade não está no tipo. Multidisciplinar libera todas, serviços são sempre livres e, num tratamento só de serviço, agendar uma Sessão de especialidade também avisa. O aviso dos quadros continua valendo como segunda regra; no <b>Sistema</b> o Administrador escolhe Bloquear, Avisar ou Desligado.", "A lista mostra a origem (Tipo de Tratamento, Especialidade ou Serviço) e quantos tratamentos usam cada tipo.", "Tipo usado em tratamento não é excluído: é <b>Inativado</b>.", "Especialidade e serviço novos já vêm com Tratamento ligado."],
+    rules: ["O <b>Status</b> do tratamento depende do tipo: tratamento de <b>serviço</b> fica <b>Ativo</b> ou <b>Finalizado</b>; tratamento de especialidade (ou Multidisciplinar) fica <b>Ativo</b>, <b>Renegociado</b> ou <b>Cancelado</b>.", "Ao marcar um tipo no tratamento, os quadros entram sozinhos: <b>Multidisciplinar</b> traz todas as especialidades (menos Aplicador ABA) e uma especialidade traz o quadro dela; você remove o que não quiser.", "Ao agendar uma Sessão (Planner e Agenda) ou salvar um quadro de especialidade, o sistema avisa se a especialidade não está no tipo. Multidisciplinar libera todas, serviços são sempre livres e, num tratamento só de serviço, agendar uma Sessão de especialidade também avisa. O aviso dos quadros continua valendo como segunda regra; no <b>Sistema</b> o Administrador escolhe Bloquear, Avisar ou Desligado.", "A lista mostra a origem (Tipo de Tratamento, Especialidade ou Serviço) e quantos tratamentos usam cada tipo.", "Tipo usado em tratamento não é excluído: é <b>Inativado</b>.", "Especialidade e serviço novos já vêm com Tratamento ligado."],
     who: "Permissão <b>Tipos de Tratamento</b>."},
   {id: "motivosbloq", group: "Cadastros", title: "Motivos de Bloqueio", mod: "motivos_bloqueio", tab: "motivosbloq",
     purpose: "Motivos para bloquear um paciente (Financeiro, Documentação pendente, Aguardando laudo…). Usados no grupo <b>Bloqueio de Agendamento</b> do cadastro do paciente.",
@@ -34992,7 +35008,7 @@ function ioFindPatient(nome, nasc){
   return L.length === 1 ? L[0] : (L.length ? {ambiguous: true} : null);
 }
 function ioDiff(label, a, b){ return '<span class="io-diff">' + esc(label) + ': ' + esc(a === "" || a == null ? "—" : a) + ' → <b>' + esc(b === "" || b == null ? "—" : b) + '</b></span>'; }
-var IO_TR_STATUS = {ativo: "ativo", alterado: "renegociado", renegociado: "renegociado", negociado: "renegociado", cancelado: "cancelado"};
+var IO_TR_STATUS = {ativo: "ativo", alterado: "renegociado", renegociado: "renegociado", negociado: "renegociado", cancelado: "cancelado", finalizado: "finalizado", finalizada: "finalizado"};
 function ioSuporte(v){
   var t = ioText(v); if (!t) return null;
   var m = /^(?:n[ií]vel\s*)?([123])$/i.exec(t);

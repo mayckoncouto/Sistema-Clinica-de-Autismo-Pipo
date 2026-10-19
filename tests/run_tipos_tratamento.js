@@ -63,6 +63,17 @@ const path = require('path');
   await page.click('#trTiposMs .ms-btn');
   await page.uncheck('#trTipos input[value="intensivo"]').catch(async () => { await page.$eval('#trTipos input[value="' + (doc.list.filter((x) => x.name === 'Intensivo')[0].id) + '"]', (c) => { c.checked = false; c.dispatchEvent(new Event('change', { bubbles: true })); }); });
   await page.check('#trTipos input[value="spec:' + specId + '"]');
+  const stOpts = () => page.$$eval('#trSt option', (a) => a.map((o) => o.value).join(','));
+  check('especialidade: Status Ativo, Renegociado ou Cancelado?', (await stOpts()) === 'ativo,renegociado,cancelado', await stOpts());
+  const svcVal = await page.$$eval('#trTipos input', (a) => { const x = a.filter((i) => /^svc:/.test(i.value))[0]; return x ? x.value : ''; });
+  if (svcVal){
+    await page.$$eval('#trTipos input', (a) => a.forEach((i) => { if (i.checked){ i.checked = false; i.dispatchEvent(new Event('change', { bubbles: true })); } }));
+    await page.$eval('#trTipos input[value="' + svcVal + '"]', (c) => { c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); });
+    check('serviço: Status Ativo ou Finalizado?', (await stOpts()) === 'ativo,finalizado', await stOpts());
+    await page.$eval('#trTipos input[value="' + svcVal + '"]', (c) => { c.checked = false; c.dispatchEvent(new Event('change', { bubbles: true })); });
+    await page.$eval('#trTipos input[value="multidisciplinar"]', (c) => { c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); });
+    await page.check('#trTipos input[value="spec:' + specId + '"]').catch(() => {});
+  }
   await page.click('#trSave'); await page.waitForTimeout(500);
   const saved = await ev('state.treatments.filter(function(t){ return t.patientId === "' + pid + '"; }).slice(-1)[0].tipos');
   check('tratamento guarda os tipos escolhidos (vários)?', saved.indexOf('multidisciplinar') !== -1 && saved.indexOf('spec:' + specId) !== -1 && saved.length === 2, saved);
