@@ -4960,3 +4960,5 @@ Pedido do usuário ("incluir todas"). Bloco "Planner: ferramentas de conferênci
 - (2026-10-19, pedido do usuário) **Sugerir Agendamento respeita sempre o Horário de Atendimento do paciente**: o horário final é a saída (sessão tem de terminar até ele; nada começa nele ou depois — `patientSlotOk`). Saiu a caixa `#sgFora` ("mostrar também horários fora"); `sgCompute` é chamado sem `fora`. Sem SQL. Teste em `tests/run_sugerir_grupo.js`.
 
 - (2026-10-19, pedido do usuário) **Sugerir Agendamento: regra 1 = só com quadros e só serviço Sessão.** `sgSessLines(p)` (quadros de `apLinesOf` com `lineSvc` = Sessão) alimenta `sgCompute`; sem quadro de Sessão a janela diz "não tem quadros de Sessão…" e não oferece nada, nem remoção. `sgRemovable` só olha sessões de serviço Sessão. Correções (`sgFixes`) herdam o filtro. Sem SQL.
+
+- (2026-10-19, pedido do usuário) Lista de Tratamentos, coluna **Vencimento**: a etiqueta de aviso (Vencido, Vence em N dias, Sessões esgotadas, Restam N sessões) vem ANTES do texto/contador (`.tr-venc-lead`). Na janela do tratamento a etiqueta continua ao lado do rótulo. Sem SQL.
