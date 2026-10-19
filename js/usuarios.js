@@ -63,6 +63,8 @@
     { key: "disponibilidade", label: "Disponibilidade", hint: "relatório de atendidos e vagas livres do Planner por dia, horário e especialidade", actions: ["view"] },
     { key: "historico_planner", label: "Histórico de Alterações – Planner", hint: "Planner → Outras Opções: quem criou, alterou ou excluiu agendamentos", actions: ["view"] },
     { key: "agenda", label: "Agenda", hint: "atendimentos por data", group: "Agenda" },
+    { key: "agenda_planner", label: "Agenda Planner", hint: "Agenda ▾ → Agenda Planner: a Agenda do dia no visual do Planner (incluir, editar e excluir seguem a permissão da Agenda)", actions: ["view"] },
+    { key: "agendamentos_lista", label: "Agendamentos", hint: "Agenda ▾ → Agendamentos: lista de todos os atendimentos dos pacientes", actions: ["view"] },
     { key: "visao_geral", label: "Visão Geral", hint: "Agenda ▾ → Visão Geral: todos os atendimentos do dia numa tela", actions: ["view"] },
     { key: "gerenciar_status", label: "Gerenciar Status", hint: "Agenda ▾ → Agendamentos → Outras Opções: mudar o status de vários atendimentos de uma vez (só os status que o nível pode usar; Finalizado não entra)", actions: ["view"] },
     { key: "historico_agenda", label: "Histórico de Alterações – Agenda", hint: "Agenda → Outras Opções: quem criou, alterou ou excluiu atendimentos", actions: ["view"] },
@@ -667,7 +669,7 @@
       ] },
       { title: "Agenda", panels: [
         { id: "agenda", keys: ["agenda", "gerenciar_status", "historico_agenda"], extra: "status" },
-        one("visao_geral")
+        one("agenda_planner"), one("agendamentos_lista"), one("visao_geral")
       ] },
       { title: "Prontuário", panels: [
         one("prontuario"), one("plano_terapeutico"), one("objetivos"), one("atividades"),
