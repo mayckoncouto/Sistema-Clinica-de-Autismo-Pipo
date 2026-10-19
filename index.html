@@ -3079,6 +3079,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar Profissional</button>
         <button class="btn ghost" id="plExportBtn" title="Baixa o Planner (4 semanas) em planilha do Excel, com a lista e a grade">Exportar Excel</button>
         <button class="btn ghost" id="plHistBtn" title="Quem criou, alterou ou excluiu agendamentos no Planner">Histórico de Alterações</button>
+        <button class="btn ghost" id="plImportBtn" title="Lê uma planilha do Excel com a grade do Planner e importa os agendamentos, com prévia" hidden>Importar Planilha</button>
         <button class="btn ghost" id="plClearWeekBtn" title="Apaga marcações por semana, dia, horário, sala, terapeuta, paciente ou tipo, com prévia" hidden>Limpar por Filtro</button>
       </div></div>
     </div>
@@ -10092,6 +10093,7 @@ function wireControls(){
   // Salas <-> Grupos de Suporte: a mesma tela mostra um cadastro ou o outro.
   document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
   document.getElementById("plClearWeekBtn").addEventListener("click", openPlClearModal);
+  document.getElementById("plImportBtn").addEventListener("click", openPlImportModal);
   document.getElementById("fixPatientBtn").addEventListener("click", function(){ openFixPatientModal(); });
   // Menu "Outras Opções ▾" do Planner: abre/fecha; escolher um item fecha o menu.
   (function(){
@@ -20606,6 +20608,7 @@ function plAutoUi(){
   show("plConfBtn", !PLA.on);
   show("plMissBtn", !PLA.on);
   show("plSugBtn", can("planner", "create"));
+  show("plImportBtn", !PLA.on && can("planner", "create"));
   show("plCopiesBtn", !PLA.on && can("planner", "edit"));
   show("plSubBtn", can("planner", "create") && can("planner", "delete"));
   show("plCopyWeekBtn", can("planner", "create"));
@@ -21243,6 +21246,166 @@ function pltGoCell(day, week, name){
   var s = document.getElementById("patientSearch"); if (s){ s.value = name; s.dispatchEvent(new Event("input", {bubbles: true})); }
 }
 function pltPerm(a){ if (can("planner", a)) return true; showToast(permDeniedMsg("planner", a), true); return false; }
+
+/* ---------- Importar Planilha (grade do Planner) ---------- */
+// Lê a planilha no formato antigo do Planner: blocos de dia empilhados (título "1ª Segunda-Feira", linha das salas,
+// linha "Horario" com o profissional de cada coluna) e as 4 semanas lado a lado. Só monta a prévia; grava pela tela
+// (applyBookingChanges), então vale permissão, histórico e Ctrl+Z.
+var PLI_DAYS = {segunda: "seg", terca: "ter", quarta: "qua", quinta: "qui", sexta: "sex", sabado: "sab", domingo: "dom"};
+var PLI_ALIAS = {leia: "aucileia", deta: "jessica"};
+var PLI_ROOM_ALIAS = {to: "Terapia Ocupacional ABA"};
+function pliTime(v){
+  if (typeof v === "number" && v > 0 && v < 1){ var m = Math.round(v * 1440); return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); }
+  var t = /^(\d{1,2}):(\d{2})/.exec(String(v || "").trim());
+  return t ? String(+t[1]).padStart(2, "0") + ":" + t[2] : "";
+}
+function pliSeatFor(room, sheetName, used){
+  var n = normText(String(sheetName || "").trim()), al = PLI_ALIAS[n] || "";
+  var seats = (room.therapists || []).filter(function(t){
+    var p = t.professionalId ? findProfessional(t.professionalId) : null; if (!p) return false;
+    var full = normText(String(profNome(p) || "")), sh = normText(String(profShortName(p) || ""));
+    return full.indexOf(n) === 0 || sh === n || (al && full.indexOf(al) === 0);
+  });
+  for (var i = 0; i < seats.length; i++) if (!used[seats[i].id]){ used[seats[i].id] = 1; return seats[i]; }
+  return null;
+}
+function pliService(fragment){
+  var n = normText(fragment), list = servicesList();
+  function byName(name){ var k = normText(name); for (var i = 0; i < list.length; i++) if (normText(list[i].name) === k) return list[i].id; return null; }
+  return byName(fragment) || (n === "acolhimento" ? byName("Acolhimento Familiar") : null);
+}
+// Texto da célula → {name, service, note}
+function pliSplit(text, warn){
+  var parts = String(text).split(/\s+-\s+/).map(function(x){ return x.trim(); }).filter(Boolean);
+  var out = {name: parts[0] || "", service: DEFAULT_SERVICE_ID, note: ""}, rest = parts.slice(1), notes = [];
+  rest.forEach(function(frag, i){
+    var n = normText(frag), id;
+    if (i === 0 && /^acolhimento/.test(n)){
+      id = pliService("Acolhimento Familiar");
+      if (id) out.service = id; else warn("Serviço “Acolhimento Familiar” não cadastrado: " + out.name);
+      var left = frag.replace(/^acolhimento\s*/i, "").replace(/^familiar\s*/i, "").trim();
+      if (left) notes.push(left);
+    } else if (i === 0 && (id = pliService(frag))){ out.service = id; }
+    else notes.push(frag);
+  });
+  out.note = notes.join(" - ");
+  return out;
+}
+function plImpParse(rows){
+  var res = {items: [], missing: {}, ambig: {}, ignored: [], unknown: [], badTime: [], occupied: 0, byDoc: {}, services: {}};
+  function cell(r, c){ var v = (rows[r] || [])[c]; return v === undefined || v === null ? "" : v; }
+  var starts = [];
+  for (var r = 0; r < rows.length; r++){
+    if (String(cell(r, 0)).trim() !== "") continue;
+    for (var c = 1; c < (rows[r] || []).length; c++){
+      var m = /^\s*(\d)\s*[ªºa°]?\s*(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)/i.exec(String(cell(r, c)));
+      if (m){ starts.push({r: r, day: PLI_DAYS[normText(m[2])]}); break; }
+    }
+  }
+  var warns = {};
+  function warn(t){ warns[t] = 1; }
+  starts.forEach(function(st, si){
+    var end = si + 1 < starts.length ? starts[si + 1].r : rows.length, hr = st.r + 2;
+    if (normText(String(cell(hr, 0))) !== "horario"){ res.unknown.push("Bloco sem a linha “Horario” (linha " + (st.r + 1) + ")"); return; }
+    // semanas: cada coluna "Horario" da linha de cabeçalho abre uma semana até a coluna ERROS/ATENDIDOS/…
+    var week = 0, w0 = [];
+    for (var c = 0; c < (rows[hr] || []).length; c++) if (normText(String(cell(hr, c))) === "horario") w0.push(c);
+    w0.forEach(function(c0, wi){
+      var w = wi + 1, cols = [];
+      for (var c = c0 + 1; c < (rows[hr] || []).length; c++){
+        var h = normText(String(cell(hr, c)));
+        if (h === "horario" || h === "erros" || h === "atendidos" || h === "livres" || h === "nivel 3") break;
+        cols.push(c);
+      }
+      // sala e profissional de cada coluna (nome da sala e do profissional valem até aparecer outro)
+      var roomName = "", profName = "", room = null, used = {}, colSeat = {};
+      cols.forEach(function(c){
+        var rn = String(cell(st.r + 1, c)).trim();
+        if (rn){ roomName = rn; profName = ""; room = findRoomByName(rn); used = {}; if (!room) res.unknown.push("Sala não encontrada: " + rn); }
+        var pn = String(cell(hr, c)).trim(); if (pn) profName = pn;
+        if (!room) return;
+        var seat = profName ? pliSeatFor(room, profName, used) : null;
+        if (seat) colSeat[c] = {room: room, seat: seat};
+        else { var n = 0; for (var r2 = hr + 1; r2 < end; r2++){ var v = String(cell(r2, c)).trim(); if (v && v !== "," && !/^reuni/i.test(v)) n++; } res.ignored.push({room: roomName, prof: profName || "(sem nome)", week: w, day: st.day, count: n}); }
+      });
+      for (var r2 = hr + 1; r2 < end; r2++){
+        var time = pliTime(cell(r2, c0));
+        if (!time) continue;
+        cols.forEach(function(c){
+          var raw = cell(r2, c), v = typeof raw === "string" ? raw.replace(/\s+/g, " ").trim() : (raw === "" ? "" : String(raw));
+          if (!v || v === "," || v === "·" || v.charAt(0) === "#" || /^reuni[aã]o cl[ií]nica!?$/i.test(v)) return;
+          var cs = colSeat[c]; if (!cs) return;
+          var day = findDayObj(st.day);
+          if (!day || day.morning.concat(day.afternoon).indexOf(time) < 0){ res.badTime.push(st.day + " " + time + " · " + v); return; }
+          var rec, label = v;
+          if (isGroup(cs.room)){
+            var tgt = findRoomByName(PLI_ROOM_ALIAS[normText(v)] || v);
+            if (!tgt || isGroup(tgt)){ res.unknown.push(cs.room.name + " " + st.day + " " + time + ": “" + v + "” não é uma sala"); return; }
+            rec = {patient: tgt.name, roomRef: tgt.id, note: "", service: DEFAULT_SERVICE_ID};
+          } else {
+            var sp = pliSplit(v, warn), cands = patsByName(sp.name);
+            if (!cands.length){ (res.missing[sp.name] = res.missing[sp.name] || []).push(st.day + "-" + w + " " + time + " " + cs.room.name); return; }
+            rec = {patient: cands[0].nome, note: sp.note, service: sp.service};
+            if (cands.length === 1) rec.patientId = cands[0].id; else (res.ambig[sp.name] = res.ambig[sp.name] || []).push(st.day + "-" + w + " " + time);
+          }
+          var docId = st.day + "-" + w, key = time + "|" + cs.room.id + "|" + cs.seat.id;
+          res.items.push({docId: docId, key: key, rec: rec, label: label});
+          res.byDoc[docId] = (res.byDoc[docId] || 0) + 1;
+        });
+      }
+    });
+  });
+  Object.keys(warns).forEach(function(t){ res.unknown.push(t); });
+  return res;
+}
+function openPlImportModal(){
+  if (PLA.on){ showToast("A importação de planilha é só do Planner.", true); return; }
+  if (!pltPerm("create")) return;
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var plan = null;
+  var m = pltModal("ovPlImp", "Importar Planilha", "Lê a grade do Planner (4 semanas) de uma planilha do Excel e mostra a prévia antes de gravar. Só entra em horário livre; Ctrl+Z desfaz.",
+    '<div class="field"><label for="pliFile">Planilha (.xlsx)</label><input type="file" id="pliFile" accept=".xlsx"></div><div id="pliOut"></div>',
+    '<button class="btn" id="pliGo" disabled>Importar</button>');
+  var out = m.ov.querySelector("#pliOut"), go = m.ov.querySelector("#pliGo");
+  function list(title, arr){ return arr.length ? '<div class="tr-sec">' + title + ' (' + arr.length + ')</div><div class="pat-count">' + arr.slice(0, 60).map(esc).join("<br>") + (arr.length > 60 ? "<br>…" : "") + '</div>' : ""; }
+  m.ov.querySelector("#pliFile").addEventListener("change", function(){
+    var f = this.files && this.files[0]; if (!f) return;
+    out.innerHTML = '<div class="pat-count">Lendo a planilha…</div>'; go.disabled = true; plan = null;
+    Promise.all([xlReadFile(f), pltLoad()]).then(function(rs){
+      var res = plImpParse(rs[0]), seen = {}, ok = [];
+      res.items.forEach(function(it){
+        var bk = state.scheduleDocs[it.docId] && state.scheduleDocs[it.docId].bookings || {}, cur = bk[it.key], id = it.docId + "#" + it.key;
+        if ((cur && (cur.patient || cur.blocked)) || seen[id]){ res.occupied++; return; }
+        seen[id] = 1; ok.push(it);
+      });
+      plan = {items: ok, res: res};
+      var weeks = {}; ok.forEach(function(it){ var w = it.docId.split("-")[1]; weeks[w] = (weeks[w] || 0) + 1; });
+      var miss = Object.keys(res.missing).sort().map(function(n){ return n + " — " + res.missing[n].length + " horário(s)"; });
+      out.innerHTML = '<div class="tr-sec tr-sec-top">Resumo</div><div class="pat-count"><b>' + ok.length + '</b> agendamentos serão importados · ' +
+        Object.keys(weeks).sort().map(function(w){ return WEEK_LABEL[w] + ": <b>" + weeks[w] + "</b>"; }).join(" · ") + '</div>' +
+        (res.occupied ? '<div class="pat-count">' + res.occupied + ' ficam de fora por já haver algo na célula (ou repetição na planilha).</div>' : "") +
+        list("Pacientes Não Cadastrados (ficam de fora)", miss) +
+        list("Colunas Ignoradas", res.ignored.map(function(i){ return i.room + " · " + i.prof + " · " + WEEK_LABEL[i.week] + " · " + i.day + (i.count ? " — tinha " + i.count + " preenchida(s)" : ""); }).filter(function(x, i, a){ return a.indexOf(x) === i; })) +
+        list("Nomes Repetidos no Cadastro (entram sem código)", Object.keys(res.ambig)) +
+        list("Horários que Não Existem na Grade", res.badTime) +
+        list("Outros Avisos", res.unknown);
+      go.disabled = !ok.length;
+    }, function(e){ out.innerHTML = '<div class="pat-count">Não consegui ler a planilha: ' + esc(e && e.message || e) + '</div>'; });
+  });
+  go.addEventListener("click", function(){
+    if (!plan || !plan.items.length) return;
+    confirmDialog({title: "Importar Planilha?", message: "Serão gravados <b>" + plan.items.length + "</b> agendamentos no Planner. Ctrl+Z desfaz.", confirmLabel: "Importar"}).then(function(ok){
+      if (!ok) return;
+      var changes = {};
+      plan.items.forEach(function(it){ (changes[it.docId] = changes[it.docId] || {})[it.key] = it.rec; });
+      go.disabled = true;
+      applyBookingChanges(changes, PLT_PASS).then(function(r){
+        if (r === false){ go.disabled = false; return; }
+        m.close(); renderGrid(); showToast(plan.items.length + " agendamentos importados. Ctrl+Z desfaz.");
+      });
+    });
+  });
+}
 
 /* ---------- Limpar por Filtro ---------- */
 function openPlClearModal(){
@@ -28702,6 +28865,7 @@ var HELP_TOPICS = [
   {id: "planner-ferramentas", group: "Planner", title: "Outras Opções do Planner", mod: "planner", tab: "planner",
     purpose: "Menu <b>Outras Opções ▾</b> do Planner: mudanças em lote e envio para a Agenda. A montagem automática das sessões ficou no <b>Auto Planner</b> (menu Planner ▾), uma grade própria separada do Planner.",
     steps: ["<b>Sugerir Agendamento:</b> só funciona com paciente que tem <b>quadros de Especialidades e Serviços</b> no tratamento ativo, e só para o serviço <b>Sessão</b> (quadros e sessões de outros serviços ficam de fora). Escolha o paciente; valem as regras de Intervenção ABA e de grupo do Auto Planner (Sessão sem Intervenção ABA fica sozinha na sala; com Intervenção ABA só divide sala e horário com a mesma faixa etária e terapeutas compatíveis); o sistema lê cada quadro de Especialidades e Serviços do tratamento ativo, vê o que já está marcado e oferece onde marcar as sessões que faltam. Primeiro vale o <b>Horário de Atendimento</b> do paciente; depois o que o quadro pede (dia, horário, sala, semanas, sessões seguidas e o mesmo horário das outras semanas). Troque a opção na lista, desmarque o que não quiser e clique em <b>Agendar</b>. O Horário de Atendimento do paciente é sempre respeitado: o horário final é a saída, então a sessão precisa terminar até ele e nada é sugerido a partir dele. Sessões do paciente que estão <b>fora do Horário de Atendimento e fora do quadro</b> aparecem numa lista à parte, para remover (nada vem marcado). Antes das sugestões novas, a ferramenta também oferece <b>correções nas sessões já marcadas</b>: onde uma especialidade tem sessões a mais e outra a menos que o quadro, troca a especialidade da sessão (no mesmo dia, quando possível); e onde o mês está desigual (por exemplo 2 Nutrição numa semana e nenhuma em outra), passa a sessão para a semana que está faltando. Elas vêm marcadas, a sessão continua existindo, e o ideal é repartir o total do quadro pelas semanas (não é regra fixa: só é feito quando há lugar que respeite as regras). Todas as regras do Planner valem e Ctrl+Z desfaz.", 
+      "<b>Importar Planilha</b>: lê uma planilha do Excel (.xlsx) com a grade do Planner (4 semanas lado a lado, os dias empilhados, a linha das salas e a linha “Horario” com o profissional de cada coluna) e mostra a prévia antes de gravar: quantos agendamentos entram por semana, pacientes que não estão cadastrados (ficam de fora), colunas ignoradas e avisos. Cada coluna vai para a coluna da sala do mesmo profissional; célula só com vírgula é horário livre; “Reunião Clinica!” é ignorada; nome com complemento vira serviço e observação (por exemplo, “Acolhimento” vira o serviço Acolhimento Familiar); nas colunas dos grupos de suporte o texto é a sala que o aplicador auxilia. Só entra em célula livre. Ctrl+Z desfaz.",
       "<b>Editar Agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar Profissional</b>: passa as colunas de um profissional para outro.",
       "<b>Outras Opções ▾ → Enviar para a Agenda</b>: comece escolhendo o <b>Período</b>. <b>Mês</b>: escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda; a 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª; a prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
