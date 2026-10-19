@@ -4949,3 +4949,5 @@ Pedido do usuário ("incluir todas"). Bloco "Planner: ferramentas de conferênci
 - **Abrir Vaga** (`openPlVagaModal`): vagas livres por especialidade/semanas/dias/faixa (com paciente opcional: horário dele e regras) + "Quem Poderia Mudar de Lugar" (pacientes da janela com outro horário livre do mesmo tipo de terapeuta fora da janela; até 80 avaliados).
 - **Limpar por Filtro** (`openPlClearModal`, no lugar do Limpar Semana; mesmo id `plClearWeekBtn`; a função `plannerClearWeek` saiu) e **Copiar Semana** (`openPlCopyWeekModal`: só em células livres, `pltTry` por célula, simulação com `pltStageSet`).
 - Regra fixa continua: nenhuma dessas ferramentas é rodada por SQL/conector; só pela tela. Ajuda: tópico `planner-ferramentas`. Teste `tests/run_planner_ferramentas.js` (no `npm test`).
+
+- (2026-10-19, pedido do usuário) **Filtro de salas do Planner não mantém mais os Grupos de Suporte**: `visibleRooms()` mostra só as salas/grupos marcados no filtro (grupo aparece se o usuário o marcar). Substitui "Filtro de salas do Planner mantém os grupos". Sem SQL.

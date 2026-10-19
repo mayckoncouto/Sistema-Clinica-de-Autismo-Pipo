@@ -1,4 +1,4 @@
-// Filtro de salas do Planner: várias salas ao mesmo tempo (grupos de suporte continuam visíveis).
+// Filtro de salas do Planner: várias salas ao mesmo tempo.
 const { chromium } = require('playwright');
 const path = require('path');
 
