@@ -293,6 +293,73 @@
     var p = permsUpgrade(profile.role.permissions);
     return p[module] ? !!p[module][action] : !!dflt;
   }
+
+  // Ferramentas com liga/desliga próprio (Níveis de Permissão, dentro de cada quadro).
+  // "from" = de quem herda enquanto o nível não tem a chave gravada (qualquer uma das ações listadas);
+  // "sel" = botões da tela que somem sem a permissão (applyPermissionsUI). Ferramenta nova: acrescentar aqui.
+  var TOOLS = [
+    // Pacientes
+    {key: "ferr_pac_link", panel: "pacientes", label: "Enviar Link de Cadastro e Pedir Atualização", hint: "Outras Opções da lista e da janela do paciente", from: [["pacientes", "create"]], sel: "#patLinkBtn,#pAskUpd"},
+    {key: "ferr_pac_links", panel: "pacientes", label: "Links Enviados", hint: "lista dos links de cadastro enviados", from: [["pacientes", "create"]], sel: "#patLinksBtn"},
+    {key: "ferr_pac_ficha", panel: "pacientes", label: "Imprimir Ficha Cadastral", hint: "ficha do paciente em PDF", from: [["pacientes", "view"]], sel: "#patPrintBtn"},
+    {key: "ferr_planilha_pacientes", panel: "pacientes", label: "Exportar / Importar Planilha", hint: "Outras Opções da lista de Pacientes", from: [["pacientes", "view"]], sel: "#patExportBtn,#patImportBtn", io: "pacientes"},
+    // Tratamentos
+    {key: "ferr_planilha_tratamentos", panel: "tratamentos", label: "Exportar / Importar Planilha", hint: "Outras Opções da lista de Tratamentos", from: [["tratamentos", "view"]], io: "tratamentos"},
+    // Prontuário e plano
+    {key: "ferr_planilha_planos", panel: "plano_terapeutico", label: "Exportar / Importar Planilha", hint: "Outras Opções do Plano Terapêutico", from: [["plano_terapeutico", "view"]], io: "planos"},
+    {key: "ferr_plano_sintese", panel: "plano_terapeutico", label: "Gerar Síntese do Quadro Clínico", hint: "botão Gerar Síntese na janela do plano", from: [["plano_terapeutico", "edit"], ["plano_terapeutico", "create"]], sel: "#plSynth"},
+    {key: "ferr_planilha_objetivos", panel: "objetivos", label: "Exportar / Importar Planilha", hint: "", from: [["objetivos", "view"]], io: "objetivos"},
+    {key: "ferr_planilha_atividades", panel: "atividades", label: "Exportar / Importar Planilha", hint: "", from: [["atividades", "view"]], io: "atividades"},
+    {key: "ferr_planilha_escalas", panel: "escalas", label: "Exportar / Importar Planilha", hint: "", from: [["escalas", "view"]], io: "escalas"},
+    {key: "ferr_planilha_habilidades", panel: "habilidades", label: "Exportar / Importar Planilha", hint: "", from: [["habilidades", "view"]], io: "habilidades"},
+    // Planner
+    {key: "ferr_pl_enviar_agenda", panel: "planner", label: "Enviar para a Agenda", hint: "levar o Planner para as datas da Agenda", from: [["agenda", "create"]], sel: "#sendToAgendaBtn"},
+    {key: "ferr_pl_editar_agend", panel: "planner", label: "Editar Agendamento (por paciente)", hint: "ver, apagar ou trocar os agendamentos de um paciente", from: [["planner", "create"], ["planner", "edit"], ["planner", "delete"]], sel: "#fixPatientBtn"},
+    {key: "ferr_pl_horario_livre", panel: "planner", label: "Horário Livre", hint: "procurar horários livres para um paciente", from: [["planner", "view"]], sel: "#freeSlotBtn"},
+    {key: "ferr_pl_trocar_prof", panel: "planner", label: "Trocar Profissional", hint: "passar as colunas de um profissional para outro", from: [["salas", "edit"], ["grupos", "edit"]], sel: "#swapProfBtn"},
+    {key: "ferr_pl_importar", panel: "planner", label: "Importar Planilha", hint: "repor o Planner a partir de uma planilha", from: [["planner", "create"]], sel: "#plImportBtn"},
+    {key: "ferr_pl_sugerir", panel: "planner", label: "Sugerir Agendamento", hint: "oferecer onde marcar as sessões de um paciente", from: [["planner", "create"]], sel: "#plSugBtn"},
+    {key: "ferr_pl_copias", panel: "planner", label: "Cópias do Planner", hint: "guardar, comparar e restaurar versões", from: [["planner", "edit"]], sel: "#plCopiesBtn"},
+    {key: "ferr_pl_substituir", panel: "planner", label: "Substituir Terapeuta", hint: "passar os atendimentos de um terapeuta ausente", from: [["planner", "edit"]], sel: "#plSubBtn"},
+    {key: "ferr_pl_vaga", panel: "planner", label: "Abrir Vaga", hint: "onde há vaga e quem poderia mudar de lugar", from: [["planner", "view"]], sel: "#plVagaBtn"},
+    {key: "ferr_pl_copiar_semana", panel: "planner", label: "Copiar Semana", hint: "copiar as marcações para outras semanas", from: [["planner", "create"]], sel: "#plCopyWeekBtn"},
+    {key: "ferr_pl_limpar", panel: "planner", label: "Limpar por Filtro", hint: "apagar marcações por semana, dia, sala, terapeuta…", from: [["planner", "delete"]], sel: "#plClearWeekBtn"},
+    {key: "ferr_pl_conferencia", panel: "planner", label: "Conferência do Planner", hint: "relatório de qualidade do Planner", from: [["planner", "view"]], sel: "#plConfBtn"},
+    {key: "ferr_pl_faltando", panel: "planner", label: "Pacientes Faltando Sessões", hint: "quem tem sessões a menos ou a mais", from: [["planner", "view"]], sel: "#plMissBtn"},
+    {key: "ferr_pl_exportar", panel: "planner", label: "Exportar Excel", hint: "baixar o Planner em planilha", from: [["planner", "view"]], sel: "#plExportBtn"},
+    // Auto Planner
+    {key: "ferr_ap_montar", panel: "autoplanner", label: "Montar Proposta", hint: "propor as sessões que faltam", from: [["autoplanner", "create"]], sel: "#autoPlannerBtn"},
+    {key: "ferr_ap_qualidade", panel: "autoplanner", label: "Relatório de Qualidade", hint: "conferir a grade do Auto Planner", from: [["autoplanner", "view"]], sel: "#apQualityBtn"},
+    {key: "ferr_ap_rascunhos", panel: "autoplanner", label: "Rascunhos e Comparar", hint: "guardar até 5 versões e comparar", from: [["autoplanner", "edit"]], sel: "#apDraftsBtn"},
+    {key: "ferr_ap_imprimir", panel: "autoplanner", label: "Imprimir", hint: "grade por terapeuta e horário da família", from: [["autoplanner", "view"]], sel: "#apPrintBtn"},
+    // Agenda (Outras Opções)
+    {key: "ferr_ag_limpar", panel: "agenda", label: "Limpar por Período", hint: "Agenda → Outras Opções", from: [["agenda", "delete"]], agd: "limpar"},
+    {key: "ferr_ag_bloquear", panel: "agenda", label: "Bloquear Período", hint: "Agenda → Outras Opções", from: [["agenda", "create"]], agd: "bloquear"},
+    {key: "ferr_ag_trocar", panel: "agenda", label: "Trocar Profissional no Período", hint: "Agenda → Outras Opções", from: [["agenda", "edit"]], agd: "trocar"},
+    {key: "ferr_ag_copiar", panel: "agenda", label: "Copiar Dia ou Semana", hint: "Agenda → Outras Opções", from: [["agenda", "create"]], agd: "copiar"},
+    {key: "ferr_ag_pendencias", panel: "agenda", label: "Pendências de Status", hint: "Agenda → Outras Opções", from: [["agenda", "view"]], agd: "pendencias"},
+    {key: "ferr_ag_exportar", panel: "agenda", label: "Exportar Excel", hint: "Agenda → Outras Opções", from: [["agenda", "view"]], agd: "exportar"},
+    // Financeiro
+    {key: "ferr_planilha_lancamentos", panel: "financeiro", label: "Exportar / Importar Planilha (Lançamentos)", hint: "Outras Opções dos Lançamentos", from: [["financeiro", "view"]], io: "lancamentos"},
+    {key: "ferr_planilha_planocontas", panel: "plano_contas", label: "Exportar / Importar Planilha", hint: "", from: [["plano_contas", "view"]], io: "planocontas"},
+    {key: "ferr_planilha_fornecedores", panel: "fornecedores", label: "Exportar / Importar Planilha", hint: "", from: [["fornecedores", "view"]], io: "fornecedores"},
+    // CRM
+    {key: "ferr_planilha_tarefas", panel: "crm", label: "Exportar / Importar Tarefas", hint: "Outras Opções da barra do CRM", from: [["crm_listas", "view"]], io: "tarefas"}
+  ];
+  function toolDef(key) { for (var i = 0; i < TOOLS.length; i++) if (TOOLS[i].key === key) return TOOLS[i]; return null; }
+  // Valor herdado enquanto o nível não tem a chave gravada.
+  function toolInherited(def) {
+    return (def.from || []).some(function (f) { return can(f[0], f[1]); });
+  }
+  function canTool(key) {
+    if (!profile || !profile.active || !profile.role) return false;
+    if (profile.role.is_admin) return true;
+    var p = permsUpgrade(profile.role.permissions) || {};
+    if (p[key]) return !!p[key].view;
+    var d = toolDef(key);
+    return d ? toolInherited(d) : true;
+  }
+  window.pipoTools = {list: TOOLS};
   function canWriteAnything() {
     if (MODULES.some(function (m) { return can(m, "create") || can(m, "edit") || can(m, "delete"); })) return true;
     // Módulos que não estão na lista fixa (ex.: uma linha por lista do CRM, crm_<lista>).
@@ -734,6 +801,7 @@
     ready: ready,
     can: can,
     canDefault: canDefault,
+    canTool: canTool,
     isAdmin: isAdmin,
     isManager: isManager,
     unit: function () { return currentUnit; },

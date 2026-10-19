@@ -78,6 +78,19 @@ const path = require('path');
   await page.click('#cfOk'); await page.waitForTimeout(200);
   console.log('deleted after confirming?', (await ev('state.convenios.length')) === 0);
 
+  // Ferramentas com permissão própria: sem a chave a ferramenta some (classe tool-off); com ela volta; Planilha trava importar/exportar.
+  await page.evaluate(() => {
+    window.pipoTools = {list: [{key: 'ferr_pl_importar', sel: '#plImportBtn'}, {key: 'ferr_planilha_objetivos', io: 'objetivos'}, {key: 'ferr_ag_exportar', agd: 'exportar'}]};
+    window.__toolOff = {ferr_pl_importar: true, ferr_planilha_objetivos: true, ferr_ag_exportar: true};
+    window.pipoAuth = {can: () => true, isAdmin: () => false, onProfile(){}, profile: () => null, canTool: (k) => !window.__toolOff[k]};
+  });
+  await ev(`toolsApply()`);
+  console.log('tool without permission hidden (button, planilha menu) and Agenda tool off?', (await page.$eval('#plImportBtn', (e) => e.classList.contains('tool-off'))) && (await page.$$eval('[data-io-wrap="objetivos"]', (e) => e.length > 0 && e.every((x) => x.classList.contains('tool-off')))) && (await ev('agdToolOn("exportar")')) === false && (await ev('agdToolOn("limpar")')) === true);
+  await page.evaluate(() => { window.__toolOff = {}; });
+  await ev(`toolsApply()`);
+  console.log('tool with permission visible again?', !(await page.$eval('#plImportBtn', (e) => e.classList.contains('tool-off'))));
+  await page.evaluate(() => { delete window.pipoAuth; });
+
   console.log('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

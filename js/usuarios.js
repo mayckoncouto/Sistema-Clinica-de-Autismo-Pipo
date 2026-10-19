@@ -167,6 +167,12 @@
       ".perm-grid tr.perm-group td{background:var(--surface-2);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:left}" +
       ".perm-grid input{width:16px;height:16px;cursor:pointer}" +
       ".perm-grid input:disabled{cursor:default}" +
+      ".perm-grp{margin-bottom:6px}.perm-grp-head{display:flex;align-items:center;gap:8px}.perm-grp-head .tr-sec{flex:1;margin-bottom:6px}" +
+      ".perm-grp-head .btn{padding:4px 10px;font-size:12px}" +
+      ".perm-quad{margin-bottom:8px}.perm-qrow .btn{padding:5px 10px;font-size:12px;flex:none}" +
+      ".perm-qbody{border:1px solid var(--line);border-top:0;border-radius:0 0 9px 9px;padding:6px 10px 10px;margin-top:-3px}" +
+      ".perm-qbody .perm-section{margin-top:8px}" +
+      "@media (max-width:760px){.perm-qrow{flex-wrap:wrap}.perm-qrow .room-info{flex:1 1 100%}.perm-grp-head{flex-wrap:wrap}}" +
       // Um nível por linha: bolinha · nome · resumo (cortado com "…", texto inteiro no title).
       // Os seletores levam ".field" para vencer as regras gerais ".field label"/".field input"
       // do app (que esticam todo input a 100% e quebram o radio).
@@ -248,14 +254,27 @@
     // uma linha por tipo de anamnese, logo depois de "Modelos de Anamnese"
     var anam = window.pipoAnamModules ? window.pipoAnamModules() : [];
     var at = all.findIndex(function (m) { return m.key === "tipos_anamnese"; });
-    return at === -1 || !anam.length ? all : all.slice(0, at + 1).concat(anam, all.slice(at + 1));
+    all = at === -1 || !anam.length ? all : all.slice(0, at + 1).concat(anam, all.slice(at + 1));
+    return all.concat(toolModules());
+  }
+  // Ferramentas (window.pipoTools): uma chave "ferr_…" por ferramenta, só com "Ver" (ligada/desligada).
+  function toolModules() {
+    return ((window.pipoTools && window.pipoTools.list) || []).map(function (t) {
+      return { key: t.key, label: t.label, hint: t.hint || "", actions: ["view"], tool: true, panel: t.panel, from: t.from || [] };
+    });
+  }
+  // Valor de um item na grade: o gravado no nível; ferramenta ainda não gravada herda da tela onde fica.
+  function permOn(perms, m, a) {
+    if (perms[m.key]) return !!perms[m.key][a];
+    if (m.tool) return (m.from || []).some(function (f) { return perms[f[0]] && perms[f[0]][f[1]]; });
+    return !!m.dflt;
   }
   // Resumo curto das permissões de um nível, para a escolha no cadastro.
   function roleSummary(role) {
     if (!role) return "";
     if (role.is_admin) return "Acesso total, inclusive Usuários e Níveis de Permissão";
     var p = role.permissions || {};
-    var parts = allModules().map(function (m) {
+    var parts = allModules().filter(function (m) { return !m.tool; }).map(function (m) {
       var mp = p[m.key] || {};
       if (!mp.view) return null;
       var w = [];
@@ -538,7 +557,7 @@
     allModules().forEach(function (m) {
       out[m.key] = {};
       // Item ainda não gravado no nível: vale o padrão (Ajuda e Trocar senha = marcados).
-      ACTIONS.forEach(function (a) { out[m.key][a.key] = modActs(m).indexOf(a.key) !== -1 && (p[m.key] ? !!p[m.key][a.key] : !!m.dflt); });
+      ACTIONS.forEach(function (a) { out[m.key][a.key] = modActs(m).indexOf(a.key) !== -1 && permOn(p, m, a.key); });
     });
     // Status dos atendimentos que o nível pode usar na Agenda: {id: true}.
     out.status = {};
@@ -623,21 +642,126 @@
     });
   }
 
-  function roleGridHtml(perms, locked) {
-    return '<table class="perm-grid" id="rPermGrid"><thead><tr><th>Tela</th>' +
-      ACTIONS.map(function (a) { return "<th>" + a.label + "</th>"; }).join("") +
-      "</tr></thead><tbody>" +
-      allModules().map(function (m) {
-        return (m.group ? '<tr class="perm-group"><td colspan="' + (ACTIONS.length + 1) + '">' + m.group + "</td></tr>" : "") +
-          "<tr><td><b>" + m.label + "</b>" + (m.hint ? "<small>" + m.hint + "</small>" : "") + "</td>" +
-          ACTIONS.map(function (a) {
-            if (modActs(m).indexOf(a.key) === -1) return '<td class="pt-muted">—</td>';
-            var on = locked || (perms[m.key] ? !!perms[m.key][a.key] : !!m.dflt);
-            return '<td><input type="checkbox" data-m="' + m.key + '" data-a="' + a.key + '"' + (on ? " checked" : "") +
-              (locked ? " disabled" : "") + ' aria-label="' + a.label + " em " + m.label + '"></td>';
-          }).join("") + "</tr>";
-      }).join("") +
-      "</tbody></table>";
+  // ---- Níveis de Permissão em quadros: um grupo por menu do topo, um quadro por tela/janela ----
+  function crmKeys() { return (window.pipoCrmModules ? window.pipoCrmModules() : []).map(function (m) { return m.key; }); }
+  function anamKeys() { return (window.pipoAnamModules ? window.pipoAnamModules() : []).map(function (m) { return m.key; }); }
+  function layout() {
+    function one(key) { return { id: key, keys: [key] }; }
+    return [
+      { title: "Cadastros", panels: [
+        { id: "pacientes", keys: ["pacientes", "pgrp_ident", "pgrp_contato", "pgrp_endereco", "pgrp_filiacao", "pgrp_financeiro", "pgrp_rotina", "pgrp_protetiva", "pgrp_convenio", "pgrp_encaminhamento", "pgrp_tratamento", "saude_paciente", "pgrp_escola", "pgrp_rotinaatual", "pgrp_admin", "pgrp_bloqueio", "campos_paciente"] },
+        { id: "tratamentos", keys: ["tratamentos", "tratamentos_valores"] },
+        one("tipos_tratamento"), one("convenios"), one("motivos_cancelamento"), one("medicos"), one("escolas"), one("diagnosticos"), one("origens"), one("motivos_bloqueio"),
+        { id: "colaboradores", keys: ["colaboradores", "colaboradores_valores"] },
+        one("especialidades"), one("servicos"), one("cbo"), one("conselhos"),
+        { id: "salas", keys: ["salas", "grupos"] },
+        one("feriados"), one("cadastro_status")
+      ] },
+      { title: "Planner", panels: [
+        { id: "planner", keys: ["planner", "bloqueio_horario", "historico_planner"] },
+        one("planner_list"),
+        { id: "autoplanner", keys: ["autoplanner", "autoplanner_enviar"] },
+        one("resumo"), one("disponibilidade")
+      ] },
+      { title: "Agenda", panels: [
+        { id: "agenda", keys: ["agenda", "gerenciar_status", "historico_agenda"], extra: "status" },
+        one("visao_geral")
+      ] },
+      { title: "Prontuário", panels: [
+        one("prontuario"), one("plano_terapeutico"), one("objetivos"), one("atividades"),
+        { id: "anamneses", keys: ["anamneses"].concat(anamKeys()) },
+        one("tipos_anamnese"), one("escalas"), one("habilidades")
+      ] },
+      { title: "CRM", panels: [ { id: "crm", keys: crmKeys() } ] },
+      { title: "Relatórios", panels: [ { id: "relatorios", keys: [], extra: "reports", title: "Relatórios" } ] },
+      { title: "Financeiro", panels: [
+        one("financeiro"), one("fornecedores"), one("categorias_fornecedor"), one("contas_bancarias"), one("plano_contas"), one("financeiro_valores"),
+        one("vendas"), one("comissoes"), one("fechamento_mes")
+      ] },
+      { title: "Menu Acesso", panels: [ one("clinica"), one("usuarios"), one("contratos"), one("backup"), one("conector_claude"), one("senha"), one("ajuda") ] }
+    ];
+  }
+  function permRowHtml(m, perms, locked) {
+    var cols = m.tool ? [ACTIONS[0]] : ACTIONS;
+    return "<tr><td><b>" + esc(m.label) + "</b>" + (m.hint ? "<small>" + esc(m.hint) + "</small>" : "") + "</td>" +
+      ACTIONS.map(function (a) {
+        if (modActs(m).indexOf(a.key) === -1) return '<td class="pt-muted">—</td>';
+        var on = locked || permOn(perms, m, a.key);
+        return '<td><input type="checkbox" data-m="' + m.key + '" data-a="' + a.key + '"' + (on ? " checked" : "") +
+          (locked ? " disabled" : "") + ' aria-label="' + a.label + " em " + esc(m.label) + '"></td>';
+      }).join("") + "</tr>";
+  }
+  function panelHtml(pn, perms, locked, byKey, tools) {
+    var mods = pn.keys.map(function (k) { return byKey[k]; }).filter(Boolean);
+    var tls = tools.filter(function (t) { return t.panel === pn.id; });
+    var title = pn.title || (mods[0] ? mods[0].label : pn.id);
+    var body = "";
+    if (mods.length || tls.length) {
+      body += '<table class="perm-grid"><thead><tr><th>Item</th>' + ACTIONS.map(function (a) { return "<th>" + a.label + "</th>"; }).join("") + "</tr></thead><tbody>" +
+        mods.map(function (m) { return permRowHtml(m, perms, locked); }).join("") +
+        (tls.length ? '<tr class="perm-group"><td colspan="' + (ACTIONS.length + 1) + '">Ferramentas e Janelas</td></tr>' + tls.map(function (m) { return permRowHtml(m, perms, locked); }).join("") : "") +
+        "</tbody></table>";
+    }
+    if (pn.extra === "status") body += statusPermsHtml(perms, locked);
+    if (pn.extra === "reports") body += reportPermsHtml(perms, locked);
+    return '<div class="perm-quad" data-q="' + esc(pn.id) + '">' +
+      '<div class="room-row perm-qrow"><span class="room-dot" style="background:var(--accent)"></span>' +
+        '<div class="room-info"><div class="rn">' + esc(title) + '</div><div class="rs perm-qsum"></div></div>' +
+        (locked ? "" : '<button type="button" class="btn ghost" data-qall="1">Ativar Tudo</button><button type="button" class="btn ghost" data-qall="0">Desativar Tudo</button>') +
+        '<button type="button" class="btn ghost" data-qedit aria-expanded="false">Editar</button></div>' +
+      '<div class="perm-qbody" hidden>' + body + "</div></div>";
+  }
+  function rolePanelsHtml(perms, locked) {
+    var all = allModules(), byKey = {}, tools = all.filter(function (m) { return m.tool; });
+    all.forEach(function (m) { if (!m.tool) byKey[m.key] = m; });
+    var lay = layout(), used = {};
+    lay.forEach(function (g) { g.panels.forEach(function (pn) { pn.keys.forEach(function (k) { used[k] = true; }); }); });
+    var rest = all.filter(function (m) { return !m.tool && !used[m.key]; }).map(function (m) { return m.key; });
+    if (rest.length) lay.push({ title: "Outros", panels: [{ id: "outros", keys: rest, title: "Outras Telas" }] });
+    return '<div id="rPermBox">' + lay.map(function (g) {
+      return '<div class="perm-grp" data-g="' + esc(g.title) + '"><div class="perm-grp-head"><div class="tr-sec">' + esc(g.title) + "</div>" +
+        (locked ? "" : '<button type="button" class="btn ghost" data-gall="1">Ativar Tudo</button><button type="button" class="btn ghost" data-gall="0">Desativar Tudo</button>') + "</div>" +
+        g.panels.map(function (pn) { return panelHtml(pn, perms, locked, byKey, tools); }).join("") + "</div>";
+    }).join("") + "</div>";
+  }
+  // Atualiza "N de M ativas" de cada quadro.
+  function permSums(root) {
+    Array.prototype.forEach.call(root.querySelectorAll(".perm-quad"), function (q) {
+      var all = q.querySelectorAll('.perm-qbody input[type="checkbox"]'), on = q.querySelectorAll('.perm-qbody input[type="checkbox"]:checked');
+      var el = q.querySelector(".perm-qsum"); if (el) el.textContent = all.length ? on.length + " de " + all.length + " ativas" : "Sem itens";
+    });
+  }
+  // Ver / incluir / editar / excluir se ajudam: marcar qualquer ação marca "Ver"; desmarcar "Ver" tira o resto.
+  function permLink(root, c) {
+    var m = c.getAttribute("data-m"), a = c.getAttribute("data-a");
+    if (!m) return;
+    if (a !== "view" && c.checked) {
+      var v = root.querySelector('input[data-m="' + m + '"][data-a="view"]');
+      if (v) v.checked = true;
+    }
+    if (a === "view" && !c.checked) root.querySelectorAll('input[data-m="' + m + '"]').forEach(function (x) { x.checked = false; });
+  }
+  function permBulk(root, scope, on) {
+    scope.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(function (x) { x.checked = on; });
+    permSums(root);
+  }
+  function wirePermBox(box) {
+    permSums(box);
+    box.addEventListener("change", function (e) {
+      if (e.target.matches('input[type="checkbox"]')) { permLink(box, e.target); permSums(box); }
+    });
+    box.addEventListener("click", function (e) {
+      var ed = e.target.closest("[data-qedit]");
+      if (ed) {
+        var q = ed.closest(".perm-quad"), bd = q.querySelector(".perm-qbody"), open = bd.hidden;
+        bd.hidden = !open; ed.textContent = open ? "Fechar" : "Editar"; ed.setAttribute("aria-expanded", open ? "true" : "false");
+        return;
+      }
+      var qa = e.target.closest("[data-qall]");
+      if (qa) { permBulk(box, qa.closest(".perm-quad").querySelector(".perm-qbody"), qa.getAttribute("data-qall") === "1"); return; }
+      var ga = e.target.closest("[data-gall]");
+      if (ga) permBulk(box, ga.closest(".perm-grp"), ga.getAttribute("data-gall") === "1");
+    });
   }
 
   function openRoleModal(role) {
@@ -646,7 +770,7 @@
     var n = role ? users.filter(function (u) { return u.role_id === role.id; }).length : 0;
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
-      '<div class="overlay" id="ovRole"><div class="modal wide" style="max-width:560px">' +
+      '<div class="overlay" id="ovRole"><div class="modal wide" style="max-width:760px">' +
         '<div class="modal-head"><div><h3>' + (isNew ? "Novo Nível de Permissão" : locked ? "Nível Administrador" : "Editar Nível de Permissão") + "</h3>" +
           '<div class="modal-sub">' + (locked
             ? "Acesso total, inclusive às telas de Usuários e Níveis de Permissão. Este nível não pode ser alterado nem excluído."
@@ -656,9 +780,7 @@
           '<div class="tr-sec tr-sec-top">Nível</div>' +
           '<div class="field"><label for="rName">Nome do Nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
           '<div class="tr-sec">Permissões</div>' +
-          roleGridHtml(role ? (role.permissions || {}) : { agenda: { view: true }, planner: { view: true }, resumo: { view: true }, pacientes: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
-          statusPermsHtml(role ? (role.permissions || {}) : {}, locked) +
-          reportPermsHtml(role ? (role.permissions || {}) : {}, locked) +
+          rolePanelsHtml(role ? (role.permissions || {}) : { agenda: { view: true }, planner: { view: true }, resumo: { view: true }, pacientes: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
           (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +
         "</div>" +
         '<div class="modal-foot">' +
@@ -677,23 +799,11 @@
     document.getElementById("rCancel").addEventListener("click", close);
     if (locked) return;
 
-    var grid = document.getElementById("rPermGrid");
-    grid.addEventListener("change", function (e) {
-      var c = e.target;
-      var m = c.getAttribute("data-m"), a = c.getAttribute("data-a");
-      // Incluir/editar/excluir sem "ver" não faz sentido: marca "ver" junto;
-      // desmarcar "ver" tira tudo daquela tela.
-      if (a !== "view" && c.checked) {
-        var v = grid.querySelector('input[data-m="' + m + '"][data-a="view"]');
-        if (v) v.checked = true;
-      }
-      if (a === "view" && !c.checked) {
-        grid.querySelectorAll('input[data-m="' + m + '"]').forEach(function (x) { x.checked = false; });
-      }
-    });
+    var grid = document.getElementById("rPermBox");
+    wirePermBox(grid);
     function readPerms() {
       var p = normalizePerms({});
-      grid.querySelectorAll("input[type=checkbox]").forEach(function (c) {
+      grid.querySelectorAll("input[type=checkbox][data-m]").forEach(function (c) {
         p[c.getAttribute("data-m")][c.getAttribute("data-a")] = c.checked;
       });
       document.querySelectorAll("#rStatusPerms input[data-status]").forEach(function (c) {
@@ -891,6 +1001,8 @@
   }
 
   function renderAll() { renderUsers(); }
+  // Gancho só para os testes (abre a janela de um nível sem passar pela tela de Usuários).
+  window.__pipoRolesTest = { setRoles: function (r) { roles = r; }, openRole: function (id) { openRoleModal(roleById(id)); }, normalize: normalizePerms };
 
   /* ---------------- ligação com as abas ---------------- */
   function init() {

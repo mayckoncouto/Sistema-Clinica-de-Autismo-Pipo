@@ -1539,6 +1539,7 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .fx-report{margin:4px 0 12px}
 .fx-top-row{margin:-4px 0 10px}
 .pl-tools-menu{min-width:210px}
+.tool-off{display:none!important}
 .pl-tools-menu.to-left{left:auto;right:0}
 /* Menus "Outras Opções" flutuam por cima de tudo (position:fixed, placeToolsMenu): não ficam
    atrás da grade nem cortados pela barra, e nunca alargam a janela. */
@@ -5460,6 +5461,7 @@ function applyPermissionsUI(){
   show("plHistBtn", !PLA.on && haCan("planner"));
   show("swapProfBtn", !PLA.on && (can("salas","edit") || can("grupos","edit")));
   permToolClasses();
+  toolsApply();
   var agendaWrite = can("planner","create") || can("planner","edit") || can("planner","delete");
   var banner = document.getElementById("readonlyBanner");
   if (banner) banner.textContent = "Modo somente leitura — você pode ver a agenda, mas não tem permissão para alterá-la.";
@@ -20606,6 +20608,20 @@ function apBuild(patients, opts){
  * Remover do Planner o que o Auto Planner Enviou. O que vai para o Planner leva via = "autoplanner"
  * (é por essa marca que a remoção acha o que foi enviado). */
 function apSendCan(){ return !window.pipoAuth || window.pipoAuth.can("autoplanner_enviar", "view"); }
+// Ferramentas com liga/desliga próprio (Níveis de Permissão; catálogo em js/pipo-supabase.js, window.pipoTools).
+function toolCan(key){ return !window.pipoAuth || !window.pipoAuth.canTool || window.pipoAuth.canTool(key); }
+function toolsApply(){
+  if (!window.pipoTools) return;
+  window.pipoTools.list.forEach(function(t){
+    var on = toolCan(t.key);
+    if (t.sel) Array.prototype.forEach.call(document.querySelectorAll(t.sel), function(el){ el.classList.toggle("tool-off", !on); });
+    if (t.io) Array.prototype.forEach.call(document.querySelectorAll('[data-io-wrap="' + t.io + '"]'), function(el){ el.classList.toggle("tool-off", !on); });
+  });
+}
+function agdToolOn(k){
+  var d = window.pipoTools && window.pipoTools.list.filter(function(t){ return t.agd === k; })[0];
+  return !d || toolCan(d.key);
+}
 function plAutoUi(){
   var sec = document.getElementById("tab-planner"); if (sec) sec.classList.toggle("pl-auto", PLA.on);
   function show(id, on){ var el = document.getElementById(id); if (el) el.hidden = !on; }
@@ -20627,6 +20643,7 @@ function plAutoUi(){
   show("sendToAgendaBtn", can("agenda", "create") && (!PLA.on || apSendCan()));
   show("plHistBtn", !PLA.on && haCan("planner"));
   show("swapProfBtn", !PLA.on && (can("salas", "edit") || can("grupos", "edit")));
+  toolsApply();
 }
 // Grava direto nos documentos do Planner de verdade (sem passar pela grade aberta, que é a do Auto Planner).
 function apPatchReal(changes){
@@ -23671,14 +23688,14 @@ var AGD_TOOLS = [
   {k: "exportar", label: "Exportar Excel", ok: function(){ return true; }, run: function(){ agdOpenExport(); }, sep: true},
   {k: "historico", label: "Histórico de Alterações", ok: function(){ return haCan("agenda"); }, run: function(){ openHistoricoAlteracoes("agenda"); }}
 ];
-function agdToolsVisible(){ return agdClient() ? AGD_TOOLS.filter(function(t){ return t.ok(); }) : []; }
+function agdToolsVisible(){ return agdClient() ? AGD_TOOLS.filter(function(t){ return t.ok() && agdToolOn(t.k); }) : []; }
 function agdToolsMenuHtml(){
   var out = [];
   // Mesmo visual do menu "Outras Opções" do Planner (sem divisórias).
   agdToolsVisible().forEach(function(t){ out.push('<button type="button" class="btn ghost" data-agd-tool="' + t.k + '">' + esc(t.k === "historico" ? haBadgeLabel("agenda", t.label) : t.label) + '</button>'); });
   return out.join("");
 }
-function agdRunTool(k){ var t = AGD_TOOLS.filter(function(x){ return x.k === k; })[0]; if (t && t.ok()) t.run(); }
+function agdRunTool(k){ var t = AGD_TOOLS.filter(function(x){ return x.k === k; })[0]; if (t && t.ok() && agdToolOn(k)) t.run(); }
 
 // Janela padrão das ferramentas: {ov, close, $}.
 function agdToolModal(id, title, sub, body, foot, width){
@@ -29359,7 +29376,8 @@ var HELP_TOPICS = [
     purpose: "Quem acessa o sistema e o que cada nível pode fazer.",
     steps: [
       "Acesso ▾ → <b>Usuários</b> → <b>+ Incluir</b>: abre o cadastro de um novo colaborador; o usuário é criado na seção <b>Acesso ao sistema</b> (e-mail, nível e senha). O Administrador também pode criar uma <b>conta sem colaborador</b> (ex.: contador externo).",
-      "<b>Níveis de Permissão</b> (só o Administrador): clique num nível e marque, por tela, Ver / Incluir / Editar / Excluir, os status e os relatórios liberados. As telas aparecem em grupos, na ordem do menu: <b>Cadastros</b>, <b>Planner</b>, <b>Agenda</b>, <b>Prontuário</b>, <b>CRM</b> e <b>Menu Acesso</b>. O grupo <b>Menu Acesso</b> libera Clínica, Usuários, Backup, Senha e Ajuda.",
+      "<b>Níveis de Permissão</b> (só a Gestão): clique num nível. As permissões aparecem em <b>quadros</b>, um por tela ou janela, agrupados na ordem do menu: <b>Cadastros</b>, <b>Planner</b>, <b>Agenda</b>, <b>Prontuário</b>, <b>CRM</b>, <b>Relatórios</b>, <b>Financeiro</b> e <b>Menu Acesso</b>. Cada quadro mostra quantas permissões estão ativas; <b>Ativar Tudo</b> e <b>Desativar Tudo</b> valem para o quadro (e, no título do grupo, para o grupo inteiro) e <b>Editar</b> abre as permissões do quadro: Ver / Incluir / Editar / Excluir de cada item e, em <b>Ferramentas e Janelas</b>, o liga/desliga de cada ferramenta (ex.: Importar Planilha, Sugerir Agendamento, Cópias do Planner, Exportar Excel). Os status dos atendimentos ficam no quadro da Agenda e os relatórios no quadro Relatórios.",
+      "Uma ferramenta que o nível ainda não tem gravada herda a permissão da tela onde fica (por exemplo, Importar Planilha do Planner nasce ligada para quem pode incluir no Planner); depois de salva, vale o que estiver marcado. Ferramenta desligada some do menu e a ação não abre.",
       "Para bloquear alguém, desative o usuário (ele sai na hora).",
       "<b>Criar Acessos dos Profissionais</b> (aparece enquanto houver profissional ativo sem usuário): lista só os colaboradores do tipo Profissional que ainda não têm usuário, com o e-mail de contato do cadastro (ou a sugestão nome@clinicapipo.com) e uma senha inicial igual para todos. Confira, desmarque quem não deve ter acesso e clique em <b>Criar Acessos</b>. Todos entram no nível Profissional, ligados ao cadastro do colaborador."
     ],
@@ -32177,7 +32195,7 @@ function openPlanModal(plan, opts){
         '<div class="field"><label>Situação da Revisão</label><div class="pl-rev-chip" id="plRevChip">' + planReviewChip({review_date: d.review_date}) + '</div></div>' +
       '</div>' +
       '<div class="tr-sec pl-sec-row pl-sec-inline"><span>Quadro Clínico</span><span class="pl-sec-note">Dados da seção Saúde do cadastro do paciente (atualizam sozinhos).</span></div>' + planClinicalHtml(p) +
-      '<div class="field"><div class="pl-sum-head"><label for="plSummary">Resumo do Quadro Clínico</label>' + (full ? '<button type="button" class="btn ghost" id="plSynth" title="Monta o resumo a partir do cadastro, do tratamento e dos objetivos do plano">Gerar Síntese</button>' : '') + '</div><textarea id="plSummary" rows="3"' + (full ? '' : ' disabled') + ' placeholder="Resumo do quadro clínico do paciente">' + esc(d.summary) + '</textarea></div>' +
+      '<div class="field"><div class="pl-sum-head"><label for="plSummary">Resumo do Quadro Clínico</label>' + (full && toolCan("ferr_plano_sintese") ? '<button type="button" class="btn ghost" id="plSynth" title="Monta o resumo a partir do cadastro, do tratamento e dos objetivos do plano">Gerar Síntese</button>' : '') + '</div><textarea id="plSummary" rows="3"' + (full ? '' : ' disabled') + ' placeholder="Resumo do quadro clínico do paciente">' + esc(d.summary) + '</textarea></div>' +
       '<div class="tr-sec pl-sec-row pl-sec-inline"><span>Objetivos por habilidade</span><div id="plCover"></div>' +
         (meSpecs.main && !isNew ? '<label class="pl-mine"><input type="checkbox" id="plOnlyMine"> Só as minhas especialidades</label>' : '') + '</div>' +
       '<div id="plSecs"></div>' +
@@ -34883,6 +34901,7 @@ function ioRecords(kind, rows){
 /* ---- janela de importação ---- */
 var IO_ST = {novo: "Novo", atualizar: "Atualizar", igual: "Igual (sem mudança)", problema: "Com problema"};
 function ioExport(kind, empty){
+  if (!toolCan("ferr_planilha_" + kind)){ showToast("Seu nível de permissão não permite exportar ou importar esta planilha.", true); return; }
   var K = IO_KINDS[kind];
   var cols = K.cols.filter(function(c){ return !c.hide || !c.hide(); });
   var data = empty ? [] : K.exportRows();
@@ -34898,6 +34917,7 @@ function ioExport(kind, empty){
 function ioCanImport(kind){ var K = IO_KINDS[kind]; return K.canImport ? K.canImport() : (can(K.mod, "create") || can(K.mod, "edit")); }
 function ioOpenImport(kind){
   var K = IO_KINDS[kind];
+  if (!toolCan("ferr_planilha_" + kind)){ showToast("Seu nível de permissão não permite exportar ou importar esta planilha.", true); return; }
   if (!ioCanImport(kind)){ showToast("Seu nível de permissão não permite incluir nem alterar " + K.label.toLowerCase() + ".", true); return; }
   var body =
     '<div class="io-steps">' +
@@ -36427,7 +36447,7 @@ IO_KINDS.tarefas = {label: "Tarefas do CRM", file: "tarefas", mod: "crm_listas",
 // no botão Cadastros). Sem sistema online (testes) tudo fica em INTAKE.mem.
 var INTAKE = {subs: [], loaded: false, mem: null, chan: null, reminded: false, missing: false};
 var INTAKE_KIND = {novo: "Paciente novo", atualizacao: "Atualização", crm: "Lead do CRM"};
-function intakeCan(){ return can("pacientes", "create"); }
+function intakeCan(){ return can("pacientes", "create") && toolCan("ferr_pac_link"); }
 function intakeMem(){ if (!INTAKE.mem) INTAKE.mem = {links: [], subs: []}; return INTAKE.mem; }
 // Link curto: /c/<código de 10 letras e números> (vercel.json leva para cadastro.html).
 function intakeUrl(token){ return location.origin + "/c/" + encodeURIComponent(token); }
