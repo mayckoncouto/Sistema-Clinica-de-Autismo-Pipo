@@ -4967,3 +4967,4 @@ Pedido do usuário ("incluir todas"). Bloco "Planner: ferramentas de conferênci
 
 - (2026-10-19, pedido do usuário) **Tipo (Novo/Renegociado) só olha tratamento da mesma natureza**: `trTipoFor` ignora o tratamento do outro grupo (serviço × especialidades). Novo tratamento de serviço com um de especialidades Ativo continua "Novo" e o de especialidades não muda. Sem SQL.
 - (2026-10-19, pedido do usuário) O rótulo "Tipo (Automático)" do tratamento passou a **Contrato (Automático)** (`#trTipo`). Sem SQL.
+- (2026-10-19, pedido do usuário) Relatório de Qualidade / Conferência do Planner, quadro **Sessões Colocadas × Contratadas**: coluna **Tipo do Tratamento** depois de Paciente (tipos do tratamento ativo) e o nome do paciente abre o tratamento (`.apq-open-tr`, `openTreatmentModal` com `stack`). Sem SQL.

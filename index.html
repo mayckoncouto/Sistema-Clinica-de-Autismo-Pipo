@@ -20803,13 +20803,22 @@ function openApQualityModal(real){
     var bad = q.contr.filter(function(c){ return c.want !== c.got; }), okN = q.contr.length - bad.length;
     var html = '<div class="pat-count"><b>' + q.total + '</b> atendimentos · <b>' + Object.keys(q.byPat).length + '</b> pacientes · <b>' + q.therRows.length + '</b> terapeutas.</div>';
     html += sec("Sessões Colocadas × Contratadas") + '<div class="pat-count">' + okN + ' de ' + q.contr.length + ' pacientes com tratamento completos' + (bad.length ? '; ' + bad.length + ' com diferença:' : '.') + '</div>' +
-      (bad.length ? tbl(["Paciente", "Contratadas", "Colocadas", "Diferença"], bad.slice(0, 200).map(function(c){ return [esc(c.p.nome), c.want, c.got, (c.got - c.want > 0 ? "+" : "") + (c.got - c.want)]; })) : "");
+      (bad.length ? tbl(["Paciente", "Tipo do Tratamento", "Contratadas", "Colocadas", "Diferença"], bad.slice(0, 200).map(function(c){
+        var t = activeTreatment(c.p.id), tipos = ((t && t.tipos) || []).map(trTypeName).filter(Boolean).join(", ");
+        return ['<a href="#" class="apq-open-tr" data-pid="' + esc(c.p.id) + '" style="color:var(--accent);text-decoration:underline">' + esc(c.p.nome) + '</a>', esc(tipos || "—"), c.want, c.got, (c.got - c.want > 0 ? "+" : "") + (c.got - c.want)]; })) : "");
     if (q.goal.length) html += sec("Meta de Grupo (ABA Sim: 80%)") + '<div class="pat-count">' + q.goal.filter(function(g){ return g.ok; }).length + ' de ' + q.goal.length + ' pacientes dentro da meta.</div>' +
       tbl(["Paciente", "Sessões", "Em Grupo", "%", "Situação"], q.goal.filter(function(g){ return !g.ok; }).slice(0, 200).map(function(g){ return [esc(g.p.nome), g.total, g.grp, g.pct + "%", (g.grp < g.lo ? "Abaixo" : "Acima") + " (ideal " + g.lo + (g.lo === g.hi ? "" : " a " + g.hi) + " em grupo)"]; }));
     html += sec("Ocupação por Terapeuta") + tbl(["Terapeuta", "Atendimentos", "Horários Ocupados", "Horários Disponíveis", "Ocupação"], q.therRows.map(function(r){ return [esc(profNome(r.prof)), r.n, r.used, r.avail, r.pct + "%" + (r.pct >= 90 ? " (alta)" : "")]; }));
     html += sec("Horário Vago por Sala e Turno") + '<div class="pat-count">' + (q.shifts - q.full.length) + ' de ' + q.shifts + ' turnos de sala com atendimento mantêm pelo menos um horário sem ninguém' + (q.full.length ? '; <b>' + q.full.length + '</b> estão cheios:' : '.') + '</div>' +
       (q.full.length ? '<div class="pat-count">' + q.full.slice(0, 40).map(esc).join("<br>") + (q.full.length > 40 ? "<br>…" : "") + '</div>' : "");
     html += sec("Alertas") + (q.alerts.length ? '<div class="pat-count">' + q.alerts.slice(0, 60).map(esc).join("<br>") + (q.alerts.length > 60 ? "<br>…" : "") + '</div>' : '<div class="pat-count">Nenhum alerta: ninguém junto que não deva e todos dentro do horário.</div>');
+    out.addEventListener("click", function(e){
+      var a = e.target.closest && e.target.closest(".apq-open-tr"); if (!a) return;
+      e.preventDefault();
+      var t = activeTreatment(a.dataset.pid);
+      if (!t){ showToast("Este paciente não tem tratamento ativo."); return; }
+      openTreatmentModal(t, {stack: true});
+    });
     out.innerHTML = html + '<div id="apqGaps"><div class="pat-count" style="margin-top:12px">Calculando o que não coube…</div></div>';
     // o que ainda falta colocar (simulação, não grava nada)
     if (!PLA.on){ var gb0 = document.getElementById("apqGaps"); if (gb0) gb0.innerHTML = '<div class="pat-count" style="margin-top:12px">Para propor o que falta, use <b>Outras Opções → Pacientes Faltando Sessões</b>.</div>'; return; }

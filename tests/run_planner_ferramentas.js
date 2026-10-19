@@ -50,7 +50,7 @@ const path = require('path');
   // 1. Conferência do Planner
   await openTool('plConfBtn'); await page.waitForSelector('#ovApQ'); await page.waitForFunction(() => /Sessões Colocadas/.test(document.getElementById('apqOut').textContent));
   const conf = await page.innerText('#ovApQ');
-  check('Conferência do Planner: title, 2 of 4 sessions for Paciente A, no Montar Proposta simulation?', /Conferência do Planner/.test(conf) && /Paciente A\s+4\s+2\s+-2/.test(conf.replace(/\n/g, ' ')) && /Pacientes Faltando Sessões/.test(conf) && !/Não Couberam/.test(conf), conf.replace(/\s+/g, ' ').slice(0, 300));
+  check('Conferência do Planner: title, 2 of 4 sessions for Paciente A, no Montar Proposta simulation?', /Conferência do Planner/.test(conf) && /Paciente A\s+\S+\s+4\s+2\s+-2/.test(conf.replace(/\n/g, ' ')) && /Pacientes Faltando Sessões/.test(conf) && !/Não Couberam/.test(conf), conf.replace(/\s+/g, ' ').slice(0, 300));
   await page.click('#apqClose');
 
   // 5. Pacientes Faltando Sessões
