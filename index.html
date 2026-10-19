@@ -3072,6 +3072,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="apPrintBtn" title="Imprimir a grade por terapeuta e o horário da família" hidden>Imprimir</button>
         <button class="btn ghost" id="apSendPlannerBtn" title="Leva o que está no Auto Planner para o Planner (só acrescenta em horários livres, respeitando as regras do Planner)" hidden>Enviar para o Planner</button>
         <button class="btn ghost" id="apUnsendBtn" title="Apaga do Planner só o que o Auto Planner enviou" hidden>Remover do Planner</button>
+        <button class="btn ghost" id="plSugBtn" title="Analisa os quadros do tratamento e o Horário de Atendimento do paciente e oferece onde marcar as sessões que faltam">Sugerir Agendamento</button>
         <button class="btn ghost" id="freeSlotBtn" title="Ver os horários livres para agendar um paciente">Horário Livre</button>
         <button class="btn ghost" id="fixPatientBtn" title="Ver, apagar ou trocar os agendamentos de um paciente no Planner">Editar Agendamento</button>
         <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar Profissional</button>
@@ -10103,6 +10104,7 @@ function wireControls(){
   })();
   document.getElementById("swapProfBtn").addEventListener("click", function(){ openSwapProfModal(); });
   document.getElementById("freeSlotBtn").addEventListener("click", function(){ openFreeSlotModal(); });
+  document.getElementById("plSugBtn").addEventListener("click", openSugerirModal);
   document.getElementById("autoPlannerBtn").addEventListener("click", function(){ openAutoPlannerModal(); });
   document.getElementById("apQualityBtn").addEventListener("click", function(){ openApQualityModal(); });
   document.getElementById("plConfBtn").addEventListener("click", function(){ openApQualityModal(true); });
@@ -20602,6 +20604,7 @@ function plAutoUi(){
   show("apPrintBtn", true);
   show("plConfBtn", !PLA.on);
   show("plMissBtn", !PLA.on);
+  show("plSugBtn", can("planner", "create"));
   show("plCopiesBtn", !PLA.on && can("planner", "edit"));
   show("plSubBtn", can("planner", "create") && can("planner", "delete"));
   show("plCopyWeekBtn", can("planner", "create"));
@@ -21601,6 +21604,210 @@ function openPlMissModal(){
         openAutoPlannerModal({ids: ids});
       }).catch(function(err){ showToast("Não foi possível preparar o Auto Planner" + (err && err.message ? ": " + err.message : "."), true); });
     });
+  });
+}
+
+/* ---------- Sugerir Agendamento (2026-10-19) ----------
+ * Para UM paciente: lê cada quadro (Especialidades e Serviços) do tratamento ativo, vê o que já está marcado no Planner
+ * (ou no Auto Planner, conforme a grade aberta) e oferece onde marcar as sessões que faltam.
+ * Prioridade 1 = Horário de Atendimento do paciente (regra dura; só aparece fora dele se a caixa for marcada);
+ * prioridade 2 = o que o quadro pede (dia, horário, sala, semanas, sessões seguidas e o mesmo horário das outras semanas).
+ * Todas as regras do Planner valem (pltTry → plannerConflict). Nada é gravado até clicar em Agendar (Ctrl+Z desfaz). */
+function sgMin(t){ var a = String(t).split(":"); return (+a[0] || 0) * 60 + (+a[1] || 0); }
+function sgHave(p, lines){
+  var have = [];
+  WEEKS.forEach(function(w){ DAYS.forEach(function(d){
+    var bk = state.scheduleDocs[d.key + "-" + w].bookings;
+    Object.keys(bk).forEach(function(key){
+      var b = bk[key]; if (!b || !b.patient || bookingKind(b)) return;
+      var ps = key.split("|"), room = findRoom(ps[1]); if (!room || isGroup(room)) return;
+      if (!recIsPatient(b, p)) return;
+      var th = findTherapist(room, ps[2]), pid = th && th.professionalId;
+      var ln = treatLineFor(lines, pid, b.service || DEFAULT_SERVICE_ID, w);
+      have.push({lineId: ln ? ln.id : "", w: w, day: d.key, time: ps[0], roomId: ps[1], seatId: ps[2]});
+    });
+  }); });
+  return have;
+}
+// Sessões do paciente que estão FORA do Horário de Atendimento e também fora do quadro (sem quadro para o profissional/serviço,
+// ou quadro com dia/horário marcados que não batem): candidatas a remover.
+function sgRemovable(p){
+  var lines = patientSpecRows(p), out = [];
+  WEEKS.forEach(function(w){ DAYS.forEach(function(d){
+    var docId = d.key + "-" + w, bk = state.scheduleDocs[docId].bookings;
+    Object.keys(bk).forEach(function(key){
+      var b = bk[key]; if (!b || !b.patient || bookingKind(b)) return;
+      var ps = key.split("|"), room = findRoom(ps[1]); if (!room || isGroup(room)) return;
+      if (!recIsPatient(b, p)) return;
+      if (patientSlotOk(p, d.key, ps[0])) return;
+      var th = findTherapist(room, ps[2]), pid = th && th.professionalId;
+      var ln = treatLineFor(lines, pid, b.service || DEFAULT_SERVICE_ID, w);
+      var days = ln ? tlDays(ln) : [];
+      var inQuadro = !!ln && (!days.length || days.indexOf(d.key) !== -1) && (!ln.hora || ln.hora === ps[0]);
+      if (inQuadro) return;
+      out.push({docId: docId, key: key, w: w, d: d, time: ps[0], room: room, seat: th, line: ln});
+    });
+  }); });
+  return out;
+}
+function sgCompute(p, opts){
+  opts = opts || {};
+  var lines = patientSpecRows(p), out = {rows: [], noLines: false, rem: sgRemovable(p)};
+  var todo = apLinesOf(p);
+  if (!todo.length){ out.noLines = !out.rem.length; return out; }
+  var have = sgHave(p, lines), cellsDone = 0;
+  try {
+    todo.forEach(function(x){
+      var line = x.line, mine = have.filter(function(h){ return h.lineId === line.id; });
+      var row = {line: line, want: x.hours, got: mine.length, items: [], gaps: 0, why: {}};
+      out.rows.push(row);
+      var falta = x.hours - mine.length;
+      if (falta <= 0) return;
+      var weeks = apWeeksOf(line), cols = apColumnsFor(Object.assign({}, line, {roomId: ""}));
+      var days = tlDays(line);
+      for (var n = 0; n < falta; n++){
+        var order = weeks.slice().sort(function(a, b){
+          var ca = have.filter(function(h){ return h.lineId === line.id && h.w === a; }).length, cb = have.filter(function(h){ return h.lineId === line.id && h.w === b; }).length;
+          return ca - cb || a - b;
+        });
+        var placed = null;
+        for (var oi = 0; oi < order.length && !placed; oi++){
+          var w = order[oi], raw = [];
+          DAYS.forEach(function(d){
+            var docId = d.key + "-" + w, bk = state.scheduleDocs[docId].bookings;
+            var mineDay = have.filter(function(h){ return h.w === w && h.day === d.key; });
+            d.morning.concat(d.afternoon).forEach(function(time, ti){
+              var inWin = patientSlotOk(p, d.key, time);
+              if (!inWin && !opts.fora) return;
+              cols.forEach(function(c){
+                var key = time + "|" + c.room.id + "|" + c.seat.id, cur = effectiveBooking(bk, key, d.key, time);
+                if (cur && (cur.patient || cur.blocked)) return;
+                var sc = 0, tags = [];
+                if (!inWin){ sc += 1000; tags.push("fora do Horário de Atendimento"); }
+                if (days.length && days.indexOf(d.key) === -1){ sc += 60; tags.push("outro dia"); }
+                if (line.hora){ var df = Math.abs(sgMin(time) - sgMin(line.hora)); if (df){ sc += 20 + df / 10; tags.push("outro horário"); } }
+                if (line.roomId && c.room.id !== line.roomId){ sc += 40; tags.push("outra sala"); }
+                var same = mine.filter(function(h){ return h.day === d.key && h.time === time && h.seatId === c.seat.id && h.roomId === c.room.id; }).length;
+                if (same){ sc -= 25 * Math.min(same, 2); tags.push("mesmo horário de outra semana"); }
+                if (mineDay.length){
+                  var adj = mineDay.some(function(h){ return Math.abs(sgMin(h.time) - sgMin(time)) <= (SESSION_MINUTES || 40) + 20; });
+                  if (String(line.seguidas) === "2" && adj){ sc -= 15; tags.push("colado na outra sessão"); }
+                  else { sc += 12; }
+                }
+                if (routineConflictMsg(p, d.key, time, "x")){ sc += 30; tags.push("rotina atual"); }
+                sc += ti * 0.1;
+                raw.push({w: w, d: d, time: time, c: c, docId: docId, key: key, sc: sc, tags: tags});
+              });
+            });
+          });
+          raw.sort(function(a, b){ return a.sc - b.sc; });
+          var good = [], tries = 0, rec = {patient: p.nome, note: "", service: lineSvc(line)};
+          for (var ri = 0; ri < raw.length && good.length < 6 && tries < 500; ri++){
+            tries++;
+            var why = pltTry(raw[ri].docId, raw[ri].key, rec);
+            if (why){ var k = pltWhyKey(why); row.why[k] = (row.why[k] || 0) + 1; continue; }
+            good.push(raw[ri]);
+          }
+          if (good.length) placed = {w: w, cands: good};
+        }
+        if (!placed){ row.gaps++; continue; }
+        var best = placed.cands[0];
+        row.items.push({line: line, w: placed.w, cands: placed.cands, sel: 0});
+        pltStageSet(best.docId, best.key, {patient: p.nome, note: "", service: lineSvc(line)});
+        have.push({lineId: line.id, w: best.w, day: best.d.key, time: best.time, roomId: best.c.room.id, seatId: best.c.seat.id});
+        mine.push(have[have.length - 1]);
+      }
+    });
+  } finally { pltStageUndo(); }
+  return out;
+}
+function sgCandText(x){
+  return x.d.full + " " + x.time + " · " + x.c.room.name + " · " + seatShortName(x.c.seat) + (x.tags.length ? " — " + x.tags.join(", ") : "");
+}
+function openSugerirModal(){
+  if (!pltPerm("create")) return;
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var pats = state.patients.filter(function(x){ return isActive(x); }).sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); });
+  var m = pltModal("ovPlSg", "Sugerir Agendamento", "Analisa cada quadro de Especialidades e Serviços do tratamento ativo e oferece onde marcar as sessões que faltam no " + esc(pltWhere()) + ". Primeiro vale o Horário de Atendimento do paciente; depois o que o quadro pede. Todas as regras do Planner são respeitadas.",
+    '<div class="field"><label for="sgPat">Paciente</label><select id="sgPat" data-combo><option value="">Selecione um paciente…</option>' + pats.map(function(x){ return '<option value="' + esc(x.id) + '">' + esc(x.nome) + '</option>'; }).join("") + '</select></div>' +
+    '<div class="field"><label class="chk-line"><input type="checkbox" id="sgFora"> Se não houver lugar, mostrar também horários fora do Horário de Atendimento</label></div>' +
+    '<div id="sgOut" class="fx-report"><div class="pat-count">Escolha um paciente.</div></div>',
+    '<button class="btn primary" id="sgApply" disabled>Agendar</button>');
+  var ov = m.ov, out = document.getElementById("sgOut"), btn = document.getElementById("sgApply"), res = null, pat = null, ready = false;
+  function items(){ var all = []; (res ? res.rows : []).forEach(function(r){ r.items.forEach(function(it){ all.push(it); }); }); return all; }
+  function draw(){
+    if (!pat){ out.innerHTML = '<div class="pat-count">Escolha um paciente.</div>'; btn.disabled = true; return; }
+    if (patBlocked(pat)){ out.innerHTML = '<div class="pat-count">Paciente com cadastro ' + esc(patBlockText(pat)) + ': não pode ser agendado.</div>'; btn.disabled = true; return; }
+    if (!res || res.noLines){ out.innerHTML = '<div class="pat-count"><b>' + esc(pat.nome) + '</b> não tem quadros com Sessões/Mês no tratamento ativo.</div>'; btn.disabled = true; return; }
+    var html = "", idx = 0, total = 0, miss = 0, remHtml = "";
+    (res.rem || []).forEach(function(r, i){
+      remHtml += '<div class="field-row" style="align-items:center"><label class="fx-seat"><input type="checkbox" data-sg-rm="' + i + '"> ' + esc(WEEK_LABEL[r.w] + " · " + r.d.full + " " + r.time + " · " + r.room.name + (r.seat ? " · " + seatShortName(r.seat) : "") + (r.line ? "" : " — sem quadro")) + '</label></div>';
+    });
+    res.rows.forEach(function(r){
+      var falta = Math.max(0, r.want - r.got);
+      html += '<div class="tr-sec">' + esc(lineLabel(r.line)) + '</div><div class="pat-count">Contratadas <b>' + r.want + '</b> · Marcadas <b>' + r.got + '</b> · ' + (falta ? 'Faltam <b>' + falta + '</b>' : 'Completo') + '</div>';
+      r.items.forEach(function(it){
+        total++;
+        html += '<div class="field-row" style="align-items:center"><label class="fx-seat" style="flex:0 0 150px"><input type="checkbox" data-sg-on="' + idx + '" checked> ' + esc(WEEK_LABEL[it.w]) + '</label>' +
+          '<div class="field" style="flex:1"><select data-sg-sel="' + idx + '" aria-label="Opção">' + it.cands.map(function(x, i){ return '<option value="' + i + '"' + (i === it.sel ? " selected" : "") + '>' + esc(sgCandText(x)) + '</option>'; }).join("") + '</select></div></div>';
+        idx++;
+      });
+      if (r.gaps){
+        miss += r.gaps;
+        html += '<div class="pat-count" style="color:var(--danger,#b3261e)">' + r.gaps + (r.gaps === 1 ? " sessão não coube." : " sessões não couberam.") + '</div>' + pltReasonsHtml(r.why);
+      }
+    });
+    if (remHtml) html += '<div class="tr-sec">Sessões Fora do Horário de Atendimento e do Quadro</div><div class="pat-count">Estas sessões estão fora do Horário de Atendimento e não batem com nenhum quadro de Especialidades e Serviços. Marque as que quiser remover do ' + esc(pltWhere()) + '.</div>' + remHtml;
+    out.innerHTML = (total ? '<div class="pat-count"><b>' + total + '</b> ' + (total === 1 ? "sessão sugerida" : "sessões sugeridas") + ' para <b>' + esc(pat.nome) + '</b>' + (miss ? " · " + miss + " não coube" : "") + '. Troque o horário na lista se quiser; desmarque o que não quiser.</div>' : '<div class="pat-count">Nenhuma sessão a sugerir para <b>' + esc(pat.nome) + '</b>' + (miss ? "" : " — os quadros estão completos") + '.</div>') + html;
+    sync();
+  }
+  function sync(){ btn.disabled = !out.querySelector("input[data-sg-on]:checked, input[data-sg-rm]:checked"); }
+  function run(){
+    var id = document.getElementById("sgPat").value;
+    pat = state.patients.filter(function(x){ return x.id === id; })[0] || null;
+    res = null;
+    if (!pat){ draw(); return; }
+    out.innerHTML = '<div class="pat-count">Analisando os quadros…</div>';
+    setTimeout(function(){
+      try { res = pat && !patBlocked(pat) ? sgCompute(pat, {fora: document.getElementById("sgFora").checked}) : null; } catch (e){ out.innerHTML = '<div class="pat-count">Não foi possível analisar: ' + esc(e && e.message || "") + '</div>'; return; }
+      draw();
+    }, 20);
+  }
+  pltLoad().then(function(){ ready = true; run(); }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o ' + esc(pltWhere()) + '.</div>'; });
+  document.getElementById("sgPat").addEventListener("change", function(){ if (ready) run(); });
+  document.getElementById("sgFora").addEventListener("change", function(){ if (ready) run(); });
+  out.addEventListener("change", function(e){
+    var s = e.target.closest("[data-sg-sel]");
+    if (s){ var it = items()[+s.getAttribute("data-sg-sel")]; if (it) it.sel = +s.value; }
+    sync();
+  });
+  btn.addEventListener("click", function(){
+    var all = items(), picks = [];
+    Array.prototype.forEach.call(out.querySelectorAll("input[data-sg-on]:checked"), function(c){ var it = all[+c.getAttribute("data-sg-on")]; if (it) picks.push(it); });
+    var rems = [];
+    Array.prototype.forEach.call(out.querySelectorAll("input[data-sg-rm]:checked"), function(c){ var r = (res.rem || [])[+c.getAttribute("data-sg-rm")]; if (r) rems.push(r); });
+    if ((!picks.length && !rems.length) || !pat) return;
+    if (rems.length && !pltPerm("delete")) return;
+    // reconfere uma a uma com o Planner de agora, vendo as anteriores (simulação)
+    var changes = {}, bad = [], n = 0;
+    try {
+      picks.forEach(function(it){
+        var x = it.cands[it.sel], rec = {patient: pat.nome, note: "", service: lineSvc(it.line)};
+        var why = pltTry(x.docId, x.key, rec);
+        if (why){ bad.push(sgCandText(x) + " — " + why); return; }
+        pltStageSet(x.docId, x.key, rec);
+        (changes[x.docId] = changes[x.docId] || {})[x.key] = rec; n++;
+      });
+    } finally { pltStageUndo(); }
+    rems.forEach(function(r){ (changes[r.docId] = changes[r.docId] || {})[r.key] = clearValueFor(r.d.key, r.time); });
+    if (!n && !rems.length){ showToast("Nenhuma sessão pôde ser marcada: " + bad.join("; "), true); return; }
+    confirmDialog({title: "Agendar Sessões", message: (n ? "Marcar <b>" + n + "</b> " + (n === 1 ? "sessão" : "sessões") : "") + (n && rems.length ? " e " : "") + (rems.length ? "remover <b>" + rems.length + "</b> " + (rems.length === 1 ? "sessão" : "sessões") : "") + " de <b>" + esc(pat.nome) + "</b> no " + esc(pltWhere()) + "?" + (bad.length ? "<br>" + bad.length + " não cabem mais e ficam de fora." : "") + " Ctrl+Z desfaz.", confirmLabel: rems.length ? "Confirmar" : "Agendar"}).then(function(ok){
+      if (!ok) return;
+      return applyBookingChanges(changes, PLT_PASS).then(function(r){
+        if (r === false) return;
+        m.close(); renderGrid(); showToast((n ? n + (n === 1 ? " sessão marcada" : " sessões marcadas") : "") + (n && rems.length ? "; " : "") + (rems.length ? rems.length + (rems.length === 1 ? " removida" : " removidas") : "") + ". Ctrl+Z desfaz.");
+      });
+    }).catch(function(err){ showToast("Não foi possível agendar" + (err && err.message ? ": " + err.message : "."), true); });
   });
 }
 
@@ -28364,7 +28571,7 @@ var HELP_TOPICS = [
     who: "Vale para todos que agendam."},
   {id: "planner-ferramentas", group: "Planner", title: "Outras Opções do Planner", mod: "planner", tab: "planner",
     purpose: "Menu <b>Outras Opções ▾</b> do Planner: mudanças em lote e envio para a Agenda. A montagem automática das sessões ficou no <b>Auto Planner</b> (menu Planner ▾), uma grade própria separada do Planner.",
-    steps: [
+    steps: ["<b>Sugerir Agendamento:</b> escolha o paciente; o sistema lê cada quadro de Especialidades e Serviços do tratamento ativo, vê o que já está marcado e oferece onde marcar as sessões que faltam. Primeiro vale o <b>Horário de Atendimento</b> do paciente; depois o que o quadro pede (dia, horário, sala, semanas, sessões seguidas e o mesmo horário das outras semanas). Troque a opção na lista, desmarque o que não quiser e clique em <b>Agendar</b>. A caixa “mostrar também horários fora do Horário de Atendimento” só serve quando não há lugar dentro dele. Sessões do paciente que estão <b>fora do Horário de Atendimento e fora do quadro</b> aparecem numa lista à parte, para remover (nada vem marcado). Todas as regras do Planner valem e Ctrl+Z desfaz.", 
       "<b>Editar Agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar Profissional</b>: passa as colunas de um profissional para outro.",
       "<b>Outras Opções ▾ → Enviar para a Agenda</b>: comece escolhendo o <b>Período</b>. <b>Mês</b>: escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda; a 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª; a prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
