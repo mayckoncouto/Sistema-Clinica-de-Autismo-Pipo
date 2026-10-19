@@ -25418,7 +25418,12 @@ function treatmentsOf(pid){
     return String(b.inicio || "").localeCompare(String(a.inicio || "")) || String(b.criadoEm || "").localeCompare(String(a.criadoEm || ""));
   });
 }
-function activeTreatment(pid){ return treatmentsOf(pid).filter(function(t){ return t.status === "ativo"; })[0] || null; }
+// Tratamento de serviço = todos os tipos são serviços ("svc:"); pode coexistir com um tratamento de especialidades.
+function trIsService(t){ var tp = (t && t.tipos) || []; return !!tp.length && tp.every(function(x){ return String(x).indexOf("svc:") === 0; }); }
+function activeTreatment(pid){
+  var a = treatmentsOf(pid).filter(function(t){ return t.status === "ativo"; });
+  return a.filter(function(t){ return !trIsService(t); })[0] || a[0] || null;
+}
 // Tratamento que vale para o paciente: o ativo; sem ativo, o mais recente.
 function currentTreatment(pid){ return activeTreatment(pid) || treatmentsOf(pid)[0] || null; }
 // Tipo é sempre calculado (não se escolhe): olha o tratamento ANTERIOR a rec
@@ -26764,7 +26769,7 @@ function openTreatmentModal(t, opts){
     var list = state.treatments.map(function(x){ return x.id === rec.id ? rec : x; });
     if (isNew) list.push(rec);
     // Só um Ativo por paciente: o outro ativo vira Renegociado.
-    var others = st === "ativo" ? list.filter(function(x){ return x.patientId === patId && x.id !== rec.id && x.status === "ativo"; }) : [];
+    var others = st === "ativo" ? list.filter(function(x){ return x.patientId === patId && x.id !== rec.id && x.status === "ativo" && trIsService(x) === trIsService(rec); }) : [];
     var go = !others.length || opts.renegotiateFrom ? Promise.resolve(true) : confirmDialog({
       title: "Já Existe um Tratamento Ativo", confirmLabel: "Continuar",
       message: "Este paciente já tem um tratamento ativo desde <b>" + esc(trBr(others[0].inicio)) + "</b>. Ao salvar, ele passa para <b>Renegociado</b>." +
@@ -35580,7 +35585,7 @@ var IO_KINDS = {
     ignoredNote: "o sistema calcula Tipo, Valor final, Idade, Retenção e Agenda",
     help: ["Uma linha por tratamento. O paciente precisa estar cadastrado em Pacientes (o nome é comparado sem acento e sem maiúsculas).",
       "Mesmo paciente e mesma data de início de um tratamento que já existe: os dados da planilha atualizam o tratamento (especialidades, terapeutas e horários do sistema ficam).",
-      "Status: Ativo, Renegociado (ou Alterado) ou Cancelado. Só um Ativo por paciente. Cancelado sem motivo fica com o motivo pendente.",
+      "Status: Ativo, Renegociado (ou Alterado) ou Cancelado. Só um Ativo por paciente (um de serviço pode coexistir com um de especialidades). Cancelado sem motivo fica com o motivo pendente.",
       "Datas no formato dd/mm/aaaa. Valor = valor mensal. O Tipo (Novo/Renegociado) é calculado pelo sistema.",
       "Suporte: 1, 2 ou 3 vai para o Nível de suporte do paciente; um texto (ex.: TDAH) vai para o Diagnóstico — só se o campo estiver vazio."],
     cols: [
