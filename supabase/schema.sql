@@ -11290,7 +11290,8 @@ returns boolean language sql immutable set search_path = public as $$
     coalesce(v ->> 'patient', '') = ''
     and not coalesce((v ->> 'blocked')::boolean, false)
     and not coalesce((v ->> 'lock')::boolean, false)
-    and not coalesce((v ->> 'training')::boolean, false));
+    and not coalesce((v ->> 'training')::boolean, false)
+    and not coalesce((v ->> 'reserva')::boolean, false));
 $$;
 
 create or replace function public.chg_bk_tipo(v jsonb)
@@ -11299,6 +11300,7 @@ returns text language sql immutable set search_path = public as $$
     when coalesce((v ->> 'lock')::boolean, false) then 'horario-bloqueado'
     when coalesce((v ->> 'blocked')::boolean, false) then 'bloqueio'
     when coalesce((v ->> 'training')::boolean, false) or v ->> 'patient' = 'Treinamento' then 'treinamento'
+    when coalesce((v ->> 'reserva')::boolean, false) or v ->> 'patient' = 'Reserva' then 'reserva'
     when v ->> 'patient' = 'Reunião Clínica' then 'reuniao'
     else 'atendimento' end;
 $$;
@@ -11331,6 +11333,7 @@ begin
     when coalesce((r ->> 'blocked')::boolean, false) then 'bloqueio'
     when r ->> 'patient' = 'Reunião Clínica' then 'reuniao'
     when r ->> 'patient' = 'Treinamento' then 'treinamento'
+    when r ->> 'patient' = 'Reserva' then 'reserva'
     when r ->> 'group_id' is not null then 'grupo'
     else 'atendimento' end;
   insert into public.change_log (unit_id, area, user_id, user_name, acao, tipo, paciente, quando, hora, sala_id, prof_id, ref, antes, depois, lote)

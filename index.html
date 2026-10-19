@@ -4389,7 +4389,7 @@ function clinicHiddenBookings(horarios, dur){
       var ok = {}; if (h && h.ativo) clinicSlots(h.manha, dur).concat(clinicSlots(h.tarde, dur)).forEach(function(t){ ok[t] = 1; });
       Object.keys(all[docId] || {}).forEach(function(k){
         var b = all[docId][k];
-        if (!b || !(b.patient || b.lock || b.blocked || b.training)) return;
+        if (!b || !(b.patient || b.lock || b.blocked || b.training || b.reserva)) return;
         if (ok[k.split("|")[0]]) return;
         (changes[docId] = changes[docId] || {})[k] = null; n++;
         var key = dk + (h && h.ativo ? "" : "-fechado");
@@ -4652,7 +4652,7 @@ function ageBandText(ids){ var v = ageBandIds(ids); return v.length && v.length 
 function ageLegendHtml(){ return AGE_BANDS.map(function(b){ return '<span><i style="background:' + b.color + '"></i>' + esc(b.label) + '</span>'; }).join(""); }
 // Legenda de serviços: Treinamento + um item por serviço (menos Sessão) com a cor do cadastro; serviço novo entra sozinho.
 function svcLegendHtml(){
-  var out = '<span><i style="background:' + TRAINING_COLOR + '"></i>Treinamento</span>';
+  var out = '<span><i style="background:' + TRAINING_COLOR + '"></i>Treinamento e Reserva</span>';
   (state.services || []).filter(function(x){ return x.id !== DEFAULT_SERVICE_ID && isActive(x); }).forEach(function(x){
     out += '<span><i style="background:' + serviceFillColor(x.id) + '"></i>' + esc(x.name) + '</span>';
   });
@@ -4900,6 +4900,7 @@ function meetingColor(){
   return sv && sv.color ? swatchVar(sv.color) : MEETING_COLOR;
 }
 var TRAINING_LABEL = "Treinamento";
+var RESERVE_LABEL = "Reserva";
 var TRAINING_COLOR = "#24E2FC"; // ciano: Treinamento e atendimentos com serviço que não é "Sessão"
 
 /* Tipos especiais de horário (não são atendimento de paciente): escolhidos
@@ -4907,12 +4908,14 @@ var TRAINING_COLOR = "#24E2FC"; // ciano: Treinamento e atendimentos com serviç
  *   bloqueado   → {patient:"Bloqueado", blocked:true}   cinza claro
  *   reuniao     → {patient:"Reunião Clínica"}            amarelo
  *   treinamento → {patient:"Treinamento", training:true} azul-claro
+ *   reserva     → {patient:"Reserva", reserva:true}       azul-claro (mesmas regras do Treinamento)
  * Nenhum deles conta como atendimento no Relatório.
  */
 var SLOT_KINDS = [
   {key:"bloqueado",   label:"Bloqueado",   color:BLOCKED_COLOR,  ink:"#182523"},
   {key:"reuniao",     label:MEETING_LABEL, get color(){ return meetingColor(); },  ink:"#182523"},
-  {key:"treinamento", label:TRAINING_LABEL, color:TRAINING_COLOR, ink:"#182523"}
+  {key:"treinamento", label:TRAINING_LABEL, color:TRAINING_COLOR, ink:"#182523"},
+  {key:"reserva",     label:RESERVE_LABEL,  color:TRAINING_COLOR, ink:"#182523"}
 ];
 /* Status dos atendimentos da Agenda (config/statuses: {list:[{id,name,color}]}).
  * Cadastro pelo menu "Acesso" (só Administrador). Quem pode usar cada status
@@ -4967,18 +4970,20 @@ function bookingKind(b){
   if (b.blocked || normText(b.patient) === "bloqueado") return "bloqueado";
   if (b.patient === MEETING_LABEL) return "reuniao";
   if (b.training || normText(b.patient) === normText(TRAINING_LABEL)) return "treinamento";
+  if (b.reserva || normText(b.patient) === normText(RESERVE_LABEL)) return "reserva";
   return "";
 }
 // Reunião Clínica / Treinamento (gravados): ocupam o PROFISSIONAL no horário, em qualquer
 // sala ou grupo (não ocupam a sala: outros profissionais podem atender ali).
-function roomMeetingKind(b){ var k = bookingKind(b); return (k === "reuniao" || k === "treinamento") ? k : ""; }
-function roomMeetingLabel(k){ return k === "treinamento" ? TRAINING_LABEL : MEETING_LABEL; }
-function profMeetingMsg(k, profName, time, where){ return profName + " está em " + roomMeetingLabel(k) + (where ? " (" + where + ")" : "") + " às " + time + ". Reunião Clínica e Treinamento ocupam o profissional em qualquer sala ou grupo nesse horário."; }
+function roomMeetingKind(b){ var k = bookingKind(b); return (k === "reuniao" || k === "treinamento" || k === "reserva") ? k : ""; }
+function roomMeetingLabel(k){ return k === "treinamento" ? TRAINING_LABEL : (k === "reserva" ? RESERVE_LABEL : MEETING_LABEL); }
+function profMeetingMsg(k, profName, time, where){ return profName + " está em " + roomMeetingLabel(k) + (where ? " (" + where + ")" : "") + " às " + time + ". Reunião Clínica, Treinamento e Reserva ocupam o profissional em qualquer sala ou grupo nesse horário."; }
 function slotKindRecord(kind, note){
   var k = SLOT_KINDS.filter(function(x){ return x.key === kind; })[0];
   var rec = {patient: k.label, note: note || ""};
   if (kind === "bloqueado") rec.blocked = true;
   if (kind === "treinamento") rec.training = true;
+  if (kind === "reserva") rec.reserva = true;
   return rec;
 }
 // Três opções lado a lado; marcar uma desmarca as outras (pode ficar nenhuma).
@@ -10427,7 +10432,7 @@ function buildScheduleTable(dayObj, week, docId, rooms, search){
         } else if (b && b.patient){
           var isBlocked = !!b.blocked;
           var isMeetingDefault = !isBlocked && b.patient === MEETING_LABEL;
-          var isTraining = !isBlocked && bookingKind(b) === "treinamento";
+          var isTraining = !isBlocked && (bookingKind(b) === "treinamento" || bookingKind(b) === "reserva");
           var isSpecialKind = isBlocked || isMeetingDefault || isTraining;
           var pRec = isSpecialKind ? null : findPatientByName(b);
           var pCol = pRec ? (otherService(b) ? serviceFillColor(b.service) : patientColor(bookingPatient(pRec, b, t.professionalId, week))) : null;
@@ -16728,7 +16733,7 @@ function roomRenameEverywhere(room, oldName, newName){
 function bkHasContent(v){
   if (!v) return false;
   var r = typeof v === "string" ? {patient: v} : v;
-  return !!(String(r.patient || "").trim() || r.blocked || r.training || String(r.note || "").trim());
+  return !!(String(r.patient || "").trim() || r.blocked || r.training || r.reserva || String(r.note || "").trim());
 }
 function bkRec(v){ return typeof v === "string" ? {patient: v} : v; }
 // Lê as 4 semanas do Planner (as regras de conflito leem state.scheduleDocs).
@@ -17034,7 +17039,7 @@ function reportAggregate(){
       // Never count the weekly team meeting placeholder or a "Bloqueado" label that
       // somehow got saved as real patient text without the blocked flag set.
       if (patientText === MEETING_LABEL || patientText.toLowerCase() === "bloqueado") return;
-      if (bookingKind(b) === "treinamento") return; // treinamento também não é atendimento
+      if (bookingKind(b) === "treinamento" || bookingKind(b) === "reserva") return; // treinamento e reserva também não são atendimento
       var parts = key.split("|");
       var seat = seatMap[parts[1]+"|"+parts[2]];
       if (!seat) return; // seat no longer exists in the current Salas registry (stale data)
@@ -17414,7 +17419,7 @@ function agdEventHtml(row, t, label, color, isMoveSource, canDrag){
   var fill = null, cls = "";
   if (kind === "bloqueado"){ fill = BLOCKED_COLOR; cls = " blocked"; }
   else if (kind === "reuniao"){ fill = meetingColor(); cls = " pcolor"; }
-  else if (kind === "treinamento"){ fill = TRAINING_COLOR; cls = " pcolor"; }
+  else if (kind === "treinamento" || kind === "reserva"){ fill = TRAINING_COLOR; cls = " pcolor"; }
   else {
     var pRec = findPatientAt(row, row.date);   // cor/ABA da época do atendimento
     var room = !pRec ? bookingRoomRef(row) : null;
@@ -19165,7 +19170,7 @@ function agpRender(){
   Object.keys(AD.rows).forEach(function(id){
     var r = AD.rows[id]; if (r.date !== iso) return;
     var rm = agpRoomOfRow(r), rk = rm ? rm.id : "", mk = bookingKind(r);
-    if (mk === "reuniao" || mk === "treinamento"){ meetAt[r.professional_id + "|" + r.time] = {kind: mk, room: rk, name: rm ? rm.name : ""}; return; }
+    if (mk === "reuniao" || mk === "treinamento" || mk === "reserva"){ meetAt[r.professional_id + "|" + r.time] = {kind: mk, room: rk, name: rm ? rm.name : ""}; return; }
     if (mk || !r.patient) return;
     (busyAt[r.professional_id + "|" + r.time] = busyAt[r.professional_id + "|" + r.time] || []).push({room: rk, name: rm ? rm.name : "", grp: !!(rm && isGroup(rm))});
     if (rm && !isGroup(rm) && isNaoABABooking(r, r.professional_id) && !abaAt[rk + "|" + r.time]) abaAt[rk + "|" + r.time] = r.patient;
@@ -23236,7 +23241,7 @@ function openGenMonthModal(){
  */
 var HA = {area: "planner", areas: ["planner"], pat: "", patName: "", rows: null, tab: "principal", q: "", acao: "", user: "", days: 30, groups: [], ov: null, mem: {planner: [], agenda: []}};
 var HA_ACOES = {criou: "Criou", alterou: "Alterou", excluiu: "Excluiu", status: "Mudou o Status"};
-var HA_TIPOS = {atendimento: "atendimento", bloqueio: "bloqueio", reuniao: "Reunião Clínica", treinamento: "treinamento", "horario-bloqueado": "horário bloqueado", grupo: "atendimento de grupo"};
+var HA_TIPOS = {atendimento: "atendimento", bloqueio: "bloqueio", reuniao: "Reunião Clínica", treinamento: "treinamento", reserva: "reserva", "horario-bloqueado": "horário bloqueado", grupo: "atendimento de grupo"};
 function haCan(area){ return !window.pipoAuth || can("historico_" + area, "view"); }
 function haAreaName(a){ return a === "agenda" ? "Agenda" : "Planner"; }
 function haDayName(key){ var d = ALL_WEEKDAYS.filter(function(x){ return x.key === key; })[0]; return d ? d.name : key; }
@@ -23506,7 +23511,7 @@ function haRestorePlanner(items){
     });
   }).catch(function(err){ showToast("Não foi possível restaurar: " + agdErr(err), true); return null; });
 }
-function chgEmptyBk(b){ return !b || (!b.patient && !b.blocked && !b.lock && !b.training); }
+function chgEmptyBk(b){ return !b || (!b.patient && !b.blocked && !b.lock && !b.training && !b.reserva); }
 function haExport(){
   var rows = (HA.rows || []).filter(haMatches).map(function(r){
     return [new Date(r.at).toLocaleString("pt-BR"), haAreaName(r.area), r.user_name || "", HA_ACOES[r.acao], HA_TIPOS[r.tipo] || r.tipo, r.paciente || "", haWhen(r), r.hora || "", haProfName(r), haRoomName(r),
@@ -24059,6 +24064,7 @@ function agdOpenCopyPeriod(){
           .forEach(function(r){
             var rec = {date: d, time: r.time, professional_id: r.professional_id, room_id: r.room_id, patient: r.patient, note: r.note || "", blocked: !!r.blocked, service: r.service || null};
             if (r.training !== undefined) rec.training = r.training;
+            if (r.reserva !== undefined) rec.reserva = r.reserva;
             var why = null, prof = findProfessional(r.professional_id);
             if (d < today) why = "Data que já passou";
             else if (!dayEnabled(AD_WEEKDAY_KEYS[dDate.getDay()]) || agdSlots(dDate).indexOf(r.time) === -1) why = "Clínica fechada neste horário";
@@ -25173,16 +25179,16 @@ var RP_BUILDERS = {
     rows.forEach(function(a){
       var k = bookingKind(a); if (!k) return;
       var n = rpProfName(a.professional_id) || "(sem profissional)";
-      var s = by[n] = by[n] || {bloqueado: 0, reuniao: 0, treinamento: 0};
+      var s = by[n] = by[n] || {bloqueado: 0, reuniao: 0, treinamento: 0, reserva: 0};
       s[k] = (s[k] || 0) + 1;
     });
-    var tot = {bloqueado: 0, reuniao: 0, treinamento: 0};
+    var tot = {bloqueado: 0, reuniao: 0, treinamento: 0, reserva: 0};
     var list = Object.keys(by).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); }).map(function(n){
-      var s = by[n]; tot.bloqueado += s.bloqueado; tot.reuniao += s.reuniao; tot.treinamento += s.treinamento;
-      return [n, s.bloqueado, rpHours(s.bloqueado), s.reuniao, rpHours(s.reuniao), s.treinamento, rpHours(s.treinamento)];
+      var s = by[n]; tot.bloqueado += s.bloqueado; tot.reuniao += s.reuniao; tot.treinamento += s.treinamento; tot.reserva += s.reserva;
+      return [n, s.bloqueado, rpHours(s.bloqueado), s.reuniao, rpHours(s.reuniao), s.treinamento, rpHours(s.treinamento), s.reserva, rpHours(s.reserva)];
     });
-    return {sections: [{title: "Por Profissional", head: ["Profissional", "Bloqueios", "Horas", "Reuniões", "Horas", "Treinamentos", "Horas"],
-      rows: list, foot: list.length > 1 ? ["Total", tot.bloqueado, rpHours(tot.bloqueado), tot.reuniao, rpHours(tot.reuniao), tot.treinamento, rpHours(tot.treinamento)] : null}]};
+    return {sections: [{title: "Por Profissional", head: ["Profissional", "Bloqueios", "Horas", "Reuniões", "Horas", "Treinamentos", "Horas", "Reservas", "Horas"],
+      rows: list, foot: list.length > 1 ? ["Total", tot.bloqueado, rpHours(tot.bloqueado), tot.reuniao, rpHours(tot.reuniao), tot.treinamento, rpHours(tot.treinamento), tot.reserva, rpHours(tot.reserva)] : null}]};
   },
   "elegibilidade": function(rows, o){
     var by = {};
@@ -28835,7 +28841,7 @@ var HELP_TOPICS = [
     purpose: "Grade de 4 semanas que se repetem (dias × salas × terapeutas × horários): o modelo da rotina da clínica.",
     steps: [
       "Planner ▾ → <b>Planner</b>. Escolha o dia e a semana (ou \"Todos\"), filtre por sala (marque uma ou várias; “Todas as Salas” limpa o filtro; os Grupos de Suporte continuam aparecendo) e busque o paciente.",
-      "Clique numa célula vazia (+) para agendar: paciente, serviço, observação, ou marque Bloqueado / Reunião Clínica / Treinamento.",
+      "Clique numa célula vazia (+) para agendar: paciente, serviço, observação, ou marque Bloqueado / Reunião Clínica / Treinamento / Reserva.",
       "Passe o mouse no agendamento para Excluir, Mover ou Copiar. Também dá para arrastar e soltar (em cima de outro agendamento, troca os dois).",
       "Na linha antes das 07:20 e na do almoço: botões <b>liberar / bloquear / limpar</b> do período (dois cliques para confirmar). Ao lado de cada horário: liberar / bloquear / limpar a linha (os botões aparecem ao passar o mouse na linha).",
       "<b>Zoom</b> (lupa na barra): 100% a 50% ou <b>Ajustar à tela</b>, que mostra ao lado o tamanho calculado.",
@@ -28856,11 +28862,11 @@ var HELP_TOPICS = [
       "Profissional não pode estar em dois lugares (salas/grupos diferentes) no mesmo horário.",
       "No Planner, profissional com paciente numa sala fica com a coluna dele nos Grupos de Suporte bloqueada nesse horário (cinza listrado), mesmo que o grupo seja para a mesma sala. Da mesma forma, com agendamento num grupo, as colunas dele em todas as salas ficam bloqueadas nesse horário, inclusive na sala que o grupo marca.",
       "Paciente não pode ter o mesmo serviço em dois lugares no mesmo horário, nem dois atendimentos com o mesmo profissional.",
-      "<b>Reunião Clínica</b> e <b>Treinamento</b> ocupam o <b>profissional</b>, não a sala: nesse horário ele não pode ter outro agendamento (paciente, grupo ou outra reunião) em nenhuma sala ou grupo, e as colunas dele ficam cinza listrado. Os outros profissionais continuam podendo atender na mesma sala.",
+      "<b>Reunião Clínica</b>, <b>Treinamento</b> e <b>Reserva</b> ocupam o <b>profissional</b>, não a sala: nesse horário ele não pode ter outro agendamento (paciente, grupo ou outra reunião) em nenhuma sala ou grupo, e as colunas dele ficam cinza listrado. Os outros profissionais continuam podendo atender na mesma sala.",
       "Por padrão o paciente que <b>não faz ABA</b> ocupa só a própria coluna: ele não trava mais a sala toda, e o Auto Planner prefere para ele as salas sem Intervenção ABA. Quem quiser a regra antiga (sala toda ocupada no horário, só para o serviço <b>Sessão</b>) liga <b>Paciente que Não Faz ABA Ocupa o Horário</b> em Acesso → Sistema.",
       "Fora do horário do paciente ou com terapeuta diferente do tratamento: pede confirmação duas vezes.",
       "Sessão com profissional cuja especialidade principal e áreas complementares não estão entre as especialidades do tratamento do paciente: aparece um aviso e é preciso confirmar.",
-      "Bloqueado, Reunião Clínica e Treinamento não entram nas regras."
+      "Bloqueado, Reunião Clínica, Treinamento e Reserva não entram nas regras."
     ],
     who: "Vale para todos que agendam."},
   {id: "planner-ferramentas", group: "Planner", title: "Outras Opções do Planner", mod: "planner", tab: "planner",
@@ -29163,7 +29169,7 @@ var HELP_TOPICS = [
       "<b>Outras Opções ▾</b>: <b>Exportar Excel</b> e <b>Imprimir / PDF</b> da lista que está na tela. Clique no título de uma coluna para ordenar."
     ],
     rules: [
-      "Só entram atendimentos de pacientes em colunas de sala. Bloqueado, Reunião Clínica, Treinamento e colunas de Grupo de Suporte não aparecem.",
+      "Só entram atendimentos de pacientes em colunas de sala. Bloqueado, Reunião Clínica, Treinamento, Reserva e colunas de Grupo de Suporte não aparecem.",
       "Atualiza sozinha quando alguém mexe no Planner. No celular o Planner e esta lista não aparecem."
     ],
     who: "Permissão <b>Planner List</b> (ver), em Níveis de Permissão, grupo Planner."},
@@ -29180,7 +29186,7 @@ var HELP_TOPICS = [
       "Conta as colunas das salas e dos Grupos de Suporte que têm profissional. Especialidade = a especialidade principal do profissional da coluna.",
       "Vaga livre = coluna vazia dentro do horário de trabalho do profissional e sem trava de regra (\"não ABA\", profissional em Reunião/Treinamento ou atendendo em outro lugar).",
       "Cada profissional conta em UM lugar por horário: onde já atende; se está livre, na sala ou grupo onde tem mais colunas vazias. Assim ninguém é contado duas vezes.",
-      "Reunião: Bloqueado, Reunião Clínica e Treinamento contam uma vez por profissional em cada horário, mesmo marcados em várias colunas.",
+      "Reunião: Bloqueado, Reunião Clínica, Treinamento e Reserva contam uma vez por profissional em cada horário, mesmo marcados em várias colunas.",
       "Horário bloqueado (cadeado ou Outras Opções → Bloquear horário) fica fora da conta: não é vaga livre nem entra em Reunião.",
       "As colunas Atendido, Disponível e Individual (não ABA) têm cor de \"aquecimento\": quanto maior o número, mais forte a cor (laranja, verde e vermelho), comparando os horários entre si e os resumos entre si.",
       "Atualiza sozinha quando alguém mexe no Planner."
@@ -29197,7 +29203,7 @@ var HELP_TOPICS = [
     purpose: "Os atendimentos do dia a dia, em datas reais, por profissional ou por sala.",
     steps: [
       "Abra <b>Agenda</b>. Escolha <b>Dia</b> ou <b>Semana</b>, <b>Profissionais</b> ou <b>Salas</b>, e navegue com ‹ Hoje ›.",
-      "Clique no + de um horário para marcar: paciente (ou grupo de suporte), serviço, sala, observação; ou marque Bloqueado / Reunião Clínica / Treinamento.",
+      "Clique no + de um horário para marcar: paciente (ou grupo de suporte), serviço, sala, observação; ou marque Bloqueado / Reunião Clínica / Treinamento / Reserva.",
       "Vários atendimentos no mesmo horário ficam lado a lado (botão + para mais um).",
       "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>. Ao lado do nome, o seletor troca o quadro de informações: <b>Agendamento</b> (serviço, sala, data/hora, observação), <b>Saúde</b> (diagnóstico, alergias, medicações e restrições alimentares do cadastro do paciente) e <b>Tratamento</b> (plano, ABA e horários). Acima do nome aparece quem <b>pode retirar</b> o paciente; abaixo do quadro, quando há medida protetiva, um quadro vermelho com quem <b>não pode retirar</b>. Depois ficam os <b>Objetivos</b> e o <b>Status</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar Agendamento</b>.",
       "Num agendamento de <b>grupo de suporte</b>, o seletor tem <b>Agendamento</b> e <b>Pacientes</b>: a lista dos pacientes agendados na mesma sala, dia e horário (cor, nome e idade; tocar no paciente abre os detalhes dele). Os <b>Objetivos</b> mostram primeiro os objetivos em comum entre esses pacientes e depois um quadro de cada paciente com os objetivos só dele, considerando o profissional com quem cada paciente está agendado.",
@@ -29299,7 +29305,7 @@ var HELP_TOPICS = [
       "Tipos: Lista de atendimentos, Elegibilidade, Produtividade, Frequência, Atendimentos por convênio, Pacote contratado × realizado, Evoluções pendentes, Ocupação, Bloqueios/reuniões/treinamentos, Pacientes sem atendimento, Tratamentos novos e renegociados, Relatório financeiro, Evolução por habilidade.",
       "<b>Evolução por Habilidade</b>: dos planos terapêuticos vigentes, uma linha por paciente e habilidade com objetivos, ativos, atingidos, suspensos, % atingidos e atingidos no período; com profissional escolhido, só os objetivos que ele pode trabalhar.",
       "<b>Relatório Financeiro</b>: uma linha por mês do período com tratamentos ativos (que valeram em algum dia do mês), novos, renegociados, cancelados, receita prevista (soma do valor final mensal dos ativos) e ticket médio (receita ÷ ativos), com a linha de totais; embaixo, a lista dos tratamentos ativos no período com o valor do mês, os meses no período e o total.",
-      "<b>Lista de Atendimentos</b> e <b>Produtividade</b> contam também Reunião Clínica e Treinamento (com status); Bloqueado nunca conta. Na Produtividade eles entram em Agendados e seguem o status como os demais. Os demais relatórios são de pacientes e não os incluem.",
+      "<b>Lista de Atendimentos</b> e <b>Produtividade</b> contam também Reunião Clínica, Treinamento e Reserva (com status); Bloqueado nunca conta. Na Produtividade eles entram em Agendados e seguem o status como os demais. Os demais relatórios são de pacientes e não os incluem.",
       "<b>Planner Fora do Horário do Paciente</b>: lê o Planner (as 4 semanas) e lista os pacientes agendados em sala fora do Horário de Atendimento do tratamento (dia não disponível ou fora da faixa), com semana, dia, hora, sala, profissional, especialidade e o horário do paciente. Só entra paciente com horário preenchido; o período não é usado. Clicar numa linha dos agendamentos abre o Planner naquele dia e semana, com o paciente em destaque na busca. Filtros: profissional e paciente.",
       "<b>Planner Sem Horário de Atendimento</b>: lê o Planner (as 4 semanas) e lista, para cada paciente ativo com tratamento ativo e Horário de Atendimento preenchido, os dias e semanas em que ele não tem nenhum agendamento de sala dentro da faixa cadastrada (ou só tem fora dela). O período não é usado; clicar numa linha abre o Planner naquele dia e semana. Filtro: paciente.",
       "Convênio, plano e sessões vêm do tratamento que valia na data de cada atendimento.",
