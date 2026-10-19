@@ -3061,6 +3061,12 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="plBlockBtn" title="Bloquear horários de um profissional, de uma sala ou da clínica toda (fica cinza, como fora do horário)" hidden>Bloquear Horário</button>
         <button class="btn ghost" id="plUnblockBtn" title="Liberar horários bloqueados de um profissional, de uma sala ou da clínica toda" hidden>Liberar Horário</button>
         <button class="btn ghost" id="autoPlannerBtn" title="Propõe as sessões que faltam no Auto Planner a partir dos quadros do tratamento (você confere antes de aplicar)" hidden>Montar Proposta</button>
+        <button class="btn ghost" id="plConfBtn" title="Confere o Planner inteiro: sessões a mais ou a menos, fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas muito ocupados e salas sem folga" hidden>Conferência do Planner</button>
+        <button class="btn ghost" id="plMissBtn" title="Lista quem tem sessões a menos ou a mais que o Sessão/Mês do tratamento e leva os que faltam para a Montar Proposta" hidden>Pacientes Faltando Sessões</button>
+        <button class="btn ghost" id="plCopiesBtn" title="Guarde versões do Planner com nome, compare com o atual e restaure se precisar" hidden>Cópias do Planner</button>
+        <button class="btn ghost" id="plSubBtn" title="Passa os atendimentos de um terapeuta ausente para outro, só nas semanas e dias escolhidos" hidden>Substituir Terapeuta</button>
+        <button class="btn ghost" id="plVagaBtn" title="Mostra onde há vaga numa especialidade e quem poderia mudar de lugar para abrir espaço">Abrir Vaga</button>
+        <button class="btn ghost" id="plCopyWeekBtn" title="Copia as marcações de uma semana para outras semanas, só em células livres" hidden>Copiar Semana</button>
         <button class="btn ghost" id="apQualityBtn" title="Confere o Auto Planner inteiro: sessões colocadas × contratadas, meta de grupo, ocupação, horário vago por sala e alertas" hidden>Relatório de Qualidade</button>
         <button class="btn ghost" id="apDraftsBtn" title="Guarde até 5 versões da grade, compare e carregue a melhor" hidden>Rascunhos</button>
         <button class="btn ghost" id="apPrintBtn" title="Imprimir a grade por terapeuta e o horário da família" hidden>Imprimir</button>
@@ -3071,7 +3077,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar Profissional</button>
         <button class="btn ghost" id="plExportBtn" title="Baixa o Planner (4 semanas) em planilha do Excel, com a lista e a grade">Exportar Excel</button>
         <button class="btn ghost" id="plHistBtn" title="Quem criou, alterou ou excluiu agendamentos no Planner">Histórico de Alterações</button>
-        <button class="btn ghost" id="plClearWeekBtn" title="Apaga todos os agendamentos da semana escolhida (segunda a sexta)" hidden>Limpar Semana</button>
+        <button class="btn ghost" id="plClearWeekBtn" title="Apaga marcações por semana, dia, horário, sala, terapeuta, paciente ou tipo, com prévia" hidden>Limpar por Filtro</button>
       </div></div>
     </div>
     <div class="readonly-note" id="readonlyBanner">Modo somente leitura — você está vendo esta agenda mas as alterações não serão salvas. Verifique se está conectado com uma conta que tem permissão de edição.</div>
@@ -10083,7 +10089,7 @@ function wireControls(){
   document.getElementById("addRoomBtn").addEventListener("click", function(){ openRoomModal(null, state.salasView === "grupos"); });
   // Salas <-> Grupos de Suporte: a mesma tela mostra um cadastro ou o outro.
   document.getElementById("sendToAgendaBtn").addEventListener("click", function(){ openSendToAgendaModal(); });
-  document.getElementById("plClearWeekBtn").addEventListener("click", function(){ plannerClearWeek(); });
+  document.getElementById("plClearWeekBtn").addEventListener("click", openPlClearModal);
   document.getElementById("fixPatientBtn").addEventListener("click", function(){ openFixPatientModal(); });
   // Menu "Outras Opções ▾" do Planner: abre/fecha; escolher um item fecha o menu.
   (function(){
@@ -10098,7 +10104,13 @@ function wireControls(){
   document.getElementById("swapProfBtn").addEventListener("click", function(){ openSwapProfModal(); });
   document.getElementById("freeSlotBtn").addEventListener("click", function(){ openFreeSlotModal(); });
   document.getElementById("autoPlannerBtn").addEventListener("click", function(){ openAutoPlannerModal(); });
-  document.getElementById("apQualityBtn").addEventListener("click", openApQualityModal);
+  document.getElementById("apQualityBtn").addEventListener("click", function(){ openApQualityModal(); });
+  document.getElementById("plConfBtn").addEventListener("click", function(){ openApQualityModal(true); });
+  document.getElementById("plMissBtn").addEventListener("click", openPlMissModal);
+  document.getElementById("plCopiesBtn").addEventListener("click", openPlCopiesModal);
+  document.getElementById("plSubBtn").addEventListener("click", openPlSubModal);
+  document.getElementById("plVagaBtn").addEventListener("click", openPlVagaModal);
+  document.getElementById("plCopyWeekBtn").addEventListener("click", openPlCopyWeekModal);
   document.getElementById("apDraftsBtn").addEventListener("click", openApDraftsModal);
   document.getElementById("apPrintBtn").addEventListener("click", openApPrintModal);
   document.getElementById("apSendPlannerBtn").addEventListener("click", apSendToPlanner);
@@ -19350,56 +19362,6 @@ function wireAgendaPlanner(){
 }
 
 
-// Planner: "Limpar Semana" — apaga tudo o que estiver gravado na semana escolhida
-// (1ª a 4ª), de segunda a sexta, em todas as salas e grupos. Dupla confirmação,
-// entra no desfazer. A Reunião Clínica padrão de segunda 11:20 volta ao normal
-// (a chave gravada é removida, então o padrão "virtual" reaparece).
-function plannerClearWeek(){
-  if (!can("planner", "delete")){ showToast(permDeniedMsg("planner", "delete"), true); return; }
-  if (state.week === "todos"){ showToast("Escolha uma semana (1ª a 4ª) para limpar.", true); return; }
-  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
-  var week = state.week;
-  var docIds = DAYS.map(function(d){ return d.key + "-" + week; });
-  Promise.all(docIds.map(function(id){ return db.doc(schedPath(id)).get(); })).then(function(snaps){
-    var changesByDoc = {}, n = 0;
-    snaps.forEach(function(snap, i){
-      var docId = docIds[i];
-      var data = snap && snap.exists ? snap.data() : null;
-      var bookings = (data && data.bookings) || {};
-      // Garante o "antes" certo para o desfazer mesmo se o dia não estiver na tela.
-      if (!state.scheduleDocs[docId]) state.scheduleDocs[docId] = {bookings: JSON.parse(JSON.stringify(bookings))};
-      var ch = {};
-      Object.keys(bookings).forEach(function(k){
-        var b = bookings[k];
-        if (b && b.patient){ ch[k] = null; n++; }
-      });
-      if (Object.keys(ch).length) changesByDoc[docId] = ch;
-    });
-    var label = WEEK_LABEL[week];
-    if (!n){ showToast("A " + label + " do Planner já está vazia."); return; }
-    var qtd = n + (n === 1 ? " agendamento" : " agendamentos");
-    confirmDialog({
-      title: "Limpar Semana do Planner",
-      message: "Apagar <b>" + qtd + "</b> da <b>" + esc(label) + "</b> (segunda a sexta)?<br>Inclui pacientes, salas, bloqueios, reuniões e treinamentos de todas as salas e grupos.",
-      confirmLabel: "Continuar"
-    }).then(function(ok){
-      if (!ok) return false;
-      return confirmDialog({
-        title: "Tem Certeza?",
-        message: "Os <b>" + qtd + "</b> da " + esc(label) + " serão apagados.<br>Se foi engano, use desfazer (Ctrl+Z) logo em seguida.",
-        confirmLabel: "Apagar Semana"
-      });
-    }).then(function(ok){
-      if (!ok) return;
-      applyBookingChanges(changesByDoc).then(function(res){
-        if (res === false) return;
-        renderGrid();
-        showToast(label.charAt(0).toUpperCase() + label.slice(1) + " do Planner limpa (" + qtd + "). Use desfazer (Ctrl+Z) se foi engano.");
-      });
-    });
-  }).catch(function(){ showToast("Não foi possível ler a semana do Planner.", true); });
-}
-
 /* ---- Planner: botão "Editar Agendamento" (antes "Corrigir paciente") ----
  * Janela para escolher um paciente, ver quantos agendamentos ele tem no Planner
  * (por especialidade do profissional da coluna × semana) e apagar os dele de um
@@ -20638,7 +20600,12 @@ function plAutoUi(){
   show("autoPlannerBtn", PLA.on && can("planner", "create") && healthCanSee());
   show("apQualityBtn", PLA.on);
   show("apDraftsBtn", PLA.on);
-  show("apPrintBtn", PLA.on);
+  show("apPrintBtn", true);
+  show("plConfBtn", !PLA.on);
+  show("plMissBtn", !PLA.on);
+  show("plCopiesBtn", !PLA.on && can("planner", "edit"));
+  show("plSubBtn", can("planner", "create") && can("planner", "delete"));
+  show("plCopyWeekBtn", can("planner", "create"));
   show("apSendPlannerBtn", PLA.on && apSendCan() && real("planner", "create"));
   show("apUnsendBtn", PLA.on && apSendCan() && real("planner", "delete"));
   show("sendToAgendaBtn", can("agenda", "create") && (!PLA.on || apSendCan()));
@@ -20680,6 +20647,7 @@ function apSendPlan(autoAll, real){
         var r = bkRec(autoAll[docId][key]);
         if (!r || r.lock || r.blocked || !bkHasContent(r)) return;   // bloqueios do Auto Planner não vão
         var time = key.split("|")[0], cur = effectiveBooking(real[docId].bookings, key, day, time);
+        if (cur && cur.patient && cur.patient === r.patient && (cur.service || DEFAULT_SERVICE_ID) === (r.service || DEFAULT_SERVICE_ID)){ out.same = (out.same || 0) + 1; return; }   // já está igual no Planner
         if (cur && (cur.patient || cur.blocked || cur.lock)){ skip("Horário já ocupado no Planner"); return; }
         var c = sysHard(plannerConflict(docId, key, r));
         if (c){ skip(c); return; }
@@ -20700,7 +20668,7 @@ function apSendToPlanner(){
     var plan = apSendPlan(res[0], res[1]);
     var why = Object.keys(plan.skipped), nSkip = why.reduce(function(a, k){ return a + plan.skipped[k]; }, 0);
     if (!plan.n){
-      showToast(nSkip ? "Nada para enviar: os " + nSkip + " atendimentos não cabem no Planner agora." : "O Auto Planner está vazio: nada para enviar ao Planner.", !!nSkip);
+      showToast(nSkip ? "Nada para enviar: os " + nSkip + " atendimentos não cabem no Planner agora." : (plan.same ? "Tudo o que está no Auto Planner já está igual no Planner." : "O Auto Planner está vazio: nada para enviar ao Planner."), !!nSkip);
       return;
     }
     var msg = "Serão incluídos <b>" + plan.n + (plan.n === 1 ? " atendimento" : " atendimentos") + "</b> no Planner, só em horários livres e dentro das regras dele." +
@@ -20787,6 +20755,8 @@ function apQuality(){
       // alertas
       var line = treatLineFor(patientSpecRows(p), si && si.prof, b.service || DEFAULT_SERVICE_ID, w);
       if (!patientSlotOk(p, d.key, ps[0])) q.alerts.push(p.nome + " fora do Horário de Atendimento · " + d.full + " " + ps[0] + " · " + w + "ª semana");
+      var tpr = si ? findProfessional(si.prof) : null;
+      if (tpr && !profSlotOk(tpr, d.key, ps[0])) q.alerts.push(p.nome + " com " + profShortName(tpr) + " fora do horário do terapeuta · " + d.full + " " + ps[0] + " · " + w + "ª semana");
       var forbid = apForbid(p);
       apOcc(docId, ps[0], room).forEach(function(o){ if (o.p.id !== p.id && forbid[o.p.id] && p.id < o.p.id) q.alerts.push(p.nome + " e " + o.p.nome + " (Não Agrupar com) juntos em " + room.name + " · " + d.full + " " + ps[0] + " · " + w + "ª semana"); });
     });
@@ -20807,15 +20777,15 @@ function apQuality(){
   q.contr.sort(function(a, b){ return (b.want - b.got) - (a.want - a.got) || String(a.p.nome).localeCompare(String(b.p.nome), "pt-BR"); });
   return q;
 }
-function openApQualityModal(){
-  if (!PLA.on) return;
+function openApQualityModal(real){
+  if (!PLA.on && real !== true) return;
   if (!db){ showToast("Sem conexão com o servidor.", true); return; }
   var host = document.getElementById("modalHost");
   host.innerHTML =
     '<div class="overlay" id="ovApQ"><div class="modal wide" style="max-width:900px">' +
-      '<div class="modal-head"><div><h3>Relatório de Qualidade</h3><div class="modal-sub">Confere o Auto Planner inteiro (as 4 semanas): sessões colocadas × contratadas, meta de grupo, ocupação, horário vago por sala e alertas.</div></div>' +
+      '<div class="modal-head"><div><h3>' + (PLA.on ? 'Relatório de Qualidade' : 'Conferência do Planner') + '</h3><div class="modal-sub">Confere o ' + (PLA.on ? 'Auto Planner' : 'Planner') + ' inteiro (as 4 semanas): sessões colocadas × contratadas, meta de grupo, ocupação, horário vago por sala e alertas.</div></div>' +
         '<button class="modal-close" id="apqClose" aria-label="Fechar">✕</button></div>' +
-      '<div class="modal-body"><div id="apqOut" class="fx-report"><div class="pat-count">Lendo o Auto Planner…</div></div></div>' +
+      '<div class="modal-body"><div id="apqOut" class="fx-report"><div class="pat-count">Lendo o ' + (PLA.on ? 'Auto Planner' : 'Planner') + '…</div></div></div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="apqCancel">Fechar</button></div>' +
     '</div></div>';
   var ov = document.getElementById("ovApQ"), out = document.getElementById("apqOut");
@@ -20833,12 +20803,13 @@ function openApQualityModal(){
       (bad.length ? tbl(["Paciente", "Contratadas", "Colocadas", "Diferença"], bad.slice(0, 200).map(function(c){ return [esc(c.p.nome), c.want, c.got, (c.got - c.want > 0 ? "+" : "") + (c.got - c.want)]; })) : "");
     if (q.goal.length) html += sec("Meta de Grupo (ABA Sim: 80%)") + '<div class="pat-count">' + q.goal.filter(function(g){ return g.ok; }).length + ' de ' + q.goal.length + ' pacientes dentro da meta.</div>' +
       tbl(["Paciente", "Sessões", "Em Grupo", "%", "Situação"], q.goal.filter(function(g){ return !g.ok; }).slice(0, 200).map(function(g){ return [esc(g.p.nome), g.total, g.grp, g.pct + "%", (g.grp < g.lo ? "Abaixo" : "Acima") + " (ideal " + g.lo + (g.lo === g.hi ? "" : " a " + g.hi) + " em grupo)"]; }));
-    html += sec("Ocupação por Terapeuta") + tbl(["Terapeuta", "Atendimentos", "Horários Ocupados", "Horários Disponíveis", "Ocupação"], q.therRows.map(function(r){ return [esc(profNome(r.prof)), r.n, r.used, r.avail, r.pct + "%"]; }));
+    html += sec("Ocupação por Terapeuta") + tbl(["Terapeuta", "Atendimentos", "Horários Ocupados", "Horários Disponíveis", "Ocupação"], q.therRows.map(function(r){ return [esc(profNome(r.prof)), r.n, r.used, r.avail, r.pct + "%" + (r.pct >= 90 ? " (alta)" : "")]; }));
     html += sec("Horário Vago por Sala e Turno") + '<div class="pat-count">' + (q.shifts - q.full.length) + ' de ' + q.shifts + ' turnos de sala com atendimento mantêm pelo menos um horário sem ninguém' + (q.full.length ? '; <b>' + q.full.length + '</b> estão cheios:' : '.') + '</div>' +
       (q.full.length ? '<div class="pat-count">' + q.full.slice(0, 40).map(esc).join("<br>") + (q.full.length > 40 ? "<br>…" : "") + '</div>' : "");
     html += sec("Alertas") + (q.alerts.length ? '<div class="pat-count">' + q.alerts.slice(0, 60).map(esc).join("<br>") + (q.alerts.length > 60 ? "<br>…" : "") + '</div>' : '<div class="pat-count">Nenhum alerta: ninguém junto que não deva e todos dentro do horário.</div>');
     out.innerHTML = html + '<div id="apqGaps"><div class="pat-count" style="margin-top:12px">Calculando o que não coube…</div></div>';
     // o que ainda falta colocar (simulação, não grava nada)
+    if (!PLA.on){ var gb0 = document.getElementById("apqGaps"); if (gb0) gb0.innerHTML = '<div class="pat-count" style="margin-top:12px">Para propor o que falta, use <b>Outras Opções → Pacientes Faltando Sessões</b>.</div>'; return; }
     var list = state.patients.filter(function(p){ return isActive(p) && activeTreatment(p.id) && !patBlocked(p); });
     var plan = apBuild(list, {support: false}), gapBox = document.getElementById("apqGaps");
     if (!gapBox) return;
@@ -20900,6 +20871,20 @@ function apSourceDocs(code, drafts){
   if (code === "atual") return currentBookingsFor(plannerAllDocIds());
   if (code === "plan") return apReadReal().then(function(r){ var o = {}; Object.keys(r).forEach(function(id){ o[id] = r[id].bookings; }); return o; });
   var d = drafts[+code.slice(1) - 1]; return Promise.resolve((d && d.docs) || {});
+}
+// Tabela de comparação A × B (números do Relatório de Qualidade + diferença de células); usada nos Rascunhos e nas Cópias do Planner.
+function apCompareHtml(A, B, df, la, lb){
+  function row(label, a, b, fmt, better){   // better: 1 = maior é melhor, -1 = menor é melhor, 0 = sem juízo
+    var diff = b - a, s = (diff > 0 ? "+" : "") + fmt(diff);
+    return '<tr><td>' + label + '</td><td>' + fmt(a) + '</td><td>' + fmt(b) + '</td><td>' + (diff ? s : "—") + (diff && better ? (diff * better > 0 ? " (melhor)" : " (pior)") : "") + '</td></tr>';
+  }
+  var n0 = function(x){ return String(x); }, pc = function(x){ return x + "%"; };
+  return '<table class="fx-table"><thead><tr><th></th><th>A — ' + esc(la) + '</th><th>B — ' + esc(lb) + '</th><th>B − A</th></tr></thead><tbody>' +
+    row("Atendimentos", A.total, B.total, n0, 0) + row("Pacientes atendidos", A.pats, B.pats, n0, 0) +
+    row("Tratamentos com todas as sessões", A.complete, B.complete, n0, 1) + row("Sessões que faltam colocar", A.falta, B.falta, n0, -1) +
+    row("Pacientes ABA Sim dentro da meta de grupo", A.goalOk, B.goalOk, n0, 1) + row("Ocupação dos terapeutas", A.occ, B.occ, pc, 0) +
+    row("Turnos de sala sem horário vago", A.full, B.full, n0, -1) + row("Alertas", A.alerts, B.alerts, n0, -1) + '</tbody></table>' +
+    '<div class="pat-count">De A para B: <b>+' + df.add + '</b> atendimentos acrescentados, <b>−' + df.rem + '</b> retirados e <b>' + df.chg + '</b> trocados de paciente na mesma célula.</div>';
 }
 function openApDraftsModal(){
   if (!PLA.on) return;
@@ -21005,17 +20990,7 @@ function openApDraftsModal(){
     out.innerHTML = '<div class="pat-count">Comparando…</div>';
     Promise.all([apSourceDocs(ca, drafts), apSourceDocs(cb, drafts)]).then(function(r){
       var A = apStatsFor(r[0]), B = apStatsFor(r[1]), df = apDiffDocs(r[0], r[1]);
-      function row(label, a, b, fmt, better){   // better: 1 = maior é melhor, -1 = menor é melhor, 0 = sem juízo
-        var diff = b - a, s = (diff > 0 ? "+" : "") + fmt(diff);
-        return '<tr><td>' + label + '</td><td>' + fmt(a) + '</td><td>' + fmt(b) + '</td><td>' + (diff ? s : "—") + (diff && better ? (diff * better > 0 ? " (melhor)" : " (pior)") : "") + '</td></tr>';
-      }
-      var n0 = function(x){ return String(x); }, pc = function(x){ return x + "%"; };
-      out.innerHTML = '<table class="fx-table"><thead><tr><th></th><th>A — ' + esc(apSourceLabel(ca, drafts)) + '</th><th>B — ' + esc(apSourceLabel(cb, drafts)) + '</th><th>B − A</th></tr></thead><tbody>' +
-        row("Atendimentos", A.total, B.total, n0, 0) + row("Pacientes atendidos", A.pats, B.pats, n0, 0) +
-        row("Tratamentos com todas as sessões", A.complete, B.complete, n0, 1) + row("Sessões que faltam colocar", A.falta, B.falta, n0, -1) +
-        row("Pacientes ABA Sim dentro da meta de grupo", A.goalOk, B.goalOk, n0, 1) + row("Ocupação dos terapeutas", A.occ, B.occ, pc, 0) +
-        row("Turnos de sala sem horário vago", A.full, B.full, n0, -1) + row("Alertas", A.alerts, B.alerts, n0, -1) + '</tbody></table>' +
-        '<div class="pat-count">De A para B: <b>+' + df.add + '</b> atendimentos acrescentados, <b>−' + df.rem + '</b> retirados e <b>' + df.chg + '</b> trocados de paciente na mesma célula.</div>';
+      out.innerHTML = apCompareHtml(A, B, df, apSourceLabel(ca, drafts), apSourceLabel(cb, drafts));
     }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível comparar.</div>'; });
   });
 }
@@ -21066,7 +21041,7 @@ function apPrintFamily(pids, list){
     return '<div class="pg"><h1>' + esc(clinicName()) + '</h1><h2>Horários de ' + esc(p.nome) + '</h2><table><thead><tr><th>Dia</th><th>Horário</th><th>Atendimento</th><th>Terapeuta</th><th>Sala</th><th>Semanas</th></tr></thead><tbody>' +
       lines.map(function(l){ return '<tr><td>' + esc(l.day) + '</td><td>' + esc(l.time) + '</td><td>' + esc(l.what) + '</td><td>' + esc(l.who) + '</td><td>' + esc(l.room) + '</td><td>' + esc(l.weeks) + '</td></tr>'; }).join("") + '</tbody></table></div>';
   }).filter(Boolean);
-  if (!pages.length){ showToast("Nenhuma sessão no Auto Planner para imprimir.", true); return; }
+  if (!pages.length){ showToast("Nenhuma sessão no " + pltWhere() + " para imprimir.", true); return; }
   demPrintFrame("Horário da Família", AP_PRINT_CSS, pages.join(""));
 }
 function apPrintTherapists(profId, week){
@@ -21078,7 +21053,7 @@ function apPrintTherapists(profId, week){
       if (!mine.length) return;
       var times = {}; DAYS.forEach(function(d){ d.morning.concat(d.afternoon).forEach(function(t){ times[t] = 1; }); });
       var ts = Object.keys(times).sort();
-      pages.push('<div class="pg"><h1>' + esc(clinicName()) + ' — ' + esc(profNome(pr)) + '</h1><h2>' + esc(WEEK_LABEL[w]) + ' · Auto Planner</h2><table><thead><tr><th>Hora</th>' + DAYS.map(function(d){ return '<th>' + esc(d.full) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+      pages.push('<div class="pg"><h1>' + esc(clinicName()) + ' — ' + esc(profNome(pr)) + '</h1><h2>' + esc(WEEK_LABEL[w]) + ' · ' + pltWhere() + '</h2><table><thead><tr><th>Hora</th>' + DAYS.map(function(d){ return '<th>' + esc(d.full) + '</th>'; }).join("") + '</tr></thead><tbody>' +
         ts.map(function(t){
           return '<tr><td class="t">' + esc(t) + '</td>' + DAYS.map(function(d){
             var c = mine.filter(function(x){ return x.day === d.key && x.time === t; }).map(function(x){ return esc(x.p.nome) + (x.svc && x.svc !== "Sessão" ? ' <span class="mut">(' + esc(x.svc) + ')</span>' : '') + ' <span class="mut">' + esc(x.room.name) + '</span>'; });
@@ -21087,16 +21062,15 @@ function apPrintTherapists(profId, week){
         }).join("") + '</tbody></table></div>');
     });
   });
-  if (!pages.length){ showToast("Nenhuma sessão no Auto Planner para imprimir.", true); return; }
+  if (!pages.length){ showToast("Nenhuma sessão no " + pltWhere() + " para imprimir.", true); return; }
   demPrintFrame("Grade por Terapeuta", AP_PRINT_CSS, pages.join(""));
 }
 function openApPrintModal(){
-  if (!PLA.on) return;
   if (!db){ showToast("Sem conexão com o servidor.", true); return; }
   var host = document.getElementById("modalHost");
   host.innerHTML =
     '<div class="overlay" id="ovApP"><div class="modal" style="max-width:560px">' +
-      '<div class="modal-head"><div><h3>Imprimir</h3><div class="modal-sub">Usa o que está no Auto Planner agora.</div></div><button class="modal-close" id="appClose" aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-head"><div><h3>Imprimir</h3><div class="modal-sub">Usa o que está no ' + (PLA.on ? 'Auto Planner' : 'Planner') + ' agora.</div></div><button class="modal-close" id="appClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         '<div class="tr-sec tr-sec-top">Grade por Terapeuta</div>' +
         '<div class="field-row"><div class="field"><label for="appTher">Terapeuta</label><select id="appTher"><option value="">Todos os terapeutas</option>' + apTherOptions() + '</select></div>' +
@@ -21114,7 +21088,7 @@ function openApPrintModal(){
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("appClose").addEventListener("click", close);
   document.getElementById("appCancel").addEventListener("click", close);
-  function withDocs(fn){ plannerLoadDocs().then(function(){ plannerAllDocIds().forEach(function(id){ if (!state.scheduleDocs[id]) state.scheduleDocs[id] = {bookings: {}}; }); fn(apPersonBookings()); }).catch(function(){ showToast("Não foi possível ler o Auto Planner.", true); }); }
+  function withDocs(fn){ plannerLoadDocs().then(function(){ plannerAllDocIds().forEach(function(id){ if (!state.scheduleDocs[id]) state.scheduleDocs[id] = {bookings: {}}; }); fn(apPersonBookings()); }).catch(function(){ showToast("Não foi possível ler o " + pltWhere() + ".", true); }); }
   document.getElementById("appPrintTher").addEventListener("click", function(){
     var t = document.getElementById("appTher").value, w = document.getElementById("appWeek").value;
     withDocs(function(){ apPrintTherapists(t, w); });
@@ -21128,7 +21102,7 @@ function openApPrintModal(){
     if (!pid){ showToast("Escolha um paciente para copiar o texto.", true); return; }
     withDocs(function(list){
       var p = findPatientById(pid), lines = apFamilyLines(pid, list);
-      if (!lines.length){ showToast("Esse paciente não tem sessões no Auto Planner.", true); return; }
+      if (!lines.length){ showToast("Esse paciente não tem sessões no " + pltWhere() + ".", true); return; }
       var txt = apFamilyText(p, lines);
       document.getElementById("appText").innerHTML = '<div class="field"><label for="appTa">Texto</label><textarea id="appTa" rows="' + Math.min(10, lines.length + 2) + '" readonly>' + esc(txt) + '</textarea></div>';
       var done = function(){ showToast("Texto copiado."); };
@@ -21176,8 +21150,571 @@ function apTherOptions(){
   }); });
   return out.sort(function(a, b){ return String(profNome(a)).localeCompare(String(profNome(b)), "pt-BR"); }).map(function(pr){ return '<option value="' + esc(pr.id) + '">' + esc(profNome(pr)) + '</option>'; }).join("");
 }
-function openAutoPlannerModal(){
+/* ---- Planner: ferramentas de conferência e reorganização (2026-10-19) ----
+ * Funcionam no Planner e no Auto Planner (leem/gravam a grade aberta, state.scheduleDocs/schedPath) e sempre mostram
+ * uma prévia antes de gravar; tudo entra no desfazer (Ctrl+Z), menos as cópias guardadas.
+ * Cópias do Planner (documento planner-copias/<1..5|auto>), Substituir Terapeuta, Pacientes Faltando Sessões,
+ * Abrir Vaga, Limpar por Filtro e Copiar Semana. Prefixo plt/plc/pl* próprio (o ap* é do Auto Planner). */
+var PLT = {stage: [], preset: null};
+var PLT_PASS = {patientHoursOk: true, routineOk: true, therapistOk: true, areaOk: true, tipoOk: true};
+function pltWhere(){ return PLA.on ? "Auto Planner" : "Planner"; }
+// Lê as 4 semanas (as que não estão ao vivo vêm frescas do banco) e garante os documentos em state.scheduleDocs.
+function pltLoad(){
+  var ids = plannerAllDocIds();
+  return currentBookingsFor(ids).then(function(all){
+    ids.forEach(function(id){
+      var live = state.scheduleSubs[id] && state.scheduleSubs[id].active && state.scheduleDocs[id];
+      if (!live) state.scheduleDocs[id] = {bookings: cloneJson(all[id] || {})};
+      else if (!state.scheduleDocs[id].bookings) state.scheduleDocs[id].bookings = {};
+    });
+    return ids;
+  });
+}
+function pltModal(id, title, sub, body, foot){
+  var host = document.getElementById("modalHost");
+  host.innerHTML =
+    '<div class="overlay" id="' + id + '"><div class="modal wide" style="max-width:780px">' +
+      '<div class="modal-head"><div><h3>' + esc(title) + '</h3><div class="modal-sub">' + sub + '</div></div><button class="modal-close" data-plt-x aria-label="Fechar">✕</button></div>' +
+      '<div class="modal-body">' + body + '</div>' +
+      '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" data-plt-x>Fechar</button>' + (foot || "") + '</div>' +
+    '</div></div>';
+  var ov = document.getElementById(id);
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  Array.prototype.forEach.call(ov.querySelectorAll("[data-plt-x]"), function(b){ b.addEventListener("click", close); });
+  return {ov: ov, close: close};
+}
+function pltTimes(){ var t = {}; DAYS.forEach(function(d){ d.morning.concat(d.afternoon).forEach(function(x){ t[x] = 1; }); }); return Object.keys(t).sort(); }
+function pltTimeOpts(first){ return '<option value="">' + first + '</option>' + pltTimes().map(function(t){ return '<option value="' + t + '">' + t + '</option>'; }).join(""); }
+function pltWeekBoxes(attr, sel){ return WEEKS.map(function(w){ return '<label class="fx-seat"><input type="checkbox" ' + attr + '="' + w + '"' + (sel.indexOf(w) >= 0 ? " checked" : "") + '> ' + w + 'ª semana</label>'; }).join(""); }
+function pltDayBoxes(attr){ return DAYS.map(function(d){ return '<label class="fx-seat"><input type="checkbox" ' + attr + '="' + d.key + '" checked> ' + esc(d.full) + '</label>'; }).join(""); }
+function pltChecked(root, attr){ return Array.prototype.slice.call(root.querySelectorAll("input[" + attr + "]:checked")).map(function(c){ return c.getAttribute(attr); }); }
+function pltSeatProfs(){
+  var ids = {}, out = [];
+  plannerRooms().forEach(function(r){ (r.therapists || []).forEach(function(t){ if (t.professionalId && !ids[t.professionalId]){ ids[t.professionalId] = 1; var p = findProfessional(t.professionalId); if (p) out.push(p); } }); });
+  return out.sort(function(a, b){ return String(profNome(a)).localeCompare(String(profNome(b)), "pt-BR"); });
+}
+function pltProfOpts(list, first){ return '<option value="">' + first + '</option>' + list.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(profNome(p)) + '</option>'; }).join(""); }
+function pltDocLabel(docId){ var p = docId.split("-"), d = findDayObj(p[0]); return WEEK_LABEL[+p[1]] + " · " + (d ? d.full : p[0]); }
+function pltCellLabel(docId, key){
+  var ps = key.split("|"), room = findRoom(ps[1]), th = room ? findTherapist(room, ps[2]) : null;
+  return pltDocLabel(docId) + " · " + ps[0] + " · " + (room ? room.name : "?") + (th ? " · " + seatShortName(th) : "");
+}
+// Simulação: grava na memória (state.scheduleDocs) e desfaz tudo no fim, para as regras enxergarem os passos anteriores.
+function pltStageSet(docId, key, rec){
+  var bk = state.scheduleDocs[docId].bookings;
+  PLT.stage.push({bk: bk, key: key, had: Object.prototype.hasOwnProperty.call(bk, key), val: bk[key]});
+  if (rec === null || rec === undefined) delete bk[key]; else bk[key] = rec;
+}
+function pltStageUndo(){ while (PLT.stage.length){ var s = PLT.stage.pop(); if (s.had) s.bk[s.key] = s.val; else delete s.bk[s.key]; } }
+// Uma marcação cabe nesta célula? Devolve "" (cabe) ou o motivo.
+function pltTry(docId, key, rec, ignore){
+  var p = key.split("|"), time = p[0], room = findRoom(p[1]), t = room ? findTherapist(room, p[2]) : null;
+  if (!room || !t) return "A coluna não existe mais";
+  var day = docId.split("-")[0], w = +docId.split("-")[1], bk = state.scheduleDocs[docId].bookings, cur = effectiveBooking(bk, key, day, time);
+  if (cur && (cur.patient || cur.blocked)) return "Horário já ocupado";
+  if (!seatAvailable(t, day, time)) return "Fora do horário do terapeuta";
+  if (plLockInfo(cur, day, w, time, room, t)) return "Horário bloqueado";
+  var rf = slotRefusal(room.id, rec); if (rf) return "Coluna de tipo diferente";
+  if (rec.patient && !bookingKind(rec)){ var pt = findPatientRef(rec); if (pt && patBlocked(pt)) return "Paciente bloqueado"; }
+  var c = sysHard(plannerConflict(docId, key, rec, ignore || []));
+  return c ? "Conflito de regra: " + String(c).replace(/<[^>]+>/g, "") : "";
+}
+function pltWhyKey(why){ return String(why).indexOf("Conflito de regra") === 0 ? "Conflito de regra" : why; }
+function pltReasonsHtml(by){
+  var ks = Object.keys(by); if (!ks.length) return "";
+  return '<div class="pat-count">' + ks.sort(function(a, b){ return by[b] - by[a]; }).map(function(k){ return esc(k) + ": <b>" + by[k] + "</b>"; }).join(" · ") + '</div>';
+}
+function pltGoCell(day, week, name){
+  var db1 = document.querySelector('#daySeg button[data-day="' + day + '"]'); if (db1) db1.click();
+  var wb = document.querySelector('#weekSeg button[data-week="' + week + '"]'); if (wb) wb.click();
+  var s = document.getElementById("patientSearch"); if (s){ s.value = name; s.dispatchEvent(new Event("input", {bubbles: true})); }
+}
+function pltPerm(a){ if (can("planner", a)) return true; showToast(permDeniedMsg("planner", a), true); return false; }
+
+/* ---------- Limpar por Filtro ---------- */
+function openPlClearModal(){
+  if (!pltPerm("delete")) return;
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var wk0 = WEEKS.indexOf(+state.week) >= 0 ? [+state.week] : WEEKS.slice();
+  var rooms = plannerRooms();
+  var m = pltModal("ovPlClr", "Limpar por Filtro", "Apaga do " + pltWhere() + " só o que combina com os filtros. Veja a prévia, confirme duas vezes; Ctrl+Z desfaz.",
+    '<div class="tr-sec tr-sec-top">Onde</div>' +
+    '<div class="field"><label>Semanas</label><div id="pcW">' + pltWeekBoxes("data-pw", wk0) + '</div></div>' +
+    '<div class="field"><label>Dias</label><div id="pcD">' + pltDayBoxes("data-pd") + '</div></div>' +
+    '<div class="field-row"><div class="field"><label for="pcFrom">Horário de</label><select id="pcFrom">' + pltTimeOpts("Qualquer") + '</select></div>' +
+    '<div class="field"><label for="pcTo">Até</label><select id="pcTo">' + pltTimeOpts("Qualquer") + '</select></div></div>' +
+    '<div class="field-row"><div class="field"><label for="pcRoom">Sala ou Grupo</label><select id="pcRoom"><option value="">Todos</option>' + rooms.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + (isGroup(r) ? " (grupo)" : "") + '</option>'; }).join("") + '</select></div>' +
+    '<div class="field"><label for="pcProf">Terapeuta</label><select id="pcProf">' + pltProfOpts(pltSeatProfs(), "Todos") + '</select></div></div>' +
+    '<div class="field"><label for="pcPat">Paciente</label><select id="pcPat" data-combo><option value="">Todos</option>' + state.patients.slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); }).map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div>' +
+    '<div class="tr-sec">O Que Apagar</div>' +
+    '<div id="pcT"><label class="fx-seat"><input type="checkbox" data-pt="pac" checked> Pacientes</label><label class="fx-seat"><input type="checkbox" data-pt="grp" checked> Grupos de Suporte (sala marcada)</label>' +
+    '<label class="fx-seat"><input type="checkbox" data-pt="esp" checked> Reunião Clínica, Treinamento e Bloqueado</label><label class="fx-seat"><input type="checkbox" data-pt="lck"> Bloqueios de Horário (cadeado)</label></div>' +
+    '<div id="pcOut" class="fx-report"><div class="pat-count">Lendo o ' + esc(pltWhere()) + '…</div></div>',
+    '<button class="btn primary" id="pcApply" disabled>Apagar</button>');
+  var ov = m.ov, out = document.getElementById("pcOut"), btn = document.getElementById("pcApply"), found = [];
+  function val(id){ return document.getElementById(id).value; }
+  function scan(){
+    var wks = pltChecked(ov, "data-pw").map(Number), days = pltChecked(ov, "data-pd"), tp = {};
+    pltChecked(ov, "data-pt").forEach(function(k){ tp[k] = 1; });
+    var from = val("pcFrom"), to = val("pcTo"), rf = val("pcRoom"), pf = val("pcProf"), pat = val("pcPat");
+    found = [];
+    wks.forEach(function(w){ DAYS.forEach(function(d){
+      if (days.indexOf(d.key) < 0) return;
+      var docId = d.key + "-" + w, bk = (state.scheduleDocs[docId] || {}).bookings || {};
+      Object.keys(bk).sort().forEach(function(key){
+        var b = bk[key]; if (!b) return;
+        var ps = key.split("|"), time = ps[0], room = findRoom(ps[1]), th = room ? findTherapist(room, ps[2]) : null;
+        if (from && time < from) return; if (to && time > to) return;
+        if (rf && ps[1] !== rf) return;
+        if (pf && !(th && th.professionalId === pf)) return;
+        var kind, kindKey = bookingKind(b);
+        if (b.lock) kind = "lck";
+        else if (kindKey || b.blocked) kind = "esp";
+        else if (!String(b.patient || "").trim()) return;
+        else kind = room && isGroup(room) ? "grp" : "pac";
+        if (!tp[kind]) return;
+        if (pat){ if (kind !== "pac") return; var pp = findPatientRef(b); if (!pp || pp.id !== pat) return; }
+        found.push({docId: docId, key: key, day: d.key, time: time, kind: kind, text: pltCellLabel(docId, key) + " — " + (b.lock ? "Bloqueio de horário" : (b.patient || "Bloqueado"))});
+      });
+    }); });
+    var by = {pac: 0, grp: 0, esp: 0, lck: 0}; found.forEach(function(f){ by[f.kind]++; });
+    if (!found.length){ out.innerHTML = '<div class="pat-count">Nada combina com esses filtros.</div>'; btn.disabled = true; btn.textContent = "Apagar"; return; }
+    out.innerHTML = '<div class="pat-count"><b>' + found.length + '</b> ' + (found.length === 1 ? "marcação será apagada" : "marcações serão apagadas") + ' — pacientes ' + by.pac + ', grupos ' + by.grp + ', reunião/treinamento/bloqueado ' + by.esp + ', cadeados ' + by.lck + '.</div>' +
+      '<div class="pat-count">' + found.slice(0, 40).map(function(f){ return esc(f.text); }).join("<br>") + (found.length > 40 ? "<br>…e mais " + (found.length - 40) : "") + '</div>';
+    btn.disabled = false; btn.textContent = "Apagar (" + found.length + ")";
+  }
+  pltLoad().then(scan).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o ' + esc(pltWhere()) + '.</div>'; });
+  ov.addEventListener("change", scan);
+  btn.addEventListener("click", function(){
+    if (!found.length) return;
+    var n = found.length, qtd = n + (n === 1 ? " marcação" : " marcações");
+    confirmDialog({title: "Limpar por Filtro", message: "Apagar <b>" + qtd + "</b> do " + esc(pltWhere()) + " com os filtros escolhidos?", confirmLabel: "Continuar"}).then(function(ok){
+      return ok && confirmDialog({title: "Tem Certeza?", message: "As <b>" + qtd + "</b> serão apagadas. Se foi engano, use desfazer (Ctrl+Z) logo em seguida.", confirmLabel: "Apagar"});
+    }).then(function(ok){
+      if (!ok) return;
+      var ch = {}; found.forEach(function(f){ (ch[f.docId] = ch[f.docId] || {})[f.key] = clearValueFor(f.day, f.time); });
+      return applyBookingChanges(ch).then(function(res){ if (res === false) return; m.close(); renderGrid(); showToast(qtd + " apagadas do " + pltWhere() + ". Ctrl+Z desfaz."); });
+    });
+  });
+}
+
+/* ---------- Copiar Semana ---------- */
+function openPlCopyWeekModal(){
+  if (!pltPerm("create")) return;
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var from0 = WEEKS.indexOf(+state.week) >= 0 ? +state.week : 1;
+  var m = pltModal("ovPlCw", "Copiar Semana", "Copia as marcações de uma semana para outras semanas do " + esc(pltWhere()) + ", só em células livres e dentro das regras. O que já está na semana de destino não é mexido.",
+    '<div class="field-row"><div class="field"><label for="cwFrom">Copiar da</label><select id="cwFrom">' + WEEKS.map(function(w){ return '<option value="' + w + '"' + (w === from0 ? " selected" : "") + '>' + WEEK_LABEL[w] + '</option>'; }).join("") + '</select></div></div>' +
+    '<div class="field"><label>Para a(s)</label><div id="cwTo">' + pltWeekBoxes("data-pw", WEEKS.filter(function(w){ return w !== from0; })) + '</div></div>' +
+    '<div class="field"><label>Dias</label><div id="cwD">' + pltDayBoxes("data-pd") + '</div></div>' +
+    '<div class="tr-sec">O Que Copiar</div>' +
+    '<div id="cwT"><label class="fx-seat"><input type="checkbox" data-pt="pac" checked> Pacientes</label><label class="fx-seat"><input type="checkbox" data-pt="grp" checked> Grupos de Suporte</label>' +
+    '<label class="fx-seat"><input type="checkbox" data-pt="esp"> Reunião Clínica, Treinamento e Bloqueado</label></div>' +
+    '<div class="field-row"><button type="button" class="btn ghost" id="cwPrev">Ver Prévia</button></div><div id="cwOut" class="fx-report"></div>',
+    '<button class="btn primary" id="cwApply" disabled>Copiar</button>');
+  var ov = m.ov, out = document.getElementById("cwOut"), btn = document.getElementById("cwApply"), plan = null;
+  function sel(){ plan = null; btn.disabled = true; btn.textContent = "Copiar"; out.innerHTML = ""; }
+  ov.addEventListener("change", sel);
+  document.getElementById("cwPrev").addEventListener("click", function(){
+    var src = +document.getElementById("cwFrom").value, tos = pltChecked(document.getElementById("cwTo"), "data-pw").map(Number).filter(function(w){ return w !== src; });
+    var days = pltChecked(document.getElementById("cwD"), "data-pd"), tp = {}; pltChecked(document.getElementById("cwT"), "data-pt").forEach(function(k){ tp[k] = 1; });
+    if (!tos.length){ out.innerHTML = '<div class="pat-count">Marque pelo menos uma semana de destino (diferente da de origem).</div>'; return; }
+    out.innerHTML = '<div class="pat-count">Conferindo…</div>';
+    pltLoad().then(function(){
+      var res = {changes: {}, n: 0, by: {}, skipped: [], perWeek: {}};
+      try {
+        tos.forEach(function(w){ DAYS.forEach(function(d){
+          if (days.indexOf(d.key) < 0) return;
+          var sdoc = d.key + "-" + src, tdoc = d.key + "-" + w, sbk = (state.scheduleDocs[sdoc] || {}).bookings || {};
+          Object.keys(sbk).sort().forEach(function(key){
+            var b = sbk[key]; if (!b || b.lock || !String(b.patient || "").trim()) return;
+            var room = findRoom(key.split("|")[1]); if (!room) return;
+            var kind = bookingKind(b) || b.blocked ? "esp" : (isGroup(room) ? "grp" : "pac");
+            if (!tp[kind]) return;
+            var rec = cloneJson(b); delete rec.auto; delete rec.via; delete rec.porque; delete rec.fixo;
+            var why = pltTry(tdoc, key, rec, []);
+            if (why){ var k = pltWhyKey(why); res.by[k] = (res.by[k] || 0) + 1; res.skipped.push(pltCellLabel(tdoc, key) + " — " + (b.patient) + ": " + why); return; }
+            pltStageSet(tdoc, key, rec);
+            (res.changes[tdoc] = res.changes[tdoc] || {})[key] = rec; res.n++; res.perWeek[w] = (res.perWeek[w] || 0) + 1;
+          });
+        }); });
+      } finally { pltStageUndo(); }
+      plan = res;
+      var tot = res.n + res.skipped.length;
+      if (!tot){ out.innerHTML = '<div class="pat-count">A ' + WEEK_LABEL[src] + ' não tem marcações desses tipos nos dias escolhidos.</div>'; return; }
+      out.innerHTML = '<div class="pat-count"><b>' + res.n + '</b> de ' + tot + ' ' + (tot === 1 ? "marcação será copiada" : "marcações serão copiadas") + ' (' + tos.map(function(w){ return w + 'ª: ' + (res.perWeek[w] || 0); }).join(" · ") + ').</div>' +
+        (res.skipped.length ? '<div class="pat-count"><b>' + res.skipped.length + '</b> ficam de fora:</div>' + pltReasonsHtml(res.by) + '<div class="pat-count">' + res.skipped.slice(0, 25).map(esc).join("<br>") + (res.skipped.length > 25 ? "<br>…" : "") + '</div>' : "");
+      btn.disabled = !res.n; btn.textContent = res.n ? "Copiar (" + res.n + ")" : "Copiar";
+    }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o ' + esc(pltWhere()) + '.</div>'; });
+  });
+  btn.addEventListener("click", function(){
+    if (!plan || !plan.n) return;
+    var n = plan.n, qtd = n + (n === 1 ? " marcação" : " marcações");
+    confirmDialog({title: "Copiar Semana", message: "Copiar <b>" + qtd + "</b> para o " + esc(pltWhere()) + " (só em células livres)?", confirmLabel: "Continuar"}).then(function(ok){
+      return ok && confirmDialog({title: "Tem Certeza?", message: "As <b>" + qtd + "</b> serão gravadas. Ctrl+Z desfaz.", confirmLabel: "Copiar"});
+    }).then(function(ok){
+      if (!ok) return;
+      return applyBookingChanges(plan.changes, PLT_PASS).then(function(res){ if (res === false) return; m.close(); renderGrid(); showToast(qtd + " copiadas. Ctrl+Z desfaz."); });
+    });
+  });
+}
+
+/* ---------- Substituir Terapeuta ---------- */
+function openPlSubModal(){
+  if (!pltPerm("create") || !pltPerm("delete")) return;
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var profs = pltSeatProfs();
+  var m = pltModal("ovPlSub", "Substituir Terapeuta", "Passa os atendimentos de um terapeuta que vai se ausentar para outro, só nas semanas e dias escolhidos (o Trocar Profissional troca as colunas para sempre). Move para a coluna do substituto na mesma sala, se couber.",
+    '<div class="field-row"><div class="field"><label for="psFrom">Terapeuta Ausente</label><select id="psFrom">' + pltProfOpts(profs, "Selecione…") + '</select></div>' +
+    '<div class="field"><label for="psTo">Substituto</label><select id="psTo">' + pltProfOpts(profs, "Selecione…") + '</select></div></div>' +
+    '<div class="field"><label>Semanas</label><div id="psW">' + pltWeekBoxes("data-pw", WEEKS.slice()) + '</div></div>' +
+    '<div class="field"><label>Dias</label><div id="psD">' + pltDayBoxes("data-pd") + '</div></div>' +
+    '<div class="field"><label>Turnos</label><div id="psT"><label class="fx-seat"><input type="checkbox" data-pt="m" checked> Manhã</label><label class="fx-seat"><input type="checkbox" data-pt="t" checked> Tarde</label></div></div>' +
+    '<div class="field-row"><button type="button" class="btn ghost" id="psPrev">Ver Prévia</button></div><div id="psOut" class="fx-report"></div>',
+    '<button class="btn primary" id="psApply" disabled>Substituir</button>');
+  var ov = m.ov, out = document.getElementById("psOut"), btn = document.getElementById("psApply"), plan = null;
+  ov.addEventListener("change", function(){ plan = null; btn.disabled = true; btn.textContent = "Substituir"; out.innerHTML = ""; });
+  document.getElementById("psPrev").addEventListener("click", function(){
+    var from = document.getElementById("psFrom").value, to = document.getElementById("psTo").value;
+    if (!from || !to){ out.innerHTML = '<div class="pat-count">Escolha o terapeuta ausente e o substituto.</div>'; return; }
+    if (from === to){ out.innerHTML = '<div class="pat-count">Escolha dois profissionais diferentes.</div>'; return; }
+    var wks = pltChecked(ov, "data-pw").map(Number), days = pltChecked(ov, "data-pd"), tn = {}; pltChecked(ov, "data-pt").forEach(function(k){ tn[k] = 1; });
+    out.innerHTML = '<div class="pat-count">Conferindo…</div>';
+    pltLoad().then(function(){
+      var fromSeats = {}, toSeats = {};
+      plannerRooms().forEach(function(r){ (r.therapists || []).forEach(function(t){
+        if (t.professionalId === from) fromSeats[r.id + "|" + t.id] = 1;
+        if (t.professionalId === to) (toSeats[r.id] = toSeats[r.id] || []).push(t);
+      }); });
+      var res = {changes: {}, n: 0, stay: [], by: {}};
+      try {
+        wks.forEach(function(w){ DAYS.forEach(function(d){
+          if (days.indexOf(d.key) < 0) return;
+          var docId = d.key + "-" + w, bk = (state.scheduleDocs[docId] || {}).bookings || {};
+          Object.keys(bk).sort().forEach(function(key){
+            var b = bk[key], ps = key.split("|"); if (!b || !fromSeats[ps[1] + "|" + ps[2]] || b.lock || !String(b.patient || "").trim()) return;
+            var morning = d.morning.indexOf(ps[0]) >= 0; if (!(morning ? tn.m : tn.t)) return;
+            var label = pltCellLabel(docId, key) + " — " + b.patient;
+            function stay(why){ res.stay.push(label + ": " + why); var k = pltWhyKey(why); res.by[k] = (res.by[k] || 0) + 1; }
+            if (bookingKind(b) || b.blocked){ stay("Reunião, treinamento ou bloqueio não é movido"); return; }
+            var targets = toSeats[ps[1]] || [];
+            if (!targets.length){ stay("O substituto não tem coluna nesta sala"); return; }
+            var rec = cloneJson(b), why = "", ok = false;
+            for (var i = 0; i < targets.length && !ok; i++){
+              var tk = ps[0] + "|" + ps[1] + "|" + targets[i].id; why = pltTry(docId, tk, rec, [key]);
+              if (!why){
+                ok = true;
+                pltStageSet(docId, tk, rec); pltStageSet(docId, key, clearValueFor(d.key, ps[0]));
+                (res.changes[docId] = res.changes[docId] || {})[tk] = rec; res.changes[docId][key] = clearValueFor(d.key, ps[0]); res.n++;
+              }
+            }
+            if (!ok) stay(why);
+          });
+        }); });
+      } finally { pltStageUndo(); }
+      plan = res;
+      var tot = res.n + res.stay.length;
+      if (!tot){ out.innerHTML = '<div class="pat-count">' + esc(professionalName(from)) + ' não tem atendimentos nessas semanas, dias e turnos.</div>'; return; }
+      out.innerHTML = '<div class="pat-count"><b>' + res.n + '</b> de ' + tot + ' ' + (tot === 1 ? "atendimento passa" : "atendimentos passam") + ' para <b>' + esc(professionalName(to)) + '</b>.</div>' +
+        (res.stay.length ? '<div class="pat-count"><b>' + res.stay.length + '</b> ficam com ' + esc(professionalName(from)) + ':</div>' + pltReasonsHtml(res.by) + '<div class="pat-count">' + res.stay.slice(0, 30).map(esc).join("<br>") + (res.stay.length > 30 ? "<br>…" : "") + '</div>' : "");
+      btn.disabled = !res.n; btn.textContent = res.n ? "Substituir (" + res.n + ")" : "Substituir";
+    }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o ' + esc(pltWhere()) + '.</div>'; });
+  });
+  btn.addEventListener("click", function(){
+    if (!plan || !plan.n) return;
+    var from = document.getElementById("psFrom").value, to = document.getElementById("psTo").value, n = plan.n, qtd = n + (n === 1 ? " atendimento" : " atendimentos");
+    confirmDialog({title: "Substituir Terapeuta", message: "Passar <b>" + qtd + "</b> de <b>" + esc(professionalName(from)) + "</b> para <b>" + esc(professionalName(to)) + "</b> no " + esc(pltWhere()) + "?", confirmLabel: "Continuar"}).then(function(ok){
+      return ok && confirmDialog({title: "Tem Certeza?", message: "Os <b>" + qtd + "</b> mudam de coluna. Para voltar: Ctrl+Z, ou repita a substituição ao contrário.", confirmLabel: "Substituir"});
+    }).then(function(ok){
+      if (!ok) return;
+      return applyBookingChanges(plan.changes, PLT_PASS).then(function(res){ if (res === false) return; m.close(); renderGrid(); showToast(qtd + " passaram para " + professionalName(to) + ". Ctrl+Z desfaz."); });
+    });
+  });
+}
+
+/* ---------- Abrir Vaga ---------- */
+function openPlVagaModal(){
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var profs = pltSeatProfs(), specIds = {};
+  profs.forEach(function(p){ profAreas(p).forEach(function(s){ specIds[s] = 1; }); });
+  var specs = state.specialties.filter(function(s){ return specIds[s.id] && isActive(s); });
+  var m = pltModal("ovPlVg", "Abrir Vaga", "Mostra onde há vaga numa especialidade (dias e horários que você escolher) e quais pacientes poderiam mudar de lugar para abrir espaço.",
+    '<div class="field-row"><div class="field"><label for="pvSpec">Especialidade</label><select id="pvSpec"><option value="">Todas</option>' + specs.map(function(s){ return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join("") + '</select></div>' +
+    '<div class="field"><label for="pvPat">Paciente (Opcional)</label><select id="pvPat" data-combo><option value="">Ninguém — só ver as vagas</option>' + state.patients.filter(isActive).sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); }).map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div></div>' +
+    '<div class="field"><label>Semanas</label><div id="pvW">' + pltWeekBoxes("data-pw", WEEKS.slice()) + '</div></div>' +
+    '<div class="field"><label>Dias</label><div id="pvD">' + pltDayBoxes("data-pd") + '</div></div>' +
+    '<div class="field-row"><div class="field"><label for="pvFrom">Horário de</label><select id="pvFrom">' + pltTimeOpts("Qualquer") + '</select></div><div class="field"><label for="pvTo">Até</label><select id="pvTo">' + pltTimeOpts("Qualquer") + '</select></div></div>' +
+    '<div class="field-row"><button type="button" class="btn ghost" id="pvGo">Ver Vagas</button></div><div id="pvOut" class="fx-report"></div>', "");
+  var ov = m.ov, out = document.getElementById("pvOut"), vagas = [];
+  function seatsFor(spec){
+    var out2 = [];
+    physicalRooms().forEach(function(r){ (r.therapists || []).forEach(function(t){
+      if (!t.professionalId) return; var pr = findProfessional(t.professionalId); if (!pr) return;
+      if (spec && profAreas(pr).indexOf(spec) < 0) return;
+      out2.push({room: r, seat: t, prof: pr});
+    }); });
+    return out2;
+  }
+  function emptyCell(docId, key, d, time){ var cur = effectiveBooking((state.scheduleDocs[docId] || {}).bookings || {}, key, d.key, time); return !(cur && (cur.patient || cur.blocked)) ? cur || {} : null; }
+  document.getElementById("pvGo").addEventListener("click", function(){
+    var spec = document.getElementById("pvSpec").value, pid = document.getElementById("pvPat").value;
+    var wks = pltChecked(document.getElementById("pvW"), "data-pw").map(Number), days = pltChecked(document.getElementById("pvD"), "data-pd");
+    var from = document.getElementById("pvFrom").value, to = document.getElementById("pvTo").value;
+    var pat = pid ? state.patients.filter(function(p){ return p.id === pid; })[0] : null;
+    if (pat && patBlocked(pat)){ out.innerHTML = '<div class="pat-count">Paciente com cadastro ' + esc(patBlockText(pat)) + ': não pode ser agendado.</div>'; return; }
+    out.innerHTML = '<div class="pat-count">Procurando…</div>';
+    pltLoad().then(function(){
+      var seats = seatsFor(spec), rec = {patient: pat ? pat.nome : "Vaga", note: "", service: DEFAULT_SERVICE_ID};
+      function inWin(time){ return (!from || time >= from) && (!to || time <= to); }
+      vagas = [];
+      wks.forEach(function(w){ DAYS.forEach(function(d){
+        if (days.indexOf(d.key) < 0) return;
+        var docId = d.key + "-" + w;
+        d.morning.concat(d.afternoon).forEach(function(time){
+          if (!inWin(time)) return;
+          if (pat && !patientSlotOk(pat, d.key, time)) return;
+          seats.forEach(function(s){
+            var key = time + "|" + s.room.id + "|" + s.seat.id, cur = emptyCell(docId, key, d, time); if (!cur) return;
+            if (!seatAvailable(s.seat, d.key, time) || plLockInfo(cur, d.key, w, time, s.room, s.seat)) return;
+            if (sysHard(plannerConflict(docId, key, rec))) return;
+            vagas.push({w: w, d: d, time: time, room: s.room, seat: s.seat, prof: s.prof, docId: docId, key: key});
+          });
+        });
+      }); });
+      // quem poderia mudar de lugar: pacientes que ocupam a janela e têm outro horário livre com a mesma especialidade
+      var movers = [], evaluated = 0, capped = false;
+      wks.forEach(function(w){ DAYS.forEach(function(d){
+        if (days.indexOf(d.key) < 0) return;
+        var docId = d.key + "-" + w, bk = (state.scheduleDocs[docId] || {}).bookings || {};
+        Object.keys(bk).sort().forEach(function(key){
+          var b = bk[key]; if (!b || !String(b.patient || "").trim() || b.lock || bookingKind(b)) return;
+          var ps = key.split("|"), time = ps[0], room = findRoom(ps[1]); if (!room || isGroup(room) || !inWin(time)) return;
+          var th = findTherapist(room, ps[2]), pr = th && th.professionalId ? findProfessional(th.professionalId) : null; if (!pr) return;
+          if (spec && profAreas(pr).indexOf(spec) < 0) return;
+          var p = findPatientRef(b); if (!p || (pat && p.id === pat.id)) return;
+          if (evaluated >= 80){ capped = true; return; } evaluated++;
+          var alts = [], pareas = profAreas(pr);
+          WEEKS.forEach(function(w2){ DAYS.forEach(function(d2){
+            var docId2 = d2.key + "-" + w2;
+            d2.morning.concat(d2.afternoon).forEach(function(t2){
+              if ((wks.indexOf(w2) >= 0 && days.indexOf(d2.key) >= 0 && inWin(t2)) || !patientSlotOk(p, d2.key, t2)) return;
+              seatsFor("").forEach(function(s){
+                if (profAreas(s.prof).filter(function(a){ return pareas.indexOf(a) >= 0; }).length === 0) return;
+                var k2 = t2 + "|" + s.room.id + "|" + s.seat.id, cur = emptyCell(docId2, k2, d2, t2); if (!cur) return;
+                if (!seatAvailable(s.seat, d2.key, t2) || plLockInfo(cur, d2.key, w2, t2, s.room, s.seat)) return;
+                if (sysHard(plannerConflict(docId2, k2, b, [key]))) return;
+                alts.push(w2 + "ª · " + d2.full.slice(0, 3) + " " + t2 + " · " + s.room.name);
+              });
+            });
+          }); });
+          if (alts.length) movers.push({p: p, from: pltCellLabel(docId, key), day: d.key, w: w, alts: alts});
+        });
+      }); });
+      var html = '<div class="pat-count"><b>' + vagas.length + '</b> ' + (vagas.length === 1 ? "vaga livre" : "vagas livres") + (pat ? ' para <b>' + esc(pat.nome) + '</b>' : '') + '. ' + (pat ? 'Clique para agendar.' : 'Escolha um paciente para agendar direto.') + '</div>';
+      WEEKS.forEach(function(w){
+        var inW = vagas.filter(function(x){ return x.w === w; }); if (!inW.length) return;
+        html += '<details class="fr-week"' + (inW.length < 60 ? " open" : "") + '><summary>' + esc(WEEK_LABEL[w]) + ' — ' + inW.length + '</summary>';
+        DAYS.forEach(function(d){
+          var inD = inW.filter(function(x){ return x.d.key === d.key; }); if (!inD.length) return;
+          html += '<div class="fr-day"><b>' + esc(d.full) + '</b><div class="fr-slots">' + inD.map(function(x){
+            return '<button type="button" class="fr-slot" data-i="' + vagas.indexOf(x) + '" title="' + esc(profNome(x.prof) + " · " + x.room.name) + '"><span class="mono">' + x.time + '</span> ' + esc(profShortName(x.prof)) + ' · ' + esc(x.room.name) + '</button>';
+          }).join("") + '</div></div>';
+        });
+        html += '</details>';
+      });
+      html += '<div class="tr-sec">Quem Poderia Mudar de Lugar</div>' + (movers.length
+        ? '<div class="pat-count"><b>' + movers.length + '</b> ' + (movers.length === 1 ? "paciente ocupa" : "pacientes ocupam") + ' a janela e ' + (movers.length === 1 ? "tem" : "têm") + ' outro horário livre com o mesmo tipo de terapeuta' + (capped ? ' (mostrando os 80 primeiros)' : '') + '. Clique para abrir no Planner.</div>' +
+          '<table class="fx-table"><thead><tr><th>Paciente</th><th>Hoje</th><th>Poderia Ir Para</th></tr></thead><tbody>' + movers.map(function(x, i){
+            return '<tr data-mv="' + i + '" style="cursor:pointer"><td>' + esc(x.p.nome) + '</td><td>' + esc(x.from) + '</td><td>' + esc(x.alts.slice(0, 3).join(" · ")) + (x.alts.length > 3 ? " (+" + (x.alts.length - 3) + ")" : "") + '</td></tr>';
+          }).join("") + '</tbody></table>'
+        : '<div class="pat-count">Ninguém na janela tem outro horário livre com o mesmo tipo de terapeuta.</div>');
+      out.innerHTML = html; out.__movers = movers;
+    }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o ' + esc(pltWhere()) + '.</div>'; });
+  });
+  out.addEventListener("click", function(e){
+    var b = e.target.closest(".fr-slot"), tr = e.target.closest("tr[data-mv]");
+    if (tr){ var mv = (out.__movers || [])[+tr.getAttribute("data-mv")]; if (!mv) return; m.close(); pltGoCell(mv.day, mv.w, mv.p.nome); return; }
+    if (!b) return;
+    var x = vagas[+b.getAttribute("data-i")], pid = document.getElementById("pvPat").value, p = pid ? state.patients.filter(function(y){ return y.id === pid; })[0] : null;
+    if (!x) return;
+    if (!can("planner", "create")){ showToast(permDeniedMsg("planner", "create"), true); return; }
+    m.close();
+    var db1 = document.querySelector('#daySeg button[data-day="' + x.d.key + '"]'); if (db1) db1.click();
+    var wb = document.querySelector('#weekSeg button[data-week="' + x.w + '"]'); if (wb) wb.click();
+    openBookingModal({key: x.key, docId: x.docId, dayKey: x.d.key, week: x.w, roomId: x.room.id, therapistId: x.seat.id, time: x.time});
+    var inp = document.getElementById("bkPatient");
+    if (inp && p){ inp.value = p.nome; inp.dispatchEvent(new Event("input", {bubbles: true})); inp.dataset.pid = p.id; var sg = document.getElementById("bkSuggest"); if (sg) sg.hidden = true; }
+  });
+}
+
+/* ---------- Pacientes Faltando Sessões ---------- */
+function openPlMissModal(){
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var m = pltModal("ovPlMs", "Pacientes Faltando Sessões", "Compara as sessões do " + esc(pltWhere()) + " (4 semanas) com o Sessão/Mês dos quadros do tratamento ativo. “Completar com o Auto Planner” leva os marcados para a Montar Proposta.",
+    '<div class="field-row"><div class="field"><label for="pmShow">Mostrar</label><select id="pmShow"><option value="falta">Só quem Falta Sessões</option><option value="sobra">Só quem Tem Sessões a Mais</option><option value="todos">Todos com Diferença</option></select></div></div>' +
+    '<div id="pmOut" class="fx-report"><div class="pat-count">Lendo…</div></div>',
+    '<button class="btn primary" id="pmAuto" disabled hidden>Completar com o Auto Planner</button>');
+  var ov = m.ov, out = document.getElementById("pmOut"), btn = document.getElementById("pmAuto"), q = null;
+  var realOk = !PLA.on && (!window.pipoAuth || (window.pipoAuth.can("autoplanner", "create") && window.pipoAuth.can("autoplanner", "edit"))) && healthCanSee();
+  btn.hidden = !realOk;
+  function rows(){
+    var f = document.getElementById("pmShow").value;
+    return q.contr.filter(function(c){ return c.want !== c.got && (f === "todos" || (f === "falta" ? c.got < c.want : c.got > c.want)); });
+  }
+  function draw(){
+    var list = rows();
+    if (!list.length){ out.innerHTML = '<div class="pat-count">Nenhum paciente nesta situação. ' + q.contr.filter(function(c){ return c.want === c.got; }).length + ' de ' + q.contr.length + ' estão completos.</div>'; btn.disabled = true; return; }
+    out.innerHTML = '<div class="pat-count"><b>' + list.length + '</b> ' + (list.length === 1 ? "paciente" : "pacientes") + ' com diferença (' + q.contr.filter(function(c){ return c.want === c.got; }).length + ' de ' + q.contr.length + ' completos).</div>' +
+      '<table class="fx-table"><thead><tr><th></th><th>Paciente</th><th>Contratadas</th><th>Colocadas</th><th>Diferença</th></tr></thead><tbody>' + list.slice(0, 300).map(function(c){
+        var df = c.got - c.want;
+        return '<tr><td>' + (df < 0 ? '<input type="checkbox" data-pm="' + esc(c.p.id) + '" checked>' : '') + '</td><td>' + esc(c.p.nome) + '</td><td>' + c.want + '</td><td>' + c.got + '</td><td>' + (df > 0 ? "+" : "") + df + '</td></tr>';
+      }).join("") + '</tbody></table>' + (list.length > 300 ? '<div class="pat-count">Mostrando 300 de ' + list.length + '.</div>' : "");
+    btn.disabled = !out.querySelector("input[data-pm]");
+  }
+  pltLoad().then(function(){ q = apQuality(); draw(); }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o ' + esc(pltWhere()) + '.</div>'; });
+  document.getElementById("pmShow").addEventListener("change", function(){ if (q) draw(); });
+  out.addEventListener("change", function(){ btn.disabled = !out.querySelector("input[data-pm]:checked"); });
+  btn.addEventListener("click", function(){
+    var ids = pltChecked(out, "data-pm"); if (!ids.length) return;
+    confirmDialog({title: "Completar com o Auto Planner", message: "O Auto Planner será aberto com uma <b>cópia do Planner de agora</b> (a grade que ele tem hoje é substituída; Ctrl+Z desfaz) e a Montar Proposta abre só para os <b>" + ids.length + "</b> " + (ids.length === 1 ? "paciente marcado" : "pacientes marcados") + ". Nada vai para o Planner de verdade sem você enviar.", confirmLabel: "Continuar"}).then(function(ok){
+      if (!ok) return;
+      m.close();
+      var tab = document.querySelector('#mainTabs button[data-tab="autoplanner"]'); if (!tab){ showToast("Auto Planner indisponível.", true); return; }
+      tab.click();
+      return apReadReal().then(function(real){
+        return pltLoad().then(function(){ return currentBookingsFor(plannerAllDocIds()); }).then(function(cur){
+          var changes = {}, n = 0;
+          plannerAllDocIds().forEach(function(id){
+            var a = cur[id] || {}, b = (real[id] || {}).bookings || {}, day = id.split("-")[0], keys = {};
+            Object.keys(a).concat(Object.keys(b)).forEach(function(k){ keys[k] = 1; });
+            Object.keys(keys).forEach(function(k){
+              if (stableStr(a[k]) === stableStr(b[k])) return;
+              (changes[id] = changes[id] || {})[k] = b[k] ? cloneJson(b[k]) : clearValueFor(day, k.split("|")[0]); n++;
+            });
+          });
+          if (!n) return true;
+          return applyBookingChanges(changes, PLT_PASS).then(function(res){ return res !== false; });
+        });
+      }).then(function(okc){
+        if (!okc) return;
+        renderGrid();
+        openAutoPlannerModal({ids: ids});
+      }).catch(function(err){ showToast("Não foi possível preparar o Auto Planner" + (err && err.message ? ": " + err.message : "."), true); });
+    });
+  });
+}
+
+/* ---------- Cópias do Planner ---------- */
+var PLC_SLOTS = 5;
+function plcPath(n){ return "planner-copias/" + n; }
+function plcRead(){
+  var ns = []; for (var i = 1; i <= PLC_SLOTS; i++) ns.push(i); ns.push("auto");
+  return Promise.all(ns.map(function(n){ return db.doc(plcPath(n)).get(); })).then(function(snaps){
+    return snaps.map(function(sn, i){ var d = sn && sn.exists && sn.data(); return d && d.name ? Object.assign({n: ns[i]}, d) : null; });
+  });
+}
+function plcErr(err, what){
+  var msg = err && err.message ? err.message : "";
+  if (/planner-copias|violates check|documents_path_valid/i.test(msg)) return "Rode o SQL 2026-10-19-copias-do-planner no Supabase antes de usar as cópias.";
+  return "Não foi possível " + what + (msg ? ": " + msg : ".");
+}
+function plcSave(n, name){
+  return currentBookingsFor(plannerAllDocIds()).then(function(all){
+    var docs = {}; Object.keys(all).forEach(function(id){ if (Object.keys(all[id] || {}).length) docs[id] = cloneJson(all[id]); });
+    var me = window.pipoAuth && window.pipoAuth.profile && window.pipoAuth.profile();
+    return db.doc(plcPath(n)).set({name: name, criadoEm: new Date().toISOString(), por: (me && me.full_name) || "", docs: docs});
+  });
+}
+function openPlCopiesModal(){
+  if (!db){ showToast("Sem conexão com o servidor.", true); return; }
+  var copies = [];
+  var m = pltModal("ovPlCp", "Cópias do Planner", "Guarde até " + PLC_SLOTS + " versões do Planner de agora (ex.: “antes da reorganização de novembro”), compare com o atual e restaure se precisar. Restaurar troca o Planner (Ctrl+Z desfaz) e guarda uma cópia automática do que estava antes.",
+    '<div class="tr-sec tr-sec-top">Cópias Salvas</div><div id="pcList"><div class="pat-count">Lendo…</div></div>' +
+    '<div class="tr-sec">Salvar o Planner Atual</div>' +
+    '<div class="field-row"><div class="field"><label for="pcName">Nome</label><input id="pcName" type="text" maxlength="40" placeholder="Ex.: Antes da reorganização de novembro"></div><div class="field"><label for="pcSlot">Guardar em</label><select id="pcSlot"></select></div></div>' +
+    '<div class="field-row"><button type="button" class="btn" id="pcSave">Salvar Cópia</button></div>' +
+    '<div class="tr-sec">Comparar</div>' +
+    '<div class="field-row"><div class="field"><label for="pcA">A</label><select id="pcA"></select></div><div class="field"><label for="pcB">B</label><select id="pcB"></select></div></div>' +
+    '<div class="field-row"><button type="button" class="btn ghost" id="pcCmp">Comparar</button></div><div id="pcOut"></div>', "");
+  var ov = m.ov, listEl = document.getElementById("pcList"), cmpOut = document.getElementById("pcOut");
+  function lbl(d){ return d.n === "auto" ? "Automática — " + d.name : "Cópia " + d.n + " — " + d.name; }
+  function refresh(){
+    return plcRead().then(function(list){
+      copies = list;
+      listEl.innerHTML = '<table class="fx-table"><thead><tr><th>Nº</th><th>Nome</th><th>Salvo em</th><th>Por</th><th>Atendimentos</th><th></th></tr></thead><tbody>' + copies.map(function(d, i){
+        var nlab = i < PLC_SLOTS ? String(i + 1) : "Auto";
+        if (!d) return i < PLC_SLOTS ? '<tr><td>' + nlab + '</td><td colspan="4"><span class="pt-muted">Vazio</span></td><td></td></tr>' : "";
+        return '<tr><td>' + nlab + '</td><td>' + esc(d.name) + '</td><td>' + esc(trBr ? trBr(String(d.criadoEm || "").slice(0, 10)) : d.criadoEm) + '</td><td>' + esc(d.por || "") + '</td><td>' + apCountDocs(d.docs) + '</td>' +
+          '<td><button type="button" class="btn ghost" data-pc-load="' + d.n + '">Restaurar</button>' + (d.n === "auto" ? "" : ' <button type="button" class="btn ghost" data-pc-del="' + d.n + '">Excluir</button>') + '</td></tr>';
+      }).join("") + '</tbody></table>';
+      var free = 0; for (var i = 0; i < PLC_SLOTS && !free; i++) if (!copies[i]) free = i + 1; free = free || 1;
+      var slotEl = document.getElementById("pcSlot"), keep = slotEl.value;
+      slotEl.innerHTML = copies.slice(0, PLC_SLOTS).map(function(d, i){ return '<option value="' + (i + 1) + '"' + ((keep ? +keep === i + 1 : i + 1 === free) ? " selected" : "") + '>' + (i + 1) + (d ? ' — ' + esc(d.name) + ' (substitui)' : ' — vazio') + '</option>'; }).join("");
+      var o = '<option value="atual">Planner (Atual)</option><option value="autopl">Auto Planner (Atual)</option>' + copies.map(function(d){ return d ? '<option value="c' + d.n + '">' + esc(lbl(d)) + '</option>' : ""; }).join("");
+      ["pcA", "pcB"].forEach(function(id, k){ var el = document.getElementById(id), cur = el.value; el.innerHTML = o; el.value = cur || (k ? "autopl" : "atual"); if (el.selectedIndex < 0) el.value = k ? "autopl" : "atual"; el.dispatchEvent(new Event("change", {bubbles: true})); });
+    });
+  }
+  refresh().catch(function(err){ listEl.innerHTML = '<div class="pat-count">' + esc(plcErr(err, "ler as cópias")) + '</div>'; });
+  function srcDocs(code){
+    if (code === "atual") return currentBookingsFor(plannerAllDocIds());
+    if (code === "autopl") return Promise.all(plannerAllDocIds().map(function(id){ return db.doc("autoplan/" + id).get(); })).then(function(snaps){ var o = {}; plannerAllDocIds().forEach(function(id, i){ var d = snaps[i] && snaps[i].exists ? snaps[i].data() : {}; o[id] = (d && d.bookings) || {}; }); return o; });
+    var d = copies.filter(function(x){ return x && String(x.n) === code.slice(1); })[0]; return Promise.resolve((d && d.docs) || {});
+  }
+  function srcLabel(code){ if (code === "atual") return "Planner (Atual)"; if (code === "autopl") return "Auto Planner (Atual)"; var d = copies.filter(function(x){ return x && String(x.n) === code.slice(1); })[0]; return d ? lbl(d) : code; }
+  document.getElementById("pcSave").addEventListener("click", function(){
+    var name = document.getElementById("pcName").value.trim(), n = +document.getElementById("pcSlot").value, old = copies[n - 1];
+    if (!can("planner", "edit")){ showToast(permDeniedMsg("planner", "edit"), true); return; }
+    if (!name){ showToast("Dê um nome à cópia.", true); document.getElementById("pcName").focus(); return; }
+    (old ? confirmDialog({title: "Substituir Cópia", message: "A cópia <b>" + esc(old.name) + "</b> será substituída pelo Planner de agora.", confirmLabel: "Substituir"}) : Promise.resolve(true)).then(function(ok){
+      if (!ok) return;
+      return plcSave(n, name).then(function(){ showToast("Cópia salva."); document.getElementById("pcName").value = ""; return refresh(); });
+    }).catch(function(err){ showToast(plcErr(err, "salvar a cópia"), true); });
+  });
+  listEl.addEventListener("click", function(e){
+    var dl = e.target.closest("[data-pc-del]"), ld = e.target.closest("[data-pc-load]");
+    if (dl){
+      var n = +dl.getAttribute("data-pc-del"), d = copies[n - 1]; if (!d) return;
+      confirmDialog({title: "Confirmar Exclusão", message: "Excluir a cópia <b>" + esc(d.name) + "</b>?", confirmLabel: "Confirmar Exclusão"}).then(function(ok){
+        if (!ok) return; return db.doc(plcPath(n)).set({}).then(function(){ showToast("Cópia excluída."); return refresh(); });
+      }).catch(function(err){ showToast(plcErr(err, "excluir"), true); });
+      return;
+    }
+    if (!ld) return;
+    var key = ld.getAttribute("data-pc-load"), dr = copies.filter(function(x){ return x && String(x.n) === key; })[0]; if (!dr) return;
+    if (!pltPerm("create") || !pltPerm("delete") || !pltPerm("edit")) return;
+    currentBookingsFor(plannerAllDocIds()).then(function(cur){
+      var changes = {}, n = 0;
+      plannerAllDocIds().forEach(function(id){
+        var a = cur[id] || {}, b = (dr.docs && dr.docs[id]) || {}, day = id.split("-")[0], keys = {};
+        Object.keys(a).concat(Object.keys(b)).forEach(function(k){ keys[k] = 1; });
+        Object.keys(keys).forEach(function(k){ if (stableStr(a[k]) === stableStr(b[k])) return; (changes[id] = changes[id] || {})[k] = b[k] ? cloneJson(b[k]) : clearValueFor(day, k.split("|")[0]); n++; });
+      });
+      if (!n){ showToast("O " + pltWhere() + " já é igual a esta cópia."); return; }
+      var df = apDiffDocs(cur, dr.docs || {});
+      return confirmDialog({title: "Restaurar Cópia", message: "O " + esc(pltWhere()) + " será trocado pela cópia <b>" + esc(dr.name) + "</b>: <b>" + df.add + "</b> atendimentos acrescentados, <b>" + df.rem + "</b> retirados e <b>" + df.chg + "</b> trocados (" + n + " células mudam). Uma cópia automática do que está agora é guardada antes.", confirmLabel: "Continuar"}).then(function(ok){
+        return ok && confirmDialog({title: "Tem Certeza?", message: "Isto muda o <b>" + esc(pltWhere()) + "</b> inteiro. Ctrl+Z desfaz, e a cópia automática fica guardada.", confirmLabel: "Restaurar"});
+      }).then(function(ok){
+        if (!ok) return;
+        return plcSave("auto", "antes de restaurar “" + dr.name + "”").then(function(){
+          return applyBookingChanges(changes, PLT_PASS).then(function(res){ if (res === false) return; showToast("Cópia restaurada (" + n + " células mudaram). Ctrl+Z desfaz."); m.close(); renderGrid(); });
+        });
+      });
+    }).catch(function(err){ showToast(plcErr(err, "restaurar"), true); });
+  });
+  document.getElementById("pcCmp").addEventListener("click", function(){
+    var ca = document.getElementById("pcA").value, cb = document.getElementById("pcB").value;
+    cmpOut.innerHTML = '<div class="pat-count">Comparando…</div>';
+    Promise.all([srcDocs(ca), srcDocs(cb)]).then(function(r){
+      cmpOut.innerHTML = apCompareHtml(apStatsFor(r[0]), apStatsFor(r[1]), apDiffDocs(r[0], r[1]), srcLabel(ca), srcLabel(cb));
+    }).catch(function(){ cmpOut.innerHTML = '<div class="pat-count">Não foi possível comparar.</div>'; });
+  });
+}
+
+
+function openAutoPlannerModal(opts0){
   if (!PLA.on) return;
+  var presetIds = opts0 && opts0.ids ? opts0.ids : null;
   if (!db){ showToast("Sem conexão com o servidor.", true); return; }
   if (!healthCanSee()){ showToast("Montar Proposta usa o nível de suporte do paciente: peça a permissão Pacientes – Saúde.", true); return; }
   var host = document.getElementById("modalHost");
@@ -21193,7 +21730,7 @@ function openAutoPlannerModal(){
         '<div class="field-row"><div class="field"><label class="chk-line"><input type="checkbox" id="apSupport" checked> <span>Marcar o Aplicador ABA nos grupos de 3 ou 4 pacientes</span></label></div></div>' +
         '<div class="field-row"><div class="field"><label class="chk-line"><input type="checkbox" id="apFora"> <span>Se não couber, usar horários fora do Horário de Atendimento do paciente (marcados para conferir)</span></label></div></div>' +
         '<div class="field-row"><button type="button" class="btn" id="apRun">Montar Proposta</button><button type="button" class="btn ghost" id="apRemove" title="Apaga do Auto Planner só o que a Montar Proposta colocou (do paciente escolhido ou de todos)"' + (can("planner", "delete") ? '' : ' hidden') + '>Remover o que a Proposta Colocou</button></div>' +
-        '<div id="apOut" class="fx-report"><div class="pat-count">Escolha e clique em “Montar Proposta”.</div></div>' +
+        '<div id="apOut" class="fx-report"><div class="pat-count">' + (presetIds ? 'Montar Proposta para os <b>' + presetIds.length + '</b> ' + (presetIds.length === 1 ? 'paciente' : 'pacientes') + ' que faltam sessões (vindos de Pacientes Faltando Sessões). Clique em “Montar Proposta”.' : 'Escolha e clique em “Montar Proposta”.') + '</div></div>' +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="apCancel">Fechar</button><button class="btn" id="apApply" disabled>Aplicar</button></div>' +
     '</div></div>';
@@ -21287,7 +21824,7 @@ function openAutoPlannerModal(){
         render();
         return;
       }
-      var list = (sel ? pats.filter(function(p){ return p.id === sel; }) : pats).filter(function(p){ return !patBlocked(p); });
+      var list = (sel ? pats.filter(function(p){ return p.id === sel; }) : (presetIds ? pats.filter(function(p){ return presetIds.indexOf(p.id) >= 0; }) : pats)).filter(function(p){ return !patBlocked(p); });
       if (!list.length){ out.innerHTML = '<div class="pat-count">Paciente Bloqueado: não entra no Auto Planner.</div>'; return; }
       plan = apBuild(list, opts);
       plan.removed = [];
@@ -27833,15 +28370,23 @@ var HELP_TOPICS = [
       "<b>Trocar Profissional</b>: passa as colunas de um profissional para outro.",
       "<b>Outras Opções ▾ → Enviar para a Agenda</b>: comece escolhendo o <b>Período</b>. <b>Mês</b>: escolha o mês e o sistema leva as 4 semanas do Planner para a Agenda; a 1ª semana é a primeira que começa numa segunda-feira dentro do mês; seguem a 2ª, 3ª e 4ª; a prévia mostra quantos vão em cada semana, o que foi pulado e os avisos.",
       "<b>Semana</b>: copia um dia (ou a semana inteira) do Planner para uma data real da Agenda, com prévia antes. Na prévia, \"com aviso\" lista os que ficam fora do horário do paciente ou com terapeuta diferente do tratamento: desmarque os que não devem ir.",
-      "<b>Limpar Semana</b>: apaga todos os agendamentos de uma semana do Planner (dupla confirmação, desfazível).",
+      "<b>Limpar por Filtro</b>: apaga marcações escolhendo semanas, dias, horário, sala ou grupo, terapeuta, paciente e o que apagar (pacientes, grupos, reunião/treinamento/bloqueado, cadeados). A prévia mostra quantas e quais; dupla confirmação, desfazível. Começa com a semana aberta.",
+      "<b>Copiar Semana</b>: copia as marcações de uma semana para outras semanas, nos dias e tipos escolhidos, só em células livres e dentro das regras (horário do terapeuta, bloqueios, conflitos). A prévia diz quantas vão e por que as outras ficam de fora.",
+      "<b>Substituir Terapeuta</b>: para férias ou licença. Escolha o terapeuta ausente, o substituto e as semanas, dias e turnos; os atendimentos passam para a coluna do substituto na mesma sala, e os que não cabem (horário ocupado, fora do horário dele, conflito) ficam como estão, com o motivo. Diferente do Trocar Profissional, que passa as colunas para sempre. Para voltar: Ctrl+Z ou repita ao contrário.",
+      "<b>Abrir Vaga</b>: escolha a especialidade, as semanas, os dias e a faixa de horário e veja as vagas livres (com um paciente escolhido, só as que ele pode usar; clique para agendar). Embaixo, <b>Quem Poderia Mudar de Lugar</b>: pacientes que ocupam a janela e têm outro horário livre com o mesmo tipo de terapeuta; clique para abrir no Planner.",
+      "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês, fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno.",
+      "<b>Pacientes Faltando Sessões</b>: lista quem tem sessões a menos (ou a mais) no Planner; <b>Completar com o Auto Planner</b> abre o Auto Planner com uma cópia do Planner de agora e a Montar Proposta só para os marcados.",
+      "<b>Cópias do Planner</b>: guarda até 5 versões com nome, compara (inclusive com o Auto Planner) e restaura. Restaurar pede duas confirmações, guarda sozinho uma cópia “Automática” do que estava antes e pode ser desfeito com Ctrl+Z.",
+      "<b>Imprimir</b>: Grade por Terapeuta e Horário da Família (por paciente ou todos, com Copiar Texto para o WhatsApp) do Planner de agora.",
       "<b>Exportar Excel</b>: baixa uma planilha (.xlsx) com duas abas: <b>Lista</b> (uma linha por agendamento das 4 semanas) e <b>Grade do Planner</b> (cada semana e dia com as salas e colunas lado a lado, como na tela)."
     ],
     rules: [
       "Enviar para a Agenda só acrescenta: nunca altera nem apaga o que já está na Agenda. Pula horários ocupados, bloqueados ou fora do horário.",
       "No período Mês valem as mesmas regras e também são pulados feriados e recessos e os dias que já passaram. Dias antes da 1ª semana, depois da 4ª (a 5ª semana) e os que caem no mês seguinte ficam para fazer à mão. Pode gerar de novo: o que já está na Agenda não é duplicado.",
-      "Trocar profissional não entra no desfazer; para voltar, troque ao contrário."
+      "Trocar profissional não entra no desfazer; para voltar, troque ao contrário.",
+      "Limpar por Filtro, Copiar Semana, Substituir Terapeuta, Abrir Vaga e Imprimir funcionam também no Auto Planner (na grade dele). Conferência, Pacientes Faltando Sessões e Cópias são do Planner; no Auto Planner use Relatório de Qualidade e Rascunhos."
     ],
-    who: "Permissão <b>Planner</b>. Enviar para a Agenda exige incluir na <b>Agenda</b>; Trocar profissional exige editar <b>Salas</b>."},
+    who: "Permissão <b>Planner</b>: Limpar por Filtro exige excluir; Copiar Semana, incluir; Substituir Terapeuta, incluir e excluir; Cópias, editar. Enviar para a Agenda exige incluir na <b>Agenda</b>; Trocar profissional exige editar <b>Salas</b>; Completar com o Auto Planner exige incluir e editar no <b>Auto Planner</b> e Pacientes – Saúde."},
   {id: "auto-planner", group: "Planner", title: "Auto Planner", mod: "autoplanner", tab: "autoplanner",
     purpose: "Grade igual à do Planner, mas <b>com registros próprios</b> (começa vazia): o sistema monta uma proposta de agenda a partir dos tratamentos de cada paciente e você confere, ajusta e só então envia para o Planner ou para a Agenda. O Planner de verdade não muda enquanto você trabalha aqui.",
     steps: [
