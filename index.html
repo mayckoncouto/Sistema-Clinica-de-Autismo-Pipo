@@ -1586,6 +1586,7 @@ table.prof-hours{width:100%;border-collapse:collapse;font-size:12.5px}
 .fx-table th:first-child,.fx-table td:first-child{text-align:left}
 .fx-table.fx-left2 th:nth-child(2),.fx-table.fx-left2 td:nth-child(2){text-align:left}
 .fx-table th{font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted)}
+#apqOut .fx-table th{cursor:pointer;user-select:none}
 .fx-table tfoot td{font-weight:700;border-bottom:0}
 .fx-table td.fx-neg{color:var(--danger);font-weight:700}
 .fx-table td.fx-pos{color:#b7791f;font-weight:700}
@@ -20821,6 +20822,18 @@ function openApQualityModal(real){
     html += sec("Horário Vago por Sala e Turno") + '<div class="pat-count">' + (q.shifts - q.full.length) + ' de ' + q.shifts + ' turnos de sala com atendimento mantêm pelo menos um horário sem ninguém' + (q.full.length ? '; <b>' + q.full.length + '</b> estão cheios:' : '.') + '</div>' +
       (q.full.length ? '<div class="pat-count">' + q.full.slice(0, 40).map(esc).join("<br>") + (q.full.length > 40 ? "<br>…" : "") + '</div>' : "");
     html += sec("Alertas") + (q.alerts.length ? '<div class="pat-count">' + q.alerts.slice(0, 60).map(esc).join("<br>") + (q.alerts.length > 60 ? "<br>…" : "") + '</div>' : '<div class="pat-count">Nenhum alerta: ninguém junto que não deva e todos dentro do horário.</div>');
+    // clicar no título da coluna ordena (crescente → decrescente); número vale como número
+    out.addEventListener("click", function(e){
+      var th = e.target.closest && e.target.closest(".fx-table th"); if (!th) return;
+      var table = th.closest("table"), idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+      var dir = th.dataset.sort === "asc" ? "desc" : "asc";
+      Array.prototype.forEach.call(table.querySelectorAll("th"), function(h){ delete h.dataset.sort; h.textContent = h.textContent.replace(/\s*[▲▼]$/, ""); });
+      th.dataset.sort = dir; th.textContent += dir === "asc" ? " ▲" : " ▼";
+      var body = table.tBodies[0], rows = Array.prototype.slice.call(body.rows);
+      function val(r){ var t = (r.cells[idx] ? r.cells[idx].textContent : "").trim(), n = parseFloat(t.replace(/\./g, "").replace(",", ".").replace(/^\+/, "")); return /^[+-]?\d/.test(t) && !isNaN(n) ? n : normText(t); }
+      rows.sort(function(a, b){ var x = val(a), y = val(b), c = (typeof x === "number" && typeof y === "number") ? x - y : String(x).localeCompare(String(y), "pt-BR", {numeric: true}); return dir === "asc" ? c : -c; });
+      rows.forEach(function(r){ body.appendChild(r); });
+    });
     out.addEventListener("click", function(e){
       var a = e.target.closest && e.target.closest(".apq-open-tr"); if (!a) return;
       e.preventDefault();
