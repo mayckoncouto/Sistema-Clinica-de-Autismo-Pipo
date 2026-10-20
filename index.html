@@ -23495,11 +23495,44 @@ function haDetails(g){
     esc(g.user_name || "") + " · " + esc(HA_ACOES[g.acao]) + " · " + esc(crmWhen(g.at)) + '</div></div><button class="modal-close" data-hdclose aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body"><div class="pat-table-wrap"><table class="pat-table"><thead><tr><th>Hora</th><th>O que Mudou</th><th>Onde</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     (g.items.length > 300 ? '<div class="pat-count">Mostrando 300 de ' + g.items.length + '. Exporte para ver todos.</div>' : '') +
+    haDayRestoreHtml(g) +
     '</div><div class="modal-foot"><button class="btn ghost" data-hdclose>Fechar</button></div></div></div>';
   var ov = document.getElementById("ovHaDet");
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   Array.prototype.forEach.call(ov.querySelectorAll("[data-hdclose]"), function(b){ b.addEventListener("click", close); });
+  var rb = document.getElementById("hdDayGo");
+  if (rb) rb.addEventListener("click", function(){
+    var day = document.getElementById("hdDay").value, onlyPat = document.getElementById("hdDayPat").checked;
+    var items = haDayItems(g, day, onlyPat);
+    if (!items.length){ showToast("Nada para restaurar nesse dia.", true); return; }
+    close();
+    haRestore({items: items, user_name: g.user_name, acao: g.acao});
+  });
+}
+// "Restaurar só um dia": separa os registros do grupo pelo dia (Planner: dia e semana; Agenda: data).
+function haDayItems(g, day, onlyPat){
+  return g.items.filter(function(r){
+    return r.acao !== "status" && r.quando === day && (!onlyPat || r.tipo === "atendimento");
+  });
+}
+function haDayRestoreHtml(g){
+  if (!haRestorable(g)) return "";
+  var days = [];
+  g.items.forEach(function(r){ if (r.acao !== "status" && r.quando && days.indexOf(r.quando) < 0) days.push(r.quando); });
+  if (days.length < 2) return "";
+  days.sort();
+  var opts = days.map(function(d){
+    var n = g.items.filter(function(r){ return r.quando === d && r.acao !== "status"; }).length;
+    return '<option value="' + esc(d) + '">' + esc(haWhen({quando: d})) + ' (' + n + ')</option>';
+  }).join("");
+  return '<div class="tr-sec">Restaurar Só um Dia</div>' +
+    '<div class="field-row" style="align-items:flex-end">' +
+      '<div class="field" style="flex:1 1 220px"><label for="hdDay">Dia</label><select id="hdDay">' + opts + '</select></div>' +
+      '<div class="field" style="flex:1 1 220px"><label class="chk-line"><input type="checkbox" id="hdDayPat"> Só atendimentos de pacientes</label></div>' +
+      '<div class="field" style="flex:0 0 auto"><button type="button" class="btn primary" id="hdDayGo">Restaurar Este Dia</button></div>' +
+    '</div>' +
+    '<div class="pat-count">Restaura só os registros do dia escolhido; os outros dias desta linha não mudam. Marcando a caixa, Bloqueado, Reunião Clínica, Treinamento e Reserva ficam de fora.</div>';
 }
 function haGo(r, ev){
   if (deepWant(ev)){
@@ -29208,6 +29241,7 @@ var HELP_TOPICS = [
       "Filtre por ação (criou, alterou, excluiu, status), por quem fez e pelo período (7 a 180 dias); a pesquisa procura paciente, profissional e sala. A linha de resumo conta as alterações do que está na tela.",
       "<b>Detalhes</b> abre a lista completa do grupo, com o antes e o depois de cada campo. <b>Ver</b> leva ao dia e ao horário.",
       "<b>Restaurar</b> (no Histórico de Movimentações) desfaz a alteração: devolve o atendimento excluído, volta o alterado ao que era ou remove o criado. Se o horário já foi mexido depois, o sistema avisa antes de sobrescrever.",
+      "Quando a linha junta vários dias, <b>Detalhes → Restaurar Só um Dia</b> restaura apenas o dia escolhido (os outros dias da linha não mudam); marcando <b>Só atendimentos de pacientes</b>, Bloqueado, Reunião Clínica, Treinamento e Reserva ficam de fora.",
       "<b>Opções ▾ → Comparar Semanas</b> mostra lado a lado quantos atendimentos foram criados, alterados e excluídos em duas semanas (e o saldo), por ação e por pessoa.",
       "<b>Opções ▾ → Exportar Excel</b> baixa o que está na tela.",
       "O número ao lado de <b>Outras Opções</b> e do item <b>Histórico de Alterações</b> é a quantidade de alterações novas (de outras pessoas) que você ainda não marcou como lidas.",
@@ -29229,6 +29263,7 @@ var HELP_TOPICS = [
       "Filtre por ação (criou, alterou, excluiu, status), por quem fez e pelo período (7 a 180 dias); a pesquisa procura paciente, profissional e sala. A linha de resumo conta as alterações do que está na tela.",
       "<b>Detalhes</b> abre a lista completa do grupo, com o antes e o depois de cada campo. <b>Ver</b> leva ao dia e ao horário.",
       "<b>Restaurar</b> (no Histórico de Movimentações) desfaz a alteração: devolve o atendimento excluído, volta o alterado ao que era ou remove o criado. Se o horário já foi mexido depois, o sistema avisa antes de sobrescrever.",
+      "Quando a linha junta vários dias, <b>Detalhes → Restaurar Só um Dia</b> restaura apenas o dia escolhido (os outros dias da linha não mudam); marcando <b>Só atendimentos de pacientes</b>, Bloqueado, Reunião Clínica, Treinamento e Reserva ficam de fora.",
       "<b>Opções ▾ → Comparar Semanas</b> mostra lado a lado quantos atendimentos foram criados, alterados e excluídos em duas semanas (e o saldo), por ação e por pessoa.",
       "<b>Opções ▾ → Exportar Excel</b> baixa o que está na tela.",
       "O número ao lado de <b>Outras Opções</b> e do item <b>Histórico de Alterações</b> é a quantidade de alterações novas (de outras pessoas) que você ainda não marcou como lidas.",

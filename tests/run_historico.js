@@ -72,6 +72,16 @@ const path = require('path');
   console.log(await ev(`(document.getElementById('toastHost')||{}).textContent`), await ev(`!!document.getElementById('cfOk')`));
   const applied = await ev(`JSON.stringify(window.__applied)`);
   check('restaurar grava o antes', applied && applied.indexOf('Paciente Um') !== -1, applied);
+  // restaurar só um dia (grupo com dois dias e uma reunião)
+  await ev(`(function(){ window.__applied = null; var it = function(id, q, tipo, pac){ return {id: id, at: new Date().toISOString(), area: "planner", user_name: "Fulana", acao: "excluiu", tipo: tipo, paciente: pac, quando: q, hora: "08:00", ref: "schedule/" + q + "#08:00|r|s" + id, antes: {patient: pac}, depois: null}; };
+    haDetails({items: [it(201, "seg-3", "atendimento", "Ana"), it(202, "seg-3", "reuniao", "Reunião Clínica"), it(203, "ter-3", "atendimento", "Bia")], user_name: "Fulana", acao: "excluiu", at: new Date().toISOString()}); })()`);
+  check('detalhes: opção restaurar só um dia', await ev(`!!document.getElementById("hdDayGo") && document.querySelectorAll("#hdDay option").length === 2`));
+  await ev(`(function(){ var s = document.getElementById("hdDay"); s.value = "seg-3"; s.dispatchEvent(new Event("change")); document.getElementById("hdDayPat").checked = true; document.getElementById("hdDayGo").click(); })()`);
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { const b = document.getElementById('cfOk'); if (b) b.click(); });
+  await page.waitForTimeout(400);
+  const day1 = await ev(`JSON.stringify(window.__applied)`);
+  check('restaura só o dia escolhido, só pacientes', day1 && day1.indexOf('Ana') !== -1 && day1.indexOf('Bia') === -1 && day1.indexOf('Reuni') === -1 && day1.indexOf('ter-3') === -1, day1);
   // contador de não lidas
   await ev(`haBadgeRefresh(true)`);
   check('contador do Planner (14 não lidas)', await ev(`HA_BADGE.planner`) === 14, await ev(`HA_BADGE.planner`));
