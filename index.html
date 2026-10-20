@@ -2084,7 +2084,12 @@ input[readonly]:not(.dp-in):focus,textarea[readonly]:focus{outline:none;box-shad
 .hours-row.cover-none .spec-name{border-color:#e3a19c}
 .cv-row .cv-spec-wrap{flex:1;min-width:0}
 .cv-row .cv-spec-wrap .dp-btn,.cv-row .cv-spec{width:100%}
+.cv-row{flex-wrap:wrap}
+.cv-row .cv-spec-wrap{flex:1 1 200px}
+.cv-row .cv-cod{width:120px;flex:none}
+.cv-row .cv-desc{flex:2 1 220px;min-width:0}
 .cv-row .cv-val{width:130px;flex:none}
+@media (max-width:760px){.cv-row .cv-cod,.cv-row .cv-val{flex:1 1 40%;width:auto}.cv-row .cv-desc{flex:1 1 100%}}
 .cv-add-row{display:flex;gap:4px;flex-wrap:wrap}
 .send-warns summary{color:#9a6212}
 .send-warn-opt{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;cursor:pointer;font-weight:500}
@@ -28874,7 +28879,7 @@ var HELP_TOPICS = [
     purpose: "Convênios usados nos tratamentos e nos relatórios, com as especialidades que cada um cobre e o valor por sessão de cada especialidade.",
     steps: [
       "Cadastros → <b>Convênios</b> → <b>+ Incluir</b>. Clique na linha para editar ou excluir.",
-      "Em <b>Especialidades/Serviços Cobertos</b>, clique em <b>+ especialidades/serviços</b>, escolha a especialidade ou o serviço e informe o <b>valor por sessão</b>. <b>Inserir Todos</b> inclui de uma vez todas as especialidades e serviços que ainda não estão na lista.",
+      "Em <b>Especialidades/Serviços Cobertos</b>, clique em <b>+ especialidades/serviços</b>, escolha a especialidade ou o serviço e informe o <b>código</b>, o <b>nome do procedimento</b> e o <b>valor por sessão</b>. <b>Inserir Todos</b> inclui de uma vez todas as especialidades e serviços que ainda não estão na lista.",
       "Abaixo de cada especialidade aparece o que ela libera (ex.: Psicologia libera Musicoterapia, Psicopedagogia e Psicomotricidade), conforme o cadastro de Especialidades."
     ],
     rules: ["Na tarefa do CRM (Convênio do lead) e no tratamento (Convênio), <b>+ Incluir</b> no fim da lista cadastra um convênio novo sem sair da janela.", "Corrigir o nome do convênio troca o nome também nos tratamentos e nos leads do CRM que usavam o nome anterior.", 
@@ -30900,6 +30905,8 @@ function openRegistryItem(kind, item){
       var lb = r.specId ? specLibera(r.specId).map(specialtyName).join(", ") : "";
       return '<div class="hours-row cv-row" data-i="' + i + '"' + (lb ? ' data-cover="' + esc("Libera também: " + lb) + '"' : '') + '>' +
         '<div class="cv-spec-wrap"><select class="cv-spec" data-reg-add="especialidades" aria-label="Especialidade"' + (canSave ? '' : ' disabled') + '>' + opts + '</select></div>' +
+        '<input type="text" class="cv-cod" placeholder="Código" aria-label="Código do procedimento" maxlength="40" value="' + esc(r.codigo || "") + '"' + (canSave ? '' : ' disabled') + '>' +
+        '<input type="text" class="cv-desc" placeholder="Nome do Procedimento" aria-label="Nome do procedimento" maxlength="200" value="' + esc(r.descricao || "") + '"' + (canSave ? '' : ' disabled') + '>' +
         (cvSee ? '<input type="text" class="cv-val" inputmode="decimal" placeholder="R$ 0,00" aria-label="Valor por sessão" value="' + esc(r.valor) + '"' + (cvEdit ? '' : ' disabled') + '>' : '') +
         (canSave ? '<button type="button" class="rm" data-cvrm="' + i + '" aria-label="Remover especialidade">✕</button>' : '') +
       '</div>';
@@ -30907,7 +30914,8 @@ function openRegistryItem(kind, item){
   }
   if (cvHost){
     var cvVals = (CONV.fin ? CONV.fin[item && item.id] : (item && item.valores)) || {};
-    cvDraft = convSpecList(item).map(function(id){ return {specId: id, valor: cvVals[id] != null && cvVals[id] !== "" ? fmtMoney(cvVals[id]).replace("R$ ", "") : ""}; });
+    var cvProcs = (item && item.procs) || {};
+    cvDraft = convSpecList(item).map(function(id){ var pr = cvProcs[id] || {}; return {specId: id, codigo: pr.codigo || "", descricao: pr.descricao || "", valor: cvVals[id] != null && cvVals[id] !== "" ? fmtMoney(cvVals[id]).replace("R$ ", "") : ""}; });
     cvRender();
     if (item) convLoadFinance().then(function(){
       if (!CONV.fin || !document.getElementById("cvRows")) return;
@@ -30920,8 +30928,8 @@ function openRegistryItem(kind, item){
       var i = +sel.closest(".cv-row").getAttribute("data-i"); cvDraft[i].specId = sel.value; cvRender();
     });
     cvHost.addEventListener("input", function(e){
-      var v = e.target.closest(".cv-val"); if (!v) return;
-      cvDraft[+v.closest(".cv-row").getAttribute("data-i")].valor = v.value;
+      var f = e.target.closest(".cv-val, .cv-cod, .cv-desc"); if (!f) return;
+      cvDraft[+f.closest(".cv-row").getAttribute("data-i")][f.classList.contains("cv-val") ? "valor" : f.classList.contains("cv-cod") ? "codigo" : "descricao"] = f.value;
     });
     cvHost.addEventListener("click", function(e){
       var b = e.target.closest("[data-cvrm]"); if (!b) return;
@@ -30984,6 +30992,9 @@ function openRegistryItem(kind, item){
       var ids = cvDraft.map(function(r){ return r.specId; }).filter(Boolean);
       if (ids.length !== cvDraft.length){ showToast("Escolha a especialidade ou o serviço em todas as linhas (ou tire a linha vazia).", true); return; }
       rec.especialidades = ids;
+      var procs = {};
+      cvDraft.forEach(function(r){ var cd = String(r.codigo || "").trim(), ds = String(r.descricao || "").trim(); if (cd || ds) procs[r.specId] = {codigo: cd, descricao: ds}; });
+      if (Object.keys(procs).length) rec.procs = procs; else delete rec.procs;
       if (cvSee && cvEdit){
         cvValsOut = {};
         cvDraft.forEach(function(r){ if (String(r.valor).trim() !== "") cvValsOut[r.specId] = parseMoney(r.valor); });
