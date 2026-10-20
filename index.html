@@ -5108,7 +5108,6 @@ function patientSpecRows(p){
  * repetir com outro profissional ou serviço. Linhas antigas "svc:<id>" (serviço no lugar da
  * especialidade) continuam sendo lidas como serviço.
  */
-var TL_WEEKS = [["", "Todas"], ["1,3", "1ª e 3ª"], ["2,4", "2ª e 4ª"], ["1", "1ª"], ["2", "2ª"], ["3", "3ª"], ["4", "4ª"]];
 function lineSvc(r){
   if (r && isSvcItem(r.specId)) return String(r.specId).slice(SVC_PREFIX.length);
   return (r && r.service) || DEFAULT_SERVICE_ID;
@@ -12939,7 +12938,17 @@ function tlDayName(k){ var d = ALL_WEEKDAYS.filter(function(x){ return x.key ===
 // "dia" do quadro: um ou mais dias separados por vírgula ("seg,qua"); vazio = qualquer dia.
 function tlDays(r){ var v = r && r.dia != null ? r : {dia: r}; return String(v.dia || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean); }
 function tlDaysText(r){ return tlDays(r).map(tlDayName).join(", "); }
-function tlWeeksText(v){ var w = TL_WEEKS.filter(function(x){ return x[0] === (v || ""); })[0]; return w ? w[1] : v; }
+// Semanas do quadro: qualquer combinação de 1ª a 4ª ("1,3"); vazio ou as quatro = Todas.
+function tlWeeksNorm(v){
+  var w = String(v || "").split(",").map(Number).filter(function(n){ return n >= 1 && n <= 4; });
+  w = w.filter(function(n, i){ return w.indexOf(n) === i; }).sort();
+  return w.length === 4 ? "" : w.join(",");
+}
+function tlWeeksText(v){
+  var w = tlWeeksNorm(v).split(",").filter(Boolean).map(function(n){ return n + "ª"; });
+  if (!w.length) return "Todas";
+  return w.length === 1 ? w[0] : w.slice(0, -1).join(", ") + " e " + w[w.length - 1];
+}
 // Resumo do quadro (linha de baixo do cartão).
 function tlSummary(r){
   var n = specSumNum(r.hours), out = [n == null ? "sem sessões/mês" : String(r.hours).replace(".", ",") + (n === 1 ? " sessão/mês" : " sessões/mês")];
@@ -13001,7 +13010,11 @@ function openTreatLineModal(ctx){
             '</div></div></div>' +
           '<div class="field"><label for="tlHora">Horário de Início</label><select id="tlHora">' + timeOpts(r.dia, r.hora) + '</select></div>' +
         '</div><div class="field-row">' +
-          '<div class="field"><label for="tlSem">Semanas</label><select id="tlSem">' + TL_WEEKS.map(function(w){ return opt(w[0], w[1], r.semanas || ""); }).join("") + '</select></div>' +
+          '<div class="field"><label id="tlSemLabel">Semanas</label><input type="hidden" id="tlSem" value="' + esc(tlWeeksNorm(r.semanas)) + '"><div class="ms" id="tlSemMs">' +
+            '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="tlSemLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
+            '<div class="ms-panel" id="tlSemPanel" hidden role="listbox" aria-multiselectable="true">' +
+              [1, 2, 3, 4].map(function(n){ return '<label class="ms-opt"><input type="checkbox" value="' + n + '"><span>' + n + 'ª Semana</span></label>'; }).join("") +
+            '</div></div><div class="pat-count" style="margin-top:4px">Marque as semanas do mês (qualquer combinação). Nenhuma ou as quatro = todas.</div></div>' +
           '<div class="field"><label for="tlSeg">Sessões Seguidas</label><select id="tlSeg">' + opt("1", "1", String(r.seguidas || "1")) + opt("2", "2", String(r.seguidas || "1")) + '</select></div>' +
         '</div>' +
         '<div class="field" id="tlObsBox"><label for="tlObs">Observação</label><textarea id="tlObs" rows="3" placeholder="Ex.: acolhimento dos pais">' + esc(r.obs || "") + '</textarea></div>' +
@@ -13043,6 +13056,20 @@ function openTreatLineModal(ctx){
     $("tlHora").dispatchEvent(new Event("change", {bubbles: true}));
   });
   diaRefresh();
+  // Semanas: lista de marcar (qualquer combinação); o valor fica no campo escondido #tlSem
+  var semMs = $("tlSemMs"), semBtn = semMs.querySelector(".ms-btn"), semPanel = $("tlSemPanel"), semIn = $("tlSem");
+  function semSync(){ var w = semIn.value.split(","); Array.prototype.forEach.call(semPanel.querySelectorAll("input"), function(c){ c.checked = w.indexOf(c.value) !== -1; }); semRefresh(); }
+  function semRefresh(){ var sum = semMs.querySelector(".ms-sum"), t = tlWeeksText(semIn.value); sum.textContent = semIn.value ? t + (semIn.value.indexOf(",") !== -1 ? " semanas" : " semana") : "Todas as semanas"; semBtn.title = sum.textContent; }
+  function semOpen(open){ semPanel.hidden = !open; semBtn.setAttribute("aria-expanded", open ? "true" : "false"); if (open){ var f = semPanel.querySelector("input"); if (f) f.focus(); } }
+  semBtn.addEventListener("click", function(){ semOpen(semPanel.hidden); });
+  semPanel.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); semOpen(false); semBtn.focus(); } });
+  $("ovTLine").addEventListener("mousedown", function(e){ if (!semMs.contains(e.target)) semOpen(false); });
+  semPanel.addEventListener("change", function(){
+    semIn.value = tlWeeksNorm(Array.prototype.map.call(semPanel.querySelectorAll("input:checked"), function(c){ return c.value; }).join(","));
+    semRefresh();
+  });
+  semIn.addEventListener("change", function(){ semIn.value = tlWeeksNorm(semIn.value); semSync(); });
+  semSync();
   $("tlX").addEventListener("click", close);
   $("tlCancel").addEventListener("click", close);
   if ($("tlDel")) $("tlDel").addEventListener("click", function(){
@@ -13051,7 +13078,7 @@ function openTreatLineModal(ctx){
   });
   function read(){
     var o = {id: r.id || uid("tl"), specId: $("tlSpec").value, hours: $("tlHours").value.trim(), profId: $("tlProf").value, aba: $("tlAba").checked ? "Sim" : "Não",
-      service: $("tlSvc").value || DEFAULT_SERVICE_ID, dia: diaVal(), hora: $("tlHora").value, semanas: $("tlSem").value,
+      service: $("tlSvc").value || DEFAULT_SERVICE_ID, dia: diaVal(), hora: $("tlHora").value, semanas: tlWeeksNorm($("tlSem").value),
       roomId: $("tlRoom").value, seguidas: $("tlSeg").value, obs: $("tlSvc").value === DEFAULT_SERVICE_ID ? "" : $("tlObs").value.trim()};
     if (lk){ o.specId = r.specId; o.service = r.service; }
     return o;
@@ -28971,7 +28998,7 @@ var HELP_TOPICS = [
       "O grupo <b>Convênio e Valores</b> traz, nesta ordem: Convênio e Sessão/Mês, Valor, Descontos e Valor final, a caixa <b>Intervenção ABA</b> com a Data de Revisão e Não Agrupar com. Ao sair do campo de valor, o valor aparece no formato R$ 1.234,56.",
       "Nos campos de valor (no tratamento, Descontos, vendas, lançamentos e contas) dá para digitar uma conta começando com <b>=</b>, por exemplo <b>=1500-200</b>, <b>=3 x 450,50</b> ou <b>=(100+50)/2</b> (use + - x / e parênteses). Ao sair do campo, o resultado preenche o valor; se a conta estiver errada, o campo é limpo e aparece um aviso.",
       "Em <b>Especialidades e Serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). Em <b>Dia</b> dá para marcar mais de um dia da semana (Segunda e Quarta, por exemplo); sem nenhum marcado vale qualquer dia. <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>) e <b>Remover</b>, no próprio quadro, tira o quadro do tratamento na hora, valendo ao salvar (quadros travados por atendimentos realizados não saem).",
-      "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de Início</b> (vazios = qualquer um), <b>Semanas</b> (Todas, 1ª e 3ª, 2ª e 4ª ou uma só) e <b>Sessões Seguidas</b> (1 ou 2). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
+      "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de Início</b> (vazios = qualquer um), <b>Semanas</b> (lista de marcar: qualquer combinação de 1ª a 4ª, como 1ª e 3ª ou 1ª, 2ª e 4ª; nenhuma ou as quatro = todas) e <b>Sessões Seguidas</b> (1 ou 2). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
       "A mesma especialidade pode ter vários quadros: por exemplo, Psicologia com o Tiago no serviço Acolhimento familiar às quintas 08:00 e mais um quadro de Psicologia em Sessão com qualquer terapeuta.",
       "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: abre um novo tratamento copiando o atual. Ao clicar em Salvar, o atual vira Renegociado e o novo fica Ativo; cancelando a janela, nada muda.",
       "Ao lado da caixa <b>Intervenção ABA</b> fica a <b>Data de Revisão</b> do ABA. Na lista de Tratamentos, a coluna <b>Data de Revisão</b> mostra a data e, depois que ela passa, a etiqueta <b>(Vencida)</b> (só em tratamento Ativo).",

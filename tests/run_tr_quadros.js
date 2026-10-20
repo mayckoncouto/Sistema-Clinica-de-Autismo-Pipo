@@ -80,6 +80,15 @@ const TL = require('./tl-helper');
   check('two Psicologia cards (Acolhimento with Ana on Thursday 08:00, and Sessão)?', cards.length === 2 && cards[0].name === 'Psicologia · Acolhimento familiar' && /Ana/.test(cards[0].sum) && /Quinta 08:00/.test(cards[0].sum) && /1ª e 3ª semanas/.test(cards[0].sum) && cards[1].name === 'Psicologia', JSON.stringify(cards));
   check('observação shown on the card?', /Acolhimento pais/.test(await page.textContent('#specRowsHost .tl-row')));
   check('sum Sessão/Mês × cards?', /Passou 2/.test(await page.textContent('#specSum')), await page.textContent('#specSum'));
+  // Semanas: qualquer combinação pela lista de marcar
+  await page.click('[data-tl-edit="1"]'); await page.waitForSelector('#ovTLine');
+  await page.click('#tlSemMs .ms-btn');
+  for (const n of ['1', '2', '4']) await page.check('#tlSemPanel input[value="' + n + '"]');
+  const semSum = await page.textContent('#tlSemMs .ms-sum');
+  await page.click('#tlSave'); await page.waitForTimeout(150);
+  while (await page.$('#cfOk')) { await page.click('#cfOk'); await page.waitForTimeout(150); }
+  const cards2 = await TL.lines(page);
+  check('weeks: any combination (1ª, 2ª e 4ª) saved and shown?', semSum === '1ª, 2ª e 4ª semanas' && /1ª, 2ª e 4ª semanas/.test(cards2[1].sum), semSum + ' | ' + cards2[1].sum);
   await page.$eval('#pPac', (x) => { x.value = '4'; x.dispatchEvent(new Event('input', {bubbles: true})); });
   await page.click('#trSave'); await page.waitForTimeout(400);
   if (await page.$('#cfOk')) { await page.click('#cfOk'); await page.waitForTimeout(300); }
