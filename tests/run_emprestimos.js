@@ -51,7 +51,7 @@ const fs = require('fs');
   });
   await page.waitForTimeout(300);
   await page.click('#finBtn');
-  check('Financeiro menu tem os dois empréstimos depois de Contas a Receber?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,emptomados,empconcedidos,conciliacao,demonstrativos,vendas,painelvendas,comissoes,fornecedores,catfornecedor,contas,planocontas');
+  check('Financeiro menu tem os dois empréstimos num grupo próprio, depois da Conciliação?', (await page.$$eval('#finMenu [data-nav]', (b) => b.map((x) => x.getAttribute('data-nav')))).join() === 'lancamentos,pagar,receber,conciliacao,emptomados,empconcedidos,vendas,painelvendas,comissoes,demonstrativos,contas,planocontas,fornecedores,catfornecedor');
   await page.click('#finMenu [data-nav="emptomados"]'); await page.waitForTimeout(300);
   check('tela tomados abre com título?', await page.$eval('#tab-emptomados', (e) => !e.hidden) && /Empréstimos Tomados/.test(await page.$eval('#tab-emptomados .cad-title', (e) => e.textContent)));
   check('estado vazio?', /Nenhum empréstimo tomado/.test(await page.textContent('#reg-emptomados-host')));

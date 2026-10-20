@@ -59,6 +59,25 @@ const path = require('path');
   check('Esc closes the stacked task window first?', !(await page.$('#ovCrm')) && !!(await page.$('#ovPat')));
   await page.keyboard.press('Escape'); await page.waitForTimeout(200);
   check('Esc then closes the patient window?', !(await page.$('#ovPat')));
+  // Ctrl+Enter salva a janela aberta (status novo)
+  await page.click('#cadBtn'); await page.click('#cadMenu [data-nav="status"]'); await page.waitForTimeout(200);
+  await open(); await page.fill('#stiName', 'Salvo Pelo Atalho');
+  await page.keyboard.press('Control+Enter'); await page.waitForTimeout(500);
+  const savedByKey = await page.evaluate(() => ((window.__STORE__['config/statuses'] || {}).list || []).some((x) => x.name === 'Salvo Pelo Atalho'));
+  check('Ctrl+Enter saves the window and closes it?', savedByKey && !(await page.$('#ovStItem')) && !(await page.$('#ovGuard')));
+  // Ctrl+clique em [data-deep] abre outra aba sem rodar o clique normal
+  const deep = await page.evaluate(() => {
+    var opened = null, ran = false; var ow = window.open; window.open = function(u){ opened = u; return null; };
+    var b = document.createElement('button'); b.setAttribute('data-deep', JSON.stringify({a: 'paciente', id: 'p1'})); b.onclick = function(){ ran = true; };
+    document.body.appendChild(b);
+    b.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, ctrlKey: true}));
+    var c = document.createElement('a'); c.setAttribute('data-deep', JSON.stringify({a: 'tarefa', id: 'abc'})); document.body.appendChild(c); c.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, ctrlKey: true})); var t = opened; c.remove(); opened = null;
+    b.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, ctrlKey: true}));
+    var first = opened; b.remove(); window.open = ow;
+    return {first: first, ran: ran, t: t};
+  });
+  check('Ctrl+click on data-deep opens a new tab and skips the normal click?', /ir=/.test(deep.first || '') && /paciente/.test(decodeURIComponent(deep.first || '')) && !deep.ran, JSON.stringify(deep));
+  check('task deep link uses ?tarefa=', /\?tarefa=abc#crm$/.test(deep.t || ''), deep.t);
   console.log('no JS errors?', errors.length === 0, errors.slice(0, 3));
   await browser.close();
   process.exit(fails || errors.length ? 1 : 0);

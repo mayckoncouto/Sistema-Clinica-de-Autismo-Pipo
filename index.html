@@ -6151,6 +6151,25 @@ var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf",
     e.preventDefault();
     b.click();
   });
+  /* Ctrl+Enter (Cmd+Enter no Mac) = Salvar na janela de cima, em todas as janelas (REGRA para janelas novas:
+   * o botão de salvar fica no rodapé como .btn.primary, de preferência com o texto "Salvar…").
+   * Só age se nenhum tratador próprio usou a tecla (ex.: enviar comentário do CRM). Antes de clicar, tira o foco
+   * do campo para os campos que gravam ao sair (data digitada, conta em dinheiro) gravarem primeiro. */
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || e.altKey || e.repeat || e.defaultPrevented) return;
+    var g = document.getElementById("ovGuard");
+    if (g){ var gs = document.getElementById("gdSave"); if (gs){ e.preventDefault(); gs.click(); } return; }
+    if (asking || document.getElementById("ovConfirm")) return;
+    var all = Array.prototype.filter.call(document.querySelectorAll(".overlay"), function(o){ return !o.hidden && o.id !== "ovConfirm" && o.id !== "ovGuard" && o.getClientRects().length > 0; });
+    var ov = all.length ? all[all.length - 1] : null; if (!ov) return;
+    var btns = Array.prototype.filter.call(ov.querySelectorAll(".modal-foot .btn.primary"), function(b){ return !b.disabled && !b.hidden && b.getClientRects().length > 0; });
+    if (!btns.length) return;
+    var b = btns.filter(function(x){ return /^salvar/i.test((x.textContent || "").trim()); })[0] || btns[btns.length - 1];
+    e.preventDefault();
+    var a = document.activeElement;
+    if (a && a !== document.body && ov.contains(a) && a.blur) a.blur();
+    setTimeout(function(){ if (b.isConnected && !b.disabled) b.click(); }, 0);
+  });
 })();
 /* ---------------- Sistema: regras com chave (Acesso → Sistema, só Administrador) ----------------
  * Documento config/system {rules: {id: "block"|"warn"|"off"}, historico: [{em, por, id, de, para}]}.
@@ -9022,7 +9041,7 @@ function wireCrm(){
       });
       return;
     }
-    var r = e.target.closest("[data-crm-id]"); if (r){ var x = CRM.tasks[r.getAttribute("data-crm-id")]; if (x) crmOpenTask(x); }
+    var r = e.target.closest("[data-crm-id]"); if (r){ if (deepWant(e)){ deepOpen({a: "tarefa", id: r.getAttribute("data-crm-id")}); return; } var x = CRM.tasks[r.getAttribute("data-crm-id")]; if (x) crmOpenTask(x); }
   });
   // Quadro: arrastar o cartão para outra coluna muda o status.
   var dragId = null;
@@ -9372,7 +9391,7 @@ function crmOpenTask(task, opts){
   var topMoves = !isNew && canEdit && crmMoveDests(listId).length, topGen = !isNew && crmGenDests().length, topPat = !isNew && task && task.patient_id && can("pacientes", "view") && !!findPatientById(task.patient_id);
   var topDup = !isNew && crmCan(listId, "create"), topFollow = !isNew && crmCan(listId, "view"), topIsFol = !isNew && task && (task.followers || []).indexOf(crmMe()) !== -1;
   var topMoreHtml = !isNew ? '<div class="cad-wrap pl-tools-wrap crm-top-more"><button type="button" class="btn ghost" id="crmTopBtn" aria-haspopup="menu" aria-expanded="false">Outras Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
-    '<div class="cad-menu pl-tools-menu" id="crmTopMenu" role="menu" hidden>' + (topPat ? '<button type="button" class="btn ghost" id="crmPatBtn">Cadastro do Paciente</button>' : '') + (topFollow ? '<button type="button" class="btn ghost" id="crmFolBtn">' + (topIsFol ? 'Deixar de Seguir' : 'Seguir Tarefa') + '</button>' : '') + (topDup ? '<button type="button" class="btn ghost" id="crmDupBtn">Duplicar Tarefa</button>' : '') + '<button type="button" class="btn ghost" id="crmLinkBtn">Copiar Link da Tarefa</button>' + (topGen ? '<button type="button" class="btn ghost" id="crmGenBtn">Gerar Tarefa a Partir Desta</button>' : '') + (topMoves ? '<button type="button" class="btn ghost" id="crmMoveBtn">Mover Tarefa</button>' : '') + '</div></div>' : '';
+    '<div class="cad-menu pl-tools-menu" id="crmTopMenu" role="menu" hidden>' + (topPat ? '<button type="button" class="btn ghost" id="crmPatBtn" data-deep="' + esc(JSON.stringify({a: "paciente", id: task.patient_id})) + '">Cadastro do Paciente</button>' : '') + (topFollow ? '<button type="button" class="btn ghost" id="crmFolBtn">' + (topIsFol ? 'Deixar de Seguir' : 'Seguir Tarefa') + '</button>' : '') + (topDup ? '<button type="button" class="btn ghost" id="crmDupBtn">Duplicar Tarefa</button>' : '') + '<button type="button" class="btn ghost" id="crmLinkBtn">Copiar Link da Tarefa</button>' + (topGen ? '<button type="button" class="btn ghost" id="crmGenBtn">Gerar Tarefa a Partir Desta</button>' : '') + (topMoves ? '<button type="button" class="btn ghost" id="crmMoveBtn">Mover Tarefa</button>' : '') + '</div></div>' : '';
   var sideHtml = '<aside class="crm-side" id="crmSide"' + (side ? '' : ' hidden') + '>' +
     '<div class="crm-side-head"><b>Atividade</b></div>' +
     '<div class="crm-side-body"><div class="crm-feed" id="crmFeed"><div class="pat-count">' + (isNew ? 'A criação e as alterações aparecem aqui depois de salvar. Comentários escritos agora são enviados junto com a tarefa.' : 'Carregando…') + '</div></div></div>' +
@@ -21057,7 +21076,7 @@ function openApQualityModal(real){
     html += sec("Sessões Colocadas × Contratadas") + '<div class="pat-count">' + okN + ' de ' + q.contr.length + ' pacientes com tratamento completos' + (bad.length ? '; ' + bad.length + ' com diferença:' : '.') + '</div>' +
       (bad.length ? tbl(["Paciente", "Tipo do Tratamento", "Contratadas", "Colocadas", "Diferença"], bad.slice(0, 200).map(function(c){
         var t = activeTreatment(c.p.id), tipos = ((t && t.tipos) || []).map(trTypeName).filter(Boolean).join(", ");
-        return ['<a href="#" class="apq-open-tr" data-pid="' + esc(c.p.id) + '" style="color:var(--accent);text-decoration:underline">' + esc(c.p.nome) + '</a>', esc(tipos || "—"), c.want, c.got, (c.got - c.want > 0 ? "+" : "") + (c.got - c.want)]; }), "fx-left2") : "");
+        return ['<a href="#" class="apq-open-tr" data-pid="' + esc(c.p.id) + '"' + (t ? ' data-deep="' + esc(JSON.stringify({a: "tratamento", id: t.id})) + '"' : '') + ' style="color:var(--accent);text-decoration:underline">' + esc(c.p.nome) + '</a>', esc(tipos || "—"), c.want, c.got, (c.got - c.want > 0 ? "+" : "") + (c.got - c.want)]; }), "fx-left2") : "");
     if (q.goal.length) html += sec("Meta de Grupo (ABA Sim: 80%)") + '<div class="pat-count">' + q.goal.filter(function(g){ return g.ok; }).length + ' de ' + q.goal.length + ' pacientes dentro da meta.</div>' +
       tbl(["Paciente", "Sessões", "Em Grupo", "%", "Situação"], q.goal.filter(function(g){ return !g.ok; }).slice(0, 200).map(function(g){ return [esc(g.p.nome), g.total, g.grp, g.pct + "%", (g.grp < g.lo ? "Abaixo" : "Acima") + " (ideal " + g.lo + (g.lo === g.hi ? "" : " a " + g.hi) + " em grupo)"]; }));
     html += sec("Ocupação por Terapeuta") + tbl(["Terapeuta", "Atendimentos", "Horários Ocupados", "Horários Disponíveis", "Ocupação"], q.therRows.map(function(r){ return [esc(profNome(r.prof)), r.n, r.used, r.avail, r.pct + "%" + (r.pct >= 90 ? " (alta)" : "")]; }));
@@ -28803,7 +28822,8 @@ var HELP_TOPICS = [
     rules: [
       "Você só vê as telas e os botões que o seu nível de permissão libera. Se faltar algo, fale com o Administrador.",
       "Toda exclusão pede confirmação.",
-      "<b>Ctrl+clique</b> (ou <b>Cmd+clique</b> no Mac, ou o botão do meio do mouse) em um botão que leva a outra tela — <b>Ver no Planner</b>, <b>Ver na Agenda</b>, <b>Ir até o horário</b>, <b>Abrir Tratamento</b>, <b>Cadastro do Paciente</b>, <b>Abrir Plano Terapêutico</b>, o ícone de agenda da evolução, o histórico de alterações e as linhas de relatório que abrem o Planner — abre essa tela em <b>outra aba do navegador</b> e mantém a janela atual aberta, para você conferir a informação e depois continuar ou salvar o que estava fazendo.",
+      "<b>Ctrl+clique</b> (ou <b>Cmd+clique</b> no Mac, ou o botão do meio do mouse) em um botão que leva a outra tela — <b>Ver no Planner</b>, <b>Ver na Agenda</b>, <b>Ir até o horário</b>, <b>Abrir Tratamento</b>, <b>Cadastro do Paciente</b>, <b>Abrir Plano Terapêutico</b>, o ícone de agenda da evolução, o histórico de alterações, as linhas de relatório que abrem o Planner, o nome do paciente na Conferência do Planner e as tarefas do CRM (listas, quadro e Caixa de Entrada) — abre essa tela em <b>outra aba do navegador</b> e mantém a janela atual aberta, para você conferir a informação e depois continuar ou salvar o que estava fazendo.",
+      "<b>Ctrl+Enter</b> (ou <b>Cmd+Enter</b> no Mac) salva a janela aberta, como clicar no botão <b>Salvar</b> do rodapé (a de cima, quando há várias). Nos comentários do CRM, Ctrl+Enter envia o comentário.",
       "A tecla <b>Esc</b> fecha a janela aberta (a de cima, quando há várias) do mesmo jeito que o ✕ ou o Cancelar: se a janela tem alterações, o sistema pergunta se deseja salvar. Com uma lista ou menu aberto, o Esc fecha primeiro a lista.",
       "Ao sair de uma janela de cadastro depois de mudar algum campo (pelo ✕, Cancelar, Fechar, clique fora ou Esc), o sistema pergunta: <b>Salvar</b>, <b>Sair sem Salvar</b> ou <b>Continuar Editando</b>.",
       "Nas janelas de Paciente, Tratamento, Lançamento e Conta a Pagar ou a Receber já salvos, <b>Outras Opções ▾ → Criar Tarefa</b> escolhe a lista do CRM e abre a janela da tarefa já preenchida (título e paciente); ajuste e salve.",
@@ -30161,6 +30181,7 @@ var notifUrlDone = false;
 var DEEP_HASH = {planner: "planner", agenda: "agenda", paciente: "pacientes", tratamento: "tratamentos", plano: "planos"};
 function deepWant(e){ return !!e && (e.ctrlKey || e.metaKey || e.button === 1); }
 function deepOpen(spec){
+  if (spec && spec.a === "tarefa"){ try { window.open(location.origin + location.pathname + "?tarefa=" + encodeURIComponent(spec.id) + "#crm", "_blank", "noopener"); } catch(e){} return; }
   try { window.open(location.origin + location.pathname + "?ir=" + encodeURIComponent(JSON.stringify(spec)) + "#" + (DEEP_HASH[spec.a] || ""), "_blank", "noopener"); } catch(e){}
 }
 // Liga um botão: Ctrl/Cmd+clique e clique do meio abrem em outra aba; clique normal roda fn.
@@ -30169,6 +30190,18 @@ function deepClick(el, specFn, fn){
   el.addEventListener("click", function(e){ if (deepWant(e)){ e.preventDefault(); e.stopPropagation(); deepOpen(specFn()); return; } fn(e); });
   el.addEventListener("auxclick", function(e){ if (e.button === 1){ e.preventDefault(); e.stopPropagation(); deepOpen(specFn()); } });
 }
+// Qualquer botão com data-deep='{"a":…}' abre em outra aba no Ctrl/Cmd+clique ou clique do meio, sem fechar a janela atual.
+(function(){
+  function hit(e){
+    var el = e.target && e.target.closest && e.target.closest("[data-deep]"); if (!el) return;
+    if (!(e.type === "auxclick" ? e.button === 1 : deepWant(e))) return;
+    var sp = null; try { sp = JSON.parse(el.getAttribute("data-deep")); } catch(x){}
+    if (!sp) return;
+    e.preventDefault(); e.stopImmediatePropagation(); deepOpen(sp);
+  }
+  document.addEventListener("click", hit, true);
+  document.addEventListener("auxclick", hit, true);
+})();
 function agendaGoSearch(d, q, prof){
   var tb = document.querySelector('#mainTabs button[data-tab="agenda"]'); if (!tb) return;
   if (d) AD.date = agdClampWeekday(agdParse(d));
@@ -36680,7 +36713,7 @@ function wireCaixa(){
     var tr = e.target.closest("tr[data-cx-id]"); if (!tr) return;
     var id = tr.getAttribute("data-cx-id"), a = e.target.closest("[data-cx-act]");
     CX.sel = id;
-    if (!a){ cxOpen(id); return; }
+    if (!a){ if (deepWant(e)){ deepOpen({a: "tarefa", id: id}); return; } cxOpen(id); return; }
     var act = a.getAttribute("data-cx-act");
     if (act === "clear") cxClear([id]);
     else if (act === "unread") cxUnread([id]);
