@@ -9351,7 +9351,8 @@ function crmOpenTask(task, opts){
   // "Enviar Link de Cadastro" e "Cadastrar Paciente" (só para lead) ficam no menu Outras Opções, à direita do título "Dados do Paciente/Lead".
   var moreHtml = can("pacientes", "create") ? '<div class="cad-wrap pl-tools-wrap crm-more-wrap" hidden><button type="button" class="btn ghost" id="crmMoreBtn" aria-haspopup="menu" aria-expanded="false">Outras Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
     '<div class="cad-menu pl-tools-menu" id="crmMoreMenu" role="menu" hidden>' +
-      '<button type="button" class="btn ghost" id="crmSendLink" hidden title="A família preenche o cadastro pelo celular; o envio fica esperando revisão">Enviar Link de Cadastro</button>' +
+      '<button type="button" class="btn ghost" id="crmSendLink" hidden title="Gera um link: a família preenche o cadastro pelo celular e, ao aprovar, ele entra em Pacientes e fica ligado a esta tarefa">Solicitar Cadastro</button>' +
+      '<button type="button" class="btn ghost" id="crmAskUpd" hidden title="A família recebe o cadastro atual para conferir e corrigir">Pedir Atualização</button>' +
       '<button type="button" class="btn ghost" id="crmRegPat" hidden>Cadastrar Paciente</button>' +
     '</div></div>' : '';
   var attHtml = isNew ? '' : '<div class="crm-sec" id="crmAttBox"><div class="crm-sec-h"><button type="button" class="crm-att-tog" id="crmAttTog" aria-expanded="false"><span class="tr-sec tr-sec-in">Anexos<span id="crmAttN"></span></span><span class="tr-sec-arrow" aria-hidden="true">▾</span></button><button type="button" class="btn ghost" id="crmAttAdd" hidden>+ Anexar</button></div><div class="crm-att-list" id="crmAttList" hidden></div></div>';
@@ -9555,7 +9556,8 @@ function crmOpenTask(task, opts){
     whoTag.className = "crm-who-tag" + (pid ? " pat" : isLead ? " lead" : "");
     leadFill();
     var rb = document.getElementById("crmRegPat"); if (rb) rb.hidden = !isLead || !canEdit;
-    var sl = document.getElementById("crmSendLink"); if (sl) sl.hidden = !isLead || !canEdit || !task;
+    var sl = document.getElementById("crmSendLink"); if (sl) sl.hidden = !!pid || !canEdit || !task;
+    var au = document.getElementById("crmAskUpd"); if (au) au.hidden = !pid || !intakeCan();
     crmMoreSync();
   }
   whoIn.addEventListener("input", function(){
@@ -9674,6 +9676,9 @@ function crmOpenTask(task, opts){
   // Enviar link de cadastro (lead de tarefa já gravada): o envio fica ligado à tarefa.
   var slb = document.getElementById("crmSendLink");
   if (slb) slb.addEventListener("click", function(){ openIntakeLinkModal({kind: "crm", task: Object.assign({}, task, {lead: Object.assign({}, task.lead || {}, readLead())})}); });
+  // Pedir Atualização (paciente já cadastrado): link com o cadastro atual preenchido.
+  var aub = document.getElementById("crmAskUpd");
+  if (aub) aub.addEventListener("click", function(){ var pp = pid ? (rawPatient(pid) || findPatientById(pid)) : null; if (pp) openIntakeLinkModal({kind: "atualizacao", patient: pp}); });
   // Cadastrar paciente (só para lead): abre o cadastro já preenchido; ao salvar, a tarefa passa a apontar para ele.
   var rp = document.getElementById("crmRegPat");
   if (rp) rp.addEventListener("click", function(){
@@ -28845,7 +28850,8 @@ var HELP_TOPICS = [
     steps: [
       "Paciente novo: Cadastros → Pacientes → <b>Outras Opções</b> → <b>Enviar Link de Cadastro</b>. Escreva o telefone (e o nome, se souber), clique em <b>Gerar Link</b> e use <b>Copiar</b>, <b>Enviar por WhatsApp</b> ou <b>Enviar por E-mail</b>.",
       "Paciente Já Cadastrado: na janela dele, <b>Outras Opções → Pedir Atualização</b> manda o link já preenchido com o cadastro atual; a família só corrige o que mudou.",
-      "Lead do CRM: na tarefa (já salva), <b>Outras Opções</b> → <b>Enviar Link de Cadastro</b>. O envio fica ligado à tarefa.",
+      "Lead do CRM: na tarefa (já salva), <b>Outras Opções</b> → <b>Solicitar Cadastro</b>. A família preenche pelo link e, ao aprovar o envio, o paciente é cadastrado em Pacientes e fica ligado à tarefa.",
+      "Paciente já cadastrado na tarefa: <b>Outras Opções</b> → <b>Pedir Atualização</b> gera o link com o cadastro atual preenchido.",
       "Quando chega um cadastro, o botão <b>Cadastros</b> mostra um número e a tela Pacientes mostra <b>Revisar Cadastro</b>. Clique para abrir a janela do paciente já preenchida: confira e salve. No paciente já cadastrado, os campos diferentes do envio ficam destacados, com <b>Usar Enviado</b> ou <b>Manter Atual</b>; telefone e e-mail novos entram na lista.",
       "<b>Descartar Envio</b> (no aviso do topo da janela, ou na lista de revisão) tira o envio da lista sem gravar nada.",
       "<b>Links Enviados</b> (Outras Opções) mostra a situação de cada link — Aguardando, Preenchido, Vencido ou Cancelado — com Copiar e Cancelar."
@@ -36967,7 +36973,7 @@ function openIntakeLinkModal(opts){
   var nome = p ? p.nome : task ? (lead.nome || (findPatientById(task.patient_id) || {}).nome || task.title || "") : "";
   var tel = p ? digitsOnly(patFirstPhone(p) || "") : task ? digitsOnly(lead.telefone || "") : "";
   var mail = p ? (patFirstEmail(p) || "") : "";
-  var title = kind === "atualizacao" ? "Pedir atualização do cadastro" : "Enviar Link de Cadastro";
+  var title = kind === "atualizacao" ? "Pedir atualização do cadastro" : (task ? "Solicitar Cadastro" : "Enviar Link de Cadastro");
   var sub = kind === "atualizacao" ? "A família recebe o formulário já preenchido com o cadastro atual e corrige o que mudou. Vale 1 dia e uma vez só; o envio fica esperando revisão."
     : "A família preenche os dados principais pelo celular. Vale 1 dia e uma vez só; o envio fica esperando revisão" + (task ? " e fica ligado a esta tarefa do CRM" : "") + ".";
   var host = regQuickHost();

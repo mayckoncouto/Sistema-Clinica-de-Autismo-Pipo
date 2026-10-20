@@ -269,7 +269,7 @@ const path = require('path');
   await page.dispatchEvent('#crmWho', 'input');
   await page.waitForSelector('#crmRegPat:not([hidden])', {timeout: 10000}).catch(() => {});
   const rpPos = await page.evaluate(() => { const b = document.getElementById('crmRegPat'), mb = document.getElementById('crmMoreBtn'); return {inMenu: !!b && !!b.closest('#crmMoreMenu'), inHead: !!mb && !!mb.closest('#crmLeadBox .crm-sec-h') && (function(){ const t = document.querySelector('#crmLeadBox .tr-sec').getBoundingClientRect(), r = mb.getBoundingClientRect(), bx = document.getElementById('crmLeadBox').getBoundingClientRect(); return Math.abs((t.top + t.bottom) / 2 - (r.top + r.bottom) / 2) < 8 && Math.abs(r.right - bx.right) < 4; })(), shown: !!mb && !mb.parentNode.hidden, menuClosed: document.getElementById('crmMoreMenu').hidden, link: !!document.querySelector('#crmMoreMenu #crmSendLink'), notInBox: true}; });
-  check('"Cadastrar Paciente" and "Enviar Link de Cadastro" inside Outras Opções, on the Dados do Paciente/Lead title line at the right?', rpPos.inMenu && rpPos.inHead && rpPos.shown && rpPos.menuClosed && rpPos.link && rpPos.notInBox, JSON.stringify(rpPos));
+  check('"Cadastrar Paciente" and "Solicitar Cadastro" inside Outras Opções, on the Dados do Paciente/Lead title line at the right?', rpPos.inMenu && rpPos.inHead && rpPos.shown && rpPos.menuClosed && rpPos.link && rpPos.notInBox, JSON.stringify(rpPos));
   await page.click('#crmMoreBtn');
   check('Outras Opções opens the menu with Cadastrar Paciente visible?', await page.evaluate(() => !document.getElementById('crmMoreMenu').hidden && !!document.getElementById('crmRegPat').offsetParent));
   await page.click('#crmRegPat');
