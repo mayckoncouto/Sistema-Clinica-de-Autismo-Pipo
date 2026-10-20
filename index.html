@@ -22155,6 +22155,23 @@ function sgFixes(p, todo, have, opts){
   function pri(h, L){   // sessões que menos combinam com o quadro de origem saem primeiro
     var days = sgDays(L); return (days.length && days.indexOf(h.day) === -1 ? 0 : 1) + (L.hora && L.hora !== h.time ? 0 : 1);
   }
+  // 0) semana: quadro com seletor de semanas e sessão agendada numa semana que o quadro não usa → levar para uma semana do quadro
+  todo.forEach(function(x){
+    var L = x.line; if (!L.semanas) return;
+    var W = apWeeksOf(L), cols = apColumnsFor(Object.assign({}, L, {roomId: ""}));
+    lh(L).filter(function(h){ return !tlWeekOk(L, h.w) && h.rec && !h.rec.fixo; }).forEach(function(h){
+      var c = sgWeekCounts(have, L), order = W.slice().sort(function(u, v){ return c[u] - c[v] || u - v; });
+      stageOut(h);
+      var rest = have.filter(function(y){ return y !== h; }), best = null;
+      for (var oi = 0; oi < order.length && !best; oi++){
+        var cd = sgCands(p, L, order[oi], rest, opts, cols, h.day, null);
+        if (!cd.length) cd = sgCands(p, L, order[oi], rest, opts, cols, null, null);
+        if (cd.length) best = cd[0];
+      }
+      if (!best){ sgUnstage(); return; }
+      commit(h, best, cloneJson(h.rec), "semanafora", L, L);
+    });
+  });
   // 1) especialidade: sobra num quadro, falta em outro (mesmo serviço)
   while (changed && guard++ < 40){
     changed = false;
@@ -22242,6 +22259,7 @@ function sgDistText(c){ return WEEKS.map(function(w){ return w + "ª: " + (c[w] 
 function sgFixText(f){
   var a = f.from;
   var src = WEEK_LABEL[a.w] + " · " + a.d.full + " " + a.time + " · " + a.room.name + (a.seat ? " · " + seatShortName(a.seat) : "");
+  if (f.kind === "semanafora") return "Semana fora do quadro (" + lineLabel(f.lineFrom) + ", só " + apWeeksOf(f.lineFrom).map(function(w){ return w + "ª"; }).join(" e ") + "): " + src + " → " + WEEK_LABEL[f.to.w] + " · " + sgCandText(f.to);
   if (f.kind === "esp") return "Trocar a especialidade: " + src + " (" + lineLabel(f.lineFrom) + ", a mais) → " + sgCandText(f.to) + " (" + lineLabel(f.lineTo) + ", faltava)";
   return "Equilibrar as semanas (" + lineLabel(f.lineFrom) + "): " + src + " → " + WEEK_LABEL[f.to.w] + " · " + sgCandText(f.to);
 }
@@ -29284,7 +29302,7 @@ var HELP_TOPICS = [
     who: "Vale para todos que agendam."},
   {id: "planner-ferramentas", group: "Planner", title: "Outras Opções do Planner", mod: "planner", tab: "planner",
     purpose: "Menu <b>Outras Opções ▾</b> do Planner: mudanças em lote e envio para a Agenda. A montagem automática das sessões ficou no <b>Auto Planner</b> (menu Planner ▾), uma grade própria separada do Planner.",
-    steps: ["<b>Sugerir Agendamento:</b> só funciona com paciente que tem <b>quadros de Especialidades e Serviços</b> no tratamento ativo, e só para o serviço <b>Sessão</b> (quadros e sessões de outros serviços ficam de fora). Escolha o paciente; valem as regras de Intervenção ABA e de grupo do Auto Planner (Sessão sem Intervenção ABA fica sozinha na sala; com Intervenção ABA só divide sala e horário com a mesma faixa etária e terapeutas compatíveis); o sistema lê cada quadro de Especialidades e Serviços do tratamento ativo, vê o que já está marcado e oferece onde marcar as sessões que faltam. Primeiro vale o <b>Horário de Atendimento</b> do paciente; depois o que o quadro pede (dia, horário, sala, semanas, sessões seguidas e o mesmo horário das outras semanas). Troque a opção na lista, desmarque o que não quiser e clique em <b>Agendar</b>. O Horário de Atendimento do paciente é sempre respeitado: o horário final é a saída, então a sessão precisa terminar até ele e nada é sugerido a partir dele. Sessões do paciente que estão <b>fora do Horário de Atendimento e fora do quadro</b> aparecem numa lista à parte, para remover (nada vem marcado). Antes das sugestões novas, a ferramenta também oferece <b>correções nas sessões já marcadas</b>: onde uma especialidade tem sessões a mais e outra a menos que o quadro, troca a especialidade da sessão (no mesmo dia, quando possível); e onde o mês está desigual (por exemplo 2 Nutrição numa semana e nenhuma em outra), passa a sessão para a semana que está faltando. Elas vêm marcadas, a sessão continua existindo, e o ideal é repartir o total do quadro pelas semanas (não é regra fixa: só é feito quando há lugar que respeite as regras). Todas as regras do Planner valem e Ctrl+Z desfaz.", 
+    steps: ["<b>Sugerir Agendamento:</b> só funciona com paciente que tem <b>quadros de Especialidades e Serviços</b> no tratamento ativo, e só para o serviço <b>Sessão</b> (quadros e sessões de outros serviços ficam de fora). Escolha o paciente; valem as regras de Intervenção ABA e de grupo do Auto Planner (Sessão sem Intervenção ABA fica sozinha na sala; com Intervenção ABA só divide sala e horário com a mesma faixa etária e terapeutas compatíveis); o sistema lê cada quadro de Especialidades e Serviços do tratamento ativo, vê o que já está marcado e oferece onde marcar as sessões que faltam. Primeiro vale o <b>Horário de Atendimento</b> do paciente; depois o que o quadro pede (dia, horário, sala, semanas, sessões seguidas e o mesmo horário das outras semanas). Troque a opção na lista, desmarque o que não quiser e clique em <b>Agendar</b>. O Horário de Atendimento do paciente é sempre respeitado: o horário final é a saída, então a sessão precisa terminar até ele e nada é sugerido a partir dele. Sessões do paciente que estão <b>fora do Horário de Atendimento e fora do quadro</b> aparecem numa lista à parte, para remover (nada vem marcado). Antes das sugestões novas, a ferramenta também oferece <b>correções nas sessões já marcadas</b>: onde uma especialidade tem sessões a mais e outra a menos que o quadro, troca a especialidade da sessão (no mesmo dia, quando possível); e onde o mês está desigual (por exemplo 2 Nutrição numa semana e nenhuma em outra), passa a sessão para a semana que está faltando. Quando o quadro tem <b>semanas escolhidas</b> (ex.: 1ª e 3ª), a ferramenta confere a semana em que cada sessão está no Planner: sessão marcada numa semana que o quadro não usa é levada para uma semana do quadro (no mesmo dia e horário, quando possível). Elas vêm marcadas, a sessão continua existindo, e o ideal é repartir o total do quadro pelas semanas (não é regra fixa: só é feito quando há lugar que respeite as regras). Todas as regras do Planner valem e Ctrl+Z desfaz.", 
       "<b>Importar Planilha</b>: lê uma planilha do Excel (.xlsx) com a grade do Planner (4 semanas lado a lado, os dias empilhados, a linha das salas e a linha “Horario” com o profissional de cada coluna) e mostra a prévia antes de gravar: quantos agendamentos entram por semana, pacientes que não estão cadastrados (ficam de fora), colunas ignoradas e avisos. Cada coluna vai para a coluna da sala do mesmo profissional; célula só com vírgula é horário livre; “Reunião Clinica!” é ignorada; nome com complemento vira serviço e observação (por exemplo, “Acolhimento” vira o serviço Acolhimento Familiar); nas colunas dos grupos de suporte o texto é a sala que o aplicador auxilia. Só entra em célula livre. Ctrl+Z desfaz.",
       "<b>Editar Agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar Profissional</b>: passa as colunas de um profissional para outro.",
