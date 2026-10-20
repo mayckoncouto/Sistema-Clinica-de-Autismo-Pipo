@@ -81,13 +81,13 @@ const path = require('path');
   await page.click('#specRowAdd'); await page.waitForSelector('#ovTLine');
   ed.lineOpts = await page.$eval('#tlAba', (a) => a.type + ':' + a.checked);
   await page.click('#tlCancel');
-  await TL.addLine(page, {aba: 'Não'}, 0);
+  await TL.addLine(page, {aba: 'Sim'}, 0);
   ed.after = await abaOf();
   check('Vencimento por defaults to Sem vencimento, date box hidden?', ed.vencDefault === 'sem' && ed.dateHidden === true, ed.vencDefault);
   check('label Descontos?', ed.desc === 'Descontos', ed.desc);
   check('general ABA checkbox is in the treatment window?', ed.noTop);
-  check('card ABA only Sim/Não, new cards = automatic rule (6 anos = Sim)?', ed.lineOpts === 'checkbox:true' && ed.lineDefault === 'Sim,Sim', ed.lineOpts + ' ' + ed.lineDefault);
-  check('one card changes alone?', ed.after === 'Não,Sim', ed.after);
+  check('card ABA only Sim/Não, new treatment: Intervenção ABA starts unchecked, new cards = Não?', ed.lineOpts === 'checkbox:false' && ed.lineDefault === 'Não,Não', ed.lineOpts + ' ' + ed.lineDefault);
+  check('one card changes alone?', ed.after === 'Sim,Não', ed.after);
 
   const btnVisible = await page.$eval('#trOpenPat', (b) => !b.hidden).catch(() => false);
   if (btnVisible){ await page.click('#trMoreBtn'); await page.click('#trOpenPat'); }

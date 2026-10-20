@@ -69,6 +69,9 @@ const path = require('path');
   if (svcVal){
     await page.$$eval('#trTipos input', (a) => a.forEach((i) => { if (i.checked){ i.checked = false; i.dispatchEvent(new Event('change', { bubbles: true })); } }));
     await page.$eval('#trTipos input[value="' + svcVal + '"]', (c) => { c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); });
+    if (/^svc:avaliacao$/.test(svcVal)){
+      check('Avaliação preenche 2 sessões?', (await page.inputValue('#trVencPor')) === 'sessoes' && (await page.inputValue('#trTotal')) === '2', await page.inputValue('#trTotal'));
+    }
     check('serviço: Status Ativo ou Finalizado?', (await stOpts()) === 'ativo,finalizado', await stOpts());
     await page.$eval('#trTipos input[value="' + svcVal + '"]', (c) => { c.checked = false; c.dispatchEvent(new Event('change', { bubbles: true })); });
     await page.$eval('#trTipos input[value="multidisciplinar"]', (c) => { c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); });

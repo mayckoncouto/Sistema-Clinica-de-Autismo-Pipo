@@ -13093,7 +13093,7 @@ function treatFieldsEditor(v, opts){
         '</div>' +
         (opts && opts.afterConv || "") +
         '<div class="field-row">' +
-          '<div class="field"><label>&nbsp;</label><label class="chk-line"><input type="checkbox" id="pAba"' + (abaYesNo(abaLegacy(v) || abaAuto((v.patientId && findPatientById(v.patientId)) || v)) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
+          '<div class="field"><label>&nbsp;</label><label class="chk-line"><input type="checkbox" id="pAba"' + (!v._novo && abaYesNo(abaLegacy(v) || abaAuto((v.patientId && findPatientById(v.patientId)) || v)) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
           '<div class="field"><label for="pAbaRev">Data de Revisão</label><input type="date" id="pAbaRev" value="' + esc(v.abaRevisao || "") + '"></div>' +
         '</div>' +
         '<div class="field-row"><div class="field"><label id="pNaoAgLabel">Não Agrupar com</label><div class="ms" id="pNaoAgMs">' +
@@ -13271,6 +13271,7 @@ function treatFieldsEditor(v, opts){
     (function(){
       var cb = document.getElementById("pAba"), sel = document.getElementById("trPat");
       if (!cb || !sel || abaLegacy(v)) return;
+      if (v._novo) return;
       var touched = false;
       cb.addEventListener("change", function(){ touched = true; });
       sel.addEventListener("change", function(){ if (!touched && sel.value) cb.checked = abaAuto(findPatientById(sel.value) || v) === "Sim"; });
@@ -13296,6 +13297,16 @@ function treatFieldsEditor(v, opts){
       convSuggest.innerHTML = html;
       convSuggest.hidden = false;
     }
+    // Tratamento novo: escolher o paciente traz o convênio do cadastro dele (se o campo ainda está vazio); pode ser editado depois.
+    var trPatSel = document.getElementById("trPat");
+    if (trPatSel && v._novo) trPatSel.addEventListener("change", function(){
+      if (convInput.value.trim() && draftConvenioId) return;
+      var pc = patConvDefault(rawPatient(trPatSel.value));
+      if (!pc.id) return;
+      var cv = localConvenios.filter(function(c){ return c.id === pc.id; })[0];
+      if (!cv) return;
+      draftConvenioId = cv.id; convInput.value = cv.name; convInput.dispatchEvent(new Event("change", {bubbles: true})); render();
+    });
     convInput.addEventListener("focus", renderConvSuggest);
     convInput.addEventListener("input", function(){ draftConvenioId = null; renderConvSuggest(); render(); });
     convInput.addEventListener("blur", function(){ setTimeout(function(){ convSuggest.hidden = true; render(); }, 130); });
@@ -16467,6 +16478,34 @@ function treatTypesAll(){
   return treatTypesCustom()
     .concat((state.specialties || []).filter(ttOn).map(function(x){ return {id: TT_SPEC + x.id, name: x.name, inativo: x.inativo, _src: "Especialidade", _ref: x.id}; }))
     .concat(servicesList().filter(ttOn).map(function(x){ return {id: TT_SVC + x.id, name: x.name, inativo: x.inativo, _src: "Serviço", _ref: x.id}; }));
+}
+// Pré-seleção do Vencimento no tratamento, por Tipo de Tratamento (tipo próprio, especialidade ou serviço).
+var TT_VENC_SEED = {"svc:avaliacao": 2, "svc:avaliacao-neuropsicologica": 10};
+function ttVencOf(id){
+  var x = null;
+  if (id.indexOf(TT_SPEC) === 0) x = (state.specialties || []).filter(function(y){ return TT_SPEC + y.id === id; })[0];
+  else if (id.indexOf(TT_SVC) === 0) x = servicesList().filter(function(y){ return TT_SVC + y.id === id; })[0];
+  else x = treatTypesCustom().filter(function(y){ return y.id === id; })[0];
+  if (x && x.vencPor) return {vencPor: x.vencPor, total: parseInt(x.totalSessoes, 10) || 0};
+  if (x && x.vencPor === "" ) return {vencPor: "", total: 0};
+  return TT_VENC_SEED[id] ? {vencPor: "sessoes", total: TT_VENC_SEED[id]} : {vencPor: "", total: 0};
+}
+function ttVencHtml(item, id, canSave){
+  var v = id ? ttVencOf(id) : {vencPor: (item && item.vencPor) || "", total: (item && parseInt(item.totalSessoes, 10)) || 0};
+  return '<div class="field-row"><div class="field"><label for="regVencPor">Vencimento no Tratamento</label><select id="regVencPor"' + (canSave ? '' : ' disabled') + '>' +
+    '<option value=""' + (v.vencPor === "" ? ' selected' : '') + '>Não Pré-selecionar</option>' +
+    '<option value="sem"' + (v.vencPor === "sem" ? ' selected' : '') + '>Sem Vencimento</option>' +
+    '<option value="sessoes"' + (v.vencPor === "sessoes" ? ' selected' : '') + '>Quantidade de Sessões</option></select></div>' +
+    '<div class="field"><label for="regVencTot">Total de Sessões</label><input type="text" inputmode="numeric" maxlength="4" id="regVencTot" value="' + (v.total || '') + '"' + (canSave ? '' : ' disabled') + '></div></div>' +
+    '<div class="pat-count" style="margin:-6px 0 8px;font-weight:500">Ao marcar este tipo no tratamento, o Vencimento já vem preenchido assim (pode ser editado no tratamento).</div>';
+}
+function ttVencRead(){
+  var vp = document.getElementById("regVencPor"), tot = document.getElementById("regVencTot");
+  return {vencPor: vp ? vp.value : "", total: parseInt(tot && tot.value, 10) || 0};
+}
+function ttVencApply(rec, v){
+  rec.vencPor = v.vencPor;
+  if (v.vencPor === "sessoes" && v.total > 0) rec.totalSessoes = v.total; else delete rec.totalSessoes;
 }
 function ttLabel(x){ return x.name + (x.padrao ? " (Padrão)" : ""); }
 function trTypeName(id){ var x = treatTypesAll().filter(function(y){ return y.id === id; })[0]; return x ? x.name : ""; }
@@ -26860,6 +26899,7 @@ function openTreatmentModal(t, opts){
     var pcd = patConvDefault(rawPatient(pid));
     if (pcd.id){ v.convenioId = pcd.id; v.convenio = pcd.nome; }
   }
+  if (isNew && !src) v._novo = true;   // tratamento novo do zero: Intervenção ABA começa desmarcada
   var d = {
     inicio: isNew ? trTodayIso() : (t.inicio || ""),
     termino: isNew ? "" : (t.termino || ""),
@@ -27058,6 +27098,15 @@ function openTreatmentModal(t, opts){
     var now = trTiposRead(), added = now.filter(function(id){ return tpPrev.indexOf(id) === -1; });
     tpPrev = now;
     if (added.length && ed && ed.addForTypes) ed.addForTypes(added);
+    // Pré-seleção do Vencimento conforme o cadastro do tipo (Cadastros → Tipos de Tratamento)
+    var pre = null;
+    added.forEach(function(id){ var c = ttVencOf(id); if (c.vencPor === "sessoes" && c.total > 0 && (!pre || pre.vencPor !== "sessoes" || c.total > pre.total)) pre = c; else if (c.vencPor === "sem" && !pre) pre = c; });
+    var vpEl = document.getElementById("trVencPor"), totEl = document.getElementById("trTotal");
+    if (pre && vpEl && totEl && !vpEl.disabled && !totEl.disabled){
+      vpEl.value = pre.vencPor; vpEl.dispatchEvent(new Event("change", {bubbles: true}));
+      if (pre.vencPor === "sessoes") totEl.value = String(pre.total);
+      syncVencPor();
+    }
     // o Status acompanha o tipo: serviço = Ativo/Finalizado; especialidade = Ativo/Renegociado/Cancelado
     var stEl = document.getElementById("trSt");
     if (stEl && !wasCancelled){
@@ -28791,7 +28840,7 @@ var HELP_TOPICS = [
     purpose: "O contrato de atendimento de cada paciente: convênio, Sessão/Mês, a caixa <b>Intervenção ABA</b> do tratamento (vale para o paciente todo e é o padrão dos quadros novos), as especialidades em quadros (cada um pode ter o seu ABA, que manda nos atendimentos dele) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras Opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
-      "Logo depois do paciente, <b>Tipo de Tratamento</b> aceita escolher vários (Multidisciplinar, especialidades, serviços…). Os marcados como padrão em Cadastros → Tipos de Tratamento já vêm escolhidos no tratamento novo.",
+      "Logo depois do paciente, <b>Tipo de Tratamento</b> aceita escolher vários (Multidisciplinar, especialidades, serviços…). Os marcados como padrão em Cadastros → Tipos de Tratamento já vêm escolhidos no tratamento novo. Cada tipo (inclusive especialidade e serviço, no cadastro deles) tem <b>Vencimento no Tratamento</b> e <b>Total de Sessões</b>: ao marcar o tipo, o Vencimento do tratamento já vem preenchido (Avaliação: 2 sessões; Avaliação Neuropsicológica: 10), e pode ser editado. No tratamento novo o Convênio vem do cadastro do paciente e a Intervenção ABA começa desmarcada.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "O grupo <b>Convênio e Valores</b> traz, nesta ordem: Convênio e Sessão/Mês, Valor, Descontos e Valor final, a caixa <b>Intervenção ABA</b> com a Data de Revisão e Não Agrupar com. Ao sair do campo de valor, o valor aparece no formato R$ 1.234,56.",
       "Nos campos de valor (no tratamento, Descontos, vendas, lançamentos e contas) dá para digitar uma conta começando com <b>=</b>, por exemplo <b>=1500-200</b>, <b>=3 x 450,50</b> ou <b>=(100+50)/2</b> (use + - x / e parênteses). Ao sair do campo, o resultado preenche o valor; se a conta estiver errada, o campo é limpo e aparece um aviso.",
@@ -30468,11 +30517,11 @@ var REG_CFG = {
     list: function(){ return servicesList(); },
     extraHtml: function(item, canSave){
       return '<div class="field"><label class="chk-line"><input type="checkbox" id="regTratamento"' + (ttOn(item) ? ' checked' : '') + (canSave ? '' : ' disabled') + '> <span>Tratamento</span></label>' +
-        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>';
+        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>' + ttVencHtml(item, item && item.id ? 'svc:' + item.id : '', canSave);
     },
     extraWire: function(){
       var c = document.getElementById("regTratamento");
-      return {read: function(){ return {on: !c || c.checked}; }, apply: function(rec, v){ rec.tratamento = v.on; }, after: function(){}};
+      return {read: function(){ var o = ttVencRead(); o.on = !c || c.checked; return o; }, apply: function(rec, v){ rec.tratamento = v.on; if (rec.id) ttVencApply(rec, v); }, after: function(){}};
     },
     write: function(l){
       // "Sessão" sempre fica, com esse nome, em primeiro.
@@ -30683,11 +30732,11 @@ var REG_CFG = {
     vals: function(x){ return [x.name, x._src, ttUseCount(x.id)]; },
     extraHtml: function(item, canSave){
       return '<div class="field"><label class="chk-line"><input type="checkbox" id="regPadrao"' + (item && item.padrao ? ' checked' : '') + (canSave ? '' : ' disabled') + '> <span>Padrão</span></label>' +
-        '<div class="pat-count" style="margin-top:4px;font-weight:500">Os tipos marcados como padrão já vêm escolhidos no tratamento novo.</div></div>';
+        '<div class="pat-count" style="margin-top:4px;font-weight:500">Os tipos marcados como padrão já vêm escolhidos no tratamento novo.</div></div>' + ttVencHtml(item, '', canSave);
     },
     extraWire: function(){
       var c = document.getElementById("regPadrao");
-      return {read: function(){ return {padrao: !!(c && c.checked)}; }, apply: function(rec, v){ if (v.padrao) rec.padrao = true; else delete rec.padrao; }, after: function(){}};
+      return {read: function(){ var o = ttVencRead(); o.padrao = !!(c && c.checked); return o; }, apply: function(rec, v){ if (v.padrao) rec.padrao = true; else delete rec.padrao; ttVencApply(rec, v); }, after: function(){}};
     }
   },
   motivosbloq: {
@@ -30767,11 +30816,11 @@ var REG_CFG = {
     list: function(){ return state.specialties.slice(); },
     extraHtml: function(item, canSave){
       return '<div class="field"><label class="chk-line"><input type="checkbox" id="regTratamento"' + (ttOn(item) ? ' checked' : '') + (canSave ? '' : ' disabled') + '> <span>Tratamento</span></label>' +
-        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>';
+        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>' + ttVencHtml(item, item && item.id ? 'spec:' + item.id : '', canSave);
     },
     extraWire: function(){
       var c = document.getElementById("regTratamento");
-      return {read: function(){ return {on: !c || c.checked}; }, apply: function(rec, v){ rec.tratamento = v.on; }, after: function(){}};
+      return {read: function(){ var o = ttVencRead(); o.on = !c || c.checked; return o; }, apply: function(rec, v){ rec.tratamento = v.on; if (rec.id) ttVencApply(rec, v); }, after: function(){}};
     },
     write: function(l){ return writeSpecialties(l); },
     cols: ["Nome", "Sigla", "Profissionais", "Libera Atender Também"],
