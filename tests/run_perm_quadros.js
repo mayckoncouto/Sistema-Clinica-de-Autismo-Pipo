@@ -81,6 +81,13 @@ const path = require('path');
   check('Supervisor opens read-only for Administrador (no Salvar, all-units box disabled)?', !(await page.$('#rSave')) && (await page.$eval('#rAllUnits', (c) => c.checked && c.disabled)));
   await page.evaluate(() => { window.pipoAuth.isManager = () => true; window.__pipoRolesTest.openRole('supervisor'); });
   check('Gestor can edit Supervisor and the all-units box?', !!(await page.$('#rSave')) && (await page.$eval('#rAllUnits', (c) => c.checked && !c.disabled)));
+  // Histórico e Testar
+  await page.evaluate(() => { window.pipoAuth.isManager = () => true; window.__pipoRolesTest.openRole('sec'); });
+  check('level window has "Testar como Este Nível" and the history section?', !!(await page.$('#rTest')) && !!(await page.$('#rHistToggle')));
+  const df = await page.evaluate(() => window.__pipoRolesTest.diff({ name: 'A', permissions: { planner: { view: true } } }, { name: 'B', permissions: { planner: { view: true, create: true }, pacientes: { view: true } } }));
+  check('history diff describes name and permission changes?', df.some((x) => /Nome: A → B/.test(x)) && df.some((x) => /^Planner: ligou Incluir/.test(x)) && df.some((x) => /^Pacientes: ligou Ver/.test(x)), JSON.stringify(df));
+  await page.evaluate(() => window.__pipoRolesTest.openList());
+  check('levels list has the Histórico button?', !!(await page.$('#rlHist')));
   check('no JS errors?', errors.length === 0, JSON.stringify(errors));
   await browser.close();
   process.exit(fails ? 1 : 0);

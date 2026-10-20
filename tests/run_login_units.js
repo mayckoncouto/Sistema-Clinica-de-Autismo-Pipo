@@ -26,7 +26,7 @@ const path = require('path');
           signOut: function(){ sessionStorage.removeItem('__s'); ls.forEach(function(f){ f('SIGNED_OUT', null); }); return Promise.resolve({}); }
         },
         rpc: function(n){ return Promise.resolve({data: n === 'login_units' ? window.__cfg.units : null, error: null}); },
-        from: function(){ var q = { select: function(){ return q; }, eq: function(){ return q; }, in: function(){ return q; }, maybeSingle: function(){ return Promise.resolve({data: window.__cfg.profile, error: null}); } }; return q; },
+        from: function(t){ var q = { select: function(){ return q; }, eq: function(){ return q; }, in: function(){ return q; }, maybeSingle: function(){ return Promise.resolve({data: t === 'roles' ? window.__cfg.testRole : window.__cfg.profile, error: null}); }, upsert: function(){ return Promise.resolve({data: null, error: null}); } }; return q; },
         channel: function(){ var c = { on: function(){ return c; }, subscribe: function(){ return c; } }; return c; },
         realtime: { setAuth: function(){} }
       };
@@ -109,6 +109,22 @@ const path = require('path');
   await login(s.page, null);
   await s.page.waitForSelector('#userPill .user-name');
   check('login still works without units?', !!(await s.page.$('#userPill .user-name')));
+  await s.ctx.close();
+
+  // 7) Testar como este nível: o Gestor abre com ?testeNivel e passa a ver como o nível, sem gravar nada
+  s = await open({ units, profile: profile(role({ id: 'gestao', name: 'Gestor', is_admin: true, is_manager: true }), 'unidade-1'), testRole: role({ id: 'secretaria', name: 'Secretária', permissions: { pacientes: { view: true } } }) });
+  await s.page.evaluate(() => sessionStorage.setItem('agendaPipo:testRole', 'secretaria'));
+  await login(s.page, null);
+  await s.page.waitForSelector('#testNote');
+  const tst = await s.page.evaluate(async () => {
+    var w = await window.pipoAuth.client.from('documents').upsert({ path: 'x' });
+    var r = await window.pipoAuth.client.rpc('patch_bookings', {});
+    var rr = await window.pipoAuth.client.rpc('crm_people', {});
+    return { admin: window.pipoAuth.isAdmin(), canPac: window.pipoAuth.can('pacientes', 'view'), canPlan: window.pipoAuth.can('planner', 'view'),
+      write: w.error && w.error.code, rpc: r.error && r.error.code, read: rr.error ? 'erro' : 'ok', name: document.getElementById('testNoteName').textContent };
+  });
+  check('test mode: acts as the tested level and blocks writes?', !tst.admin && tst.canPac && !tst.canPlan && tst.write === 'teste' && tst.rpc === 'teste' && tst.read === 'ok' && tst.name === 'Secretária', JSON.stringify(tst));
+  check('no JS errors?', s.errors.length === 0, s.errors.join(' | '));
   await s.ctx.close();
 
   await browser.close();

@@ -380,6 +380,7 @@
       return;
     }
     renderUserPill();
+    testName(profile);
     profileListeners.forEach(function (fn) { try { fn(profile); } catch (e) { console.error(e); } });
   }
 
@@ -387,9 +388,72 @@
     return client.from("profiles").select("*, role:roles(*)").eq("id", session.user.id).maybeSingle().then(function (r) {
       if (r.error) throw r.error;
       if (!r.data) throw new Error("Perfil não encontrado para este usuário.");
-      return r.data;
+      var data = r.data, tid = ssGet(TEST_KEY);
+      // "Testar como este nível": só quem edita os níveis (Gestor e Administrador); a tela passa a seguir o nível testado.
+      if (!tid || !(data.role && data.role.is_admin)) { if (tid) ssSet(TEST_KEY, null); return data; }
+      return client.from("roles").select("*").eq("id", tid).maybeSingle().then(function (q) {
+        if (q.error || !q.data) { ssSet(TEST_KEY, null); return data; }
+        testWrap();
+        return Object.assign({}, data, { _realRole: data.role, role: q.data, _test: true });
+      });
     });
   }
+  /* ---- Modo de teste de nível: nada é gravado ----
+   * Gravações (insert/update/upsert/delete), funções que mudam dados e as funções /api/* (menos /api/config) são recusadas
+   * com "Modo de teste". As leituras do banco continuam com o acesso de quem está testando. */
+  var TEST_KEY = "agendaPipo:testRole", TEST_MSG = "Modo de teste: nada é gravado.", testWrapped = false;
+  var TEST_READ_RPC = /(^|_)(list|summary|usage|inbox|unread|people|units|can|ctx|appointments|open_tasks|exists|permitido|form)$|^(crm_people|treatment_appt_summary|report_appointments_with_records|group_slot_appointments|crm_inbox|clinical_records_summary|change_log_unread|change_log_list|login_units|crm_task_usage|crm_user_open_tasks)$/;
+  try {
+    var tq = new URLSearchParams(location.search).get("testeNivel");
+    if (tq) {
+      ssSet(TEST_KEY, tq);
+      var sp = new URLSearchParams(location.search); sp.delete("testeNivel");
+      history.replaceState(null, "", location.pathname + (sp.toString() ? "?" + sp.toString() : "") + location.hash);
+    }
+  } catch (e) {}
+  function testBlocked() {
+    var res = { data: null, error: { message: TEST_MSG, code: "teste" } };
+    var px = new Proxy(function () {}, {
+      get: function (t, k) {
+        if (k === "then") return function (a, b) { return Promise.resolve(res).then(a, b); };
+        if (k === "catch") return function (b) { return Promise.resolve(res).catch(b); };
+        return function () { return px; };
+      },
+      apply: function () { return px; }
+    });
+    return px;
+  }
+  function testWrap() {
+    if (testWrapped || !client) return;
+    testWrapped = true;
+    var from = client.from.bind(client), rpc = client.rpc.bind(client);
+    client.from = function (t) {
+      var b = from(t);
+      ["insert", "update", "upsert", "delete"].forEach(function (m) { b[m] = function () { return testBlocked(); }; });
+      return b;
+    };
+    client.rpc = function (name) { return TEST_READ_RPC.test(String(name)) ? rpc.apply(null, arguments) : testBlocked(); };
+    var f0 = window.fetch.bind(window);
+    window.fetch = function (u, o) {
+      var url = String((u && u.url) || u || ""), m = String((o && o.method) || (u && u.method) || "GET").toUpperCase();
+      if (url.indexOf("/api/") !== -1 && url.indexOf("/api/config") === -1 && m !== "GET") return Promise.reject(new Error(TEST_MSG));
+      return f0(u, o);
+    };
+    var put = function () {
+      if (document.getElementById("testNote") || !document.body) return;
+      var d = document.createElement("div");
+      d.id = "testNote"; d.className = "readonly-note on";
+      d.innerHTML = '<span style="flex:1">Testando como o nível <b id="testNoteName"></b>: telas, menus e botões ficam como esse nível vê. Nada é gravado (os dados mostrados seguem o seu acesso).</span><button type="button" class="btn ghost" id="testNoteExit">Sair do Teste</button>';
+      document.body.insertBefore(d, document.body.firstChild);
+      document.getElementById("testNoteExit").addEventListener("click", function () {
+        ssSet(TEST_KEY, null);
+        try { window.close(); } catch (e) {}
+        setTimeout(function () { location.href = location.pathname + location.hash; }, 200);
+      });
+    };
+    if (document.body) put(); else document.addEventListener("DOMContentLoaded", put);
+  }
+  function testName(p) { var el = document.getElementById("testNoteName"); if (el && p && p._test) el.textContent = p.role.name || p.role.id; }
   function reloadProfile() {
     if (!session) return;
     loadProfile().then(setProfile).catch(function () {});
@@ -419,7 +483,8 @@
   // Qual unidade vale nesta sessão? Quem não acessa todas as unidades fica sempre na própria unidade (a tela de login não
   // tem escolha de unidade). Gestor e Supervisor voltam para a última que usou, senão a própria.
   function resolveUnit(p) {
-    var mgr = !!(p.role && (p.role.is_manager || p.role.all_units));
+    var rr = p._realRole || p.role;   // no modo de teste, a unidade segue o nível de verdade
+    var mgr = !!(rr && (rr.is_manager || rr.all_units));
     var own = p.unit_id || "unidade-1";
     if (!mgr) return { id: own };
     var want = lsGet(UNIT_KEY);
@@ -437,7 +502,8 @@
     } catch (e) { return ""; }
   }
   function syncTokenUnit(p, id) {
-    if (!(p.role && (p.role.is_manager || p.role.all_units)) || !session) return Promise.resolve();
+    var rr = p._realRole || p.role;
+    if (!(rr && (rr.is_manager || rr.all_units)) || !session) return Promise.resolve();
     if ((jwtUnit(session.access_token) || p.unit_id || "unidade-1") === id) return Promise.resolve();
     return client.auth.updateUser({ data: { active_unit: id } }).then(function (r) {
       if (r && r.error) throw r.error;
