@@ -26645,7 +26645,21 @@ function trMonthViewHtml(t, ym){
   }
   html += '</tbody></table></div>';
   if (v.other) html += '<div class="pat-count" style="margin-top:4px">' + v.other + ' atendimento(s) neste mês em especialidades ou serviços que não estão no tratamento.</div>';
-  return trDivPanelHtml(v) + html;
+  return trPlannerBoxHtml(t) + trDivPanelHtml(v) + html;
+}
+// Resumo do paciente no Planner (4 semanas), no estilo do quadro de informações: por semana, atendimentos, profissionais e fora do horário.
+function trPlannerBoxHtml(t){
+  var p = t && t.patientId ? findPatientById(t.patientId) : null;
+  if (!p) return "";
+  var wait = !TR.plan, items = wait ? [] : trPlannerItems(p), wk = {1: 0, 2: 0, 3: 0, 4: 0}, profs = {}, fora = 0, hp = {horarios: t.horarios || null};
+  items.forEach(function(it){ if (wk[it.week] != null) wk[it.week]++; if (it.prof) profs[it.prof] = 1; if (t.horarios && !patientSlotOk(hp, it.day, it.time)) fora++; });
+  function val(x){ return wait ? '<span class="pt-muted">…</span>' : x; }
+  var cells = [["Por Semana", val([1, 2, 3, 4].map(function(w){ return w + "ª: " + wk[w]; }).join(" · "))],
+    ["Atendimentos", val(String(items.length))], ["Profissionais", val(String(Object.keys(profs).length))],
+    ["Fora do Horário do Paciente", val(fora ? '<span style="color:var(--danger)">' + fora + '</span>' : "0")]];
+  return '<div class="pl-clin" id="trPlBox" title="Atendimentos do paciente no Planner (4 semanas)">' + cells.map(function(c){
+    return '<div class="pl-clin-it"><span>' + c[0] + '</span><b>' + c[1] + '</b></div>';
+  }).join("") + '</div>';
 }
 // Seção recolhível genérica da janela do tratamento (título com seta; começa fechada;
 // aberta/fechada lembrada neste navegador pela chave `key`).
@@ -28952,6 +28966,7 @@ var HELP_TOPICS = [
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
       "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre os quadros de <b>Sessão</b>; os quadros de outros serviços não mudam, mas as sessões deles são descontadas do total — 10 por mês com 2 de outro serviço = 8 divididas entre os de Sessão; o resto vai para os primeiros; se não der 1 para cada quadro de Sessão, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
+      "<b>Contratado × Realizado — Resumo do Planner</b>: no alto da seção, um quadro mostra os atendimentos do paciente no Planner (4 semanas): quantos em cada semana, o total, quantos profissionais e quantos estão fora do Horário de Atendimento do tratamento (em vermelho quando há).",
       "<b>Contratado × Realizado — Divergências</b>: acima da tabela, o painel lista tudo que não bate entre o tratamento (quadros), o Planner e a Agenda no mês: especialidade ou serviço no Planner ou na Agenda <b>sem quadro</b> em Especialidades e Serviços (também aparece na tabela em <b>Fora do Tratamento</b>), sessão em semana, dia, horário, sala ou terapeuta diferente do quadro, sessão fora do Horário de Atendimento do paciente, paciente em dois lugares no Planner, semanas com número de sessões desigual, Planner sem Agenda e Agenda sem Planner, quadro com 0 sessões/mês, soma dos quadros diferente de Sessão/Mês, mais de um atendimento no mesmo dia, atendimento depois do vencimento ou antes do início do tratamento e atendimentos que já passaram sem status. Cada item tem a cor do nível (vermelho = erro, âmbar = atenção, azul = informação) e o botão <b>Ver no Planner</b> / <b>Ver na Agenda</b>. Na lista de Tratamentos, o filtro <b>Com divergências no mês atual</b> mostra os tratamentos ativos que têm erro ou atenção. Em serviço que não é Sessão, vale primeiro o dia e o horário do quadro: se a sessão cai no horário do quadro, o Horário de Atendimento do paciente é ignorado; se não, ele é conferido como nas demais.",
       "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",
       "<b>Não Agrupar com</b> (ao lado de Sessão/Mês): marque os pacientes que não devem ficar juntos na mesma sala e horário; o Auto Planner respeita nos dois sentidos.",
