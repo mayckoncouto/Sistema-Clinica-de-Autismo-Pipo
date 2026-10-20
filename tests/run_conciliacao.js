@@ -28,7 +28,9 @@ const fs = require('fs');
   check('planilha com coluna Valor?', c2.lines && c2.lines[0].valor === -10 && c2.lines[0].date === '2026-10-09');
   check('sem colunas conhecidas: erro claro?', /Não encontrei as colunas/.test((await ev('cnParseRows([["a","b"]])')).error || ''));
   const ks = await ev('cnKeys([{date:"2026-10-01",valor:-5,desc:"A",doc:""},{date:"2026-10-01",valor:-5,desc:"A",doc:""},{date:"2026-10-01",valor:-5,desc:"B",doc:"Z9"}]).map(function(l){ return l.key; })');
-  check('chaves: repetidas ganham nº e documento vale por si?', ks[0] !== ks[1] && ks[2] === 'id:Z9', JSON.stringify(ks));
+  check('chaves: repetidas ganham nº e documento vale por si?', ks[0] !== ks[1] && ks[2] === 'id:Z9|2026-10-01|-5.00', JSON.stringify(ks));
+  const kb = await ev('[cnKeys([{date:"2026-08-07",valor:9140,desc:"PGTO",doc:"N10132"}])[0].key, cnKeys([{date:"2026-09-01",valor:14750,desc:"PGTO",doc:"N10132"}])[0].key]');
+  check('Bradesco: mesmo FITID em meses diferentes vira chaves diferentes?', kb[0] !== kb[1], JSON.stringify(kb));
   const kz = await ev('cnKeys(cnParseOfx("<OFX><STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260914030000.000<TRNAMT>53085.72<FITID>000000<MEMO>SAUDE CAIXA PGTO CREDENC</STMTTRN><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260925030000.000<TRNAMT>-73.0<FITID>000000<MEMO>TARIFA MANUTENCAO CONTA A</STMTTRN></OFX>")).map(function(l){ return l.key; })');
   check('OFX da Caixa (FITID 000000 em tudo): chaves diferentes?', kz.length === 2 && kz[0] !== kz[1] && !/^id:/.test(kz[0]), JSON.stringify(kz));
 

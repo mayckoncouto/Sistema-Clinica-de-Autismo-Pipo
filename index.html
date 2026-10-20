@@ -39036,7 +39036,9 @@ function cnKeys(lines){
   lines.forEach(function(l){ if (l.doc) docN[l.doc] = (docN[l.doc] || 0) + 1; });
   lines.forEach(function(l){
     // Alguns bancos (ex.: Caixa) mandam o mesmo FITID (000000) em todas as linhas: não serve de identidade.
-    if (l.doc && !/^0+$/.test(l.doc) && docN[l.doc] === 1){ l.key = "id:" + l.doc; return; }
+    // O FITID vale só junto com a data e o valor: o Bradesco recomeça a numeração (N10132…) em todo arquivo,
+    // então o mesmo FITID aparece em meses diferentes. Chaves antigas "id:FITID" são conferidas por cnKeyDup.
+    if (l.doc && !/^0+$/.test(l.doc) && docN[l.doc] === 1){ l.key = "id:" + l.doc + "|" + l.date + "|" + l.valor.toFixed(2); return; }
     var base = l.date + "|" + l.valor.toFixed(2) + "|" + normText(l.desc);
     seen[base] = (seen[base] || 0) + 1;
     l.key = base + "|" + seen[base];
@@ -39486,7 +39488,7 @@ function cnOpenImport(){
   function plan(){
     if (!parsed || !parsed.lines){ go.disabled = true; return; }
     var acc = document.getElementById("cniAcc").value, have = {};
-    (CN.rows || []).forEach(function(l){ if (l.acc === acc) have[l.key] = 1; });
+    (CN.rows || []).forEach(function(l){ if (l.acc === acc){ have[l.key] = 1; if (/^id:[^|]+$/.test(l.key)) have[l.key + "|" + l.date + "|" + Number(l.valor).toFixed(2)] = 1; } });
     var lines = cnKeys(parsed.lines.map(function(l){ return Object.assign({}, l); })), fresh = lines.filter(function(l){ return !have[l.key]; });
     parsed.fresh = fresh.map(function(l){ return Object.assign({acc: acc}, l); });
     var dmin = lines.reduce(function(m, l){ return !m || l.date < m ? l.date : m; }, ""), dmax = lines.reduce(function(m, l){ return !m || l.date > m ? l.date : m; }, "");
@@ -39602,7 +39604,11 @@ function cnWireMenu(){
       if (!pend.length){ showToast("Não há linhas pendentes neste período.", true); return; }
       confirmDialog({title: "Confirmar Exclusão", message: 'Excluir <b>' + pend.length + '</b> ' + (pend.length === 1 ? "linha pendente" : "linhas pendentes") + ' do extrato' + (CN.ym ? ' de ' + esc(flMonthLabel(CN.ym)) : '') + '? As conciliadas e os lançamentos não mudam.', confirmLabel: "Confirmar Exclusão"}).then(function(ok){
         if (!ok) return;
-        cnDeleteLines(pend.map(function(l){ return l.id; })).then(function(d){ if (d){ showToast("Linhas excluídas."); renderConciliacao(); } });
+        // Todos os meses: segunda confirmação (apaga o extrato inteiro da conta que estiver pendente).
+        var again = CN.ym ? Promise.resolve(true) : confirmDialog({title: "Excluir de Todos os Meses?", message: "Nenhum mês está escolhido: serão excluídas <b>" + pend.length + "</b> linhas pendentes de <b>todos os meses</b> desta conta. Para importar de novo depois, o arquivo do banco terá que ser escolhido outra vez. Continuar?", confirmLabel: "Excluir Todas"});
+        again.then(function(ok2){ if (!ok2) return;
+          cnDeleteLines(pend.map(function(l){ return l.id; })).then(function(d){ if (d){ showToast("Linhas excluídas."); renderConciliacao(); } });
+        });
       });
     }
   });
