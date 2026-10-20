@@ -31,7 +31,7 @@ const path = require('path');
   await page.waitForSelector('#mainTabs [data-tab="vendas"]', { state: 'attached' });
   check('botão Vendas existe no menu Financeiro', (await ev(`FIN_ITEMS.some(function(i){ return i.key === "vendas" && i.tab === "vendas"; })`)) === true);
   const order = await ev(`FIN_ITEMS.map(function(i){ return i.key; }).slice(5, 9).join()`);
-  check('Vendas vem depois de Demonstrativos', order === 'conciliacao,demonstrativos,vendas,painelvendas', order);
+  check('Vendas, Painel de Vendas e Comissões em grupo próprio, depois dos Empréstimos', order === 'empconcedidos,vendas,painelvendas,comissoes', order);
   await page.$eval('#mainTabs [data-tab="vendas"]', (b) => b.click());
   await page.waitForSelector('#reg-vendas-host tr[data-vn-id]', { timeout: 4000 });
   check('lista as 4 vendas (inclusive cancelada)', (await page.$$eval('#reg-vendas-host tr[data-vn-id]', (t) => t.length)) === 4);
