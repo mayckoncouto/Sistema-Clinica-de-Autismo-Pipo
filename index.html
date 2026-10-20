@@ -29087,7 +29087,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Financeiro</b> (ver, incluir, editar e excluir)."},
   {id: "conciliacao", group: "Financeiro", title: "Conciliação com o Extrato", mod: "financeiro", tab: "conciliacao",
     purpose: "Confere os Lançamentos com o extrato do banco. Você importa o extrato (arquivo do banco) e o sistema mostra, linha a linha, o que já tem lançamento e o que está pendente. Serve para achar o que passou no banco e não foi lançado, e o que foi lançado e não apareceu no banco.",
-    steps: ["Financeiro → <b>Conciliação</b>. Escolha a conta bancária.", "<b>Importar Extrato</b>: escolha o arquivo baixado no banco (OFX, Excel ou CSV). O sistema mostra quantas linhas são novas e quantas já tinham sido importadas; importar o mesmo arquivo de novo não duplica.", "Cada linha pendente mostra o lançamento mais parecido (mesma conta, mesmo valor no extrato e data próxima). Clique em <b>Confirmar</b> para conciliar, ou em <b>Escolher…</b> para apontar outro lançamento.", "<b>Confirmar Sugestões</b> concilia de uma vez as linhas que têm um único lançamento com o mesmo valor e data até 2 dias de diferença.", "Linha sem lançamento: <b>Criar Lançamento</b> abre o lançamento já preenchido com data, descrição e valor do extrato; escolha a subcategoria.", "O filtro <b>Lançamentos sem Extrato</b> mostra o que foi lançado mas não aparece no extrato importado. <b>Desfazer</b> tira a ligação de uma linha."],
+    steps: ["<b>Outras Opções → Desfazer Conciliações…</b>: escolha a conta, quando foram conciliadas (últimos 30 minutos, última hora, hoje, últimos 7 dias ou qualquer data) e se foram feitas por você ou por qualquer pessoa; desmarque o que não quer e clique em <b>Desfazer</b>. As linhas voltam a Pendente e os lançamentos não mudam.", "Financeiro → <b>Conciliação</b>. Escolha a conta bancária.", "<b>Importar Extrato</b>: escolha o arquivo baixado no banco (OFX, Excel ou CSV). O sistema mostra quantas linhas são novas e quantas já tinham sido importadas; importar o mesmo arquivo de novo não duplica.", "Cada linha pendente mostra o lançamento mais parecido (mesma conta, mesmo valor no extrato e data próxima). Clique em <b>Confirmar</b> para conciliar, ou em <b>Escolher…</b> para apontar outro lançamento.", "<b>Confirmar Sugestões</b> concilia de uma vez as linhas que têm um único lançamento com o mesmo valor e data até 2 dias de diferença.", "Linha sem lançamento: <b>Criar Lançamento</b> abre o lançamento já preenchido com data, descrição e valor do extrato; escolha a subcategoria.", "O filtro <b>Lançamentos sem Extrato</b> mostra o que foi lançado mas não aparece no extrato importado. <b>Desfazer</b> tira a ligação de uma linha."],
     rules: ["O valor comparado é o <b>valor do extrato</b> do lançamento, quando existe; senão o valor lançado. O sinal vem do tipo da subcategoria (entrada ou saída).", "Um lançamento só pode estar ligado a uma linha do extrato. Lançamento conciliado ganha a marca ✓ na lista de Lançamentos e avisa antes de mudar valor, data ou conta.", "Conciliar não altera nenhum lançamento, nem o saldo. Meses fechados continuam travados para os lançamentos, mas podem ser conciliados.", "Outras Opções → Excluir Linhas Pendentes do Período apaga linhas importadas por engano; as conciliadas ficam.", "Uma linha do extrato pode ter <b>vários lançamentos</b> (<b>Escolher</b> aceita marcar mais de um) e <b>Dividir</b> cria vários lançamentos de uma vez, como um pagamento em lote. Se a soma não fecha com a linha, ela fica <b>Parcial</b> e <b>Completar</b> cria o que falta.", "<b>Criar Lançamento</b> já sugere a subcategoria mais usada para descrições parecidas (aprendida dos lançamentos existentes; veja em Outras Opções → <b>O Que o Sistema Aprendeu</b>).", "<b>Transferências entre Contas</b> (Outras Opções) acha a saída numa conta e a entrada igual na outra e cria os dois lançamentos já conciliados."],
     who: "Permissão <b>Financeiro</b>: ver para olhar, editar para conciliar, incluir para importar o extrato e criar lançamento, excluir para apagar linhas."},
   {id: "demonstrativos", group: "Financeiro", title: "Demonstrativos", mod: "financeiro", tab: "demonstrativos",
@@ -38847,7 +38847,7 @@ function wireEmprestimos(){
  * no extrato, data próxima) e a pessoa confirma. Valor comparado = valor do extrato do lançamento, se houver, senão o valor. */
 var CN = {rows: null, links: [], hasLinks: true, loading: null, acc: "", ym: "", st: "pend", q: ""};
 function cnCan(a){ return can("financeiro", a); }
-function cnFromDb(x){ return {id: x.id, acc: x.account_id, date: x.data, desc: x.descricao || "", valor: Number(x.valor) || 0, doc: x.doc || "", key: x.key || "", entry: x.entry_id || "", entries: x.entry_id ? [x.entry_id] : []}; }
+function cnFromDb(x){ return {id: x.id, acc: x.account_id, date: x.data, desc: x.descricao || "", valor: Number(x.valor) || 0, doc: x.doc || "", key: x.key || "", entry: x.entry_id || "", entries: x.entry_id ? [x.entry_id] : [], matchedAt: x.matched_at || "", matchedBy: x.matched_by || ""}; }
 function cnToDb(r){ return {account_id: r.acc, data: r.date, descricao: r.desc, valor: r.valor, doc: r.doc || null, key: r.key, entry_id: r.entry || null}; }
 function cnLoad(force){
   var c = agdClient();
@@ -38918,7 +38918,7 @@ function cnSuggest(line, byEntry){
 function cnSetEntries(lineId, ids){
   var c = agdClient(), seen = {};
   ids = (ids || []).filter(function(x){ if (!x || seen[x]) return false; seen[x] = 1; return true; });
-  function done(){ CN.rows = (CN.rows || []).map(function(l){ return l.id === lineId ? Object.assign({}, l, {entry: ids[0] || "", entries: ids.slice()}) : l; });
+  function done(){ CN.rows = (CN.rows || []).map(function(l){ return l.id === lineId ? Object.assign({}, l, {entry: ids[0] || "", entries: ids.slice(), matchedAt: ids.length ? new Date().toISOString() : "", matchedBy: ids.length ? crmMe() : ""}) : l; });
     CN.links = (CN.links || []).filter(function(x){ return x.line_id !== lineId; }).concat(ids.map(function(e){ return {entry_id: e, line_id: lineId}; })); return true; }
   if (!c) return Promise.resolve(done());
   function fail(msg){ showToast("Não foi possível " + (ids.length ? "conciliar" : "desfazer") + ": " + msg, true); return false; }
@@ -39512,6 +39512,70 @@ function cnOpenImport(){
     });
   });
 }
+// Desfazer conciliações em lote: escolhe conta, quando foram conciliadas e quem conciliou; prévia com caixa por linha.
+// Desfazer só solta a linha do extrato do(s) lançamento(s): nada é apagado (a linha volta a Pendente).
+function cnMatchedAt(l){
+  var t = l.matchedAt || "";
+  (CN.links || []).forEach(function(x){ if (x.line_id === l.id && x.created_at && x.created_at > t) t = x.created_at; });
+  return t;
+}
+function cnUndoDialog(){
+  if (!cnCan("edit")){ showToast(permDeniedMsg("financeiro", "edit"), true); return; }
+  var me = crmMe(), accs = cnAccounts();
+  var body = '<div class="field-row">' +
+      '<div class="field"><label for="cuAcc">Conta</label><select id="cuAcc"><option value="">Todas as Contas</option>' + accs.map(function(a){ return '<option value="' + esc(a.id) + '"' + (a.id === CN.acc ? ' selected' : '') + '>' + esc(a.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field"><label for="cuWhen">Conciliadas</label><select id="cuWhen"><option value="30">Nos Últimos 30 Minutos</option><option value="60">Na Última Hora</option><option value="hoje" selected>Hoje</option><option value="7d">Nos Últimos 7 Dias</option><option value="">Em Qualquer Data</option></select></div>' +
+      '<div class="field"><label for="cuWho">Por</label><select id="cuWho"><option value="me">Mim</option><option value="">Qualquer Pessoa</option></select></div>' +
+    '</div><div class="pat-count" id="cuSum" style="margin:6px 0"></div><div id="cuList"></div>' +
+    '<div class="pat-count" style="margin-top:8px">Desfazer solta a linha do extrato do lançamento: a linha volta a Pendente e o lançamento continua como está.</div>';
+  var m = agdToolModal("ovCnUndo", "Desfazer Conciliações", "Escolha quais conciliações desfazer. As mais recentes aparecem primeiro.", body,
+    '<button class="btn ghost" data-tclose>Cancelar</button><button class="btn primary" id="cuGo" disabled>Desfazer</button>', 860);
+  var off = {};
+  function list(){
+    var acc = m.$("#cuAcc").value, when = m.$("#cuWhen").value, who = m.$("#cuWho").value, now = Date.now(), lim = null;
+    if (when === "30") lim = now - 30 * 60000; else if (when === "60") lim = now - 3600000; else if (when === "7d") lim = now - 7 * 86400000;
+    else if (when === "hoje"){ var d0 = new Date(); d0.setHours(0, 0, 0, 0); lim = d0.getTime(); }
+    return (CN.rows || []).filter(function(l){
+      if (!l.entry || (acc && l.acc !== acc)) return false;
+      if (who === "me" && l.matchedBy && l.matchedBy !== me) return false;
+      var t = cnMatchedAt(l); if (lim !== null && (!t || Date.parse(t) < lim)) return false;
+      return true;
+    }).sort(function(a, b){ return String(cnMatchedAt(b)).localeCompare(String(cnMatchedAt(a))); });
+  }
+  function draw(){
+    var L = list(), sel = L.filter(function(l){ return !off[l.id]; });
+    m.$("#cuSum").textContent = L.length + (L.length === 1 ? " conciliação encontrada" : " conciliações encontradas") + " · " + sel.length + " marcada" + (sel.length === 1 ? "" : "s");
+    m.$("#cuList").innerHTML = L.length ? '<div class="pat-table-wrap" style="max-height:48vh"><table class="pat-table"><thead><tr><th style="width:36px"><input type="checkbox" id="cuAll"' + (sel.length === L.length ? ' checked' : '') + ' aria-label="Marcar todas"></th><th style="width:120px">Conciliada em</th><th style="width:96px">Data</th><th>Descrição do Extrato</th><th style="width:120px">Valor</th><th>Lançamento</th></tr></thead><tbody>' +
+      L.slice(0, 500).map(function(l){
+        var t = cnMatchedAt(l), dt = t ? new Date(t) : null, e = cnEntryById(l.entry), n = (l.entries || []).length;
+        return '<tr data-cu="' + esc(l.id) + '"><td><input type="checkbox" data-cu-chk' + (off[l.id] ? '' : ' checked') + ' aria-label="Marcar"></td>' +
+          '<td>' + esc(dt ? dt.toLocaleDateString("pt-BR").slice(0, 5) + " " + dt.toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"}) : "—") + '</td>' +
+          '<td>' + esc(trBr(l.date)) + '</td><td class="pt-ell" title="' + esc(l.desc) + '">' + esc(l.desc || "—") + '</td>' +
+          '<td><span class="' + (l.valor < 0 ? "fl-neg" : "fl-pos") + '">' + esc(flMoneySigned(l.valor)) + '</span></td>' +
+          '<td class="pt-ell">' + esc(e ? (e.desc || "—") + (n > 1 ? " e mais " + (n - 1) : "") : "—") + '</td></tr>';
+      }).join("") + '</tbody></table></div>' + (L.length > 500 ? '<div class="pat-count">Mostrando 500 de ' + L.length + '. Use os filtros para chegar ao que quer.</div>' : '')
+      : '<div class="empty-state"><b>Nenhuma conciliação com esses filtros.</b></div>';
+    var go = m.$("#cuGo"); go.textContent = "Desfazer (" + sel.length + ")"; go.disabled = !sel.length;
+  }
+  ["#cuAcc", "#cuWhen", "#cuWho"].forEach(function(s){ m.$(s).addEventListener("change", function(){ off = {}; draw(); }); });
+  m.ov.addEventListener("change", function(e){
+    var t = e.target;
+    if (t.id === "cuAll"){ list().forEach(function(l){ if (t.checked) delete off[l.id]; else off[l.id] = 1; }); draw(); return; }
+    if (t.hasAttribute && t.hasAttribute("data-cu-chk")){ var id = t.closest("tr").getAttribute("data-cu"); if (t.checked) delete off[id]; else off[id] = 1; draw(); }
+  });
+  m.$("#cuGo").addEventListener("click", function(){
+    var sel = list().filter(function(l){ return !off[l.id]; }); if (!sel.length) return;
+    confirmDialog({title: "Desfazer Conciliações", message: "Desfazer <b>" + sel.length + "</b> " + (sel.length === 1 ? "conciliação" : "conciliações") + "? As linhas voltam a Pendente; os lançamentos não mudam.", confirmLabel: "Desfazer"}).then(function(ok){
+      if (!ok) return;
+      var go = m.$("#cuGo"); go.disabled = true; go.textContent = "Desfazendo…";
+      var n = 0;
+      sel.reduce(function(p, l){ return p.then(function(r){ return r === false ? false : cnSetEntries(l.id, []).then(function(d){ if (d) n++; return d; }); }); }, Promise.resolve(true)).then(function(){
+        m.close(); showToast(n + (n === 1 ? " conciliação desfeita." : " conciliações desfeitas.")); renderConciliacao();
+      });
+    });
+  });
+  draw();
+}
 function cnWireMenu(){
   var btn = document.getElementById("cnMenuBtn"), menu = document.getElementById("cnMenu"); if (!btn || !menu) return;
   btn.addEventListener("click", function(e){
@@ -39520,6 +39584,7 @@ function cnWireMenu(){
     menu.innerHTML = (cnCan("edit") ? '<button type="button" class="cad-item" role="menuitem" data-cn-act="auto">Confirmar Sugestões</button>' : "") + (cnCan("create") ? '<button type="button" class="cad-item" role="menuitem" data-cn-act="import">Importar Extrato</button>' : "") +
       (cnCan("edit") && flCan("create") ? '<button type="button" class="cad-item" role="menuitem" data-cn-act="transfers">Transferências entre Contas' + (cnTransferPairs(0).length ? ' (' + cnTransferPairs(0).length + ')' : '') + '</button>' : "") +
       '<button type="button" class="cad-item" role="menuitem" data-cn-act="learned">O Que o Sistema Aprendeu</button>' +
+      (cnCan("edit") ? '<button type="button" class="cad-item" role="menuitem" data-cn-act="undo">Desfazer Conciliações…</button>' : "") +
       (cnCan("delete") ? '<button type="button" class="cad-item" role="menuitem" data-cn-act="delpend">Excluir Linhas Pendentes do Período</button>' : "");
     if (!menu.innerHTML){ return; }
     menu.hidden = false; btn.setAttribute("aria-expanded", "true"); placeToolsMenu(btn, menu);
@@ -39531,6 +39596,7 @@ function cnWireMenu(){
     else if (b.getAttribute("data-cn-act") === "auto") cnAutoConfirm();
     else if (b.getAttribute("data-cn-act") === "transfers") cnTransfersModal();
     else if (b.getAttribute("data-cn-act") === "learned") cnLearnedModal();
+    else if (b.getAttribute("data-cn-act") === "undo") cnUndoDialog();
     else {
       var pend = cnLinesOfAcc().filter(function(l){ return !l.entry && cnMonthOk(l.date); });
       if (!pend.length){ showToast("Não há linhas pendentes neste período.", true); return; }

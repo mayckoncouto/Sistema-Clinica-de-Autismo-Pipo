@@ -114,6 +114,14 @@ const fs = require('fs');
   await ev('flDeleteRow(' + JSON.stringify(ly) + ')'); await page.waitForTimeout(200);
   check('apagar o lançamento solta a linha?', (await ev('CN.rows.filter(function(l){ return l.id === "cny"; })[0].entry')) === '');
 
+  // Desfazer Conciliações: lista as conciliadas agora há pouco (por mim) e desfaz as marcadas
+  await page.click('#cnMenuBtn'); await page.click('#cnMenu [data-cn-act="undo"]'); await page.waitForSelector('#ovCnUndo');
+  const nU = await page.$$eval('#ovCnUndo tr[data-cu]', (r) => r.length);
+  check('Desfazer Conciliações lista as conciliadas hoje?', nU >= 1 && /cnx/.test(await page.$eval('#ovCnUndo', (o) => [...o.querySelectorAll("tr[data-cu]")].map((r) => r.getAttribute("data-cu")).join(","))), nU);
+  await page.click('#cuAll'); await page.check('#ovCnUndo tr[data-cu="cnx"] [data-cu-chk]');
+  check('botão conta só a marcada?', /(1)/.test(await page.textContent('#cuGo')));
+  await page.click('#cuGo'); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(400);
+  check('desfez a conciliação (linha volta a pendente)?', (await ev('CN.rows.filter(function(l){ return l.id === "cnx"; })[0].entry')) === '' && !(await page.$('#ovCnUndo')));
   // permissões: sem editar não mostra botões
   check('no JS errors?', errors.length === 0, JSON.stringify(errors));
   await browser.close();
