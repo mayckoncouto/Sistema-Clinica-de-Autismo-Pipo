@@ -23405,22 +23405,34 @@ function haLoad(force){
     HA.rows.sort(function(x, y){ return String(y.at).localeCompare(String(x.at)); });
     HA._area = key; HA._days = HA.days; return Promise.resolve();
   }
-  HA.rows = null; haRender();
-  return Promise.all(HA.areas.map(function(a){
-    // O servidor entrega no máximo 1000 linhas por vez: lê página por página até acabar.
-    var all = [];
-    function page(from){
-      return c.rpc("change_log_list", {p_area: a, p_days: HA.days}).range(from, from + 999).then(function(r){
-        if (r.error) throw r.error;
-        var d = r.data || []; all = all.concat(d);
-        return d.length === 1000 && all.length < 20000 ? page(from + 1000) : null;
-      });
-    }
-    return page(0).then(function(){ return all.map(function(x){ x.area = a; return x; }); });
-  })).then(function(parts){
-    HA.rows = [].concat.apply([], parts).sort(function(x, y){ return String(y.at).localeCompare(String(x.at)); });
-    HA._area = key; HA._days = HA.days;
+  HA.rows = null; HA.next = {}; HA.show = HA_SHOW; haRender();
+  return haFetchPages(HA.areas).then(function(rows){
+    HA.rows = rows; HA._area = key; HA._days = HA.days;
   }).catch(function(err){ HA.rows = []; showToast("Não foi possível carregar o histórico: " + agdErr(err), true); });
+}
+// Lê do servidor a próxima página (1000 alterações) de cada área; HA.next[área] = de onde continuar (-1 = acabou).
+var HA_PAGE = 1000, HA_SHOW = 150;
+function haFetchPages(areas){
+  var c = agdClient(), seen = {};
+  (HA.rows || []).forEach(function(r){ seen[r.area + ":" + r.id] = 1; });
+  return Promise.all(areas.map(function(a){
+    var from = HA.next[a] || 0; if (from < 0) return [];
+    return c.rpc("change_log_list", {p_area: a, p_days: HA.days}).range(from, from + HA_PAGE - 1).then(function(r){
+      if (r.error) throw r.error;
+      var d = r.data || []; HA.next[a] = d.length === HA_PAGE ? from + HA_PAGE : -1;
+      return d.filter(function(x){ return !seen[a + ":" + x.id]; }).map(function(x){ x.area = a; return x; });
+    });
+  })).then(function(parts){
+    return (HA.rows || []).concat([].concat.apply([], parts)).sort(function(x, y){ return String(y.at).localeCompare(String(x.at)); });
+  });
+}
+function haHasMoreServer(){ return HA.areas.some(function(a){ return HA.next && HA.next[a] !== undefined && HA.next[a] >= 0; }); }
+function haMore(){
+  var shownAll = (HA.groups || []).length <= HA.show;
+  if (!shownAll || !haHasMoreServer() || !agdClient()){ HA.show += HA_SHOW; haRender(); return; }
+  var b = HA.ov && HA.ov.querySelector("#haMore"); if (b){ b.disabled = true; b.textContent = "Carregando…"; }
+  haFetchPages(HA.areas).then(function(rows){ HA.rows = rows; HA.show += HA_SHOW; haRender(); })
+    .catch(function(err){ showToast("Não foi possível carregar mais: " + agdErr(err), true); haRender(); });
 }
 function haSetRead(ids, read){
   var rows = (HA.rows || []).filter(function(r){ return ids.indexOf(r.id) !== -1; });
@@ -23439,10 +23451,8 @@ function haRowHtml(g, tab, idx){
   var title = many ? '<b>' + g.items.length + ' registros</b><small>' + esc(haAreaName(first.area)) + ' · ' + esc(HA_ACOES[g.acao]) + '</small>'
     : '<b>' + esc(first.paciente || HA_TIPOS[first.tipo] || "(sem nome)") + '</b><small>' + esc((HA.areas.length > 1 ? haAreaName(first.area) + ' · ' : '') + haWhere(first)) + '</small>';
   var acts = '<button type="button" class="btn ghost cx-sec" data-ha-act="det">Detalhes</button>';
-  if (!many) acts += '<button type="button" class="btn ghost cx-sec" data-ha-act="go">Ver</button>';
   if (tab === "lidas") acts += '<button type="button" class="btn ghost" data-ha-act="unread">Voltar à Principal</button>';
   else {
-    if (tab === "historico" && haRestorable(g)) acts += '<button type="button" class="btn ghost cx-sec" data-ha-act="restore">Restaurar</button>';
     if (!g.lida) acts += '<button type="button" class="btn primary" data-ha-act="read">✓ Marcar como Lida</button>';
   }
   return '<tr class="cx-row' + (g.lida && tab === "principal" ? ' cx-read' : '') + '" data-ha-i="' + idx + '">' +
@@ -23470,21 +23480,22 @@ function haRender(){
   }
   var list = tabs[HA.tab] || [], all = HA.rows.filter(haMatches);
   var cnt = function(a){ return all.filter(function(r){ return r.acao === a; }).length; };
-  ov.querySelector("#haSum").textContent = all.length + (all.length === 1 ? " alteração" : " alterações") + " no período · " + cnt("criou") + " criadas · " + cnt("alterou") + " alteradas · " + cnt("excluiu") + " excluídas · " + cnt("status") + " de status";
+  ov.querySelector("#haSum").textContent = all.length + (all.length === 1 ? " alteração" : " alterações") + (haHasMoreServer() ? " carregadas (há mais antigas)" : " no período") + " · " + cnt("criou") + " criadas · " + cnt("alterou") + " alteradas · " + cnt("excluiu") + " excluídas · " + cnt("status") + " de status";
   HA.groups = list;
   if (!list.length){
     host.innerHTML = '<div class="empty-state"><b>' + (HA.tab === "principal" ? "Nada novo" : HA.tab === "lidas" ? "Nada nas Lidas" : "Nenhuma alteração") + '</b>' +
       (HA.tab === "principal" ? "Você está em dia com as alterações dos outros usuários." : (HA.q || HA.acao || HA.user ? "Ajuste a pesquisa ou os filtros." : "")) + '</div>';
     return;
   }
-  var html = '', last = "";
-  list.forEach(function(g, i){
+  var html = '', last = "", show = HA.show || HA_SHOW;
+  list.slice(0, show).forEach(function(g, i){
     var gn = cxGroupName(g.at);
     if (gn !== last){ html += '<tr class="cx-grp"><td colspan="6">' + esc(gn) + '</td></tr>'; last = gn; }
     html += haRowHtml(g, HA.tab, i);
   });
   host.innerHTML = '<div class="pat-table-wrap"><table class="pat-table cx-tbl"><colgroup><col style="width:24%"><col><col style="width:140px"><col style="width:56px"><col style="width:64px"><col style="width:330px"></colgroup>' +
-    '<thead><tr><th>Registro</th><th>O que Mudou</th><th>Feito por</th><th>Qtd</th><th>Quando</th><th></th></tr></thead><tbody>' + html + '</tbody></table></div>';
+    '<thead><tr><th>Registro</th><th>O que Mudou</th><th>Feito por</th><th>Qtd</th><th>Quando</th><th></th></tr></thead><tbody>' + html + '</tbody></table></div>' +
+    (list.length > show || haHasMoreServer() ? '<div style="text-align:center;margin-top:10px"><button type="button" class="btn ghost" id="haMore">' + (list.length > show ? "Ver Mais (" + (list.length - show) + ")" : "Carregar Alterações Mais Antigas") + '</button></div>' : "");
 }
 function haRestorable(g){
   if (g.acao === "status") return false;
@@ -23492,53 +23503,136 @@ function haRestorable(g){
   if (area === "agenda") return g.acao === "excluiu" ? can("agenda", "create") : g.acao === "alterou" ? can("agenda", "edit") : can("agenda", "delete");
   return g.acao === "excluiu" ? can("planner", "create") : g.acao === "alterou" ? can("planner", "edit") : can("planner", "delete");
 }
+// Detalhes de uma linha do histórico: lê do servidor o grupo inteiro (a lista da janela traz só as alterações carregadas),
+// filtra por dia, paciente e tipo, marca registro por registro e restaura tudo, o filtro ou só os marcados.
+var HA_COLS = "id,at,user_id,user_name,acao,tipo,paciente,quando,hora,sala_id,prof_id,ref,antes,depois,lote";
+function haGroupFull(g){
+  var c = agdClient(), area = g.items[0].area;
+  if (!c || !g.user_id || !c.from) return Promise.resolve(g.items.slice());
+  var top = new Date(g.at).getTime(), all = [];
+  function page(from){
+    return c.from("change_log").select(HA_COLS).eq("area", area).eq("acao", g.acao).eq("user_id", g.user_id)
+      .gte("at", new Date(top - 600000).toISOString()).lte("at", g.at)
+      .order("at", {ascending: false}).order("id", {ascending: false}).range(from, from + 999).then(function(r){
+        if (r.error) throw r.error;
+        var d = r.data || []; all = all.concat(d);
+        return d.length === 1000 && all.length < 20000 ? page(from + 1000) : null;
+      });
+  }
+  return page(0).then(function(){
+    // Mesma regra de haGroup: mesma gravação ou até 90 s da mais nova, no máximo 10 min entre a mais nova e a mais velha.
+    var lote = g.items[0].lote, oldest = top, out = [];
+    for (var i = 0; i < all.length; i++){
+      var r = all[i], t = new Date(r.at).getTime();
+      if ((r.lote === lote || top - t <= 90000) && oldest - t <= 600000){ r.area = area; out.push(r); oldest = t; } else break;
+    }
+    if (HA.pat) out = out.filter(function(r){ return normText(r.paciente || "") === HA.pat; });
+    return out.length >= g.items.length ? out : g.items.slice();
+  }).catch(function(){ return g.items.slice(); });
+}
+function haIsPatientRow(r){ return r.tipo === "atendimento"; }
 function haDetails(g){
-  var rows = g.items.slice(0, 300).map(function(r){
-    return '<tr><td>' + esc(cxShort(r.at)) + '</td><td>' + haItemText(r) + '</td><td>' + esc(haWhere(r)) + '</td></tr>';
-  }).join("");
-  var host = regQuickHost(), title = g.items.length === 1 ? "Detalhes da Alteração" : g.items.length + " Registros";
-  host.innerHTML = '<div class="overlay confirm-overlay" id="ovHaDet"><div class="modal wide" style="max-width:900px"><div class="modal-head"><div><h3>' + esc(title) + '</h3><div class="modal-sub">' +
-    esc(g.user_name || "") + " · " + esc(HA_ACOES[g.acao]) + " · " + esc(crmWhen(g.at)) + '</div></div><button class="modal-close" data-hdclose aria-label="Fechar">✕</button></div>' +
-    '<div class="modal-body"><div class="pat-table-wrap"><table class="pat-table"><thead><tr><th>Hora</th><th>O que Mudou</th><th>Onde</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    (g.items.length > 300 ? '<div class="pat-count">Mostrando 300 de ' + g.items.length + '. Exporte para ver todos.</div>' : '') +
-    haDayRestoreHtml(g) +
-    '</div><div class="modal-foot"><button class="btn ghost" data-hdclose>Fechar</button></div></div></div>';
-  var ov = document.getElementById("ovHaDet");
+  var host = regQuickHost();
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovHaDet"><div class="modal wide" style="max-width:1040px"><div class="modal-head"><div><h3>Detalhes</h3><div class="modal-sub">Carregando…</div></div>' +
+    '<button class="modal-close" data-hdclose aria-label="Fechar">✕</button></div><div class="modal-body"><div class="empty-state"><b>Carregando…</b></div></div></div></div>';
+  var ov0 = document.getElementById("ovHaDet");
+  ov0.querySelector("[data-hdclose]").addEventListener("click", function(){ host.innerHTML = ""; });
+  return haGroupFull(g).then(function(items){ if (document.getElementById("ovHaDet") === ov0) haDetailsRender(g, items); });
+}
+function haDetailsRender(g, items){
+  var host = regQuickHost(), canRest = haRestorable(g), area = items[0] ? items[0].area : "planner";
+  var D = {day: "", pat: "", tipo: "", q: "", off: {}, show: 300};
+  function count(key){ var o = {}; items.forEach(function(r){ var k = r[key] || ""; o[k] = (o[k] || 0) + 1; }); return o; }
+  var days = count("quando"), pats = count("paciente");
+  var dayKeys = Object.keys(days).filter(Boolean).sort(), patKeys = Object.keys(pats).filter(Boolean).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+  var nPat = items.filter(haIsPatientRow).length;
+  var title = items.length === 1 ? "Detalhes da Alteração" : items.length + " Registros";
+  var sub = esc(g.user_name || "") + " · " + esc(HA_ACOES[g.acao]) + " · " + esc(crmWhen(g.at)) + " · " + haAreaName(area);
+  var summ = items.length + (items.length === 1 ? " registro" : " registros") + " · " + dayKeys.length + (dayKeys.length === 1 ? " dia" : " dias") + " · " + patKeys.length + (patKeys.length === 1 ? " nome" : " nomes") +
+    (nPat !== items.length ? " · " + nPat + " de pacientes e " + (items.length - nPat) + " especiais (Bloqueado, Reunião, Treinamento, Reserva, grupo)" : "");
+  var bar = items.length > 1 ? '<div class="pat-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:8px">' +
+      '<input type="search" id="hdQ" placeholder="Pesquisar paciente, profissional ou sala…" style="flex:1 1 220px;min-width:140px">' +
+      (dayKeys.length > 1 ? '<select id="hdDay" aria-label="Dia"><option value="">Todos os Dias</option>' + dayKeys.map(function(d){ return '<option value="' + esc(d) + '">' + esc(haWhen({quando: d})) + ' (' + days[d] + ')</option>'; }).join("") + '</select>' : '') +
+      (patKeys.length > 1 ? '<select id="hdPat" aria-label="Paciente"><option value="">Todos os Pacientes</option>' + patKeys.map(function(p){ return '<option value="' + esc(p) + '">' + esc(p) + ' (' + pats[p] + ')</option>'; }).join("") + '</select>' : '') +
+      (nPat && nPat !== items.length ? '<select id="hdTipo" aria-label="Tipo"><option value="">Todos os Tipos</option><option value="pac">Só Atendimentos de Pacientes</option><option value="esp">Só Especiais</option></select>' : '') +
+    '</div>' : '';
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovHaDet"><div class="modal wide" style="max-width:1040px"><div class="modal-head"><div><h3>' + esc(title) + '</h3><div class="modal-sub">' + sub + '</div></div>' +
+    '<button class="modal-close" data-hdclose aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="pat-count" style="margin-bottom:8px">' + esc(summ) + '</div>' + bar + '<div id="hdHost"></div>' +
+    (canRest ? '<div class="pat-count" style="margin-top:8px">Restaurar desfaz a alteração: o excluído volta, o alterado volta ao que era e o criado é removido. Use os filtros e as caixas para escolher o que restaurar; o que ficar de fora não muda.' + (area === "planner" ? ' No Planner, Ctrl+Z desfaz a restauração.' : '') + '</div>' : '') +
+    '</div><div class="modal-foot"><button class="btn ghost" id="hdXls" style="margin-right:auto">Exportar Excel</button><button class="btn ghost" data-hdclose>Fechar</button>' +
+    (canRest && items.length > 1 ? '<button class="btn ghost" id="hdAll">Restaurar Tudo (' + items.length + ')</button>' : '') +
+    (canRest ? '<button class="btn primary" id="hdGo">Restaurar</button>' : '') + '</div></div></div>';
+  var ov = document.getElementById("ovHaDet"), $ = function(s){ return ov.querySelector(s); };
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   Array.prototype.forEach.call(ov.querySelectorAll("[data-hdclose]"), function(b){ b.addEventListener("click", close); });
-  var rb = document.getElementById("hdDayGo");
-  if (rb) rb.addEventListener("click", function(){
-    var day = document.getElementById("hdDay").value, onlyPat = document.getElementById("hdDayPat").checked;
-    var items = haDayItems(g, day, onlyPat);
-    if (!items.length){ showToast("Nada para restaurar nesse dia.", true); return; }
+  function shown(){
+    var q = normText(D.q || "");
+    return items.filter(function(r){
+      if (D.day && r.quando !== D.day) return false;
+      if (D.pat && (r.paciente || "") !== D.pat) return false;
+      if (D.tipo === "pac" && !haIsPatientRow(r)) return false;
+      if (D.tipo === "esp" && haIsPatientRow(r)) return false;
+      if (q && normText([r.paciente, haProfName(r), haRoomName(r), HA_TIPOS[r.tipo] || ""].join(" ")).indexOf(q) === -1) return false;
+      return true;
+    });
+  }
+  function selected(){ return shown().filter(function(r){ return r.acao !== "status" && !D.off[r.id]; }); }
+  function syncGo(){
+    var go = $("#hdGo"), sel = selected(); if (go){ go.textContent = "Restaurar Selecionados (" + sel.length + ")"; go.disabled = !sel.length; }
+    var ca = $("#hdChkAll"); if (ca) ca.checked = shown().every(function(x){ return !D.off[x.id]; });
+  }
+  function draw(){
+    var list = shown(), part = list.slice(0, D.show);
+    var rows = part.map(function(r){
+      return '<tr data-hd-id="' + esc(String(r.id)) + '">' + (canRest ? '<td><input type="checkbox" data-hd-chk' + (D.off[r.id] ? '' : ' checked') + ' aria-label="Marcar"></td>' : '') +
+        '<td>' + esc(cxShort(r.at)) + '</td><td>' + haItemText(r) + '</td><td>' + esc(haWhere(r)) + '</td>' +
+        '<td><button type="button" class="btn ghost cx-sec" data-hd-go>Ver</button></td></tr>';
+    }).join("");
+    $("#hdHost").innerHTML = list.length ? '<div class="pat-table-wrap" style="max-height:52vh"><table class="pat-table"><thead><tr>' +
+        (canRest ? '<th style="width:36px"><input type="checkbox" id="hdChkAll" aria-label="Marcar todos"></th>' : '') +
+        '<th style="width:70px">Hora</th><th>O que Mudou</th><th>Onde</th><th style="width:70px"></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        (list.length > part.length ? '<div style="text-align:center;margin-top:8px"><button type="button" class="btn ghost" id="hdMore">Mostrar Mais (' + (list.length - part.length) + ')</button></div>' : '')
+      : '<div class="empty-state"><b>Nada com esses filtros.</b></div>';
+    var more = $("#hdMore"); if (more) more.addEventListener("click", function(){ D.show += 300; draw(); });
+    syncGo();
+  }
+  ov.addEventListener("change", function(e){
+    var t = e.target;
+    if (t.id === "hdChkAll"){ var on = t.checked; shown().forEach(function(r){ if (on) delete D.off[r.id]; else D.off[r.id] = 1; }); draw(); return; }
+    if (t.hasAttribute && t.hasAttribute("data-hd-chk")){
+      var id = t.closest("tr").getAttribute("data-hd-id"), r = items.filter(function(x){ return String(x.id) === id; })[0];
+      if (r){ if (t.checked) delete D.off[r.id]; else D.off[r.id] = 1; }
+      syncGo(); return;
+    }
+    if (t.id === "hdDay"){ D.day = t.value; D.show = 300; draw(); }
+    else if (t.id === "hdPat"){ D.pat = t.value; D.show = 300; draw(); }
+    else if (t.id === "hdTipo"){ D.tipo = t.value; D.show = 300; draw(); }
+  });
+  var qi = $("#hdQ"); if (qi) qi.addEventListener("input", debounce150(function(){ D.q = qi.value; D.show = 300; draw(); }));
+  ov.addEventListener("click", function(e){
+    var b = e.target.closest("[data-hd-go]"); if (!b) return;
+    var id = b.closest("tr").getAttribute("data-hd-id"), r = items.filter(function(x){ return String(x.id) === id; })[0]; if (!r) return;
+    if (!deepWant(e)) close();
+    haGo(r, e);
+  });
+  function restore(list){
+    list = list.filter(function(r){ return r.acao !== "status"; });
+    if (!list.length){ showToast("Nada marcado para restaurar.", true); return; }
     close();
-    haRestore({items: items, user_name: g.user_name, acao: g.acao});
+    haRestore({items: list, user_name: g.user_name, acao: g.acao});
+  }
+  if ($("#hdGo")) $("#hdGo").addEventListener("click", function(){ restore(selected()); });
+  if ($("#hdAll")) $("#hdAll").addEventListener("click", function(){ restore(items.slice()); });
+  $("#hdXls").addEventListener("click", function(){
+    var rows = shown().map(function(r){
+      return [new Date(r.at).toLocaleString("pt-BR"), haAreaName(r.area || area), r.user_name || "", HA_ACOES[r.acao], HA_TIPOS[r.tipo] || r.tipo, r.paciente || "", haWhen(r), r.hora || "", haProfName(r), haRoomName(r),
+        haDiff(r).map(function(d){ return d.label + ": " + d.de + " → " + d.para; }).join("; ")];
+    });
+    xlDownload("historico-detalhes.xlsx", [{name: "Detalhes", rows: [["Quando", "Área", "Feito por", "Ação", "Tipo", "Paciente", "Dia", "Hora", "Profissional", "Sala", "O que Mudou"]].concat(rows)}]);
   });
-}
-// "Restaurar só um dia": separa os registros do grupo pelo dia (Planner: dia e semana; Agenda: data).
-function haDayItems(g, day, onlyPat){
-  return g.items.filter(function(r){
-    return r.acao !== "status" && r.quando === day && (!onlyPat || r.tipo === "atendimento");
-  });
-}
-function haDayRestoreHtml(g){
-  if (!haRestorable(g)) return "";
-  var days = [];
-  g.items.forEach(function(r){ if (r.acao !== "status" && r.quando && days.indexOf(r.quando) < 0) days.push(r.quando); });
-  if (days.length < 2) return "";
-  days.sort();
-  var opts = days.map(function(d){
-    var n = g.items.filter(function(r){ return r.quando === d && r.acao !== "status"; }).length;
-    return '<option value="' + esc(d) + '">' + esc(haWhen({quando: d})) + ' (' + n + ')</option>';
-  }).join("");
-  return '<div class="tr-sec">Restaurar Só um Dia</div>' +
-    '<div class="field-row" style="align-items:flex-end">' +
-      '<div class="field" style="flex:1 1 220px"><label for="hdDay">Dia</label><select id="hdDay">' + opts + '</select></div>' +
-      '<div class="field" style="flex:1 1 220px"><label class="chk-line"><input type="checkbox" id="hdDayPat"> Só atendimentos de pacientes</label></div>' +
-      '<div class="field" style="flex:0 0 auto"><button type="button" class="btn primary" id="hdDayGo">Restaurar Este Dia</button></div>' +
-    '</div>' +
-    '<div class="pat-count">Restaura só os registros do dia escolhido; os outros dias desta linha não mudam. Marcando a caixa, Bloqueado, Reunião Clínica, Treinamento e Reserva ficam de fora.</div>';
+  draw();
 }
 function haGo(r, ev){
   if (deepWant(ev)){
@@ -23722,8 +23816,10 @@ function openHistoricoAlteracoes(area, opts){
   HA.ov = m.ov; HA.days = 30;
   m.ov.querySelectorAll("#haTabs [data-ha]").forEach(function(b){ b.classList.toggle("active", b.getAttribute("data-ha") === HA.tab); });
   m.ov.addEventListener("click", function(e){
-    var t = e.target.closest("[data-ha]"); if (t){ HA.tab = t.getAttribute("data-ha"); haRender(); return; }
-    var b = e.target.closest("[data-ha-act]"); if (!b) return;
+    var t = e.target.closest("[data-ha]"); if (t){ HA.tab = t.getAttribute("data-ha"); HA.show = HA_SHOW; haRender(); return; }
+    if (e.target.closest("#haMore")){ haMore(); return; }
+    var b = e.target.closest("[data-ha-act]");
+    if (!b){ var row = e.target.closest("tr[data-ha-i]"); if (row && !e.target.closest("button,input,a")){ var g0 = HA.groups[+row.getAttribute("data-ha-i")]; if (g0) haDetails(g0); } return; }
     var tr = b.closest("tr[data-ha-i]"), g = tr ? HA.groups[+tr.getAttribute("data-ha-i")] : null; if (!g) return;
     var act = b.getAttribute("data-ha-act"), ids = g.items.map(function(r){ return r.id; });
     if (act === "det") haDetails(g);
@@ -23732,9 +23828,9 @@ function openHistoricoAlteracoes(area, opts){
     else if (act === "read"){ haSetRead(ids, true).then(haRender); haRender(); }
     else if (act === "unread"){ haSetRead(ids, false).then(haRender); haRender(); }
   });
-  m.$("#haSearch").addEventListener("input", debounce150(function(){ HA.q = m.$("#haSearch").value; haRender(); }));
-  m.$("#haAcao").addEventListener("change", function(){ HA.acao = this.value; haRender(); });
-  m.$("#haUser").addEventListener("change", function(){ HA.user = this.value; haRender(); });
+  m.$("#haSearch").addEventListener("input", debounce150(function(){ HA.q = m.$("#haSearch").value; HA.show = HA_SHOW; haRender(); }));
+  m.$("#haAcao").addEventListener("change", function(){ HA.acao = this.value; HA.show = HA_SHOW; haRender(); });
+  m.$("#haUser").addEventListener("change", function(){ HA.user = this.value; HA.show = HA_SHOW; haRender(); });
   m.$("#haDays").addEventListener("change", function(){ HA.days = +this.value; haLoad(true).then(haRender); });
   m.$("#haMenuBtn").addEventListener("click", function(){
     crmPop(this, "cx-menu", '<button type="button" role="menuitem" data-pick="all">Marcar Tudo da Principal como Lido</button><button type="button" role="menuitem" data-pick="cmp">Comparar Semanas</button><button type="button" role="menuitem" data-pick="xls">Exportar Excel</button><button type="button" role="menuitem" data-pick="reload">Atualizar</button>',
@@ -29245,9 +29341,10 @@ var HELP_TOPICS = [
       "<b>Principal</b> mostra o que outras pessoas mudaram e você ainda não marcou como lido (as suas próprias alterações nunca aparecem aqui, e a mudança de status fica só no histórico). <b>Histórico de Movimentações</b> mostra tudo do período. <b>Lidas</b> guarda o que você já marcou.",
       "Use <b>✓ Marcar como Lida</b> na linha, ou <b>Opções ▾ → Marcar Tudo da Principal como Lido</b>. Em Lidas, <b>Voltar à Principal</b> traz a linha de volta.",
       "Filtre por ação (criou, alterou, excluiu, status), por quem fez e pelo período (7 a 180 dias); a pesquisa procura paciente, profissional e sala. A linha de resumo conta as alterações do que está na tela.",
-      "<b>Detalhes</b> abre a lista completa do grupo, com o antes e o depois de cada campo. <b>Ver</b> leva ao dia e ao horário.",
-      "<b>Restaurar</b> (no Histórico de Movimentações) desfaz a alteração: devolve o atendimento excluído, volta o alterado ao que era ou remove o criado. Se o horário já foi mexido depois, o sistema avisa antes de sobrescrever.",
-      "Quando a linha junta vários dias, <b>Detalhes → Restaurar Só um Dia</b> restaura apenas o dia escolhido (os outros dias da linha não mudam); marcando <b>Só atendimentos de pacientes</b>, Bloqueado, Reunião Clínica, Treinamento e Reserva ficam de fora.",
+      "A lista mostra as alterações mais recentes; <b>Ver Mais</b> no fim mostra mais linhas e <b>Carregar Alterações Mais Antigas</b> busca o restante do período.",
+      "Clique na linha (ou em <b>Detalhes</b>) para abrir a lista completa do grupo, com o antes e o depois de cada campo. Em cada registro, <b>Ver</b> leva ao dia e ao horário.",
+      "Restaurar fica dentro de <b>Detalhes</b> e desfaz a alteração: devolve o atendimento excluído, volta o alterado ao que era ou remove o criado. <b>Restaurar Tudo</b> restaura o grupo inteiro; para escolher, filtre por <b>Dia</b>, <b>Paciente</b> ou <b>Tipo</b> (só pacientes ou só especiais), desmarque o que não quer e use <b>Restaurar Selecionados</b>. Se o horário já foi mexido depois, o sistema avisa antes de sobrescrever.",
+      "<b>Exportar Excel</b> dentro de Detalhes baixa os registros do grupo que estão na tela.",
       "<b>Opções ▾ → Comparar Semanas</b> mostra lado a lado quantos atendimentos foram criados, alterados e excluídos em duas semanas (e o saldo), por ação e por pessoa.",
       "<b>Opções ▾ → Exportar Excel</b> baixa o que está na tela.",
       "O número ao lado de <b>Outras Opções</b> e do item <b>Histórico de Alterações</b> é a quantidade de alterações novas (de outras pessoas) que você ainda não marcou como lidas.",
@@ -29267,9 +29364,10 @@ var HELP_TOPICS = [
       "<b>Principal</b> mostra o que outras pessoas mudaram e você ainda não marcou como lido (as suas próprias alterações nunca aparecem aqui, e a mudança de status fica só no histórico). <b>Histórico de Movimentações</b> mostra tudo do período. <b>Lidas</b> guarda o que você já marcou.",
       "Use <b>✓ Marcar como Lida</b> na linha, ou <b>Opções ▾ → Marcar Tudo da Principal como Lido</b>. Em Lidas, <b>Voltar à Principal</b> traz a linha de volta.",
       "Filtre por ação (criou, alterou, excluiu, status), por quem fez e pelo período (7 a 180 dias); a pesquisa procura paciente, profissional e sala. A linha de resumo conta as alterações do que está na tela.",
-      "<b>Detalhes</b> abre a lista completa do grupo, com o antes e o depois de cada campo. <b>Ver</b> leva ao dia e ao horário.",
-      "<b>Restaurar</b> (no Histórico de Movimentações) desfaz a alteração: devolve o atendimento excluído, volta o alterado ao que era ou remove o criado. Se o horário já foi mexido depois, o sistema avisa antes de sobrescrever.",
-      "Quando a linha junta vários dias, <b>Detalhes → Restaurar Só um Dia</b> restaura apenas o dia escolhido (os outros dias da linha não mudam); marcando <b>Só atendimentos de pacientes</b>, Bloqueado, Reunião Clínica, Treinamento e Reserva ficam de fora.",
+      "A lista mostra as alterações mais recentes; <b>Ver Mais</b> no fim mostra mais linhas e <b>Carregar Alterações Mais Antigas</b> busca o restante do período.",
+      "Clique na linha (ou em <b>Detalhes</b>) para abrir a lista completa do grupo, com o antes e o depois de cada campo. Em cada registro, <b>Ver</b> leva ao dia e ao horário.",
+      "Restaurar fica dentro de <b>Detalhes</b> e desfaz a alteração: devolve o atendimento excluído, volta o alterado ao que era ou remove o criado. <b>Restaurar Tudo</b> restaura o grupo inteiro; para escolher, filtre por <b>Dia</b>, <b>Paciente</b> ou <b>Tipo</b> (só pacientes ou só especiais), desmarque o que não quer e use <b>Restaurar Selecionados</b>. Se o horário já foi mexido depois, o sistema avisa antes de sobrescrever.",
+      "<b>Exportar Excel</b> dentro de Detalhes baixa os registros do grupo que estão na tela.",
       "<b>Opções ▾ → Comparar Semanas</b> mostra lado a lado quantos atendimentos foram criados, alterados e excluídos em duas semanas (e o saldo), por ação e por pessoa.",
       "<b>Opções ▾ → Exportar Excel</b> baixa o que está na tela.",
       "O número ao lado de <b>Outras Opções</b> e do item <b>Histórico de Alterações</b> é a quantidade de alterações novas (de outras pessoas) que você ainda não marcou como lidas.",

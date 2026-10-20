@@ -64,8 +64,11 @@ const path = require('path');
   // restaurar (Planner): chamada com o antes
   await ev(`(function(){ window.__applied = null; applyBookingChanges = function(ch){ window.__applied = ch; return Promise.resolve(true); }; })()`);
   await ev(`document.querySelector('#haTabs [data-ha="historico"]').click()`);
-  console.log(await ev(`JSON.stringify([can("planner","create"), HA.tab, document.querySelectorAll("#haHost [data-ha-act=restore]").length])`));
-  await ev(`(function(){ var tr = Array.prototype.filter.call(document.querySelectorAll("#haHost tr[data-ha-i]"), function(t){ return t.textContent.indexOf("Paciente Um") !== -1 && t.textContent.indexOf("Excluiu") !== -1; })[0]; tr.querySelector('[data-ha-act="restore"]').click(); })()`);
+  check('linhas sem Ver e Restaurar', await ev(`document.querySelectorAll("#haHost [data-ha-act=restore], #haHost [data-ha-act=go]").length`) === 0);
+  await ev(`(function(){ var tr = Array.prototype.filter.call(document.querySelectorAll("#haHost tr[data-ha-i]"), function(t){ return t.textContent.indexOf("Paciente Um") !== -1 && t.textContent.indexOf("Excluiu") !== -1; })[0]; tr.querySelector(".cx-sum").click(); })()`);
+  await page.waitForTimeout(300);
+  check('clique na linha abre Detalhes com Restaurar', await ev(`!!document.getElementById("hdGo") && !!document.querySelector("#ovHaDet [data-hd-go]")`));
+  await ev(`document.getElementById("hdGo").click()`);
   await page.waitForTimeout(300);
   await page.evaluate(() => { const b = document.getElementById('cfOk'); if (b) b.click(); });
   await page.waitForTimeout(400);
@@ -75,8 +78,11 @@ const path = require('path');
   // restaurar só um dia (grupo com dois dias e uma reunião)
   await ev(`(function(){ window.__applied = null; var it = function(id, q, tipo, pac){ return {id: id, at: new Date().toISOString(), area: "planner", user_name: "Fulana", acao: "excluiu", tipo: tipo, paciente: pac, quando: q, hora: "08:00", ref: "schedule/" + q + "#08:00|r|s" + id, antes: {patient: pac}, depois: null}; };
     haDetails({items: [it(201, "seg-3", "atendimento", "Ana"), it(202, "seg-3", "reuniao", "Reunião Clínica"), it(203, "ter-3", "atendimento", "Bia")], user_name: "Fulana", acao: "excluiu", at: new Date().toISOString()}); })()`);
-  check('detalhes: opção restaurar só um dia', await ev(`!!document.getElementById("hdDayGo") && document.querySelectorAll("#hdDay option").length === 2`));
-  await ev(`(function(){ var s = document.getElementById("hdDay"); s.value = "seg-3"; s.dispatchEvent(new Event("change")); document.getElementById("hdDayPat").checked = true; document.getElementById("hdDayGo").click(); })()`);
+  await page.waitForTimeout(200);
+  check('detalhes: filtros de dia, paciente e tipo', await ev(`document.querySelectorAll("#hdDay option").length === 3 && !!document.getElementById("hdPat") && !!document.getElementById("hdTipo")`));
+  await ev(`(function(){ var s = document.getElementById("hdDay"); s.value = "seg-3"; s.dispatchEvent(new Event("change", {bubbles: true})); var t = document.getElementById("hdTipo"); t.value = "pac"; t.dispatchEvent(new Event("change", {bubbles: true})); })()`);
+  check('filtro mostra 1 e o botão conta 1', await ev(`document.querySelectorAll("#hdHost tr[data-hd-id]").length === 1 && /\(1\)/.test(document.getElementById("hdGo").textContent)`), await ev(`document.getElementById("hdGo").textContent`));
+  await ev(`document.getElementById("hdGo").click()`);
   await page.waitForTimeout(300);
   await page.evaluate(() => { const b = document.getElementById('cfOk'); if (b) b.click(); });
   await page.waitForTimeout(400);
@@ -98,6 +104,12 @@ const path = require('path');
   await page.waitForTimeout(200);
   check('comparar semanas abre com tabela', await ev(`!!document.getElementById("ovHaCmp") && document.querySelectorAll("#hcOut table").length >= 1`));
   check('comparar: semana A tem lançamentos', await ev(`document.getElementById("hcOut").textContent.indexOf("Excluídos") !== -1`));
+  // lista longa: mostra 150 linhas e o botão Ver Mais traz o resto
+  await ev(`(function(){ document.getElementById("modalHost").innerHTML = ""; var L = []; for (var k = 0; k < 200; k++) L.push({id: 500 + k, at: new Date(Date.now() - k * 600000).toISOString(), user_id: k % 2 ? "u-a" : "u-b", user_name: "X", acao: "criou", tipo: "atendimento", paciente: "P" + k, quando: "seg-1", hora: "08:00", ref: "schedule/seg-1#08:00|r|s" + k, antes: null, depois: {patient: "P" + k}, lote: "l" + k, lida: false}); HA.mem.planner = L; HA.mem.agenda = []; openHistoricoAlteracoes("planner"); })()`);
+  await page.waitForTimeout(300);
+  check('lista longa mostra 150 e Ver Mais', await ev(`document.querySelectorAll("#haHost tr[data-ha-i]").length === 150 && !!document.getElementById("haMore")`));
+  await ev(`document.getElementById("haMore").click()`);
+  check('Ver Mais traz o resto', await ev(`document.querySelectorAll("#haHost tr[data-ha-i]").length === 200 && !document.getElementById("haMore")`));
   check('sem erros de script', errors.length === 0, errors.join('|'));
   await browser.close();
   try { fs.unlinkSync(evPage); } catch (e) {}
