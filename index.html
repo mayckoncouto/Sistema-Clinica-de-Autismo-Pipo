@@ -10697,13 +10697,14 @@ function openPlBlockModal(mode){
         '<div class="field"><div class="plb-hours-head"><label>Horários <span class="plb-hint">vêm com o horário de trabalho do profissional (sala ou clínica toda: o horário da clínica); ajuste ou apague o que não for ' + (lock ? 'bloquear' : 'liberar') + '</span></label>' +
           '<span class="plb-hours-btns"><button type="button" class="btn ghost" id="plbDefault">Horário Padrão</button><button type="button" class="btn ghost" id="plbClearHours">Limpar Horários</button></span></div>' +
           '<table class="prof-hours plb-hours" id="plbHours"><colgroup><col style="width:56px"><col><col><col><col></colgroup><thead><tr><th rowspan="2">Dia</th><th colspan="2" class="ph-per">Manhã</th><th colspan="2" class="ph-per">Tarde</th></tr><tr><th>Início</th><th>Fim</th><th>Início</th><th>Fim</th></tr></thead><tbody>' +
-          ALL_WEEKDAYS.map(function(wd){
-            var open = !!findDayObj(wd.key) && DAYS.some(function(d){ return d.key === wd.key; });
+          // Só os dias abertos no Horário de Atendimento da Clínica (Acesso → Clínica).
+          ALL_WEEKDAYS.filter(function(wd){ return !!findDayObj(wd.key) && DAYS.some(function(d){ return d.key === wd.key; }); }).map(function(wd){
+            var open = true;
             function inp(per, e, lab){ return '<td><input type="text" class="plb-h" data-day="' + wd.key + '" data-p="' + per + '" data-e="' + e + '" inputmode="numeric" maxlength="5" placeholder="--:--" aria-label="' + lab + ' ' + esc(wd.full) + '"' + (open ? '' : ' disabled title="Clínica fechada neste dia no Planner"') + '></td>'; }
             return '<tr data-plb-row="' + wd.key + '"' + (open ? '' : ' class="plb-closed"') + '><td class="ph-day" title="' + esc(wd.full) + '">' + wd.name.slice(0, 3) + '</td>' +
               inp("m", "s", "Início manhã") + inp("m", "e", "Fim manhã") + inp("t", "s", "Início tarde") + inp("t", "e", "Fim tarde") + '</tr>';
           }).join("") + '</tbody></table>' +
-          '<div class="pat-count">Bloqueia os horários do Planner que começam dentro dessas faixas.</div></div>' +
+          '<div class="pat-count">' + (lock ? "Bloqueia" : "Libera") + ' os horários do Planner que começam dentro dessas faixas. Só aparecem os dias abertos no Horário de Atendimento da Clínica.</div></div>' +
         (lock ? '<div class="field-row" style="display:flex;gap:10px;flex-wrap:wrap"><div class="field" style="flex:1;min-width:160px"><label for="plbMotivo">Motivo</label><select id="plbMotivo"><option value="">Sem motivo</option>' +
           PLB_MOTIVOS.map(function(m){ return '<option>' + esc(m) + '</option>'; }).join("") + '</select></div>' +
           '<div class="field" style="flex:2;min-width:200px"><label for="plbDet">Detalhe (Opcional)</label><input id="plbDet" type="text" maxlength="80" placeholder="Ex.: férias de novembro"></div></div>' : '') +
@@ -10762,6 +10763,7 @@ function openPlBlockModal(mode){
       else { var c = clinicDayCfg(wd.key); pp = c.ativo ? {m: c.manha && c.manha.inicio ? c.manha : null, t: c.tarde && c.tarde.inicio ? c.tarde : null} : {m: null, t: null}; }
       [["m", pp.m], ["t", pp.t]].forEach(function(x){
         var sEl = hIn(wd.key, x[0], "s"), eEl = hIn(wd.key, x[0], "e");
+        if (!sEl || !eEl) return;
         if (sEl.disabled){ sEl.value = eEl.value = ""; return; }
         sEl.value = x[1] ? x[1].inicio || "" : ""; eEl.value = x[1] ? x[1].fim || "" : "";
       });

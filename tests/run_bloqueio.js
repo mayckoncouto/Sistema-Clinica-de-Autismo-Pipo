@@ -68,6 +68,7 @@ const path = require('path');
   await setSel('#plbAlvo', 'prof');
   await setSel('#plbId', 'ana-terapeuta');
   for (const w of ['2', '3', '4']) await page.uncheck(`.plb-weeks input[value="${w}"]`);
+  console.log('only open clinic days listed?', await page.$$eval('[data-plb-row]', (l) => l.map((r) => r.getAttribute('data-plb-row')).join(',') === 'seg,ter,qua,qui,sex'));
   // Já vem preenchida com o horário de trabalho da Ana; "Limpar Horários" esvazia.
   const filled = await page.$$eval('.plb-h', (l) => l.filter((x) => x.value).length);
   await page.click('#plbClearHours');
