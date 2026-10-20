@@ -56,6 +56,12 @@ const fs = require('fs');
   check('value shown negative (a pagar)?', /−R\$\s?3\.000,00/.test(r[0]));
   // dia 31 -> último dia do mês
   check('fpAddMonths clamps to the last day?', (await ev('fpAddMonths("2026-01-31", 1)')) === '2026-02-28' && (await ev('fpAddMonths("2026-11-30", 3)')) === '2027-02-28' && (await ev('fpAddMonths("2026-12-15", 2)')) === '2027-02-15');
+  // reaproveita: fornecedor escolhido traz a subcategoria e a conta da última conta dele
+  await page.click('#fpAdd'); await page.waitForSelector('#ovFp');
+  await setSel('#fpForn', 'imob'); await page.waitForTimeout(100);
+  check('supplier pre-fills subcategory and bank account from its last account?', (await page.$eval('#fpSub', (e) => e.value)) === 'alu' && (await page.$eval('#fpConta', (e) => e.value)) === 'viacredi');
+  await page.$eval('#ovFp .modal-foot .btn:not(.primary):not(.danger)', (b) => b.click()); await page.waitForTimeout(150);
+  if (await page.$('#gdSair')) { await page.click('#gdSair'); await page.waitForTimeout(150); }
   // conta a receber avulsa e vencida: na tela Contas a Receber
   let r2 = await rows();
   check('Contas a Pagar has the 3 rent accounts only', r2.length === 3);
