@@ -4080,6 +4080,8 @@ var CLINIC_SLOT_MIN = 40; // duração padrão do atendimento (cadastro da clín
 var CLINIC_DURATIONS = [20, 30, 40, 45, 50, 60, 90];
 // Margem máxima (%) de desconto de empréstimo numa conta a pagar de colaborador (Clínica → Financeiro); padrão 30.
 function clinicMargem(){ var m = parseFloat(state.clinic && state.clinic.margemDesconto); return m >= 0 && m <= 100 ? m : 30; }
+// Máximo de sessões seguidas que um quadro do tratamento pode pedir (cadastro da Clínica; padrão 2).
+function clinicSeguidasMax(){ var n = parseInt(state.clinic && state.clinic.seguidasMax, 10); return n >= 1 && n <= 8 ? n : 2; }
 function clinicDuration(){ var d = parseInt(state.clinic && state.clinic.duracao, 10); return d >= 10 && d <= 240 ? d : 40; }
 var ALL_WEEKDAYS = [
   {key:"seg", name:"Segunda", full:"Segunda-feira"}, {key:"ter", name:"Terça", full:"Terça-feira"},
@@ -4212,8 +4214,9 @@ function openClinicModal(){
           '</div>' +
           '<div class="cl-card"><div class="tr-sec">Atendimento</div>' +
             '<div class="field-row"><div class="field"><label for="clDur">Duração Padrão</label><select id="clDur">' +
-              CLINIC_DURATIONS.map(function(m){ return '<option value="'+m+'"'+(m === clinicDuration() ? ' selected' : '')+'>'+m+' Minutos</option>'; }).join("") + '</select></div><div class="field"></div></div>' +
-            '<div class="pat-count">Cada linha do Planner e da Agenda é um atendimento com esta duração.</div>' +
+              CLINIC_DURATIONS.map(function(m){ return '<option value="'+m+'"'+(m === clinicDuration() ? ' selected' : '')+'>'+m+' Minutos</option>'; }).join("") + '</select></div><div class="field"><label for="clSeg">Sessões Seguidas (Máximo)</label><select id="clSeg">' +
+              [1, 2, 3, 4, 5, 6, 7, 8].map(function(n){ return '<option value="'+n+'"'+(n === clinicSeguidasMax() ? ' selected' : '')+'>'+n+(n === 1 ? ' Sessão' : ' Sessões')+'</option>'; }).join("") + '</select></div></div>' +
+            '<div class="pat-count">Cada linha do Planner e da Agenda é um atendimento com esta duração. Sessões Seguidas é o máximo que o quadro do tratamento oferece (lista de 1 até esse número).</div>' +
           '</div>' +
         '</div>' +
         '<div class="prof-section"><div class="prof-section-head"><span class="tr-sec tr-sec-in">Horário de Atendimento</span>' +
@@ -4423,6 +4426,7 @@ function openClinicModal(){
       endereco: document.getElementById("clEnd").value.trim(), cidade: document.getElementById("clCidade").value.trim(),
       horarios: horarios,
       duracao: dur,
+      seguidasMax: +document.getElementById("clSeg").value || 2,
       descontoMax: (function(){ var dv = parseFloat(String(document.getElementById("clDescMax").value).replace(",", ".")); return dv > 0 ? Math.min(100, dv) : ""; })(),
       margemDesconto: (function(){ var mv = parseFloat(String(document.getElementById("clMargem").value).replace(",", ".")); return isNaN(mv) ? 30 : Math.max(0, Math.min(100, mv)); })(),
       corBotoes: corBtn,
@@ -13015,7 +13019,7 @@ function openTreatLineModal(ctx){
             '<div class="ms-panel" id="tlSemPanel" hidden role="listbox" aria-multiselectable="true">' +
               [1, 2, 3, 4].map(function(n){ return '<label class="ms-opt"><input type="checkbox" value="' + n + '"><span>' + n + 'ª Semana</span></label>'; }).join("") +
             '</div></div><div class="pat-count" style="margin-top:4px">Marque as semanas do mês (qualquer combinação). Nenhuma ou as quatro = todas.</div></div>' +
-          '<div class="field"><label for="tlSeg">Sessões Seguidas</label><select id="tlSeg">' + opt("1", "1", String(r.seguidas || "1")) + opt("2", "2", String(r.seguidas || "1")) + '</select></div>' +
+          '<div class="field"><label for="tlSeg">Sessões Seguidas</label><select id="tlSeg">' + (function(){ var cur = +r.seguidas || 1, mx = Math.max(clinicSeguidasMax(), cur), h = ""; for (var k = 1; k <= mx; k++) h += opt(String(k), String(k), String(cur)); return h; })() + '</select></div>' +
         '</div>' +
         '<div class="field" id="tlObsBox"><label for="tlObs">Observação</label><textarea id="tlObs" rows="3" placeholder="Ex.: acolhimento dos pais">' + esc(r.obs || "") + '</textarea></div>' +
       '</div>' +
@@ -22177,7 +22181,7 @@ function sgCands(p, line, w, have, opts, cols, onlyDay, why){
         if (same){ sc -= 25 * Math.min(same, 2); tags.push("mesmo horário de outra semana"); }
         if (mineDay.length){
           var adj = mineDay.some(function(h){ return Math.abs(sgMin(h.time) - sgMin(time)) <= (SESSION_MINUTES || 40) + 20; });
-          if (String(line.seguidas) === "2" && adj){ sc -= 15; tags.push("colado na outra sessão"); }
+          if ((+line.seguidas || 1) > 1 && adj){ sc -= 15; tags.push("colado na outra sessão"); }
           else { sc += 12; }
         }
         if (routineConflictMsg(p, d.key, time, "x")){ sc += 30; tags.push("rotina atual"); }
@@ -28998,7 +29002,7 @@ var HELP_TOPICS = [
       "O grupo <b>Convênio e Valores</b> traz, nesta ordem: Convênio e Sessão/Mês, Valor, Descontos e Valor final, a caixa <b>Intervenção ABA</b> com a Data de Revisão e Não Agrupar com. Ao sair do campo de valor, o valor aparece no formato R$ 1.234,56.",
       "Nos campos de valor (no tratamento, Descontos, vendas, lançamentos e contas) dá para digitar uma conta começando com <b>=</b>, por exemplo <b>=1500-200</b>, <b>=3 x 450,50</b> ou <b>=(100+50)/2</b> (use + - x / e parênteses). Ao sair do campo, o resultado preenche o valor; se a conta estiver errada, o campo é limpo e aparece um aviso.",
       "Em <b>Especialidades e Serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). Em <b>Dia</b> dá para marcar mais de um dia da semana (Segunda e Quarta, por exemplo); sem nenhum marcado vale qualquer dia. <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>) e <b>Remover</b>, no próprio quadro, tira o quadro do tratamento na hora, valendo ao salvar (quadros travados por atendimentos realizados não saem).",
-      "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de Início</b> (vazios = qualquer um), <b>Semanas</b> (lista de marcar: qualquer combinação de 1ª a 4ª, como 1ª e 3ª ou 1ª, 2ª e 4ª; nenhuma ou as quatro = todas) e <b>Sessões Seguidas</b> (1 ou 2). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
+      "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de Início</b> (vazios = qualquer um), <b>Semanas</b> (lista de marcar: qualquer combinação de 1ª a 4ª, como 1ª e 3ª ou 1ª, 2ª e 4ª; nenhuma ou as quatro = todas) e <b>Sessões Seguidas</b> (de 1 até o máximo definido na Clínica, em Atendimento → Sessões Seguidas). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
       "A mesma especialidade pode ter vários quadros: por exemplo, Psicologia com o Tiago no serviço Acolhimento familiar às quintas 08:00 e mais um quadro de Psicologia em Sessão com qualquer terapeuta.",
       "Para mudar as sessões de um tratamento que já tem atendimentos, use <b>Renegociar</b>: abre um novo tratamento copiando o atual. Ao clicar em Salvar, o atual vira Renegociado e o novo fica Ativo; cancelando a janela, nada muda.",
       "Ao lado da caixa <b>Intervenção ABA</b> fica a <b>Data de Revisão</b> do ABA. Na lista de Tratamentos, a coluna <b>Data de Revisão</b> mostra a data e, depois que ela passa, a etiqueta <b>(Vencida)</b> (só em tratamento Ativo).",
