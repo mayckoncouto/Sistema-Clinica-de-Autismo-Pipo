@@ -23,7 +23,7 @@ const path = require('path');
   await page.evaluate(() => window.pipoOpenSystem());
   await page.waitForSelector('#ovSys');
   const ui = await page.evaluate(() => ({
-    groups: [...document.querySelectorAll('#ovSys .sys-group h4')].map((h) => h.textContent),
+    groups: [...document.querySelectorAll('#ovSys .sys-group .tr-sec')].map((h) => h.textContent),
     seg: [...document.querySelectorAll('[data-rule="pl_nao_aba"] [data-mode]')].map((b) => b.textContent),
     locked: !!document.querySelector('[data-rule="tr_um_ativo"] .sys-lock') && !document.querySelector('[data-rule="tr_um_ativo"] [data-mode]')
   }));

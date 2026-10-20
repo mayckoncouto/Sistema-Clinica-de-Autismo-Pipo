@@ -274,7 +274,7 @@ const path = require('path');
   check('Outras Opções opens the menu with Cadastrar Paciente visible?', await page.evaluate(() => !document.getElementById('crmMoreMenu').hidden && !!document.getElementById('crmRegPat').offsetParent));
   await page.click('#crmRegPat');
   await page.waitForSelector('#ovPat');
-  const pre = await page.evaluate(() => ({nome: document.getElementById('pNome').value, tel: [...document.querySelectorAll('#telHost input')].map(i => i.value).join(' ')}));
+  const pre = await page.evaluate(() => ({nome: document.getElementById('pNome').value, tel: document.getElementById('telHost').textContent}));
   check('"Cadastrar Paciente" opens the patient form with the lead data?', pre.nome === 'Novo Lead Teste' && /88887777|8888-7777/.test(pre.tel), JSON.stringify(pre));
   await page.fill('#pf-cpf', '52998224725');
   await page.click('#pSave'); await page.waitForTimeout(400);

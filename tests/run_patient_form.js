@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 (async () => {
+  const pmSave = async (vals) => { await page.waitForSelector('#ovPmItem'); for (const k of Object.keys(vals)) { const sel = '#pmi-' + k; const tag = await page.$eval(sel, (e) => e.tagName); if (tag === 'SELECT') await page.$eval(sel, (e, v) => { e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }, vals[k]); else await page.fill(sel, vals[k]); } await page.click('#pmiSave'); await page.waitForTimeout(80); };
   const src = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
   const i = src.indexOf('"use strict";');
   const evPage = path.join(__dirname, 'page_pf.html');
@@ -48,17 +49,17 @@ const path = require('path');
   await page.fill('#pm-mae-nome', 'Maria Azul Souza'); await page.waitForTimeout(100);
   console.log('linked: correcting the mother updates the financial responsible?', (await page.inputValue('#fi-nome')) === 'Maria Azul Souza');
   const rot = await page.$eval('#rotParents', (e) => e.textContent);
-  console.log('pickup shows mother and father from Filiação (not in the list)?', /Maria Azul Souza \(Mãe\) — pode retirar/.test(rot) && /João Azul \(Pai\) — pode retirar/.test(rot) && !(await page.$('#rotHost .pm-ret')), rot);
-  await page.click('#rotAdd'); await page.fill('#rotHost .pm-ret:last-child [data-rk="nome"]', 'Vó Azul');
-  await page.fill('#rotHost .pm-ret:last-child [data-rk="telefone"]', '47988887777');
-  console.log('other person has phone (masked) and document fields?', (await page.inputValue('#rotHost .pm-ret:last-child [data-rk="telefone"]')) === '(47) 98888-7777' && !!(await page.$('#rotHost [data-rk="doc"]')));
+  console.log('pickup shows mother and father from Filiação (not in the list)?', /Maria Azul Souza \(Mãe\) — pode retirar/.test(rot) && /João Azul \(Pai\) — pode retirar/.test(rot) && !(await page.$('#rotHost .pm-card')), rot);
+  await page.click('#rotAdd'); await page.waitForSelector('#ovPmItem'); await page.fill('#pmi-nome', 'Vó Azul'); await page.fill('#pmi-telefone', '47988887777');
+  const rotTel = await page.inputValue('#pmi-telefone'), rotDoc = !!(await page.$('#pmi-doc')); await page.click('#pmiSave'); await page.waitForTimeout(80);
+  console.log('other person has phone (masked) and document fields?', rotTel === '(47) 98888-7777' && rotDoc && /Vó Azul/.test(await page.textContent('#rotHost')));
   // Contatos.
-  await page.fill('#telHost .pm-row:nth-child(1) [data-tk="numero"]', '47999998888');
-  await page.fill('#telHost .pm-row:nth-child(1) [data-tk="nome"]', 'Maria');
-  console.log('phone mask applied?', (await page.inputValue('#telHost [data-tk="numero"]')) === '(47) 99999-8888');
-  await page.click('#telAdd'); await page.fill('#telHost .pm-row:nth-child(2) [data-tk="numero"]', '4733334444');
-  await page.$eval('#telHost .pm-row:nth-child(2) select', (s) => { s.value = 'ligacao'; s.dispatchEvent(new Event('change', { bubbles: true })); });
-  await page.fill('#mailHost [data-mk="email"]', 'maria@exemplo.com');
+  await page.click('#telAdd'); await page.waitForSelector('#ovPmItem'); await page.fill('#pmi-numero', '47999998888');
+  const telMask = await page.inputValue('#pmi-numero'); await page.fill('#pmi-nome', 'Maria'); await page.click('#pmiSave'); await page.waitForTimeout(80);
+  console.log('phone mask applied?', telMask === '(47) 99999-8888' && (await page.textContent('#telHost')).indexOf('(47) 99999-8888') !== -1);
+  await page.click('#telAdd'); await pmSave({numero: '4733334444', via: 'ligacao'});
+  console.log('phones are cards with Editar/Remover?', (await page.$$('#telHost .pm-card')).length === 2 && !!(await page.$('#telHost [data-pm-edit]')) && /Ligação/.test(await page.textContent('#telHost')));
+  await page.click('#mailAdd'); await pmSave({email: 'maria@exemplo.com'});
   await page.click('[data-copy="telefone"]'); await page.waitForTimeout(150);
   console.log('Copiar Telefone with 2 phones opens a pick list?', await page.isVisible('#dpPop .dp-opt'));
   await page.click('#dpPop .dp-opt:nth-child(2)'); await page.waitForTimeout(100);
@@ -184,8 +185,7 @@ const path = require('path');
 
   // Medida Protetiva: nome + parentesco na retirada; impedido não pode estar nas duas listas.
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
-  await page.click('#protAdd'); await page.fill('#protHost [data-pk="nome"]', 'Vó Azul'); await page.fill('#protHost [data-pk="rel"]', 'Avó');
-  await page.fill('#protHost [data-pk="obs"]', 'Processo 123');
+  await page.click('#protAdd'); await pmSave({nome: 'Vó Azul', rel: 'Avó', obs: 'Processo 123'});
   await page.click('#pSave'); await page.waitForTimeout(200);
   console.log('person in both lists asks to remove from pickup?', await page.isVisible('#cfOk'));
   await page.click('#cfOk'); await page.waitForTimeout(300);
@@ -202,11 +202,9 @@ const path = require('path');
   console.log('Agenda: alert only on the last appointment of the day; box lists both?', !pk.first && pk.last && pk.box, JSON.stringify(pk));
   // Medida Protetiva da Mãe (nome da Filiação) tira a mãe da retirada; "Pode retirar" desmarcado tira o pai.
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
-  await page.click('#protAdd');
-  await page.$eval('#protHost .pm-prot:last-child select[data-pk="quem"]', (s) => { s.value = 'mae'; s.dispatchEvent(new Event('change', { bubbles: true })); });
-  await page.waitForTimeout(100);
-  const pmName = await page.$eval('#protHost .pm-prot:last-child [data-pk="nome"]', (e) => [e.value, e.readOnly]);
-  console.log('protective measure "Mãe" takes the name from Filiação (read-only)?', pmName[0] === 'Maria Azul Souza' && pmName[1], JSON.stringify(pmName));
+  await page.click('#protAdd'); await pmSave({quem: 'mae'});
+  const pmName = await page.textContent('#protHost .pm-card:last-child');
+  console.log('protective measure "Mãe" takes the name from Filiação?', /Maria Azul Souza/.test(pmName) && /Mãe/.test(pmName), pmName);
   await page.uncheck('#pm-pai-retira'); await page.waitForTimeout(100);
   const rot2 = await page.$eval('#rotParents', (e) => e.textContent);
   console.log('mother with measure and father unchecked show "não pode retirar"?', /Maria Azul Souza \(Mãe\) — não pode retirar/.test(rot2) && /João Azul \(Pai\) — não pode retirar/.test(rot2) && await page.isVisible('[data-retira-prot="mae"]'), rot2);
@@ -217,7 +215,7 @@ const path = require('path');
     pk2.ret.length === 0 && pk2.prot.indexOf('Maria Azul Souza/Mãe') !== -1, JSON.stringify([pk2, an2.pai]));
   // Mãe/Pai não entram como "outra pessoa".
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
-  await page.click('#rotAdd'); await page.fill('#rotHost .pm-ret:last-child [data-rk="nome"]', 'Fulana'); await page.fill('#rotHost .pm-ret:last-child [data-rk="rel"]', 'mãe');
+  await page.click('#rotAdd'); await pmSave({nome: 'Fulana', rel: 'mãe'});
   await page.click('#pSave'); await page.waitForTimeout(200);
   console.log('"Mãe" as other person is refused?', await page.isVisible('#ovPat') && (await raw('ana-azul')).rotina.every((r) => r.nome !== 'Fulana'));
   await page.keyboard.press('Escape'); await page.waitForTimeout(150);

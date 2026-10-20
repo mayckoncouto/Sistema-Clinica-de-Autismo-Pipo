@@ -71,7 +71,7 @@ const path = require('path');
   await page.click('#pReview'); await page.waitForTimeout(300);
   const df = await page.evaluate(() => ({diffs: document.querySelectorAll('#ovPat .ik-diff').length, rua: document.getElementById('pa-rua').value,
     bar: (document.querySelector('#pa-rua') && document.querySelector('#pa-rua').closest('.field').querySelector('.ik-diff-bar') || {}).textContent || '',
-    tels: [...document.querySelectorAll('#telHost [data-tk="numero"]')].map((x) => x.value)}));
+    tels: [...document.querySelectorAll('#telHost .pm-card .rn')].map((x) => x.textContent)}));
   check('existing patient: differing fields highlighted, empty ones filled, new phone added?', df.diffs >= 2 && df.rua === 'Rua Nova' && /Usando o enviado/.test(df.bar) && df.tels.some((t) => /97777-6666/.test(t)), df);
   if (!(await page.inputValue('#pf-cpf'))) await page.fill('#pf-cpf', '111.444.777-35');
   await page.click('#pSave'); await page.waitForTimeout(500);
