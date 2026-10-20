@@ -140,6 +140,11 @@
     { key: "evolucao-habilidade", label: "Evolução por Habilidade" }
   ];
   function confirmBox(opts) { return window.pipoConfirm ? window.pipoConfirm(opts) : Promise.resolve(window.confirm(opts.title)); }
+  // Gestor = is_manager (acesso total, todas as unidades); níveis com all_units (Supervisor) acessam todas as unidades.
+  function roleRank(r) { return r.is_manager ? 0 : r.all_units ? 1 : r.is_admin ? 2 : 3; }
+  function isMgr() { return !!(auth.isManager && auth.isManager()); }
+  // Só o Gestor mexe nos níveis travados para os demais: Gestor/Administrador (sempre travados) e os de todas as unidades.
+  function roleLockedFor(r) { return !!(r && (r.is_admin || (r.all_units && !isMgr()))); }
   function roleById(id) { return roles.filter(function (r) { return r.id === id; })[0] || null; }
   function friendlyDbError(e) {
     var m = (e && e.message) || String(e || "");
@@ -221,12 +226,12 @@
   function loadRoles() {
     return auth.client.from("roles").select("*").order("sort", { ascending: true }).then(function (r) {
       if (r.error) { toast("Não foi possível carregar os níveis: " + r.error.message, true); return; }
-      // Níveis em ordem alfabética (lista de níveis e escolha do nível do usuário).
+      // Ordem dos níveis: Gestor, Supervisor (todas as unidades), Administrador, demais (na ordem do cadastro).
       // Permissões sempre no formato novo na tela; dbNew = o banco já está no formato novo
       // (atualização 2026-10-07e). Antes dela, grava convertendo para o formato antigo.
       dbNew = (r.data || []).some(function (x) { return window.pipoPerms.isNew(x.permissions); });
       (r.data || []).forEach(function (x) { x.permissions = window.pipoPerms.upgrade(x.permissions); });
-      roles = (r.data || []).sort(function (a, b) { return (a.name || "").localeCompare(b.name || "", "pt-BR", { sensitivity: "base" }); });
+      roles = (r.data || []).sort(function (a, b) { return roleRank(a) - roleRank(b) || (a.sort || 0) - (b.sort || 0) || (a.name || "").localeCompare(b.name || "", "pt-BR", { sensitivity: "base" }); });
       loaded.roles = true;
     });
   }
@@ -326,7 +331,7 @@
       document.getElementById("rolesBtn").addEventListener("click", function () { openRolesModal(); });
       document.getElementById("bulkProfBtn").addEventListener("click", function () { openBulkProfModal(); });
     }
-    document.getElementById("rolesBtn").hidden = !(auth.isManager && auth.isManager());
+    document.getElementById("rolesBtn").hidden = !auth.isAdmin();
     document.getElementById("addUserBtn").hidden = !uCan("create");
     // Só aparece enquanto houver profissional sem usuário ligado.
     document.getElementById("bulkProfBtn").hidden = !(uCan("create") && loaded.users && profsWithoutUser().length);
@@ -404,7 +409,7 @@
 
   function rolePickerHtml(selectedId, disabled) {
     // Quem não é Administrador não vê (nem escolhe) o nível Administrador.
-    return '<div class="role-pick" id="uRolePick">' + roles.filter(function (r) { return (auth.isManager && auth.isManager()) || !r.is_admin || r.id === selectedId; }).map(function (r) {
+    return '<div class="role-pick" id="uRolePick">' + roles.filter(function (r) { return isMgr() || !(r.is_admin || r.all_units) || r.id === selectedId; }).map(function (r) {
       var sum = roleSummary(r);
       return '<label class="' + (disabled ? "disabled" : "") + '" title="' + esc(r.name + " — " + sum) + '">' +
         '<input type="radio" name="uRole" value="' + esc(r.id) + '"' +
@@ -420,8 +425,8 @@
     var tRole = u ? roleById(u.role_id) : null;
     // Somente leitura: sem "editar" em Usuários, ou conta de administrador vista por quem não é Administrador.
     var mgr = !!(auth.isManager && auth.isManager());
-    // Gestão altera tudo; Administrador não mexe em conta de Gestão nem em outro Administrador (o banco também recusa).
-    var ro = !isNew && !mgr && ((tRole && (tRole.is_manager || (tRole.is_admin && !isMe))) || (!auth.isAdmin() && !uCan("edit")));
+    // Gestor altera tudo; os demais não mexem em conta de Gestor, de outro Administrador nem de Supervisor (o banco também recusa).
+    var ro = !isNew && !mgr && ((tRole && (tRole.is_manager || ((tRole.is_admin || tRole.all_units) && !isMe))) || (!auth.isAdmin() && !uCan("edit")));
     var canDel = !ro && uCan("delete"), canEd = !ro && uCan("edit");
     function unitFieldHtml(usr, disabled) {
       var list = (auth.units && auth.units()) || [];
@@ -431,7 +436,7 @@
       return '<div class="field"><label for="uUnit">Unidade</label><select id="uUnit">' + list.map(function (x) {
         return '<option value="' + esc(x.id) + '"' + (x.id === cur ? " selected" : "") + ">" + esc(x.name) + "</option>";
       }).join("") + "</select>" +
-        '<div class="pat-count" style="margin-top:6px">Só a Gestão escolhe a unidade do usuário.</div></div>';
+        '<div class="pat-count" style="margin-top:6px">Só o Gestor escolhe a unidade do usuário.</div></div>';
     }
     var defaultRole = roleById("secretaria") ? "secretaria" : (roles.filter(function (x) { return !x.is_admin; })[0] || {}).id;
     var mh = document.getElementById("modalHost");
@@ -454,7 +459,7 @@
             : "") +
           '<div class="field"><label>Nível de Permissão</label>' + rolePickerHtml(isNew ? defaultRole : u.role_id, isMe || ro) +
             (isMe ? '<div class="pat-count" style="margin-top:6px">Você não pode mudar o seu próprio nível.</div>' :
-              (ro && tRole && tRole.is_admin ? '<div class="pat-count" style="margin-top:6px">Conta de Administrador ou Gestão: só a Gestão altera.</div>' : "")) + "</div>" +
+              (ro && tRole && (tRole.is_admin || tRole.all_units) ? '<div class="pat-count" style="margin-top:6px">Conta de Gestor, Supervisor ou Administrador: só o Gestor altera.</div>' : "")) + "</div>" +
           unitFieldHtml(u, ro) +
           (!isNew && canEd
             ? '<div class="field" style="margin-top:4px"><label>Senha e Acesso</label><div class="u-actions">' +
@@ -612,27 +617,28 @@
 
   // Janela "Níveis de Permissão" (aberta pelo botão na tela de Usuários, como
   // "Especialidades" em Pacientes): lista dos níveis + "Novo nível".
+  function roleBadges(r) {
+    return (r.is_manager ? ' <span class="u-badge admin">Acesso Total · Todas as Unidades</span>'
+      : r.all_units ? ' <span class="u-badge admin">Todas as Unidades</span>'
+      : r.is_admin ? ' <span class="u-badge admin">Acesso Total</span>' : "");
+  }
   function openRolesModal() {
-    if (!(auth.isManager && auth.isManager())) return;   // Níveis de Permissão: só a Gestão (valem para todas as unidades)
+    if (!auth.isAdmin()) return;   // Níveis de Permissão: Gestor e Administrador (valem para todas as unidades)
     var counts = {};
     users.forEach(function (u) { counts[u.role_id] = (counts[u.role_id] || 0) + 1; });
+    var q0 = "";
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
       '<div class="overlay" id="ovRoles"><div class="modal wide" style="max-width:760px">' +
         '<div class="modal-head"><div><h3>Níveis de Permissão</h3>' +
-          '<div class="modal-sub">O que cada nível pode fazer em cada tela. Clique num nível para editar. ' +
-          'Uma mudança vale na hora para todos os usuários daquele nível.</div></div>' +
+          '<div class="modal-sub">O que cada nível pode fazer em cada tela. Os níveis valem para todas as unidades; ' +
+          'uma mudança vale na hora para todos os usuários daquele nível.</div></div>' +
           '<button class="modal-close" id="rlClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
-          '<table class="adm-table adm-roles"><thead><tr><th>Nível</th><th style="width:30%">Usuários</th></tr></thead><tbody>' +
-            roles.map(function (r) {
-              var n = counts[r.id] || 0;
-              return '<tr data-role-id="' + esc(r.id) + '" tabindex="0">' +
-                '<td class="u-name">' + esc(r.name) + (r.is_admin ? ' <span class="u-badge admin">Acesso total</span>' : "") + "</td>" +
-                '<td><span class="u-badge">' + n + (n === 1 ? " usuário" : " usuários") + "</span></td>" +
-              "</tr>";
-            }).join("") +
-          "</tbody></table>" +
+          '<div class="search-wrap" style="margin-bottom:10px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>' +
+            '<input id="rlSearch" type="text" placeholder="Buscar nível…"></div>' +
+          '<div class="room-list tl-list" id="rlList"></div>' +
         "</div>" +
         '<div class="modal-foot">' +
           '<button class="btn primary" id="addRoleBtn">+ Incluir</button>' +
@@ -640,16 +646,32 @@
           '<button class="btn ghost" id="rlDone">Fechar</button>' +
         "</div>" +
       "</div></div>";
+    function draw() {
+      var q = normText(q0);
+      var list = roles.filter(function (r) { return !q || normText(r.name).indexOf(q) !== -1; });
+      document.getElementById("rlList").innerHTML = list.length ? list.map(function (r) {
+        var n = counts[r.id] || 0, lk = roleLockedFor(r);
+        var sum = r.is_admin ? (r.is_manager ? "Acesso total a todas as telas e unidades. Cadastra unidades, níveis e regras do Sistema." : "Acesso total a todas as telas da própria unidade.") : roleSummary(r);
+        return '<div class="room-row tl-row" data-role-id="' + esc(r.id) + '">' +
+          '<div class="room-info"><div class="rn">' + esc(r.name) + roleBadges(r) + ' <span class="u-badge">' + n + (n === 1 ? " usuário" : " usuários") + "</span></div>" +
+          '<div class="rs">' + esc(sum) + "</div></div>" +
+          (!lk ? '<button type="button" class="btn ghost" data-rl-copy="' + esc(r.id) + '">Duplicar</button>' : "") +
+          '<button type="button" class="btn ghost" data-rl-edit="' + esc(r.id) + '">' + (lk ? "Ver" : "Editar") + "</button></div>";
+      }).join("") : '<div class="hours-empty">Nenhum nível encontrado.</div>';
+    }
+    draw();
     var ov = document.getElementById("ovRoles");
     function close() { mh.innerHTML = ""; }
     ov.addEventListener("mousedown", function (e) { if (e.target === ov) close(); });
     document.getElementById("rlClose").addEventListener("click", close);
     document.getElementById("rlDone").addEventListener("click", close);
+    document.getElementById("rlSearch").addEventListener("input", function () { q0 = this.value; draw(); });
     document.getElementById("addRoleBtn").addEventListener("click", function () { openRoleModal(null); });
-    ov.querySelectorAll("tbody tr[data-role-id]").forEach(function (tr) {
-      function open() { var r = roleById(tr.getAttribute("data-role-id")); if (r) openRoleModal(r); }
-      tr.addEventListener("click", open);
-      tr.addEventListener("keydown", function (e) { if (e.key === "Enter") open(); });
+    document.getElementById("rlList").addEventListener("click", function (e) {
+      var c = e.target.closest("[data-rl-copy]");
+      if (c) { var rc = roleById(c.getAttribute("data-rl-copy")); if (rc) openRoleModal(null, rc); return; }
+      var row = e.target.closest("[data-role-id]");
+      if (row) { var r = roleById(row.getAttribute("data-role-id")); if (r) openRoleModal(r); }
     });
   }
 
@@ -776,24 +798,31 @@
     });
   }
 
-  function openRoleModal(role) {
+  function openRoleModal(role, copyFrom) {
     var isNew = !role;
-    var locked = !!(role && role.is_admin);
-    var n = role ? users.filter(function (u) { return u.role_id === role.id; }).length : 0;
+    var locked = roleLockedFor(role);
+    var members = role ? users.filter(function (u) { return u.role_id === role.id; }) : [];
+    var n = members.length;
+    var allU = role ? !!role.all_units : !!(copyFrom && copyFrom.all_units && isMgr());
+    var lockMsg = !role ? "" : role.is_manager
+      ? "Acesso total a todas as telas e a todas as unidades. Este nível não pode ser alterado nem excluído."
+      : role.is_admin ? "Acesso total a todas as telas da própria unidade, inclusive Usuários e Níveis de Permissão. Este nível não pode ser alterado nem excluído."
+      : "Este nível acessa todas as unidades: só o Gestor altera ou exclui.";
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
       '<div class="overlay" id="ovRole"><div class="modal wide" style="max-width:760px">' +
-        '<div class="modal-head"><div><h3>' + (isNew ? "Novo Nível de Permissão" : locked ? "Nível Administrador" : "Editar Nível de Permissão") + "</h3>" +
-          '<div class="modal-sub">' + (locked
-            ? "Acesso total, inclusive às telas de Usuários e Níveis de Permissão. Este nível não pode ser alterado nem excluído."
-            : "Marque o que este nível pode fazer em cada tela. Incluir, editar ou excluir marcam \"Ver\" junto.") + "</div></div>" +
+        '<div class="modal-head"><div><h3>' + (isNew ? "Novo Nível de Permissão" : locked ? "Nível " + esc(role.name) : "Editar Nível de Permissão") + "</h3>" +
+          '<div class="modal-sub">' + (locked ? lockMsg
+            : (copyFrom ? "Cópia de <b>" + esc(copyFrom.name) + "</b>. " : "") + "Marque o que este nível pode fazer em cada tela. Incluir, editar ou excluir marcam \"Ver\" junto.") + "</div></div>" +
           '<button class="modal-close" id="rClose" aria-label="Fechar">✕</button></div>' +
         '<div class="modal-body">' +
           '<div class="tr-sec tr-sec-top">Nível</div>' +
-          '<div class="field"><label for="rName">Nome do Nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
+          '<div class="field"><label for="rName">Nome do Nível</label><input id="rName" type="text" maxlength="40" value="' + esc(role ? role.name : copyFrom ? "Cópia de " + copyFrom.name : "") + '"' + (locked ? " disabled" : "") + "></div>" +
+          (role && role.is_admin ? "" : '<label class="chk-line" style="margin:2px 0 4px"><input type="checkbox" id="rAllUnits"' + (allU ? " checked" : "") + (locked || !isMgr() ? " disabled" : "") + "> Acessa Todas as Unidades (troca de unidade no topo)</label>" +
+            (isMgr() ? "" : '<div class="pat-count">Só o Gestor marca um nível para acessar todas as unidades.</div>')) +
           '<div class="tr-sec">Permissões</div>' +
-          rolePanelsHtml(role ? (role.permissions || {}) : { agenda: { view: true }, planner: { view: true }, resumo: { view: true }, pacientes: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
-          (!isNew ? '<div class="pat-count">' + n + (n === 1 ? " usuário neste nível." : " usuários neste nível.") + "</div>" : "") +
+          rolePanelsHtml(role ? (role.permissions || {}) : copyFrom ? (copyFrom.permissions || {}) : { agenda: { view: true }, planner: { view: true }, resumo: { view: true }, pacientes: { view: true }, convenios: { view: true }, servicos: { view: true }, especialidades: { view: true }, salas: { view: true }, grupos: { view: true } }, locked) +
+          (!isNew ? '<div class="tr-sec">Usuários neste Nível (' + n + ")</div>" + (n ? '<div class="pat-count">' + members.map(function (u) { return esc(u.full_name || u.email) + (u.active ? "" : " (desativado)"); }).join(" · ") + "</div>" : '<div class="pat-count">Nenhum usuário neste nível.</div>') : "") +
         "</div>" +
         '<div class="modal-foot">' +
           (!isNew && !locked ? '<button class="btn danger" id="rDelete">Excluir Nível</button>' : "<span></span>") +
@@ -846,9 +875,13 @@
       if (isNew) {
         var base = slugify(name), id = base, i = 2;
         while (roleById(id)) id = base + "-" + (i++);
-        q = auth.client.from("roles").insert({ id: id, name: name, permissions: dbPerms(readPerms()) });
+        var ins = { id: id, name: name, permissions: dbPerms(readPerms()) };
+        if (isMgr()) ins.all_units = !!(document.getElementById("rAllUnits") || {}).checked;
+        q = auth.client.from("roles").insert(ins);
       } else {
-        q = auth.client.from("roles").update({ name: name, permissions: dbPerms(readPerms()) }).eq("id", role.id);
+        var upd = { name: name, permissions: dbPerms(readPerms()) };
+        if (isMgr() && document.getElementById("rAllUnits")) upd.all_units = document.getElementById("rAllUnits").checked;
+        q = auth.client.from("roles").update(upd).eq("id", role.id);
       }
       q.then(function (r) {
         if (r.error) {
@@ -1014,7 +1047,7 @@
 
   function renderAll() { renderUsers(); }
   // Gancho só para os testes (abre a janela de um nível sem passar pela tela de Usuários).
-  window.__pipoRolesTest = { setRoles: function (r) { roles = r; }, openRole: function (id) { openRoleModal(roleById(id)); }, normalize: normalizePerms };
+  window.__pipoRolesTest = { setRoles: function (r) { roles = r; }, openRole: function (id) { openRoleModal(roleById(id)); }, openList: function () { openRolesModal(); }, sortRoles: function () { roles.sort(function (a, b) { return roleRank(a) - roleRank(b) || (a.sort || 0) - (b.sort || 0); }); }, normalize: normalizePerms };
 
   /* ---------------- ligação com as abas ---------------- */
   function init() {

@@ -39,8 +39,8 @@ function errMsg(resp, fallback) {
   return b.msg || b.message || b.error_description || b.error || fallback;
 }
 
-// Quem está chamando: Gestão, Administrador ou nível com a permissão "Usuários" (usuarios:
-// ver/incluir/editar/excluir). A Gestão mexe em todas as unidades; os demais, só na própria.
+// Quem está chamando: Gestor, Administrador ou nível com a permissão "Usuários" (usuarios:
+// ver/incluir/editar/excluir). A Gestor mexe em todas as unidades; os demais, só na própria.
 // Volta {id, isAdmin, isManager, unit, perms} ou null.
 async function currentActor(req) {
   var auth = req.headers.authorization || "";
@@ -51,22 +51,26 @@ async function currentActor(req) {
   });
   if (!me.ok || !me.body || !me.body.id) return null;
   var prof = await call(
-    "/rest/v1/profiles?select=id,active,unit_id,role:roles(is_admin,is_manager,permissions)&id=eq." + encodeURIComponent(me.body.id),
+    "/rest/v1/profiles?select=id,active,unit_id,role:roles(is_admin,is_manager,all_units,permissions)&id=eq." + encodeURIComponent(me.body.id),
     { headers: adminHeaders() }
   );
   var row = prof.ok && Array.isArray(prof.body) ? prof.body[0] : null;
   if (!row || !row.active || !row.role) return null;
   var u = (row.role.permissions && row.role.permissions.usuarios) || {};
-  return { id: row.id, isAdmin: !!row.role.is_admin, isManager: !!row.role.is_manager, unit: row.unit_id || "unidade-1", perms: u };
+  // Supervisor (nível que acessa todas as unidades): age na unidade aberta (a que está no token).
+  var unit = row.unit_id || "unidade-1";
+  var meta = (me.body.user_metadata && me.body.user_metadata.active_unit) || "";
+  if ((row.role.is_manager || row.role.all_units) && meta && (await unitExists(meta))) unit = meta;
+  return { id: row.id, isAdmin: !!row.role.is_admin, isManager: !!row.role.is_manager, unit: unit, perms: u };
 }
 function allowed(actor, action) { return actor.isAdmin || !!actor.perms[action]; }
-// Unidade e nível do usuário alvo (quem não é da Gestão só mexe em usuário da própria unidade
-// e nunca em conta de Gestão ou de outro Administrador).
+// Unidade e nível do usuário alvo (quem não é da Gestor só mexe em usuário da própria unidade
+// e nunca em conta de Gestor ou de outro Administrador).
 async function targetInfo(id) {
-  var r = await call("/rest/v1/profiles?select=id,unit_id,role:roles(is_admin,is_manager)&id=eq." + encodeURIComponent(id), { headers: adminHeaders() });
+  var r = await call("/rest/v1/profiles?select=id,unit_id,role:roles(is_admin,is_manager,all_units)&id=eq." + encodeURIComponent(id), { headers: adminHeaders() });
   var row = r.ok && Array.isArray(r.body) ? r.body[0] : null;
   if (!row) return null;
-  return { unit: row.unit_id || "unidade-1", isAdmin: !!(row.role && row.role.is_admin), isManager: !!(row.role && row.role.is_manager) };
+  return { unit: row.unit_id || "unidade-1", isAdmin: !!(row.role && row.role.is_admin), isManager: !!(row.role && row.role.is_manager), allUnits: !!(row.role && row.role.all_units) };
 }
 // A unidade existe no cadastro (config/units)? Sem o cadastro ainda, aceita só a Unidade 1.
 async function unitExists(id) {
@@ -117,8 +121,8 @@ module.exports = async function handler(req, res) {
       res.status(403).json({ error: "Este usuário é de outra unidade." });
       return;
     }
-    if (tgt && (tgt.isManager || (tgt.isAdmin && body.id !== admin.id))) {
-      res.status(403).json({ error: "Só a Gestão altera uma conta de Administrador ou de Gestão." });
+    if (tgt && (tgt.isManager || ((tgt.isAdmin || tgt.allUnits) && body.id !== admin.id))) {
+      res.status(403).json({ error: "Só o Gestor altera uma conta de Gestor, Supervisor ou Administrador." });
       return;
     }
   }
@@ -133,14 +137,14 @@ module.exports = async function handler(req, res) {
         res.status(400).json({ error: "A senha precisa ter pelo menos 8 caracteres." }); return;
       }
       var roleId = String(body.role_id || "");
-      var roleCheck = await call("/rest/v1/roles?select=id,is_admin,is_manager&id=eq." + encodeURIComponent(roleId), { headers: adminHeaders() });
+      var roleCheck = await call("/rest/v1/roles?select=id,is_admin,is_manager,all_units&id=eq." + encodeURIComponent(roleId), { headers: adminHeaders() });
       if (!roleId || !roleCheck.ok || !Array.isArray(roleCheck.body) || !roleCheck.body.length) {
         res.status(400).json({ error: "Escolha um nível de permissão válido." }); return;
       }
-      if (!admin.isManager && roleCheck.body[0].is_admin) {
-        res.status(403).json({ error: "Só a Gestão cria usuários no nível Administrador ou Gestão." }); return;
+      if (!admin.isManager && (roleCheck.body[0].is_admin || roleCheck.body[0].all_units)) {
+        res.status(403).json({ error: "Só o Gestor cria usuários nos níveis Gestor, Supervisor ou Administrador." }); return;
       }
-      // Unidade do usuário: a Gestão escolhe; os demais criam só na própria unidade.
+      // Unidade do usuário: o Gestor escolhe; os demais criam só na unidade em que estão (Supervisor: a aberta).
       var unitId = admin.isManager ? String(body.unit_id || admin.unit || "unidade-1") : admin.unit;
       if (!(await unitExists(unitId))) {
         res.status(400).json({ error: "Unidade não encontrada." }); return;

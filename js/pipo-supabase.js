@@ -273,13 +273,17 @@
   function isAdmin() {
     return !!(profile && profile.active && profile.role && profile.role.is_admin);
   }
-  // Gestão: nível acima do Administrador, vê e cadastra todas as unidades.
+  // Gestor: nível acima do Administrador, vê e cadastra todas as unidades.
   function isManager() {
     return !!(profile && profile.active && profile.role && profile.role.is_manager);
   }
+  // Acessa todas as unidades (troca de unidade no topo): Gestor e níveis marcados (ex.: Supervisor).
+  function allUnits() {
+    return !!(profile && profile.active && profile.role && (profile.role.is_manager || profile.role.all_units));
+  }
   function can(module, action) {
     if (!profile || !profile.active || !profile.role) return false;
-    if (module === "unidades") return isManager();   // cadastro de Unidades: só a Gestão
+    if (module === "unidades") return isManager();   // cadastro de Unidades: só o Gestor
     if (profile.role.is_admin) return true;
     var p = permsUpgrade(profile.role.permissions);
     return !!(p[module] && p[module][action]);
@@ -393,7 +397,7 @@
 
   /* ---------------- unidades ---------------- */
   // Lista de unidades ativas (id, nome) vinda de login_units(), que também funciona antes do login.
-  // Unidade da sessão: a do perfil de cada pessoa; só a Gestão escolhe (seletor no topo, depois de entrar).
+  // Unidade da sessão: a do perfil de cada pessoa; Gestor e Supervisor escolhem (seletor no topo, depois de entrar).
   var UNIT_KEY = "agendaPipo:unit", LOGIN_MSG_KEY = "agendaPipo:loginMsg";
   var units = [];
   var currentUnit = null;      // {id, name}
@@ -412,18 +416,18 @@
     for (var i = 0; i < units.length; i++) if (units[i].id === id) return units[i].name;
     return id === "unidade-1" ? "Unidade 1" : (id || "");
   }
-  // Qual unidade vale nesta sessão? Quem não é da Gestão fica sempre na própria unidade (a tela de login não
-  // tem escolha de unidade). A Gestão volta para a última que usou, senão a própria.
+  // Qual unidade vale nesta sessão? Quem não acessa todas as unidades fica sempre na própria unidade (a tela de login não
+  // tem escolha de unidade). Gestor e Supervisor voltam para a última que usou, senão a própria.
   function resolveUnit(p) {
-    var mgr = !!(p.role && p.role.is_manager);
+    var mgr = !!(p.role && (p.role.is_manager || p.role.all_units));
     var own = p.unit_id || "unidade-1";
     if (!mgr) return { id: own };
     var want = lsGet(UNIT_KEY);
     var ok = units.some(function (u) { return u.id === want; });
     return { id: ok ? want : (units.some(function (u) { return u.id === own; }) ? own : (units[0] ? units[0].id : own)) };
   }
-  // A unidade que a Gestão está usando vai no token (user_metadata.active_unit): é por ele que o banco separa os dados
-  // (active_unit() em supabase/2026-10-12l). Quem não é da Gestão usa sempre a do próprio perfil.
+  // A unidade que o Gestor ou Supervisor está usando vai no token (user_metadata.active_unit): é por ele que o banco separa os dados
+  // (active_unit() em supabase/2026-10-12l). Quem não acessa todas as unidades usa sempre a do próprio perfil.
   function jwtUnit(token) {
     try {
       var b = String(token || "").split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
@@ -433,7 +437,7 @@
     } catch (e) { return ""; }
   }
   function syncTokenUnit(p, id) {
-    if (!(p.role && p.role.is_manager) || !session) return Promise.resolve();
+    if (!(p.role && (p.role.is_manager || p.role.all_units)) || !session) return Promise.resolve();
     if ((jwtUnit(session.access_token) || p.unit_id || "unidade-1") === id) return Promise.resolve();
     return client.auth.updateUser({ data: { active_unit: id } }).then(function (r) {
       if (r && r.error) throw r.error;
@@ -450,7 +454,7 @@
   }
   function unitHtml() {
     if (!currentUnit) return "";
-    if (isManager() && units.length) {
+    if (allUnits() && units.length) {
       return '<select class="unit-switch" data-unit-switch aria-label="Unidade">' + units.map(function (u) {
         return '<option value="' + escapeHtml(u.id) + '"' + (u.id === currentUnit.id ? " selected" : "") + ">" + escapeHtml(u.name) + "</option>";
       }).join("") + "</select>";
@@ -459,7 +463,7 @@
   }
   document.addEventListener("change", function (e) {
     var sel = e.target.closest && e.target.closest("[data-unit-switch]");
-    if (!sel || !isManager()) return;
+    if (!sel || !allUnits()) return;
     if (sel.value && (!currentUnit || sel.value !== currentUnit.id)) {
       lsSet(UNIT_KEY, sel.value);
       location.reload();
@@ -804,6 +808,7 @@
     canTool: canTool,
     isAdmin: isAdmin,
     isManager: isManager,
+    allUnits: allUnits,
     unit: function () { return currentUnit; },
     units: function () { return units.slice(); },
     unitName: unitName,

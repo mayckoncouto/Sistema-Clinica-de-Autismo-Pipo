@@ -40,7 +40,7 @@ const path = require('path');
   check('login name editable?', /Joinville/.test((await rows()).join()) && !/Unidade 2 – Joinville/.test((await rows()).join()));
   // ajuda: o "?" da tela abre o tópico Unidades
   await page.click('#tab-unidades .help-q'); await page.waitForTimeout(300);
-  check('help topic for the screen opens?', await page.$eval('#tab-ajuda', (e) => !e.hidden) && /Gestão/.test(await page.$eval('#helpBody', (e) => e.textContent)) && /Unidades/.test(await page.$eval('#helpBody h3, #helpBody h2', (e) => e.textContent)));
+  check('help topic for the screen opens?', await page.$eval('#tab-ajuda', (e) => !e.hidden) && /Gestor/.test(await page.$eval('#helpBody', (e) => e.textContent)) && /Unidades/.test(await page.$eval('#helpBody h3, #helpBody h2', (e) => e.textContent)));
   check('no JS errors?', errors.length === 0, errors.join(' | '));
   await browser.close();
   console.log(fails ? 'FALHOU: ' + fails : 'Tudo certo');

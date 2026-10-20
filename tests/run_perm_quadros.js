@@ -60,6 +60,27 @@ const path = require('path');
   // salvar: normalize inclui as chaves de ferramenta
   const n = await page.evaluate(() => window.__pipoRolesTest.normalize({ planner: { view: true, create: true }, ferr_pl_limpar: { view: true } }));
   check('normalize: saved tool kept, unsaved tool inherits?', n.ferr_pl_limpar.view === true && n.ferr_pl_importar.view === true && n.ferr_pl_copias.view === false);
+  // Lista de níveis em quadros, na ordem Gestor, Supervisor, Administrador, demais
+  await page.evaluate(() => {
+    window.pipoAuth.isManager = () => false;   // Administrador
+    window.__pipoRolesTest.setRoles([
+      { id: 'sec', name: 'Secretária', sort: 3, is_admin: false, permissions: {} },
+      { id: 'administrador', name: 'Administrador', sort: 2, is_admin: true, permissions: {} },
+      { id: 'supervisor', name: 'Supervisor', sort: 1, is_admin: false, all_units: true, permissions: {} },
+      { id: 'gestao', name: 'Gestor', sort: 0, is_admin: true, is_manager: true, permissions: {} }]);
+    window.__pipoRolesTest.sortRoles();
+    window.__pipoRolesTest.openList();
+  });
+  await page.waitForSelector('#rlList .room-row');
+  const order = await page.$$eval('#rlList .room-row .rn', (e) => e.map((x) => x.textContent.split(' ')[0]));
+  check('levels as cards in order Gestor, Supervisor, Administrador, others?', order.join('|') === 'Gestor|Supervisor|Administrador|Secretária', order.join('|'));
+  const btns = await page.$$eval('#rlList .room-row', (e) => e.map((r) => [...r.querySelectorAll('button')].map((b) => b.textContent).join('+')));
+  check('Administrador: Gestor/Supervisor/Administrador only "Ver"; others Duplicar + Editar?', btns.join('|') === 'Ver|Ver|Ver|Duplicar+Editar', btns.join('|'));
+  await page.click('#rlList [data-role-id="supervisor"] [data-rl-edit]');
+  await page.waitForSelector('#ovRole');
+  check('Supervisor opens read-only for Administrador (no Salvar, all-units box disabled)?', !(await page.$('#rSave')) && (await page.$eval('#rAllUnits', (c) => c.checked && c.disabled)));
+  await page.evaluate(() => { window.pipoAuth.isManager = () => true; window.__pipoRolesTest.openRole('supervisor'); });
+  check('Gestor can edit Supervisor and the all-units box?', !!(await page.$('#rSave')) && (await page.$eval('#rAllUnits', (c) => c.checked && !c.disabled)));
   check('no JS errors?', errors.length === 0, JSON.stringify(errors));
   await browser.close();
   process.exit(fails ? 1 : 0);
