@@ -69,7 +69,7 @@ const fs = require('fs');
   // sugestões
   const rowsT = () => page.$$eval('#reg-conciliacao-host tbody tr', (r) => r.map((x) => x.textContent.replace(/\s+/g, ' ')));
   let t = await rowsT();
-  check('as 2 linhas pendentes mostram a sugestão certa?', t.length === 2 && t.some((x) => /Aluguel sede/.test(x) && /Sugestão/.test(x)) && t.some((x) => /Repasse convênio X/.test(x) && /Sugestão/.test(x)), JSON.stringify(t));
+  check('as 2 linhas pendentes mostram a sugestão certa?', t.length === 2 && t.some((x) => /Aluguel sede/.test(x) && /Confirmar/.test(x)) && t.some((x) => /Repasse convênio X/.test(x) && /Confirmar/.test(x)), JSON.stringify(t));
   check('cartões: 2 linhas, 0 conciliadas, 3 lançamentos sem extrato?', /Linhas do Extrato2/.test(await page.textContent('#cnSum')) && /Lançamentos sem Extrato3/.test(await page.textContent('#cnSum')), await page.textContent('#cnSum'));
   // confirmar uma
   await page.click('#reg-conciliacao-host tbody tr:first-child [data-cn-ok]'); await page.waitForTimeout(200);
