@@ -39303,8 +39303,27 @@ function renderConciliacao(){
       vals: [CN.sel[l.id] ? 1 : 0, l.date, normText(l.desc), l.valor, st === "conc" ? 2 : st === "parcial" ? 1 : 0, normText(sugTxt), vlNum === null ? "" : vlNum, cOk ? 1 : 0, cPick ? 1 : 0, cNew ? 1 : 0, cSplit ? 1 : 0]};
   }), renderConciliacao, "reg-table");
 }
+// tempo real: mudança em linhas do extrato, ligações ou lançamentos (por esta ou por outra pessoa) relê e redesenha a tela
+function cnEnsureChannel(){
+  var c = agdClient();
+  if (CN.channel || !c) return;
+  var timer = null;
+  function again(){
+    clearTimeout(timer);
+    timer = setTimeout(function(){
+      if (state.tab !== "conciliacao" || CN.loading) return;
+      Promise.all([cnLoad(true), flLoad(true)]).then(function(){ if (state.tab === "conciliacao") renderConciliacao(); });
+    }, 500);
+  }
+  CN.channel = c.channel("pipo-conciliacao");
+  ["finance_statement_lines", "finance_statement_links", "finance_entries"].forEach(function(t){
+    CN.channel.on("postgres_changes", {event: "*", schema: "public", table: t}, again);
+  });
+  CN.channel.subscribe();
+}
 function cnOnShow(){
   renderConciliacao();
+  cnEnsureChannel();
   if (agdClient() && cnCan("view")){
     Promise.all([cnLoad(true), flLoad(true)]).then(function(){ if (state.tab === "conciliacao") renderConciliacao(); });
   }
