@@ -11392,7 +11392,7 @@ language sql stable security invoker set search_path = public as $$
     from public.change_log c
    where c.area = p_area and c.at >= now() - make_interval(days => greatest(1, least(coalesce(p_days, 30), 365)))
    order by c.at desc, c.id desc
-   limit 4000;
+   limit 20000;
 $$;
 grant execute on function public.change_log_list(text, int) to authenticated;
 revoke execute on function public.change_log_list(text, int) from anon, public;

@@ -23407,10 +23407,16 @@ function haLoad(force){
   }
   HA.rows = null; haRender();
   return Promise.all(HA.areas.map(function(a){
-    return c.rpc("change_log_list", {p_area: a, p_days: HA.days}).then(function(r){
-      if (r.error) throw r.error;
-      return (r.data || []).map(function(x){ x.area = a; return x; });
-    });
+    // O servidor entrega no máximo 1000 linhas por vez: lê página por página até acabar.
+    var all = [];
+    function page(from){
+      return c.rpc("change_log_list", {p_area: a, p_days: HA.days}).range(from, from + 999).then(function(r){
+        if (r.error) throw r.error;
+        var d = r.data || []; all = all.concat(d);
+        return d.length === 1000 && all.length < 20000 ? page(from + 1000) : null;
+      });
+    }
+    return page(0).then(function(){ return all.map(function(x){ x.area = a; return x; }); });
   })).then(function(parts){
     HA.rows = [].concat.apply([], parts).sort(function(x, y){ return String(y.at).localeCompare(String(x.at)); });
     HA._area = key; HA._days = HA.days;
