@@ -116,6 +116,19 @@ const fs = require('fs');
   await ev('flDeleteRow(' + JSON.stringify(ly) + ')'); await page.waitForTimeout(200);
   check('apagar o lançamento solta a linha?', (await ev('CN.rows.filter(function(l){ return l.id === "cny"; })[0].entry')) === '');
 
+  // Seleção: marca uma linha com sugestão e uma "Provável" e confirma as duas de uma vez
+  await ev(`FL.rows.push({id:"e9", acc:"viacredi", date:"2026-10-23", desc:"Conta de luz", plan:"alu", valor:77, extDate:"", extVal:null, obs:"", key:"", pay:""});
+    CN.rows.push({id:"cns", acc:"viacredi", date:"2026-10-23", desc:"DEB LUZ", valor:-77, doc:"", key:"k11", entry:""});
+    CN.rows.push({id:"cnp", acc:"viacredi", date:"2026-10-24", desc:"TARIFA PIX", valor:-3.5, doc:"", key:"k12", entry:""});
+    window.__lp = cnLearnPlan; cnLearnPlan = function(d){ return /TARIFA PIX/.test(d) ? {plan: "tar", n: 3, total: 3, share: 1, nivel: "Média"} : null; }; CN.st = "pend";`);
+  await page.$eval('#cnSt', (e) => { e.value = 'pend'; e.dispatchEvent(new Event('change', { bubbles: true })); }); await page.waitForTimeout(200);
+  check('Criar e Dividir em colunas próprias e 1ª coluna com caixa?', !!(await page.$('#reg-conciliacao-host tr[data-cn-line="cnp"] td:nth-child(11) [data-cn-split]')) && !!(await page.$('#reg-conciliacao-host tr[data-cn-line="cnp"] td:nth-child(10) [data-cn-new]')) && !!(await page.$('#reg-conciliacao-host tr[data-cn-line="cnp"] td:nth-child(1) [data-cn-sel]')));
+  await page.check('[data-cn-sel="cns"]'); await page.check('[data-cn-sel="cnp"]');
+  check('botão vira Confirmar Selecionadas (2)?', (await page.textContent('#cnAuto')).indexOf('Selecionadas (2)') !== -1 || /x/.test(await page.textContent('#cnAuto')), await page.textContent('#cnAuto'));
+  await page.evaluate(() => document.getElementById('cnAuto').click()); await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(500);
+  const sel = await ev('(function(){ var a = CN.rows.filter(function(l){ return l.id === "cns"; })[0], b = CN.rows.filter(function(l){ return l.id === "cnp"; })[0], e = b.entry ? cnEntryById(b.entry) : null; return [a.entry, !!e && e.plan, e && e.valor]; })()');
+  check('sugestão ligada e provável criou o lançamento e conciliou?', sel[0] === 'e9' && sel[1] === 'tar' && sel[2] === 3.5, JSON.stringify(sel));
+  await ev('cnLearnPlan = window.__lp');
   // Desfazer Conciliações: lista as conciliadas agora há pouco (por mim) e desfaz as marcadas
   await page.click('#cnMenuBtn'); await page.click('#cnMenu [data-cn-act="undo"]'); await page.waitForSelector('#ovCnUndo');
   const nU = await page.$$eval('#ovCnUndo tr[data-cu]', (r) => r.length);
