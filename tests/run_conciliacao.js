@@ -129,6 +129,18 @@ const fs = require('fs');
   const sel = await ev('(function(){ var a = CN.rows.filter(function(l){ return l.id === "cns"; })[0], b = CN.rows.filter(function(l){ return l.id === "cnp"; })[0], e = b.entry ? cnEntryById(b.entry) : null; return [a.entry, !!e && e.plan, e && e.valor]; })()');
   check('sugestão ligada e provável criou o lançamento e conciliou?', sel[0] === 'e9' && sel[1] === 'tar' && sel[2] === 3.5, JSON.stringify(sel));
   await ev('cnLearnPlan = window.__lp');
+  // Dividir: grade com Nº, resumo em cartões, "Lançar o que Falta" e botão só libera quando fecha
+  await ev(`CN.rows.push({id:"cnd", acc:"viacredi", date:"2026-10-25", desc:"PAGAMENTO LOTE", valor:-100, doc:"", key:"k13", entry:""}); CN.st = "pend"`);
+  await page.$eval('#cnSt', (e) => { e.value = 'pend'; e.dispatchEvent(new Event('change', { bubbles: true })); }); await page.waitForTimeout(200);
+  await page.click('#reg-conciliacao-host tr[data-cn-line="cnd"] [data-cn-split]'); await page.waitForSelector('#ovCnSplit');
+  check('Dividir: resumo em cartões e botão travado sem fechar?', (await page.$$('#cnsTot .fl-card')).length === 3 && await page.$eval('#cnsOk', (b) => b.disabled));
+  const rowsSp = await page.$$('#cnsRows .cn-sp-row');
+  for (const r of rowsSp){ await r.$eval('select.cn-sp-plan', (s) => { s.value = 'tar'; s.dispatchEvent(new Event('change', { bubbles: true })); }); }
+  await rowsSp[0].$eval('.cn-sp-val', (e) => { e.value = '30,00'; e.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.click('#cnsFill');
+  check('Lançar o que Falta preenche a última parte e libera o botão?', (await page.$eval('#cnsRows .cn-sp-row:last-child .cn-sp-val', (e) => e.value)) === '70,00' && !(await page.$eval('#cnsOk', (b) => b.disabled)), await page.$eval('#cnsOk', (b) => b.textContent));
+  await page.click('#cnsOk'); await page.waitForTimeout(500);
+  check('dividiu em 2 lançamentos e conciliou?', (await ev('cnEntriesOf(CN.rows.filter(function(l){ return l.id === "cnd"; })[0]).length')) === 2);
   // Desfazer Conciliações: lista as conciliadas agora há pouco (por mim) e desfaz as marcadas
   await page.click('#cnMenuBtn'); await page.click('#cnMenu [data-cn-act="undo"]'); await page.waitForSelector('#ovCnUndo');
   const nU = await page.$$eval('#ovCnUndo tr[data-cu]', (r) => r.length);

@@ -2086,6 +2086,12 @@ input[readonly]:not(.dp-in):focus,textarea[readonly]:focus{outline:none;box-shad
 .cv-row .cv-spec-wrap .dp-btn,.cv-row .cv-spec{width:100%}
 .hours-row.cv-row{display:grid;grid-template-columns:minmax(150px,1.1fr) 112px minmax(0,2.2fr) 112px 30px;gap:8px;align-items:center}
 .cv-head{display:grid;grid-template-columns:minmax(150px,1.1fr) 112px minmax(0,2.2fr) 112px 30px;gap:8px;font-size:11.5px;font-weight:600;color:var(--muted);margin:2px 0 3px;padding-left:2px}
+.cn-sp-head,.hours-row.cn-sp-row{display:grid;grid-template-columns:26px minmax(200px,1.3fr) 130px minmax(0,2fr) 30px;gap:8px;align-items:center}
+.cn-sp-head{font-size:11.5px;font-weight:600;color:var(--muted);margin:2px 0 4px}
+.hours-row.cn-sp-row{margin-bottom:6px;flex-wrap:nowrap}.cn-sp-n{font-weight:700;color:var(--muted);text-align:center}
+.cn-sp-row > *{min-width:0}.hours-row.cn-sp-row > .dp-btn,.hours-row.cn-sp-row > input,.hours-row.cn-sp-row > select{width:100%;max-width:none;flex:none}.cn-sp-row .cn-sp-val{text-align:right}
+.cn-sp-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}.cn-sp-sum{margin-bottom:6px}
+@media (max-width:760px){.cn-sp-head{display:none}.hours-row.cn-sp-row{grid-template-columns:22px 1fr 30px}.cn-sp-row .cn-sp-plan,.cn-sp-row .dp-btn{grid-column:2}.cn-sp-row .cn-sp-val,.cn-sp-row .cn-sp-desc{grid-column:2}}
 .cv-head.nov,.hours-row.cv-row.nov{grid-template-columns:minmax(150px,1.1fr) 112px minmax(0,2.2fr) 30px}
 .cv-row .cv-spec-wrap{min-width:0}
 .cv-row .cv-spec-wrap .dp-btn,.cv-row .cv-spec,.cv-row .cv-cod,.cv-row .cv-desc,.cv-row .cv-val{width:100%;min-width:0}
@@ -39336,15 +39342,16 @@ function cnSplitDialog(line){
   var lp = cnLearnPlan(line.desc, line.acc, sign);
   function optHtml(keep){ return '<option value="">Escolha…</option>' + plans.map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === keep ? ' selected' : '') + '>' + esc(flPlanLabel(p)) + '</option>'; }).join(""); }
   function rowHtml(plan, val, desc){
-    return '<div class="hours-row cv-row nov cn-sp-row"><select class="cn-sp-plan" data-combo data-reg-add="planocontas" aria-label="Subcategoria">' + optHtml(plan) + '</select>' +
+    return '<div class="hours-row cn-sp-row"><span class="cn-sp-n"></span><select class="cn-sp-plan" data-combo data-reg-add="planocontas" aria-label="Subcategoria">' + optHtml(plan) + '</select>' +
       '<input type="text" class="cn-sp-val" data-money inputmode="decimal" placeholder="0,00" aria-label="Valor" value="' + (val ? esc(fmtMoney(val).replace("R$ ", "")) : "") + '">' +
-      '<input type="text" class="cn-sp-desc" maxlength="200" aria-label="Descrição" value="' + esc(desc) + '"><button type="button" class="rm" aria-label="Remover Parte">✕</button></div>';
+      '<input type="text" class="cn-sp-desc" maxlength="200" aria-label="Descrição" value="' + esc(desc) + '" title="' + esc(desc) + '"><button type="button" class="rm" aria-label="Remover Parte" title="Remover parte">✕</button></div>';
   }
-  host.innerHTML = '<div class="overlay confirm-overlay" id="ovCnSplit"><div class="modal" style="max-width:860px"><div class="modal-head"><div><h3>Dividir em Lançamentos</h3><div class="modal-sub">' + esc(trBr(line.date)) + ' · ' + esc(line.desc || "—") + ' · ' + esc(flMoneySigned(rest)) + '</div></div><button class="modal-close" id="cnsClose" aria-label="Fechar">✕</button></div>' +
-    '<div class="modal-body"><div class="tr-sec tr-sec-top">Partes</div><div class="cv-head nov"><span>Subcategoria</span><span>Valor (R$)</span><span>Descrição</span><span></span></div>' +
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovCnSplit"><div class="modal" style="max-width:960px"><div class="modal-head"><div><h3>Dividir em Lançamentos</h3><div class="modal-sub">' + esc(trBr(line.date)) + ' · ' + esc(line.desc || "—") + ' · ' + esc(flMoneySigned(rest)) + '</div></div><button class="modal-close" id="cnsClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="fl-sum cn-sp-sum" id="cnsTot"></div>' +
+    '<div class="tr-sec">Partes</div><div class="cn-sp-head"><span>Nº</span><span>Subcategoria</span><span>Valor (R$)</span><span>Descrição</span><span></span></div>' +
     '<div id="cnsRows">' + rowHtml(lp ? lp.plan : "", 0, line.desc) + rowHtml("", 0, line.desc) + '</div>' +
-    '<button type="button" class="btn add-row-btn cv-add-row" id="cnsAdd">+ Incluir Parte</button>' +
-    '<div class="pat-count" id="cnsTot" style="margin-top:8px"></div></div>' +
+    '<div class="cn-sp-acts"><button type="button" class="btn add-row-btn" id="cnsAdd">+ Incluir Parte</button><button type="button" class="btn ghost" id="cnsFill" title="Coloca o valor que falta na última parte">Lançar o que Falta na Última Parte</button></div>' +
+    '<div class="pat-count" style="margin-top:8px">Cada parte vira um lançamento com a data e a conta da linha do extrato. A soma das partes precisa fechar com o valor da linha.</div></div>' +
     '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="cnsCancel">Cancelar</button><button class="btn primary" id="cnsOk">Criar e Conciliar</button></div></div></div>';
   var ov = document.getElementById("ovCnSplit"), rowsEl = document.getElementById("cnsRows"), tot = document.getElementById("cnsTot");
   function close(){ host.innerHTML = ""; }
@@ -39355,7 +39362,14 @@ function cnSplitDialog(line){
   function upd(){
     var sum = 0; parts().forEach(function(x){ sum += x.valor; }); sum = Math.round(sum * 100) / 100;
     var left = Math.round((total - sum) * 100) / 100;
-    tot.innerHTML = 'Soma <b>' + esc(flMoneySigned(sign * sum)) + '</b> · Linha <b>' + esc(flMoneySigned(rest)) + '</b> · ' + (Math.abs(left) < 0.005 ? '<span class="cn-eq">Fecha</span>' : (left > 0 ? 'Falta ' : 'Sobra ') + '<b>' + esc(flMoneySigned(Math.abs(left))) + '</b>');
+    var ok = Math.abs(left) < 0.005, n = rowsEl.querySelectorAll(".cn-sp-row").length;
+    function card(label, val, cls){ return '<div class="fl-card ' + (cls || "") + '"><small>' + esc(label) + '</small><b>' + val + '</b></div>'; }
+    tot.innerHTML = card("Linha do Extrato", esc(flMoneySigned(rest)), "") + card("Soma das Partes", esc(flMoneySigned(sign * sum)), "") +
+      card(ok ? "Situação" : left > 0 ? "Falta" : "Sobra", ok ? '<span class="cn-eq">Fecha ✓</span>' : esc(flMoneySigned(Math.abs(left))), ok ? "" : "fl-warn");
+    Array.prototype.forEach.call(rowsEl.querySelectorAll(".cn-sp-n"), function(el, i){ el.textContent = i + 1; });
+    var ready = ok && parts().every(function(x){ return x.plan && x.valor > 0; });
+    var okb = document.getElementById("cnsOk"); if (okb){ okb.textContent = "Criar " + n + " Lançamentos e Conciliar"; okb.disabled = !ready; okb.title = ready ? "" : ok ? "Escolha a subcategoria e o valor de todas as partes" : "A soma das partes ainda não fecha com o valor da linha"; }
+    var fb = document.getElementById("cnsFill"); if (fb) fb.disabled = ok;
   }
   rowsEl.addEventListener("input", upd); rowsEl.addEventListener("change", upd);
   rowsEl.addEventListener("focusout", function(e){ if (e.target.classList.contains("cn-sp-val") && e.target.value.trim()) e.target.value = fmtMoney(parseMoney(e.target.value)).replace("R$ ", ""); upd(); });
@@ -39368,6 +39382,13 @@ function cnSplitDialog(line){
     var sum = 0; parts().forEach(function(x){ sum += x.valor; });
     var left = Math.round((total - sum) * 100) / 100;
     rowsEl.insertAdjacentHTML("beforeend", rowHtml("", left > 0 ? left : 0, line.desc)); upd();
+  });
+  document.getElementById("cnsFill").addEventListener("click", function(){
+    var vs = rowsEl.querySelectorAll(".cn-sp-val"), last = vs[vs.length - 1], others = 0;
+    parts().slice(0, -1).forEach(function(x){ others += x.valor; });
+    var v = Math.round((total - others) * 100) / 100;
+    if (v <= 0){ showToast("As outras partes já passam do valor da linha.", true); return; }
+    last.value = fmtMoney(v).replace("R$ ", ""); upd();
   });
   upd();
   document.getElementById("cnsOk").addEventListener("click", function(){
