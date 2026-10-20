@@ -29088,7 +29088,7 @@ var HELP_TOPICS = [
   {id: "conciliacao", group: "Financeiro", title: "Conciliação com o Extrato", mod: "financeiro", tab: "conciliacao",
     purpose: "Confere os Lançamentos com o extrato do banco. Você importa o extrato (arquivo do banco) e o sistema mostra, linha a linha, o que já tem lançamento e o que está pendente. Serve para achar o que passou no banco e não foi lançado, e o que foi lançado e não apareceu no banco.",
     steps: ["Financeiro → <b>Conciliação</b>. Escolha a conta bancária.", "<b>Importar Extrato</b>: escolha o arquivo baixado no banco (OFX, Excel ou CSV). O sistema mostra quantas linhas são novas e quantas já tinham sido importadas; importar o mesmo arquivo de novo não duplica.", "Cada linha pendente mostra o lançamento mais parecido (mesma conta, mesmo valor no extrato e data próxima). Clique em <b>Confirmar</b> para conciliar, ou em <b>Escolher…</b> para apontar outro lançamento.", "<b>Confirmar Sugestões</b> concilia de uma vez as linhas que têm um único lançamento com o mesmo valor e data até 2 dias de diferença.", "Linha sem lançamento: <b>Criar Lançamento</b> abre o lançamento já preenchido com data, descrição e valor do extrato; escolha a subcategoria.", "O filtro <b>Lançamentos sem Extrato</b> mostra o que foi lançado mas não aparece no extrato importado. <b>Desfazer</b> tira a ligação de uma linha."],
-    rules: ["O valor comparado é o <b>valor do extrato</b> do lançamento, quando existe; senão o valor lançado. O sinal vem do tipo da subcategoria (entrada ou saída).", "Um lançamento só pode estar ligado a uma linha do extrato. Lançamento conciliado ganha a marca ✓ na lista de Lançamentos e avisa antes de mudar valor, data ou conta.", "Conciliar não altera nenhum lançamento, nem o saldo. Meses fechados continuam travados para os lançamentos, mas podem ser conciliados.", "Outras Opções → Excluir Linhas Pendentes do Período apaga linhas importadas por engano; as conciliadas ficam."],
+    rules: ["O valor comparado é o <b>valor do extrato</b> do lançamento, quando existe; senão o valor lançado. O sinal vem do tipo da subcategoria (entrada ou saída).", "Um lançamento só pode estar ligado a uma linha do extrato. Lançamento conciliado ganha a marca ✓ na lista de Lançamentos e avisa antes de mudar valor, data ou conta.", "Conciliar não altera nenhum lançamento, nem o saldo. Meses fechados continuam travados para os lançamentos, mas podem ser conciliados.", "Outras Opções → Excluir Linhas Pendentes do Período apaga linhas importadas por engano; as conciliadas ficam.", "Uma linha do extrato pode ter <b>vários lançamentos</b> (<b>Escolher</b> aceita marcar mais de um) e <b>Dividir</b> cria vários lançamentos de uma vez, como um pagamento em lote. Se a soma não fecha com a linha, ela fica <b>Parcial</b> e <b>Completar</b> cria o que falta.", "<b>Criar Lançamento</b> já sugere a subcategoria mais usada para descrições parecidas (aprendida dos lançamentos existentes; veja em Outras Opções → <b>O Que o Sistema Aprendeu</b>).", "<b>Transferências entre Contas</b> (Outras Opções) acha a saída numa conta e a entrada igual na outra e cria os dois lançamentos já conciliados."],
     who: "Permissão <b>Financeiro</b>: ver para olhar, editar para conciliar, incluir para importar o extrato e criar lançamento, excluir para apagar linhas."},
   {id: "demonstrativos", group: "Financeiro", title: "Demonstrativos", mod: "financeiro", tab: "demonstrativos",
     purpose: "O painel do financeiro, com dois botões: <b>Fluxo de Caixa</b> (o que entrou, o que saiu e o saldo) e <b>DRE</b> (receitas, despesas e resultado). Tudo é calculado dos <b>Lançamentos</b>: nada é digitado de novo.",
@@ -30201,6 +30201,7 @@ var BACKUP_TABLES = [
   {name: "bank_account_finance", order: "account_id", label: "Saldo Inicial das Contas", restore: true, optional: true},
   {name: "finance_entries", order: "id", label: "Lançamentos Financeiros", restore: true, optional: true},
   {name: "finance_statement_lines", order: "id", label: "Extrato do Banco (Conciliação)", restore: true, optional: true},
+  {name: "finance_statement_links", order: "entry_id", label: "Vínculos do Extrato com Lançamentos", restore: true, optional: true},
   {name: "treatment_sales", order: "id", label: "Vendas dos Tratamentos", restore: true, optional: true},
   {name: "anamneses", order: "id", label: "Anamneses dos Pacientes", restore: true, optional: true},
   {name: "commission_rules", order: "id", label: "Regras de Comissão", restore: true, optional: true},
@@ -37235,7 +37236,8 @@ function flDeleteRow(id){
   var c = agdClient();
   var done = function(){
     FL.rows = (FL.rows || []).filter(function(x){ return x.id !== id; });
-    if (typeof CN !== "undefined" && CN.rows) CN.rows = CN.rows.map(function(l){ return l.entry === id ? Object.assign({}, l, {entry: ""}) : l; });
+    if (typeof CN !== "undefined" && CN.rows) CN.rows = CN.rows.map(function(l){ return cnEntriesOf(l).indexOf(id) !== -1 ? Object.assign({}, l, {entries: cnEntriesOf(l).filter(function(x){ return x !== id; }), entry: (cnEntriesOf(l).filter(function(x){ return x !== id; })[0] || "")}) : l; });
+    if (typeof CN !== "undefined" && CN.links) CN.links = CN.links.filter(function(x){ return x.entry_id !== id; });
     if (typeof FP !== "undefined" && FP.rows) FP.rows = FP.rows.map(function(p){ return p.entry === id ? Object.assign({}, p, {entry: ""}) : p; });   // a conta a pagar/receber ligada volta a ficar em aberto
     return true;
   };
@@ -37414,6 +37416,7 @@ function openLancamento(row, opts){
     h.textContent = p ? p.tipo + " · " + (p.categoria || "") + (p.tipo === "Receita" || p.tipo === "Entrada" ? " — soma no saldo da conta" : " — diminui o saldo da conta") : "";
   }
   document.getElementById("flSub").addEventListener("change", subHint); subHint();
+  if (opts && opts.learned && document.getElementById("flSub").value === opts.learned.plan){ var lh = document.getElementById("flSubHint"); lh.textContent += (lh.textContent ? " · " : "") + "Sugerida pelo histórico: " + cnLearnText(opts.learned); }
   ["flValor", "flExtVal"].forEach(function(id){
     var el = document.getElementById(id);
     el.addEventListener("blur", function(){ if (el.value.trim()) el.value = fmtMoney(parseMoney(el.value)).replace("R$ ", ""); });
@@ -38842,9 +38845,9 @@ function wireEmprestimos(){
  * finance_statement_lines (valor COM SINAL: entrada +, saída −). Cada linha vira “conciliada” quando é ligada a um
  * lançamento (entry_id); pendente = sem lançamento. O sistema SUGERE o lançamento mais parecido (mesma conta, mesmo valor
  * no extrato, data próxima) e a pessoa confirma. Valor comparado = valor do extrato do lançamento, se houver, senão o valor. */
-var CN = {rows: null, loading: null, acc: "", ym: "", st: "pend", q: ""};
+var CN = {rows: null, links: [], hasLinks: true, loading: null, acc: "", ym: "", st: "pend", q: ""};
 function cnCan(a){ return can("financeiro", a); }
-function cnFromDb(x){ return {id: x.id, acc: x.account_id, date: x.data, desc: x.descricao || "", valor: Number(x.valor) || 0, doc: x.doc || "", key: x.key || "", entry: x.entry_id || ""}; }
+function cnFromDb(x){ return {id: x.id, acc: x.account_id, date: x.data, desc: x.descricao || "", valor: Number(x.valor) || 0, doc: x.doc || "", key: x.key || "", entry: x.entry_id || "", entries: x.entry_id ? [x.entry_id] : []}; }
 function cnToDb(r){ return {account_id: r.acc, data: r.date, descricao: r.desc, valor: r.valor, doc: r.doc || null, key: r.key, entry_id: r.entry || null}; }
 function cnLoad(force){
   var c = agdClient();
@@ -38852,20 +38855,45 @@ function cnLoad(force){
   if (!cnCan("view")){ CN.rows = []; return Promise.resolve(); }
   if (CN.loading) return CN.loading;
   if (CN.rows && !force) return Promise.resolve();
-  CN.loading = dbAll(function(){ return c.from("finance_statement_lines").select("*").order("id"); }).then(function(r){
+  CN.loading = Promise.all([
+    dbAll(function(){ return c.from("finance_statement_lines").select("*").order("id"); }),
+    dbAll(function(){ return c.from("finance_statement_links").select("*").order("entry_id"); })
+  ]).then(function(rs){
+    var r = rs[0], lk = rs[1];
     CN.loading = null;
     if (r.error){
       CN.rows = CN.rows || [];
       showToast("Não foi possível ler o extrato: " + r.error.message + (/does not exist|relation/i.test(r.error.message || "") ? " (rode o SQL 2026-10-12g)" : ""), true);
       return;
     }
+    CN.hasLinks = !!(lk && !lk.error);
+    CN.links = CN.hasLinks ? (lk.data || []) : [];
     CN.rows = (r.data || []).map(cnFromDb);
+    cnRebuild();
   }, function(){ CN.loading = null; CN.rows = CN.rows || []; });
   return CN.loading;
 }
 // lançamento ligado a cada linha do extrato (id do lançamento → linha)
-function cnMatched(id){ return !!(CN.rows && CN.rows.some(function(l){ return l.entry === id; })); }
-function cnByEntry(){ var m = {}; (CN.rows || []).forEach(function(l){ if (l.entry) m[l.entry] = l; }); return m; }
+// uma linha do extrato pode ter VÁRIOS lançamentos (juntar vários ou dividir uma linha): l.entries; l.entry = o primeiro
+function cnRebuild(){
+  var m = {};
+  (CN.links || []).forEach(function(x){ (m[x.line_id] = m[x.line_id] || []).push(x.entry_id); });
+  CN.rows = (CN.rows || []).map(function(l){
+    var ids = (m[l.id] || []).slice();
+    if (l.entry && ids.indexOf(l.entry) === -1) ids.unshift(l.entry);
+    return Object.assign({}, l, {entries: ids, entry: ids[0] || ""});
+  });
+}
+function cnEntriesOf(l){ return l.entries || (l.entry ? [l.entry] : []); }
+function cnMatched(id){ return !!(CN.rows && CN.rows.some(function(l){ return cnEntriesOf(l).indexOf(id) !== -1; })); }
+function cnByEntry(){ var m = {}; (CN.rows || []).forEach(function(l){ cnEntriesOf(l).forEach(function(id){ m[id] = l; }); }); return m; }
+// soma (com sinal) dos lançamentos ligados × valor da linha: "conc" (fecha), "parcial" (sobrou ou faltou) ou "pend" (nenhum)
+function cnSum(l){ var t = 0; cnEntriesOf(l).forEach(function(id){ var e = cnEntryById(id); if (e) t += cnEntrySigned(e); }); return Math.round(t * 100) / 100; }
+function cnRest(l){ return Math.round((l.valor - cnSum(l)) * 100) / 100; }
+function cnState(l){
+  if (!cnEntriesOf(l).length) return "pend";
+  return Math.abs(cnRest(l)) < 0.005 ? "conc" : "parcial";
+}
 function cnEntryById(id){ for (var i = 0; i < (FL.rows || []).length; i++) if (FL.rows[i].id === id) return FL.rows[i]; return null; }
 // valor do lançamento como aparece no extrato, com sinal
 function cnEntrySigned(e){ return flSign(e) * (e.extVal != null ? e.extVal : e.valor); }
@@ -38886,15 +38914,33 @@ function cnSuggest(line, byEntry){
   var c = cnCandidates(line, byEntry).filter(function(x){ return x.days <= 10; });
   return c.length ? c[0] : null;
 }
-function cnUpdateOne(id, entryId){
-  var c = agdClient();
-  function done(){ CN.rows = (CN.rows || []).map(function(l){ return l.id === id ? Object.assign({}, l, {entry: entryId || ""}) : l; }); return true; }
+// grava os lançamentos de uma linha (troca a lista inteira): vínculos + o primeiro em entry_id
+function cnSetEntries(lineId, ids){
+  var c = agdClient(), seen = {};
+  ids = (ids || []).filter(function(x){ if (!x || seen[x]) return false; seen[x] = 1; return true; });
+  function done(){ CN.rows = (CN.rows || []).map(function(l){ return l.id === lineId ? Object.assign({}, l, {entry: ids[0] || "", entries: ids.slice()}) : l; });
+    CN.links = (CN.links || []).filter(function(x){ return x.line_id !== lineId; }).concat(ids.map(function(e){ return {entry_id: e, line_id: lineId}; })); return true; }
   if (!c) return Promise.resolve(done());
-  return c.from("finance_statement_lines").update({entry_id: entryId || null}).eq("id", id).then(function(res){
-    if (res.error){ showToast("Não foi possível " + (entryId ? "conciliar" : "desfazer") + ": " + (/duplicate|unique/i.test(res.error.message || "") ? "esse lançamento já está ligado a outra linha do extrato." : res.error.message), true); return false; }
-    return done();
+  function fail(msg){ showToast("Não foi possível " + (ids.length ? "conciliar" : "desfazer") + ": " + msg, true); return false; }
+  function nice(m){ return /duplicate|unique/i.test(m || "") ? "esse lançamento já está ligado a outra linha do extrato." : m; }
+  if (!CN.hasLinks){
+    if (ids.length > 1) return Promise.resolve(fail("rode o SQL 2026-10-20 para ligar vários lançamentos a uma linha."));
+    return c.from("finance_statement_lines").update({entry_id: ids[0] || null}).eq("id", lineId).then(function(res){ return res.error ? fail(nice(res.error.message)) : done(); });
+  }
+  var old = (CN.links || []).filter(function(x){ return x.line_id === lineId; });
+  return c.from("finance_statement_links").delete().eq("line_id", lineId).then(function(r1){
+    if (r1.error) return fail(r1.error.message);
+    var ins = ids.length ? c.from("finance_statement_links").insert(ids.map(function(e){ return {entry_id: e, line_id: lineId}; })) : Promise.resolve({});
+    return ins.then(function(r2){
+      if (r2.error){
+        var back = old.length ? c.from("finance_statement_links").insert(old.map(function(x){ return {entry_id: x.entry_id, line_id: lineId}; })) : Promise.resolve({});
+        return back.then(function(){ return fail(nice(r2.error.message)); });
+      }
+      return c.from("finance_statement_lines").update({entry_id: ids[0] || null}).eq("id", lineId).then(function(r3){ return r3.error ? fail(nice(r3.error.message)) : done(); });
+    });
   });
 }
+function cnUpdateOne(id, entryId){ return cnSetEntries(id, entryId ? [entryId] : []); }
 function cnInsertLines(list){
   var c = agdClient();
   CN.rows = CN.rows || [];
@@ -39024,8 +39070,9 @@ function cnShown(){
   var q = normText(CN.q || "");
   return cnLinesOfAcc().filter(function(l){
     if (!cnMonthOk(l.date)) return false;
-    if (CN.st === "pend" && l.entry) return false;
-    if (CN.st === "conc" && !l.entry) return false;
+    var st = cnState(l);
+    if (CN.st === "pend" && st === "conc") return false;
+    if (CN.st === "conc" && st !== "conc") return false;
     return !q || normText(l.desc + " " + l.valor.toFixed(2).replace(".", ",")).indexOf(q) !== -1;
   });
 }
@@ -39037,8 +39084,8 @@ function renderConciliacao(){
     Promise.all([cnLoad(), flLoad()]).then(function(){ if (state.tab === "conciliacao") renderConciliacao(); }); return; }
   cnFillFilters();
   var by = cnByEntry(), all = cnLinesOfAcc().filter(function(l){ return cnMonthOk(l.date); });
-  var conc = all.filter(function(l){ return l.entry; }), pend = all.filter(function(l){ return !l.entry; });
-  var sem = cnEntriesWithoutLine(), sumPend = 0; pend.forEach(function(l){ sumPend += l.valor; });
+  var conc = all.filter(function(l){ return cnState(l) === "conc"; }), pend = all.filter(function(l){ return cnState(l) !== "conc"; });
+  var sem = cnEntriesWithoutLine(), sumPend = 0; pend.forEach(function(l){ sumPend += cnRest(l); });
   var cnt = document.getElementById("cnCount"); if (cnt) cnt.textContent = all.length + (all.length === 1 ? " linha" : " linhas");
   var sum = document.getElementById("cnSum");
   if (sum){
@@ -39066,13 +39113,20 @@ function renderConciliacao(){
   var canEdit = cnCan("edit"), canNew = cnCan("create") && flCan("create");
   var cols = [{key: "data", label: "Data", width: 100}, {key: "desc", label: "Descrição do Extrato", width: 260, min: 140, cls: "pt-nome"}, {key: "valor", label: "Valor", width: 120},
     {key: "sit", label: "Situação", width: 110}, {key: "sug", label: "Sugestão / Lançamento", width: 240, min: 120}, {key: "vlanc", label: "Valor / Lançamento", width: 170},
-    {key: "ok", label: "Confirmar", width: 112}, {key: "pick", label: "Escolher", width: 112}, {key: "new", label: "Criar Lançamento", width: 160}];
+    {key: "ok", label: "Confirmar", width: 112}, {key: "pick", label: "Escolher", width: 112}, {key: "new", label: "Criar ou Dividir", width: 250}];
   gtRender(host, "conciliacao", cols, rows.map(function(l){
-    var sit, sug = "", vl = "", vlNum = null, vlDate = "", cOk = "", cPick = "", cNew = "", sugTxt = "", e = l.entry ? cnEntryById(l.entry) : null;
-    if (l.entry){
-      sit = '<span class="tr-mchip tr-ok">Conciliada</span>';
-      if (e){ sugTxt = (e.desc || "—") + " · " + trBr(e.date).slice(0, 5); vlNum = cnEntrySigned(e); vlDate = cnEntryDate(e); sug = '<span class="cn-link pt-ell" data-cn-open="' + esc(e.id) + '" title="' + esc(sugTxt) + '">' + esc(sugTxt) + '</span>'; }
+    var sit, sug = "", vl = "", vlNum = null, vlDate = "", cOk = "", cPick = "", cNew = "", sugTxt = "", st = cnState(l), ids = cnEntriesOf(l), e = ids.length ? cnEntryById(ids[0]) : null;
+    if (st !== "pend"){
+      var rest = cnRest(l);
+      sit = st === "conc" ? '<span class="tr-mchip tr-ok">Conciliada' + (ids.length > 1 ? ' · ' + ids.length : '') + '</span>' : '<span class="tr-mchip tr-sobra" title="A soma dos lançamentos não fecha com a linha">Parcial</span>';
+      if (e){
+        vlNum = cnSum(l); vlDate = cnEntryDate(e); sugTxt = (e.desc || "—") + " · " + trBr(e.date).slice(0, 5) + (ids.length > 1 ? " + " + (ids.length - 1) + (ids.length === 2 ? " lançamento" : " lançamentos") : "");
+        var tt = ids.map(function(id){ var x = cnEntryById(id); return x ? (x.desc || "—") + " (" + flMoneySigned(cnEntrySigned(x)) + ")" : ""; }).filter(Boolean).join("; ");
+        sug = '<span class="cn-link pt-ell" data-cn-open="' + esc(e.id) + '" title="' + esc(tt) + '">' + esc(sugTxt) + '</span>' + (st === "parcial" ? ' <small class="pt-muted">Falta ' + esc(flMoneySigned(rest)) + '</small>' : '');
+      }
       if (canEdit) cOk = '<button type="button" class="btn ghost cn-btn" data-cn-undo="' + esc(l.id) + '">Desfazer</button>';
+      if (canEdit && st === "parcial") cPick = '<button type="button" class="btn ghost cn-btn" data-cn-pick="' + esc(l.id) + '">Completar…</button>';
+      if (canNew && st === "parcial") cNew = '<button type="button" class="btn ghost cn-btn" data-cn-new="' + esc(l.id) + '">Criar Lançamento</button> <button type="button" class="btn ghost cn-btn" data-cn-split="' + esc(l.id) + '">Dividir…</button>';
     } else {
       var sg = cnSuggest(l, by);
       sit = '<span class="tr-mchip tr-falta">Pendente</span>';
@@ -39080,9 +39134,12 @@ function renderConciliacao(){
         sugTxt = (sg.e.desc || "—") + " · " + trBr(cnEntryDate(sg.e)).slice(0, 5); vlNum = cnEntrySigned(sg.e); vlDate = cnEntryDate(sg.e);
         sug = '<span class="cn-sug pt-ell" title="Mesmo valor e data próxima: ' + esc(sugTxt) + '">' + esc(sugTxt) + '</span>';
         cOk = '<button type="button" class="btn primary cn-btn" data-cn-ok="' + esc(l.id) + '|' + esc(sg.e.id) + '">Confirmar</button>';
+      } else if (canNew){
+        var lp = cnLearnPlan(l.desc, l.acc, l.valor > 0 ? 1 : -1);
+        if (lp){ var lpl = flPlanById(lp.plan); sugTxt = "Provável: " + (lpl ? lpl.name : ""); sug = '<span class="cn-sug pt-ell pt-muted" title="' + esc(cnLearnText(lp)) + '">' + esc(sugTxt) + '</span>'; }
       }
       if (canEdit) cPick = '<button type="button" class="btn ghost cn-btn" data-cn-pick="' + esc(l.id) + '">Escolher…</button>';
-      if (canNew) cNew = '<button type="button" class="btn ghost cn-btn" data-cn-new="' + esc(l.id) + '">Criar Lançamento</button>';
+      if (canNew) cNew = '<button type="button" class="btn ghost cn-btn" data-cn-new="' + esc(l.id) + '">Criar Lançamento</button> <button type="button" class="btn ghost cn-btn" data-cn-split="' + esc(l.id) + '">Dividir…</button>';
     }
     if (vlNum !== null){
       var dif = Math.abs(vlNum - l.valor) > 0.005, same = !dif && vlDate === l.date;   // data e valor batem = verde
@@ -39090,7 +39147,7 @@ function renderConciliacao(){
     }
     return {attrs: 'class="pr-row" data-cn-line="' + esc(l.id) + '"', cells: [esc(trBr(l.date)), '<b>' + esc(l.desc || "—") + '</b>',
       '<span class="' + (l.valor < 0 ? "fl-neg" : "fl-pos") + '">' + esc(flMoneySigned(l.valor)) + '</span>', sit, sug, vl, cOk, cPick, cNew],
-      vals: [l.date, normText(l.desc), l.valor, l.entry ? 1 : 0, normText(sugTxt), vlNum === null ? "" : vlNum, cOk ? 1 : 0, cPick ? 1 : 0, cNew ? 1 : 0]};
+      vals: [l.date, normText(l.desc), l.valor, st === "conc" ? 2 : st === "parcial" ? 1 : 0, normText(sugTxt), vlNum === null ? "" : vlNum, cOk ? 1 : 0, cPick ? 1 : 0, cNew ? 1 : 0]};
   }), renderConciliacao, "reg-table");
 }
 function cnOnShow(){
@@ -39114,17 +39171,26 @@ function cnRank(line, by){
   }).sort(function(a, b){ return b.score - a.score || a.days - b.days; });
 }
 function cnPickModal(line){
-  var by = cnByEntry(), all = cnRank(line, by), host = document.getElementById("confirmHost");
+  var byAll = cnByEntry(), mine = cnEntriesOf(line), by = {}, sel = {}, host = document.getElementById("confirmHost");
   if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
-  var best = all[0] && all[0].score >= 70 ? all[0].e.id : "";
+  Object.keys(byAll).forEach(function(id){ if (mine.indexOf(id) === -1) by[id] = byAll[id]; });
+  var all = cnRank(line, by);
+  all.sort(function(a, b){ return (mine.indexOf(b.e.id) !== -1 ? 1 : 0) - (mine.indexOf(a.e.id) !== -1 ? 1 : 0); });
+  mine.forEach(function(id){ sel[id] = 1; });
+  var best = "";
+  if (!mine.length){
+    var top = all.slice().sort(function(a, b){ return b.score - a.score || a.days - b.days; })[0];
+    if (top && top.score >= 70){ best = top.e.id; sel[best] = 1; }
+  }
+  var byId = {}; all.forEach(function(c){ byId[c.e.id] = c; });
   function compat(c){ return c.score >= 120 ? ["Alta", "cn-hi"] : c.score >= 70 ? ["Média", "cn-mid"] : ["Baixa", "cn-lo"]; }
   function rowsHtml(q, onlyExact){
     var nq = normText(q || ""), n = 0, out = "";
     all.forEach(function(c){
-      if (n >= 60 || (onlyExact && !c.exact) || (nq && normText(c.e.desc || "").indexOf(nq) === -1)) return;
+      if (!sel[c.e.id] && (n >= 60 || (onlyExact && !c.exact) || (nq && normText(c.e.desc || "").indexOf(nq) === -1))) return;
       n++;
       var cp = compat(c), isBest = c.e.id === best;
-      out += '<tr data-id="' + esc(c.e.id) + '"' + (isBest ? ' class="cn-best"' : '') + '><td class="cn-ck"><input type="checkbox" name="cnE" value="' + esc(c.e.id) + '" aria-label="Escolher"></td>' +
+      out += '<tr data-id="' + esc(c.e.id) + '"' + (isBest ? ' class="cn-best"' : '') + '><td class="cn-ck"><input type="checkbox" name="cnE" value="' + esc(c.e.id) + '"' + (sel[c.e.id] ? ' checked' : '') + ' aria-label="Escolher"></td>' +
         '<td><b>' + esc(c.e.desc || "—") + '</b>' + (isBest ? ' <span class="tr-chip st-ativo">Sugerido</span>' : '') + '</td>' +
         '<td>' + esc(trBr(cnEntryDate(c.e))) + '</td>' +
         '<td><span class="' + (c.sv < 0 ? "fl-neg" : "fl-pos") + '">' + esc(flMoneySigned(c.sv)) + '</span></td>' +
@@ -39134,45 +39200,261 @@ function cnPickModal(line){
     });
     return out || '<tr><td colspan="7" class="pt-muted" style="text-align:center;padding:18px">Nenhum lançamento encontrado.</td></tr>';
   }
-  host.innerHTML = '<div class="overlay" id="ovCnPick"><div class="modal" style="max-width:900px"><div class="modal-head"><div><h3>Escolher Lançamento</h3><div class="modal-sub">' + esc(trBr(line.date)) + ' · ' + esc(line.desc || "—") + ' · ' + esc(flMoneySigned(line.valor)) + '</div></div><button class="modal-close" id="cnpClose" aria-label="Fechar">✕</button></div>' +
+  host.innerHTML = '<div class="overlay" id="ovCnPick"><div class="modal" style="max-width:900px"><div class="modal-head"><div><h3>Escolher Lançamentos</h3><div class="modal-sub">' + esc(trBr(line.date)) + ' · ' + esc(line.desc || "—") + ' · ' + esc(flMoneySigned(line.valor)) + '</div></div><button class="modal-close" id="cnpClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body"><div class="pat-toolbar" style="padding:0 0 10px"><div class="search-wrap" style="flex:1 1 auto"><input type="search" id="cnpQ" placeholder="Pesquisar pelo nome do lançamento…" autocomplete="off"></div>' +
     '<label class="chk-line"><input type="checkbox" id="cnpExact"> <span>Só Valor Igual</span></label></div>' +
     '<div class="cn-pick-wrap"><table class="pat-table cn-pick"><thead><tr><th class="cn-ck"></th><th>Lançamento</th><th>Data</th><th>Valor</th><th>Diferença</th><th>Distância</th><th>Compatibilidade</th></tr></thead><tbody id="cnpBody">' + rowsHtml("", false) + '</tbody></table></div>' +
-    '<div class="pat-count" style="margin-top:8px">Mostrando os 60 mais parecidos, do mais ao menos compatível (valor, data e palavras em comum).</div></div>' +
+    '<div class="pat-count" style="margin-top:8px" id="cnpTot"></div>' +
+    '<div class="pat-count">Marque um ou mais lançamentos: a soma deles deve fechar com a linha do extrato. Mostrando os 60 mais parecidos.</div></div>' +
     '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="cnpCancel">Cancelar</button><button class="btn primary" id="cnpOk" disabled>Conciliar</button></div></div></div>';
   var ov = document.getElementById("ovCnPick");
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("cnpClose").addEventListener("click", close); document.getElementById("cnpCancel").addEventListener("click", close);
-  var ok = document.getElementById("cnpOk");
-  var body = document.getElementById("cnpBody"), qEl = document.getElementById("cnpQ"), exEl = document.getElementById("cnpExact");
-  function refill(){ body.innerHTML = rowsHtml(qEl.value, exEl.checked); ok.disabled = true; }
+  var ok = document.getElementById("cnpOk"), body = document.getElementById("cnpBody"), qEl = document.getElementById("cnpQ"), exEl = document.getElementById("cnpExact"), tot = document.getElementById("cnpTot");
+  function sumSel(){ var t = 0, n = 0; Object.keys(sel).forEach(function(id){ if (byId[id]){ t += byId[id].sv; n++; } }); return {n: n, sum: Math.round(t * 100) / 100}; }
+  function upd(){
+    var r = sumSel(), rest = Math.round((line.valor - r.sum) * 100) / 100;
+    tot.innerHTML = r.n ? 'Selecionados: <b>' + r.n + '</b> · Soma <b>' + esc(flMoneySigned(r.sum)) + '</b> · Linha <b>' + esc(flMoneySigned(line.valor)) + '</b> · ' + (Math.abs(rest) < 0.005 ? '<span class="cn-eq">Fecha</span>' : (rest > 0 ? 'Falta ' : 'Sobra ') + '<b>' + esc(flMoneySigned(Math.abs(rest))) + '</b>') : 'Nenhum lançamento marcado.';
+    ok.disabled = !r.n;
+  }
+  function refill(){ body.innerHTML = rowsHtml(qEl.value, exEl.checked); upd(); }
   qEl.addEventListener("input", refill); exEl.addEventListener("change", refill);
-  // uma só escolha: marcar uma caixa desmarca as outras; clicar na linha também marca
   body.addEventListener("click", function(e){
     var tr = e.target.closest("tr[data-id]"); if (!tr) return;
     var cb = tr.querySelector("input"); if (e.target !== cb) cb.checked = !cb.checked;
-    body.querySelectorAll("input:checked").forEach(function(o){ if (o !== cb) o.checked = false; });
-    ok.disabled = !cb.checked;
+    if (cb.checked) sel[tr.getAttribute("data-id")] = 1; else delete sel[tr.getAttribute("data-id")];
+    upd();
   });
-  var pre = best && body.querySelector('tr[data-id="' + best + '"] input');
-  if (pre){ pre.checked = true; ok.disabled = false; }
+  upd();
   ok.addEventListener("click", function(){
-    var id = ov.querySelector('input[name="cnE"]:checked').value, e = cnEntryById(id);
-    var go = function(){ cnUpdateOne(line.id, id).then(function(d){ if (d){ close(); showToast("Linha conciliada."); renderConciliacao(); } }); };
-    if (e && Math.abs(cnEntrySigned(e) - line.valor) > 0.005)
-      confirmDialog({title: "Valor Diferente", message: 'O lançamento está com <b>' + esc(flMoneySigned(cnEntrySigned(e))) + '</b> e a linha do extrato com <b>' + esc(flMoneySigned(line.valor)) + '</b>. Conciliar mesmo assim?', confirmLabel: "Conciliar"}).then(function(y){ if (y) go(); });
+    var ids = Object.keys(sel), r = sumSel();
+    var go = function(){ cnSetEntries(line.id, ids).then(function(d){ if (d){ close(); showToast(ids.length > 1 ? "Linha conciliada com " + ids.length + " lançamentos." : "Linha conciliada."); renderConciliacao(); } }); };
+    if (Math.abs(r.sum - line.valor) > 0.005)
+      confirmDialog({title: "Soma Diferente", message: 'A soma dos lançamentos é <b>' + esc(flMoneySigned(r.sum)) + '</b> e a linha do extrato tem <b>' + esc(flMoneySigned(line.valor)) + '</b>. Conciliar mesmo assim? A linha ficará como <b>Parcial</b>.', confirmLabel: "Conciliar"}).then(function(y){ if (y) go(); });
     else go();
   });
 }
-// criar o lançamento que falta a partir da linha do extrato
+// ---- aprendizado: a subcategoria mais usada para descrições parecidas (calculado dos lançamentos que já existem)
+var CN_GENERIC = {debito: 1, credito: 1, deb: 1, cred: 1, pix: 1, ted: 1, doc: 1, tef: 1, pag: 1, pagto: 1, pgto: 1, pg: 1, internet: 1, transf: 1, transferencia: 1, pagador: 1, compra: 1, cartao: 1, saque: 1, recebido: 1, enviado: 1, de: 1, da: 1, do: 1, p: 1};
+function cnLearnKey(desc){
+  var w = normText(desc || "").replace(/[0-9]+/g, " ").split(/[^a-z]+/).filter(function(x){ return x.length > 1; });
+  var f = w.filter(function(x){ return !CN_GENERIC[x]; });
+  return (f.length ? f : w).slice(0, 6).join(" ");
+}
+function cnLearnIndex(){
+  if (CN._lrn && CN._lrnRows === FL.rows && CN._lrnN === (FL.rows || []).length) return CN._lrn;
+  var ix = {};
+  (FL.rows || []).forEach(function(e){
+    if (!e.plan || !e.desc) return;
+    var k = cnLearnKey(e.desc); if (!k) return;
+    var o = ix[k] || (ix[k] = {total: 0, plans: {}});
+    o.total++;
+    var pl = o.plans[e.plan] || (o.plans[e.plan] = {n: 0, acc: {}, last: ""});
+    pl.n++; pl.acc[e.acc] = (pl.acc[e.acc] || 0) + 1; if (e.date > pl.last) pl.last = e.date;
+  });
+  CN._lrn = ix; CN._lrnRows = FL.rows; CN._lrnN = (FL.rows || []).length;
+  return ix;
+}
+function cnLearnPlan(desc, acc, sign){
+  var k = cnLearnKey(desc), o = cnLearnIndex()[k]; if (!o) return null;
+  var best = null, tot = 0;
+  Object.keys(o.plans).forEach(function(id){
+    var p = flPlanById(id); if (!p || p.inativo) return;
+    var sg = (p.tipo === "Receita" || p.tipo === "Entrada") ? 1 : (p.tipo === "Despesa" || p.tipo === "Saída") ? -1 : 0;
+    if (sign && sg !== sign) return;
+    var pl = o.plans[id]; tot += pl.n;
+    var score = pl.n + (pl.acc[acc] || 0) * 0.5;
+    if (!best || score > best.score || (score === best.score && pl.last > best.last)) best = {plan: id, n: pl.n, score: score, last: pl.last};
+  });
+  if (!best || !tot) return null;
+  best.total = tot; best.share = best.n / tot; best.key = k;
+  if (best.share < 0.6) return null;
+  best.nivel = best.n >= 5 && best.share >= 0.9 ? "Alta" : best.n >= 2 ? "Média" : "Baixa";
+  return best;
+}
+function cnLearnText(lp){
+  var p = flPlanById(lp.plan);
+  return "Subcategoria “" + (p ? p.name : "") + "” em " + lp.n + " de " + lp.total + (lp.total === 1 ? " lançamento parecido" : " lançamentos parecidos") + " (confiança " + lp.nivel.toLowerCase() + ").";
+}
+// janela “O Que o Sistema Aprendeu”: descrições que se repetem e a subcategoria de cada uma
+function cnLearnedModal(){
+  var host = regQuickHost(), ix = cnLearnIndex(), rows = [];
+  Object.keys(ix).forEach(function(k){
+    var o = ix[k]; if (o.total < 2) return;
+    var best = null; Object.keys(o.plans).forEach(function(id){ if (!best || o.plans[id].n > o.plans[best].n) best = id; });
+    var p = flPlanById(best), pl = o.plans[best], share = pl.n / o.total;
+    rows.push({k: k, plan: p ? p.name : "—", n: pl.n, total: o.total, share: share, nivel: pl.n >= 5 && share >= 0.9 ? "Alta" : share >= 0.6 ? "Média" : "Dividida"});
+  });
+  rows.sort(function(a, b){ return b.total - a.total; });
+  function html(q){
+    var nq = normText(q || "");
+    var list = rows.filter(function(r){ return !nq || normText(r.k + " " + r.plan).indexOf(nq) !== -1; }).slice(0, 150);
+    return list.map(function(r){ var cp = r.nivel === "Alta" ? "cn-hi" : r.nivel === "Média" ? "cn-mid" : "cn-lo";
+      return '<tr><td><b>' + esc(r.k) + '</b></td><td>' + esc(r.plan) + '</td><td>' + r.n + ' de ' + r.total + '</td><td><span class="cn-cp ' + cp + '">' + r.nivel + '</span></td></tr>'; }).join("") ||
+      '<tr><td colspan="4" class="pt-muted" style="text-align:center;padding:18px">Nada encontrado.</td></tr>';
+  }
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovCnLrn"><div class="modal" style="max-width:820px"><div class="modal-head"><div><h3>O Que o Sistema Aprendeu</h3><div class="modal-sub">' + rows.length + ' descrições que se repetem em ' + (FL.rows || []).length + ' lançamentos. “Criar Lançamento” já sugere a subcategoria mais usada.</div></div><button class="modal-close" id="cnlClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="pat-toolbar" style="padding:0 0 10px"><div class="search-wrap" style="flex:1 1 auto"><input type="search" id="cnlQ" placeholder="Pesquisar descrição ou subcategoria…" autocomplete="off"></div></div>' +
+    '<div class="cn-pick-wrap"><table class="pat-table cn-pick"><thead><tr><th>Descrição Parecida</th><th>Subcategoria Mais Usada</th><th>Lançamentos</th><th>Confiança</th></tr></thead><tbody id="cnlBody">' + html("") + '</tbody></table></div></div>' +
+    '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="cnlOk">Fechar</button></div></div></div>';
+  var ov = document.getElementById("ovCnLrn");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("cnlClose").addEventListener("click", close); document.getElementById("cnlOk").addEventListener("click", close);
+  document.getElementById("cnlQ").addEventListener("input", function(){ document.getElementById("cnlBody").innerHTML = html(this.value); });
+}
+// criar o lançamento que falta (ou o que ainda falta para fechar a linha) a partir da linha do extrato
 function cnCreateFrom(line){
-  openLancamento(null, {pre: {acc: line.acc, date: line.date, desc: line.desc, valor: Math.abs(line.valor), extDate: line.date, extVal: Math.abs(line.valor)}, onSaved: function(n){
+  var rest = cnRest(line), sign = rest > 0 ? 1 : -1, lp = cnLearnPlan(line.desc, line.acc, sign);
+  var pre = {acc: line.acc, date: line.date, desc: line.desc, valor: Math.abs(rest), extDate: line.date, extVal: Math.abs(rest)};
+  if (lp) pre.plan = lp.plan;
+  openLancamento(null, {pre: pre, learned: lp, onSaved: function(n){
     if (!n) return;
-    if (flSign(n) !== (line.valor > 0 ? 1 : -1)){
-      showToast("A subcategoria escolhida é de " + (flSign(n) > 0 ? "entrada" : "saída") + ", mas a linha do extrato é de " + (line.valor > 0 ? "entrada" : "saída") + ". O lançamento foi criado sem conciliar; ajuste a subcategoria e concilie.", true); return; }
-    cnUpdateOne(line.id, n.id).then(function(d){ if (d) showToast("Lançamento criado e conciliado."); renderConciliacao(); });
+    if (flSign(n) !== sign){
+      showToast("A subcategoria escolhida é de " + (flSign(n) > 0 ? "entrada" : "saída") + ", mas a linha do extrato é de " + (sign > 0 ? "entrada" : "saída") + ". O lançamento foi criado sem conciliar; ajuste a subcategoria e concilie.", true); return; }
+    var cur = (CN.rows || []).filter(function(x){ return x.id === line.id; })[0] || line;
+    cnSetEntries(line.id, cnEntriesOf(cur).concat(n.id)).then(function(d){ if (d) showToast("Lançamento criado e conciliado."); renderConciliacao(); });
   }});
+}
+// dividir uma linha do extrato em vários lançamentos (ex.: um pagamento em lote)
+function cnSplitDialog(line){
+  var rest = cnRest(line), sign = rest > 0 ? 1 : -1, total = Math.abs(rest), host = regQuickHost();
+  if (fcDateClosed(line.date)){ showToast("O mês de " + flMonthLabel(line.date.slice(0, 7)) + " está fechado. Reabra o mês para criar lançamentos nele.", true); return; }
+  var plans = activeOnly(state.chartAccounts).filter(function(p){ var g = (p.tipo === "Receita" || p.tipo === "Entrada") ? 1 : (p.tipo === "Despesa" || p.tipo === "Saída") ? -1 : 0; return g === sign; })
+    .sort(function(a, b){ return String(a.categoria || "").localeCompare(String(b.categoria || ""), "pt-BR") || String(a.name).localeCompare(String(b.name), "pt-BR"); });
+  var lp = cnLearnPlan(line.desc, line.acc, sign);
+  function optHtml(keep){ return '<option value="">Escolha…</option>' + plans.map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === keep ? ' selected' : '') + '>' + esc(flPlanLabel(p)) + '</option>'; }).join(""); }
+  function rowHtml(plan, val, desc){
+    return '<div class="hours-row cv-row nov cn-sp-row"><select class="cn-sp-plan" data-combo data-reg-add="planocontas" aria-label="Subcategoria">' + optHtml(plan) + '</select>' +
+      '<input type="text" class="cn-sp-val" data-money inputmode="decimal" placeholder="0,00" aria-label="Valor" value="' + (val ? esc(fmtMoney(val).replace("R$ ", "")) : "") + '">' +
+      '<input type="text" class="cn-sp-desc" maxlength="200" aria-label="Descrição" value="' + esc(desc) + '"><button type="button" class="rm" aria-label="Remover Parte">✕</button></div>';
+  }
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovCnSplit"><div class="modal" style="max-width:860px"><div class="modal-head"><div><h3>Dividir em Lançamentos</h3><div class="modal-sub">' + esc(trBr(line.date)) + ' · ' + esc(line.desc || "—") + ' · ' + esc(flMoneySigned(rest)) + '</div></div><button class="modal-close" id="cnsClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="tr-sec tr-sec-top">Partes</div><div class="cv-head nov"><span>Subcategoria</span><span>Valor (R$)</span><span>Descrição</span><span></span></div>' +
+    '<div id="cnsRows">' + rowHtml(lp ? lp.plan : "", 0, line.desc) + rowHtml("", 0, line.desc) + '</div>' +
+    '<button type="button" class="btn add-row-btn cv-add-row" id="cnsAdd">+ Incluir Parte</button>' +
+    '<div class="pat-count" id="cnsTot" style="margin-top:8px"></div></div>' +
+    '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="cnsCancel">Cancelar</button><button class="btn primary" id="cnsOk">Criar e Conciliar</button></div></div></div>';
+  var ov = document.getElementById("ovCnSplit"), rowsEl = document.getElementById("cnsRows"), tot = document.getElementById("cnsTot");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("cnsClose").addEventListener("click", close); document.getElementById("cnsCancel").addEventListener("click", close);
+  function parts(){ return Array.prototype.map.call(rowsEl.querySelectorAll(".cn-sp-row"), function(r){
+    return {plan: r.querySelector(".cn-sp-plan").value, valor: Math.round(Math.abs(parseMoney(r.querySelector(".cn-sp-val").value) || 0) * 100) / 100, desc: r.querySelector(".cn-sp-desc").value.trim()}; }); }
+  function upd(){
+    var sum = 0; parts().forEach(function(x){ sum += x.valor; }); sum = Math.round(sum * 100) / 100;
+    var left = Math.round((total - sum) * 100) / 100;
+    tot.innerHTML = 'Soma <b>' + esc(flMoneySigned(sign * sum)) + '</b> · Linha <b>' + esc(flMoneySigned(rest)) + '</b> · ' + (Math.abs(left) < 0.005 ? '<span class="cn-eq">Fecha</span>' : (left > 0 ? 'Falta ' : 'Sobra ') + '<b>' + esc(flMoneySigned(Math.abs(left))) + '</b>');
+  }
+  rowsEl.addEventListener("input", upd); rowsEl.addEventListener("change", upd);
+  rowsEl.addEventListener("focusout", function(e){ if (e.target.classList.contains("cn-sp-val") && e.target.value.trim()) e.target.value = fmtMoney(parseMoney(e.target.value)).replace("R$ ", ""); upd(); });
+  rowsEl.addEventListener("click", function(e){
+    var rm = e.target.closest(".rm"); if (!rm) return;
+    if (rowsEl.querySelectorAll(".cn-sp-row").length <= 2){ showToast("Dividir pede pelo menos duas partes.", true); return; }
+    rm.closest(".cn-sp-row").remove(); upd();
+  });
+  document.getElementById("cnsAdd").addEventListener("click", function(){
+    var sum = 0; parts().forEach(function(x){ sum += x.valor; });
+    var left = Math.round((total - sum) * 100) / 100;
+    rowsEl.insertAdjacentHTML("beforeend", rowHtml("", left > 0 ? left : 0, line.desc)); upd();
+  });
+  upd();
+  document.getElementById("cnsOk").addEventListener("click", function(){
+    var ps = parts(), sum = 0, i;
+    for (i = 0; i < ps.length; i++){
+      if (!ps[i].plan){ showToast("Escolha a subcategoria da parte " + (i + 1) + ".", true); return; }
+      if (!(ps[i].valor > 0)){ showToast("Informe o valor da parte " + (i + 1) + ".", true); return; }
+      sum += ps[i].valor;
+    }
+    if (Math.abs(sum - total) > 0.005){ showToast("A soma das partes precisa ser igual ao valor da linha (" + flMoneySigned(rest) + ").", true); return; }
+    var btn = document.getElementById("cnsOk"); btn.disabled = true;
+    var made = [];
+    ps.reduce(function(p, x){
+      return p.then(function(ok){
+        if (!ok) return false;
+        return flSaveRow({acc: line.acc, date: line.date, desc: x.desc || line.desc, plan: x.plan, valor: x.valor, extDate: line.date, extVal: x.valor, obs: ""}, true).then(function(n){ if (n) made.push(n.id); return !!n; });
+      });
+    }, Promise.resolve(true)).then(function(allOk){
+      var cur = (CN.rows || []).filter(function(r){ return r.id === line.id; })[0] || line;
+      var link = made.length ? cnSetEntries(line.id, cnEntriesOf(cur).concat(made)) : Promise.resolve(false);
+      link.then(function(d){
+        btn.disabled = false;
+        if (allOk && d){ close(); showToast(made.length + " lançamentos criados e conciliados."); }
+        else if (made.length) showToast("Nem todas as partes foram criadas: as que deram certo já estão ligadas à linha.", true);
+        renderConciliacao();
+        if (allOk && d) return;
+      });
+    });
+  });
+}
+// transferências entre contas: saída numa conta e entrada igual na outra, no mesmo dia (linhas do extrato ainda pendentes)
+function cnTransferPairs(tol){
+  var pend = (CN.rows || []).filter(function(l){ return cnState(l) === "pend"; });
+  var ins = pend.filter(function(l){ return l.valor > 0; }), used = {}, pairs = [];
+  pend.filter(function(l){ return l.valor < 0; }).sort(function(a, b){ return a.date < b.date ? -1 : 1; }).forEach(function(o){
+    var best = null;
+    ins.forEach(function(i){
+      if (used[i.id] || i.acc === o.acc || Math.abs(i.valor + o.valor) >= 0.005) return;
+      var d = Math.abs(fpDays(i.date, o.date)); if (d > tol) return;
+      if (!best || d < best.d) best = {i: i, d: d};
+    });
+    if (best){ used[best.i.id] = 1; pairs.push({out: o, inn: best.i, d: best.d}); }
+  });
+  return pairs;
+}
+function cnTransfersModal(){
+  if (!(cnCan("edit") && flCan("create"))){ showToast(permDeniedMsg("financeiro", "create"), true); return; }
+  var host = regQuickHost(), tol = 0, pairs = cnTransferPairs(0);
+  var outPlans = activeOnly(state.chartAccounts).filter(function(p){ return p.tipo === "Saída"; }), inPlans = activeOnly(state.chartAccounts).filter(function(p){ return p.tipo === "Entrada"; });
+  function def(list){ var h = list.filter(function(p){ return /transfer/i.test(normText(p.name)); })[0]; return h ? h.id : ""; }
+  function opts(list, keep){ return '<option value="">Escolha…</option>' + list.map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === keep ? ' selected' : '') + '>' + esc(flPlanLabel(p)) + '</option>'; }).join(""); }
+  function accName(id){ var a = flAccById(id); return a ? a.name : "—"; }
+  function body(){
+    if (!pairs.length) return '<tr><td colspan="6" class="pt-muted" style="text-align:center;padding:18px">Nenhuma transferência encontrada entre as linhas pendentes' + (tol ? '' : ' no mesmo dia') + '.</td></tr>';
+    return pairs.map(function(x, i){
+      return '<tr data-i="' + i + '"><td class="cn-ck"><input type="checkbox" checked aria-label="Escolher"></td><td>' + esc(trBr(x.out.date)) + '</td><td>' + esc(accName(x.out.acc)) + '</td><td>' + esc(accName(x.inn.acc)) + '</td>' +
+        '<td><span class="fl-pos">' + esc(flMoneySigned(x.inn.valor)) + '</span></td><td>' + (x.d === 0 ? "Mesmo dia" : x.d + " dia") + '</td></tr>';
+    }).join("");
+  }
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovCnTr"><div class="modal" style="max-width:860px"><div class="modal-head"><div><h3>Transferências entre Contas</h3><div class="modal-sub">Saída numa conta e entrada de mesmo valor na outra, nas linhas do extrato que ainda estão pendentes.</div></div><button class="modal-close" id="cntClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="field-row"><div class="field"><label for="cntOut">Subcategoria da Saída</label><select id="cntOut" data-combo data-reg-add="planocontas">' + opts(outPlans, def(outPlans)) + '</select></div>' +
+    '<div class="field"><label for="cntIn">Subcategoria da Entrada</label><select id="cntIn" data-combo data-reg-add="planocontas">' + opts(inPlans, def(inPlans)) + '</select></div></div>' +
+    '<label class="chk-line" style="margin:4px 0 10px"><input type="checkbox" id="cntTol"> <span>Aceitar 1 dia de diferença</span></label>' +
+    '<div class="cn-pick-wrap"><table class="pat-table cn-pick"><thead><tr><th class="cn-ck"></th><th>Data</th><th>Saiu de</th><th>Entrou em</th><th>Valor</th><th>Distância</th></tr></thead><tbody id="cntBody">' + body() + '</tbody></table></div>' +
+    '<div class="pat-count" style="margin-top:8px">Cada par vira dois lançamentos (um em cada conta), já conciliados com a linha do extrato.</div></div>' +
+    '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="cntCancel">Cancelar</button><button class="btn primary" id="cntOk">Criar e Conciliar</button></div></div></div>';
+  var ov = document.getElementById("ovCnTr"), bodyEl = document.getElementById("cntBody");
+  function close(){ host.innerHTML = ""; }
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  document.getElementById("cntClose").addEventListener("click", close); document.getElementById("cntCancel").addEventListener("click", close);
+  document.getElementById("cntTol").addEventListener("change", function(){ tol = this.checked ? 1 : 0; pairs = cnTransferPairs(tol); bodyEl.innerHTML = body(); });
+  bodyEl.addEventListener("click", function(e){ var tr = e.target.closest("tr[data-i]"); if (!tr) return; var cb = tr.querySelector("input"); if (e.target !== cb) cb.checked = !cb.checked; });
+  document.getElementById("cntOk").addEventListener("click", function(){
+    var po = document.getElementById("cntOut").value, pi = document.getElementById("cntIn").value;
+    var chosen = Array.prototype.filter.call(bodyEl.querySelectorAll("tr[data-i]"), function(tr){ return tr.querySelector("input").checked; }).map(function(tr){ return pairs[+tr.getAttribute("data-i")]; });
+    if (!chosen.length){ showToast("Marque ao menos uma transferência.", true); return; }
+    if (!po || !pi){ showToast("Escolha a subcategoria da saída e a da entrada (em Plano de Contas: tipos Saída e Entrada).", true); return; }
+    var btn = document.getElementById("cntOk"); btn.disabled = true;
+    var okN = 0, skipN = 0;
+    chosen.reduce(function(p, x){
+      return p.then(function(){
+        if (fcDateClosed(x.out.date) || fcDateClosed(x.inn.date)){ skipN++; return; }
+        var v = Math.abs(x.out.valor);
+        return flSaveRow({acc: x.out.acc, date: x.out.date, desc: "Transferência para " + accName(x.inn.acc), plan: po, valor: v, extDate: x.out.date, extVal: v, obs: ""}, true).then(function(eo){
+          if (!eo) return;
+          return flSaveRow({acc: x.inn.acc, date: x.inn.date, desc: "Transferência de " + accName(x.out.acc), plan: pi, valor: v, extDate: x.inn.date, extVal: v, obs: ""}, true).then(function(ei){
+            if (!ei) return;
+            return cnSetEntries(x.out.id, [eo.id]).then(function(a){ return a ? cnSetEntries(x.inn.id, [ei.id]) : false; }).then(function(b){ if (b) okN++; });
+          });
+        });
+      });
+    }, Promise.resolve()).then(function(){
+      btn.disabled = false; close();
+      showToast(okN + (okN === 1 ? " transferência conciliada." : " transferências conciliadas.") + (skipN ? " " + skipN + " em mês fechado ficaram de fora." : ""), okN === 0);
+      renderConciliacao();
+    });
+  });
 }
 function cnAutoConfirm(){
   var by = cnByEntry(), used = {}, pairs = [];
@@ -39236,6 +39518,8 @@ function cnWireMenu(){
     e.stopPropagation();
     if (!menu.hidden){ menu.hidden = true; btn.setAttribute("aria-expanded", "false"); return; }
     menu.innerHTML = (cnCan("edit") ? '<button type="button" class="cad-item" role="menuitem" data-cn-act="auto">Confirmar Sugestões</button>' : "") + (cnCan("create") ? '<button type="button" class="cad-item" role="menuitem" data-cn-act="import">Importar Extrato</button>' : "") +
+      (cnCan("edit") && flCan("create") ? '<button type="button" class="cad-item" role="menuitem" data-cn-act="transfers">Transferências entre Contas' + (cnTransferPairs(0).length ? ' (' + cnTransferPairs(0).length + ')' : '') + '</button>' : "") +
+      '<button type="button" class="cad-item" role="menuitem" data-cn-act="learned">O Que o Sistema Aprendeu</button>' +
       (cnCan("delete") ? '<button type="button" class="cad-item" role="menuitem" data-cn-act="delpend">Excluir Linhas Pendentes do Período</button>' : "");
     if (!menu.innerHTML){ return; }
     menu.hidden = false; btn.setAttribute("aria-expanded", "true"); placeToolsMenu(btn, menu);
@@ -39245,6 +39529,8 @@ function cnWireMenu(){
     menu.hidden = true; btn.setAttribute("aria-expanded", "false");
     if (b.getAttribute("data-cn-act") === "import") cnOpenImport();
     else if (b.getAttribute("data-cn-act") === "auto") cnAutoConfirm();
+    else if (b.getAttribute("data-cn-act") === "transfers") cnTransfersModal();
+    else if (b.getAttribute("data-cn-act") === "learned") cnLearnedModal();
     else {
       var pend = cnLinesOfAcc().filter(function(l){ return !l.entry && cnMonthOk(l.date); });
       if (!pend.length){ showToast("Não há linhas pendentes neste período.", true); return; }
@@ -39270,6 +39556,7 @@ function wireConciliacao(){
     if ((t = e.target.closest("[data-cn-ok]"))){ var p = t.getAttribute("data-cn-ok").split("|"); cnUpdateOne(p[0], p[1]).then(function(d){ if (d) renderConciliacao(); }); return; }
     if ((t = e.target.closest("[data-cn-undo]"))){ cnUpdateOne(t.getAttribute("data-cn-undo"), "").then(function(d){ if (d) renderConciliacao(); }); return; }
     if ((t = e.target.closest("[data-cn-pick]"))){ var l = (CN.rows || []).filter(function(x){ return x.id === t.getAttribute("data-cn-pick"); })[0]; if (l) cnPickModal(l); return; }
+    if ((t = e.target.closest("[data-cn-split]"))){ var l3 = (CN.rows || []).filter(function(x){ return x.id === t.getAttribute("data-cn-split"); })[0]; if (l3) cnSplitDialog(l3); return; }
     if ((t = e.target.closest("[data-cn-new]"))){ var l2 = (CN.rows || []).filter(function(x){ return x.id === t.getAttribute("data-cn-new"); })[0]; if (l2) cnCreateFrom(l2); return; }
     if ((t = e.target.closest("[data-cn-open]")) || (t = e.target.closest("[data-cn-entry]"))){ var e1 = cnEntryById(t.getAttribute("data-cn-open") || t.getAttribute("data-cn-entry")); if (e1) openLancamento(e1); }
   });

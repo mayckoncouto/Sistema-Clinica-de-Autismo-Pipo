@@ -21,7 +21,7 @@ var PREFIX = "backup-agenda-pipo-";
 var TABLES = [
   ["documents", "path"], ["appointments", "id"], ["clinical_records", "id"], ["patient_health", "patient_id"],
   ["treatment_finance", "treatment_id"], ["convenio_finance", "id"], ["bank_account_finance", "account_id"],
-  ["finance_entries", "id"], ["finance_statement_lines", "id"], ["treatment_sales", "id"], ["anamneses", "id"],
+  ["finance_entries", "id"], ["finance_statement_lines", "id"], ["finance_statement_links", "entry_id"], ["treatment_sales", "id"], ["anamneses", "id"],
   ["commission_rules", "id"], ["sale_commissions", "id"], ["sale_goals", "id"], ["finance_loans", "id"],
   ["finance_payables", "id"], ["staff", "id"], ["staff_pay", "staff_id"], ["therapy_plans", "id"],
   ["tasks", "id"], ["task_events", "id"], ["intake_links", "token"], ["intake_submissions", "id"],
