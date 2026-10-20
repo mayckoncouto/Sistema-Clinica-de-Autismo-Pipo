@@ -67,6 +67,7 @@ const path = require('path');
   await page.waitForFunction(() => { const b = document.getElementById('trPlBox'); return b && !/…/.test(b.textContent); }, null, {timeout: 4000}).catch(() => {});
   const plBox = await page.$eval('#trPlBox', (e) => e.innerText.replace(/\s+/g, ' ')).catch(() => '');
   console.log('Planner box (Por Semana, Atendimentos, Profissionais, Fora do Horário) above the table?', /Por Semana 1ª: \d+ · 2ª: \d+ · 3ª: \d+ · 4ª: \d+ Atendimentos \d+ Profissionais \d+ Fora do Horário do Paciente \d+/i.test(plBox), plBox);
+  if (process.env.SHOT) await page.$eval('#trPlBox', (e) => e.scrollIntoView()).then(() => page.locator('#trPlBox').screenshot({path: process.env.SHOT}));
   const rowsShown = await page.$$eval('#trMonthly tbody tr:not(.tr-month-x):not(.tr-month-xh)', (t) => t.length);
   console.log('section starts hidden and opens with the arrow?', closed && !(await page.$eval('#trMonthBody', (e) => e.hidden)));
   console.log('‹ goes to the previous month (first one, ‹ disabled)?', /\(atual\)/.test(label1) && !/\(atual\)/.test(label2) && prevOff && rowsShown === 3, label1, label2);
