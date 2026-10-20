@@ -51,6 +51,19 @@ const path = require('path');
   await openTool('plConfBtn'); await page.waitForSelector('#ovApQ'); await page.waitForFunction(() => /Sessões Colocadas/.test(document.getElementById('apqOut').textContent));
   const conf = await page.innerText('#ovApQ');
   check('Conferência do Planner: title, 2 of 4 sessions for Paciente A, no Montar Proposta simulation?', /Conferência do Planner/.test(conf) && /Paciente A\s+\S+\s+4\s+2\s+-2/.test(conf.replace(/\n/g, ' ')) && /Pacientes Faltando Sessões/.test(conf) && !/Não Couberam/.test(conf), conf.replace(/\s+/g, ' ').slice(0, 300));
+  // tempo real: alteração feita aqui e alteração vinda de outra pessoa atualizam a janela aberta
+  const flat = () => page.$eval('#apqOut', (o) => o.innerText.replace(/\s+/g, ' '));
+  await ev("applyBookingChanges({'seg-1': {'08:00|rA|a2': {patient: 'Paciente A', note: ''}}}, {patientHoursOk: true, routineOk: true, therapistOk: true, areaOk: true, tipoOk: true})");
+  await page.waitForFunction(() => /Paciente A \S+ 4 3 -1/.test(document.getElementById('apqOut').innerText.replace(/\s+/g, ' ')), null, {timeout: 5000}).catch(() => {});
+  const live1 = await flat();
+  check('Conferência live: in-app change updates the open window (3 of 4)?', /Paciente A \S+ 4 3 -1/.test(live1) && /Atualizado às/.test(live1), live1.slice(0, 200));
+  await ev("(async function(){ var db = await window.claude.use('db'); await db.doc('schedule/qua-3').set({bookings: {'07:20|rA|a1': {patient: 'Paciente A', note: ''}}}); })()");
+  await page.waitForFunction(() => !/Paciente A \S+ 4 3/.test(document.getElementById('apqOut').innerText.replace(/\s+/g, ' ')), null, {timeout: 5000}).catch(() => {});
+  const live2 = await flat();
+  check('Conferência live: change from another person (other day) completes Paciente A?', !/Paciente A/.test(live2) && /completos/.test(live2), live2.slice(0, 200));
+  await ev("(async function(){ var db = await window.claude.use('db'); await db.doc('schedule/qua-3').set({bookings: {}}); })()");
+  await ev("applyBookingChanges({'seg-1': {'08:00|rA|a2': null}}, {noHistory: true})");
+  await page.waitForTimeout(900);
   await page.click('#apqClose');
 
   // 5. Pacientes Faltando Sessões

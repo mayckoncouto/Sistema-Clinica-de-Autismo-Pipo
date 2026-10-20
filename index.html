@@ -6728,6 +6728,7 @@ function subscribeReportDocs(){
       state.reportDocs[docId] = (snap.exists && snap.data()) ? snap.data() : {bookings:{}};
       scheduleRelatorioRender();
       trPlanLive(docId);
+      if (APQ_LIVE){ if (!PLA.on && !state.scheduleSubs[docId]) state.scheduleDocs[docId] = state.reportDocs[docId]; apqLive(); }
     }, function(){
       if (!holder.active) return;
       state.reportDocs[docId] = {bookings:{}};
@@ -6877,6 +6878,7 @@ function flushGridUpdate(){
 // (e.g. the day/week selection changed in the same tick) rather than risk
 // silently dropping an update.
 function renderScheduleDocsTargeted(docIds){
+  apqLive();
   var host = document.getElementById("gridHost");
   if (!host) return;
   var search = state.search;
@@ -21018,7 +21020,29 @@ function openApQualityModal(real){
   document.getElementById("apqCancel").addEventListener("click", close);
   function tbl(head, rows, cls){ return '<table class="fx-table' + (cls ? ' ' + cls : '') + '"><thead><tr>' + head.map(function(h){ return '<th><span class="th-label">' + h + '</span><button type="button" class="sort-btn" title="Ordenar por ' + h + '" aria-label="Ordenar por ' + h + '">' + SORT_NONE_SVG + '</button></th>'; }).join("") + '</tr></thead><tbody>' + rows.map(function(r){ return '<tr>' + r.map(function(c){ return '<td>' + c + '</td>'; }).join("") + '</tr>'; }).join("") + '</tbody></table>'; }
   function sec(t){ return '<div class="prof-section-head" style="margin-top:12px"><span class="tr-sec tr-sec-in">' + t + '</span></div>'; }
-  plannerLoadDocs().then(function(){
+  // clicar no título da coluna ordena (crescente → decrescente); número vale como número
+  out.addEventListener("click", function(e){
+    var th = e.target.closest && e.target.closest(".fx-table th"); if (!th) return;
+    var table = th.closest("table"), idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+    var dir = th.dataset.sort === "asc" ? "desc" : "asc";
+    Array.prototype.forEach.call(table.querySelectorAll("th"), function(h){ var b = h.querySelector(".sort-btn"); delete h.dataset.sort; if (b){ b.classList.remove("active"); b.innerHTML = SORT_NONE_SVG; } });
+    th.dataset.sort = dir; var sb = th.querySelector(".sort-btn"); if (sb){ sb.classList.add("active"); sb.innerHTML = dir === "asc" ? SORT_ASC_SVG : SORT_DESC_SVG; }
+    var body = table.tBodies[0], rows = Array.prototype.slice.call(body.rows);
+    function val(r){ var t = (r.cells[idx] ? r.cells[idx].textContent : "").trim(), n = parseFloat(t.replace(/\./g, "").replace(",", ".").replace(/^\+/, "")); return /^[+-]?\d/.test(t) && !isNaN(n) ? n : normText(t); }
+    rows.sort(function(a, b){ var x = val(a), y = val(b), c = (typeof x === "number" && typeof y === "number") ? x - y : String(x).localeCompare(String(y), "pt-BR", {numeric: true}); return dir === "asc" ? c : -c; });
+    rows.forEach(function(r){ body.appendChild(r); });
+  });
+  out.addEventListener("click", function(e){
+    var a = e.target.closest && e.target.closest(".apq-open-tr"); if (!a) return;
+    e.preventDefault();
+    var t = activeTreatment(a.dataset.pid);
+    if (!t){ showToast("Este paciente não tem tratamento ativo."); return; }
+    openTreatmentModal(t, {stack: true});
+  });
+  var gapsHtml = "";
+  // Desenha de novo (ao abrir e a cada mudança no Planner, com a janela aberta). Mantém a rolagem.
+  function draw(){
+    if (!out.isConnected){ if (APQ_LIVE === draw) APQ_LIVE = null; return; }
     var q = apQuality();
     var bad = q.contr.filter(function(c){ return c.want !== c.got; }), okN = q.contr.length - bad.length;
     var html = '<div class="pat-count"><b>' + q.total + '</b> atendimentos · <b>' + Object.keys(q.byPat).length + '</b> pacientes · <b>' + q.therRows.length + '</b> terapeutas.</div>';
@@ -21032,33 +21056,31 @@ function openApQualityModal(real){
     html += sec("Horário Vago por Sala e Turno") + '<div class="pat-count">' + (q.shifts - q.full.length) + ' de ' + q.shifts + ' turnos de sala com atendimento mantêm pelo menos um horário sem ninguém' + (q.full.length ? '; <b>' + q.full.length + '</b> estão cheios:' : '.') + '</div>' +
       (q.full.length ? '<div class="pat-count">' + q.full.slice(0, 40).map(esc).join("<br>") + (q.full.length > 40 ? "<br>…" : "") + '</div>' : "");
     html += sec("Alertas") + (q.alerts.length ? '<div class="pat-count">' + q.alerts.slice(0, 60).map(esc).join("<br>") + (q.alerts.length > 60 ? "<br>…" : "") + '</div>' : '<div class="pat-count">Nenhum alerta: ninguém junto que não deva e todos dentro do horário.</div>');
-    // clicar no título da coluna ordena (crescente → decrescente); número vale como número
-    out.addEventListener("click", function(e){
-      var th = e.target.closest && e.target.closest(".fx-table th"); if (!th) return;
-      var table = th.closest("table"), idx = Array.prototype.indexOf.call(th.parentNode.children, th);
-      var dir = th.dataset.sort === "asc" ? "desc" : "asc";
-      Array.prototype.forEach.call(table.querySelectorAll("th"), function(h){ var b = h.querySelector(".sort-btn"); delete h.dataset.sort; if (b){ b.classList.remove("active"); b.innerHTML = SORT_NONE_SVG; } });
-      th.dataset.sort = dir; var sb = th.querySelector(".sort-btn"); if (sb){ sb.classList.add("active"); sb.innerHTML = dir === "asc" ? SORT_ASC_SVG : SORT_DESC_SVG; }
-      var body = table.tBodies[0], rows = Array.prototype.slice.call(body.rows);
-      function val(r){ var t = (r.cells[idx] ? r.cells[idx].textContent : "").trim(), n = parseFloat(t.replace(/\./g, "").replace(",", ".").replace(/^\+/, "")); return /^[+-]?\d/.test(t) && !isNaN(n) ? n : normText(t); }
-      rows.sort(function(a, b){ var x = val(a), y = val(b), c = (typeof x === "number" && typeof y === "number") ? x - y : String(x).localeCompare(String(y), "pt-BR", {numeric: true}); return dir === "asc" ? c : -c; });
-      rows.forEach(function(r){ body.appendChild(r); });
-    });
-    out.addEventListener("click", function(e){
-      var a = e.target.closest && e.target.closest(".apq-open-tr"); if (!a) return;
-      e.preventDefault();
-      var t = activeTreatment(a.dataset.pid);
-      if (!t){ showToast("Este paciente não tem tratamento ativo."); return; }
-      openTreatmentModal(t, {stack: true});
-    });
-    out.innerHTML = html + '<div id="apqGaps"><div class="pat-count" style="margin-top:12px">Calculando o que não coube…</div></div>';
-    // o que ainda falta colocar (simulação, não grava nada)
-    if (!PLA.on){ var gb0 = document.getElementById("apqGaps"); if (gb0) gb0.innerHTML = '<div class="pat-count" style="margin-top:12px">Para propor o que falta, use <b>Outras Opções → Pacientes Faltando Sessões</b>.</div>'; return; }
-    var list = state.patients.filter(function(p){ return isActive(p) && activeTreatment(p.id) && !patBlocked(p); });
-    var plan = apBuild(list, {support: false}), gapBox = document.getElementById("apqGaps");
-    if (!gapBox) return;
-    gapBox.innerHTML = sec("Não Couberam (se rodar Montar Proposta agora)") + (plan.gaps.length ? tbl(["Paciente", "Quadro", "Faltam", "Motivo"], plan.gaps.slice(0, 200).map(function(g){ return [esc(g.p.nome), esc(lineLabel(g.line)), g.falta, apGapWhy(g)]; })) : '<div class="pat-count">Tudo o que está nos tratamentos tem lugar.</div>');
-  }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o Auto Planner.</div>'; });
+    var body = out.closest(".modal-body"), top = body ? body.scrollTop : 0;
+    var stamp = '<div class="pat-count" style="margin-top:12px">Atualizado às ' + new Date().toLocaleTimeString("pt-BR") + ': acompanha as mudanças do ' + (PLA.on ? 'Auto Planner' : 'Planner') + ' enquanto a janela está aberta.</div>';
+    out.innerHTML = html + '<div id="apqGaps">' + (gapsHtml || '<div class="pat-count" style="margin-top:12px">' + (PLA.on ? 'Calculando o que não coube…' : 'Para propor o que falta, use <b>Outras Opções → Pacientes Faltando Sessões</b>.') + '</div>') + '</div>' + stamp;
+    if (body) body.scrollTop = top;
+  }
+  plannerLoadDocs().then(function(){
+    draw();
+    APQ_LIVE = draw;
+    if (!PLA.on) return;
+    // o que ainda falta colocar (simulação, não grava nada) — só ao abrir: a conta é pesada
+    setTimeout(function(){
+      if (!out.isConnected) return;
+      var list = state.patients.filter(function(p){ return isActive(p) && activeTreatment(p.id) && !patBlocked(p); });
+      var plan = apBuild(list, {support: false});
+      gapsHtml = sec("Não Couberam (se rodar Montar Proposta agora)") + (plan.gaps.length ? tbl(["Paciente", "Quadro", "Faltam", "Motivo"], plan.gaps.slice(0, 200).map(function(g){ return [esc(g.p.nome), esc(lineLabel(g.line)), g.falta, apGapWhy(g)]; })) : '<div class="pat-count">Tudo o que está nos tratamentos tem lugar.</div>');
+      var gapBox = document.getElementById("apqGaps"); if (gapBox) gapBox.innerHTML = gapsHtml;
+    }, 30);
+  }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o ' + (PLA.on ? 'Auto Planner' : 'Planner') + '.</div>'; });
+}
+// Conferência do Planner / Relatório de Qualidade aberto: redesenha (com espera) quando o Planner muda.
+var APQ_LIVE = null, APQ_TIMER = null;
+function apqLive(){
+  if (!APQ_LIVE) return;
+  clearTimeout(APQ_TIMER);
+  APQ_TIMER = setTimeout(function(){ if (APQ_LIVE) APQ_LIVE(); }, 600);
 }
 /* ---- Auto Planner: rascunhos (até 5), comparação, impressão e Excel ----
  * Rascunho = cópia das 4 semanas do Auto Planner num documento próprio (autoplan/rascunho-<1..5>:
@@ -29272,7 +29294,7 @@ var HELP_TOPICS = [
       "<b>Copiar Semana</b>: copia as marcações de uma semana para outras semanas, nos dias e tipos escolhidos, só em células livres e dentro das regras (horário do terapeuta, bloqueios, conflitos). A prévia diz quantas vão e por que as outras ficam de fora.",
       "<b>Substituir Terapeuta</b>: para férias ou licença. Escolha o terapeuta ausente, o substituto e as semanas, dias e turnos; os atendimentos passam para a coluna do substituto na mesma sala, e os que não cabem (horário ocupado, fora do horário dele, conflito) ficam como estão, com o motivo. Diferente do Trocar Profissional, que passa as colunas para sempre. Para voltar: Ctrl+Z ou repita ao contrário.",
       "<b>Abrir Vaga</b>: escolha a especialidade, as semanas, os dias e a faixa de horário e veja as vagas livres (com um paciente escolhido, só as que ele pode usar; clique para agendar). Embaixo, <b>Quem Poderia Mudar de Lugar</b>: pacientes que ocupam a janela e têm outro horário livre com o mesmo tipo de terapeuta; clique para abrir no Planner.",
-      "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês, fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno.",
+      "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês, fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno. Com a janela aberta, ela se atualiza sozinha quando o Planner muda (por você ou por outra pessoa); o Relatório de Qualidade do Auto Planner faz o mesmo.",
       "<b>Pacientes Faltando Sessões</b>: lista quem tem sessões a menos (ou a mais) no Planner; <b>Completar com o Auto Planner</b> abre o Auto Planner com uma cópia do Planner de agora e a Montar Proposta só para os marcados.",
       "<b>Cópias do Planner</b>: guarda até 5 versões com nome, compara (inclusive com o Auto Planner) e restaura. Restaurar pede duas confirmações, guarda sozinho uma cópia “Automática” do que estava antes e pode ser desfeito com Ctrl+Z.",
       "<b>Imprimir</b>: Grade por Terapeuta e Horário da Família (por paciente ou todos, com Copiar Texto para o WhatsApp) do Planner de agora.",
