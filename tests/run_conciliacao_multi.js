@@ -57,6 +57,15 @@ const fs = require('fs');
   await page.click('#cnsOk'); await page.waitForTimeout(200);
   check('dividir sem valores não grava?', (await ev('cnEntriesOf(CN.rows.filter(function(l){return l.id==="T1";})[0]).length')) === 0);
   await page.click('#cnsCancel');
+  // desfazer: apaga só o que a conciliação criou
+  const nBefore = await ev('FL.rows.length');
+  await ev('cnUndoLine("L2")'); await page.waitForSelector('#cfOk');
+  check('desfazer pergunta e cita os lançamentos criados?', /excluídos/.test(await page.textContent('#confirmHost')));
+  await page.click('#cfOk'); await page.waitForTimeout(500);
+  check('desfazer apagou os 2 lançamentos criados e soltou a linha?', (await ev('FL.rows.length')) === nBefore - 2 && (await ev('cnEntriesOf(CN.rows.filter(function(l){return l.id==="L2";})[0]).length')) === 0);
+  await ev('cnSetEntries("L1", ["j1","j2"])'); await ev('cnUndoLine("L1")'); await page.waitForTimeout(500);
+  check('lançamento que já existia só é desligado (não apaga)?', (await ev('!!cnEntryById("j1") && !!cnEntryById("j2")')) && (await ev('cnEntriesOf(CN.rows.filter(function(l){return l.id==="L1";})[0]).length')) === 0);
+  check('OFX traz o número da conta?', (await ev('cnParseOfx("<ACCTID>12345-6<STMTTRN><DTPOSTED>20261001<TRNAMT>-1<FITID>1</STMTTRN>").acct')) === '12345-6');
   // transferência
   check('transferência: acha o par saída/entrada?', (await ev('cnTransferPairs(0).length')) === 1);
   await ev('cnTransfersModal()'); await page.waitForSelector('#ovCnTr');
