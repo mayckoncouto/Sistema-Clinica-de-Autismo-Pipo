@@ -92,6 +92,7 @@ const fs = require('fs');
   // escolher à mão e valor diferente
   await ev(`CN.rows.push({id:'cnx', acc:'viacredi', date:'2026-10-21', desc:'DEB 99', valor:-98, doc:'', key:'k9', entry:''}); CN.st='pend'`);
   await page.$eval('#cnSt', (e) => { e.value = 'pend'; e.dispatchEvent(new Event('change', { bubbles: true })); }); await page.waitForTimeout(200);
+  await page.evaluate(() => { const h = document.getElementById('confirmHost'); if (h) h.remove(); });   // como logo depois de abrir o sistema
   const rowX = await page.$('#reg-conciliacao-host tr[data-cn-line="cnx"] [data-cn-pick]');
   await rowX.click(); await page.waitForSelector('#ovCnPick');
   check('Escolher mostra os lançamentos da conta (outro valor também)?', (await page.$$('#ovCnPick input[name="cnE"]')).length >= 2);
