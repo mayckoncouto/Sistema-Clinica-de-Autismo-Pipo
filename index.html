@@ -22182,6 +22182,20 @@ function sgFixes(p, todo, have, opts){
   function pri(h, L){   // sessões que menos combinam com o quadro de origem saem primeiro
     var days = sgDays(L); return (days.length && days.indexOf(h.day) === -1 ? 0 : 1) + (L.hora && L.hora !== h.time ? 0 : 1);
   }
+  // -1) horário: sessão marcada FORA do Horário de Atendimento do paciente → levar para um horário livre dentro dele (mesma semana, mesmo quadro)
+  todo.forEach(function(x){
+    var L = x.line, cols = apColumnsFor(Object.assign({}, L, {roomId: ""}));
+    lh(L).filter(function(h){ return h.rec && !h.rec.fixo && !patientSlotOk(p, h.day, h.time); }).forEach(function(h){
+      stageOut(h);
+      var rest = have.filter(function(y){ return y !== h; }), best = null, order = [h.w].concat(WEEKS.filter(function(w){ return w !== h.w && tlWeekOk(L, w); }));
+      for (var oi = 0; oi < order.length && !best; oi++){
+        var cd = sgCands(p, L, order[oi], rest, opts, cols, null, null);
+        if (cd.length) best = cd[0];
+      }
+      if (!best){ sgUnstage(); return; }
+      commit(h, best, cloneJson(h.rec), "forajanela", L, L);
+    });
+  });
   // 0) semana: quadro com seletor de semanas e sessão agendada numa semana que o quadro não usa → levar para uma semana do quadro
   todo.forEach(function(x){
     var L = x.line; if (!L.semanas) return;
@@ -22286,6 +22300,7 @@ function sgDistText(c){ return WEEKS.map(function(w){ return w + "ª: " + (c[w] 
 function sgFixText(f){
   var a = f.from;
   var src = WEEK_LABEL[a.w] + " · " + a.d.full + " " + a.time + " · " + a.room.name + (a.seat ? " · " + seatShortName(a.seat) : "");
+  if (f.kind === "forajanela") return "Fora do Horário de Atendimento do paciente (" + lineLabel(f.lineFrom) + "): " + src + " → " + WEEK_LABEL[f.to.w] + " · " + sgCandText(f.to);
   if (f.kind === "semanafora") return "Semana fora do quadro (" + lineLabel(f.lineFrom) + ", só " + apWeeksOf(f.lineFrom).map(function(w){ return w + "ª"; }).join(" e ") + "): " + src + " → " + WEEK_LABEL[f.to.w] + " · " + sgCandText(f.to);
   if (f.kind === "esp") return "Trocar a especialidade: " + src + " (" + lineLabel(f.lineFrom) + ", a mais) → " + sgCandText(f.to) + " (" + lineLabel(f.lineTo) + ", faltava)";
   return "Equilibrar as semanas (" + lineLabel(f.lineFrom) + "): " + src + " → " + WEEK_LABEL[f.to.w] + " · " + sgCandText(f.to);
