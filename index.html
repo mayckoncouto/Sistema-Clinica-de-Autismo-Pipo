@@ -22363,10 +22363,13 @@ function openSugerirModal(){
     if (rems.length && !pltPerm("delete")) return;
     // reconfere uma a uma com o Planner de agora, vendo as anteriores (simulação)
     var changes = {}, bad = [], n = 0, nf = 0;
+    // Horário de Atendimento de agora (o tratamento pode ter mudado depois da análise): nada é gravado fora dele
+    var freshPat = state.patients.filter(function(x){ return x.id === pat.id; })[0] || pat;
     try {
       fxs.forEach(function(f){
         var a = f.from, cur = (state.scheduleDocs[a.docId].bookings || {})[a.key];
         if (!cur || !recIsPatient(cur, pat)){ bad.push(sgFixText(f) + " — a sessão mudou"); return; }
+        if (!patientSlotOk(freshPat, f.to.d.key, f.to.time)){ bad.push(sgFixText(f) + " — fora do Horário de Atendimento do paciente"); return; }
         pltStageSet(a.docId, a.key, clearValueFor(a.d.key, a.time));
         var why = pltTry(f.to.docId, f.to.key, f.rec);
         if (why){ sgUnstage(); bad.push(sgFixText(f) + " — " + why); return; }
@@ -22376,6 +22379,7 @@ function openSugerirModal(){
       });
       picks.forEach(function(it){
         var x = it.cands[it.sel], rec = {patient: pat.nome, note: "", service: lineSvc(it.line)};
+        if (!patientSlotOk(freshPat, x.d.key, x.time)){ bad.push(sgCandText(x) + " — fora do Horário de Atendimento do paciente"); return; }
         var why = pltTry(x.docId, x.key, rec);
         if (why){ bad.push(sgCandText(x) + " — " + why); return; }
         pltStageSet(x.docId, x.key, rec);
