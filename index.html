@@ -12819,6 +12819,11 @@ function convValor(convId, specId){
   var m = CONV.fin ? CONV.fin[convId] : (c && c.valores);
   return m && m[base] != null && m[base] !== "" ? parseMoney(m[base]) : null;
 }
+// Valor médio por sessão do convênio = média dos valores das especialidades/serviços cobertos que têm valor (só quem vê "Tratamentos – Valores").
+function convValorMedio(c){
+  var vals = convSpecList(c).map(function(id){ return convValor(c.id, id); }).filter(function(v){ return v != null && !isNaN(v); });
+  return vals.length ? vals.reduce(function(a, b){ return a + b; }, 0) / vals.length : null;
+}
 function convLoadFinance(){
   var c = agdClient();
   if (!c || !trCanSeeVal()) return Promise.resolve();
@@ -28877,6 +28882,7 @@ var HELP_TOPICS = [
       "No tratamento, a linha de especialidade mostra \"Coberta pelo convênio via …\" ou, em vermelho, \"Não coberta pelo convênio\". É só um aviso: o tratamento pode ser salvo.",
       "Convênio sem especialidades cadastradas não confere nada nos tratamentos. Serviços só são conferidos quando o convênio tem algum serviço na lista.",
       "Os valores só aparecem para quem tem <b>Tratamentos – Valores: ver</b> e só são alterados com <b>editar</b>.",
+      "Na lista, a coluna <b>Valor Médio</b> mostra a média dos valores por sessão das especialidades e serviços cobertos que têm valor (\"—\" quando nenhum tem). Ela só aparece para quem tem <b>Tratamentos – Valores: ver</b>.",
       "Também é possível criar um convênio direto na janela do tratamento, digitando o nome.",
       "A coluna Pacientes mostra quantos usam o convênio."
     ],
@@ -30383,14 +30389,17 @@ var REG_CFG = {
     title: "convênio", plural: "convênios", module: "convenios", newLabel: "+ Incluir",
     list: function(){ return state.convenios.slice(); },
     write: function(l){ return writeConvenios(l); },
-    cols: ["Nome", "Pacientes", "Especialidades/Serviços Cobertos"],
+    cols: function(){ return trCanSeeVal() ? ["Nome", "Pacientes", "Valor Médio", "Especialidades/Serviços Cobertos"] : ["Nome", "Pacientes", "Especialidades/Serviços Cobertos"]; },
+    onShow: function(){ if (trCanSeeVal() && !CONV.fin && !CONV.tried){ CONV.tried = true; convLoadFinance().then(function(){ renderRegistryTab("convenios"); }); } },
     row: function(c){
       var n = state.patients.filter(function(p){ return p.convenioId === c.id || (!p.convenioId && normText(p.convenio || "") === normText(c.name)); }).length;
       var sp = convSpecList(c).map(specialtyName).join(", ");
-      return ['<b>' + esc(c.name) + '</b>', n, sp ? esc(sp) : '<span class="pt-muted">—</span>'];
+      var spCell = sp ? esc(sp) : '<span class="pt-muted">—</span>', vm = trCanSeeVal() ? convValorMedio(c) : null;
+      return trCanSeeVal() ? ['<b>' + esc(c.name) + '</b>', n, vm == null ? '<span class="pt-muted">—</span>' : fmtMoney(vm), spCell] : ['<b>' + esc(c.name) + '</b>', n, spCell];
     },
     vals: function(c){
-      return [c.name, state.patients.filter(function(p){ return p.convenioId === c.id || (!p.convenioId && normText(p.convenio || "") === normText(c.name)); }).length, convSpecList(c).length];
+      var n = state.patients.filter(function(p){ return p.convenioId === c.id || (!p.convenioId && normText(p.convenio || "") === normText(c.name)); }).length;
+      return trCanSeeVal() ? [c.name, n, convValorMedio(c), convSpecList(c).length] : [c.name, n, convSpecList(c).length];
     }
   },
   servicos: {
@@ -30728,7 +30737,9 @@ function renderRegistryTab(kind){
   if (addBtn) addBtn.hidden = !can(cfg.module, "create");
   if (!all.length){ host.innerHTML = '<div class="empty-state"><b>' + (cfg.fem ? 'Nenhuma ' : 'Nenhum ') + cfg.title + (cfg.fem ? ' cadastrada' : ' cadastrado') + '</b>Use "' + esc(cfg.newLabel) + '".</div>'; return; }
   if (!shown.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca.</div>'; return; }
-  var cols = cfg.cols.map(function(c, i){ var w = cfg.widths && cfg.widths[i]; return {key: "c" + i, label: c, width: w || (i ? 180 : 360), min: i ? 70 : 140, cls: i ? "pt-muted" : "pt-nome"}; });
+  if (cfg.onShow) cfg.onShow();
+  var cfgCols = typeof cfg.cols === "function" ? cfg.cols() : cfg.cols;
+  var cols = cfgCols.map(function(c, i){ var w = cfg.widths && cfg.widths[i]; return {key: "c" + i, label: c, width: w || (i ? 180 : 360), min: i ? 70 : 140, cls: i ? "pt-muted" : "pt-nome"}; });
   gtRender(host, "reg-" + kind, cols, shown.map(function(x){
     var cells = cfg.row(x).slice(); cells[0] = cells[0] + inactTag(x);
     return {attrs: 'class="pr-row' + (x.inativo ? ' is-inactive' : '') + '" data-reg-id="' + esc(x.id) + '" tabindex="0"', cells: cells, vals: cfg.vals(x)};

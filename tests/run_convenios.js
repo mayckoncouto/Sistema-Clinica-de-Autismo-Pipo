@@ -45,6 +45,8 @@ const path = require('path');
   console.log('value per session: direct, released (same value) and not covered?', (await ev(`[convValor("unimed","psico"), convValor("unimed","musico"), convValor("unimed","fono")].join("/")`)) === '120.5/120.5/');
   console.log('coverage: direct / via / none / convênio without list = no check?',
     (await ev(`JSON.stringify([convCoverage("unimed","psico"), convCoverage("unimed","musico"), convCoverage("unimed","fono"), convCoverage("bradesco-saude","fono")])`)) === '[{"direct":true},{"via":"psico"},{"none":true},null]');
+  await page.$eval('#mainTabs button[data-tab=convenios]', (b) => b.click()); await page.waitForTimeout(300);
+  console.log('list has the Valor Médio column with the average per session (R$ 120,50)?', /Valor Médio/i.test(await page.textContent('#reg-convenios-host thead')) && /120,50/.test(await page.textContent('#reg-convenios-host tr:has-text("Unimed")')));
   console.log('list shows covered specialties?', /Psicologia/.test(await page.textContent('#reg-convenios-host tr:has-text("Unimed")')));
 
   // Reabrir mostra o valor salvo.
