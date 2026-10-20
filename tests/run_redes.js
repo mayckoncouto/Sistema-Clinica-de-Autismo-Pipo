@@ -25,21 +25,28 @@ const path = require('path');
 
   await ev('openClinicModal()'); await page.waitForSelector('#ovClinic');
   check('Clínica window has the "Redes Sociais" group, empty?', /Redes Sociais/.test(await page.textContent('#ovClinic')) && /Nenhuma rede/.test(await page.textContent('#clSocs')));
-  await page.click('#clSocAdd'); await page.click('#clSocAdd');
-  let rows = await page.$$eval('#clSocs .cl-soc select[data-sk="rede"]', (a) => a.map((s) => s.value));
-  check('"+ Inserir" adds rows with the next network not used yet?', JSON.stringify(rows) === '["instagram","facebook"]', rows);
-  await page.fill('#clSocs [data-soc="0"] [data-sk="url"]', 'instagram.com/clinica');
-  await page.fill('#clSocs [data-soc="1"] [data-sk="url"]', 'facebook.com/clinica');
-  await page.$eval('#clSocs [data-soc="1"] select[data-sk="rede"]', (s) => { s.value = 'outro'; s.dispatchEvent(new Event('change', {bubbles: true})); });
-  check('"Outro" asks for a name and keeps the link typed?', !!(await page.$('#clSocs [data-soc="1"] [data-sk="nome"]')) && (await page.inputValue('#clSocs [data-soc="1"] [data-sk="url"]')) === 'facebook.com/clinica');
-  await page.fill('#clSocs [data-soc="1"] [data-sk="nome"]', 'Blog');
-  await page.click('#clSocs [data-soc="1"] [data-socmv="-1"]');
-  rows = await page.$$eval('#clSocs .cl-soc select[data-sk="rede"]', (a) => a.map((s) => s.value));
-  check('▲ moves the row up?', JSON.stringify(rows) === '["outro","instagram"]', rows);
+  check('"Redes Sociais" is the last group of the window?', await ev('(function(){ var t = document.querySelectorAll("#ovClinic .modal-body > .tr-sec"); return t[t.length - 1].textContent; })()') === 'Redes Sociais');
+  async function socSave(rede, nome, url){
+    await page.waitForSelector('#ovSoc');
+    if (rede) await page.$eval('#scRede', (s, v) => { s.value = v; s.dispatchEvent(new Event('change', {bubbles: true})); }, rede);
+    if (nome !== null) await page.fill('#scNome', nome);
+    await page.fill('#scUrl', url);
+    await page.click('#scSave'); await page.waitForTimeout(100);
+  }
   await page.click('#clSocAdd');
-  await page.fill('#clSocs [data-soc="2"] [data-sk="url"]', 'javascript:alert(1)');
-  await page.click('#clSave'); await page.waitForTimeout(200);
-  check('invalid link is refused with the network name?', !!(await page.$('#ovClinic')) && await ev('!(state.clinic && state.clinic.redes)'));
+  check('"+ Incluir" opens the window with the next network not used?', await ev('document.getElementById("scRede").value') === 'instagram');
+  await socSave(null, null, 'instagram.com/clinica');
+  await page.click('#clSocAdd'); await socSave('outro', '', 'facebook.com/clinica');
+  check('"Outro" without a name is refused?', !!(await page.$('#ovSoc')));
+  await socSave(null, 'Blog', 'facebook.com/clinica');
+  await page.click('#clSocAdd'); await socSave(null, null, 'javascript:alert(1)');
+  check('invalid link is refused in the window?', !!(await page.$('#ovSoc')));
+  await page.click('#ovSoc [data-scclose]');
+  check('two cards (quadros) with Editar and Remover?', (await page.$$('#clSocs .room-row.cl-soc')).length === 2 && !!(await page.$('#clSocs [data-soc="0"] [data-socedit]')) && !!(await page.$('#clSocs [data-soc="0"] [data-socdel]')));
+  await page.click('#clSocs [data-soc="1"] [data-socmv="-1"]');
+  check('▲ moves the card up?', /Blog/.test(await page.textContent('#clSocs [data-soc="0"]')));
+  await page.click('#clSocs [data-soc="1"] [data-socedit]'); await socSave(null, null, 'instagram.com/clinica');
+  await page.click('#clSocAdd'); await socSave('youtube', null, 'youtube.com/x');
   await page.click('#clSocs [data-soc="2"] [data-socdel]');
   await page.click('#clSave'); await page.waitForTimeout(400);
   const saved = await ev('JSON.stringify(state.clinic && state.clinic.redes)');
@@ -51,7 +58,7 @@ const path = require('path');
   const th = await ev('printTheme("h3{color:#2f7a6d;border-bottom:1px solid #e3e8e6}th{background:#eee}")');
   check('print css uses the system color?', !/#2f7a6d/i.test(th) && /color-mix/.test(th) && /#2c7a72/i.test(th), th);
   await ev('openClinicModal()'); await page.waitForSelector('#ovClinic');
-  check('reopening shows the saved rows?', (await page.$$('#clSocs .cl-soc')).length === 2 && (await page.inputValue('#clSocs [data-soc="0"] [data-sk="nome"]')) === 'Blog');
+  check('reopening shows the saved rows?', (await page.$$('#clSocs .cl-soc')).length === 2 && /Blog/.test(await page.textContent('#clSocs [data-soc="0"]')));
   await page.click('#clCancel');
 
   // Celular: a linha quebra e nada passa da janela.
