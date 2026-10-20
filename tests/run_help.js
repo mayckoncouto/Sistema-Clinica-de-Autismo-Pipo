@@ -16,6 +16,7 @@ const path = require('path');
   console.log('Ajuda opens the guide screen with the overview topic?', await page.isVisible('#tab-ajuda') && /Visão Geral/.test(await page.textContent('#helpBody')));
   const groups = await page.$$eval('#helpNav .help-grp', (a) => a.map((x) => x.textContent));
   console.log('menu has the main areas (Cadastros, Planner, Agenda, Prontuário, Relatórios, Acesso)?', ['Cadastros', 'Planner', 'Agenda', 'Prontuário', 'Relatórios', 'Acesso'].every((g) => groups.includes(g)), groups.join(','));
+  await page.click('#helpNav [data-help-grp="Cadastros"]');
   await page.click('#helpNav [data-help-go="tratamentos"]');
   const tb = await page.textContent('#helpBody');
   console.log('topic shows purpose, steps, rules and who can use?', /Como Fazer/.test(tb) && /Regras e Avisos/.test(tb) && /Quem Pode Usar/.test(tb) && /só um tratamento Ativo/.test(tb));
