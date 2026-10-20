@@ -2817,7 +2817,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
   #tab-conciliacao .pat-toolbar > .pat-count{flex:1 1 60px!important;min-width:60px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #tab-conciliacao .pat-toolbar > :is(#cnImport,#cnMenuWrap,.help-q){flex:none}
   #tab-conciliacao :is(#cnAuto,#cnImport){display:none!important}
-  #reg-conciliacao-host .pat-table :is(col,th,td):is(:nth-child(5),:nth-child(8)){display:none}
+  #reg-conciliacao-host .pat-table :is(col,th,td):is(:nth-child(5),:nth-child(6),:nth-child(9)){display:none}
   :is(#tab-pagar,#tab-receber) .pat-toolbar > .pat-count{flex:1 1 90px!important;min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   :is(#tab-pagar,#tab-receber) .pat-toolbar > :is(#fpAdd,#frAdd,.help-q){flex:none}
   :is(#reg-pagar-host,#reg-receber-host) .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(5)):not(:nth-child(7)){display:none}
@@ -39065,28 +39065,32 @@ function renderConciliacao(){
   if (!rows.length){ host.innerHTML = '<div class="empty-state"><b>' + (CN.st === "pend" ? "Nada pendente" : "Nada encontrado") + '</b>' + (CN.st === "pend" ? "Todas as linhas deste período já estão conciliadas." : "Ajuste a busca ou os filtros.") + '</div>'; return; }
   var canEdit = cnCan("edit"), canNew = cnCan("create") && flCan("create");
   var cols = [{key: "data", label: "Data", width: 100}, {key: "desc", label: "Descrição do Extrato", width: 260, min: 140, cls: "pt-nome"}, {key: "valor", label: "Valor", width: 120},
-    {key: "sit", label: "Situação", width: 110}, {key: "sug", label: "Sugestão / Lançamento", width: 260, min: 120},
+    {key: "sit", label: "Situação", width: 110}, {key: "sug", label: "Sugestão / Lançamento", width: 240, min: 120}, {key: "vlanc", label: "Valor / Lançamento", width: 170},
     {key: "ok", label: "Confirmar", width: 112}, {key: "pick", label: "Escolher", width: 112}, {key: "new", label: "Criar Lançamento", width: 160}];
   gtRender(host, "conciliacao", cols, rows.map(function(l){
-    var sit, sug = "", cOk = "", cPick = "", cNew = "", sugTxt = "", e = l.entry ? cnEntryById(l.entry) : null;
+    var sit, sug = "", vl = "", vlNum = null, cOk = "", cPick = "", cNew = "", sugTxt = "", e = l.entry ? cnEntryById(l.entry) : null;
     if (l.entry){
       sit = '<span class="tr-mchip tr-ok">Conciliada</span>';
-      if (e){ sugTxt = (e.desc || "—") + " · " + trBr(e.date).slice(0, 5); sug = '<span class="cn-link pt-ell" data-cn-open="' + esc(e.id) + '" title="' + esc(sugTxt) + '">' + esc(sugTxt) + '</span>'; }
+      if (e){ sugTxt = (e.desc || "—") + " · " + trBr(e.date).slice(0, 5); vlNum = cnEntrySigned(e); sug = '<span class="cn-link pt-ell" data-cn-open="' + esc(e.id) + '" title="' + esc(sugTxt) + '">' + esc(sugTxt) + '</span>'; }
       if (canEdit) cOk = '<button type="button" class="btn ghost cn-btn" data-cn-undo="' + esc(l.id) + '">Desfazer</button>';
     } else {
       var sg = cnSuggest(l, by);
       sit = '<span class="tr-mchip tr-falta">Pendente</span>';
       if (sg && canEdit){
-        sugTxt = (sg.e.desc || "—") + " · " + trBr(cnEntryDate(sg.e)).slice(0, 5);
+        sugTxt = (sg.e.desc || "—") + " · " + trBr(cnEntryDate(sg.e)).slice(0, 5); vlNum = cnEntrySigned(sg.e);
         sug = '<span class="cn-sug pt-ell" title="Mesmo valor e data próxima: ' + esc(sugTxt) + '">' + esc(sugTxt) + '</span>';
         cOk = '<button type="button" class="btn primary cn-btn" data-cn-ok="' + esc(l.id) + '|' + esc(sg.e.id) + '">Confirmar</button>';
       }
       if (canEdit) cPick = '<button type="button" class="btn ghost cn-btn" data-cn-pick="' + esc(l.id) + '">Escolher…</button>';
       if (canNew) cNew = '<button type="button" class="btn ghost cn-btn" data-cn-new="' + esc(l.id) + '">Criar Lançamento</button>';
     }
+    if (vlNum !== null){
+      var dif = Math.abs(vlNum - l.valor) > 0.005;
+      vl = '<span class="' + (vlNum < 0 ? "fl-neg" : "fl-pos") + '"' + (dif ? ' title="Diferente do valor do extrato (' + esc(flMoneySigned(l.valor)) + ')"' : '') + '>' + esc(flMoneySigned(vlNum)) + '</span>' + (dif ? ' <span class="tr-mchip tr-falta" title="Valor diferente do extrato">≠</span>' : '');
+    }
     return {attrs: 'class="pr-row" data-cn-line="' + esc(l.id) + '"', cells: [esc(trBr(l.date)), '<b>' + esc(l.desc || "—") + '</b>',
-      '<span class="' + (l.valor < 0 ? "fl-neg" : "fl-pos") + '">' + esc(flMoneySigned(l.valor)) + '</span>', sit, sug, cOk, cPick, cNew],
-      vals: [l.date, normText(l.desc), l.valor, l.entry ? 1 : 0, normText(sugTxt), cOk ? 1 : 0, cPick ? 1 : 0, cNew ? 1 : 0]};
+      '<span class="' + (l.valor < 0 ? "fl-neg" : "fl-pos") + '">' + esc(flMoneySigned(l.valor)) + '</span>', sit, sug, vl, cOk, cPick, cNew],
+      vals: [l.date, normText(l.desc), l.valor, l.entry ? 1 : 0, normText(sugTxt), vlNum === null ? "" : vlNum, cOk ? 1 : 0, cPick ? 1 : 0, cNew ? 1 : 0]};
   }), renderConciliacao, "reg-table");
 }
 function cnOnShow(){
