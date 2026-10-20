@@ -22084,7 +22084,7 @@ function sgHave(p, lines){
 // Sessões do paciente que estão FORA do Horário de Atendimento e também fora do quadro (sem quadro para o profissional/serviço,
 // ou quadro com dia/horário marcados que não batem): candidatas a remover.
 // Regra 1 do Sugerir Agendamento: só vale com quadros no tratamento ativo e só para o serviço Sessão.
-function sgSessLines(p){ return apLinesOf(p).filter(function(x){ return lineSvc(x.line) === DEFAULT_SERVICE_ID; }); }
+function sgSessLines(p){ return apLinesOf(p); }   // todos os quadros (Sessão e demais serviços); a regra de especialidade só vale para Sessão
 function sgRemovable(p){
   var lines = patientSpecRows(p), out = [];
   if (!sgSessLines(p).length) return out;
@@ -22092,12 +22092,12 @@ function sgRemovable(p){
     var docId = d.key + "-" + w, bk = state.scheduleDocs[docId].bookings;
     Object.keys(bk).forEach(function(key){
       var b = bk[key]; if (!b || !b.patient || bookingKind(b)) return;
-      if ((b.service || DEFAULT_SERVICE_ID) !== DEFAULT_SERVICE_ID) return;
       var ps = key.split("|"), room = findRoom(ps[1]); if (!room || isGroup(room)) return;
       if (!recIsPatient(b, p)) return;
       if (patientSlotOk(p, d.key, ps[0])) return;
       var th = findTherapist(room, ps[2]), pid = th && th.professionalId;
       var ln = treatLineFor(lines, pid, b.service || DEFAULT_SERVICE_ID, w);
+      if (!ln && (b.service || DEFAULT_SERVICE_ID) !== DEFAULT_SERVICE_ID) return;   // serviço sem quadro (ex.: Devolutiva) não é sugerido para remover
       var days = ln ? sgDays(ln) : [];
       var inQuadro = !!ln && (!days.length || days.indexOf(d.key) !== -1) && (!ln.hora || ln.hora === ps[0]);
       if (inQuadro) return;
@@ -22220,7 +22220,9 @@ function sgFixes(p, todo, have, opts){
     for (var ei = 0; ei < exc.length && !changed; ei++){
       for (var di = 0; di < def.length && !changed; di++){
         var L = exc[ei].line, M = def[di].line;
-        if (L.id === M.id || lineSvc(L) !== lineSvc(M)) continue;
+        if (L.id === M.id) continue;
+        // mesmo serviço: troca entre especialidades (Sessão); serviços diferentes: só dentro da MESMA especialidade (ex.: Psicologia Sessão → Psicologia Acolhimento)
+        if (lineSvc(L) !== lineSvc(M) && (!L.specId || L.specId !== M.specId)) continue;
         var cm = sgWeekCounts(have, M), cols = apColumnsFor(Object.assign({}, M, {roomId: ""}));
         var srcs = lh(L).filter(function(h){ return h.rec && !h.rec.fixo; }).sort(function(a, b){ return (cm[a.w] - cm[b.w]) || (pri(a, L) - pri(b, L)); });
         for (var si = 0; si < srcs.length && !changed; si++){
