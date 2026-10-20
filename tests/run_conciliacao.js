@@ -96,7 +96,7 @@ const fs = require('fs');
   const rowX = await page.$('#reg-conciliacao-host tr[data-cn-line="cnx"] [data-cn-pick]');
   await rowX.click(); await page.waitForSelector('#ovCnPick');
   check('Escolher mostra os lançamentos da conta (outro valor também)?', (await page.$$('#ovCnPick input[name="cnE"]')).length >= 2);
-  await page.click('#ovCnPick input[value="e3"]'); await page.click('#cnpOk'); await page.waitForSelector('#cfOk');
+  await page.check('#ovCnPick input[value="e3"]'); await page.click('#cnpOk'); await page.waitForSelector('#cfOk');
   check('valor diferente pede confirmação?', /Valor Diferente/.test(await page.textContent('#confirmHost')));
   await page.click('#cfOk'); await page.waitForTimeout(300);
   check('conciliou mesmo assim?', (await ev('CN.rows.filter(function(l){ return l.id === "cnx"; })[0].entry')) === 'e3');

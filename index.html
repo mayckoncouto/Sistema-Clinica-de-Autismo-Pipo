@@ -2893,6 +2893,13 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
   #ovTreat .tr-month th:not(:first-child),#ovTreat .tr-month td:not(:first-child){width:36px}
   #ovTreat .tr-month-nav b{min-width:0;flex:1}
 }
+.cn-pick-wrap{max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.cn-pick{width:100%;table-layout:auto}.cn-pick thead th{position:sticky;top:0;background:var(--surface-2);z-index:1}
+.cn-pick td.cn-ck,.cn-pick th.cn-ck{width:42px;text-align:center}.cn-pick tbody tr{cursor:pointer}.cn-pick tbody tr:hover{background:var(--accent-weak)}
+.cn-pick tr.cn-best{background:var(--accent-weak)}.cn-eq{color:#2f7a6d;font-weight:600}
+.cn-cp{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600}
+.cn-cp.cn-hi{background:#dff3ec;color:#1f6b57}.cn-cp.cn-mid{background:#fdf0d2;color:#8a5a00}.cn-cp.cn-lo{background:#eef1f0;color:#5d6967}
+@media (max-width:760px){.cn-pick th:nth-child(5),.cn-pick td:nth-child(5),.cn-pick th:nth-child(6),.cn-pick td:nth-child(6){display:none}}
 </style>
 <!-- APP-HEAD:END -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -39082,22 +39089,63 @@ function cnOnShow(){
   }
 }
 // escolher à mão o lançamento de uma linha do extrato
+// ranking de todos os lançamentos livres da conta: valor igual ou parecido, data igual ou próxima, palavras em comum
+function cnRank(line, by){
+  var lw = cnWords(line.desc), sg = line.valor > 0 ? 1 : -1;
+  return (FL.rows || []).filter(function(e){ return e.acc === line.acc && !by[e.id] && flSign(e) !== 0; }).map(function(e){
+    var sv = cnEntrySigned(e), diff = sv - line.valor, rel = Math.abs(diff) / Math.max(Math.abs(line.valor), 0.01);
+    var d = Math.abs(fpDays(cnEntryDate(e), line.date)), ew = cnWords(e.desc), common = 0;
+    lw.forEach(function(w){ if (ew.indexOf(w) !== -1) common++; });
+    var vs = Math.abs(diff) < 0.005 ? 100 : rel <= 0.01 ? 60 : rel <= 0.05 ? 35 : rel <= 0.2 ? 10 : 0;
+    var ds = Math.max(0, 40 - d * 4);
+    var score = vs + ds + Math.min(common, 4) * 6 - (flSign(e) !== sg ? 80 : 0);
+    return {e: e, sv: sv, diff: diff, days: d, common: common, score: score, exact: Math.abs(diff) < 0.005};
+  }).sort(function(a, b){ return b.score - a.score || a.days - b.days; });
+}
 function cnPickModal(line){
-  var by = cnByEntry(), cands = cnCandidates(line, by), host = document.getElementById("confirmHost");
+  var by = cnByEntry(), all = cnRank(line, by), host = document.getElementById("confirmHost");
   if (!host){ host = document.createElement("div"); host.id = "confirmHost"; document.body.appendChild(host); }
-  var other = (FL.rows || []).filter(function(e){ return e.acc === line.acc && !by[e.id] && flSign(e) !== 0 && !cands.some(function(c){ return c.e.id === e.id; }); })
-    .sort(function(a, b){ return Math.abs(fpDays(cnEntryDate(a), line.date)) - Math.abs(fpDays(cnEntryDate(b), line.date)); }).slice(0, 40);
-  function li(e, exact){ var sg = cnEntrySigned(e); return '<label class="kind-opt cn-opt"><input type="radio" name="cnE" value="' + esc(e.id) + '"> <b>' + esc(e.desc || "—") + '</b> · ' + esc(trBr(cnEntryDate(e))) + ' · <span class="' + (sg < 0 ? "fl-neg" : "fl-pos") + '">' + esc(flMoneySigned(sg)) + '</span>' + (exact ? "" : ' <small>(valor diferente do extrato)</small>') + '</label>'; }
-  host.innerHTML = '<div class="overlay" id="ovCnPick"><div class="modal" style="max-width:640px"><div class="modal-head"><div><h3>Escolher Lançamento</h3><div class="modal-sub">' + esc(trBr(line.date)) + ' · ' + esc(line.desc || "—") + ' · ' + esc(flMoneySigned(line.valor)) + '</div></div><button class="modal-close" id="cnpClose" aria-label="Fechar">✕</button></div>' +
-    '<div class="modal-body">' + (cands.length ? '<div class="tr-sec tr-sec-top">Mesmo Valor</div>' + cands.map(function(c){ return li(c.e, true); }).join("") : '<div class="field-hint">Nenhum lançamento com o mesmo valor ainda sem linha do extrato.</div>') +
-      (other.length ? '<div class="tr-sec">Outros Lançamentos da Conta</div>' + other.map(function(e){ return li(e, false); }).join("") : "") + '</div>' +
+  var best = all[0] && all[0].score >= 70 ? all[0].e.id : "";
+  function compat(c){ return c.score >= 120 ? ["Alta", "cn-hi"] : c.score >= 70 ? ["Média", "cn-mid"] : ["Baixa", "cn-lo"]; }
+  function rowsHtml(q, onlyExact){
+    var nq = normText(q || ""), n = 0, out = "";
+    all.forEach(function(c){
+      if (n >= 60 || (onlyExact && !c.exact) || (nq && normText(c.e.desc || "").indexOf(nq) === -1)) return;
+      n++;
+      var cp = compat(c), isBest = c.e.id === best;
+      out += '<tr data-id="' + esc(c.e.id) + '"' + (isBest ? ' class="cn-best"' : '') + '><td class="cn-ck"><input type="checkbox" name="cnE" value="' + esc(c.e.id) + '" aria-label="Escolher"></td>' +
+        '<td><b>' + esc(c.e.desc || "—") + '</b>' + (isBest ? ' <span class="tr-chip st-ativo">Sugerido</span>' : '') + '</td>' +
+        '<td>' + esc(trBr(cnEntryDate(c.e))) + '</td>' +
+        '<td><span class="' + (c.sv < 0 ? "fl-neg" : "fl-pos") + '">' + esc(flMoneySigned(c.sv)) + '</span></td>' +
+        '<td>' + (c.exact ? '<span class="cn-eq">Igual</span>' : esc(flMoneySigned(c.diff))) + '</td>' +
+        '<td>' + (c.days === 0 ? "Mesmo dia" : c.days + (c.days === 1 ? " dia" : " dias")) + '</td>' +
+        '<td><span class="cn-cp ' + cp[1] + '">' + cp[0] + '</span></td></tr>';
+    });
+    return out || '<tr><td colspan="7" class="pt-muted" style="text-align:center;padding:18px">Nenhum lançamento encontrado.</td></tr>';
+  }
+  host.innerHTML = '<div class="overlay" id="ovCnPick"><div class="modal" style="max-width:900px"><div class="modal-head"><div><h3>Escolher Lançamento</h3><div class="modal-sub">' + esc(trBr(line.date)) + ' · ' + esc(line.desc || "—") + ' · ' + esc(flMoneySigned(line.valor)) + '</div></div><button class="modal-close" id="cnpClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="pat-toolbar" style="padding:0 0 10px"><div class="search-wrap" style="flex:1 1 auto"><input type="search" id="cnpQ" placeholder="Pesquisar pelo nome do lançamento…" autocomplete="off"></div>' +
+    '<label class="chk-line"><input type="checkbox" id="cnpExact"> <span>Só Valor Igual</span></label></div>' +
+    '<div class="cn-pick-wrap"><table class="pat-table cn-pick"><thead><tr><th class="cn-ck"></th><th>Lançamento</th><th>Data</th><th>Valor</th><th>Diferença</th><th>Distância</th><th>Compatibilidade</th></tr></thead><tbody id="cnpBody">' + rowsHtml("", false) + '</tbody></table></div>' +
+    '<div class="pat-count" style="margin-top:8px">Mostrando os 60 mais parecidos, do mais ao menos compatível (valor, data e palavras em comum).</div></div>' +
     '<div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="cnpCancel">Cancelar</button><button class="btn primary" id="cnpOk" disabled>Conciliar</button></div></div></div>';
   var ov = document.getElementById("ovCnPick");
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("cnpClose").addEventListener("click", close); document.getElementById("cnpCancel").addEventListener("click", close);
   var ok = document.getElementById("cnpOk");
-  ov.addEventListener("change", function(){ ok.disabled = !ov.querySelector('input[name="cnE"]:checked'); });
+  var body = document.getElementById("cnpBody"), qEl = document.getElementById("cnpQ"), exEl = document.getElementById("cnpExact");
+  function refill(){ body.innerHTML = rowsHtml(qEl.value, exEl.checked); ok.disabled = true; }
+  qEl.addEventListener("input", refill); exEl.addEventListener("change", refill);
+  // uma só escolha: marcar uma caixa desmarca as outras; clicar na linha também marca
+  body.addEventListener("click", function(e){
+    var tr = e.target.closest("tr[data-id]"); if (!tr) return;
+    var cb = tr.querySelector("input"); if (e.target !== cb) cb.checked = !cb.checked;
+    body.querySelectorAll("input:checked").forEach(function(o){ if (o !== cb) o.checked = false; });
+    ok.disabled = !cb.checked;
+  });
+  var pre = best && body.querySelector('tr[data-id="' + best + '"] input');
+  if (pre){ pre.checked = true; ok.disabled = false; }
   ok.addEventListener("click", function(){
     var id = ov.querySelector('input[name="cnE"]:checked').value, e = cnEntryById(id);
     var go = function(){ cnUpdateOne(line.id, id).then(function(d){ if (d){ close(); showToast("Linha conciliada."); renderConciliacao(); } }); };
