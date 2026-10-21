@@ -2193,6 +2193,13 @@ input[readonly]:not(.dp-in):focus,textarea[readonly]:focus{outline:none;box-shad
 .cp-val{flex:1;min-width:0;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-family:"IBM Plex Mono",ui-monospace,monospace}
 .cp-save{width:100%;padding:8px;border:0;border-radius:8px;background:var(--ink);color:var(--surface);font:inherit;font-weight:800;font-size:13px;cursor:pointer}
 .color-pick-row{display:flex;align-items:center;gap:9px}
+body.no-aba .aba-only{display:none!important}
+body.no-aba #trHost .pat-table.tr-main :is(col,th,td):is(:nth-child(5),:nth-child(6)){display:none}
+.age-legend{display:contents}
+.age-legend[hidden]{display:none}
+.cl-band{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.cl-band .field{flex:1 1 120px;margin:0}
+.cl-band .color-trigger{margin-bottom:4px}
 .color-trigger{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);cursor:pointer;padding:0;flex:none}
 .color-trigger:hover{filter:brightness(.95)}
 .color-pick-code{font-size:12.5px;color:var(--ink-2)}
@@ -3158,8 +3165,8 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
     <div class="clipboard-bar" id="clipboardBar"></div>
     <div class="grid-scroll"><div id="gridHost"></div></div>
     <div class="color-legend">
-      <span><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
-      <span data-age-legend hidden></span>
+      <span class="aba-only"><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
+      <span class="age-legend" data-age-legend></span>
       <span data-meet-legend><i style="background:#F5E27A"></i>Reunião Clínica</span>
       <span data-svc-legend style="display:contents"></span>
       <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
@@ -3295,8 +3302,8 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <div class="clipboard-bar" id="agdClipboardBar"></div>
       <div class="agd-scroll"><div id="agdGrid"></div></div>
       <div class="color-legend agd-legend">
-        <span><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
-        <span data-age-legend hidden></span>
+        <span class="aba-only"><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
+        <span class="age-legend" data-age-legend></span>
         <span data-meet-legend><i style="background:#F5E27A"></i>Reunião Clínica</span>
         <span data-svc-legend style="display:contents"></span>
         <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
@@ -3331,8 +3338,8 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <div class="clipboard-bar" id="agpClipboardBar"></div>
       <div class="agd-scroll"><div id="agpGrid"></div></div>
       <div class="color-legend agd-legend">
-        <span><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
-        <span data-age-legend hidden></span>
+        <span class="aba-only"><i style="background:#F4B7B7"></i>Sem Intervenção ABA</span>
+        <span class="age-legend" data-age-legend></span>
         <span data-meet-legend><i style="background:#F5E27A"></i>Reunião Clínica</span>
         <span data-svc-legend style="display:contents"></span>
         <span><i style="background:var(--off-bg);border:1px dashed var(--line-strong)"></i>Bloqueado ou Fora do Horário do Profissional</span>
@@ -4212,6 +4219,7 @@ function onClinicChange(){
   applyClinicBrand();
   rebuildDays();
   applyClinicTheme();
+  abaUiApply(false);
   if (state.day !== "todos" && !dayEnabled(state.day)) state.day = DAYS[0].key;
   try {
     buildDaySeg();
@@ -4260,6 +4268,11 @@ function openClinicModal(){
               CLINIC_DURATIONS.map(function(m){ return '<option value="'+m+'"'+(m === clinicDuration() ? ' selected' : '')+'>'+m+' Minutos</option>'; }).join("") + '</select></div><div class="field"><label for="clSeg">Sessões Seguidas (Máximo)</label><select id="clSeg">' +
               [1, 2, 3, 4, 5, 6, 7, 8].map(function(n){ return '<option value="'+n+'"'+(n === clinicSeguidasMax() ? ' selected' : '')+'>'+n+(n === 1 ? ' Sessão' : ' Sessões')+'</option>'; }).join("") + '</select></div></div>' +
             '<div class="pat-count">Cada linha do Planner e da Agenda é um atendimento com esta duração. Sessões Seguidas é o máximo que o quadro do tratamento oferece (lista de 1 até esse número).</div>' +
+            (unitAbaOn() ? '<div class="field-row" style="margin-top:10px"><div class="field"><label>&nbsp;</label><label class="chk-line"><input type="checkbox" id="clAba"' + (c.aba === "Não" ? '' : ' checked') + '> <span>Intervenção ABA</span></label></div>' +
+              '<div class="field" id="clMetaBox"><label for="clMeta">Meta %</label><input type="text" id="clMeta" inputmode="decimal" maxlength="5" placeholder="80" value="' + esc(c.metaGrupo != null && c.metaGrupo !== "" ? String(c.metaGrupo) : "80") + '"></div></div>' +
+              '<div class="pat-count">Intervenção ABA liga todas as regras e campos de ABA do sistema (paciente sem ABA ocupa a sala, salas ABA, grupos por faixa etária, cores por idade). Meta % é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner).</div>' +
+              '<div id="clBandsBox"><div class="tr-sec">Faixas Etárias</div><div class="pat-count">Valem para todas as unidades: cor das células por idade, legendas e faixas de Habilidades e Objetivos. Idade final em branco = sem limite.</div>' +
+              '<div class="room-list" id="clBands"></div><button type="button" class="btn add-row-btn" id="clBandAdd">+ Incluir Faixa</button></div>' : '') +
           '</div>' +
         '</div>' +
         '<div class="prof-section"><div class="prof-section-head"><span class="tr-sec tr-sec-in">Horário de Atendimento</span>' +
@@ -4289,6 +4302,67 @@ function openClinicModal(){
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("clClose").addEventListener("click", close);
+  // Faixas etárias (quadros) e chave da Intervenção ABA
+  var bands = AGE_BANDS.map(function(b){ return {id: b.id, min: b.min, max: b.max, color: b.color}; }), bandsTouched = false;
+  function bandsSync(){
+    Array.prototype.forEach.call(document.querySelectorAll("#clBands .cl-band"), function(r, i){
+      if (!bands[i]) return;
+      bands[i].min = r.querySelector(".clb-min").value.trim(); bands[i].max = r.querySelector(".clb-max").value.trim();
+    });
+  }
+  function bandsDraw(){
+    var hb = document.getElementById("clBands"); if (!hb) return;
+    hb.innerHTML = bands.map(function(b, i){
+      return '<div class="room-row cl-band" data-band="' + i + '"><button type="button" class="color-trigger" data-band-color="' + i + '" style="background:' + esc(b.color) + '" aria-label="Cor da faixa" title="Escolher cor"' + (clCanEdit ? '' : ' disabled') + '></button>' +
+        '<div class="field"><label>Idade Inicial</label><input type="text" inputmode="numeric" maxlength="3" class="clb-min" value="' + esc(b.min == null ? "" : String(b.min)) + '"' + (clCanEdit ? '' : ' disabled') + '></div>' +
+        '<div class="field"><label>Idade Final</label><input type="text" inputmode="numeric" maxlength="3" class="clb-max" placeholder="Sem limite" value="' + esc(b.max == null ? "" : String(b.max)) + '"' + (clCanEdit ? '' : ' disabled') + '></div>' +
+        (clCanEdit ? '<button type="button" class="btn ghost" data-band-rm="' + i + '">Remover</button>' : '') + '</div>';
+    }).join("") || '<div class="pat-count">Nenhuma faixa: valem as faixas padrão.</div>';
+  }
+  function abaBoxSync(){
+    var cb = document.getElementById("clAba"), on = !cb || cb.checked;
+    var mb = document.getElementById("clMetaBox"), bb = document.getElementById("clBandsBox");
+    if (mb) mb.hidden = !on; if (bb) bb.hidden = !on;
+  }
+  if (document.getElementById("clBands")){
+    bandsDraw(); abaBoxSync();
+    document.getElementById("clAba").addEventListener("change", abaBoxSync);
+    var bAdd = document.getElementById("clBandAdd");
+    if (!clCanEdit) bAdd.hidden = true;
+    bAdd.addEventListener("click", function(){
+      bandsSync(); bandsTouched = true;
+      var last = bands[bands.length - 1], mn = last ? (last.max !== "" && last.max != null ? (+last.max || 0) + 1 : (+last.min || 0) + 1) : 0;
+      bands.push({id: uid("fx"), min: mn, max: "", color: "#C9B8E8"}); bandsDraw();
+    });
+    document.getElementById("clBands").addEventListener("input", function(){ bandsTouched = true; });
+    document.getElementById("clBands").addEventListener("click", function(e){
+      var rm = e.target.closest("[data-band-rm]");
+      if (rm){ bandsSync(); bandsTouched = true; bands.splice(+rm.getAttribute("data-band-rm"), 1); bandsDraw(); return; }
+      var cbtn = e.target.closest("[data-band-color]");
+      if (cbtn && clCanEdit){
+        var i = +cbtn.getAttribute("data-band-color");
+        openColorPicker(cbtn, bands[i].color, function(col){ bandsSync(); bands[i].color = col; bandsTouched = true; bandsDraw(); });
+      }
+    });
+  }
+  // Confere as faixas: idade inteira, final >= inicial, sem sobrepor, só a última sem limite. "" = ok.
+  function bandsCheck(){
+    bandsSync();
+    var list = bands.map(function(b){ return {id: b.id, min: String(b.min).trim(), max: String(b.max == null ? "" : b.max).trim(), color: b.color}; });
+    for (var i = 0; i < list.length; i++){
+      if (!/^\d{1,3}$/.test(list[i].min)) return "informe a idade inicial de todas as faixas";
+      if (list[i].max !== "" && !/^\d{1,3}$/.test(list[i].max)) return "a idade final precisa ser um número (ou em branco = sem limite)";
+      list[i].min = +list[i].min; list[i].max = list[i].max === "" ? null : +list[i].max;
+      if (list[i].max != null && list[i].max < list[i].min) return "a idade final não pode ser menor que a inicial";
+    }
+    list.sort(function(a, b){ return a.min - b.min; });
+    for (var j = 0; j < list.length; j++){
+      if (list[j].max == null && j < list.length - 1) return "só a última faixa pode ficar sem idade final";
+      if (j && list[j].min <= list[j - 1].max) return "as faixas " + ageBandLabel(list[j - 1]) + " e " + ageBandLabel(list[j]) + " se sobrepõem";
+    }
+    bands.__ok = list;
+    return "";
+  }
   document.getElementById("clCancel").addEventListener("click", close);
   // Logo: a imagem escolhida vira um PNG quadrado de 128 px (fundo transparente preservado).
   var logo = (c.logo && /^data:image\//.test(c.logo)) ? c.logo : "";
@@ -4420,6 +4494,14 @@ function openClinicModal(){
   });
   counts();
   if (clCanEdit) document.getElementById("clSave").addEventListener("click", function(){
+    var abaCb = document.getElementById("clAba"), abaSim = abaCb ? abaCb.checked : c.aba !== "Não";
+    var metaV = c.metaGrupo != null ? c.metaGrupo : "";
+    if (abaCb && abaSim){
+      var mv = parseFloat(String(document.getElementById("clMeta").value).replace(",", "."));
+      if (!(mv > 0 && mv <= 100)){ showToast("Meta % precisa ser um número de 1 a 100.", true); return; }
+      metaV = mv;
+      if (bandsTouched){ var bw = bandsCheck(); if (bw){ showToast("Faixas Etárias: " + bw + ".", true); return; } }
+    }
     socSync();
     var redes = [], badSoc = null;
     socs.forEach(function(it){
@@ -4470,6 +4552,8 @@ function openClinicModal(){
       horarios: horarios,
       duracao: dur,
       seguidasMax: +document.getElementById("clSeg").value || 2,
+      aba: abaSim ? "" : "Não",
+      metaGrupo: metaV,
       descontoMax: (function(){ var dv = parseFloat(String(document.getElementById("clDescMax").value).replace(",", ".")); return dv > 0 ? Math.min(100, dv) : ""; })(),
       margemDesconto: (function(){ var mv = parseFloat(String(document.getElementById("clMargem").value).replace(",", ".")); return isNaN(mv) ? 30 : Math.max(0, Math.min(100, mv)); })(),
       corBotoes: corBtn,
@@ -4480,6 +4564,12 @@ function openClinicModal(){
     if (!db){ showToast("Sem conexão com o servidor.", true); return; }
     db.doc("config/clinic").set(rec).then(function(){
       state.clinic = rec; onClinicChange(); close(); showToast("Cadastro da clínica salvo.");
+      if (abaSim && bandsTouched && bands.__ok){
+        var fx = bands.__ok.map(function(b){ return {id: b.id, min: b.min, max: b.max, color: b.color}; });
+        db.doc("config/age_bands").set({faixas: fx}).then(function(){ state.ageBands = fx; ageBandsApply(fx); abaUiApply(true); })
+          .catch(function(err){ var m = (err && err.message) || ""; showToast(/check|path|violat/i.test(m) ? "Faixas Etárias não salvas: falta rodar a atualização do banco." : "Não foi possível salvar as Faixas Etárias.", true); });
+      }
+      abaUiApply(true);
     }).catch(function(err){
       var m = (err && err.message) || "";
       showToast(/check|path|violat/i.test(m) ? "Falta rodar a atualização do banco (cadastro da clínica)." : "Não foi possível salvar o cadastro da clínica.", true);
@@ -4745,11 +4835,46 @@ var PCOLOR_5_9 = "#C4DCA9";
 var PCOLOR_10_MAIS = "#F4CC99";
 // Faixas etárias: uma lista só para a cor do paciente, as legendas e o cadastro de
 // Habilidades. Mudou aqui, muda em todos (as habilidades guardam o id da faixa).
-var AGE_BANDS = [
+var AGE_BANDS_DEFAULT = [
   {id: "0-4", min: 0, max: 4, label: "0–4 anos", color: PCOLOR_0_4},
   {id: "5-9", min: 5, max: 9, label: "5–9 anos", color: PCOLOR_5_9},
   {id: "10+", min: 10, max: null, label: "10+ anos", color: PCOLOR_10_MAIS}
 ];
+var AGE_BANDS = AGE_BANDS_DEFAULT.slice();
+// Faixas etárias editáveis (2026-10-21): Clínica → Atendimento, documento da EMPRESA config/age_bands {faixas:[{id,min,max,color}]}.
+// Os ids ficam (Habilidades e Objetivos guardam o id da faixa); sem documento valem as padrão.
+function ageBandLabel(b){ return b.max == null || b.max === "" ? b.min + "+ anos" : b.min + "–" + b.max + " anos"; }
+function ageBandsNorm(list){
+  return (Array.isArray(list) ? list : []).map(function(b){
+    var mn = parseInt(b && b.min, 10), mx = b && b.max !== "" && b.max != null ? parseInt(b.max, 10) : null;
+    if (!b || !b.id || isNaN(mn)) return null;
+    var o = {id: String(b.id), min: mn, max: mx != null && !isNaN(mx) ? mx : null, color: b.color || "#d9dde0"};
+    o.label = ageBandLabel(o); return o;
+  }).filter(Boolean).sort(function(a, b){ return a.min - b.min; });
+}
+function ageBandsApply(list){ var n = ageBandsNorm(list); AGE_BANDS = n.length ? n : AGE_BANDS_DEFAULT.slice(); }
+// Intervenção ABA (2026-10-21): a Unidade diz se tem (Acesso → Unidades) e a Clínica liga/desliga (Atendimento).
+// Desligada: nenhuma regra "não ABA", sem cor por idade/ABA, sem campos de ABA nas telas e sem Meta % na Conferência.
+function unitAbaOn(){
+  if (typeof state === "undefined" || !state) return true;
+  var id = window.pipoAuth && window.pipoAuth.unit ? window.pipoAuth.unit() : "";
+  var u = id ? (state.units || []).filter(function(x){ return x.id === id; })[0] : null;
+  return !u || u.aba !== "Não";
+}
+function abaOn(){ return unitAbaOn() && !(typeof state !== "undefined" && state && state.clinic && state.clinic.aba === "Não"); }
+function abaMeta(){ if (typeof state === "undefined" || !state) return 80; var m = parseFloat(String(state.clinic && state.clinic.metaGrupo != null ? state.clinic.metaGrupo : "").replace(",", ".")); return m > 0 && m <= 100 ? m : 80; }
+// Aplica a chave ABA na tela (classe no body, legendas) e redesenha o que usa as cores/regras.
+function abaUiApply(redraw){
+  var off = !abaOn();
+  if (document.body) document.body.classList.toggle("no-aba", off);
+  ageLegendFill();
+  if (!redraw) return;
+  try {
+    if (state.tab === "planner" && typeof renderGrid === "function") renderGrid();
+    if ((state.tab === "agenda" || state.tab === "agendaplanner") && typeof agdRender === "function") agdRender();
+    if (state.tab === "tratamentos" && typeof renderTreatmentsTab === "function") renderTreatmentsTab();
+  } catch (e){}
+}
 function ageBandOf(age){
   if (age == null || !isFinite(age)) return null;
   age = Math.floor(age);
@@ -4769,7 +4894,7 @@ function svcLegendHtml(){
 }
 function svcLegendFill(){ Array.prototype.forEach.call(document.querySelectorAll("[data-svc-legend]"), function(el){ el.innerHTML = svcLegendHtml(); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-meet-legend] i"), function(i){ i.style.background = meetingColor(); }); }
-function ageLegendFill(){ Array.prototype.forEach.call(document.querySelectorAll("[data-age-legend]"), function(el){ el.outerHTML = ageLegendHtml(); }); }
+function ageLegendFill(){ Array.prototype.forEach.call(document.querySelectorAll("[data-age-legend]"), function(el){ el.innerHTML = ageLegendHtml(); el.hidden = typeof abaOn === "function" && !abaOn(); }); }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ageLegendFill); else ageLegendFill();
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", svcLegendFill); else svcLegendFill();
 
@@ -4843,7 +4968,7 @@ function bookingPatient(p, b, profId, week){
   return p._aba === aba ? p : Object.assign({}, p, {_aba: aba});
 }
 function patientColor(p){
-  if (!p) return null;
+  if (!p || !abaOn()) return null;
   if (patientIsNaoABA(p)) return PCOLOR_ABA_NAO;
   var band = ageBandOf(patientAgeYears(p));
   return band ? band.color : null;
@@ -6636,8 +6761,13 @@ function subscribeSimpleLists(){
       if (k === "feriados") holAfterChange();
       if (k === "visoesdre" && state.tab === "demonstrativos" && DM.view === "dre") renderDemonstrativos();
       if (k === "tiposcolab" && state.tab === "colaboradores") renderStaffTab();
+      if (k === "unidades") abaUiApply(true);
     }, function(){});
   });
+  db.doc("config/age_bands").onSnapshot(function(snap){
+    state.ageBands = (snap.exists && snap.data() && Array.isArray(snap.data().faixas)) ? snap.data().faixas : [];
+    ageBandsApply(state.ageBands); abaUiApply(true);
+  }, function(){});
   db.doc("config/patient_fields").onSnapshot(function(snap){
     state.patientFields = (snap.exists && snap.data() && snap.data().fields) || {};
     state.patientLink = (snap.exists && snap.data() && snap.data().link) || {};
@@ -7176,7 +7306,7 @@ function renderDispTab(){
   var cols = r.specs.map(function(sp){ return {spec: sp, label: sp ? specialtyName(sp) : "Sem especialidade", sub: "atend. / livres", color: vgSpecColor(sp)}; })
     .concat((r.groups || []).map(function(gid){ var g = findRoom(gid); return {grp: gid, label: g ? g.name : gid, sub: "atend. / livres", color: swatchVar(g ? g.color : "slate")}; }))
     .concat([{k: "blk", label: "Reunião", title: "Bloqueado, Reunião Clínica e Treinamento (1 por profissional)"}, {k: "fr", label: "Disponível", title: "Total de Vagas Livres"},
-      {k: "at", label: "Atendido", title: "Total Atendido (Pacientes e Grupos)"}, {k: "nao", label: "Individual (Não ABA)", title: "Atendimentos de Pacientes que Não Fazem ABA"}]);
+      {k: "at", label: "Atendido", title: "Total Atendido (Pacientes e Grupos)"}].concat(abaOn() ? [{k: "nao", label: "Individual (Não ABA)", title: "Atendimentos de Pacientes que Não Fazem ABA"}] : []));
   function cells(d, kind){
     var at = dispSum(d.at), fr = dispSum(d.free), hk = kind === "time" || kind === "sub", sb = kind === "sub";
     return cols.map(function(c){
@@ -11373,7 +11503,7 @@ function patientBusyMsg(patient, service, time, place){
 // Paciente sem Intervenção ABA ocupa a SALA inteira no horário: as outras
 // colunas da mesma sala ficam bloqueadas (só no Planner, só em sala — não em grupo).
 function isNaoABABooking(b, profId, week){
-  if (!b || !b.patient || bookingKind(b)) return false;
+  if (!b || !b.patient || bookingKind(b) || !abaOn()) return false;
   // Regras "não ABA" só valem para Sessão: outro serviço (avaliação, triagem…) não ocupa
   // nem é barrado (Planner e Agenda).
   if (!abaRuleApplies(b, profId, week)) return false;
@@ -13049,7 +13179,7 @@ function openTreatLineModal(ctx){
           '<div class="field"><label for="tlSvc">Serviço</label><select id="tlSvc"' + dis + '>' + svcs.map(function(s){ return opt(s.id, s.name, r.service); }).join("") + '</select></div>' +
           '<div class="field"><label for="tlProf">Profissional</label><select id="tlProf" data-combo>' + specProfOptions(r.specId, r.profId) + '</select></div>' +
         '</div><div class="field-row">' +
-          '<div class="field"><label class="chk-line"><input type="checkbox" id="tlAba"' + (abaYesNo(r.aba) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
+          '<div class="field aba-only"><label class="chk-line"><input type="checkbox" id="tlAba"' + (abaYesNo(r.aba) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
           '<div class="field"><label for="tlRoom">Sala</label><select id="tlRoom" data-combo>' + opt("", "Qualquer sala", r.roomId) + rooms.map(function(x){ return opt(x.id, x.name, r.roomId); }).join("") + '</select></div>' +
         '</div><div class="field-row">' +
           '<div class="field"><label id="tlDiaLabel">Dia</label><div class="ms" id="tlDiaMs">' +
@@ -13231,10 +13361,10 @@ function treatFieldsEditor(v, opts){
           '</select></div>' +
         '</div>' +
         (opts && opts.afterConv || "") +
-        '<div class="tr-sec">Intervenção ABA</div>' +
+        '<div class="tr-sec aba-only">Intervenção ABA</div>' +
         '<div class="field-row">' +
-          '<div class="field"><label>&nbsp;</label><label class="chk-line"><input type="checkbox" id="pAba"' + (!v._novo && abaYesNo(abaLegacy(v) || abaAuto((v.patientId && findPatientById(v.patientId)) || v)) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
-          '<div class="field"><label for="pAbaRev">Data de Revisão</label><input type="date" id="pAbaRev" value="' + esc(v.abaRevisao || "") + '"></div>' +
+          '<div class="field aba-only"><label>&nbsp;</label><label class="chk-line"><input type="checkbox" id="pAba"' + (!v._novo && abaYesNo(abaLegacy(v) || abaAuto((v.patientId && findPatientById(v.patientId)) || v)) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
+          '<div class="field aba-only"><label for="pAbaRev">Data de Revisão</label><input type="date" id="pAbaRev" value="' + esc(v.abaRevisao || "") + '"></div>' +
           '<div class="field" style="flex:2"><label id="pNaoAgLabel">Não Agrupar com</label><div class="ms" id="pNaoAgMs">' +
           '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="pNaoAgLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
           '<div class="ms-panel" id="pNaoAg" hidden role="listbox" aria-multiselectable="true">' +
@@ -16907,7 +17037,7 @@ function openRoomModal(r, asGroup){
       '<div class="modal-body">' +
         '<div class="tr-sec tr-sec-top">'+(grp ? "Grupo" : "Sala")+'</div>' +
         '<div class="field"><label for="rmName">Nome '+(grp ? "do grupo" : "da sala")+'</label><input id="rmName" type="text" placeholder="'+(grp ? "ex: Coordenador" : "ex: Fonoaudiologia")+'" value="'+esc(draftName)+'"></div>' +
-        (grp ? '' : '<div class="field"><label class="chk-line"><input type="checkbox" id="rmAba"'+(draftAba ? ' checked' : '')+'> <span>Sala Intervenção ABA</span></label><div class="color-hex-label" style="margin-top:6px">Sala ABA recebe de 2 a 4 pacientes ABA Sim no mesmo horário e aparece com “ABA” no nome (ex.: Fonoaudiologia ABA).</div></div>') +
+        (grp ? '' : '<div class="field aba-only"><label class="chk-line"><input type="checkbox" id="rmAba"'+(draftAba ? ' checked' : '')+'> <span>Sala Intervenção ABA</span></label><div class="color-hex-label" style="margin-top:6px">Sala ABA recebe de 2 a 4 pacientes ABA Sim no mesmo horário e aparece com “ABA” no nome (ex.: Fonoaudiologia ABA).</div></div>') +
         '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="rmColorBtn" title="Escolher cor" aria-label="Escolher cor"></button><span class="color-pick-code mono" id="rmColorCode"></span><span class="color-hex-label">clique na bolinha para escolher</span></div></div>' +
         '<div class="tr-sec">Terapeutas (Colunas na Grade)</div>' +
         '<div class="field"><div class="therapist-rows" id="rmTherapists"></div>' +
@@ -18277,7 +18407,7 @@ function agdOpenDetails(row){
           line("Diagnóstico (CID)", pat.cid || "") + line("Nível de Suporte", pat.suporte || "") + line("Alergias", pat.alergias || "") +
           line("Medicações em Uso", pat.medicacoes || "") + line("Restrições Alimentares", pat.restricoes || "")) + '</div>' : '') +
           '<div class="agd-det" data-det-pane="tr" hidden>' + emptyNote(
-          line("Intervenção ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) + lineHtml("Horários", trHoursText(pat) ? agdDetHoursHtml(trHoursText(pat)) : "")) + '</div>' : '') +
+          (abaOn() ? line("Intervenção ABA", abaYesNo(bookingAbaOf(pat, row.professional_id, row.service))) : "") + lineHtml("Horários", trHoursText(pat) ? agdDetHoursHtml(trHoursText(pat)) : "")) + '</div>' : '') +
         (grp ? '<div class="agd-det-pane" data-det-pane="pa" hidden>' + agdGroupPatientsHtml(grpItems) + '</div>' : '') +
         (pat ? pickupProtHtml(pat, agdIsLastOfDay(row)) : '') +
         '<div id="agdDetGoals"></div>' +
@@ -20432,9 +20562,9 @@ function plForbid(p){
   return set;
 }
 // Meta de grupo (ABA Sim): 80% das sessões do mês em grupo, por paciente (arredondado).
-var PL_GROUP_PCT = 0.8;
+var PL_GROUP_PCT = 0.8;   // padrão; vale o Meta % da Clínica (abaMeta)
 function plGroupGoal(hours){
-  var t = Math.round(hours * PL_GROUP_PCT);
+  var t = Math.round(hours * abaMeta() / 100);
   return {lo: t, hi: t, target: t};
 }
 // Quem está numa sala num horário.
@@ -20547,7 +20677,7 @@ function plQuality(){
     var bp = q.byPat[p.id] || {n: 0}, want = plLinesOf(p).reduce(function(a, x){ return a + x.hours; }, 0), got = bp.n;
     if (want || got) q.contr.push({p: p, want: want, got: got, fora: bp.fora || 0});
     var st = plGroupStat(p);
-    if (st.total && plLinesOf(p).some(function(x){ return plIsAbaSim(p, x.line); })){
+    if (abaOn() && st.total && plLinesOf(p).some(function(x){ return plIsAbaSim(p, x.line); })){
       var gl = plGroupGoal(st.total);
       q.goal.push({p: p, total: st.total, grp: st.grp, pct: Math.round(st.grp * 100 / st.total), ok: st.grp >= gl.lo && st.grp <= gl.hi, lo: gl.lo, hi: gl.hi});
     }
@@ -20605,7 +20735,7 @@ function openPlConfModal(){
       (bad.length ? tbl(["Paciente", "Tipo do Tratamento", "Contratadas", "Colocadas", "Diferença", "Fora do Horário"], bad.slice(0, 200).map(function(c){
         var t = activeTreatment(c.p.id), tipos = ((t && t.tipos) || []).map(trTypeName).filter(Boolean).join(", ");
         return ['<a href="#" class="apq-open-tr" data-pid="' + esc(c.p.id) + '" style="color:var(--accent);text-decoration:underline">' + esc(c.p.nome) + '</a>', esc(tipos || "—"), c.want, c.got, c.got === c.want ? "0" : (c.got - c.want > 0 ? "+" : "") + (c.got - c.want), c.fora ? '<b style="color:var(--danger)">' + c.fora + '</b>' : "0"]; }), "fx-left2") : "");
-    if (q.goal.length) html += sec("Meta de Grupo (ABA Sim: 80%)") + '<div class="pat-count">' + q.goal.filter(function(g){ return g.ok; }).length + ' de ' + q.goal.length + ' pacientes dentro da meta.</div>' +
+    if (q.goal.length) html += sec("Meta % (" + abaMeta() + "%)") + '<div class="pat-count">' + q.goal.filter(function(g){ return g.ok; }).length + ' de ' + q.goal.length + ' pacientes dentro da meta.</div>' +
       tbl(["Paciente", "Sessões", "Em Grupo", "%", "Situação"], q.goal.filter(function(g){ return !g.ok; }).slice(0, 200).map(function(g){ return [esc(g.p.nome), g.total, g.grp, g.pct + "%", (g.grp < g.lo ? "Abaixo" : "Acima") + " (ideal " + g.lo + (g.lo === g.hi ? "" : " a " + g.hi) + " em grupo)"]; }));
     html += sec("Ocupação por Terapeuta") + tbl(["Terapeuta", "Atendimentos", "Horários Ocupados", "Horários Disponíveis", "Ocupação"], q.therRows.map(function(r){ return [esc(profNome(r.prof)), r.n, r.used, r.avail, r.pct + "%" + (r.pct >= 90 ? " (alta)" : "")]; }));
     html += sec("Horário Vago por Sala e Turno") + '<div class="pat-count">' + (q.shifts - q.full.length) + ' de ' + q.shifts + ' turnos de sala com atendimento mantêm pelo menos um horário sem ninguém' + (q.full.length ? '; <b>' + q.full.length + '</b> estão cheios:' : '.') + '</div>' +
@@ -21472,7 +21602,7 @@ function sgRemovable(p){
 // Regra de grupo: Sessão ABA Não fica sozinha na sala; ABA Sim só divide sala/horário com
 // ABA Sim da MESMA faixa etária e terapeutas compatíveis. Devolve "" se pode ou o motivo.
 function sgGroupCheck(p, line, docId, time, room, seat){
-  if (lineSvc(line) !== DEFAULT_SERVICE_ID) return "";
+  if (!abaOn() || lineSvc(line) !== DEFAULT_SERVICE_ID) return "";
   var others = plOcc(docId, time, room).filter(function(o){ return o.p.id !== p.id; });
   if (!others.length) return "";
   if (!plIsAbaSim(p, line)) return "Paciente sem Intervenção ABA atende sozinho na sala";
@@ -21509,7 +21639,7 @@ function sgCands(p, line, w, have, opts, cols, onlyDay, why){
           else { sc += 12; }
         }
         if (routineConflictMsg(p, d.key, time, "x")){ sc += 30; tags.push("rotina atual"); }
-        if (lineSvc(line) === DEFAULT_SERVICE_ID && roomAba(c.room) !== plIsAbaSim(p, line)) sc += 50;
+        if (abaOn() && lineSvc(line) === DEFAULT_SERVICE_ID && roomAba(c.room) !== plIsAbaSim(p, line)) sc += 50;
         sc += ti * 0.1;
         raw.push({w: w, d: d, time: time, c: c, docId: docId, key: key, sc: sc, tags: tags});
       });
@@ -25424,14 +25554,14 @@ function trPatEntrada(pid){ var p = pid && rawPatient(pid); return (p && p.entra
 // Janela do paciente: uma linha só com Início, Tipo, Plano e ABA do tratamento atual.
 function treatCardHtml(t){
   function item(label, val){ return '<span class="trc-item"><span>' + label + ':</span> <b>' + (val ? esc(val) : "—") + '</b></span>'; }
-  return '<div class="trc-line">' + item("Início", trBr(t.inicio)) + item("Tipo", trLabel(TR_TIPOS, t.tipo)) + item("Intervenção ABA", trAbaText(t)) + '</div>';
+  return '<div class="trc-line">' + item("Início", trBr(t.inicio)) + item("Tipo", trLabel(TR_TIPOS, t.tipo)) + (abaOn() ? item("Intervenção ABA", trAbaText(t)) : "") + '</div>';
 }
 function treatSummaryHtml(t){
   var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
   return '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span> ' +
     'desde <b>' + esc(trBr(t.inicio)) + '</b> · ' + esc(trLabel(TR_TIPOS, t.tipo)) +
     (conv ? ' · ' + esc(conv) : '') +     (t.sessoesMes !== "" && t.sessoesMes != null ? ' · ' + esc(t.sessoesMes) + ' sessões/mês' : '') +
-    (trAbaText(t) ? ' · Intervenção ABA: ' + esc(trAbaText(t)) : '');
+    (abaOn() && trAbaText(t) ? ' · Intervenção ABA: ' + esc(trAbaText(t)) : '');
 }
 
 // Último atendimento (Agenda, sem bloqueios, até hoje) de cada paciente; recarrega a cada 2 min.
@@ -26073,8 +26203,8 @@ function renderTreatmentsTab(){
   if (due) due.innerHTML =
     (dueN ? '<button type="button" class="btn ghost tr-due-btn" data-tr-due="vencendo">' + dueN + (dueN === 1 ? ' vence' : ' vencem') + ' nos próximos ' + TR_DUE_DAYS + ' dias</button>' : '') +
     (overN ? '<button type="button" class="btn ghost tr-missing-btn" data-tr-due="vencidos">' + overN + (overN === 1 ? ' vencido' : ' vencidos') + '</button>' : '') +
-    (abaSoon ? '<button type="button" class="btn ghost tr-due-btn" data-tr-due="abavencendo">' + abaSoon + (abaSoon === 1 ? ' revisão da Intervenção ABA vence' : ' revisões da Intervenção ABA vencem') + ' nos próximos ' + TR_DUE_DAYS + ' dias</button>' : '') +
-    (abaOver ? '<button type="button" class="btn ghost tr-missing-btn" data-tr-due="abavencida">' + abaOver + (abaOver === 1 ? ' revisão da Intervenção ABA vencida' : ' revisões da Intervenção ABA vencidas') + '</button>' : '');
+    (abaSoon && abaOn() ? '<button type="button" class="btn ghost tr-due-btn" data-tr-due="abavencendo">' + abaSoon + (abaSoon === 1 ? ' revisão da Intervenção ABA vence' : ' revisões da Intervenção ABA vencem') + ' nos próximos ' + TR_DUE_DAYS + ' dias</button>' : '') +
+    (abaOver && abaOn() ? '<button type="button" class="btn ghost tr-missing-btn" data-tr-due="abavencida">' + abaOver + (abaOver === 1 ? ' revisão da Intervenção ABA vencida' : ' revisões da Intervenção ABA vencidas') + '</button>' : '');
   Array.prototype.forEach.call(due ? due.querySelectorAll("[data-tr-due]") : [], function(b){
     b.onclick = function(){ var f = document.getElementById("trFilter"); f.value = b.getAttribute("data-tr-due"); f.dispatchEvent(new Event("change", {bubbles: true})); };
   });
@@ -28656,7 +28786,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Contratos</b> em Níveis de Permissão (ver, incluir, editar, excluir)."},
   {id: "unidades", group: "Acesso", title: "Unidades", mod: null, tab: "unidades",
     purpose: "A clínica pode ter várias unidades (filiais). Cada pessoa trabalha na sua unidade; o Gestor enxerga e cadastra todas, e o Supervisor enxerga todas. Os dados que existiam antes pertencem à Unidade 1.",
-    steps: ["<b>Tela de login:</b> não há escolha de unidade: digite e-mail e senha e o sistema abre a unidade do seu cadastro.", "<b>Gestor e Supervisor:</b> depois de entrar, no topo, à direita, a lista de unidades troca a unidade que está aberta (o sistema lembra a última usada neste aparelho). No celular, a lista fica no menu ☰.", "<b>Acesso → Unidades</b> (só o Gestor) → <b>+ Incluir</b>: nome na tela de login, nome fantasia, CNPJ, telefone, e-mail, endereço e cidade.", "<b>Acesso → Usuários:</b> o Gestor escolhe a unidade de cada usuário; o Administrador cria usuários só na própria unidade (o Supervisor, na unidade aberta)."],
+    steps: ["<b>Intervenção ABA:</b> no cadastro da unidade, escolha se ela usa Intervenção ABA. Com <b>Não</b>, as opções de ABA, Meta % e Faixas Etárias somem do cadastro da Clínica dessa unidade e o sistema faz só os agendamentos normais.", "<b>Tela de login:</b> não há escolha de unidade: digite e-mail e senha e o sistema abre a unidade do seu cadastro.", "<b>Gestor e Supervisor:</b> depois de entrar, no topo, à direita, a lista de unidades troca a unidade que está aberta (o sistema lembra a última usada neste aparelho). No celular, a lista fica no menu ☰.", "<b>Acesso → Unidades</b> (só o Gestor) → <b>+ Incluir</b>: nome na tela de login, nome fantasia, CNPJ, telefone, e-mail, endereço e cidade.", "<b>Acesso → Usuários:</b> o Gestor escolhe a unidade de cada usuário; o Administrador cria usuários só na própria unidade (o Supervisor, na unidade aberta)."],
     rules: ["Duas unidades podem ter o mesmo nome fantasia com CNPJs diferentes; o CNPJ não se repete.", "O <b>Nome da Unidade</b> aparece só para quem já entrou; pode ser editado quando quiser.", "Ordem dos níveis: <b>Gestor</b>, <b>Supervisor</b>, <b>Administrador</b> e os demais. O <b>Gestor</b> tem acesso total a todas as unidades e é quem define a unidade de cada Administrador. O <b>Supervisor</b> acessa todas as unidades (troca no topo), com as permissões que o Gestor marcar no nível dele. O <b>Administrador</b> tem acesso total, mas só na própria unidade.", "Os Níveis de Permissão valem para todas as unidades: o Gestor e o Administrador editam (o Administrador não altera Gestor, Administrador nem níveis que acessam todas as unidades). O Sistema e a restauração do Backup são só do Gestor.", "Cada unidade tem a sua própria <b>Clínica</b> (nome, logo, cores, horários, redes sociais): o link de cadastro mostra a da unidade que o gerou. Salas, Planner e Agenda também são de cada unidade.", "A Unidade 1 não pode ser excluída. Unidade com usuários é <b>Inativada</b> em vez de excluída.", "A unidade escolhida define quais dados a pessoa enxerga. A separação já está pronta no banco; as telas passam a mostrar só os dados da unidade aos poucos, sem mudar o uso da Unidade 1."],
     who: "Cadastro de Unidades, Sistema e restauração do Backup: nível <b>Gestor</b>. Níveis de Permissão: Gestor e Administrador. Trocar de unidade: Gestor e níveis que acessam todas as unidades (Supervisor)."},
   {id: "catfornecedor", group: "Financeiro", title: "Categorias de Fornecedor", mod: "categorias_fornecedor", tab: "catfornecedor",
@@ -29317,7 +29447,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Status</b>."},
   {id: "clinica", group: "Acesso", title: "Cadastro da Clínica", mod: "clinica",
     purpose: "Dados da clínica (Razão Social, CNPJ, Nome da Clínica / Nome Fantasia e Descrição), redes sociais, dias e horários de funcionamento, duração do atendimento, cores e logo. O Nome Fantasia e a Descrição aparecem no topo, no login e nas impressões.",
-    steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve.", "Em <b>Atendimento</b>, <b>Sessões Seguidas (Máximo)</b> define até quantas sessões seguidas o quadro do tratamento pode pedir (a lista do quadro vai de 1 até esse número).",
+    steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve.", "Em <b>Atendimento</b>, <b>Sessões Seguidas (Máximo)</b> define até quantas sessões seguidas o quadro do tratamento pode pedir (a lista do quadro vai de 1 até esse número).", "Em <b>Atendimento</b>, a caixa <b>Intervenção ABA</b> (só aparece quando a unidade tem Intervenção ABA) liga todas as regras e campos de ABA do sistema: paciente sem ABA ocupando a sala, salas ABA, grupos ABA por faixa etária, cores por idade nas células, Intervenção ABA no tratamento e nos quadros. Desligada, o sistema faz só os agendamentos normais. Ao lado, <b>Meta %</b> é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner, quadro Meta %).", "<b>Faixas Etárias</b> (só com Intervenção ABA): cada quadro tem Idade Inicial, Idade Final (em branco = sem limite, só na última) e a Cor das células do Planner e da Agenda. As faixas valem para todas as unidades e também aparecem em Habilidades e Objetivos; não podem se sobrepor.",
       "<b>Redes Sociais</b>: clique em <b>+ Inserir</b>, escolha a rede (Instagram, Facebook, YouTube, TikTok, WhatsApp, Google Maps, Site, LinkedIn, E-mail ou Outro) e cole o link. ▲▼ mudam a ordem e ✕ tira a linha. Em “Outro”, escreva também o nome (ex.: Blog)."],
     rules: [
       "As redes sociais aparecem, com a logo colorida de cada uma, na página do link de cadastro (só depois do envio, no agradecimento), no fim das mensagens com o link de cadastro (as impressões e os PDFs não levam as redes). Sem redes cadastradas, nada disso aparece.",
@@ -30190,7 +30320,8 @@ var REG_CFG = {
     dupKey: function(x){ return supplierDocDigits(x.cnpj) || normText(x.name); },
     fields: [{key: "fantasia", label: "Nome Fantasia"}, {key: "cnpj", label: "CNPJ", doc: true},
       {key: "telefone", label: "Telefone", phone: true}, {key: "email", label: "E-mail", ph: "contato@empresa.com.br"},
-      {key: "endereco", label: "Endereço", ph: "Rua, número, bairro"}, {key: "cidade", label: "Cidade"}],
+      {key: "endereco", label: "Endereço", ph: "Rua, número, bairro"}, {key: "cidade", label: "Cidade"},
+      {key: "aba", label: "Intervenção ABA", select: [{v: "Não", l: "Não"}], empty: "Sim"}],
     search: function(u){ return u.name + " " + (u.fantasia || "") + " " + (u.cnpj || "") + " " + supplierDocDigits(u.cnpj) + " " + (u.cidade || ""); },
     cols: ["Nome na Tela de Login", "Nome Fantasia", "CNPJ", "Cidade"],
     widths: [260, 240, 170, 180],
