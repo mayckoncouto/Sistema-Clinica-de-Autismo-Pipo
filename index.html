@@ -1360,6 +1360,7 @@ button.tr-sec-toggle[aria-expanded="false"] .tr-sec-arrow{transform:rotate(-90de
 .tr-month td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
 .tr-month tr.tr-month-first td{border-top:2px solid var(--line)}
 .tr-month tr.tr-month-tot td{font-weight:800;background:var(--surface-2)}
+@media (min-width:761px){#trMonthly .tr-month{table-layout:fixed}#trMonthly .tr-month th:first-child{width:30%}#trMonthly .tr-month th:not(:first-child),#trMonthly .tr-month td:not(:first-child){text-align:center}}
 .tr-div{margin:0 0 8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .tr-div-ok{color:#1f6b45;background:#eaf6ef;border-color:#bfe0cd;font-size:12.5px}
 .tr-div-h{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;font-size:12.5px}
@@ -26801,7 +26802,7 @@ function trDivPanelHtml(v){
   if (!d.length) return '<div class="tr-div tr-div-ok"><b>Sem divergências</b> entre o tratamento, o Planner e a Agenda neste mês.</div>';
   var c = {erro: 0, aviso: 0, info: 0}; d.forEach(function(x){ c[x.lvl]++; });
   return '<div class="tr-div"><div class="tr-div-h"><b>' + d.length + (d.length === 1 ? ' divergência' : ' divergências') + '</b>' +
-    ['erro', 'aviso', 'info'].filter(function(k){ return c[k]; }).map(function(k){ return '<span class="tr-div-chip tr-div-' + k + '">' + c[k] + ' ' + TR_DIV_LBL[k].toLowerCase() + '</span>'; }).join("") + '</div>' +
+    ['erro'].filter(function(k){ return c[k]; }).map(function(k){ return '<span class="tr-div-chip tr-div-' + k + '">' + c[k] + ' ' + TR_DIV_LBL[k].toLowerCase() + '</span>'; }).join("") + '</div>' +
     ['erro', 'aviso', 'info'].map(function(k){
       var it = d.filter(function(x){ return x.lvl === k; }); if (!it.length) return "";
       var ul = '<ul class="tr-div-l">' + it.map(function(x){
@@ -26862,9 +26863,14 @@ function trMonthViewHtml(t, ym){
 function trPlannerBoxHtml(t, v){
   var p = t && t.patientId ? findPatientById(t.patientId) : null;
   if (!p) return "";
-  var wait = !TR.plan, items = wait ? [] : trPlannerItems(p), wk = {1: 0, 2: 0, 3: 0, 4: 0}, ideal = {1: 0, 2: 0, 3: 0, 4: 0}, profs = {}, fora = 0, hp = {horarios: t.horarios || null};
-  items.forEach(function(it){ if (wk[it.week] != null) wk[it.week]++; if (it.prof) profs[it.prof] = 1; if (t.horarios && !patientSlotOk(hp, it.day, it.time)) fora++; });
+  var wait = !TR.plan, items = wait ? [] : trPlannerItems(p), wk = {1: 0, 2: 0, 3: 0, 4: 0}, ideal = {1: 0, 2: 0, 3: 0, 4: 0}, specs = {}, fora = 0, hp = {horarios: t.horarios || null};
   var lines = treatLines(t.specHours), sumLines = 0;
+  items.forEach(function(it){
+    if (wk[it.week] != null) wk[it.week]++;
+    var ln = treatLineFor(lines, it.prof, it.svc, it.week), pr = it.prof ? findProfessional(it.prof) : null, sp = ln ? ln.specId : (pr && pr.specialtyId);
+    if (sp) specs[sp] = 1;
+    if (t.horarios && !patientSlotOk(hp, it.day, it.time)) fora++;
+  });
   lines.forEach(function(l){ var h = Number(l.hours) || 0, ws = apWeeksOf(l); sumLines += h; ws.forEach(function(w){ ideal[w] += h / ws.length; }); });
   var contr = Number(t.sessoesMes) || sumLines;
   function nf(x){ return (Math.round(x * 10) / 10).toLocaleString("pt-BR"); }
@@ -26872,14 +26878,14 @@ function trPlannerBoxHtml(t, v){
   var badWeek = [1, 2, 3, 4].filter(function(w){ return Math.abs(wk[w] - ideal[w]) >= 1; });
   function val(x){ return wait ? '<span class="pt-muted">…</span>' : x; }
   var weekTxt = [1, 2, 3, 4].map(function(w){ return w + "ª: " + col(badWeek.indexOf(w) === -1, wk[w] + "/" + nf(ideal[w])); }).join(" · ");
-  var cells = [["Por Semana (Agendado/Ideal)", val(weekTxt)],
-    ["Atendimentos (Planner/Contratado)", val(col(items.length === contr, items.length + "/" + contr))],
-    ["Profissionais", val(String(Object.keys(profs).length))],
+  var cells = [["Por Semana", val(weekTxt)],
+    ["Atendimentos", val(col(items.length === contr, items.length + "/" + contr))],
+    ["Especialidades", val(String(Object.keys(specs).length))],
     ["Fora do Horário do Paciente", val(col(!fora, String(fora)))]];
   var divs = ((v && v.divs) || []).filter(function(x){ return x.lvl === "erro" || x.lvl === "aviso"; }).length;
   var bad = !wait && (divs || badWeek.length || fora || items.length !== contr);
   var st = wait ? "" : bad ? ' style="background:#fdf3f3;border-color:#f3b8b8"' : ' style="background:#eaf6ef;border-color:#bfe0cd"';
-  var tip = "Atendimentos do paciente no Planner (4 semanas). Ideal da semana = sessões/mês de cada quadro divididas pelas semanas em que ele vale.";
+  var tip = "Atendimentos do paciente no Planner (4 semanas). Por Semana = agendado/ideal (ideal = sessões/mês de cada quadro divididas pelas semanas em que ele vale). Atendimentos = Planner/Contratado. Especialidades = quantas especialidades diferentes estão no Planner.";
   return '<div class="pl-clin" id="trPlBox" title="' + esc(tip) + '"' + st + '>' + cells.map(function(c){
     return '<div class="pl-clin-it"><span>' + c[0] + '</span><b>' + c[1] + '</b></div>';
   }).join("") + '</div>';
