@@ -180,7 +180,7 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 #trPlBox{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.6fr)}
 #trPlBox .pl-clin-it b{white-space:nowrap}
 @media (max-width:760px){#trPlBox{grid-template-columns:repeat(2,minmax(0,1fr))}#trPlBox .pl-clin-it b{white-space:normal}}
-.pl-clin-it span{display:block;font-size:11px;color:var(--muted)}.pl-clin-it b{font-weight:600;font-size:13px;white-space:pre-line}
+.pl-clin-it > span{display:block;font-size:11px;color:var(--muted)}.pl-clin-it b{font-weight:600;font-size:13px;white-space:pre-line}
 .pl-hint{font-size:11.5px;color:var(--muted)}
 .pl-acts-link{cursor:pointer;text-decoration:underline dotted}.pl-acts-link:hover{color:var(--accent)}
 .pl-spec{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--surface)}
@@ -1371,6 +1371,7 @@ button.tr-sec-toggle[aria-expanded="false"] .tr-sec-arrow{transform:rotate(-90de
 .tr-div-l li{display:flex;align-items:flex-start;gap:7px;font-size:12px;line-height:1.35}
 .tr-div-dot{flex:0 0 8px;height:8px;border-radius:50%;margin-top:5px;background:#8a5a10}
 li.tr-div-erro .tr-div-dot{background:#c0392b}li.tr-div-info .tr-div-dot{background:#2f6db5}
+.tr-div-more{margin-top:4px}.tr-div-more>summary{cursor:pointer;font-size:12px;color:var(--muted);list-style:none;display:flex;align-items:center;gap:6px}.tr-div-more>summary::-webkit-details-marker{display:none}.tr-div-more[open]>summary{margin-bottom:4px}
 .tr-div-go{margin-left:auto;flex:0 0 auto;padding:1px 8px;font-size:11px}
 .tr-month tr.tr-month-xh td{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#9b1c1c;background:#fdf3f3}
 .tr-warn.tr-warn-bad{background:#fde8e8;color:#9b1c1c;border-color:#f3b8b8}
@@ -13204,17 +13205,18 @@ function treatFieldsEditor(v, opts){
           '</select></div>' +
         '</div>' +
         (opts && opts.afterConv || "") +
+        '<div class="tr-sec">Intervenção ABA</div>' +
         '<div class="field-row">' +
           '<div class="field"><label>&nbsp;</label><label class="chk-line"><input type="checkbox" id="pAba"' + (!v._novo && abaYesNo(abaLegacy(v) || abaAuto((v.patientId && findPatientById(v.patientId)) || v)) === "Sim" ? ' checked' : '') + '> <span>Intervenção ABA</span></label></div>' +
           '<div class="field"><label for="pAbaRev">Data de Revisão</label><input type="date" id="pAbaRev" value="' + esc(v.abaRevisao || "") + '"></div>' +
-        '</div>' +
-        '<div class="field-row"><div class="field"><label id="pNaoAgLabel">Não Agrupar com</label><div class="ms" id="pNaoAgMs">' +
+          '<div class="field" style="flex:2"><label id="pNaoAgLabel">Não Agrupar com</label><div class="ms" id="pNaoAgMs">' +
           '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="pNaoAgLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
           '<div class="ms-panel" id="pNaoAg" hidden role="listbox" aria-multiselectable="true">' +
             state.patients.filter(function(q){ return q.id !== v.patientId && (isActive(q) || (v.naoAgrupar || []).indexOf(q.id) !== -1); })
               .sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); })
               .map(function(q){ return '<label class="ms-opt"><input type="checkbox" value="' + esc(q.id) + '" data-n="' + esc(q.nome) + '"' + ((v.naoAgrupar || []).indexOf(q.id) !== -1 ? ' checked' : '') + '><span>' + esc(q.nome) + '</span></label>'; }).join("") +
-          '</div></div><div class="pat-count">O Auto Planner nunca coloca estes pacientes juntos na mesma sala e horário (vale nos dois sentidos).</div></div></div>' +
+          '</div></div></div></div>' +
+        '<div class="pat-count">Não Agrupar com: o Auto Planner nunca coloca estes pacientes juntos na mesma sala e horário (vale nos dois sentidos).</div>' +
         trInfoBoxHtml(v) +
         '<div class="tr-sec spec-sum-label">Especialidades e Serviços <span class="spec-sum" id="specSum" hidden></span></div>' +
         '<div class="field">' +
@@ -13227,8 +13229,8 @@ function treatFieldsEditor(v, opts){
               '<button type="button" class="btn ghost" id="specRowDistribute" title="Divide o total de Sessão/Mês igualmente entre todos os quadros">Distribuir</button>' +
             '</div></div>' +
         '</div>' +
-        (opts && opts.beforeHours || "") +
-        patHoursSectionHtml(v);
+        patHoursSectionHtml(v) +
+        (opts && opts.afterHours || "");
   // wire() define estas duas (dependem dos campos já na tela); read() usa.
   var syncRef = function(){}, resolveRef = function(){ return draftConvenioId; }, renderRef = function(){};
   function wire(ovId){
@@ -26736,10 +26738,16 @@ function trDivPanelHtml(v){
   var c = {erro: 0, aviso: 0, info: 0}; d.forEach(function(x){ c[x.lvl]++; });
   return '<div class="tr-div"><div class="tr-div-h"><b>' + d.length + (d.length === 1 ? ' divergência' : ' divergências') + '</b>' +
     ['erro', 'aviso', 'info'].filter(function(k){ return c[k]; }).map(function(k){ return '<span class="tr-div-chip tr-div-' + k + '">' + c[k] + ' ' + TR_DIV_LBL[k].toLowerCase() + '</span>'; }).join("") + '</div>' +
-    '<ul class="tr-div-l">' + d.map(function(x){
-      return '<li class="tr-div-' + x.lvl + '"><span class="tr-div-dot" title="' + TR_DIV_LBL[x.lvl] + '"></span><span>' + esc(x.text) + '</span>' +
-        (x.go ? '<button type="button" class="btn ghost tr-div-go" data-trgo="' + esc(x.go.t + "|" + (x.go.k || x.go.d)) + '">' + (x.go.t === "planner" ? 'Ver no Planner' : 'Ver na Agenda') + '</button>' : '') + '</li>';
-    }).join("") + '</ul></div>';
+    ['erro', 'aviso', 'info'].map(function(k){
+      var it = d.filter(function(x){ return x.lvl === k; }); if (!it.length) return "";
+      var ul = '<ul class="tr-div-l">' + it.map(function(x){
+        return '<li class="tr-div-' + x.lvl + '"><span class="tr-div-dot" title="' + TR_DIV_LBL[x.lvl] + '"></span><span>' + esc(x.text) + '</span>' +
+          (x.go ? '<button type="button" class="btn ghost tr-div-go" data-trgo="' + esc(x.go.t + "|" + (x.go.k || x.go.d)) + '">' + (x.go.t === "planner" ? 'Ver no Planner' : 'Ver na Agenda') + '</button>' : '') + '</li>';
+      }).join("") + '</ul>';
+      if (k === "erro") return ul;
+      return '<details class="tr-div-more"><summary><span class="tr-div-chip tr-div-' + k + '">' + it.length + ' ' + TR_DIV_LBL[k].toLowerCase() + '</span> ' +
+        (it.length === 1 ? 'Ver o item' : 'Ver os ' + it.length + ' itens') + '</summary>' + ul + '</details>';
+    }).join("") + '</div>';
 }
 function trDivGo(val, ev){
   var i = val.indexOf("|"), t = val.slice(0, i), rest = val.slice(i + 1), ap = rest.split("|");
@@ -26782,19 +26790,33 @@ function trMonthViewHtml(t, ym){
   }
   html += '</tbody></table></div>';
   if (v.other) html += '<div class="pat-count" style="margin-top:4px">' + v.other + ' atendimento(s) neste mês em especialidades ou serviços que não estão no tratamento.</div>';
-  return trPlannerBoxHtml(t) + trDivPanelHtml(v) + html;
+  return trPlannerBoxHtml(t, v) + trDivPanelHtml(v) + html;
 }
 // Resumo do paciente no Planner (4 semanas), no estilo do quadro de informações: por semana, atendimentos, profissionais e fora do horário.
-function trPlannerBoxHtml(t){
+// Ideal por semana = soma, quadro a quadro, das sessões/mês divididas pelas semanas em que o quadro vale.
+// Vermelho suave = divergência (erro/atenção) ou semana fora do ideal; verde suave = tudo certo.
+function trPlannerBoxHtml(t, v){
   var p = t && t.patientId ? findPatientById(t.patientId) : null;
   if (!p) return "";
-  var wait = !TR.plan, items = wait ? [] : trPlannerItems(p), wk = {1: 0, 2: 0, 3: 0, 4: 0}, profs = {}, fora = 0, hp = {horarios: t.horarios || null};
+  var wait = !TR.plan, items = wait ? [] : trPlannerItems(p), wk = {1: 0, 2: 0, 3: 0, 4: 0}, ideal = {1: 0, 2: 0, 3: 0, 4: 0}, profs = {}, fora = 0, hp = {horarios: t.horarios || null};
   items.forEach(function(it){ if (wk[it.week] != null) wk[it.week]++; if (it.prof) profs[it.prof] = 1; if (t.horarios && !patientSlotOk(hp, it.day, it.time)) fora++; });
+  var lines = treatLines(t.specHours), sumLines = 0;
+  lines.forEach(function(l){ var h = Number(l.hours) || 0, ws = apWeeksOf(l); sumLines += h; ws.forEach(function(w){ ideal[w] += h / ws.length; }); });
+  var contr = Number(t.sessoesMes) || sumLines;
+  function nf(x){ return (Math.round(x * 10) / 10).toLocaleString("pt-BR"); }
+  function col(ok, txt){ return '<span style="color:' + (ok ? '#1f6b45' : 'var(--danger)') + '">' + txt + '</span>'; }
+  var badWeek = [1, 2, 3, 4].filter(function(w){ return Math.abs(wk[w] - ideal[w]) >= 1; });
   function val(x){ return wait ? '<span class="pt-muted">…</span>' : x; }
-  var cells = [["Por Semana", val([1, 2, 3, 4].map(function(w){ return w + "ª: " + wk[w]; }).join(" · "))],
-    ["Atendimentos", val(String(items.length))], ["Profissionais", val(String(Object.keys(profs).length))],
-    ["Fora do Horário do Paciente", val(fora ? '<span style="color:var(--danger)">' + fora + '</span>' : "0")]];
-  return '<div class="pl-clin" id="trPlBox" title="Atendimentos do paciente no Planner (4 semanas)">' + cells.map(function(c){
+  var weekTxt = [1, 2, 3, 4].map(function(w){ return w + "ª: " + col(badWeek.indexOf(w) === -1, wk[w] + "/" + nf(ideal[w])); }).join(" · ");
+  var cells = [["Por Semana (Agendado/Ideal)", val(weekTxt)],
+    ["Atendimentos (Planner/Contratado)", val(col(items.length === contr, items.length + "/" + contr))],
+    ["Profissionais", val(String(Object.keys(profs).length))],
+    ["Fora do Horário do Paciente", val(col(!fora, String(fora)))]];
+  var divs = ((v && v.divs) || []).filter(function(x){ return x.lvl === "erro" || x.lvl === "aviso"; }).length;
+  var bad = !wait && (divs || badWeek.length || fora || items.length !== contr);
+  var st = wait ? "" : bad ? ' style="background:#fdf3f3;border-color:#f3b8b8"' : ' style="background:#eaf6ef;border-color:#bfe0cd"';
+  var tip = "Atendimentos do paciente no Planner (4 semanas). Ideal da semana = sessões/mês de cada quadro divididas pelas semanas em que ele vale.";
+  return '<div class="pl-clin" id="trPlBox" title="' + esc(tip) + '"' + st + '>' + cells.map(function(c){
     return '<div class="pl-clin-it"><span>' + c[0] + '</span><b>' + c[1] + '</b></div>';
   }).join("") + '</div>';
 }
@@ -26826,9 +26848,7 @@ function trMonthSectionHtml(){
       '<b id="trMonthLabel"></b><button type="button" class="btn ghost" id="trMonthNext" aria-label="Próximo mês">›</button>' +
       '<button type="button" class="btn ghost" id="trMonthToday">Mês Atual</button></div>' +
       '<div id="trMonthly"></div>' +
-      '<div class="pat-count" style="margin-top:6px">Contratado = sessões/mês do tratamento. Planner = sessões do paciente no modelo de 4 semanas; Dif. Planner = Contratado − Planner. ' +
-        'Agenda = atendimentos marcados no mês (qualquer status). Realizado = Finalizado + Não compareceu. Justificado = Falta justificada. ' +
-        'Dif. Agenda = Contratado − Agenda + Justificado. Vermelho = faltam sessões; âmbar com "+" = sessões a mais; verde = igual.</div>' +
+      '<div class="pat-count" style="margin-top:6px">Realizado = Finalizado + Não compareceu.</div>' +
     '</div>';
 }
 function trMonthSectionWire(t, getDraft){
@@ -27129,7 +27149,7 @@ function openTreatmentModal(t, opts){
       '<div class="field"><label for="trDesp">Descontos</label><input type="text" inputmode="decimal" id="trDesp" placeholder="R$ 0,00"' + (canEditVal ? '' : ' disabled') + ' value="' + esc(d.descontos === "" ? "" : fmtMoney(parseMoney(d.descontos))) + '"></div>' +
       '<div class="field"><label>Valor Final</label><input type="text" id="trFinal" disabled></div>' +
     '</div>') : '';
-  var ed = treatFieldsEditor(v, {afterConv: '<div class="pat-count" id="trConvHint" hidden></div>' + moneyRow, beforeHours: '<div class="tr-sec">Observações</div><div class="field"><textarea id="trObs" rows="5" placeholder="Opcional" aria-label="Observações">' + esc(d.obs) + '</textarea></div>'});
+  var ed = treatFieldsEditor(v, {afterConv: '<div class="pat-count" id="trConvHint" hidden></div>' + moneyRow, afterHours: '<div class="tr-sec">Observações</div><div class="field"><textarea id="trObs" rows="5" placeholder="Opcional" aria-label="Observações">' + esc(d.obs) + '</textarea></div>'});
   var wasCancelled = !isNew && t.status === "cancelado" && sysOn("tr_cancelado_def");
   var mots = activeOnly(cancelReasonsList(), isNew ? "" : t.motivoCancel);
   if (!isNew && t.motivoCancel && !mots.some(function(m){ return m.id === t.motivoCancel; })) mots.push({id: t.motivoCancel, name: t.motivoCancelNome || t.motivoCancel});
@@ -27164,23 +27184,25 @@ function openTreatmentModal(t, opts){
       '<div class="modal-body">' +
         '<div class="tr-cancel" id="trLockNote" hidden><p class="tr-cancel-note" id="trLockText"></p></div>' +
         '<div class="tr-sec tr-sec-top">Tratamento</div>' +
-        '<div class="field"><label for="trPat">Paciente</label><select id="trPat"' + (isNew && !opts.renegotiateFrom ? '' : ' disabled') + '>' + patOpts + '</select></div>' +
-        '<div class="field"><label id="trTiposLabel">Tipo de Tratamento</label><div class="ms" id="trTiposMs">' +
-          '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="trTiposLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
-          '<div class="ms-panel" id="trTipos" hidden role="listbox" aria-multiselectable="true">' +
-            treatTypesAll().filter(function(x){ return isActive(x) || d.tipos.indexOf(x.id) !== -1; }).sort(REG_CFG.tipostrat.sort).map(function(x){
-              return '<label class="ms-opt"><input type="checkbox" value="' + esc(x.id) + '"' + (d.tipos.indexOf(x.id) !== -1 ? ' checked' : '') + '><span>' + esc(ttLabel(x)) + '</span></label>';
-            }).join("") +
-          '</div></div></div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label for="trPat">Paciente</label><select id="trPat"' + (isNew && !opts.renegotiateFrom ? '' : ' disabled') + '>' + patOpts + '</select></div>' +
+          '<div class="field"><label for="trTipo">Contrato (Automático)</label><select id="trTipo" disabled>' + opt(TR_TIPOS, d.tipo) + '</select></div>' +
+        '</div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label id="trTiposLabel">Tipo de Tratamento</label><div class="ms" id="trTiposMs">' +
+            '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="trTiposLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
+            '<div class="ms-panel" id="trTipos" hidden role="listbox" aria-multiselectable="true">' +
+              treatTypesAll().filter(function(x){ return isActive(x) || d.tipos.indexOf(x.id) !== -1; }).sort(REG_CFG.tipostrat.sort).map(function(x){
+                return '<label class="ms-opt"><input type="checkbox" value="' + esc(x.id) + '"' + (d.tipos.indexOf(x.id) !== -1 ? ' checked' : '') + '><span>' + esc(ttLabel(x)) + '</span></label>';
+              }).join("") +
+            '</div></div></div>' +
+          '<div class="field"><label for="trSt">Status</label><select id="trSt"' + (wasCancelled ? ' disabled' : '') + '>' + trStatusOpts(d.tipos, d.status) + '</select></div>' +
+        '</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="trIni">Data de Início</label><input type="date" id="trIni" value="' + esc(d.inicio) + '">' +
             (trPatEntrada(pid) ? '<div class="pat-count" id="trEntradaHint">Cadastrado em ' + esc(trBr(trPatEntrada(pid))) + ' (o início não pode ser antes)</div>' : '') + '</div>' +
           '<div class="field"><label for="trFim">Data de Término</label><input type="date" id="trFim" value="' + esc(d.termino) + '">' +
             '<div class="pat-count" id="trFimHint">' + esc((isNew ? "Em andamento" : trEndAutoText(t)) === "—" ? "Vazio = automático (último atendimento na Agenda)." : "Vazio = automático: " + (isNew ? "Em andamento" : trEndAutoText(t)) + ".") + '</div></div>' +
-        '</div>' +
-        '<div class="field-row">' +
-          '<div class="field"><label for="trTipo">Contrato (Automático)</label><select id="trTipo" disabled>' + opt(TR_TIPOS, d.tipo) + '</select></div>' +
-          '<div class="field"><label for="trSt">Status</label><select id="trSt"' + (wasCancelled ? ' disabled' : '') + '>' + trStatusOpts(d.tipos, d.status) + '</select></div>' +
         '</div>' +
         '<div class="field-row">' +
           '<div class="field"><label for="trVencPor">Vencimento por</label><select id="trVencPor">' +
@@ -27338,14 +27360,14 @@ function openTreatmentModal(t, opts){
   syncVencPor();
   var trMonthSec = trMonthSectionWire(t, function(){
     var r0 = ed.read(), ini0 = document.getElementById("trIni"), fim0 = document.getElementById("trFim");
-    return Object.assign({}, t, {specHours: r0.fields.specHours, horarios: r0.fields.horarios !== undefined ? r0.fields.horarios : t.horarios, inicio: (ini0 && ini0.value) || t.inicio, termino: fim0 ? (fim0.value || undefined) : t.termino});
+    return Object.assign({}, t, {sessoesMes: r0.fields.sessoesMes !== undefined ? r0.fields.sessoesMes : t.sessoesMes, specHours: r0.fields.specHours, horarios: r0.fields.horarios !== undefined ? r0.fields.horarios : t.horarios, inicio: (ini0 && ini0.value) || t.inicio, termino: fim0 ? (fim0.value || undefined) : t.termino});
   });
   // Mudou quadro, início ou término na janela (mesmo sem salvar): o Contratado × Realizado se refaz.
   (function(){
     var tm = null, sr = document.getElementById("specRowsHost"), mo = null;
     var go = function(){ if (tm) clearTimeout(tm); tm = setTimeout(function(){ tm = null; if (!document.getElementById("ovTreat")) return; trMonthSec.refresh(); if (mo) mo.takeRecords(); }, 250); };
     if (sr && window.MutationObserver){ mo = new MutationObserver(go); mo.observe(sr, {childList: true, subtree: true}); }
-    ["trIni", "trFim"].forEach(function(id){ var el = document.getElementById(id); if (el) el.addEventListener("change", go); });
+    ["trIni", "trFim", "pPac"].forEach(function(id){ var el = document.getElementById(id); if (el){ el.addEventListener("change", go); el.addEventListener("input", go); } });
     var ph = document.getElementById("pHours"); if (ph){ ph.addEventListener("change", go); ph.addEventListener("input", go); ph.addEventListener("click", go); }
   })();
   trCollapseWire("trHist", TR_HIST_OPEN_KEY);
@@ -29106,7 +29128,7 @@ var HELP_TOPICS = [
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
       "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre os quadros de <b>Sessão</b>; os quadros de outros serviços não mudam, mas as sessões deles são descontadas do total — 10 por mês com 2 de outro serviço = 8 divididas entre os de Sessão; o resto vai para os primeiros; se não der 1 para cada quadro de Sessão, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
-      "<b>Contratado × Realizado — Resumo do Planner</b>: no alto da seção, um quadro mostra os atendimentos do paciente no Planner (4 semanas): quantos em cada semana, o total, quantos profissionais e quantos estão fora do Horário de Atendimento do tratamento (em vermelho quando há).",
+      "<b>Contratado × Realizado — Resumo do Planner</b>: no alto da seção, um quadro mostra os atendimentos do paciente no Planner (4 semanas): cada semana como agendado/ideal (ideal = sessões/mês de cada quadro divididas pelas semanas em que ele vale), o total do Planner/Contratado, quantos profissionais e quantos estão fora do Horário de Atendimento. Número verde = certo, vermelho = acima ou abaixo. O quadro fica verde suave quando está tudo certo e vermelho suave quando há divergência ou semana fora do ideal. Logo abaixo, as divergências: os erros aparecem um por linha; atenção e informação ficam num resumo — clique nele para ver as linhas.",
       "<b>Contratado × Realizado — Divergências</b>: acima da tabela, o painel lista tudo que não bate entre o tratamento (quadros), o Planner e a Agenda no mês: especialidade ou serviço no Planner ou na Agenda <b>sem quadro</b> em Especialidades e Serviços (também aparece na tabela em <b>Fora do Tratamento</b>), sessão em semana, dia, horário, sala ou terapeuta diferente do quadro, sessão fora do Horário de Atendimento do paciente, paciente em dois lugares no Planner, semanas com número de sessões desigual, Planner sem Agenda e Agenda sem Planner, quadro com 0 sessões/mês, soma dos quadros diferente de Sessão/Mês, mais de um atendimento no mesmo dia, atendimento depois do vencimento ou antes do início do tratamento e atendimentos que já passaram sem status. Cada item tem a cor do nível (vermelho = erro, âmbar = atenção, azul = informação) e o botão <b>Ver no Planner</b> / <b>Ver na Agenda</b>. Na lista de Tratamentos, o filtro <b>Com divergências no mês atual</b> mostra os tratamentos ativos que têm erro ou atenção. Em serviço que não é Sessão, vale primeiro o dia e o horário do quadro: se a sessão cai no horário do quadro, o Horário de Atendimento do paciente é ignorado; se não, ele é conferido como nas demais.",
       "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",
       "<b>Não Agrupar com</b> (ao lado de Sessão/Mês): marque os pacientes que não devem ficar juntos na mesma sala e horário; o Auto Planner respeita nos dois sentidos.",

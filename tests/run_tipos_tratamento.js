@@ -56,8 +56,8 @@ const path = require('path');
   // Tratamento: campo logo depois do paciente, vários, padrão marcado
   const pid = await ev('state.patientsRaw[0].id');
   await ev('openTreatmentModal(null, {patientId: "' + pid + '"})'); await page.waitForSelector('#ovTreat');
-  const order = await page.$$eval('#ovTreat .modal-body .field > label, #ovTreat .modal-body .field > select', (a) => a.slice(0, 3).map((x) => x.id || x.textContent));
-  check('Tipo de Tratamento vem depois do paciente?', order[0] === 'trPat' || /Paciente/.test(order[0]) ? order.join('|').indexOf('trTiposLabel') !== -1 : false, order);
+  const order = await page.$$eval('#ovTreat .modal-body .field > label, #ovTreat .modal-body .field > select', (a) => a.slice(0, 5).map((x) => x.id || x.textContent));
+  check('Tipo de Tratamento logo abaixo do paciente (Paciente | Contrato, Tipo | Status)?', order[0] === 'trPat' || /Paciente/.test(order[0]) ? order.join('|').indexOf('trTiposLabel') !== -1 : false, order);
   check('não tem mais o campo Plano?', (await page.$('#pPlano')) === null);
   check('padrões já vêm escolhidos?', (await page.textContent('#trTiposMs .ms-sum')).indexOf('Multidisciplinar') !== -1 && (await page.textContent('#trTiposMs .ms-sum')).indexOf('Intensivo') !== -1, await page.textContent('#trTiposMs .ms-sum'));
   await page.click('#trTiposMs .ms-btn');
