@@ -39,15 +39,27 @@ const path = require('path');
   const r2 = JSON.parse(await ev(`JSON.stringify((function(){ var x = pvCompute("2026-10-01", "2026-10-31", "v2"); return {n: x.n, total: x.total}; })())`));
   check('filtro por vendedor v2', r2.n === 1 && r2.total === 1200, JSON.stringify(r2));
 
-  await ev(`openPainelVendas()`);
-  await page.waitForSelector('#ovPv #pvCards .fl-card', { timeout: 3000 });
-  await page.evaluate(() => { document.getElementById('pvFrom').value = '2026-10-01'; document.getElementById('pvTo').value = '2026-10-31'; document.getElementById('pvFrom').dispatchEvent(new Event('change')); });
-  await page.waitForTimeout(300);
-  const cards = await page.$eval('#pvCards', (x) => x.innerText.replace(/\s+/g, ' '));
-  check('cartões mostram vendas, ticket e parcelas vencidas', /4 · R\$\s?7\.200,00/.test(cards) && /1\.800,00/.test(cards) && /1 · R\$\s?400,00/.test(cards), cards);
+  await ev(`(function(){ PV.per = "pers"; PV.from = "2026-10-01"; PV.to = "2026-10-31"; PV.view = "geral"; openPainelVendas(); return 1; })()`);
+  await page.waitForSelector('#tab-painelvendas:not([hidden]) #pvBody .fl-card', { timeout: 3000 });
+  await ev('renderPainelVendas()'); await page.waitForTimeout(200);
+  const cards = await page.$eval('#pvBody .fl-sum', (x) => x.innerText.replace(/\s+/g, ' '));
+  check('abre como tela (Financeiro), não janela', await page.$eval('#tab-painelvendas', (x) => !x.hidden) && !(await page.$('#ovPv')));
+  check('cartões: total 7.200, 4 vendas, ticket 1.800 e parcelas vencidas', /R\$\s?7\.200,00/.test(cards) && /Vendas 4/.test(cards) && /1\.800,00/.test(cards) && /1 · R\$\s?400,00/.test(cards), cards);
   const body = await page.$eval('#pvBody', (x) => x.innerText.replace(/\s+/g, ' '));
-  check('metas do mês: valor 7.200 de 10.000 (72%) e 4 de 5 vendas (80%)', /72%/.test(body) && /80%/.test(body), body.slice(body.indexOf('Metas'), body.indexOf('Metas') + 140));
-  await page.click('#pvOk');
+  check('metas do mês: valor 7.200 de 10.000 (72%) e 4 de 5 vendas (80%)', /72%/.test(body) && /80%/.test(body), body.slice(body.indexOf('Metas'), body.indexOf('Metas') + 160));
+  check('gráficos de vendas por mês, por tipo e por convênio', (await page.$$('#pvBody svg.dem-chart')).length >= 3 && /Por Convênio/.test(body) && /Particular/.test(body));
+  await page.click('#pvSeg [data-pv="vendedores"]'); await page.waitForTimeout(150);
+  const vend = await page.$eval('#pvBody', (x) => x.innerText.replace(/\s+/g, ' '));
+  check('vendedores: ranking com Vend v1 em 1º', /Ranking dos Vendedores/.test(vend) && /1º Vend v1/.test(vend), vend.slice(vend.indexOf('Ranking'), vend.indexOf('Ranking') + 120));
+  await page.click('#pvSeg [data-pv="receb"]'); await page.waitForTimeout(150);
+  const rc = await page.$eval('#pvBody', (x) => x.innerText.replace(/\s+/g, ' '));
+  check('recebimentos: parcela vencida listada e previsão de 6 meses', /Parcelas Vencidas/.test(rc) && /Previsão de Recebimentos/.test(rc) && /Paciente Um/.test(rc));
+  await ev('state.treatments.push({id: "t2", patientId: window.__pid, inicio: "2026-02-01", status: "ativo", tipo: "novo", sessoesMes: 4, convenio: "Particular", valor: 500, specHours: []}); 1');
+  await page.click('#pvSeg [data-pv="oport"]'); await page.waitForTimeout(150);
+  const op = await page.$eval('#pvBody', (x) => x.innerText.replace(/\s+/g, ' '));
+  check('oportunidades: tratamento ativo sem venda com Gerar Venda', /Tratamentos Ativos sem Venda/.test(op) && !!(await page.$('[data-pv-sell="t2"]')), op.slice(0, 200));
+  await ev('state.treatments = state.treatments.filter(function(t){ return t.id !== "t2"; }); 1');
+  await ev('PV.per = "mes"; PV.view = "geral"; 1');
 
   // Metas
   await ev(`openMetasVendas()`);
