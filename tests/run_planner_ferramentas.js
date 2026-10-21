@@ -70,6 +70,8 @@ const path = require('path');
   check('Conferência has the "Fora do Horário" column?', /DIFERENÇA FORA DO HORÁRIO/i.test(live3) && /Paciente A \S+ 6 4 -2 0/.test(live3), live3.slice(0, 300));
   const foraN = await ev("(function(){ var o = patientSlotOk; patientSlotOk = function(){ return false; }; var q = plQuality(); patientSlotOk = o; return q.contr.map(function(c){ return c.fora + '/' + c.got; }).join(); })()");
   check('Fora do Horário counts the sessions outside the patient hours?', foraN === '4/4', foraN);
+  const qb = await ev(`[quadroHoraBate({hora: "15:30", dia: "qua"}, "orientacao-familiar", "qua", "15:30"), quadroHoraBate({hora: "15:30", dia: "qua"}, "sessao", "qua", "15:30"), quadroHoraBate({hora: "15:30", dia: "qua"}, "orientacao-familiar", "ter", "15:30"), quadroHoraBate({hora: "15:30"}, "orientacao-familiar", "seg", "14:10")].join()`);
+  check('Serviço no dia/horário do próprio quadro não conta como fora do horário (Sessão conta)?', qb === 'true,false,false,false', qb);
   await ev("(async function(){ var db = await window.claude.use('db'); await db.doc('treatments/all').set({list: " + trBak + "}); })()");
   await page.waitForTimeout(800);
   await ev("(async function(){ var db = await window.claude.use('db'); await db.doc('schedule/qua-3').set({bookings: {}}); })()");

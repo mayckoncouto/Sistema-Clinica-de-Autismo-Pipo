@@ -7757,7 +7757,10 @@ function pllPass(r, f){
   if (f.room && r.roomId !== f.room) return false;
   return true;
 }
-function pllOutside(r){ return !!(r.pat && !patientSlotOk(r.pat, r.day, r.time)); }
+function pllOutside(r){
+  if (!r.pat || patientSlotOk(r.pat, r.day, r.time)) return false;
+  return !quadroHoraBate(treatLineFor(patientSpecRows(r.pat), r.prof, r.svc || DEFAULT_SERVICE_ID, +r.week), r.svc, r.day, r.time);
+}
 function pllShown(){ var f = pllFilters(); return pllRows().filter(function(r){ return pllPass(r, f); }); }
 function pllOnShow(){ pllFillFilters(); pllRender(); }
 function pllRender(){
@@ -12978,6 +12981,12 @@ function abaYesNo(v){ return v === "Não" ? "Não" : "Sim"; }
 function tlDayName(k){ var d = ALL_WEEKDAYS.filter(function(x){ return x.key === k; })[0]; return d ? d.name : k; }
 // "dia" do quadro: um ou mais dias separados por vírgula ("seg,qua"); vazio = qualquer dia.
 function tlDays(r){ var v = r && r.dia != null ? r : {dia: r}; return String(v.dia || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean); }
+// Serviço que não é Sessão marcado no dia/horário que o próprio quadro pede: não conta como "fora do Horário de Atendimento".
+function quadroHoraBate(line, svc, day, time){
+  if (!line || (svc || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID || !line.hora || String(line.hora).slice(0, 5) !== String(time).slice(0, 5)) return false;
+  var dias = String(line.dia || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+  return !dias.length || dias.indexOf(day) !== -1;
+}
 function tlDaysText(r){ return tlDays(r).map(tlDayName).join(", "); }
 // Semanas do quadro: qualquer combinação de 1ª a 4ª ("1,3"); vazio ou as quatro = Todas.
 function tlWeeksNorm(v){
@@ -20527,7 +20536,7 @@ function plQuality(){
       if (si){ var th = (q.ther[si.prof] = q.ther[si.prof] || {n: 0, times: {}}); th.n++; th.times[w + "|" + d.key + "|" + ps[0]] = 1; }
       // alertas
       var line = treatLineFor(patientSpecRows(p), si && si.prof, b.service || DEFAULT_SERVICE_ID, w);
-      if (!patientSlotOk(p, d.key, ps[0])){ q.byPat[p.id].fora = (q.byPat[p.id].fora || 0) + 1; q.alerts.push(p.nome + " fora do Horário de Atendimento · " + d.full + " " + ps[0] + " · " + w + "ª semana"); }
+      if (!quadroHoraBate(line, b.service, d.key, ps[0]) && !patientSlotOk(p, d.key, ps[0])){ q.byPat[p.id].fora = (q.byPat[p.id].fora || 0) + 1; q.alerts.push(p.nome + " fora do Horário de Atendimento · " + d.full + " " + ps[0] + " · " + w + "ª semana"); }
       var tpr = si ? findProfessional(si.prof) : null;
       if (tpr && !profSlotOk(tpr, d.key, ps[0])) q.alerts.push(p.nome + " com " + profShortName(tpr) + " fora do horário do terapeuta · " + d.full + " " + ps[0] + " · " + w + "ª semana");
       var forbid = plForbid(p);
@@ -21537,7 +21546,7 @@ function sgFixes(p, todo, have, opts){
   // -1) horário: sessão marcada FORA do Horário de Atendimento do paciente → levar para um horário livre dentro dele (mesma semana, mesmo quadro)
   todo.forEach(function(x){
     var L = x.line, cols = plColumnsFor(Object.assign({}, L, {roomId: ""}));
-    lh(L).filter(function(h){ return h.rec && !h.rec.fixo && !patientSlotOk(p, h.day, h.time); }).forEach(function(h){
+    lh(L).filter(function(h){ return h.rec && !h.rec.fixo && !quadroHoraBate(L, h.rec.service, h.day, h.time) && !patientSlotOk(p, h.day, h.time); }).forEach(function(h){
       stageOut(h);
       var rest = have.filter(function(y){ return y !== h; }), best = null, order = [h.w].concat(WEEKS.filter(function(w){ return w !== h.w && tlWeekOk(L, w); }));
       for (var oi = 0; oi < order.length && !best; oi++){
@@ -24504,6 +24513,7 @@ var RP_BUILDERS = {
         checked++;
         if (patientSlotOk(pat, dayKey, kp[0])) return;
         var ther = findTherapist(room, kp[2]), profId = ther && ther.professionalId;
+        if (quadroHoraBate(treatLineFor(patientSpecRows(pat), profId, rec.service || DEFAULT_SERVICE_ID, +week), rec.service, dayKey, kp[0])) return;
         if (o.prof && profId !== o.prof) return;
         if (o.pac && normText(pat.nome).indexOf(o.pac) === -1) return;
         var h = pat.horarios[dayKey];
@@ -25555,10 +25565,7 @@ function trDivergences(t, ym, ctx){
   function weeksText(l){ return String(l.semanas).split(",").map(function(x){ return x + "ª"; }).join(" e ") + " semana(s)"; }
   var pgo = function(it){ return {t: "planner", k: it.day + "|" + it.week + "|" + p.nome}; };
   // Serviço que não é Sessão: vale primeiro o horário (e dia) do quadro; se bate, o Horário de Atendimento do paciente é ignorado.
-  function quadroBate(line, svc, day, time){
-    if (!line || (svc || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID || !line.hora || String(line.hora).slice(0, 5) !== String(time).slice(0, 5)) return false;
-    var dias = tlDays(line); return !dias.length || dias.indexOf(day) !== -1;
-  }
+  var quadroBate = quadroHoraBate;
   var perWeek = {}, slotSeen = {};
   ctx.pitems.forEach(function(it){
     var line = ctx.lineOf(it.prof, it.svc, it.week), tag = " (" + trWdName(it.day) + " " + it.time + ", " + it.week + "ª semana)";
@@ -25907,7 +25914,7 @@ function trPlannerBoxHtml(t, v){
     if (wk[it.week] != null) wk[it.week]++;
     var ln = treatLineFor(lines, it.prof, it.svc, it.week), pr = it.prof ? findProfessional(it.prof) : null, sp = ln ? ln.specId : (pr && pr.specialtyId);
     if (sp) specs[sp] = 1;
-    if (t.horarios && !patientSlotOk(hp, it.day, it.time)) fora++;
+    if (t.horarios && !quadroHoraBate(ln, it.svc, it.day, it.time) && !patientSlotOk(hp, it.day, it.time)) fora++;
   });
   lines.forEach(function(l){ var h = Number(l.hours) || 0, ws = plWeeksOf(l); sumLines += h; ws.forEach(function(w){ ideal[w] += h / ws.length; }); });
   var contr = Number(t.sessoesMes) || sumLines, cSpecs = {};
@@ -28862,7 +28869,7 @@ var HELP_TOPICS = [
       "<b>Copiar Semana</b>: copia as marcações de uma semana para outras semanas, nos dias e tipos escolhidos, só em células livres e dentro das regras (horário do terapeuta, bloqueios, conflitos). A prévia diz quantas vão e por que as outras ficam de fora.",
       "<b>Substituir Terapeuta</b>: para férias ou licença. Escolha o terapeuta ausente, o substituto e as semanas, dias e turnos; os atendimentos passam para a coluna do substituto na mesma sala, e os que não cabem (horário ocupado, fora do horário dele, conflito) ficam como estão, com o motivo. Diferente do Trocar Profissional, que passa as colunas para sempre. Para voltar: Ctrl+Z ou repita ao contrário.",
       "<b>Vagas Disponíveis</b>: escolha a especialidade, as semanas, os dias e a faixa de horário e veja as vagas livres (com um paciente escolhido, só as que ele pode usar; clique para agendar). Embaixo, <b>Quem Poderia Mudar de Lugar</b>: pacientes que ocupam a janela e têm outro horário livre com o mesmo tipo de terapeuta; clique para abrir no Planner.",
-      "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês (a tabela Sessões Colocadas × Contratadas também mostra, na coluna Fora do Horário, quantas sessões de cada paciente estão fora do Horário de Atendimento e lista quem tem alguma, mesmo com as sessões completas), fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno. Com a janela aberta, ela se atualiza sozinha quando o Planner, os tratamentos ou os pacientes mudam (por você ou por outra pessoa) e confere de novo a cada 15 segundos.",
+      "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês (a tabela Sessões Colocadas × Contratadas também mostra, na coluna Fora do Horário, quantas sessões de cada paciente estão fora do Horário de Atendimento (serviço que não é Sessão marcado no dia e horário que o próprio quadro pede não conta) e lista quem tem alguma, mesmo com as sessões completas), fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno. Com a janela aberta, ela se atualiza sozinha quando o Planner, os tratamentos ou os pacientes mudam (por você ou por outra pessoa) e confere de novo a cada 15 segundos.",
       "<b>Pacientes Faltando Sessões</b>: lista quem tem sessões a menos (ou a mais) no Planner que o Sessão/Mês do tratamento; o botão <b>Sugerir</b> abre o Sugerir Agendamento já no paciente.",
       "<b>Cópias do Planner</b>: guarda até 5 versões com nome, compara e restaura. Restaurar pede duas confirmações, guarda sozinho uma cópia “Automática” do que estava antes e pode ser desfeito com Ctrl+Z.",
       "<b>Imprimir</b>: Grade por Terapeuta e Horário da Família (por paciente ou todos, com Copiar Texto para o WhatsApp) do Planner de agora.",
