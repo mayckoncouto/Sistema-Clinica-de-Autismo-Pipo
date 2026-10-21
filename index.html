@@ -26872,7 +26872,10 @@ function trPlannerBoxHtml(t, v){
     if (t.horarios && !patientSlotOk(hp, it.day, it.time)) fora++;
   });
   lines.forEach(function(l){ var h = Number(l.hours) || 0, ws = apWeeksOf(l); sumLines += h; ws.forEach(function(w){ ideal[w] += h / ws.length; }); });
-  var contr = Number(t.sessoesMes) || sumLines;
+  var contr = Number(t.sessoesMes) || sumLines, cSpecs = {};
+  lines.forEach(function(l){ if ((Number(l.hours) || 0) > 0 && l.specId) cSpecs[l.specId] = 1; });
+  var nSp = Object.keys(specs).length, nCs = Object.keys(cSpecs).length;
+  var spOk = nSp === nCs && Object.keys(cSpecs).every(function(k){ return specs[k]; });
   function nf(x){ return (Math.round(x * 10) / 10).toLocaleString("pt-BR"); }
   function col(ok, txt){ return '<span style="color:' + (ok ? '#1f6b45' : 'var(--danger)') + '">' + txt + '</span>'; }
   var badWeek = [1, 2, 3, 4].filter(function(w){ return Math.abs(wk[w] - ideal[w]) >= 1; });
@@ -26880,12 +26883,12 @@ function trPlannerBoxHtml(t, v){
   var weekTxt = [1, 2, 3, 4].map(function(w){ return w + "ª: " + col(badWeek.indexOf(w) === -1, wk[w] + "/" + nf(ideal[w])); }).join(" · ");
   var cells = [["Por Semana", val(weekTxt)],
     ["Atendimentos", val(col(items.length === contr, items.length + "/" + contr))],
-    ["Especialidades", val(String(Object.keys(specs).length))],
+    ["Especialidades", val(col(spOk, nSp + "/" + nCs))],
     ["Fora do Horário do Paciente", val(col(!fora, String(fora)))]];
   var divs = ((v && v.divs) || []).filter(function(x){ return x.lvl === "erro" || x.lvl === "aviso"; }).length;
-  var bad = !wait && (divs || badWeek.length || fora || items.length !== contr);
+  var bad = !wait && (divs || badWeek.length || fora || items.length !== contr || !spOk);
   var st = wait ? "" : bad ? ' style="background:#fdf3f3;border-color:#f3b8b8"' : ' style="background:#eaf6ef;border-color:#bfe0cd"';
-  var tip = "Atendimentos do paciente no Planner (4 semanas). Por Semana = agendado/ideal (ideal = sessões/mês de cada quadro divididas pelas semanas em que ele vale). Atendimentos = Planner/Contratado. Especialidades = quantas especialidades diferentes estão no Planner.";
+  var tip = "Atendimentos do paciente no Planner (4 semanas). Por Semana = agendado/ideal (ideal = sessões/mês de cada quadro divididas pelas semanas em que ele vale). Atendimentos = Planner/Contratado. Especialidades = especialidades no Planner/especialidades contratadas nos quadros.";
   return '<div class="pl-clin" id="trPlBox" title="' + esc(tip) + '"' + st + '>' + cells.map(function(c){
     return '<div class="pl-clin-it"><span>' + c[0] + '</span><b>' + c[1] + '</b></div>';
   }).join("") + '</div>';
