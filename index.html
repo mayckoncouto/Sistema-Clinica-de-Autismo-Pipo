@@ -2197,9 +2197,6 @@ body.no-aba .aba-only{display:none!important}
 body.no-aba #trHost .pat-table.tr-main :is(col,th,td):is(:nth-child(5),:nth-child(6)){display:none}
 .age-legend{display:contents}
 .age-legend[hidden]{display:none}
-.cl-band{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
-.cl-band .field{flex:1 1 120px;margin:0}
-.cl-band .color-trigger{margin-bottom:4px}
 .color-trigger{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);cursor:pointer;padding:0;flex:none}
 .color-trigger:hover{filter:brightness(.95)}
 .color-pick-code{font-size:12.5px;color:var(--ink-2)}
@@ -4272,7 +4269,7 @@ function openClinicModal(){
               '<div class="field" id="clMetaBox"><label for="clMeta">Meta %</label><input type="text" id="clMeta" inputmode="decimal" maxlength="5" placeholder="80" value="' + esc(c.metaGrupo != null && c.metaGrupo !== "" ? String(c.metaGrupo) : "80") + '"></div></div>' +
               '<div class="pat-count">Intervenção ABA liga todas as regras e campos de ABA do sistema (paciente sem ABA ocupa a sala, salas ABA, grupos por faixa etária, cores por idade). Meta % é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner).</div>' +
               '<div id="clBandsBox"><div class="tr-sec">Faixas Etárias</div><div class="pat-count">Valem para todas as unidades: cor das células por idade, legendas e faixas de Habilidades e Objetivos. Idade final em branco = sem limite.</div>' +
-              '<div class="room-list" id="clBands"></div><button type="button" class="btn add-row-btn" id="clBandAdd">+ Incluir Faixa</button></div>' : '') +
+              '<div class="room-list tl-list" id="clBands"></div><button type="button" class="btn add-row-btn" id="clBandAdd">+ Incluir Faixa</button></div>' : '') +
           '</div>' +
         '</div>' +
         '<div class="prof-section"><div class="prof-section-head"><span class="tr-sec tr-sec-in">Horário de Atendimento</span>' +
@@ -4304,20 +4301,47 @@ function openClinicModal(){
   document.getElementById("clClose").addEventListener("click", close);
   // Faixas etárias (quadros) e chave da Intervenção ABA
   var bands = AGE_BANDS.map(function(b){ return {id: b.id, min: b.min, max: b.max, color: b.color}; }), bandsTouched = false;
-  function bandsSync(){
-    Array.prototype.forEach.call(document.querySelectorAll("#clBands .cl-band"), function(r, i){
-      if (!bands[i]) return;
-      bands[i].min = r.querySelector(".clb-min").value.trim(); bands[i].max = r.querySelector(".clb-max").value.trim();
-    });
-  }
+  function bandsSync(){}
   function bandsDraw(){
     var hb = document.getElementById("clBands"); if (!hb) return;
     hb.innerHTML = bands.map(function(b, i){
-      return '<div class="room-row cl-band" data-band="' + i + '"><button type="button" class="color-trigger" data-band-color="' + i + '" style="background:' + esc(b.color) + '" aria-label="Cor da faixa" title="Escolher cor"' + (clCanEdit ? '' : ' disabled') + '></button>' +
-        '<div class="field"><label>Idade Inicial</label><input type="text" inputmode="numeric" maxlength="3" class="clb-min" value="' + esc(b.min == null ? "" : String(b.min)) + '"' + (clCanEdit ? '' : ' disabled') + '></div>' +
-        '<div class="field"><label>Idade Final</label><input type="text" inputmode="numeric" maxlength="3" class="clb-max" placeholder="Sem limite" value="' + esc(b.max == null ? "" : String(b.max)) + '"' + (clCanEdit ? '' : ' disabled') + '></div>' +
-        (clCanEdit ? '<button type="button" class="btn ghost" data-band-rm="' + i + '">Remover</button>' : '') + '</div>';
-    }).join("") || '<div class="pat-count">Nenhuma faixa: valem as faixas padrão.</div>';
+      var lim = (b.max === "" || b.max == null) ? "Sem limite" : String(b.max);
+      return '<div class="room-row tl-row cl-band" data-band="' + i + '"><span class="room-dot" style="background:' + esc(b.color) + '"></span>' +
+        '<div class="room-info"><div class="rn">' + esc(ageBandLabel({min: b.min, max: b.max === "" ? null : b.max})) + '</div><div class="rs">Idade Inicial ' + esc(String(b.min)) + ' · Idade Final ' + esc(lim) + '</div></div>' +
+        (clCanEdit ? '<button type="button" class="btn ghost" data-band-ed="' + i + '">Editar</button><button type="button" class="btn danger" data-band-rm="' + i + '">Remover</button>' : '') + '</div>';
+    }).join("") || '<div class="hours-empty">Nenhuma faixa: valem as faixas padrão.</div>';
+  }
+  // Janela da faixa: Idade Inicial, Idade Final (em branco = sem limite) e Cor.
+  function bandModal(i){
+    var isNew = i === null, last = bands[bands.length - 1];
+    var b = isNew ? {id: uid("fx"), min: last ? (last.max !== "" && last.max != null ? (+last.max || 0) + 1 : (+last.min || 0) + 1) : 0, max: "", color: "#C9B8E8"} : Object.assign({}, bands[i]);
+    var host = regQuickHost();
+    host.innerHTML = '<div class="overlay confirm-overlay" id="ovBand"><div class="modal" style="max-width:480px"><div class="modal-head"><div><h3>' + (isNew ? "Incluir Faixa Etária" : "Editar Faixa Etária") + '</h3></div>' +
+      '<button class="modal-close" data-bdclose aria-label="Fechar">✕</button></div><div class="modal-body">' +
+      '<div class="field-row"><div class="field"><label for="bdMin">Idade Inicial</label><input id="bdMin" type="text" inputmode="numeric" maxlength="3" value="' + esc(b.min == null ? "" : String(b.min)) + '"></div>' +
+      '<div class="field"><label for="bdMax">Idade Final</label><input id="bdMax" type="text" inputmode="numeric" maxlength="3" placeholder="Sem limite" value="' + esc(b.max == null ? "" : String(b.max)) + '"></div></div>' +
+      '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="bdColor" style="background:' + esc(b.color) + '" aria-label="Escolher cor"></button><span class="color-pick-code mono" id="bdColorCode">' + esc(b.color) + '</span><span class="color-hex-label">clique na bolinha para escolher</span></div></div>' +
+      '<div class="pat-count">Idade Final em branco = sem limite (só na última faixa).</div>' +
+      '</div><div class="modal-foot"><span class="spacer"></span><button class="btn ghost" data-bdclose>Cancelar</button><button class="btn primary" id="bdSave">Salvar</button></div></div></div>';
+    var ov = document.getElementById("ovBand");
+    function close(){ host.innerHTML = ""; }
+    ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+    Array.prototype.forEach.call(ov.querySelectorAll("[data-bdclose]"), function(x){ x.addEventListener("click", close); });
+    document.getElementById("bdColor").addEventListener("click", function(){
+      var btn = this;
+      openColorPicker(btn, b.color, function(col){ b.color = col; btn.style.background = col; document.getElementById("bdColorCode").textContent = col; });
+    });
+    document.getElementById("bdSave").addEventListener("click", function(){
+      var mn = document.getElementById("bdMin").value.trim(), mx = document.getElementById("bdMax").value.trim();
+      if (!/^\d{1,3}$/.test(mn)){ showToast("Informe a idade inicial.", true); return; }
+      if (mx !== "" && !/^\d{1,3}$/.test(mx)){ showToast("A idade final precisa ser um número (ou em branco = sem limite).", true); return; }
+      if (mx !== "" && +mx < +mn){ showToast("A idade final não pode ser menor que a inicial.", true); return; }
+      b.min = +mn; b.max = mx === "" ? "" : +mx;
+      if (isNew) bands.push(b); else bands[i] = b;
+      bands.sort(function(x, y){ return (+x.min) - (+y.min); });
+      bandsTouched = true; close(); bandsDraw();
+    });
+    setTimeout(function(){ var x = document.getElementById("bdMin"); if (x) x.focus(); }, 30);
   }
   function abaBoxSync(){
     var cb = document.getElementById("clAba"), on = !cb || cb.checked;
@@ -4329,20 +4353,12 @@ function openClinicModal(){
     document.getElementById("clAba").addEventListener("change", abaBoxSync);
     var bAdd = document.getElementById("clBandAdd");
     if (!clCanEdit) bAdd.hidden = true;
-    bAdd.addEventListener("click", function(){
-      bandsSync(); bandsTouched = true;
-      var last = bands[bands.length - 1], mn = last ? (last.max !== "" && last.max != null ? (+last.max || 0) + 1 : (+last.min || 0) + 1) : 0;
-      bands.push({id: uid("fx"), min: mn, max: "", color: "#C9B8E8"}); bandsDraw();
-    });
-    document.getElementById("clBands").addEventListener("input", function(){ bandsTouched = true; });
+    bAdd.addEventListener("click", function(){ bandModal(null); });
     document.getElementById("clBands").addEventListener("click", function(e){
       var rm = e.target.closest("[data-band-rm]");
-      if (rm){ bandsSync(); bandsTouched = true; bands.splice(+rm.getAttribute("data-band-rm"), 1); bandsDraw(); return; }
-      var cbtn = e.target.closest("[data-band-color]");
-      if (cbtn && clCanEdit){
-        var i = +cbtn.getAttribute("data-band-color");
-        openColorPicker(cbtn, bands[i].color, function(col){ bandsSync(); bands[i].color = col; bandsTouched = true; bandsDraw(); });
-      }
+      if (rm){ bandsTouched = true; bands.splice(+rm.getAttribute("data-band-rm"), 1); bandsDraw(); return; }
+      var ed = e.target.closest("[data-band-ed]");
+      if (ed) bandModal(+ed.getAttribute("data-band-ed"));
     });
   }
   // Confere as faixas: idade inteira, final >= inicial, sem sobrepor, só a última sem limite. "" = ok.
@@ -6224,7 +6240,7 @@ function confirmDialog(opts){
  * Vale para as janelas listadas em GUARD_IDS. Campo mudado pela pessoa (evento de verdade) marca a janela;
  * ✕, Cancelar/Fechar, clique fora e Esc perguntam: Salvar | Sair sem Salvar | Continuar Editando.
  * "Salvar" aciona o botão Salvar da própria janela (se ela recusar, continua aberta). */
-var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf","ovRoom","ovScale","ovGoal","ovAct","ovAnTipo","ovAnam","ovAnNew","ovClinic","ovFl","ovFp","ovLn","ovCrm","ovCrmL","ovPlan","ovPr","ovTLine","ovEncLine","ovQuick","ovBook","ovAgd","ovServ","ovSpec","ovStatus","ovUser","ovRole","ovAnQ","ovAnCols","ovComRule","ovCt","ovMetas","ovSale","ovVnEd","ovPlb","ovPf","ovPwd","ovCrma","ovFpb","ovFpl","ovAtt"];
+var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf","ovRoom","ovScale","ovGoal","ovAct","ovAnTipo","ovAnam","ovAnNew","ovClinic","ovFl","ovFp","ovLn","ovCrm","ovCrmL","ovPlan","ovPr","ovTLine","ovEncLine","ovQuick","ovBook","ovAgd","ovServ","ovSpec","ovStatus","ovUser","ovRole","ovAnQ","ovAnCols","ovComRule","ovCt","ovMetas","ovSale","ovVnEd","ovPlb","ovPf","ovPwd","ovCrma","ovFpb","ovFpl","ovAtt","ovBand"];
 (function(){
   var asking = false;
   function guardOv(el){

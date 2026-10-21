@@ -39,14 +39,21 @@ const path = require('path');
   r = JSON.parse(await ev(`JSON.stringify({cb: !!document.getElementById("clAba"), meta: (document.getElementById("clMeta") || {}).value, bands: document.querySelectorAll("#clBands .cl-band").length})`));
   check('Atendimento mostra Intervenção ABA, Meta % (80) e as 3 faixas?', r.cb && r.meta === '80' && r.bands === 3, JSON.stringify(r));
   await page.fill('#clMeta', '70');
+  check('Faixas no estilo dos quadros de Salas (bolinha, título, Editar e Remover)?', await ev(`(function(){ var r = document.querySelector("#clBands .cl-band"); return !!(r && r.querySelector(".room-dot") && r.querySelector(".rn").textContent === "0–4 anos" && r.querySelector("[data-band-ed]") && r.querySelector("[data-band-rm]") && !r.querySelector("input")); })()`));
   await page.click('#clBandAdd');
-  r = JSON.parse(await ev(`JSON.stringify(Array.prototype.map.call(document.querySelectorAll("#clBands .cl-band"), function(x){ return [x.querySelector(".clb-min").value, x.querySelector(".clb-max").value]; }))`));
-  check('+ Incluir Faixa cria a 4ª faixa começando depois da última?', r.length === 4 && r[3][0] === '11', JSON.stringify(r));
-  // 10+ sem limite e a nova 11+: precisa dar erro de sobreposição / sem limite
+  await page.waitForSelector('#ovBand');
+  check('+ Incluir Faixa abre a janela já começando depois da última (11)?', await page.$eval('#bdMin', (e) => e.value) === '11');
+  await page.click('#bdSave'); await page.waitForTimeout(200);
+  r = JSON.parse(await ev(`JSON.stringify(Array.prototype.map.call(document.querySelectorAll("#clBands .cl-band .rn"), function(x){ return x.textContent; }))`));
+  check('4ª faixa no quadro?', r.length === 4 && r[3] === '11+ anos', JSON.stringify(r));
+  // 10+ sem limite e a nova 11+: o Salvar recusa
   await page.click('#clSave'); await page.waitForTimeout(300);
   let still = await page.$('#ovClinic');
   check('Faixa sem limite antes de outra é recusada?', !!still);
-  await ev(`(function(){ var rows = document.querySelectorAll("#clBands .cl-band"); rows[2].querySelector(".clb-max").value = "10"; rows[3].querySelector(".clb-max").value = ""; rows[3].querySelector(".clb-max").dispatchEvent(new Event("input", {bubbles: true})); })()`);
+  await ev(`document.querySelectorAll("#clBands [data-band-ed]")[2].click()`);
+  await page.waitForSelector('#ovBand');
+  await page.fill('#bdMax', '10');
+  await page.click('#bdSave'); await page.waitForTimeout(200);
   await page.click('#clSave');
   await page.waitForTimeout(400);
   const ok = await page.$('.confirm-overlay button.primary'); if (ok){ await ok.click(); await page.waitForTimeout(400); }
