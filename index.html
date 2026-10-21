@@ -20632,6 +20632,17 @@ function plGroupStat(p){
 function plQuality(){
   plannerAllDocIds().forEach(function(id){ if (!state.scheduleDocs[id]) state.scheduleDocs[id] = {bookings: {}}; if (!state.scheduleDocs[id].bookings) state.scheduleDocs[id].bookings = {}; });
   var q = {total: 0, byPat: {}, ther: {}, full: [], shifts: 0, alerts: [], contr: [], goal: []};
+  // Guarda o que se repete (a conta roda a cada mudança do Planner): quadros e "Não Agrupar com" por paciente, quem está em cada sala/horário.
+  var rowsMemo = {}, forbidMemo = {}, occMemo = {}, lineMemo = {};
+  function rowsOf(p){ return rowsMemo[p.id] || (rowsMemo[p.id] = patientSpecRows(p)); }
+  function forbidOf(p){ return forbidMemo[p.id] || (forbidMemo[p.id] = plForbid(p)); }
+  var naoMemo = {};   // "Sem Intervenção ABA" por paciente + terapeuta + serviço + semana (a conta é a mesma para todos os horários)
+  function naoOf(b, prof, w, p){
+    var k = (p ? p.id : "") + "|" + (prof || "") + "|" + (b.service || "") + "|" + w;
+    return k in naoMemo ? naoMemo[k] : (naoMemo[k] = isNaoABABooking(b, prof, w));
+  }
+  function occAba(list){ return list.filter(function(o){ return (o.b.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID && !naoOf(o.b, o.prof, o.wk, o.p); }); }
+  function occ(docId, time, room){ var k = docId + "|" + time + "|" + room.id; return occMemo[k] || (occMemo[k] = plOcc(docId, time, room)); }
   var seatInfo = {};
   physicalRooms().forEach(function(r){ (r.therapists || []).forEach(function(t){ if (t.professionalId) seatInfo[r.id + "|" + t.id] = {prof: t.professionalId, seat: t}; }); });
   var avail = {};   // profissional → horários (semana|dia|hora) em que alguma coluna dele está livre para atender
@@ -20643,7 +20654,7 @@ function plQuality(){
     var docId = d.key + "-" + w, bk = state.scheduleDocs[docId].bookings;
     physicalRooms().forEach(function(room){
       [d.morning, d.afternoon].forEach(function(turn, ti){
-        var busy = turn.filter(function(time){ return plOcc(docId, time, room).length; }).length;
+        var busy = turn.filter(function(time){ return occ(docId, time, room).length; }).length;
         if (!busy) return;
         q.shifts++;
         if (busy === turn.length) q.full.push(room.name + " · " + d.full + " · " + w + "ª semana · " + (ti ? "tarde" : "manhã"));
@@ -20657,20 +20668,24 @@ function plQuality(){
       (q.byPat[p.id] = q.byPat[p.id] || {p: p, n: 0}).n++;
       var dk = w + "|" + d.key + "|" + ps[0] + "|" + (b.service || DEFAULT_SERVICE_ID), dd = (q.byPat[p.id].dupK = q.byPat[p.id].dupK || {});
       dd[dk] = (dd[dk] || 0) + 1;
-      if ((b.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID){ var bps = q.byPat[p.id]; (bps.sess = bps.sess || {})[w + "|" + d.key + "|" + ps[0]] = 1; }
       var si = seatInfo[ps[1] + "|" + ps[2]];
-      if (abaOn() && isNaoABABooking(b, si && si.prof, w)){
-        var dupOthers = plOcc(docId, ps[0], room).filter(function(o){ return o.p.id !== p.id; });
+      var nao = naoOf(b, si && si.prof, w, p);
+      if ((b.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID){
+        var bps = q.byPat[p.id]; (bps.sess = bps.sess || {})[w + "|" + d.key + "|" + ps[0]] = 1;
+        if (!nao){ bps.gt = (bps.gt || 0) + 1; if (occAba(occ(docId, ps[0], room)).length >= 2) bps.gg = (bps.gg || 0) + 1; }   // sessões ABA Sim e quantas em grupo (meta %)
+      }
+      if (abaOn() && nao){
+        var dupOthers = occ(docId, ps[0], room).filter(function(o){ return o.p.id !== p.id; });
         if (dupOthers.length){ var dl = (q.duplas = q.duplas || {}); (dl[p.id] = dl[p.id] || {p: p, items: []}).items.push({w: w, day: d.full, dayKey: d.key, time: ps[0], room: room.name, others: dupOthers.map(function(o){ return o.p.nome; })}); }
       }
       if (si){ var th = (q.ther[si.prof] = q.ther[si.prof] || {n: 0, times: {}}); th.n++; th.times[w + "|" + d.key + "|" + ps[0]] = 1; }
       // alertas
-      var line = treatLineFor(patientSpecRows(p), si && si.prof, b.service || DEFAULT_SERVICE_ID, w);
+      var lk = p.id + "|" + (si ? si.prof : "") + "|" + (b.service || "") + "|" + w, line = lk in lineMemo ? lineMemo[lk] : (lineMemo[lk] = treatLineFor(rowsOf(p), si && si.prof, b.service || DEFAULT_SERVICE_ID, w));
       if (!quadroHoraBate(line, b.service, d.key, ps[0]) && !patientSlotOk(p, d.key, ps[0])){ q.byPat[p.id].fora = (q.byPat[p.id].fora || 0) + 1; q.alerts.push(p.nome + " fora do Horário de Atendimento · " + d.full + " " + ps[0] + " · " + w + "ª semana"); }
       var tpr = si ? findProfessional(si.prof) : null;
       if (tpr && !profSlotOk(tpr, d.key, ps[0])) q.alerts.push(p.nome + " com " + profShortName(tpr) + " fora do horário do terapeuta · " + d.full + " " + ps[0] + " · " + w + "ª semana");
-      var forbid = plForbid(p);
-      plOcc(docId, ps[0], room).forEach(function(o){ if (o.p.id !== p.id && forbid[o.p.id] && p.id < o.p.id) q.alerts.push(p.nome + " e " + o.p.nome + " (Não Agrupar com) juntos em " + room.name + " · " + d.full + " " + ps[0] + " · " + w + "ª semana"); });
+      var forbid = forbidOf(p);
+      if (Object.keys(forbid).length) occ(docId, ps[0], room).forEach(function(o){ if (o.p.id !== p.id && forbid[o.p.id] && p.id < o.p.id) q.alerts.push(p.nome + " e " + o.p.nome + " (Não Agrupar com) juntos em " + room.name + " · " + d.full + " " + ps[0] + " · " + w + "ª semana"); });
     });
   }); });
   state.patients.filter(function(p){ return isActive(p) && activeTreatment(p.id); }).forEach(function(p){
@@ -20682,7 +20697,7 @@ function plQuality(){
       if (patientSlotOk(p, d.key, time) && !(bp.sess && bp.sess[w + "|" + d.key + "|" + time])){ vazio++; vazioDet.push(w + "ª " + d.full + " " + time); }
     }); }); });
     if (want || got) q.contr.push({p: p, want: want, got: got, fora: bp.fora || 0, vazio: vazio, vazioDet: vazioDet, dup: dup, dupDet: dupDet});
-    var st = plGroupStat(p);
+    var st = {total: bp.gt || 0, grp: bp.gg || 0};
     if (abaOn() && st.total && plLinesOf(p).some(function(x){ return plIsAbaSim(p, x.line); })){
       var gl = plGroupGoal(st.total);
       q.goal.push({p: p, total: st.total, grp: st.grp, pct: Math.round(st.grp * 100 / st.total), ok: st.grp >= gl.lo && st.grp <= gl.hi, lo: gl.lo, hi: gl.hi});
@@ -20782,7 +20797,7 @@ function openPlConfModal(){
     draw();
     APQ_LIVE = draw;
     // reserva: confere de novo a cada 15 s enquanto a janela está aberta (conta só na memória, sem ir ao banco)
-    var tick = setInterval(function(){ if (!out.isConnected){ clearInterval(tick); return; } draw(); }, 15000);
+    var tick = setInterval(function(){ if (!out.isConnected){ clearInterval(tick); return; } if (!document.hidden) draw(); }, 30000);
   }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o Planner.</div>'; });
 }
 // Conferência do Planner aberta: redesenha (com espera) quando o Planner muda.
@@ -20790,7 +20805,7 @@ var APQ_LIVE = null, APQ_TIMER = null;
 function apqLive(){
   if (!APQ_LIVE) return;
   clearTimeout(APQ_TIMER);
-  APQ_TIMER = setTimeout(function(){ if (APQ_LIVE) APQ_LIVE(); }, 600);
+  APQ_TIMER = setTimeout(function(){ if (APQ_LIVE && !document.hidden) APQ_LIVE(); }, 1500);
 }
 /* ---- Planner: comparar versões (Cópias do Planner) ---- */
 function plCountDocs(docs){
