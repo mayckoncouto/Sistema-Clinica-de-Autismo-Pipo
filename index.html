@@ -11406,10 +11406,12 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
   // Acesso → Sistema: regra em "Bloquear" recusa (texto); "Avisar" guarda o 1º aviso
   // e segue procurando recusas ({warn, msg} no fim); "Desligado" não confere.
   var warned = null;
+  plannerConflict.lastRule = null;   // regra que recusou (para descrever o motivo nas ferramentas)
   function hit(id, msg){
     var m = sysMode(id);
     if (m === "off") return null;
     if (m === "warn"){ if (!warned) warned = {warn: true, rule: id, msg: msg}; return null; }
+    plannerConflict.lastRule = id;
     return msg;
   }
   var x;
@@ -20885,12 +20887,17 @@ function pltTry(docId, key, rec, ignore){
   var rf = slotRefusal(room.id, rec); if (rf) return "Coluna de tipo diferente";
   if (rec.patient && !bookingKind(rec)){ var pt = findPatientRef(rec); if (pt && patBlocked(pt)) return "Paciente bloqueado"; }
   var c = sysHard(plannerConflict(docId, key, rec, ignore || []));
-  return c ? "Conflito de regra: " + String(c).replace(/<[^>]+>/g, "") : "";
+  if (!c) return "";
+  var rule = (SYS_RULES.filter(function(r){ return r.id === plannerConflict.lastRule; })[0] || {}).label;
+  return "Regra" + (rule ? " " + rule : "") + ": " + String(c).replace(/<[^>]+>/g, "");
 }
-function pltWhyKey(why){ return String(why).indexOf("Conflito de regra") === 0 ? "Conflito de regra" : why; }
+// Agrupa o motivo: regra do Sistema pelo nome da regra (o texto completo vira exemplo); os outros pelo próprio texto.
+function pltWhyKey(why){ var s = String(why), m = /^Regra( [^:]+)?: /.exec(s); return m ? (m[1] ? "Regra “" + m[1].trim() + "”" : "Regra do Planner") : s; }
+function pltWhyAdd(by, wh){ var k = pltWhyKey(wh); by[k] = (by[k] || 0) + 1; if (k !== wh){ by.__ex = by.__ex || {}; if (!by.__ex[k]) by.__ex[k] = String(wh).replace(/^Regra( [^:]+)?: /, ""); } }
 function pltReasonsHtml(by){
-  var ks = Object.keys(by); if (!ks.length) return "";
-  return '<div class="pat-count">' + ks.sort(function(a, b){ return by[b] - by[a]; }).map(function(k){ return esc(k) + ": <b>" + by[k] + "</b>"; }).join(" · ") + '</div>';
+  var ks = Object.keys(by).filter(function(k){ return k !== "__ex"; }); if (!ks.length) return "";
+  var ex = by.__ex || {};
+  return '<div class="pat-count">Motivos: ' + ks.sort(function(a, b){ return by[b] - by[a]; }).map(function(k){ return esc(k) + ": <b>" + by[k] + "</b>" + (ex[k] ? ' <span style="opacity:.8">(ex.: ' + esc(ex[k]) + ')</span>' : ""); }).join(" · ") + '</div>';
 }
 function pltGoCell(day, week, name){
   var db1 = document.querySelector('#daySeg button[data-day="' + day + '"]'); if (db1) db1.click();
@@ -21160,7 +21167,7 @@ function openPlCopyWeekModal(){
             if (!tp[kind]) return;
             var rec = cloneJson(b); delete rec.auto; delete rec.via; delete rec.porque; delete rec.fixo;
             var why = pltTry(tdoc, key, rec, []);
-            if (why){ var k = pltWhyKey(why); res.by[k] = (res.by[k] || 0) + 1; res.skipped.push(pltCellLabel(tdoc, key) + " — " + (b.patient) + ": " + why); return; }
+            if (why){ pltWhyAdd(res.by, why); res.skipped.push(pltCellLabel(tdoc, key) + " — " + (b.patient) + ": " + why); return; }
             pltStageSet(tdoc, key, rec);
             (res.changes[tdoc] = res.changes[tdoc] || {})[key] = rec; res.n++; res.perWeek[w] = (res.perWeek[w] || 0) + 1;
           });
@@ -21222,7 +21229,7 @@ function openPlSubModal(){
             var b = bk[key], ps = key.split("|"); if (!b || !fromSeats[ps[1] + "|" + ps[2]] || b.lock || !String(b.patient || "").trim()) return;
             var morning = d.morning.indexOf(ps[0]) >= 0; if (!(morning ? tn.m : tn.t)) return;
             var label = pltCellLabel(docId, key) + " — " + b.patient;
-            function stay(why){ res.stay.push(label + ": " + why); var k = pltWhyKey(why); res.by[k] = (res.by[k] || 0) + 1; }
+            function stay(why){ res.stay.push(label + ": " + why); pltWhyAdd(res.by, why); }
             if (bookingKind(b) || b.blocked){ stay("Reunião, treinamento ou bloqueio não é movido"); return; }
             var targets = toSeats[ps[1]] || [];
             if (!targets.length){ stay("O substituto não tem coluna nesta sala"); return; }
@@ -21504,7 +21511,7 @@ function sgCands(p, line, w, have, opts, cols, onlyDay, why){
   for (var ri = 0; ri < raw.length && good.length < 6 && tries < 500; ri++){
     tries++;
     var wh = pltTry(raw[ri].docId, raw[ri].key, rec) || sgGroupCheck(p, line, raw[ri].docId, raw[ri].time, raw[ri].c.room, raw[ri].c.seat);
-    if (wh){ if (why){ var k = pltWhyKey(wh); why[k] = (why[k] || 0) + 1; } continue; }
+    if (wh){ if (why) pltWhyAdd(why, wh); continue; }
     good.push(raw[ri]);
   }
   return good;
@@ -21631,11 +21638,25 @@ function sgCompute(p, opts){
             var good = sgCands(p, line, order[oi], have, opts, cols, null, row.why);
             if (good.length) placed = {w: order[oi], cands: good};
           }
-          if (!placed){ row.gaps++; continue; }
+          var useLine = line;
+          if (!placed){
+            row.gaps++;
+            // não coube na especialidade que falta: tenta outra especialidade do tratamento (mesmo serviço), com as regras dela
+            var alts = todo.filter(function(y){ return y.line.id !== line.id && lineSvc(y.line) === lineSvc(line) && y.line.specId !== line.specId; });
+            for (var ai = 0; ai < alts.length && !placed; ai++){
+              var M = alts[ai].line, colsM = plColumnsFor(Object.assign({}, M, {roomId: ""}));
+              for (var oj = 0; oj < order.length && !placed; oj++){
+                if (!tlWeekOk(M, order[oj])) continue;
+                var gm = sgCands(p, M, order[oj], have, opts, colsM, null, null);
+                if (gm.length){ placed = {w: order[oj], cands: gm}; useLine = M; }
+              }
+            }
+            if (!placed) continue;
+          }
           var best = placed.cands[0];
-          row.items.push({line: line, w: placed.w, cands: placed.cands, sel: 0});
-          pltStageSet(best.docId, best.key, {patient: p.nome, note: "", service: lineSvc(line)});
-          have.push({lineId: line.id, w: best.w, day: best.d.key, time: best.time, roomId: best.c.room.id, seatId: best.c.seat.id, docId: best.docId, key: best.key, rec: {patient: p.nome}, d: best.d, room: best.c.room, seat: best.c.seat});
+          row.items.push({line: useLine, w: placed.w, cands: placed.cands, sel: 0, alt: useLine !== line ? line : null});
+          pltStageSet(best.docId, best.key, {patient: p.nome, note: "", service: lineSvc(useLine)});
+          have.push({lineId: useLine.id, w: best.w, day: best.d.key, time: best.time, roomId: best.c.room.id, seatId: best.c.seat.id, docId: best.docId, key: best.key, rec: {patient: p.nome}, d: best.d, room: best.c.room, seat: best.c.seat});
         }
       }
       row.distAfter = sgWeekCounts(have, line);
@@ -21682,7 +21703,8 @@ function openSugerirModal(pid0){
       html += '<div class="tr-sec">' + esc(lineLabel(r.line)) + '</div><div class="pat-count">Contratadas <b>' + r.want + '</b> · Marcadas <b>' + r.got + '</b> · ' + (falta ? 'Faltam <b>' + falta + '</b>' : (r.got > r.want ? 'A mais <b>' + (r.got - r.want) + '</b>' : 'Completo')) + ' · Por semana hoje: ' + sgDistText(r.dist) + '</div>';
       r.items.forEach(function(it){
         total++;
-        html += '<div class="field-row" style="align-items:center"><label class="fx-seat" style="flex:0 0 150px"><input type="checkbox" data-sg-on="' + idx + '" checked> ' + esc(WEEK_LABEL[it.w]) + '</label>' +
+        if (it.alt) html += '<div class="pat-count" style="margin-top:6px">Não coube em <b>' + esc(lineLabel(it.alt)) + '</b>. Sugestão em outra especialidade do tratamento: <b>' + esc(lineLabel(it.line)) + '</b> (fica 1 sessão a mais nela; marque se quiser).</div>';
+        html += '<div class="field-row" style="align-items:center"><label class="fx-seat" style="flex:0 0 150px"><input type="checkbox" data-sg-on="' + idx + '"' + (it.alt ? "" : " checked") + '> ' + esc(WEEK_LABEL[it.w]) + '</label>' +
           '<div class="field" style="flex:1"><select data-sg-sel="' + idx + '" aria-label="Opção">' + it.cands.map(function(x, i){ return '<option value="' + i + '"' + (i === it.sel ? " selected" : "") + '>' + esc(sgCandText(x)) + '</option>'; }).join("") + '</select></div></div>';
         idx++;
       });
@@ -28808,7 +28830,7 @@ var HELP_TOPICS = [
     who: "Vale para todos que agendam."},
   {id: "planner-ferramentas", group: "Planner", title: "Outras Opções do Planner", mod: "planner", tab: "planner",
     purpose: "Menu <b>Outras Opções ▾</b> do Planner: conferência, sugestões de agendamento, mudanças em lote, cópias, impressão e envio para a Agenda.",
-    steps: ["<b>Sugerir Agendamento:</b> só funciona com paciente que tem <b>quadros de Especialidades e Serviços</b> no tratamento ativo, e só para o serviço <b>Sessão</b> (quadros e sessões de outros serviços ficam de fora). Escolha o paciente; valem as regras de Intervenção ABA e de grupo do Planner (Sessão sem Intervenção ABA fica sozinha na sala; com Intervenção ABA só divide sala e horário com a mesma faixa etária e terapeutas compatíveis); o sistema lê cada quadro de Especialidades e Serviços do tratamento ativo, vê o que já está marcado e oferece onde marcar as sessões que faltam. Primeiro vale o <b>Horário de Atendimento</b> do paciente; depois o que o quadro pede (dia, horário, sala, semanas, sessões seguidas e o mesmo horário das outras semanas). Troque a opção na lista, desmarque o que não quiser e clique em <b>Agendar</b>. O Horário de Atendimento do paciente é sempre respeitado: o horário final é a saída, então a sessão precisa terminar até ele e nada é sugerido a partir dele. Sessões do paciente que estão <b>fora do Horário de Atendimento e fora do quadro</b> aparecem numa lista à parte, para remover (nada vem marcado). Antes das sugestões novas, a ferramenta também oferece <b>correções nas sessões já marcadas</b>: onde uma especialidade tem sessões a mais e outra a menos que o quadro, troca a especialidade da sessão (no mesmo dia, quando possível); e onde o mês está desigual (por exemplo 2 Nutrição numa semana e nenhuma em outra), passa a sessão para a semana que está faltando. Quando o quadro tem <b>semanas escolhidas</b> (ex.: 1ª e 3ª), a ferramenta confere a semana em que cada sessão está no Planner: sessão marcada numa semana que o quadro não usa é levada para uma semana do quadro (no mesmo dia e horário, quando possível). Elas vêm marcadas, a sessão continua existindo, e o ideal é repartir o total do quadro pelas semanas (não é regra fixa: só é feito quando há lugar que respeite as regras). Todas as regras do Planner valem e Ctrl+Z desfaz.", 
+    steps: ["<b>Sugerir Agendamento:</b> só funciona com paciente que tem <b>quadros de Especialidades e Serviços</b> no tratamento ativo, e só para o serviço <b>Sessão</b> (quadros e sessões de outros serviços ficam de fora). Escolha o paciente; valem as regras de Intervenção ABA e de grupo do Planner (Sessão sem Intervenção ABA fica sozinha na sala; com Intervenção ABA só divide sala e horário com a mesma faixa etária e terapeutas compatíveis); o sistema lê cada quadro de Especialidades e Serviços do tratamento ativo, vê o que já está marcado e oferece onde marcar as sessões que faltam. Primeiro vale o <b>Horário de Atendimento</b> do paciente; depois o que o quadro pede (dia, horário, sala, semanas, sessões seguidas e o mesmo horário das outras semanas). Troque a opção na lista, desmarque o que não quiser e clique em <b>Agendar</b>. O Horário de Atendimento do paciente é sempre respeitado: o horário final é a saída, então a sessão precisa terminar até ele e nada é sugerido a partir dele. Sessões do paciente que estão <b>fora do Horário de Atendimento e fora do quadro</b> aparecem numa lista à parte, para remover (nada vem marcado). Antes das sugestões novas, a ferramenta também oferece <b>correções nas sessões já marcadas</b>: onde uma especialidade tem sessões a mais e outra a menos que o quadro, troca a especialidade da sessão (no mesmo dia, quando possível); e onde o mês está desigual (por exemplo 2 Nutrição numa semana e nenhuma em outra), passa a sessão para a semana que está faltando. Quando o quadro tem <b>semanas escolhidas</b> (ex.: 1ª e 3ª), a ferramenta confere a semana em que cada sessão está no Planner: sessão marcada numa semana que o quadro não usa é levada para uma semana do quadro (no mesmo dia e horário, quando possível). Elas vêm marcadas, a sessão continua existindo, e o ideal é repartir o total do quadro pelas semanas (não é regra fixa: só é feito quando há lugar que respeite as regras). Todas as regras do Planner valem e Ctrl+Z desfaz. Quando uma sessão não cabe, aparecem os <b>motivos</b> com o nome da regra que barrou (ex.: Regra “Profissional em Dois Lugares”) e um exemplo; e o sistema sugere a sessão em <b>outra especialidade do tratamento</b> (mesmo serviço, com as regras dela), que vem desmarcada: marque se quiser (ela fica com 1 sessão a mais).", 
       "<b>Importar Planilha</b>: lê uma planilha do Excel (.xlsx) com a grade do Planner (4 semanas lado a lado, os dias empilhados, a linha das salas e a linha “Horario” com o profissional de cada coluna) e mostra a prévia antes de gravar: quantos agendamentos entram por semana, pacientes que não estão cadastrados (ficam de fora), colunas ignoradas e avisos. Cada coluna vai para a coluna da sala do mesmo profissional; célula só com vírgula é horário livre; “Reunião Clinica!” é ignorada; nome com complemento vira serviço e observação (por exemplo, “Acolhimento” vira o serviço Acolhimento Familiar); nas colunas dos grupos de suporte o texto é a sala que o aplicador auxilia. Só entra em célula livre. Ctrl+Z desfaz.",
       "<b>Editar Agendamento</b>: escolha o paciente para ver os horários dele, apagar (dia/semana/mês), trocar por outro paciente, copiar a semana e comparar o pacote com o planejado.",
       "<b>Trocar Profissional</b>: passa as colunas de um profissional para outro.",
