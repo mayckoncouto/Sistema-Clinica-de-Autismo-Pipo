@@ -2,11 +2,11 @@
 -- Devolve uma linha por item: area | item | valor | situacao (ok / atenção / limpar).
 with x as (
   select 'Operação' area, 'Atendimentos passados sem status' item,
-         (select count(*) from appointments where blocked is not true and coalesce(patient,'')<>'' and status is null and date < current_date and group_id is null) v, 1 limite
+         (select count(*) from appointments where blocked is not true and coalesce(patient,'')<>'' and status is null and date < current_date and group_id is null and patient_id is not null) v, 1 limite
   union all select 'Operação','Atendimentos de paciente sem sala',
-         (select count(*) from appointments where room_id is null and group_id is null and blocked is not true and coalesce(patient,'')<>''), 1
+         (select count(*) from appointments where room_id is null and group_id is null and blocked is not true and coalesce(patient,'')<>'' and patient not in ('Reserva','Reunião Clínica','Treinamento')), 1
   union all select 'Operação','Atendimentos de paciente sem código do paciente',
-         (select count(*) from appointments where patient_id is null and group_id is null and blocked is not true and coalesce(patient,'')<>'' and patient not in ('Reunião Clínica','Treinamento')), 1
+         (select count(*) from appointments where patient_id is null and group_id is null and blocked is not true and coalesce(patient,'')<>'' and patient not in ('Reserva','Reunião Clínica','Treinamento')), 1
   union all select 'Operação','Tarefas do CRM vencidas e abertas',
          (select count(*) from tasks where due_date < current_date and closed_at is null), 1
   union all select 'Operação','Contas a pagar/receber vencidas há mais de 30 dias',
