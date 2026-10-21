@@ -6567,6 +6567,7 @@ function subscribePatients(){
     rebuildPatients();
     patientsLoaded = true;
     renderPatientsTab();
+    apqLive();
     agdRenderIfVisible(); // cores dos pacientes na Agenda
     if (state.tab === "tratamentos") renderTreatmentsTab(); // aviso "sem tratamento ativo" segue a situação do paciente
   }, function(){ patientsLoaded = true; });
@@ -20580,13 +20581,15 @@ function openPlConfModal(){
       (q.full.length ? '<div class="pat-count">' + q.full.slice(0, 40).map(esc).join("<br>") + (q.full.length > 40 ? "<br>…" : "") + '</div>' : "");
     html += sec("Alertas") + (q.alerts.length ? '<div class="pat-count">' + q.alerts.slice(0, 60).map(esc).join("<br>") + (q.alerts.length > 60 ? "<br>…" : "") + '</div>' : '<div class="pat-count">Nenhum alerta: ninguém junto que não deva e todos dentro do horário.</div>');
     var body = out.closest(".modal-body"), top = body ? body.scrollTop : 0;
-    var stamp = '<div class="pat-count" style="margin-top:12px">Atualizado às ' + new Date().toLocaleTimeString("pt-BR") + ': acompanha as mudanças do Planner enquanto a janela está aberta.</div>';
+    var stamp = '<div class="pat-count" style="margin-top:12px">Atualizado às ' + new Date().toLocaleTimeString("pt-BR") + ': acompanha as mudanças do Planner, dos tratamentos e dos pacientes enquanto a janela está aberta.</div>';
     out.innerHTML = html + '<div class="pat-count" style="margin-top:12px">Para marcar o que falta, use <b>Outras Opções → Pacientes Faltando Sessões</b> ou <b>Sugerir Agendamento</b>.</div>' + stamp;
     if (body) body.scrollTop = top;
   }
   plannerLoadDocs().then(function(){
     draw();
     APQ_LIVE = draw;
+    // reserva: confere de novo a cada 15 s enquanto a janela está aberta (conta só na memória, sem ir ao banco)
+    var tick = setInterval(function(){ if (!out.isConnected){ clearInterval(tick); return; } draw(); }, 15000);
   }).catch(function(){ out.innerHTML = '<div class="pat-count">Não foi possível ler o Planner.</div>'; });
 }
 // Conferência do Planner aberta: redesenha (com espera) quando o Planner muda.
@@ -25338,6 +25341,7 @@ function subscribeTreatments(){
 }
 function afterTreatmentsChange(){
   if (window.__patTrRefresh) window.__patTrRefresh();
+  apqLive();   // Conferência do Planner aberta: as Contratadas vêm dos tratamentos
   renderPatientsTab();
   queueGridUpdate();
   agdRenderIfVisible();
@@ -28794,7 +28798,7 @@ var HELP_TOPICS = [
       "<b>Copiar Semana</b>: copia as marcações de uma semana para outras semanas, nos dias e tipos escolhidos, só em células livres e dentro das regras (horário do terapeuta, bloqueios, conflitos). A prévia diz quantas vão e por que as outras ficam de fora.",
       "<b>Substituir Terapeuta</b>: para férias ou licença. Escolha o terapeuta ausente, o substituto e as semanas, dias e turnos; os atendimentos passam para a coluna do substituto na mesma sala, e os que não cabem (horário ocupado, fora do horário dele, conflito) ficam como estão, com o motivo. Diferente do Trocar Profissional, que passa as colunas para sempre. Para voltar: Ctrl+Z ou repita ao contrário.",
       "<b>Vagas Disponíveis</b>: escolha a especialidade, as semanas, os dias e a faixa de horário e veja as vagas livres (com um paciente escolhido, só as que ele pode usar; clique para agendar). Embaixo, <b>Quem Poderia Mudar de Lugar</b>: pacientes que ocupam a janela e têm outro horário livre com o mesmo tipo de terapeuta; clique para abrir no Planner.",
-      "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês, fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno. Com a janela aberta, ela se atualiza sozinha quando o Planner muda (por você ou por outra pessoa).",
+      "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês, fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno. Com a janela aberta, ela se atualiza sozinha quando o Planner, os tratamentos ou os pacientes mudam (por você ou por outra pessoa) e confere de novo a cada 15 segundos.",
       "<b>Pacientes Faltando Sessões</b>: lista quem tem sessões a menos (ou a mais) no Planner que o Sessão/Mês do tratamento; o botão <b>Sugerir</b> abre o Sugerir Agendamento já no paciente.",
       "<b>Cópias do Planner</b>: guarda até 5 versões com nome, compara e restaura. Restaurar pede duas confirmações, guarda sozinho uma cópia “Automática” do que estava antes e pode ser desfeito com Ctrl+Z.",
       "<b>Imprimir</b>: Grade por Terapeuta e Horário da Família (por paciente ou todos, com Copiar Texto para o WhatsApp) do Planner de agora.",

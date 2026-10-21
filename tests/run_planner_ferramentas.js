@@ -61,6 +61,14 @@ const path = require('path');
   await page.waitForFunction(() => !/Paciente A \S+ 4 3/.test(document.getElementById('apqOut').innerText.replace(/\s+/g, ' ')), null, {timeout: 5000}).catch(() => {});
   const live2 = await flat();
   check('Conferência live: change from another person (other day) completes Paciente A?', !/Paciente A/.test(live2) && /completos/.test(live2), live2.slice(0, 200));
+  // tratamento mudou (Contratadas): a janela aberta também se atualiza
+  const trBak = await ev("JSON.stringify(state.treatments)");
+  await ev("(async function(){ var pa = state.patients.filter(function(p){ return p.nome === 'Paciente A'; })[0]; var list = cloneJson(state.treatments); var t = list.filter(function(x){ return x.patientId === pa.id && x.status === 'ativo'; })[0]; t.specHours[0].hours = String((+t.specHours[0].hours || 0) + 2); var db = await window.claude.use('db'); await db.doc('treatments/all').set({list: list}); })()");
+  await page.waitForFunction(() => /Paciente A \S+ 6 4 -2/.test(document.getElementById('apqOut').innerText.replace(/\s+/g, ' ')), null, {timeout: 5000}).catch(() => {});
+  const live3 = await flat();
+  check('Conferência live: treatment change (Contratadas) updates the open window (6 × 4)?', /Paciente A \S+ 6 4 -2/.test(live3), live3.slice(0, 200));
+  await ev("(async function(){ var db = await window.claude.use('db'); await db.doc('treatments/all').set({list: " + trBak + "}); })()");
+  await page.waitForTimeout(800);
   await ev("(async function(){ var db = await window.claude.use('db'); await db.doc('schedule/qua-3').set({bookings: {}}); })()");
   await ev("applyBookingChanges({'seg-1': {'08:00|rA|a2': null}}, {noHistory: true})");
   await page.waitForTimeout(900);
