@@ -14935,7 +14935,7 @@ var LINK_FIELDS = [
   {key: "carteirinha", label: "Nº da Carteirinha", off: true}, {key: "carteirinhaValidade", label: "Validade da Carteirinha", off: true},
   {key: "comoConheceu", label: "Como Conheceu a Clínica"},
   {key: "diagnostico", label: "Qual diagnóstico?"},
-  {key: "laudo", label: "Possui diagnóstico?"},
+  {key: "redeSocial", label: "Rede Social", off: true},
   {key: "escola", label: "Escola"},
   {key: "escolaTurno", label: "Turno da Escola"},
   {key: "obs", label: "Observações"},
@@ -14956,14 +14956,14 @@ function linkFieldCfg(which, key){
   return c ? {show: !!c.show || !!c.req, req: !!c.req} : {show: !f.off, req: !f.off && !!f.req};
 }
 // Campo do cadastro ↔ campo do link (cadastro.html). Os do link sem campo no cadastro (Responsável e
-// parentesco, Convênio, Possui diagnóstico?) aparecem no fim, no grupo "Só no link de cadastro".
+// parentesco, Convênio) aparecem no fim, no grupo "Só no link de cadastro" (hoje nenhum).
 var LINK_OF_FIELD = {nome: "nome", nascimento: "nascimento", cpf: "cpf", sexo: "sexo", telefones: "telefone", emails: "email", endereco: "endereco",
   comoConheceu: "comoConheceu", cid: "diagnostico", escolaId: "escola", escolaTurno: "escolaTurno", obs: "obs",
   rg: "rg", cns: "cns", entrada: "entrada", mae: "mae", pai: "pai", rotina: "rotina", protetiva: "protetiva", financeiro: "financeiro",
   escolaSerie: "escolaSerie", professor: "professor", mediador: "mediador", rotinaAtual: "rotinaAtual", medicoId: "medico",
   diagData: "diagData", suporte: "suporte", comunicacao: "comunicacao", alergias: "alergias", medicacoes: "medicacoes", restricoes: "restricoes",
-  convenioPadrao: "convenio", carteirinha: "carteirinha", carteirinhaValidade: "carteirinhaValidade"};
-var LINK_ONLY = ["laudo"];
+  convenioPadrao: "convenio", carteirinha: "carteirinha", carteirinhaValidade: "carteirinhaValidade", redeSocial: "redeSocial"};
+var LINK_ONLY = [];
 function openPatientFieldsModal(){
   if (!can("campos_paciente", "view")){ showToast(permDeniedMsg("campos_paciente", "view"), true); return; }
   var canEdit = can("campos_paciente", "edit");
@@ -14987,7 +14987,7 @@ function openPatientFieldsModal(){
         chk("show", cfg.show, lockShow, "Aparece: " + f.label) + linkCells(lk, f.label) + chk("req", cfg.req, lockReq, "Obrigatório: " + f.label) + '</tr>';
     }).join("");
   }).join("") +
-  '<tr class="pf-sec"><td colspan="4">Só no link de cadastro</td></tr>' + LINK_ONLY.map(function(k){
+  (LINK_ONLY.length ? '<tr class="pf-sec"><td colspan="4">Só no link de cadastro</td></tr>' : "") + LINK_ONLY.map(function(k){
     var lf = LINK_FIELDS.filter(function(x){ return x.key === k; })[0];
     var req = linkFieldCfg("individual", k).req;
     return '<tr data-lfk="' + k + '" data-lonly><td>' + esc(lf.label) + '</td><td class="pf-chk pf-na">—</td>' + linkCells(k, lf.label) + chk("req", req, false, "Obrigatório: " + lf.label) + '</tr>';
@@ -28569,7 +28569,7 @@ var HELP_TOPICS = [
       "<b>Links Enviados</b> (Outras Opções) mostra a situação de cada link — Aguardando, Preenchido, Vencido ou Cancelado — com Copiar e Cancelar."
     ],
     rules: [
-      "O formulário pode ter qualquer campo do cadastro do paciente — identificação (nome, nascimento, CPF, sexo, RG, Cartão SUS, data de entrada), mãe e pai (nome, CPF e profissão), endereço, responsáveis pela retirada, medida protetiva, telefone, e-mail, responsável financeiro, saúde (diagnóstico, data do diagnóstico, médico, nível de suporte, comunicação, alergias, medicações, restrições alimentares), escola (nome, série, turno, professor, mediador), rotina atual, como conheceu e observações — e ainda <b>Convênio</b> e <b>Possui diagnóstico?</b>, mais a autorização (LGPD), que é sempre obrigatória.",
+      "O formulário pode ter qualquer campo do cadastro do paciente — identificação (nome, nascimento, CPF, sexo, RG, Cartão SUS, data de entrada), mãe e pai (nome, CPF e profissão), endereço, responsáveis pela retirada, medida protetiva, telefone, e-mail, rede social, responsável financeiro, saúde (diagnóstico, data do diagnóstico, médico, nível de suporte, comunicação, alergias, medicações, restrições alimentares), escola (nome, série, turno, professor, mediador), rotina atual, como conheceu e observações — e ainda <b>Convênio</b> e <b>Possui diagnóstico?</b>, mais a autorização (LGPD), que é sempre obrigatória.",
       "Quais campos aparecem e quais são obrigatórios: Pacientes → Outras Opções → <b>Campos Obrigatórios</b>, colunas <b>Link Rápido</b> (Enviar link de cadastro, Pedir atualização e o link da tarefa do CRM). <b>Obrigatório</b> vale no cadastro e nos links em que o campo aparece; Convênio e “Possui diagnóstico?” ficam no grupo “Só no link de cadastro”. Nos links todos os campos podem ser escolhidos, inclusive nome e telefone; o envio precisa ter pelo menos o nome, o telefone, o CPF ou o e-mail.",
       "O link vale 1 dia e uma vez só.",
       "Ao salvar um paciente novo vindo do link, nasce um tratamento <b>Ativo</b> só com o convênio informado (o resto do tratamento é preenchido depois). Se veio do CRM, a tarefa fica ligada ao paciente e os dados do lead saem da tarefa.",
@@ -36673,7 +36673,7 @@ function intakePrefillFrom(p){
     telNome: ((n.telefones || [])[0] || {}).nome || "", finQuem: fin.link === "mae" ? "Mãe" : fin.link === "pai" ? "Pai" : "",
     telefone: patFirstPhone(n) ? digitsOnly(patFirstPhone(n)) : "", email: patFirstEmail(n) || "",
     cep: e.cep || "", rua: e.rua || "", numero: e.numero || "", compl: e.compl || "", bairro: e.bairro || "", cidade: e.cidade || "", uf: e.uf || "",
-    convenio: patConvDefault(n).nome || (tr ? (tr.convenio || "") : ""), carteirinha: n.carteirinha || "", carteirinhaValidade: n.carteirinhaValidade || "", escola: n.escolaId ? patRegName("escolas", n.escolaId) : "", escolaTurno: n.escolaTurno || "", comoConheceu: n.comoConheceu || ""};
+    convenio: patConvDefault(n).nome || (tr ? (tr.convenio || "") : ""), carteirinha: n.carteirinha || "", carteirinhaValidade: n.carteirinhaValidade || "", redeSocial: n.redeSocial || "", escola: n.escolaId ? patRegName("escolas", n.escolaId) : "", escolaTurno: n.escolaTurno || "", comoConheceu: n.comoConheceu || ""};
   if (healthCanSee()){
     var hh = Object.assign({}, n, HEALTH.map ? healthOf(n.id) : {});
     o.diagnostico = String(hh.cid || "");
@@ -36798,7 +36798,7 @@ function intakeToPatient(d){
   d = d || {};
   var o = {}, notes = [], rel = String(d.respParentesco || ""), role = rel === "Mãe" ? "mae" : rel === "Pai" ? "pai" : "";
   ["nome", "nascimento", "sexo", "escolaTurno", "comoConheceu", "rg", "entrada", "escolaSerie", "professor", "mediador",
-   "diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes"].forEach(function(k){ if (d[k]) o[k] = d[k]; });
+   "diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes", "redeSocial"].forEach(function(k){ if (d[k]) o[k] = d[k]; });
   if (d.cpf) o.cpf = digitsOnly(d.cpf);
   if (d.cns) o.cns = digitsOnly(d.cns);
   if (d.diagnostico) o.cid = d.diagnostico;
@@ -36856,7 +36856,7 @@ function intakeToPatient(d){
   }
   if (d.carteirinha) o.carteirinha = d.carteirinha;
   if (d.carteirinhaValidade) o.carteirinhaValidade = d.carteirinhaValidade;
-  if (d.laudo) notes.push("Possui diagnóstico: " + d.laudo);
+  if (d.laudo) notes.push("Possui diagnóstico: " + d.laudo);   // envios antigos
   if (d.convenio) notes.push("Convênio informado: " + (d.convenio === "Outro" && d.convenioOutro ? "Outro — " + d.convenioOutro : d.convenio));
   if (d.obs) notes.push("Observações da família: " + d.obs);
   return {patch: o, notes: notes};
@@ -36915,7 +36915,7 @@ function intakeApplyReview(overlay, info, isNew, added){
   // Campo a campo (só os que existem na janela).
   var MAP = [["nome", "pNome"], ["nascimento", "pNasc"]];
   ["sexo", "cpf", "rg", "cns", "entrada", "cid", "escolaId", "escolaSerie", "escolaTurno", "professor", "mediador", "comoConheceu",
-   "medicoId", "diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes", "convenioPadrao", "carteirinha", "carteirinhaValidade"].forEach(function(k){ if (p[k]) MAP.push([k, "pf-" + k]); });
+   "medicoId", "diagData", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes", "convenioPadrao", "carteirinha", "carteirinhaValidade", "redeSocial"].forEach(function(k){ if (p[k]) MAP.push([k, "pf-" + k]); });
   var e = p.endereco || {}; ["cep", "rua", "numero", "compl", "bairro", "cidade", "uf"].forEach(function(k){ if (e[k]) MAP.push(["endereco." + k, "pa-" + k]); });
   ["mae", "pai"].forEach(function(r){ if (p[r]) ["nome", "cpf", "profissao"].forEach(function(x){ if (p[r][x]) MAP.push([r + "." + x, "pm-" + r + "-" + (x === "profissao" ? "prof" : x)]); }); });
   if (p.financeiro){ ["nome", "doc", "telefone", "email"].forEach(function(x){ if (p.financeiro[x]) MAP.push(["financeiro." + x, "fi-" + x]); }); }

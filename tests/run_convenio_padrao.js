@@ -90,7 +90,7 @@ const path = require('path');
   // Campos Obrigatórios: o convênio do cadastro e o do link são a mesma linha.
   await ev('openPatientFieldsModal()'); await page.waitForSelector('#ovPf');
   check('Campos Obrigatórios: Convênio, Carteirinha e Validade com colunas de link?', await page.$$eval('#ovPf tr[data-pfk="convenioPadrao"][data-lfk="convenio"], #ovPf tr[data-pfk="carteirinha"][data-lfk="carteirinha"], #ovPf tr[data-pfk="carteirinhaValidade"][data-lfk="carteirinhaValidade"]', (a) => a.length === 3));
-  check('"Só no link" fica só com Possui diagnóstico?', await page.$$eval('#ovPf tr[data-lonly]', (a) => a.length === 1));
+  check('sem grupo "Só no link de cadastro" (Possui diagnóstico? saiu)?', await page.$$eval('#ovPf tr[data-lonly]', (a) => a.length === 0));
   await page.click('#pfCancel');
 
   // Planilha de pacientes: colunas e importação.

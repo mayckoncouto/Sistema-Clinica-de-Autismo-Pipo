@@ -276,7 +276,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
   var DEFAULT_REQ = {nome: 1, telefone: 1, nascimento: 1, cpf: 1};
   // Campos que só aparecem no link quando a clínica marca em Campos obrigatórios (sem configuração = fora).
   var OFF = {rg: 1, cns: 1, entrada: 1, mae: 1, pai: 1, rotina: 1, protetiva: 1, financeiro: 1, escolaSerie: 1, professor: 1, mediador: 1,
-    rotinaAtual: 1, medico: 1, carteirinha: 1, carteirinhaValidade: 1, diagData: 1, suporte: 1, comunicacao: 1, alergias: 1, medicacoes: 1, restricoes: 1};
+    rotinaAtual: 1, medico: 1, carteirinha: 1, carteirinhaValidade: 1, diagData: 1, suporte: 1, comunicacao: 1, alergias: 1, medicacoes: 1, restricoes: 1, redeSocial: 1};
   var GROUP = {telNome: "telefone", finQuem: "financeiro",
     cep: "endereco", numero: "endereco", rua: "endereco", compl: "endereco", bairro: "endereco", cidade: "endereco", uf: "endereco",
     maeNome: "mae", maeCpf: "mae", maeProfissao: "mae", paiNome: "pai", paiCpf: "pai", paiProfissao: "pai",
@@ -360,7 +360,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       sec("Contato",
         f("telefone", "Telefone / WhatsApp", {value: fmtPhone(p.telefone || FORM.telefone), attrs: ' inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000"'}) +
         f("telNome", "De quem é este telefone?", {value: p.telNome, attrs: ' autocomplete="name"', hint: "Nome e parentesco. Ex.: Maria (mãe)"}) +
-        f("email", "E-mail", {type: "email", value: p.email, attrs: ' autocomplete="email"'})) +
+        f("email", "E-mail", {type: "email", value: p.email, attrs: ' autocomplete="email"'}) +
+        f("redeSocial", "Rede Social", {value: p.redeSocial, wide: true, attrs: ' placeholder="Ex.: @usuario no Instagram"'})) +
       sec("Mãe",
         f("maeNome", "Nome da Mãe", {value: p.maeNome, wide: true}) +
         f("maeCpf", "CPF da Mãe", {value: fmtCpf(p.maeCpf), attrs: ' inputmode="numeric" placeholder="000.000.000-00"'}) +
@@ -384,8 +385,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         f("finTelefone", "Telefone", {value: fmtPhone(p.finTelefone), attrs: ' inputmode="tel" placeholder="(00) 00000-0000"'}) +
         f("finEmail", "E-mail", {type: "email", value: p.finEmail, wide: true})) +
       sec("Saúde",
-        f("laudo", "Possui diagnóstico?", {select: ["Sim", "Não"], value: p.laudo || (p.diagnostico ? "Sim" : "")}) +
-        f("diagnostico", "Qual diagnóstico?", {select: diags.concat(["Outro"]), value: dgSel, wide: true, when: "diag-sim"}) +
+        f("diagnostico", "Qual diagnóstico?", {select: diags.concat(["Outro"]), value: dgSel, wide: true}) +
         f("diagnosticoOutro", "Qual?", {value: dgOutro, wide: true, when: "diag-outro", attrs: ' placeholder="Escreva o diagnóstico"'}) +
         f("diagData", "Data do Diagnóstico", {date: true, value: p.diagData}) +
         (meds.length
@@ -434,17 +434,16 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     // Campos que dependem de outro: nome/CPF do financeiro (quando não é a mãe nem o pai) e "Qual convênio?" (Outro).
     function whenSync(){
       var quem = (document.getElementById("finQuem") || {}).value || "", conv = (document.getElementById("convenio") || {}).value || "";
-      var lau = document.getElementById("laudo"), dg = (document.getElementById("diagnostico") || {}).value || "";
-      var temDiag = !lau || lau.value === "Sim";
+      var dg = (document.getElementById("diagnostico") || {}).value || "";
       var esc0 = (document.getElementById("escola") || {}).value || "", med0 = (document.getElementById("medico") || {}).value || "";
       Array.prototype.forEach.call(frm.querySelectorAll("[data-when]"), function(el){
         var w = el.getAttribute("data-when");
         if (w === "esc-outro"){ el.hidden = esc0 !== "Outra"; return; }
         if (w === "med-outro"){ el.hidden = med0 !== "Outro"; return; }
-        el.hidden = !(w === "fin-outro" ? quem !== "Mãe" && quem !== "Pai" : w === "diag-sim" ? temDiag : w === "diag-outro" ? temDiag && dg === "Outro" : conv === "Outro");
+        el.hidden = !(w === "fin-outro" ? quem !== "Mãe" && quem !== "Pai" : w === "diag-outro" ? dg === "Outro" : conv === "Outro");
       });
     }
-    frm.addEventListener("change", function(e){ if (e.target.id === "finQuem" || e.target.id === "convenio" || e.target.id === "laudo" || e.target.id === "diagnostico" || e.target.id === "escola" || e.target.id === "medico") whenSync(); });
+    frm.addEventListener("change", function(e){ if (e.target.id === "finQuem" || e.target.id === "convenio" || e.target.id === "diagnostico" || e.target.id === "escola" || e.target.id === "medico") whenSync(); });
     whenSync();
     frm.addEventListener("click", function(e){
       var add = e.target.closest("[data-ladd]"), rm = e.target.closest("[data-lrm]");
@@ -516,14 +515,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
       }
       var data = {consentimento: true};
       ["nome", "nascimento", "sexo", "telNome", "finQuem", "email", "rua", "numero", "compl", "bairro", "cidade", "uf",
-       "convenio", "diagnostico", "laudo", "escola", "escolaTurno", "comoConheceu", "obs",
+       "convenio", "diagnostico", "redeSocial", "escola", "escolaTurno", "comoConheceu", "obs",
        "rg", "maeNome", "maeProfissao", "paiNome", "paiProfissao", "finNome", "finEmail", "escolaSerie", "professor", "mediador",
        "medico", "suporte", "comunicacao", "alergias", "medicacoes", "restricoes", "carteirinha"].forEach(function(id){ data[id] = val(id); });
       data.convenioOutro = data.convenio === "Outro" ? val("convenioOutro") : "";
       if (document.getElementById("escolaOutro") && data.escola === "Outra") data.escola = val("escolaOutro");
       if (document.getElementById("medicoOutro") && data.medico === "Outro") data.medico = val("medicoOutro");
-      if (document.getElementById("laudo") && data.laudo !== "Sim") data.diagnostico = "";
-      else if (data.diagnostico === "Outro") data.diagnostico = val("diagnosticoOutro");
+      if (data.diagnostico === "Outro") data.diagnostico = val("diagnosticoOutro");
       data.nascimento = nascIso || ""; data.entrada = entIso || ""; data.diagData = diagIso || ""; data.carteirinhaValidade = cartIso || "";
       data.cpf = digits(val("cpf")); data.telefone = digits(val("telefone")); data.cep = digits(val("cep"));
       data.cns = digits(val("cns")); data.maeCpf = digits(val("maeCpf")); data.paiCpf = digits(val("paiCpf"));

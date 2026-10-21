@@ -211,6 +211,7 @@
         ".adm-users td.u-name{overflow-wrap:anywhere}" +
         ".adm-users :is(th,td):last-child{width:1%;white-space:nowrap}" +
         // Níveis de Permissão: só Nível e Usuários (o resumo das permissões aparece ao abrir o nível).
+        ".adm-roles :is(th,td):nth-child(2),.adm-roles :is(th,td):nth-child(4){display:none}" +
         ".adm-roles :is(th,td):first-child{width:auto!important;overflow-wrap:anywhere}" +
         ".adm-roles :is(th,td):last-child{width:1%!important;white-space:nowrap}" +
       "}";
@@ -639,7 +640,7 @@
     var q0 = "";
     var mh = document.getElementById("modalHost");
     mh.innerHTML =
-      '<div class="overlay" id="ovRoles"><div class="modal wide" style="max-width:760px">' +
+      '<div class="overlay" id="ovRoles"><div class="modal wide" style="max-width:940px">' +
         '<div class="modal-head"><div><h3>Níveis de Permissão</h3>' +
           '<div class="modal-sub">O que cada nível pode fazer em cada tela. Os níveis valem para todas as unidades; ' +
           'uma mudança vale na hora para todos os usuários daquele nível.</div></div>' +
@@ -648,7 +649,7 @@
           '<div class="search-wrap" style="margin-bottom:10px">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>' +
             '<input id="rlSearch" type="text" placeholder="Buscar nível…"></div>' +
-          '<div class="room-list tl-list" id="rlList"></div>' +
+          '<div id="rlList"></div>' +
         "</div>" +
         '<div class="modal-foot">' +
           '<button class="btn primary" id="addRoleBtn">+ Incluir</button>' +
@@ -660,15 +661,16 @@
     function draw() {
       var q = normText(q0);
       var list = roles.filter(function (r) { return !q || normText(r.name).indexOf(q) !== -1; });
-      document.getElementById("rlList").innerHTML = list.length ? list.map(function (r) {
-        var n = counts[r.id] || 0, lk = roleLockedFor(r);
-        var sum = r.is_admin ? (r.is_manager ? "Acesso total a todas as telas e unidades. Cadastra unidades, níveis e regras do Sistema." : "Acesso total a todas as telas da própria unidade.") : roleShort(r);
-        return '<div class="room-row tl-row" data-role-id="' + esc(r.id) + '">' +
-          '<div class="room-info"><div class="rn">' + esc(r.name) + roleBadges(r) + ' <span class="u-badge">' + n + (n === 1 ? " usuário" : " usuários") + "</span></div>" +
-          '<div class="rs">' + esc(sum) + "</div></div>" +
-          (!lk ? '<button type="button" class="btn ghost" data-rl-copy="' + esc(r.id) + '">Duplicar</button>' : "") +
-          '<button type="button" class="btn ghost" data-rl-edit="' + esc(r.id) + '">' + (lk ? "Ver" : "Editar") + "</button></div>";
-      }).join("") : '<div class="hours-empty">Nenhum nível encontrado.</div>';
+      document.getElementById("rlList").innerHTML = list.length ?
+        '<table class="adm-table adm-roles"><thead><tr><th>Nível de Permissão</th><th>Acesso</th><th>Usuários</th><th>Resumo</th><th></th></tr></thead><tbody>' +
+        list.map(function (r) {
+          var n = counts[r.id] || 0, lk = roleLockedFor(r);
+          var sum = r.is_admin ? (r.is_manager ? "Acesso total a todas as telas e unidades. Cadastra unidades, níveis e regras do Sistema." : "Acesso total a todas as telas da própria unidade.") : roleShort(r);
+          return '<tr data-role-id="' + esc(r.id) + '"><td class="u-name">' + esc(r.name) + "</td>" +
+            "<td>" + (roleBadges(r) || "—") + "</td><td>" + n + "</td><td>" + esc(sum) + "</td>" +
+            '<td class="rl-acts">' + (!lk ? '<button type="button" class="btn ghost" data-rl-copy="' + esc(r.id) + '">Duplicar</button> ' : "") +
+            '<button type="button" class="btn ghost" data-rl-edit="' + esc(r.id) + '">' + (lk ? "Ver" : "Editar") + "</button></td></tr>";
+        }).join("") + "</tbody></table>" : '<div class="hours-empty">Nenhum nível encontrado.</div>';
     }
     draw();
     var ov = document.getElementById("ovRoles");
