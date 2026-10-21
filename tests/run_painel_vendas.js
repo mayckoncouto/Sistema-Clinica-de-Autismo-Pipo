@@ -69,6 +69,13 @@ const path = require('path');
   check('meta nova entra na lista', (await ev(`GOALS.rows.length`)) === 2 && /5\.000,00/.test(await page.$eval('#mtHost', (x) => x.innerText)));
   await page.fill('#mtValor', '6.000,00'); await page.click('#mtAdd'); await page.waitForTimeout(200);
   check('mesma meta (vendedor + mês) é atualizada, não duplicada', (await ev(`GOALS.rows.length`)) === 2);
+  // Editar: traz a meta para os campos e salva a alteração na mesma meta
+  await page.click('#mtHost [data-mt-ed]'); await page.waitForTimeout(100);
+  const edv = await page.evaluate(() => ({ v: document.getElementById('mtValor').value, btn: document.getElementById('mtAdd').textContent, cancel: !document.getElementById('mtCancelEd').hidden }));
+  check('Editar preenche os campos e vira Salvar Alteração', edv.v && edv.btn === 'Salvar Alteração' && edv.cancel, JSON.stringify(edv));
+  await page.fill('#mtValor', '8.500,00'); await page.fill('#mtQtd', '9'); await page.click('#mtAdd'); await page.waitForTimeout(200);
+  const ed2 = await ev(`(function(){ var g = GOALS.rows.filter(function(x){ return x.qtd === 9; })[0]; return {n: GOALS.rows.length, valor: g && g.valor, btn: document.getElementById('mtAdd').textContent}; })()`);
+  check('Salvar Alteração muda a meta sem criar outra e volta para + Incluir', ed2.n === 2 && ed2.valor === 8500 && ed2.btn === '+ Incluir', JSON.stringify(ed2));
   await page.click('#mtOk');
 
   // Contrato do tratamento

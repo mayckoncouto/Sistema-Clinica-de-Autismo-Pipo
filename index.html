@@ -28010,21 +28010,38 @@ function openMetasVendas(back){
   host.innerHTML = '<div class="overlay" id="ovMetas"><div class="modal" style="max-width:760px">' +
     '<div class="modal-head"><div><h3>Metas de Vendas</h3><div class="modal-sub">Meta de valor e de quantidade por mês, para a equipe toda ou para um vendedor. O progresso aparece no Painel de Vendas.</div></div>' +
     '<button class="modal-close" id="mtClose" aria-label="Fechar">✕</button></div>' +
-    '<div class="modal-body">' + (canEdit ? '<div class="tr-sec tr-sec-top">Nova Meta</div><div class="field-row">' +
+    '<div class="modal-body">' + (canEdit ? '<div class="tr-sec tr-sec-top" id="mtSecTitle">Nova Meta</div><div class="field-row">' +
       '<div class="field"><label for="mtSeller">Vendedor</label><select id="mtSeller"><option value="">Equipe toda</option>' + fpStaffList().map(function(s){ return '<option value="' + esc(s.id) + '">' + esc(s.nome) + '</option>'; }).join("") + '</select></div>' +
       '<div class="field"><label for="mtYm">Mês</label><select id="mtYm">' + months.map(function(m){ return '<option value="' + m + '"' + (m === today.slice(0, 7) ? ' selected' : '') + '>' + esc(pvMonthLabel(m)) + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="field-row"><div class="field"><label for="mtValor">Meta de Valor (R$)</label><input type="text" id="mtValor" data-money inputmode="decimal"></div>' +
       '<div class="field"><label for="mtQtd">Meta de Vendas (Quantidade)</label><input type="text" id="mtQtd" inputmode="numeric"></div></div>' : '') +
       '<div class="tr-sec">Metas Cadastradas</div><div id="mtHost"></div></div>' +
-    '<div class="modal-foot"><span></span><div class="spacer"></div>' + (canEdit ? '<button class="btn ghost" id="mtAdd">+ Incluir</button>' : '') + '<button class="btn primary" id="mtOk">Fechar</button></div></div></div>';
+    '<div class="modal-foot"><span></span><div class="spacer"></div>' + (canEdit ? '<button class="btn ghost" id="mtCancelEd" hidden>Cancelar Edição</button><button class="btn ghost" id="mtAdd">+ Incluir</button>' : '') + '<button class="btn primary" id="mtOk">Fechar</button></div></div></div>';
   var ov = document.getElementById("ovMetas"), $ = function(id){ return document.getElementById(id); };
   function close(){ host.innerHTML = ""; if (back) back(); }
+  var editId = "";
+  function setVal(id, v){ var el = $(id); if (!el) return; el.value = v; el.dispatchEvent(new Event("change", {bubbles: true})); }
+  function editMode(g){
+    editId = g ? g.id : "";
+    if ($("mtSecTitle")) $("mtSecTitle").textContent = g ? "Editar Meta" : "Nova Meta";
+    if ($("mtAdd")) $("mtAdd").textContent = g ? "Salvar Alteração" : "+ Incluir";
+    if ($("mtCancelEd")) $("mtCancelEd").hidden = !g;
+    if (g){
+      if (!Array.prototype.some.call($("mtYm").options, function(o){ return o.value === g.ym; })){ var o = document.createElement("option"); o.value = g.ym; o.textContent = pvMonthLabel(g.ym); $("mtYm").appendChild(o); }
+      setVal("mtSeller", g.seller || ""); setVal("mtYm", g.ym);
+      $("mtValor").value = g.valor ? fmtMoney(g.valor).replace(/^R\$\s*/, "") : ""; $("mtQtd").value = g.qtd || "";
+      $("mtValor").focus();
+    } else { $("mtValor").value = ""; $("mtQtd").value = ""; }
+    render();
+  }
   function render(){
     var list = (GOALS.rows || []).slice().sort(function(a, b){ return a.ym < b.ym ? 1 : -1; });
     $("mtHost").innerHTML = list.length ? '<div class="ln-scroll"><table class="pat-table ln-plan"><thead><tr><th>Mês</th><th>Meta de</th><th>Valor</th><th>Vendas</th><th></th></tr></thead><tbody>' +
       list.map(function(g){ return '<tr><td>' + esc(pvMonthLabel(g.ym)) + '</td><td>' + esc(g.seller ? fpStaffName(g.seller) : "Equipe toda") + '</td><td>' + (g.valor ? esc(fmtMoney(g.valor)) : "—") + '</td><td>' + (g.qtd || "—") + '</td><td>' +
+        (canEdit ? '<button class="btn ghost" data-mt-ed="' + esc(g.id) + '">' + (g.id === editId ? 'Editando' : 'Editar') + '</button>' : '') +
         (slCan("delete") ? '<button class="btn ghost" data-mt-del="' + esc(g.id) + '">Excluir</button>' : '') + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="hint">Nenhuma meta cadastrada.</div>';
-    $("mtHost").querySelectorAll("[data-mt-del]").forEach(function(b){ b.addEventListener("click", function(){ goalDelete(b.getAttribute("data-mt-del")).then(render); }); });
+    $("mtHost").querySelectorAll("[data-mt-del]").forEach(function(b){ b.addEventListener("click", function(){ var id = b.getAttribute("data-mt-del"); goalDelete(id).then(function(){ if (id === editId) editMode(null); else render(); }); }); });
+    $("mtHost").querySelectorAll("[data-mt-ed]").forEach(function(b){ b.addEventListener("click", function(){ var g = (GOALS.rows || []).filter(function(x){ return x.id === b.getAttribute("data-mt-ed"); })[0]; if (g) editMode(g); }); });
   }
   goalLoad().then(render);
   $("mtClose").addEventListener("click", close); $("mtOk").addEventListener("click", close);
@@ -28033,9 +28050,11 @@ function openMetasVendas(back){
     var valor = parseMoney($("mtValor").value), qtd = parseInt($("mtQtd").value, 10) || 0;
     if (!(valor > 0) && !(qtd > 0)){ showToast("Informe a meta de valor ou de quantidade.", true); return; }
     var seller = $("mtSeller").value, ym = $("mtYm").value;
-    var ex = (GOALS.rows || []).filter(function(g){ return g.ym === ym && g.seller === seller; })[0];
-    goalSave({id: ex ? ex.id : "", seller: seller, ym: ym, valor: valor > 0 ? valor : 0, qtd: qtd}).then(function(ok){ if (ok){ $("mtValor").value = ""; $("mtQtd").value = ""; render(); } });
+    var ex = (GOALS.rows || []).filter(function(g){ return g.ym === ym && (g.seller || "") === seller && g.id !== editId; })[0];
+    if (editId && ex){ showToast("Já existe meta de " + (seller ? fpStaffName(seller) : "Equipe toda") + " em " + pvMonthLabel(ym) + ". Edite ou exclua aquela.", true); return; }
+    goalSave({id: editId || (ex ? ex.id : ""), seller: seller, ym: ym, valor: valor > 0 ? valor : 0, qtd: qtd}).then(function(ok){ if (ok){ if (editId) showToast("Meta alterada."); editMode(null); } });
   });
+  if ($("mtCancelEd")) $("mtCancelEd").addEventListener("click", function(){ editMode(null); });
 }
 
 // ----- Contrato do tratamento -----
@@ -29190,7 +29209,8 @@ var HELP_TOPICS = [
       "<b>Vendedores</b>: total por vendedor em gráfico, destaques do período e o ranking com vendas, total, % do total, ticket médio, meta do mês, canceladas e comissão gerada.",
       "<b>Recebimentos</b>: a receber, próximos 30 dias, em atraso, recebido no período e inadimplência; previsão de recebimentos dos próximos 6 meses, atraso por faixa de dias e a lista de parcelas vencidas (clique abre a venda).",
       "<b>Oportunidades</b>: tratamentos ativos sem venda (botão <b>Gerar Venda</b>), tratamentos a renovar (vencidos ou perto do vencimento), vendas sem parcelas e vendas sem vendedor.",
-      "<b>Outras Opções</b>: Exportar Excel, Imprimir, Vendas, Comissões e Metas."
+      "<b>Outras Opções</b>: Exportar Excel, Imprimir, Vendas, Comissões e Metas.",
+      "<b>Metas</b>: em cada meta cadastrada, <b>Editar</b> traz os dados para os campos de cima; mude o que precisar e clique em <b>Salvar Alteração</b> (ou <b>Cancelar Edição</b>). Não pode haver duas metas do mesmo vendedor no mesmo mês."
     ],
     rules: [
       "Venda cancelada não entra no total nem no ticket médio; aparece nos cartões de canceladas.",
