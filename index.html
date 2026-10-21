@@ -20661,6 +20661,9 @@ function plQuality(){
       var p = findPatientRef(b); if (!p) return;
       q.total++;
       (q.byPat[p.id] = q.byPat[p.id] || {p: p, n: 0}).n++;
+      var dk = w + "|" + d.key + "|" + ps[0] + "|" + (b.service || DEFAULT_SERVICE_ID), dd = (q.byPat[p.id].dupK = q.byPat[p.id].dupK || {});
+      dd[dk] = (dd[dk] || 0) + 1;
+      if ((b.service || DEFAULT_SERVICE_ID) === DEFAULT_SERVICE_ID){ var bps = q.byPat[p.id]; (bps.sess = bps.sess || {})[w + "|" + d.key + "|" + ps[0]] = 1; }
       var si = seatInfo[ps[1] + "|" + ps[2]];
       if (si){ var th = (q.ther[si.prof] = q.ther[si.prof] || {n: 0, times: {}}); th.n++; th.times[w + "|" + d.key + "|" + ps[0]] = 1; }
       // alertas
@@ -20674,7 +20677,13 @@ function plQuality(){
   }); });
   state.patients.filter(function(p){ return isActive(p) && activeTreatment(p.id); }).forEach(function(p){
     var bp = q.byPat[p.id] || {n: 0}, want = plLinesOf(p).reduce(function(a, x){ return a + x.hours; }, 0), got = bp.n;
-    if (want || got) q.contr.push({p: p, want: want, got: got, fora: bp.fora || 0});
+    var dup = 0, dupDet = [];
+    Object.keys(bp.dupK || {}).forEach(function(k){ if (bp.dupK[k] > 1){ var kp = k.split("|"), dy = DAYS.filter(function(x){ return x.key === kp[1]; })[0]; dup++; dupDet.push(kp[0] + "ª " + (dy ? dy.full : kp[1]) + " " + kp[2] + " · " + bp.dupK[k] + "× " + bookingServiceName({patient: "x", service: kp[3]}) || kp[3]); } });
+    var vazio = 0, vazioDet = [];
+    if (p.horarios) WEEKS.forEach(function(w){ DAYS.forEach(function(d){ d.morning.concat(d.afternoon).forEach(function(time){
+      if (patientSlotOk(p, d.key, time) && !(bp.sess && bp.sess[w + "|" + d.key + "|" + time])){ vazio++; vazioDet.push(w + "ª " + d.full + " " + time); }
+    }); }); });
+    if (want || got) q.contr.push({p: p, want: want, got: got, fora: bp.fora || 0, vazio: vazio, vazioDet: vazioDet, dup: dup, dupDet: dupDet});
     var st = plGroupStat(p);
     if (abaOn() && st.total && plLinesOf(p).some(function(x){ return plIsAbaSim(p, x.line); })){
       var gl = plGroupGoal(st.total);
@@ -20736,12 +20745,14 @@ function openPlConfModal(){
   function draw(){
     if (!out.isConnected){ if (APQ_LIVE === draw) APQ_LIVE = null; return; }
     var q = plQuality();
-    var bad = q.contr.filter(function(c){ return c.want !== c.got || c.fora; }), okN = q.contr.length - bad.length;
+    var bad = q.contr.filter(function(c){ return c.want !== c.got || c.fora || c.dup; }), okN = q.contr.length - bad.length;
     var html = '<div class="pat-count"><b>' + q.total + '</b> atendimentos · <b>' + Object.keys(q.byPat).length + '</b> pacientes · <b>' + q.therRows.length + '</b> terapeutas.</div>';
-    html += sec("Sessões Colocadas × Contratadas") + '<div class="pat-count">' + okN + ' de ' + q.contr.length + ' pacientes com tratamento completos e dentro do horário' + (bad.length ? '; ' + bad.length + ' com diferença ou fora do horário:' : '.') + '</div>' +
-      (bad.length ? tbl(["Paciente", "Tipo do Tratamento", "Contratadas", "Colocadas", "Diferença", "Fora do Horário"], bad.slice(0, 200).map(function(c){
+    html += sec("Sessões Colocadas × Contratadas") + '<div class="pat-count">' + okN + ' de ' + q.contr.length + ' pacientes com tratamento completos e dentro do horário' + (bad.length ? '; ' + bad.length + ' com diferença, fora do horário ou repetidos no mesmo horário:' : '.') + '</div>' +
+      (bad.length ? tbl(["Paciente", "Tipo do Tratamento", "Contratadas", "Colocadas", "Diferença", "Fora do Horário", "Horário Vazio", "Mesmo Horário Repetido"], bad.slice(0, 200).map(function(c){
         var t = activeTreatment(c.p.id), tipos = ((t && t.tipos) || []).map(trTypeName).filter(Boolean).join(", ");
-        return ['<a href="#" class="apq-open-tr" data-pid="' + esc(c.p.id) + '" style="color:var(--accent);text-decoration:underline">' + esc(c.p.nome) + '</a>', esc(tipos || "—"), c.want, c.got, c.got === c.want ? "0" : (c.got - c.want > 0 ? "+" : "") + (c.got - c.want), c.fora ? '<b style="color:var(--danger)">' + c.fora + '</b>' : "0"]; }), "fx-left2") : "");
+        return ['<a href="#" class="apq-open-tr" data-pid="' + esc(c.p.id) + '" style="color:var(--accent);text-decoration:underline">' + esc(c.p.nome) + '</a>', esc(tipos || "—"), c.want, c.got, c.got === c.want ? "0" : (c.got - c.want > 0 ? "+" : "") + (c.got - c.want), c.fora ? '<b style="color:var(--danger)">' + c.fora + '</b>' : "0",
+          c.vazio ? '<span title="' + esc(c.vazioDet.slice(0, 60).join("; ") + (c.vazioDet.length > 60 ? "…" : "")) + '">' + (c.got < c.want ? '<b style="color:var(--danger)">' + c.vazio + '</b>' : c.vazio) + '</span>' : "0",
+          c.dup ? '<b style="color:var(--danger)" title="' + esc(c.dupDet.join("; ")) + '">' + c.dup + '</b>' : "0"]; }), "fx-left2") : "");
     if (q.noTreat.length) html += sec("No Planner sem Tratamento Ativo") + '<div class="pat-count"><b>' + q.noTreat.length + '</b> paciente(s) com atendimento no Planner e sem tratamento ativo:</div>' +
       tbl(["Paciente", "Situação do Paciente", "Atendimentos no Planner"], q.noTreat.slice(0, 200).map(function(x){
         var ts = state.treatments.filter(function(t){ return t.patientId === x.p.id; });
@@ -29011,7 +29022,7 @@ var HELP_TOPICS = [
       "<b>Copiar Semana</b>: copia as marcações de uma semana para outras semanas, nos dias e tipos escolhidos, só em células livres e dentro das regras (horário do terapeuta, bloqueios, conflitos). A prévia diz quantas vão e por que as outras ficam de fora.",
       "<b>Substituir Terapeuta</b>: para férias ou licença. Escolha o terapeuta ausente, o substituto e as semanas, dias e turnos; os atendimentos passam para a coluna do substituto na mesma sala, e os que não cabem (horário ocupado, fora do horário dele, conflito) ficam como estão, com o motivo. Diferente do Trocar Profissional, que passa as colunas para sempre. Para voltar: Ctrl+Z ou repita ao contrário.",
       "<b>Vagas Disponíveis</b>: escolha a especialidade, as semanas, os dias e a faixa de horário e veja as vagas livres (com um paciente escolhido, só as que ele pode usar; clique para agendar). Embaixo, <b>Quem Poderia Mudar de Lugar</b>: pacientes que ocupam a janela e têm outro horário livre com o mesmo tipo de terapeuta; clique para abrir no Planner.",
-      "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês, pacientes no Planner sem tratamento ativo (a tabela Sessões Colocadas × Contratadas também mostra, na coluna Fora do Horário, quantas sessões de cada paciente estão fora do Horário de Atendimento (serviço que não é Sessão marcado no dia e horário que o próprio quadro pede não conta) e lista quem tem alguma, mesmo com as sessões completas), fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno. Com a janela aberta, ela se atualiza sozinha quando o Planner, os tratamentos ou os pacientes mudam (por você ou por outra pessoa) e confere de novo a cada 15 segundos.",
+      "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês, pacientes no Planner sem tratamento ativo (a tabela Sessões Colocadas × Contratadas também mostra, na coluna Fora do Horário, quantas sessões de cada paciente estão fora do Horário de Atendimento (serviço que não é Sessão marcado no dia e horário que o próprio quadro pede não conta) e lista quem tem alguma, mesmo com as sessões completas; a coluna Horário Vazio conta os horários dentro do Horário de Atendimento do paciente, nas 4 semanas, sem sessão do serviço Sessão marcada — outros serviços são ignorados — e o mouse sobre o número mostra quais são; fica em vermelho quando faltam sessões; a coluna Mesmo Horário Repetido conta os dias e horários em que o paciente tem 2 ou mais agendamentos do mesmo serviço — Sessão ou outro, como duas Avaliações — e lista quem tem algum), fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno. Com a janela aberta, ela se atualiza sozinha quando o Planner, os tratamentos ou os pacientes mudam (por você ou por outra pessoa) e confere de novo a cada 15 segundos.",
       "<b>Pacientes Faltando Sessões</b>: lista quem tem sessões a menos (ou a mais) no Planner que o Sessão/Mês do tratamento; o botão <b>Sugerir</b> abre o Sugerir Agendamento já no paciente.",
       "<b>Cópias do Planner</b>: guarda até 5 versões com nome, compara e restaura. Restaurar pede duas confirmações, guarda sozinho uma cópia “Automática” do que estava antes e pode ser desfeito com Ctrl+Z.",
       "<b>Imprimir</b>: Grade por Terapeuta e Horário da Família (por paciente ou todos, com Copiar Texto para o WhatsApp) do Planner de agora.",
