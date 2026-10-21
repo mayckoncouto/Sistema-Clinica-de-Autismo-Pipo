@@ -39,6 +39,7 @@ const path = require('path');
   await page.$eval('#mainTabs button[data-tab="crm"]', (b) => b.click()); await page.waitForTimeout(300);
   await ev('(function(){ crmOpenTask(null, {listId: "atendimento"}); return true; })()');
   await page.waitForSelector('#crmWho');
+  await page.waitForTimeout(150);   // a janela leva o cursor para "Tarefa" logo depois de abrir
     await page.fill('#crmWho', 'a'); await page.dispatchEvent('#crmWho', 'input'); await page.waitForTimeout(150);
   const g2 = await geo('#crmWhoSug', '#crmWho');
   const shNo = await page.evaluate(() => { const l = document.querySelector('#crmWhoSug'); l.style.display = 'none'; const h = document.querySelector('#crmWho').closest('.modal-body').scrollHeight; l.style.display = ''; return h; });
