@@ -26,7 +26,7 @@ const path = require('path');
           signOut: function(){ sessionStorage.removeItem('__s'); ls.forEach(function(f){ f('SIGNED_OUT', null); }); return Promise.resolve({}); }
         },
         rpc: function(n){ return Promise.resolve({data: n === 'login_units' ? window.__cfg.units : null, error: null}); },
-        from: function(t){ var q = { select: function(){ return q; }, eq: function(){ return q; }, in: function(){ return q; }, maybeSingle: function(){ return Promise.resolve({data: t === 'roles' ? window.__cfg.testRole : window.__cfg.profile, error: null}); }, upsert: function(){ return Promise.resolve({data: null, error: null}); } }; return q; },
+        from: function(t){ var q = { select: function(){ return q; }, eq: function(){ return q; }, in: function(){ return q; }, maybeSingle: function(){ var d = {data: t === 'roles' ? window.__cfg.testRole : window.__cfg.profile, error: null}; return sessionStorage.getItem('__slow') ? new Promise(function(r){ setTimeout(function(){ r(d); }, 1500); }) : Promise.resolve(d); }, upsert: function(){ return Promise.resolve({data: null, error: null}); } }; return q; },
         channel: function(){ var c = { on: function(){ return c; }, subscribe: function(){ return c; } }; return c; },
         realtime: { setAuth: function(){} }
       };
@@ -124,6 +124,27 @@ const path = require('path');
       write: w.error && w.error.code, rpc: r.error && r.error.code, read: rr.error ? 'erro' : 'ok', name: document.getElementById('testNoteName').textContent };
   });
   check('test mode: acts as the tested level and blocks writes?', !tst.admin && tst.canPac && !tst.canPlan && tst.write === 'teste' && tst.rpc === 'teste' && tst.read === 'ok' && tst.name === 'Secretária', JSON.stringify(tst));
+  check('no JS errors?', s.errors.length === 0, s.errors.join(' | '));
+  await s.ctx.close();
+
+  // 8) segunda abertura: o sistema não espera /api/config nem o perfil para mostrar o topo (último perfil do aparelho)
+  s = await open({ units, profile: profile(role({ permissions: { pacientes: { view: true } } }), 'unidade-1') });
+  await login(s.page, null);
+  await s.page.waitForSelector('#userPill .user-name');
+  await s.page.evaluate(() => sessionStorage.setItem('__slow', '1'));
+  await s.page.unroute('http://pipo.test/**');
+  await s.page.route('http://pipo.test/**', (route) => {
+    const u = route.request().url();
+    if (u.endsWith('/api/config')) return new Promise((r) => setTimeout(r, 1500)).then(() => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ supabaseUrl: 'http://x', supabaseAnonKey: 'k' }) }));
+    return route.fulfill({ contentType: 'text/html', body: html });
+  });
+  await s.page.addInitScript(() => { window.pipoEarlyNav = function(){ window.__early = (window.__early || 0) + 1; window.__earlyCan = window.pipoAuth.can('pacientes', 'view'); }; });
+  await s.page.reload();
+  await s.page.waitForTimeout(600);
+  const ea = await s.page.evaluate(() => ({ pill: !!document.querySelector('#userPill .user-name'), prof: !!window.pipoAuth.profile(), early: window.__early, earlyCan: window.__earlyCan, canNow: window.pipoAuth.can('pacientes', 'view') }));
+  check('reopen: top bar and menus drawn before config and profile arrive (cached), nothing granted meanwhile?', ea.pill && !ea.prof && ea.early === 1 && ea.earlyCan === true && ea.canNow === false, JSON.stringify(ea));
+  await s.page.waitForFunction(() => !!window.pipoAuth.profile(), null, { timeout: 5000 });
+  check('reopen: real profile arrives afterwards?', await s.page.evaluate(() => window.pipoAuth.can('pacientes', 'view')));
   check('no JS errors?', s.errors.length === 0, s.errors.join(' | '));
   await s.ctx.close();
 

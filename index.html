@@ -5647,8 +5647,10 @@ function permToolClasses(){
   }
 }
 // Mostra/esconde abas e botões conforme as permissões do usuário logado.
-function applyPermissionsUI(){
-  if (HEALTH.map === null && healthCanSee()) healthLoad();
+// early = só desenha os menus do topo com o último perfil deste aparelho, enquanto o perfil de verdade
+// chega (pipoEarlyNav em js/pipo-supabase.js): não troca de tela e não carrega nada.
+function applyPermissionsUI(early){
+  if (!early && HEALTH.map === null && healthCanSee()) healthLoad();
   if (!window.pipoAuth) return;
   var tabModule = {planner:"planner", agenda:"agenda", visaogeral:"visao_geral", agendamentos:"agendamentos_lista", agendaplanner:"agenda_planner", plannerlist:"planner_list", resumo:"resumo", disponibilidade:"disponibilidade", pacientes:"pacientes", tratamentos:"tratamentos", tipostrat:"tipos_tratamento", profissionais:"colaboradores", salas:"salas", prontuario:"prontuario", planos:"plano_terapeutico", objetivos:"objetivos", atividades:"atividades", anamneses:"anamneses", tiposanam:"tipos_anamnese", escalas:"escalas", habilidades:"habilidades", relatorios:"relatorios", convenios:"convenios", servicos:"servicos", especialidades:"especialidades", motivos:"motivos_cancelamento", status:"cadastro_status", medicos:"medicos", escolas:"escolas", diagnosticos:"diagnosticos", origens:"origens", motivosbloq:"motivos_bloqueio", cbo:"cbo", conselhos:"conselhos", fornecedores:"fornecedores", catfornecedor:"categorias_fornecedor", unidades:"unidades", contratos:"contratos", contas:"contas_bancarias", planocontas:"plano_contas", demonstrativos:"financeiro", feriados:"feriados", colaboradores:"colaboradores", tiposcolab:"colaboradores", lancamentos:"financeiro", emptomados:"financeiro", empconcedidos:"financeiro", conciliacao:"financeiro", vendas:"vendas", painelvendas:"vendas", pagar:"financeiro", receber:"financeiro", automacoes:"crmautomacoes"};
   // Salas e Grupos de Suporte dividem a mesma tela.
@@ -5674,6 +5676,7 @@ function applyPermissionsUI(){
     if (!visible && k === state.tab) activeHidden = true;
   });
   renderCadMenu();
+  if (early) return;
   // Aba atual sem permissão (ou sem conteúdo visível): vai para a primeira permitida.
   var curSec = document.getElementById("tab-" + state.tab);
   if (activeHidden || !curSec){
@@ -5832,6 +5835,7 @@ function boot(){
   renderSalasTab();
   renderRelatorioTab();
   // staffLoad: depois do fim do script (o bloco do RH vem mais abaixo).
+  window.pipoEarlyNav = function(){ applyPermissionsUI(true); };
   if (window.pipoAuth) window.pipoAuth.onProfile(function(){ applyPermissionsUI(); setTimeout(staffLoad, 0); crmPreload(); setTimeout(intakeLoad, 0); if (state.tab === "crm") crmRender(); });
   else setTimeout(staffLoad, 0);
   connectDb();

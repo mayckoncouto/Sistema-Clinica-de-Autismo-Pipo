@@ -377,6 +377,7 @@
     }
     renderUserPill();
     testName(profile);
+    saveNavProfile(profile);
     profileListeners.forEach(function (fn) { try { fn(profile); } catch (e) { console.error(e); } });
   }
 
@@ -781,15 +782,36 @@
   }
 
   /* ---------------- inicialização ---------------- */
+  // Menus na hora: o último perfil deste aparelho (só o nível e o nome) desenha o topo enquanto o perfil de verdade
+  // chega do banco. Nada é carregado com ele; quando o perfil chega, tudo é refeito com o de verdade.
+  var NAV_KEY = "agendaPipo:navProfile";
+  function saveNavProfile(p) {
+    if (!p || p._test || !p.role) return;
+    lsSet(NAV_KEY, JSON.stringify({ uid: p.id, p: { id: p.id, active: p.active, email: p.email, full_name: p.full_name, unit_id: p.unit_id,
+      role: { id: p.role.id, name: p.role.name, is_admin: p.role.is_admin, is_manager: p.role.is_manager, all_units: p.role.all_units, permissions: p.role.permissions } } }));
+  }
+  function earlyNav(s) {
+    if (profile || !s || !s.user || ssGet(TEST_KEY)) return;
+    var c = null;
+    try { c = JSON.parse(lsGet(NAV_KEY) || "null"); } catch (e) {}
+    if (!c || c.uid !== s.user.id || !c.p || !c.p.active) return;
+    profile = c.p;
+    try { renderUserPill(); if (window.pipoEarlyNav) window.pipoEarlyNav(); } catch (e) {}
+    finally { profile = null; }
+  }
+
   function onSignedIn(s) {
     session = s;
-    return loadProfile().then(function (p) {
+    earlyNav(s);
+    // Perfil e unidades ao mesmo tempo (antes um esperava o outro).
+    return Promise.all([loadProfile(), loadUnits()]).then(function (res) {
+      var p = res[0];
       if (!p.active) {
         client.auth.signOut({ scope: "local" });
         showLogin("Seu acesso foi desativado. Fale com o administrador da clínica.");
         return;
       }
-      return loadUnits().then(function () {
+      return Promise.resolve().then(function () {
         var u = resolveUnit(p);
         if (u.erro) {
           ssSet(LOGIN_MSG_KEY, "Você não tem acesso a esta unidade.");
@@ -809,55 +831,80 @@
     });
   }
 
+  // Endereço e chave pública do banco ficam guardados neste aparelho: o sistema abre sem esperar /api/config
+  // (que é conferido em seguida; se mudou, a página recarrega com o novo).
+  var CFG_KEY = "agendaPipo:cfg";
+  function applyCfgBrand(cfg) {
+    // Cor dos botões da clínica já na tela de login (null = padrão; ausente = não leu).
+    if (cfg.clinica) {
+      if (cfg.clinica.nome) loginBrand.nome = cfg.clinica.nome;
+      if (cfg.clinica.subtitulo) loginBrand.sub = cfg.clinica.subtitulo;
+    }
+    if (cfg.theme !== undefined && window.pipoTheme) window.pipoTheme(cfg.theme && cfg.theme.corBotoes, cfg.theme && cfg.theme.corTexto);
+  }
+  function boot(cfg) {
+    if (!window.supabase || !window.supabase.createClient) throw new Error("biblioteca do Supabase não carregou");
+    client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    });
+    window.pipoAuth.client = client;
+    var handled = false;
+    client.auth.onAuthStateChange(function (event, s) {
+      if (event === "SIGNED_OUT") {
+        session = null;
+        profile = null;
+        if (handled) location.reload();
+        return;
+      }
+      if (s && !session) {
+        handled = true;
+        // Não chamar o Supabase direto dentro do callback (trava de sessão).
+        setTimeout(function () { onSignedIn(s); }, 0);
+      } else if (s) {
+        session = s;
+        if (client.realtime && client.realtime.setAuth) client.realtime.setAuth(s.access_token);
+      }
+    });
+    return client.auth.getSession().then(function (r) {
+      if (!r.data.session) { var m = ssGet(LOGIN_MSG_KEY); ssSet(LOGIN_MSG_KEY, null); showLogin(m || ""); }
+    });
+  }
+  function bootFail(e) {
+    var net = (navigator.onLine === false) || /load failed|failed to fetch|networkerror|network request failed|fetch failed/i.test(String((e && e.message) || e));
+    if (net) {
+      showLogin("Sem conexão com a internet. Confira o Wi-Fi ou os dados móveis; o sistema abre sozinho quando a conexão voltar.");
+      window.addEventListener("online", function () { location.reload(); }, { once: true });
+    } else {
+      showLogin("Sistema não configurado corretamente (" + (e.message || e) + "). Avise o administrador.");
+    }
+    var f = loginEl && loginEl.querySelector("button");
+    if (f) f.disabled = true;
+  }
   function start() {
     injectStyles();
     wireUserPill();
-    fetch("/api/config").then(function (r) {
+    var cached = null;
+    try { cached = JSON.parse(lsGet(CFG_KEY) || "null"); } catch (e) {}
+    if (!(cached && cached.supabaseUrl && cached.supabaseAnonKey)) cached = null;
+    var net = fetch("/api/config").then(function (r) {
       if (!r.ok) throw new Error("config " + r.status);
       return r.json();
     }).then(function (cfg) {
-      // Cor dos botões da clínica já na tela de login (null = padrão; ausente = não leu).
-      if (cfg.clinica) {
-        if (cfg.clinica.nome) loginBrand.nome = cfg.clinica.nome;
-        if (cfg.clinica.subtitulo) loginBrand.sub = cfg.clinica.subtitulo;
+      applyCfgBrand(cfg);
+      if (cfg.supabaseUrl && cfg.supabaseAnonKey) {
+        lsSet(CFG_KEY, JSON.stringify({ supabaseUrl: cfg.supabaseUrl, supabaseAnonKey: cfg.supabaseAnonKey,
+          clinica: cfg.clinica ? { nome: cfg.clinica.nome, subtitulo: cfg.clinica.subtitulo } : undefined }));
+        if (cached && (cached.supabaseUrl !== cfg.supabaseUrl || cached.supabaseAnonKey !== cfg.supabaseAnonKey)) location.reload();
       }
-      if (cfg.theme !== undefined && window.pipoTheme) window.pipoTheme(cfg.theme && cfg.theme.corBotoes, cfg.theme && cfg.theme.corTexto);
-      if (!window.supabase || !window.supabase.createClient) throw new Error("biblioteca do Supabase não carregou");
-      client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-        auth: { persistSession: true, autoRefreshToken: true }
-      });
-      window.pipoAuth.client = client;
-      var handled = false;
-      client.auth.onAuthStateChange(function (event, s) {
-        if (event === "SIGNED_OUT") {
-          session = null;
-          profile = null;
-          if (handled) location.reload();
-          return;
-        }
-        if (s && !session) {
-          handled = true;
-          // Não chamar o Supabase direto dentro do callback (trava de sessão).
-          setTimeout(function () { onSignedIn(s); }, 0);
-        } else if (s) {
-          session = s;
-          if (client.realtime && client.realtime.setAuth) client.realtime.setAuth(s.access_token);
-        }
-      });
-      return client.auth.getSession().then(function (r) {
-        if (!r.data.session) { var m = ssGet(LOGIN_MSG_KEY); ssSet(LOGIN_MSG_KEY, null); showLogin(m || ""); }
-      });
-    }).catch(function (e) {
-      var net = (navigator.onLine === false) || /load failed|failed to fetch|networkerror|network request failed|fetch failed/i.test(String((e && e.message) || e));
-      if (net) {
-        showLogin("Sem conexão com a internet. Confira o Wi-Fi ou os dados móveis; o sistema abre sozinho quando a conexão voltar.");
-        window.addEventListener("online", function () { location.reload(); }, { once: true });
-      } else {
-        showLogin("Sistema não configurado corretamente (" + (e.message || e) + "). Avise o administrador.");
-      }
-      var f = loginEl && loginEl.querySelector("button");
-      if (f) f.disabled = true;
+      return cfg;
     });
+    if (cached) {
+      applyCfgBrand({ clinica: cached.clinica });
+      net.catch(function () {});
+      try { boot(cached).catch(bootFail); } catch (e) { bootFail(e); }
+    } else {
+      net.then(boot).catch(bootFail);
+    }
   }
 
   window.pipoAuth = {
