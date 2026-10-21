@@ -22,7 +22,7 @@ const path = require('path');
   }, perms);
 
   // Só Pacientes em Cadastros e só Planner no menu Planner
-  await setPerm({ pacientes: ['view'], resumo: ['view'] });
+  await setPerm({ pacientes: ['view'], disponibilidade: ['view'] });
   const cad = page.locator('#cadBtn');
   console.log('only Pacientes allowed: button reads "Pacientes" (no arrow)?', (await cad.innerText()).trim() === 'Pacientes' && (await cad.locator('svg').count()) === 0);
   console.log('button has no menu popup?', (await cad.getAttribute('aria-haspopup')) === null);
@@ -31,10 +31,10 @@ const path = require('path');
   console.log('click opens the Pacientes screen directly (menu stays closed)?', await page.locator('#cadMenu').isHidden() &&
     await page.evaluate(() => window.__ev("state.tab") === 'pacientes'));
   console.log('the button is marked active on its screen?', await cad.evaluate((b) => b.classList.contains('active')));
-  console.log('only Resumo allowed: Planner menu button reads "Resumo"?', (await page.locator('#plBtn').innerText()).trim() === 'Resumo');
+  console.log('only Disponibilidade allowed: Planner menu button reads "Resumo"?', (await page.locator('#plBtn').innerText()).trim() === 'Disponibilidade');
   await page.click('#plBtn');
   await page.waitForTimeout(200);
-  console.log('click opens the Resumo directly?', await page.evaluate(() => window.__ev("state.tab") === 'resumo') && await page.locator('#plMenu').isHidden());
+  console.log('click opens Disponibilidade directly?', await page.evaluate(() => window.__ev("state.tab") === 'disponibilidade') && await page.locator('#plMenu').isHidden());
 
   // Pacientes + Tratamentos: volta a ser o menu "Cadastros"
   await setPerm({ pacientes: ['view'], tratamentos: ['view'], planner: ['view'] });
