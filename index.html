@@ -2428,8 +2428,9 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #tab-agenda .agd-side .agd-filter,#tab-agenda #agdResList{display:none}
   #tab-agenda .agd-pick{display:block}
   #tab-agenda .agd-pick .dp-btn{width:100%}
-  .pm-grid{grid-template-columns:minmax(0,1fr)}
-  .pm-grid .pm-span2{grid-column:auto}
+  .pm-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pm-grid > .field,.pm-grid .pm-span2{grid-column:1/-1}
+  .pm-grid > .field.pm-short{grid-column:auto}
   .pm-row{flex-wrap:wrap}
   .pm-row-tel > input:first-child{flex:1 1 100%}
   .pm-row > input:first-child:not(:only-of-type){flex:1 1 100%}
@@ -12726,6 +12727,24 @@ function wirePatHoursMenu(tbl){
   document.addEventListener("mousedown", function(e){ if (!tm.hidden && !e.target.closest("#pHoursMore")) setOpen(false); });
   document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !tm.hidden){ e.stopPropagation(); setOpen(false); tb.focus(); } }, true);
 }
+// Horário de Atendimento do tratamento mais recente do paciente que tem horário preenchido (para o tratamento novo).
+function trPrevHorarios(pid){
+  var last = (state.treatments || []).filter(function(t){ return t.patientId === pid && t.horarios && Object.keys(t.horarios).length; })
+    .sort(function(a, b){ return String(b.inicio || "").localeCompare(String(a.inicio || "")) || String(b.criadoEm || "").localeCompare(String(a.criadoEm || "")); })[0];
+  return last ? cloneJson(last.horarios) : null;
+}
+// Preenche a tabela #pHours com um horário salvo (dias que não estão na tabela ficam de fora).
+function fillPatHours(h){
+  var tbl = document.getElementById("pHours"); if (!tbl || !h) return;
+  Array.prototype.forEach.call(tbl.querySelectorAll("tbody tr"), function(tr){
+    var k = tr.getAttribute("data-day"), d = h[k] || {ativo: false}, on = !!d.ativo;
+    tr.querySelector(".cl-ativo").checked = on;
+    [["mi", d.manha && d.manha.inicio], ["mf", d.manha && d.manha.fim], ["ti", d.tarde && d.tarde.inicio], ["tf", d.tarde && d.tarde.fim]].forEach(function(x){
+      var el = document.getElementById("ph-" + k + "-" + x[0]); el.value = x[1] || ""; el.disabled = !on;
+    });
+  });
+  if (tbl.__recount) tbl.__recount();
+}
 function readPatHours(){
   var tbl = document.getElementById("pHours"); if (!tbl) return undefined;
   var out = {};
@@ -13042,6 +13061,18 @@ function openTreatLineModal(ctx){
     var cur = $("tlProf").value; $("tlProf").innerHTML = specProfOptions($("tlSpec").value, cur);
     $("tlProf").value = specProfessionals($("tlSpec").value).some(function(p){ return p.id === cur; }) ? cur : "";
     $("tlProf").dispatchEvent(new Event("change", {bubbles: true}));
+  });
+  // Profissional escolhido e sala vazia: sugere a sala onde ele tem mais colunas.
+  $("tlProf").addEventListener("change", function(){
+    var pid = $("tlProf").value, rs = $("tlRoom"); if (!pid || rs.value) return;
+    var best = null, bn = 0;
+    physicalRooms().forEach(function(x){
+      var n = (x.therapists || []).filter(function(t){ return t.professionalId === pid; }).length;
+      if (n > bn && Array.prototype.some.call(rs.options, function(o){ return o.value === x.id; })){ best = x; bn = n; }
+    });
+    if (!best) return;
+    rs.value = best.id; rs.dispatchEvent(new Event("change", {bubbles: true}));
+    showToast("Sala sugerida pelo profissional: " + best.name + " (confira).");
   });
   var diaMs = $("tlDiaMs"), diaBtn = diaMs.querySelector(".ms-btn"), diaPanel = $("tlDia");
   function diaVal(){ return Array.prototype.map.call(diaPanel.querySelectorAll("input:checked"), function(c){ return c.value; }).join(","); }
@@ -13381,6 +13412,7 @@ function treatFieldsEditor(v, opts){
     // Tratamento novo: escolher o paciente traz o convênio do cadastro dele (se o campo ainda está vazio); pode ser editado depois.
     var trPatSel = document.getElementById("trPat");
     if (trPatSel && v._novo) trPatSel.addEventListener("change", function(){
+      if (readPatHours() === null){ var ph = trPrevHorarios(trPatSel.value); if (ph){ fillPatHours(ph); showToast("Horário de Atendimento copiado do tratamento anterior (confira)."); } }
       if (convInput.value.trim() && draftConvenioId) return;
       var pc = patConvDefault(rawPatient(trPatSel.value));
       if (!pc.id) return;
@@ -13537,6 +13569,8 @@ var CID_SUGGESTIONS = [
   "R63.3 Dificuldades de alimentação",
   "R63.8 Outros sintomas e sinais relativos à ingestão de alimentos e líquidos"
 ];
+// No celular, estes campos curtos ficam dois por linha (os demais ocupam a linha toda).
+var PAT_SHORT = {nascimento: 1, sexo: 1, cpf: 1, rg: 1, cns: 1, diagData: 1, suporte: 1, escolaTurno: 1, escolaSerie: 1, entrada: 1, carteirinha: 1, carteirinhaValidade: 1};
 var PAT_FIELDS = [
   {key: "nome", label: "Nome", sec: "ident", lock: true, wide: true},
   {key: "nascimento", label: "Data de Nascimento", sec: "ident", type: "date"},
@@ -13964,8 +13998,8 @@ function patAddressHtml(e){
   e = e || {};
   function inp(k, label, extra, cls){ return '<div class="field' + (cls ? ' ' + cls : '') + '"><label for="pa-' + k + '">' + label + '</label><input id="pa-' + k + '" type="text"' + (extra || '') + ' value="' + esc(e[k] || "") + '"></div>'; }
   return '<div class="pm-grid">' +
-    inp("cep", "CEP", ' inputmode="numeric" placeholder="00000-000" maxlength="9"') + inp("rua", "Rua", '', 'pm-span2') + inp("numero", "Número") + inp("compl", "Complemento") +
-    inp("bairro", "Bairro") + inp("cidade", "Cidade", '', 'pm-span2') + inp("uf", "UF", ' maxlength="2" style="text-transform:uppercase"') + '</div>' +
+    inp("cep", "CEP", ' inputmode="numeric" placeholder="00000-000" maxlength="9"', 'pm-short') + inp("rua", "Rua", '', 'pm-span2') + inp("numero", "Número", '', 'pm-short') + inp("compl", "Complemento", '', 'pm-short') +
+    inp("bairro", "Bairro") + inp("cidade", "Cidade", '', 'pm-span2') + inp("uf", "UF", ' maxlength="2" style="text-transform:uppercase"', 'pm-short') + '</div>' +
     '<div class="pat-count" id="paCepMsg">Digite o CEP para preencher rua, bairro, cidade e UF.</div>';
 }
 function patAddressText(e){
@@ -14180,8 +14214,8 @@ function openPatientModal(p, opts){
     } else {
       optMode = fs.length > 1 && fs.filter(function(f){ return patFieldCfg(f.key).req; }).length * 2 > fs.length;
       html = '<div class="pm-grid">' + fs.filter(function(f){ return f.type !== "referral"; }).map(function(f){
-        var cell = '<div class="field' + (f.wide || f.type === "area" || f.type === "line" ? ' pm-wide' : f.span2 ? ' pm-span2' : '') + '" data-pf="' + f.key + '">' + patFieldInputHtml(f, v).replace('</label>', reqMark(f.key) + '</label>') + '</div>';
-        if (f.key === "nascimento") cell += '<div class="field" id="pIdadeField"></div>';
+        var cell = '<div class="field' + (f.wide || f.type === "area" || f.type === "line" ? ' pm-wide' : f.span2 ? ' pm-span2' : '') + (PAT_SHORT[f.key] || f.type === "check" ? ' pm-short' : '') + '" data-pf="' + f.key + '">' + patFieldInputHtml(f, v).replace('</label>', reqMark(f.key) + '</label>') + '</div>';
+        if (f.key === "nascimento") cell += '<div class="field pm-short" id="pIdadeField"></div>';
         return cell;
       }).join("") + '</div>';
       if (sec.id === "bloqueio") html += '<div class="pat-count" id="pBloqNote">' + esc(patBlockNote(v)) + '</div>';
@@ -16041,6 +16075,11 @@ function openStaffModal(entry, opts){
   }
   if ($("profSpecialty")) $("profSpecialty").addEventListener("change", function(){
     complDraft = complDraft.filter(function(id){ return id !== $("profSpecialty").value; }); complRender();
+    var ce = $("profConselho"), sg = councilForSpec($("profSpecialty").value);
+    if (ce && !ce.value && sg && Array.prototype.some.call(ce.options, function(o){ return o.value === sg; })){
+      ce.value = sg; ce.dispatchEvent(new Event("change", {bubbles: true}));
+      showToast("Conselho sugerido pela especialidade (confira).");
+    }
   });
   function complValue(){
     var main = $("profSpecialty") ? $("profSpecialty").value : "", seen = {};
@@ -16612,6 +16651,19 @@ var DEFAULT_COUNCILS = [["CRP", "Conselho Regional de Psicologia"], ["CRFa", "Co
   ["CREFITO", "Conselho Regional de Fisioterapia e Terapia Ocupacional"], ["CRN", "Conselho Regional de Nutricionistas"],
   ["CRM", "Conselho Regional de Medicina"], ["CREF", "Conselho Regional de Educação Física"],
   ["CRESS", "Conselho Regional de Serviço Social"], ["ABPp", "Associação Brasileira de Psicopedagogia"]];
+// conselho sugerido para a especialidade: o mais usado pelos profissionais dela; sem nenhum, pelo nome
+var COUNCIL_BY_SPEC = [[/^psicopedag/, "ABPp"], [/^psicolog/, "CRP"], [/^fono/, "CRFa"], [/^fisio|^terapia ocupacional|^to$/, "CREFITO"],
+  [/^nutri/, "CRN"], [/^medic|^neuro|^psiquiat|^pediatr/, "CRM"], [/^educacao fisica|^psicomotric/, "CREF"], [/^servico social|^assistente social/, "CRESS"]];
+function councilForSpec(specId){
+  if (!specId) return "";
+  var cnt = {};
+  (state.professionals || []).forEach(function(p){ if (p.specialtyId === specId && p.conselho) cnt[p.conselho] = (cnt[p.conselho] || 0) + 1; });
+  var best = Object.keys(cnt).sort(function(a, b){ return cnt[b] - cnt[a]; })[0];
+  if (best) return best;
+  var n = normText(specialtyName(specId) || "");
+  for (var i = 0; i < COUNCIL_BY_SPEC.length; i++) if (COUNCIL_BY_SPEC[i][0].test(n)) return COUNCIL_BY_SPEC[i][1];
+  return "";
+}
 function councilKey(s){ return normText(String(s || "").trim()).replace(/[^a-z0-9]/g, ""); }
 function councilList(){
   if (state.councils && state.councils.length) return state.councils.slice();
@@ -27052,6 +27104,7 @@ function openTreatmentModal(t, opts){
     var pcd = patConvDefault(rawPatient(pid));
     if (pcd.id){ v.convenioId = pcd.id; v.convenio = pcd.nome; }
   }
+  if (!src && pid && !v.horarios){ var ph = trPrevHorarios(pid); if (ph){ v.horarios = ph; } }
   if (isNew && !src) v._novo = true;   // tratamento novo do zero: Intervenção ABA começa desmarcada
   var d = {
     inicio: isNew ? trTodayIso() : (t.inicio || ""),
@@ -29059,7 +29112,7 @@ var HELP_TOPICS = [
       "<b>Não Agrupar com</b> (ao lado de Sessão/Mês): marque os pacientes que não devem ficar juntos na mesma sala e horário; o Auto Planner respeita nos dois sentidos.",
       "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava. A coluna <b>Sessões</b> mostra quantos horários da clínica cabem nas faixas de cada dia, e abaixo da tabela fica a soma: sessões disponíveis por semana × o <b>Período</b> do tratamento (campo ao lado de Sessão/Mês: Semanal × 4, Quinzenal × 2, Mensal × 1) = por mês. O Período já vem como Semanal."
     ],
-    rules: [
+    rules: ["Tratamento novo (sem renegociar) já vem com o Horário de Atendimento do tratamento anterior do paciente, quando houver; no quadro de uma especialidade, ao escolher o profissional com a sala em branco, o sistema sugere a sala onde ele tem mais colunas. Confira antes de salvar.", 
       "Agendar com outro terapeuta ou fora do horário do paciente <b>não é proibido</b>, mas o sistema pede confirmação duas vezes (Planner e Agenda).",
       "O <b>ABA</b> fica só no quadro de cada especialidade (Sim ou Não). O quadro novo já vem com a regra automática: <b>Sim</b> para todos, <b>Não</b> quando o paciente tem nível de suporte 3 ou 17 anos ou mais. Pode ser trocado à mão em cada quadro.",
       "No Planner e na Agenda, a cor do paciente e as regras de \u201csem Intervenção ABA\u201d usam o ABA do quadro da especialidade do atendimento (especialidade principal ou complementar do profissional; serviço diferente de Sessão = o quadro do serviço). Atendimento sem quadro no tratamento usa a regra automática.",
@@ -29121,7 +29174,7 @@ var HELP_TOPICS = [
       "<b>Acesso ao sistema</b>: e-mail, nível de permissão e senha do usuário; depois, nova senha e acesso ativo.",
       "Busque por nome, cargo ou CPF e filtre pelo tipo. \"Inativos\" mostra também os desligados."
     ],
-    rules: [
+    rules: ["Ao escolher a especialidade principal com o Conselho em branco, o sistema sugere o Conselho: o mais usado pelos profissionais dessa especialidade ou, sem nenhum, o da profissão (Psicologia → CRP, Fonoaudiologia → CRFa…). Confira antes de salvar.", 
       "O CPF fica só no cadastro do colaborador, que aparece apenas para quem tem a permissão Colaboradores. A parte de atendimento (usada pelo Planner e pela Agenda) guarda nome, nome social, especialidades, serviços e horário.",
       "Quem atende tem uma situação só: inativar ou reativar o colaborador vale também para o Planner e a Agenda. Tirar o tipo Profissional tira a pessoa da grade, sem inativar o colaborador.",
       "A soma das formas de pagamento é comparada com o valor contratado (aviso quando não confere).",
@@ -29222,7 +29275,7 @@ var HELP_TOPICS = [
   {id: "lancamentos", group: "Financeiro", title: "Lançamentos", mod: "financeiro", tab: "lancamentos",
     purpose: "Toda a movimentação das contas: o que entrou e o que saiu, com a conta, a data, a descrição, a subcategoria do Plano de Contas e o valor. É a base do saldo de cada conta e dos Demonstrativos (Fluxo de Caixa e DRE).",
     steps: ["Financeiro → <b>Lançamentos</b>. Escolha o <b>mês</b>, a <b>conta</b> e o <b>tipo</b> para filtrar; a busca procura na descrição, na conta e na subcategoria.", "<b>+ Incluir</b>: escolha a conta, a data, escreva a descrição, escolha a subcategoria e digite o valor (sempre positivo). Se quiser conferir com o banco, preencha a data e o valor do extrato.", "Clique numa linha para editar ou excluir.", "<b>Outras Opções ▾</b> exporta e importa os lançamentos por planilha Excel, com as mesmas colunas da aba FLUXO (Conta, Descrição, Data, Valor, Sub-Categoria, Data Extrato, Valor Extrato) e abre o <b>Fechamento de Mês</b>."],
-    rules: ["O sinal vem da subcategoria: <b>Receita</b> e <b>Entrada</b> somam no saldo; <b>Despesa</b> e <b>Saída</b> diminuem. Só Receita e Despesa entram no resultado (DRE).", "O <b>saldo de cada conta</b> é o saldo inicial (Financeiro → Contas Bancárias) mais os lançamentos desde a data desse saldo; ele só aparece para quem tem <b>Financeiro – Valores</b>.", "Valor diferente do extrato fica em destaque, para você conferir.", "Importar a mesma planilha de novo não duplica: lançamento igual (conta, data, descrição, valor e subcategoria) aparece como Igual. Conta ou subcategoria que não está cadastrada, ou mês fechado, vira “Com problema” e não é importado.", "Mês fechado mostra um cadeado e não aceita incluir, editar, excluir nem importar lançamentos; reabra o mês em Outras Opções → Fechamento de Mês.", "Conta ou subcategoria que já tem lançamentos não é excluída: é <b>Inativada</b>. <b>Excluir</b> um lançamento pede sempre uma confirmação."],
+    rules: ["Num lançamento novo sem subcategoria, ao digitar a descrição o sistema sugere a subcategoria usada nos lançamentos parecidos (a mesma regra da Conciliação). Confira antes de salvar.", "O sinal vem da subcategoria: <b>Receita</b> e <b>Entrada</b> somam no saldo; <b>Despesa</b> e <b>Saída</b> diminuem. Só Receita e Despesa entram no resultado (DRE).", "O <b>saldo de cada conta</b> é o saldo inicial (Financeiro → Contas Bancárias) mais os lançamentos desde a data desse saldo; ele só aparece para quem tem <b>Financeiro – Valores</b>.", "Valor diferente do extrato fica em destaque, para você conferir.", "Importar a mesma planilha de novo não duplica: lançamento igual (conta, data, descrição, valor e subcategoria) aparece como Igual. Conta ou subcategoria que não está cadastrada, ou mês fechado, vira “Com problema” e não é importado.", "Mês fechado mostra um cadeado e não aceita incluir, editar, excluir nem importar lançamentos; reabra o mês em Outras Opções → Fechamento de Mês.", "Conta ou subcategoria que já tem lançamentos não é excluída: é <b>Inativada</b>. <b>Excluir</b> um lançamento pede sempre uma confirmação."],
     who: "Permissão <b>Financeiro</b> (ver, incluir, editar e excluir) em Níveis de Permissão; o saldo das contas, com <b>Financeiro – Valores</b>."},
   {id: "contas-pagar-receber", group: "Financeiro", title: "Contas a Pagar e a Receber", mod: "financeiro", tab: "pagar",
     purpose: "O que a clínica ainda vai pagar ou receber: aluguel, salários, fornecedores, repasses de convênio. Quando a conta é paga ou recebida, ela vira um lançamento. As contas em aberto alimentam a coluna “previsto” do Fluxo de Caixa, que fica mais exata do que só a média dos meses anteriores.",
@@ -37595,6 +37648,15 @@ function openLancamento(row, opts){
     h.textContent = p ? p.tipo + " · " + (p.categoria || "") + (p.tipo === "Receita" || p.tipo === "Entrada" ? " — soma no saldo da conta" : " — diminui o saldo da conta") : "";
   }
   document.getElementById("flSub").addEventListener("change", subHint); subHint();
+  // Lançamento novo sem subcategoria: a descrição sugere a usada nos lançamentos parecidos.
+  if (isNew) document.getElementById("flDesc").addEventListener("change", function(){
+    var se = document.getElementById("flSub"); if (se.value || typeof cnLearnPlan !== "function") return;
+    var lp = cnLearnPlan(this.value, document.getElementById("flConta").value, 0);
+    if (!lp || !Array.prototype.some.call(se.options, function(o){ return o.value === lp.plan; })) return;
+    se.value = lp.plan; se.dispatchEvent(new Event("change", {bubbles: true}));
+    var lh = document.getElementById("flSubHint"); lh.textContent += (lh.textContent ? " · " : "") + "Sugerida pelo histórico: " + cnLearnText(lp);
+    showToast("Subcategoria sugerida pelos lançamentos parecidos (confira).");
+  });
   if (opts && opts.learned && document.getElementById("flSub").value === opts.learned.plan){ var lh = document.getElementById("flSubHint"); lh.textContent += (lh.textContent ? " · " : "") + "Sugerida pelo histórico: " + cnLearnText(opts.learned); }
   ["flValor", "flExtVal"].forEach(function(id){
     var el = document.getElementById(id);
