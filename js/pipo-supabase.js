@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var MODULES = ["agenda", "agenda_planner", "agendamentos_lista", "esp_bloqueado", "esp_reuniao", "esp_treinamento", "esp_reserva", "visao_geral", "gerenciar_status", "historico_planner", "historico_agenda", "planner", "planner_list", "bloqueio_horario", "autoplanner", "autoplanner_enviar", "resumo", "disponibilidade", "pacientes", "saude_paciente", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "diagnosticos", "origens", "motivos_bloqueio", "cbo", "conselhos", "fornecedores", "categorias_fornecedor", "contas_bancarias", "plano_contas", "financeiro_valores", "vendas", "comissoes", "feriados", "campos_paciente", "pgrp_ident", "pgrp_endereco", "pgrp_filiacao", "pgrp_rotina", "pgrp_protetiva", "pgrp_contato", "pgrp_financeiro", "pgrp_convenio", "pgrp_bloqueio", "pgrp_encaminhamento", "pgrp_escola", "pgrp_rotinaatual", "pgrp_admin", "pgrp_tratamento", "tipos_tratamento", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "objetivos", "atividades", "anamneses", "tipos_anamnese", "escalas", "habilidades", "colaboradores", "colaboradores_valores", "financeiro", "fechamento_mes", "contratos", "conector_claude"];
+  var MODULES = ["agenda", "agenda_planner", "agendamentos_lista", "esp_bloqueado", "esp_reuniao", "esp_treinamento", "esp_reserva", "visao_geral", "gerenciar_status", "historico_planner", "historico_agenda", "planner", "planner_list", "bloqueio_horario", "resumo", "disponibilidade", "pacientes", "saude_paciente", "tratamentos", "tratamentos_valores", "motivos_cancelamento", "medicos", "escolas", "diagnosticos", "origens", "motivos_bloqueio", "cbo", "conselhos", "fornecedores", "categorias_fornecedor", "contas_bancarias", "plano_contas", "financeiro_valores", "vendas", "comissoes", "feriados", "campos_paciente", "pgrp_ident", "pgrp_endereco", "pgrp_filiacao", "pgrp_rotina", "pgrp_protetiva", "pgrp_contato", "pgrp_financeiro", "pgrp_convenio", "pgrp_bloqueio", "pgrp_encaminhamento", "pgrp_escola", "pgrp_rotinaatual", "pgrp_admin", "pgrp_tratamento", "tipos_tratamento", "convenios", "servicos", "especialidades", "salas", "grupos", "clinica", "cadastro_status", "prontuario", "plano_terapeutico", "objetivos", "atividades", "anamneses", "tipos_anamnese", "escalas", "habilidades", "colaboradores", "colaboradores_valores", "financeiro", "fechamento_mes", "contratos", "conector_claude"];
   var ACTIONS = ["view", "create", "edit", "delete"];
 
   var client = null;
@@ -331,11 +331,7 @@
     {key: "ferr_pl_conferencia", panel: "planner", label: "Conferência do Planner", hint: "relatório de qualidade do Planner", from: [["planner", "view"]], sel: "#plConfBtn"},
     {key: "ferr_pl_faltando", panel: "planner", label: "Pacientes Faltando Sessões", hint: "quem tem sessões a menos ou a mais", from: [["planner", "view"]], sel: "#plMissBtn"},
     {key: "ferr_pl_exportar", panel: "planner", label: "Exportar Excel", hint: "baixar o Planner em planilha", from: [["planner", "view"]], sel: "#plExportBtn"},
-    // Auto Planner
-    {key: "ferr_ap_montar", panel: "autoplanner", label: "Montar Proposta", hint: "propor as sessões que faltam", from: [["autoplanner", "create"]], sel: "#autoPlannerBtn"},
-    {key: "ferr_ap_qualidade", panel: "autoplanner", label: "Relatório de Qualidade", hint: "conferir a grade do Auto Planner", from: [["autoplanner", "view"]], sel: "#apQualityBtn"},
-    {key: "ferr_ap_rascunhos", panel: "autoplanner", label: "Rascunhos e Comparar", hint: "guardar até 5 versões e comparar", from: [["autoplanner", "edit"]], sel: "#apDraftsBtn"},
-    {key: "ferr_ap_imprimir", panel: "autoplanner", label: "Imprimir", hint: "grade por terapeuta e horário da família", from: [["autoplanner", "view"]], sel: "#apPrintBtn"},
+    {key: "ferr_pl_imprimir", panel: "planner", label: "Imprimir", hint: "grade por terapeuta e horário da família", from: [["planner", "view"]], sel: "#plPrintBtn"},
     // Agenda (Outras Opções)
     {key: "ferr_ag_limpar", panel: "agenda", label: "Limpar por Período", hint: "Agenda → Outras Opções", from: [["agenda", "delete"]], agd: "limpar"},
     {key: "ferr_ag_bloquear", panel: "agenda", label: "Bloquear Período", hint: "Agenda → Outras Opções", from: [["agenda", "create"]], agd: "bloquear"},

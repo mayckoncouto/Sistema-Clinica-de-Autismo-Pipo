@@ -32,6 +32,12 @@ const v = count(/^var\s+([A-Za-z0-9_$]+)\s*=/gm); v.length ? fail("var repetida 
 const body = idx.slice(0, idx.indexOf("<script"));
 const ids = {}; let m; const re = /\sid="([^"]+)"/g; while ((m = re.exec(body))) ids[m[1]] = (ids[m[1]] || 0) + 1;
 const dup = Object.keys(ids).filter((k) => ids[k] > 1); dup.length ? fail("ids repetidos: " + dup.join(", ")) : ok("sem id repetido no HTML");
+// 3b. id de tela (HTML fixo) repetido numa janela montada pelo script: os dois ficam na página juntos e
+// getElementById pega o da tela (aconteceu com pvFrom/pvTo do Painel de Vendas × Abrir Vaga, 2026-10-21).
+const scriptIds = {}; idx.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/g, (_, code) => { let x; const r2 = /\bid="([A-Za-z][\w-]*)"/g; while ((x = r2.exec(code))) scriptIds[x[1]] = 1; return ""; });
+const staticIds = {}; idx.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "").replace(/\sid="([A-Za-z][\w-]*)"/g, (_, k) => { staticIds[k] = 1; return ""; });
+const both = Object.keys(staticIds).filter((k) => scriptIds[k]);
+both.length ? fail("id da tela repetido em janela do script: " + both.join(", ")) : ok("sem id da tela repetido nas janelas");
 
 // 4. Nomes proibidos (bloqueadores de anúncio) em classes/ids
 const ad = idx.match(/(?:id|class)="[^"]*\b(?:ad|ads|ad-[a-z-]+|advert[a-z-]*|banner[a-z-]*|sponsor[a-z-]*|promo[a-z-]*)\b[^"]*"/g);

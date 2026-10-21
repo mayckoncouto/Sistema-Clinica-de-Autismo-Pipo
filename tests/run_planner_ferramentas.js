@@ -43,8 +43,8 @@ const path = require('path');
 
   // menu
   await page.click('#plToolsBtn');
-  check('Planner mode: new buttons visible, Relatório de Qualidade/Montar Proposta hidden?', !(await hidden('plConfBtn')) && !(await hidden('plMissBtn')) && !(await hidden('plCopiesBtn')) && !(await hidden('plSubBtn')) && !(await hidden('plVagaBtn')) && !(await hidden('plCopyWeekBtn')) && !(await hidden('apPrintBtn')) && (await hidden('apQualityBtn')) && (await hidden('autoPlannerBtn')));
-  check('Limpar Semana became Limpar por Filtro; Imprimir e Exportar became Imprimir?', (await page.$eval('#plClearWeekBtn', (b) => b.textContent)) === 'Limpar por Filtro' && (await page.$eval('#apPrintBtn', (b) => b.textContent)) === 'Imprimir');
+  check('Planner tools visible and the Auto Planner buttons are gone?', !(await hidden('plConfBtn')) && !(await hidden('plMissBtn')) && !(await hidden('plCopiesBtn')) && !(await hidden('plSubBtn')) && !(await hidden('plVagaBtn')) && !(await hidden('plCopyWeekBtn')) && !(await hidden('plPrintBtn')) && !(await page.$('#apQualityBtn')) && !(await page.$('#autoPlannerBtn')) && !(await page.$('#apDraftsBtn')) && !(await page.$('#apSendPlannerBtn')) && !(await page.$('#mainTabs button[data-tab="autoplanner"]')));
+  check('Limpar Semana became Limpar por Filtro; Imprimir e Exportar became Imprimir?', (await page.$eval('#plClearWeekBtn', (b) => b.textContent)) === 'Limpar por Filtro' && (await page.$eval('#plPrintBtn', (b) => b.textContent)) === 'Imprimir');
   await page.click('#plToolsBtn');
 
   // 1. Conferência do Planner
@@ -74,7 +74,7 @@ const path = require('path');
 
   // 3. Imprimir no Planner
   await ev(`window.__printed = null; demPrintFrame = function(t, css, body){ window.__printed = {t: t, body: body}; };`);
-  await openTool('apPrintBtn'); await page.waitForSelector('#ovApP');
+  await openTool('plPrintBtn'); await page.waitForSelector('#ovApP');
   check('Imprimir modal says Planner (not Auto Planner)?', /Planner agora/.test(await page.innerText('#ovApP')) && !/Excel/.test(await page.innerText('#ovApP')));
   await page.click('#appPrintTher'); await page.waitForFunction(() => window.__ev('window.__printed') !== null);
   const pr = JSON.parse(await ev('JSON.stringify(window.__printed)'));
@@ -146,24 +146,14 @@ const path = require('path');
   const s2n = await store('schedule/seg-2');
   check('other weeks not touched by the substitution?', s2n['07:20|rA|a1'] && s2n['07:20|rA|a1'].patient === 'Paciente A');
 
-  // 5b. Completar com o Auto Planner: copia o Planner para o Auto Planner e abre a Montar Proposta só para o paciente marcado
-  await openTool('plMissBtn'); await page.waitForSelector('#ovPlMs input[data-pm]');
-  check('Completar button available in Planner mode?', !(await hidden('pmAuto')));
-  await page.click('#pmAuto'); await page.waitForSelector('.confirm-overlay button.primary, .confirm-overlay .btn:not(.ghost)');
-  await page.click('.confirm-overlay button.primary, .confirm-overlay .btn:not(.ghost)');
-  await page.waitForSelector('#ovAp #apRun'); await page.waitForTimeout(500);
-  check('Auto Planner open with the preset text?', await ev('PLA.on') && /1<\/b> paciente|1 paciente/.test(await page.$eval('#apOut', (e) => e.innerHTML)), (await page.$eval('#apOut', (e) => e.textContent)).slice(0, 120));
-  const autoS1 = await ev(`JSON.stringify((window.__STORE__["autoplan/seg-1"] || {}).bookings || {})`).then(JSON.parse);
-  const realS1 = await store('schedule/seg-1');
-  check('Auto Planner grid now equals the real Planner (seg-1)?', Object.keys(realS1).filter((k) => realS1[k].patient).every((k) => autoS1[k] && autoS1[k].patient === realS1[k].patient), JSON.stringify(Object.keys(autoS1)));
-  await page.click('#apRun'); await page.waitForFunction(() => /sessões? propostas?|sessão proposta|Nada|Bloqueado|não couberam/.test(document.getElementById('apOut').textContent));
-  const prop = await page.$eval('#apOut', (e) => e.textContent);
-  check('proposal runs only for Paciente A?', /Paciente A/.test(prop) && !/Paciente B/.test(prop), prop.replace(/\s+/g, ' ').slice(0, 160));
-  await page.click('#apClose');
-  // Auto Planner mode: buttons of the real Planner hidden, old ones back
-  await page.click('#plToolsBtn');
-  check('Auto Planner mode: Relatório de Qualidade/Rascunhos visible, Conferência/Cópias/Faltando hidden, Substituir/Vaga/Copiar Semana visible?', !(await hidden('apQualityBtn')) && !(await hidden('apDraftsBtn')) && (await hidden('plConfBtn')) && (await hidden('plCopiesBtn')) && (await hidden('plMissBtn')) && !(await hidden('plSubBtn')) && !(await hidden('plVagaBtn')) && !(await hidden('plCopyWeekBtn')) && !(await hidden('apPrintBtn')));
-  await page.click('#plToolsBtn');
+  // 5b. Pacientes Faltando Sessões: o botão Sugerir abre o Sugerir Agendamento já no paciente
+  await openTool('plMissBtn'); await page.waitForSelector('#ovPlMs [data-pm-sug]');
+  check('Faltando Sessões has Sugerir and no Auto Planner button?', !(await page.$('#pmAuto')) && !!(await page.$('#ovPlMs [data-pm-sug]')));
+  const sugPid = await page.$eval('#ovPlMs [data-pm-sug]', (b) => b.getAttribute('data-pm-sug'));
+  await page.click('#ovPlMs [data-pm-sug]'); await page.waitForSelector('#ovPlSg');
+  await page.waitForFunction(() => !/Escolha um paciente|Analisando/.test(document.getElementById('sgOut').textContent), null, {timeout: 5000}).catch(() => {});
+  check('Sugerir opened on that patient?', (await page.$eval('#sgPat', (e) => e.value)) === sugPid, sugPid);
+  await page.$eval('#ovPlSg [data-plt-x]', (b) => b.click());
 
   check('no JS errors?', errors.length === 0, errors.join('|'));
   fs.unlinkSync(evPage);

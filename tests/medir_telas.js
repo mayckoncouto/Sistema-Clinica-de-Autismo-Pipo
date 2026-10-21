@@ -2,7 +2,7 @@
 // Uso: node tests/build.js && node tests/medir_telas.js   — parte do protocolo "Verificação Completa" (passo 6).
 const { chromium } = require('playwright');
 const path = require('path');
-const TABS = ['planner', 'autoplanner', 'resumo', 'disponibilidade', 'agenda', 'agendaplanner', 'agendamentos', 'visaogeral', 'prontuario', 'planos', 'crm',
+const TABS = ['planner', 'resumo', 'disponibilidade', 'agenda', 'agendaplanner', 'agendamentos', 'visaogeral', 'prontuario', 'planos', 'crm',
   'pacientes', 'tratamentos', 'colaboradores', 'salas', 'convenios', 'especialidades', 'objetivos', 'atividades', 'lancamentos', 'demonstrativos', 'pagar', 'receber', 'vendas', 'relatorios', 'ajuda'];
 (async () => {
   const browser = await chromium.launch(require('./launch-opts'));
