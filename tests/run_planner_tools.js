@@ -16,7 +16,7 @@ const path = require('path');
   console.log('Enviar para a Agenda is inside "Outras Opções"?', (await page.locator('#plToolsMenu #sendToAgendaBtn').count()) === 1 && /Outras Opções/.test(await page.textContent('#plToolsBtn')));
   await page.click('#plToolsBtn');
   const items = await page.locator('#plToolsMenu button:visible').allInnerTexts();
-  console.log('menu lists Horário Livre, Editar Agendamento, Trocar Profissional, Exportar Excel, Limpar Semana?', ['Horário Livre', 'Editar Agendamento', 'Trocar Profissional', 'Exportar Excel', 'Limpar Semana'].every((t) => items.some((i) => i.trim() === t)));
+  console.log('menu lists Horário Livre, Editar Agendamento, Trocar Profissional, Exportar Excel, Limpar por Filtro?', ['Horário Livre', 'Editar Agendamento', 'Trocar Profissional', 'Exportar Excel', 'Limpar por Filtro'].every((t) => items.some((i) => i.trim() === t)));
   await page.keyboard.press('Escape');
   console.log('Esc closes the menu?', await page.locator('#plToolsMenu').isHidden());
 
