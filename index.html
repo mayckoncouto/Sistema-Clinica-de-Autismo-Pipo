@@ -13237,7 +13237,7 @@ function treatFieldsEditor(v, opts){
           '<button type="button" class="btn ghost add-row-btn" id="specRowAdd">+ Incluir Especialidade</button> ' +
           '<div class="cad-wrap pl-tools-wrap tr-more-wrap spec-more-wrap"><button type="button" class="btn ghost" id="specMoreBtn" aria-haspopup="menu" aria-expanded="false">Outras Opções <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
             '<div class="cad-menu pl-tools-menu" id="specMoreMenu" role="menu" hidden>' +
-              '<button type="button" class="btn ghost" id="specRowAddAll" title="Inclui 1 sessão de cada especialidade ativa (menos Aplicador ABA) que ainda não está no tratamento">Incluir Todas</button>' +
+              '<button type="button" class="btn ghost" id="specRowAddAll" title="Inclui 1 sessão de cada especialidade do Tipo de Tratamento (Multidisciplinar = todas, menos Aplicador ABA) que ainda não está no tratamento">Incluir Todas</button>' +
               '<button type="button" class="btn ghost" id="specRowRemoveAll">Remover Todas</button>' +
               '<button type="button" class="btn ghost" id="specRowDistribute" title="Divide o total de Sessão/Mês igualmente entre todos os quadros">Distribuir</button>' +
             '</div></div>' +
@@ -13355,13 +13355,22 @@ function treatFieldsEditor(v, opts){
         showToast("Sessões distribuídas: " + parts.join(", ") + ".");
       });
     });
-    document.getElementById("specRowAddAll").addEventListener("click", function(){ addAllSpecs(false); });
+    // Incluir Todas segue o Tipo de Tratamento: sem tipo ou com Multidisciplinar = todas; senão só as especialidades marcadas.
+    document.getElementById("specRowAddAll").addEventListener("click", function(){
+      var pn = document.getElementById("trTipos");
+      var tipos = pn ? Array.prototype.map.call(pn.querySelectorAll("input:checked"), function(c){ return c.value; }) : [];
+      if (!tipos.length || tipos.indexOf("multidisciplinar") !== -1){ addAllSpecs(false); return; }
+      var only = tipos.filter(function(id){ return String(id).indexOf(TT_SPEC) === 0; }).map(function(id){ return String(id).slice(TT_SPEC.length); });
+      if (!only.length){ showToast("O Tipo de Tratamento não tem especialidades. Marque uma especialidade ou Multidisciplinar."); return; }
+      addAllSpecs(false, only);
+    });
     // Inclui 1 sessão de cada especialidade ativa (menos Aplicador ABA) que ainda não tem quadro de Sessão.
     // silent = chamado pelo Tipo de Tratamento (Multidisciplinar): sem aviso quando não há nada a incluir.
-    function addAllSpecs(silent){
+    // only = ids das especialidades permitidas (as do Tipo de Tratamento); sem ele, todas.
+    function addAllSpecs(silent, only){
       var have = {}; draftLines.forEach(function(r){ if (lineSvc(r) === DEFAULT_SERVICE_ID) have[r.specId] = true; });
-      var add = activeOnly(state.specialties).filter(function(sp){ return !/aplicador/.test(normText(sp.name || "")) && !have[sp.id]; });
-      if (!add.length){ if (!silent) showToast("Todas as especialidades (menos Aplicador ABA) já estão no tratamento."); return 0; }
+      var add = activeOnly(state.specialties).filter(function(sp){ return !/aplicador/.test(normText(sp.name || "")) && !have[sp.id] && (!only || only.indexOf(sp.id) !== -1); });
+      if (!add.length){ if (!silent) showToast(only ? "As especialidades do Tipo de Tratamento já estão no tratamento." : "Todas as especialidades (menos Aplicador ABA) já estão no tratamento."); return 0; }
       // Ordem fixa: Fono, Psicologia, TO, Psicopedagogia, Psicomotricidade, Fisioterapia, Musicoterapia, Nutrição; as outras depois.
       var ORD = ["fono", "psicolog", "ocupacional", "psicoped", "psicomot", "fisio", "music", "nutri"];
       function ordIdx(sp){ var n = normText(sp.name || ""); for (var i = 0; i < ORD.length; i++){ if (n.indexOf(ORD[i]) !== -1) return i; } return ORD.length; }
@@ -28423,7 +28432,7 @@ var HELP_TOPICS = [
     purpose: "Indica o terapeuta de cada especialidade e o horário em que o paciente pode ser atendido. Acima das especialidades, um quadro mostra a idade, o diagnóstico e o nível de suporte do paciente (diagnóstico e suporte só para quem pode ver os dados de saúde).",
     steps: [
       "Na janela do tratamento, ao lado de cada especialidade/serviço, escolha o terapeuta (ou \"Todos os terapeutas\").",
-      "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade ativa, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre os quadros de <b>Sessão</b>; os quadros de outros serviços não mudam, mas as sessões deles são descontadas do total — 10 por mês com 2 de outro serviço = 8 divididas entre os de Sessão; o resto vai para os primeiros; se não der 1 para cada quadro de Sessão, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
+      "Em <b>Especialidades e Serviços</b>, <b>Outras Opções ▾</b> tem <b>Incluir Todas</b> (1 sessão/mês para cada especialidade do Tipo de Tratamento — com Multidisciplinar ou sem tipo marcado, todas as ativas —, menos Aplicador ABA e as que já têm quadro de Sessão), <b>Remover Todas</b> (tira todos os quadros, menos os travados por atendimentos realizados) e <b>Distribuir</b> (divide o Sessão/Mês, número inteiro, igualmente entre os quadros de <b>Sessão</b>; os quadros de outros serviços não mudam, mas as sessões deles são descontadas do total — 10 por mês com 2 de outro serviço = 8 divididas entre os de Sessão; o resto vai para os primeiros; se não der 1 para cada quadro de Sessão, avisa e não muda). Depois ajuste as sessões e o terapeuta em <b>Editar</b>.",
       "<b>Contratado × Realizado — Resumo do Planner</b>: no alto da seção, um quadro mostra os atendimentos do paciente no Planner (4 semanas): cada semana como agendado/ideal (ideal = sessões/mês de cada quadro divididas pelas semanas em que ele vale), o total do Planner/Contratado, quantos profissionais e quantos estão fora do Horário de Atendimento. Número verde = certo, vermelho = acima ou abaixo. O quadro fica verde suave quando está tudo certo e vermelho suave quando há divergência ou semana fora do ideal. Logo abaixo, as divergências: os erros aparecem um por linha; atenção e informação ficam num resumo — clique nele para ver as linhas.",
       "<b>Contratado × Realizado — Divergências</b>: acima da tabela, o painel lista tudo que não bate entre o tratamento (quadros), o Planner e a Agenda no mês: especialidade ou serviço no Planner ou na Agenda <b>sem quadro</b> em Especialidades e Serviços (também aparece na tabela em <b>Fora do Tratamento</b>), sessão em semana, dia, horário, sala ou terapeuta diferente do quadro, sessão fora do Horário de Atendimento do paciente, paciente em dois lugares no Planner, semanas com número de sessões desigual, Planner sem Agenda e Agenda sem Planner, quadro com 0 sessões/mês, soma dos quadros diferente de Sessão/Mês, mais de um atendimento no mesmo dia, atendimento depois do vencimento ou antes do início do tratamento e atendimentos que já passaram sem status. Cada item tem a cor do nível (vermelho = erro, âmbar = atenção, azul = informação) e o botão <b>Ver no Planner</b> / <b>Ver na Agenda</b>. Na lista de Tratamentos, o filtro <b>Com divergências no mês atual</b> mostra os tratamentos ativos que têm erro ou atenção. Em serviço que não é Sessão, vale primeiro o dia e o horário do quadro: se a sessão cai no horário do quadro, o Horário de Atendimento do paciente é ignorado; se não, ele é conferido como nas demais.",
       "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",

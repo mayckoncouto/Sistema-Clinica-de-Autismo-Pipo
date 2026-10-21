@@ -49,6 +49,17 @@ const TL = require('./tl-helper');
   check('Distribuir com outro serviço: 8 nos quadros de Sessão (4,4) e o outro serviço fica 2', dl.map((l) => l.hours).join(',') === '4,4,2', dl.map((l) => l.hours).join(',') + ' | ' + dmsg);
   await menu('#specRowRemoveAll'); await page.click('#cfOk'); await page.waitForTimeout(150);
   check('Remover Todas esvazia os quadros', (await TL.lines(page)).length === 0);
+  // Tipo de Tratamento só com Fonoaudiologia: Incluir Todas inclui só ela
+  const fonoId = await ev(`(state.specialties.filter(function(x){ return /fono/i.test(x.name); })[0] || {}).id`);
+  await page.$$eval('#trTipos input', (xs, v) => xs.forEach((c) => { c.checked = c.value === v; }), 'spec:' + fonoId);
+  await menu('#specRowAddAll');
+  const lt = await TL.lines(page);
+  check('Tipo só com Fonoaudiologia: inclui só Fonoaudiologia', lt.length === 1 && /Fonoaudiologia/.test(lt[0].name), JSON.stringify(lt));
+  await menu('#specRowRemoveAll'); await page.click('#cfOk'); await page.waitForTimeout(150);
+  // Tipo só com serviço: não inclui nada e avisa
+  await page.$$eval('#trTipos input', (xs) => { let one = false; xs.forEach((c) => { c.checked = !one && /^svc:/.test(c.value) && (one = true); }); });
+  await menu('#specRowAddAll');
+  check('Tipo sem especialidade: nada é incluído', (await TL.lines(page)).length === 0);
   check('no JS errors?', errors.length === 0, errors.join(' | '));
   fs.unlinkSync(evPage);
   await browser.close();
