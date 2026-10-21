@@ -218,6 +218,14 @@ module.exports = async function handler(req, res) {
     var query = req.query || {};
     var action = query.action || "";
     if (!SUPABASE_URL || !ANON_KEY) { fail(res, 500, "O sistema não está configurado (Supabase)."); return; }
+    // Upload: usuário, permissão, contexto da tarefa e token do Google saem juntos (cada ida ao banco custa tempo).
+    var upKind = action === "upload" ? header(req, "x-kind") : "", upTask = action === "upload" ? header(req, "x-task-id") : "";
+    var pre = action === "upload" && KINDS[upKind] ? {
+      can: can(token, upTask, upKind, "create"),
+      ctx: sb("/rest/v1/rpc/task_attachment_ctx", { method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_task: upTask }) }),
+      google: googleToken().catch(function () {})
+    } : null;
+    if (pre) { pre.can.catch(function () {}); pre.ctx.catch(function () {}); }
     var user = await currentUser(token);
     if (!user) { fail(res, 401, "Entre no sistema."); return; }
 
@@ -238,8 +246,8 @@ module.exports = async function handler(req, res) {
     if (action === "upload") {
       var taskId = header(req, "x-task-id"), kind = header(req, "x-kind");
       if (!KINDS[kind]) { fail(res, 400, "Escolha Documentos ou Relatórios."); return; }
-      if (!(await can(token, taskId, kind, "create"))) { fail(res, 403, "Sem permissão para anexar nesta tarefa" + (kind === "documentos" ? " (Documentos exige ver a saúde do paciente)." : ".")); return; }
-      var ctx = await sb("/rest/v1/rpc/task_attachment_ctx", { method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_task: taskId }) });
+      if (!(await (pre ? pre.can : can(token, taskId, kind, "create")))) { fail(res, 403, "Sem permissão para anexar nesta tarefa" + (kind === "documentos" ? " (Documentos exige ver a saúde do paciente)." : ".")); return; }
+      var ctx = await (pre ? pre.ctx : sb("/rest/v1/rpc/task_attachment_ctx", { method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_task: taskId }) }));
       var c = ctx.ok && Array.isArray(ctx.body) ? ctx.body[0] : (ctx.ok ? ctx.body : null);
       if (!c) { fail(res, 403, errMsg(ctx, "Sem acesso a esta tarefa.")); return; }
       if (!c.patient_id || !c.patient_name) { fail(res, 400, "Esta tarefa não tem paciente cadastrado. Cadastre o paciente antes de anexar."); return; }
