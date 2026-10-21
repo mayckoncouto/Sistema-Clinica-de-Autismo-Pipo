@@ -18278,6 +18278,7 @@ function agdOpenDetails(row){
           }).join("") + '</select>' + (stLocked ? '<div class="pl-hint">' + esc(AGD_FINAL_LOCK_MSG) + '</div>' : '') + '</div>' : '') +
       '</div>' +
       '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="agdDetOk">Fechar</button>' +
+        '<button class="btn ghost" id="agdDetEvo" hidden>Registrar Evolução</button>' +
         (state.tab !== "agenda" && can("agenda", "view") ? '<button class="btn ghost" id="agdDetGo">Ver na Agenda</button>' : '') +
         (can("agenda", "edit") ? '<button class="btn primary" id="agdDetEdit">Editar Agendamento</button>' : '') + '</div>' +
     '</div></div>';
@@ -18315,6 +18316,7 @@ function agdOpenDetails(row){
   if (goBtn) goBtn.addEventListener("click", function(e){ if (deepWant(e)){ deepOpen({a: "agenda", d: row.date, prof: row.professional_id, id: row.id}); return; } close(); prGoToAppointment({appointment_date: row.date, professional_id: row.professional_id, appointment_id: row.id}, true); });
   var edBtn = document.getElementById("agdDetEdit");
   if (edBtn) edBtn.addEventListener("click", function(){ agdOpenModal({row: AD.rows[row.id] || row}); });
+  agdDetEvoWire(row, document.getElementById("agdDetEvo"));
   // Status: grava na hora em que escolhe.
   var sel = document.getElementById("agdDetStatus");
   if (sel) sel.addEventListener("change", function(){
@@ -18323,6 +18325,24 @@ function agdOpenDetails(row){
       sel.disabled = false;
       if (ok){ curStatus = v; row = AD.rows[row.id] || row; agdRender(); }
       else sel.value = curStatus;
+    });
+  });
+}
+
+// Registrar Evolução (Detalhes do Agendamento): só com a regra "Finalizado exige evolução" em Avisar,
+// atendimento Finalizado de paciente cadastrado SEM evolução ligada (não feita ou excluída pelo
+// Administrador) e permissão de incluir no Prontuário. Abre a evolução já ligada ao atendimento.
+function agdDetEvoWire(row, btn){
+  if (!btn) return;
+  if (sysMode("ag_final_evolucao") !== "warn" || row.status !== FINAL_STATUS || !prCan("create")) return;
+  var p = findPatientByName(row); if (!p) return;
+  var q = window.pipoAuth ? agdClient().from("clinical_records").select("id").eq("appointment_id", row.id).then(function(r){ return r.error ? null : (r.data || []).length; })
+    : Promise.resolve(((PLAN && PLAN.evoMem) || []).filter(function(x){ return x.appointment_id === row.id; }).length);
+  q.then(function(n){
+    if (n !== 0 || !document.body.contains(btn)) return;
+    btn.hidden = false;
+    btn.addEventListener("click", function(){
+      prOpenEditor({patient: p, appointment: row, onSaved: function(){ showToast("Evolução registrada e ligada ao atendimento."); }, onCancel: function(){}});
     });
   });
 }
@@ -29131,7 +29151,7 @@ var HELP_TOPICS = [
     purpose: "Marcar o que aconteceu: Finalizado, Não compareceu, Falta justificada…",
     steps: [
       "Clique no atendimento e escolha o <b>Status</b> (quem não pode editar vê a janela de detalhes e também pode marcar).",
-      "Ao marcar <b>Finalizado</b> sem evolução, o sistema abre a evolução do prontuário; o status só é gravado depois de salvar a evolução."
+      "Ao marcar <b>Finalizado</b> sem evolução, o sistema abre a evolução do prontuário; o status só é gravado depois de salvar a evolução. Com a regra “Finalizado Exige Evolução” em <b>Avisar</b> (Acesso → Sistema), dá para finalizar sem evolução; depois, nos <b>Detalhes do Agendamento</b>, o botão <b>Registrar Evolução</b> (ao lado de Fechar) aparece enquanto o atendimento Finalizado não tiver evolução (não feita ou excluída pelo Administrador) e abre a evolução já ligada ao atendimento."
     ],
     rules: [
       "Cada nível só usa os status liberados para ele (Níveis de Permissão → Status dos atendimentos).",
