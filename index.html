@@ -3138,7 +3138,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="apQualityBtn" title="Confere o Auto Planner inteiro: sessões colocadas × contratadas, meta de grupo, ocupação, horário vago por sala e alertas" hidden>Relatório de Qualidade</button>
         <div class="cad-sep" aria-hidden="true"></div>
         <button class="btn ghost" id="plSubBtn" title="Passa os atendimentos de um terapeuta ausente para outro, só nas semanas e dias escolhidos" hidden>Substituir Terapeuta</button>
-        <button class="btn ghost" id="plVagaBtn" title="Mostra onde há vaga numa especialidade e quem poderia mudar de lugar para abrir espaço">Abrir Vaga</button>
+        <button class="btn ghost" id="plVagaBtn" title="Mostra onde há vaga numa especialidade e quem poderia mudar de lugar para abrir espaço">Vagas Disponíveis</button>
         <button class="btn ghost" id="plCopyWeekBtn" title="Copia as marcações de uma semana para outras semanas, só em células livres" hidden>Copiar Semana</button>
         <button class="btn ghost" id="swapProfBtn" title="Passar as colunas de um profissional para outro (férias, saída, substituição)">Trocar Profissional</button>
         <button class="btn ghost" id="plClearWeekBtn" title="Apaga marcações por semana, dia, horário, sala, terapeuta, paciente ou tipo, com prévia" hidden>Limpar por Filtro</button>
@@ -21686,6 +21686,30 @@ function pltTimes(){ var t = {}; DAYS.forEach(function(d){ d.morning.concat(d.af
 function pltTimeOpts(first){ return '<option value="">' + first + '</option>' + pltTimes().map(function(t){ return '<option value="' + t + '">' + t + '</option>'; }).join(""); }
 function pltWeekBoxes(attr, sel){ return WEEKS.map(function(w){ return '<label class="fx-seat"><input type="checkbox" ' + attr + '="' + w + '"' + (sel.indexOf(w) >= 0 ? " checked" : "") + '> ' + w + 'ª semana</label>'; }).join(""); }
 function pltDayBoxes(attr){ return DAYS.map(function(d){ return '<label class="fx-seat"><input type="checkbox" ' + attr + '="' + d.key + '" checked> ' + esc(d.full) + '</label>'; }).join(""); }
+/* Lista de marcar (várias opções) para as janelas do Planner: painel #id com caixas [attr]; todas marcadas = "Todos". */
+function pltMsHtml(id, label, attr, items, allText){
+  return '<div class="field"><label id="' + id + 'L">' + label + '</label><div class="ms" id="' + id + 'Ms" data-all="' + esc(allText) + '">' +
+    '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="' + id + 'L"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
+    '<div class="ms-panel" id="' + id + '" hidden role="listbox" aria-multiselectable="true">' +
+    items.map(function(it){ return '<label class="ms-opt"><input type="checkbox" ' + attr + '="' + esc(it[0]) + '" checked><span>' + esc(it[1]) + '</span></label>'; }).join("") +
+    '</div></div></div>';
+}
+function pltMsWire(id){
+  var ms = document.getElementById(id + "Ms"), btn = ms.querySelector(".ms-btn"), panel = document.getElementById(id), sum = ms.querySelector(".ms-sum");
+  function refresh(){
+    var all = panel.querySelectorAll("input"), on = panel.querySelectorAll("input:checked"), t;
+    if (on.length === all.length) t = ms.getAttribute("data-all");
+    else if (!on.length) t = "Nenhum";
+    else t = Array.prototype.map.call(on, function(c){ return c.parentNode.textContent.trim(); }).join(", ");
+    sum.textContent = t; btn.title = t;
+  }
+  function open(o){ panel.hidden = !o; btn.setAttribute("aria-expanded", o ? "true" : "false"); }
+  btn.addEventListener("click", function(){ open(panel.hidden); });
+  panel.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); open(false); btn.focus(); } });
+  panel.addEventListener("change", refresh);
+  document.addEventListener("mousedown", function(e){ if (!panel.hidden && !ms.contains(e.target)) open(false); });
+  refresh();
+}
 function pltChecked(root, attr){ return Array.prototype.slice.call(root.querySelectorAll("input[" + attr + "]:checked")).map(function(c){ return c.getAttribute(attr); }); }
 function pltSeatProfs(){
   var ids = {}, out = [];
@@ -22097,14 +22121,15 @@ function openPlVagaModal(){
   var profs = pltSeatProfs(), specIds = {};
   profs.forEach(function(p){ profAreas(p).forEach(function(s){ specIds[s] = 1; }); });
   var specs = state.specialties.filter(function(s){ return specIds[s.id] && isActive(s); });
-  var m = pltModal("ovPlVg", "Abrir Vaga", "Mostra onde há vaga numa especialidade (dias e horários que você escolher) e quais pacientes poderiam mudar de lugar para abrir espaço.",
+  var m = pltModal("ovPlVg", "Vagas Disponíveis", "Mostra onde há vaga numa especialidade (dias e horários que você escolher) e quais pacientes poderiam mudar de lugar para abrir espaço.",
     '<div class="field-row"><div class="field"><label for="pvSpec">Especialidade</label><select id="pvSpec"><option value="">Todas</option>' + specs.map(function(s){ return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join("") + '</select></div>' +
     '<div class="field"><label for="pvPat">Paciente (Opcional)</label><select id="pvPat" data-combo><option value="">Ninguém — só ver as vagas</option>' + state.patients.filter(isActive).sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); }).map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div></div>' +
-    '<div class="field"><label>Semanas</label><div id="pvW">' + pltWeekBoxes("data-pw", WEEKS.slice()) + '</div></div>' +
-    '<div class="field"><label>Dias</label><div id="pvD">' + pltDayBoxes("data-pd") + '</div></div>' +
+    '<div class="field-row">' + pltMsHtml("pvW", "Semanas", "data-pw", WEEKS.map(function(w){ return [w, w + "ª Semana"]; }), "Todas as semanas") +
+    pltMsHtml("pvD", "Dias", "data-pd", DAYS.map(function(d){ return [d.key, d.full]; }), "Todos os dias") + '</div>' +
     '<div class="field-row"><div class="field"><label for="pvFrom">Horário de</label><select id="pvFrom">' + pltTimeOpts("Qualquer") + '</select></div><div class="field"><label for="pvTo">Até</label><select id="pvTo">' + pltTimeOpts("Qualquer") + '</select></div></div>' +
     '<div class="field-row"><button type="button" class="btn ghost" id="pvGo">Ver Vagas</button></div><div id="pvOut" class="fx-report"></div>', "");
   var ov = m.ov, out = document.getElementById("pvOut"), vagas = [];
+  pltMsWire("pvW"); pltMsWire("pvD");
   function seatsFor(spec){
     var out2 = [];
     physicalRooms().forEach(function(r){ (r.therapists || []).forEach(function(t){
@@ -29852,7 +29877,7 @@ var HELP_TOPICS = [
       "<b>Limpar por Filtro</b>: apaga marcações escolhendo semanas, dias, horário, sala ou grupo, terapeuta, paciente e o que apagar (pacientes, grupos, reunião/treinamento/bloqueado, cadeados). A prévia mostra quantas e quais; dupla confirmação, desfazível. Começa com a semana aberta.",
       "<b>Copiar Semana</b>: copia as marcações de uma semana para outras semanas, nos dias e tipos escolhidos, só em células livres e dentro das regras (horário do terapeuta, bloqueios, conflitos). A prévia diz quantas vão e por que as outras ficam de fora.",
       "<b>Substituir Terapeuta</b>: para férias ou licença. Escolha o terapeuta ausente, o substituto e as semanas, dias e turnos; os atendimentos passam para a coluna do substituto na mesma sala, e os que não cabem (horário ocupado, fora do horário dele, conflito) ficam como estão, com o motivo. Diferente do Trocar Profissional, que passa as colunas para sempre. Para voltar: Ctrl+Z ou repita ao contrário.",
-      "<b>Abrir Vaga</b>: escolha a especialidade, as semanas, os dias e a faixa de horário e veja as vagas livres (com um paciente escolhido, só as que ele pode usar; clique para agendar). Embaixo, <b>Quem Poderia Mudar de Lugar</b>: pacientes que ocupam a janela e têm outro horário livre com o mesmo tipo de terapeuta; clique para abrir no Planner.",
+      "<b>Vagas Disponíveis</b>: escolha a especialidade, as semanas, os dias e a faixa de horário e veja as vagas livres (com um paciente escolhido, só as que ele pode usar; clique para agendar). Embaixo, <b>Quem Poderia Mudar de Lugar</b>: pacientes que ocupam a janela e têm outro horário livre com o mesmo tipo de terapeuta; clique para abrir no Planner.",
       "<b>Conferência do Planner</b>: confere o Planner inteiro (4 semanas): sessões a mais ou a menos que o Sessão/Mês, fora do horário do paciente e do terapeuta, grupos fora da meta, terapeutas com ocupação alta e salas sem horário vago no turno. Com a janela aberta, ela se atualiza sozinha quando o Planner muda (por você ou por outra pessoa); o Relatório de Qualidade do Auto Planner faz o mesmo.",
       "<b>Pacientes Faltando Sessões</b>: lista quem tem sessões a menos (ou a mais) no Planner; <b>Completar com o Auto Planner</b> abre o Auto Planner com uma cópia do Planner de agora e a Montar Proposta só para os marcados.",
       "<b>Cópias do Planner</b>: guarda até 5 versões com nome, compara (inclusive com o Auto Planner) e restaura. Restaurar pede duas confirmações, guarda sozinho uma cópia “Automática” do que estava antes e pode ser desfeito com Ctrl+Z.",
