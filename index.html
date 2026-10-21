@@ -6212,6 +6212,7 @@ var SYS_RULES = [
   {id: "pl_fora_prof", g: "planner", label: "Fora do Horário de Trabalho do Profissional", desc: "Célula fora do horário de trabalho do profissional da coluna fica cinza e não aceita agendamento.", def: "block", modes: ["block", "off"]},
   {id: "pl_sala_max", g: "planner", label: "Máximo de 4 Pacientes por Sala no Mesmo Horário", desc: "Agendar o 5º paciente numa sala no mesmo horário (Planner). Em Avisar, pede confirmação; o Auto Planner nunca passa de 4.", def: "warn", modes: BWO},
   {id: "pl_paciente_bloqueado", g: "planner", label: "Paciente Bloqueado", desc: "Agendar um paciente com o cadastro Bloqueado. Quem já está na célula pode ser editado; mover ou colar em outra célula é recusado.", def: "block", modes: BWO},
+  {id: "pl_nao_agrupar", g: "planner", label: "Paciente em “Não Agrupar com”", desc: "Agendar o paciente na mesma sala e horário de alguém marcado em “Não Agrupar com” no tratamento (vale nos dois sentidos).", def: "warn", modes: BWO},
   {id: "pl_rotina", g: "planner", label: "Rotina Atual do Paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "pl_fora_paciente", g: "planner", label: "Fora do Horário do Paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
   {id: "pl_terapeuta", g: "planner", label: "Terapeuta Diferente do Tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
@@ -6226,6 +6227,7 @@ var SYS_RULES = [
   {id: "ag_fora_trabalho", g: "agenda", label: "Fora do Horário de Trabalho do Profissional", desc: "Horário fora do expediente do profissional fica hachurado e não aceita agendamento.", def: "block", modes: ["block", "off"]},
   {id: "ag_feriado", g: "agenda", label: "Feriado ou Recesso", desc: "Agendar em data cadastrada em Feriados e Recessos.", def: "warn", modes: BWO},
   {id: "ag_paciente_bloqueado", g: "agenda", label: "Paciente Bloqueado", desc: "Agendar um paciente com o cadastro Bloqueado. Quem já tem o atendimento pode ser editado; marcar um novo horário é recusado.", def: "block", modes: BWO},
+  {id: "ag_nao_agrupar", g: "agenda", label: "Paciente em “Não Agrupar com”", desc: "Agendar o paciente na mesma sala e horário de alguém marcado em “Não Agrupar com” no tratamento (vale nos dois sentidos).", def: "warn", modes: BWO},
   {id: "ag_rotina", g: "agenda", label: "Rotina Atual do Paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "ag_fora_paciente", g: "agenda", label: "Fora do Horário do Paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
   {id: "ag_terapeuta", g: "agenda", label: "Terapeuta Diferente do Tratamento", desc: "Agendar com terapeuta diferente do indicado na especialidade do tratamento.", def: "warn", modes: BWO},
@@ -11992,6 +11994,15 @@ function applyBookingChanges(changesByDoc, opts){
         .then(function(ok){ return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {patientHoursOk: true})) : false; });
     }
   }
+  // "Não Agrupar com": aviso (não vale para desfazer/refazer).
+  if (!opts.history && !opts.naoAgOk){
+    var nag = sysOn("pl_nao_agrupar") ? naoAgruparConflicts(changesByDoc) : [];
+    if (nag.length){
+      return sysGate("pl_nao_agrupar", "Paciente em “Não Agrupar com”", nag, function(){ return naoAgruparConfirm(nag); }).then(function(ok){
+        return ok ? applyBookingChanges(changesByDoc, Object.assign({}, opts, {naoAgOk: true})) : false;
+      });
+    }
+  }
   // Rotina atual do paciente (escola, outra terapia…) no período: aviso (não vale para desfazer/refazer).
   if (!opts.history && !opts.routineOk){
     var rtn = sysOn("pl_rotina") ? routineConflicts(changesByDoc) : [];
@@ -13216,7 +13227,6 @@ function treatFieldsEditor(v, opts){
               .sort(function(a, b){ return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"); })
               .map(function(q){ return '<label class="ms-opt"><input type="checkbox" value="' + esc(q.id) + '" data-n="' + esc(q.nome) + '"' + ((v.naoAgrupar || []).indexOf(q.id) !== -1 ? ' checked' : '') + '><span>' + esc(q.nome) + '</span></label>'; }).join("") +
           '</div></div></div></div>' +
-        '<div class="pat-count">Não Agrupar com: o Auto Planner nunca coloca estes pacientes juntos na mesma sala e horário (vale nos dois sentidos).</div>' +
         trInfoBoxHtml(v) +
         '<div class="tr-sec spec-sum-label">Especialidades e Serviços <span class="spec-sum" id="specSum" hidden></span></div>' +
         '<div class="field">' +
@@ -13700,6 +13710,41 @@ function routineWire(root){
   });
 }
 // Planner: agendamentos novos num período ocupado da rotina atual do paciente.
+// "Não Agrupar com" (tratamento): os dois pacientes não devem ficar na mesma sala e horário (vale nos dois sentidos).
+function naoAgruparPair(a, b){
+  if (!a || !b || a.id === b.id) return false;
+  return (a.naoAgrupar || []).indexOf(b.id) !== -1 || (b.naoAgrupar || []).indexOf(a.id) !== -1;
+}
+function naoAgruparMsg(a, b, quando){ return "<b>" + esc(a.nome) + "</b> e <b>" + esc(b.nome) + "</b> — " + esc(quando); }
+function naoAgruparConfirm(msgs){
+  return confirmDialog({title: "Paciente em “Não Agrupar com”",
+    message: "Pelo tratamento, estes pacientes não devem ficar juntos na mesma sala e horário:<br>" + msgs.slice(0, 8).join("<br>") + (msgs.length > 8 ? "<br>…" : "") + "<br>Agendar assim mesmo?",
+    confirmLabel: "Agendar Assim Mesmo"});
+}
+function naoAgruparConflicts(changesByDoc){
+  var out = [], seen = {};
+  Object.keys(changesByDoc).forEach(function(docId){
+    var changes = changesByDoc[docId], parts = docId.split("-"), dayKey = parts[0], week = parts[1];
+    var doc = state.scheduleDocs[docId] || repDoc(docId), merged = Object.assign({}, (doc && doc.bookings) || {}, changes);
+    var d = ALL_WEEKDAYS.filter(function(x){ return x.key === dayKey; })[0];
+    Object.keys(changes).forEach(function(k){
+      var rec = changes[k];
+      if (!rec || !rec.patient || bookingKind(rec)) return;
+      var kp = k.split("|"), time = kp[0], room = findRoom(kp[1]);
+      if (!room || isGroup(room)) return;
+      var a = findPatientByName(rec); if (!a) return;
+      Object.keys(merged).forEach(function(k2){
+        if (k2 === k) return;
+        var kq = k2.split("|"); if (kq[0] !== time || kq[1] !== kp[1]) return;
+        var o = merged[k2]; if (!o || !o.patient || bookingKind(o)) return;
+        var b = findPatientByName(o); if (!naoAgruparPair(a, b)) return;
+        var key = [docId, time, kp[1], [a.id, b.id].sort().join("+")].join("|"); if (seen[key]) return; seen[key] = 1;
+        out.push(naoAgruparMsg(a, b, (d ? d.full : dayKey) + (week ? " (" + week + "ª semana)" : "") + " às " + time + " · " + room.name));
+      });
+    });
+  });
+  return out;
+}
 function routineConflicts(changesByDoc){
   var out = [];
   Object.keys(changesByDoc).forEach(function(docId){
@@ -18565,7 +18610,26 @@ function agdRoutineCheck(pairs){
     var p = findPatientAt(rec, rec.date); if (!p) return null;
     return routineConflictMsg(p, AD_WEEKDAY_KEYS[agdParse(rec.date).getDay()], rec.time, agdBrDate(rec.date));
   }).filter(Boolean);
-  return sysGate("ag_rotina", "Rotina Atual do Paciente", msgs, function(){ return routineConfirm(msgs); }).then(function(ok){ return ok ? agdTherapistCheck(pairs) : false; });
+  return sysGate("ag_rotina", "Rotina Atual do Paciente", msgs, function(){ return routineConfirm(msgs); }).then(function(ok){ return ok ? agdNaoAgruparCheck(pairs) : false; });
+}
+function agdNaoAgruparCheck(pairs){
+  var msgs = [], seen = {};
+  if (sysOn("ag_nao_agrupar")) pairs.forEach(function(x){
+    var rec = x.rec, old = x.old;
+    if (!rec || !rec.patient || bookingKind(rec) || !rec.room_id || !rec.date) return;
+    if (old && samePatient(old, rec) && old.date === rec.date && old.time === rec.time && old.room_id === rec.room_id) return;
+    var a = findPatientAt(rec, rec.date); if (!a) return;
+    var skip = {}; if (old && old.id) skip[old.id] = 1; if (rec.id) skip[rec.id] = 1;
+    var others = Object.keys(AD.rows || {}).map(function(id){ return AD.rows[id]; }).concat(pairs.filter(function(y){ return y !== x; }).map(function(y){ return y.rec; }));
+    others.forEach(function(o){
+      if (!o || (o.id && skip[o.id]) || o.date !== rec.date || o.time !== rec.time || o.room_id !== rec.room_id || !o.patient || bookingKind(o)) return;
+      var b = findPatientAt(o, o.date); if (!naoAgruparPair(a, b)) return;
+      var key = [rec.date, rec.time, rec.room_id, [a.id, b.id].sort().join("+")].join("|"); if (seen[key]) return; seen[key] = 1;
+      var rm = (state.rooms || []).filter(function(r){ return r.id === rec.room_id; })[0];
+      msgs.push(naoAgruparMsg(a, b, agdBrDate(rec.date) + " às " + rec.time + (rm ? " · " + rm.name : "")));
+    });
+  });
+  return sysGate("ag_nao_agrupar", "Paciente em “Não Agrupar com”", msgs, function(){ return naoAgruparConfirm(msgs); }).then(function(ok){ return ok ? agdTherapistCheck(pairs) : false; });
 }
 function agdTherapistCheck(pairs){
   var msgs = pairs.map(function(x){
@@ -29072,7 +29136,7 @@ var HELP_TOPICS = [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
       "Logo depois do paciente, <b>Tipo de Tratamento</b> aceita escolher vários (Multidisciplinar, especialidades, serviços…). Os marcados como padrão em Cadastros → Tipos de Tratamento já vêm escolhidos no tratamento novo. Cada tipo (inclusive especialidade e serviço, no cadastro deles) tem <b>Vencimento no Tratamento</b> e <b>Total de Sessões</b>: ao marcar o tipo, o Vencimento do tratamento já vem preenchido (Avaliação: 2 sessões; Avaliação Neuropsicológica: 10), e o Sessão/Mês recebe o mesmo total; tudo pode ser editado. No tratamento novo o Convênio vem do cadastro do paciente e a Intervenção ABA começa desmarcada.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
-      "O grupo <b>Convênio e Valores</b> traz, nesta ordem: Convênio e Sessão/Mês, Valor, Descontos e Valor final, a caixa <b>Intervenção ABA</b> com a Data de Revisão e Não Agrupar com. Ao sair do campo de valor, o valor aparece no formato R$ 1.234,56.",
+      "O grupo <b>Convênio e Valores</b> traz, nesta ordem: Convênio, Sessão/Mês e Período, Valor, Descontos e Valor final. Logo depois vem o grupo <b>Intervenção ABA</b>: a caixa Intervenção ABA, a Data de Revisão e Não Agrupar com. Ao sair do campo de valor, o valor aparece no formato R$ 1.234,56.",
       "Nos campos de valor (no tratamento, Descontos, vendas, lançamentos e contas) dá para digitar uma conta começando com <b>=</b>, por exemplo <b>=1500-200</b>, <b>=3 x 450,50</b> ou <b>=(100+50)/2</b> (use + - x / e parênteses). Ao sair do campo, o resultado preenche o valor; se a conta estiver errada, o campo é limpo e aparece um aviso.",
       "Em <b>Especialidades e Serviços</b>, cada especialidade é um <b>quadro</b> com o resumo (sessões/mês, terapeuta, ABA, dia e horário, semanas, sala, sessões seguidas e observação). Em <b>Dia</b> dá para marcar mais de um dia da semana (Segunda e Quarta, por exemplo); sem nenhum marcado vale qualquer dia. <b>+ Incluir especialidade</b> abre a janela do quadro; <b>Editar</b> abre a do quadro já cadastrado (lá também fica o <b>Excluir</b>) e <b>Remover</b>, no próprio quadro, tira o quadro do tratamento na hora, valendo ao salvar (quadros travados por atendimentos realizados não saem).",
       "Na janela do quadro: Especialidade, Sessões/mês, <b>Serviço</b> (padrão Sessão), Profissional (\u201cTodos os terapeutas\u201d ou um só), ABA, Sala (\u201cQualquer sala\u201d ou uma), <b>Dia</b> e <b>Horário de Início</b> (vazios = qualquer um), <b>Semanas</b> (lista de marcar: qualquer combinação de 1ª a 4ª, como 1ª e 3ª ou 1ª, 2ª e 4ª; nenhuma ou as quatro = todas) e <b>Sessões Seguidas</b> (de 1 até o máximo definido na Clínica, em Atendimento → Sessões Seguidas). A <b>Observação</b> aparece quando o serviço não é Sessão (ex.: \u201cAcolhimento pais\u201d).",
@@ -29129,7 +29193,7 @@ var HELP_TOPICS = [
       "<b>Contratado × Realizado — Resumo do Planner</b>: no alto da seção, um quadro mostra os atendimentos do paciente no Planner (4 semanas): cada semana como agendado/ideal (ideal = sessões/mês de cada quadro divididas pelas semanas em que ele vale), o total do Planner/Contratado, quantos profissionais e quantos estão fora do Horário de Atendimento. Número verde = certo, vermelho = acima ou abaixo. O quadro fica verde suave quando está tudo certo e vermelho suave quando há divergência ou semana fora do ideal. Logo abaixo, as divergências: os erros aparecem um por linha; atenção e informação ficam num resumo — clique nele para ver as linhas.",
       "<b>Contratado × Realizado — Divergências</b>: acima da tabela, o painel lista tudo que não bate entre o tratamento (quadros), o Planner e a Agenda no mês: especialidade ou serviço no Planner ou na Agenda <b>sem quadro</b> em Especialidades e Serviços (também aparece na tabela em <b>Fora do Tratamento</b>), sessão em semana, dia, horário, sala ou terapeuta diferente do quadro, sessão fora do Horário de Atendimento do paciente, paciente em dois lugares no Planner, semanas com número de sessões desigual, Planner sem Agenda e Agenda sem Planner, quadro com 0 sessões/mês, soma dos quadros diferente de Sessão/Mês, mais de um atendimento no mesmo dia, atendimento depois do vencimento ou antes do início do tratamento e atendimentos que já passaram sem status. Cada item tem a cor do nível (vermelho = erro, âmbar = atenção, azul = informação) e o botão <b>Ver no Planner</b> / <b>Ver na Agenda</b>. Na lista de Tratamentos, o filtro <b>Com divergências no mês atual</b> mostra os tratamentos ativos que têm erro ou atenção. Em serviço que não é Sessão, vale primeiro o dia e o horário do quadro: se a sessão cai no horário do quadro, o Horário de Atendimento do paciente é ignorado; se não, ele é conferido como nas demais.",
       "Dois quadros da mesma especialidade e do mesmo terapeuta podem ter <b>ABA</b> e <b>Semanas</b> diferentes (por exemplo, ABA Sim na 1ª e 3ª semanas e ABA Não na 2ª e 4ª): o Planner e a Agenda usam o quadro da semana do atendimento (a 1ª semana do mês é a que começa na primeira segunda-feira), e o <b>Contratado × Realizado</b> conta cada atendimento no quadro da sua semana. Dias fora das semanas 1 a 4 contam no primeiro quadro.",
-      "<b>Não Agrupar com</b> (ao lado de Sessão/Mês): marque os pacientes que não devem ficar juntos na mesma sala e horário; o Auto Planner respeita nos dois sentidos.",
+      "<b>Não Agrupar com</b> (grupo Intervenção ABA): marque os pacientes que não devem ficar juntos na mesma sala e horário. Vale nos dois sentidos: o Auto Planner nunca os junta, e no Planner e na Agenda colocar os dois na mesma sala e horário pede confirmação (regras do Acesso → Sistema).",
       "Em <b>Horário de Atendimento</b>, marque os dias e os períodos (manhã/tarde) do paciente. Marque <b>Disponível</b> nos dias em que ele pode vir. Em <b>Outras Opções ▾</b>: <b>Limpar Horário de Todos os Dias</b> desmarca tudo e apaga os horários; <b>Limpar os dias sem “Disponível” marcado</b> apaga só os horários que sobraram nos dias desmarcados; <b>Copiar Segunda para Todos</b> repete o horário de segunda nos outros dias. Depois de cada uma, o botão <b>Desfazer</b> aparece por alguns segundos e volta como estava. A coluna <b>Sessões</b> mostra quantos horários da clínica cabem nas faixas de cada dia, e abaixo da tabela fica a soma: sessões disponíveis por semana × o <b>Período</b> do tratamento (campo ao lado de Sessão/Mês: Semanal × 4, Quinzenal × 2, Mensal × 1) = por mês. O Período já vem como Semanal."
     ],
     rules: ["Tratamento novo (sem renegociar) já vem com o Horário de Atendimento do tratamento anterior do paciente, quando houver; no quadro de uma especialidade, ao escolher o profissional com a sala em branco, o sistema sugere a sala onde ele tem mais colunas. Confira antes de salvar.", 
