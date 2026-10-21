@@ -5344,6 +5344,8 @@ function patientConvenioName(p){
 // Início oculto em todos os modos até o usuário definir o conteúdo (2026-10-05).
 // Para mostrar de novo: true (botão, tela de entrada, clique na logo).
 var INICIO_ON = false;
+// Auto Planner (Planner ▾) oculto a pedido do usuário (2026-10-21): o código e os dados (autoplan/*) ficam; para voltar, true.
+var AUTOPLANNER_ON = false;
 var state = {
   sysRules: {},          // Acesso → Sistema: {regra: modo} (config/system)
   sysHist: [],
@@ -5620,7 +5622,7 @@ function navInitialTab(){
   var key = "";
   try { key = navOldHash(decodeURIComponent((location.hash || "").slice(1))); } catch(e){}
   var tab = ({planner: "planner", resumo: "resumo", grupos: "salas"})[key] || key;
-  if (tab === "autoplanner" && !(document.querySelector('#mainTabs button[data-tab="autoplanner"]'))) tab = "";
+  if (tab === "autoplanner" && (!AUTOPLANNER_ON || !(document.querySelector('#mainTabs button[data-tab="autoplanner"]')))) tab = "";
   if (tab === "autoplanner"){ PLA.on = true; tab = "planner"; }   // mesma seção do Planner, com os registros do Auto Planner
   if (!tab || !document.getElementById("tab-" + tab) || !document.querySelector('#mainTabs button[data-tab="' + tab + '"]')) tab = "";
   var mobile = !!(window.matchMedia && window.matchMedia("(max-width:760px)").matches);
@@ -10132,7 +10134,7 @@ function wireTabs(){
     // Celular: Planner e Resumo não são mostrados; vai para a primeira outra tela permitida.
     if (MOBILE_HIDDEN_TABS.indexOf(b.getAttribute("data-tab")) !== -1 && isMobileView()){ var alt = mobileAltTab(); if (alt){ alt.click(); return; } }
     // Auto Planner: mesma seção do Planner, com os registros dele (PLA.on).
-    var tabKey = b.getAttribute("data-tab"), wantAuto = tabKey === "autoplanner";
+    var tabKey = b.getAttribute("data-tab"), wantAuto = tabKey === "autoplanner" && AUTOPLANNER_ON;
     if (wantAuto) tabKey = "planner";
     var modeChanged = plAutoSet(wantAuto);
     state.tab = tabKey;
@@ -22212,7 +22214,7 @@ function openPlMissModal(){
     '<div id="pmOut" class="fx-report"><div class="pat-count">Lendo…</div></div>',
     '<button class="btn primary" id="pmAuto" disabled hidden>Completar com o Auto Planner</button>');
   var ov = m.ov, out = document.getElementById("pmOut"), btn = document.getElementById("pmAuto"), q = null;
-  var realOk = !PLA.on && (!window.pipoAuth || (window.pipoAuth.can("autoplanner", "create") && window.pipoAuth.can("autoplanner", "edit"))) && healthCanSee();
+  var realOk = AUTOPLANNER_ON && !PLA.on && (!window.pipoAuth || (window.pipoAuth.can("autoplanner", "create") && window.pipoAuth.can("autoplanner", "edit"))) && healthCanSee();
   btn.hidden = !realOk;
   function rows(){
     var f = document.getElementById("pmShow").value;
@@ -30426,6 +30428,7 @@ var HELP_TAB_TOPIC = {crm: "crm", inicio: "inicio", planner: "planner", plannerl
   caixa: "crm-caixa", vendas: "lista-vendas", painelvendas: "painel-vendas", especialidades: "especialidades", motivos: "motivos", status: "agenda-status", medicos: "medicos", escolas: "escolas", diagnosticos: "diagnosticos", origens: "origens", motivosbloq: "motivosbloq", tipostrat: "tipostrat", cbo: "cbo", conselhos: "conselhos", fornecedores: "fornecedores", catfornecedor: "fornecedores", unidades: "unidades", contratos: "contratos", contas: "contas-bancarias", planocontas: "plano-de-contas", lancamentos: "lancamentos", pagar: "contas-pagar-receber", receber: "contas-pagar-receber", emptomados: "emprestimos", empconcedidos: "emprestimos", conciliacao: "conciliacao", automacoes: "crm-automacoes", demonstrativos: "demonstrativos", feriados: "feriados", usuarios: "usuarios", colaboradores: "colaboradores", tiposcolab: "tiposcolab",
   planos: "plano-terapeutico", objetivos: "objetivos", atividades: "atividades", anamneses: "anamneses", tiposanam: "tipos-anamnese", escalas: "escalas", habilidades: "habilidades"};
 function helpCan(t){
+  if (t.id === "auto-planner" && !AUTOPLANNER_ON) return false;
   if (!t.mod) return true;
   if (!window.pipoAuth) return true;
   if (t.mod === "admin") return window.pipoAuth.isAdmin();
@@ -31804,7 +31807,7 @@ var CAD_TABS = ["pacientes", "tratamentos", "tipostrat", "convenios", "motivos",
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "planner", isOn: function(){ return state.tab === "planner" && !PLA.on; }, ok: function(){ return can("planner", "view"); }},
   {key: "plannerlist", label: "Planner List", tab: "plannerlist", ok: function(){ return can("planner_list", "view"); }},
-  {key: "autoplanner", label: "Auto Planner", tab: "autoplanner", isOn: function(){ return state.tab === "planner" && PLA.on; }, ok: function(){ return can("autoplanner", "view"); }},
+  {key: "autoplanner", label: "Auto Planner", tab: "autoplanner", isOn: function(){ return state.tab === "planner" && PLA.on; }, ok: function(){ return AUTOPLANNER_ON && can("autoplanner", "view"); }},
   {key: "resumo", label: "Resumo", tab: "resumo", ok: function(){ return can("resumo", "view"); }},
   {key: "disponibilidade", label: "Disponibilidade", tab: "disponibilidade", ok: function(){ return can("disponibilidade", "view"); }}
 ];
@@ -31868,7 +31871,7 @@ function renderNavMenus(){
   NAV_MENUS.forEach(function(m){
     var menu = document.getElementById(m.menu), btn = document.getElementById(m.btn);
     if (!menu || !btn) return;
-    var items = m.items.filter(function(i){ return !window.pipoAuth || i.ok(); });
+    var items = m.items.filter(function(i){ return (i.key !== "autoplanner" || AUTOPLANNER_ON) && (!window.pipoAuth || i.ok()); });
     menu.innerHTML = items.map(function(i, n){ return (i.sep && n ? '<div class="cad-sep" role="separator"></div>' : "") + '<button type="button" role="menuitem" data-nav="' + i.key + '">' + i.label + '</button>'; }).join("");
     btn.hidden = !items.length;
     // Só UMA opção permitida no menu: o botão vira essa opção direto (sem menu suspenso).
