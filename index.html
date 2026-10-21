@@ -4265,11 +4265,8 @@ function openClinicModal(){
               CLINIC_DURATIONS.map(function(m){ return '<option value="'+m+'"'+(m === clinicDuration() ? ' selected' : '')+'>'+m+' Minutos</option>'; }).join("") + '</select></div><div class="field"><label for="clSeg">Sessões Seguidas (Máximo)</label><select id="clSeg">' +
               [1, 2, 3, 4, 5, 6, 7, 8].map(function(n){ return '<option value="'+n+'"'+(n === clinicSeguidasMax() ? ' selected' : '')+'>'+n+(n === 1 ? ' Sessão' : ' Sessões')+'</option>'; }).join("") + '</select></div></div>' +
             '<div class="pat-count">Cada linha do Planner e da Agenda é um atendimento com esta duração. Sessões Seguidas é o máximo que o quadro do tratamento oferece (lista de 1 até esse número).</div>' +
-            (unitAbaOn() ? '<div class="field-row" style="margin-top:10px"><div class="field"><label>&nbsp;</label><label class="chk-line"><input type="checkbox" id="clAba"' + (c.aba === "Não" ? '' : ' checked') + '> <span>Intervenção ABA</span></label></div>' +
-              '<div class="field" id="clMetaBox"><label for="clMeta">Meta %</label><input type="text" id="clMeta" inputmode="decimal" maxlength="5" placeholder="80" value="' + esc(c.metaGrupo != null && c.metaGrupo !== "" ? String(c.metaGrupo) : "80") + '"></div></div>' +
-              '<div class="pat-count">Intervenção ABA liga todas as regras e campos de ABA do sistema (paciente sem ABA ocupa a sala, salas ABA, grupos por faixa etária, cores por idade). Meta % é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner).</div>' +
-              '<div id="clBandsBox"><div class="tr-sec">Faixas Etárias</div><div class="pat-count">Valem para todas as unidades: cor das células por idade, legendas e faixas de Habilidades e Objetivos. Idade final em branco = sem limite.</div>' +
-              '<div class="room-list tl-list" id="clBands"></div><button type="button" class="btn add-row-btn" id="clBandAdd">+ Incluir Faixa</button></div>' : '') +
+            (unitAbaOn() ? '<div class="field-row" style="margin-top:10px"><div class="field" id="clMetaBox"><label for="clMeta">Meta %</label><input type="text" id="clMeta" inputmode="decimal" maxlength="5" placeholder="80" value="' + esc(c.metaGrupo != null && c.metaGrupo !== "" ? String(c.metaGrupo) : "80") + '"></div><div class="field"></div></div>' +
+              '<div class="pat-count">Meta % é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner). A Intervenção ABA e as Faixas Etárias ficam no cadastro da Unidade.</div>' : '') +
           '</div>' +
         '</div>' +
         '<div class="prof-section"><div class="prof-section-head"><span class="tr-sec tr-sec-in">Horário de Atendimento</span>' +
@@ -4299,86 +4296,6 @@ function openClinicModal(){
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
   document.getElementById("clClose").addEventListener("click", close);
-  // Faixas etárias (quadros) e chave da Intervenção ABA
-  var bands = AGE_BANDS.map(function(b){ return {id: b.id, min: b.min, max: b.max, color: b.color}; }), bandsTouched = false;
-  function bandsSync(){}
-  function bandsDraw(){
-    var hb = document.getElementById("clBands"); if (!hb) return;
-    hb.innerHTML = bands.map(function(b, i){
-      var lim = (b.max === "" || b.max == null) ? "Sem limite" : String(b.max);
-      return '<div class="room-row tl-row cl-band" data-band="' + i + '"><span class="room-dot" style="background:' + esc(b.color) + '"></span>' +
-        '<div class="room-info"><div class="rn">' + esc(ageBandLabel({min: b.min, max: b.max === "" ? null : b.max})) + '</div><div class="rs">Idade Inicial ' + esc(String(b.min)) + ' · Idade Final ' + esc(lim) + '</div></div>' +
-        (clCanEdit ? '<button type="button" class="btn ghost" data-band-ed="' + i + '">Editar</button><button type="button" class="btn danger" data-band-rm="' + i + '">Remover</button>' : '') + '</div>';
-    }).join("") || '<div class="hours-empty">Nenhuma faixa: valem as faixas padrão.</div>';
-  }
-  // Janela da faixa: Idade Inicial, Idade Final (em branco = sem limite) e Cor.
-  function bandModal(i){
-    var isNew = i === null, last = bands[bands.length - 1];
-    var b = isNew ? {id: uid("fx"), min: last ? (last.max !== "" && last.max != null ? (+last.max || 0) + 1 : (+last.min || 0) + 1) : 0, max: "", color: "#C9B8E8"} : Object.assign({}, bands[i]);
-    var host = regQuickHost();
-    host.innerHTML = '<div class="overlay confirm-overlay" id="ovBand"><div class="modal" style="max-width:480px"><div class="modal-head"><div><h3>' + (isNew ? "Incluir Faixa Etária" : "Editar Faixa Etária") + '</h3></div>' +
-      '<button class="modal-close" data-bdclose aria-label="Fechar">✕</button></div><div class="modal-body">' +
-      '<div class="field-row"><div class="field"><label for="bdMin">Idade Inicial</label><input id="bdMin" type="text" inputmode="numeric" maxlength="3" value="' + esc(b.min == null ? "" : String(b.min)) + '"></div>' +
-      '<div class="field"><label for="bdMax">Idade Final</label><input id="bdMax" type="text" inputmode="numeric" maxlength="3" placeholder="Sem limite" value="' + esc(b.max == null ? "" : String(b.max)) + '"></div></div>' +
-      '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="bdColor" style="background:' + esc(b.color) + '" aria-label="Escolher cor"></button><span class="color-pick-code mono" id="bdColorCode">' + esc(b.color) + '</span><span class="color-hex-label">clique na bolinha para escolher</span></div></div>' +
-      '<div class="pat-count">Idade Final em branco = sem limite (só na última faixa).</div>' +
-      '</div><div class="modal-foot"><span class="spacer"></span><button class="btn ghost" data-bdclose>Cancelar</button><button class="btn primary" id="bdSave">Salvar</button></div></div></div>';
-    var ov = document.getElementById("ovBand");
-    function close(){ host.innerHTML = ""; }
-    ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
-    Array.prototype.forEach.call(ov.querySelectorAll("[data-bdclose]"), function(x){ x.addEventListener("click", close); });
-    document.getElementById("bdColor").addEventListener("click", function(){
-      var btn = this;
-      openColorPicker(btn, b.color, function(col){ b.color = col; btn.style.background = col; document.getElementById("bdColorCode").textContent = col; });
-    });
-    document.getElementById("bdSave").addEventListener("click", function(){
-      var mn = document.getElementById("bdMin").value.trim(), mx = document.getElementById("bdMax").value.trim();
-      if (!/^\d{1,3}$/.test(mn)){ showToast("Informe a idade inicial.", true); return; }
-      if (mx !== "" && !/^\d{1,3}$/.test(mx)){ showToast("A idade final precisa ser um número (ou em branco = sem limite).", true); return; }
-      if (mx !== "" && +mx < +mn){ showToast("A idade final não pode ser menor que a inicial.", true); return; }
-      b.min = +mn; b.max = mx === "" ? "" : +mx;
-      if (isNew) bands.push(b); else bands[i] = b;
-      bands.sort(function(x, y){ return (+x.min) - (+y.min); });
-      bandsTouched = true; close(); bandsDraw();
-    });
-    setTimeout(function(){ var x = document.getElementById("bdMin"); if (x) x.focus(); }, 30);
-  }
-  function abaBoxSync(){
-    var cb = document.getElementById("clAba"), on = !cb || cb.checked;
-    var mb = document.getElementById("clMetaBox"), bb = document.getElementById("clBandsBox");
-    if (mb) mb.hidden = !on; if (bb) bb.hidden = !on;
-  }
-  if (document.getElementById("clBands")){
-    bandsDraw(); abaBoxSync();
-    document.getElementById("clAba").addEventListener("change", abaBoxSync);
-    var bAdd = document.getElementById("clBandAdd");
-    if (!clCanEdit) bAdd.hidden = true;
-    bAdd.addEventListener("click", function(){ bandModal(null); });
-    document.getElementById("clBands").addEventListener("click", function(e){
-      var rm = e.target.closest("[data-band-rm]");
-      if (rm){ bandsTouched = true; bands.splice(+rm.getAttribute("data-band-rm"), 1); bandsDraw(); return; }
-      var ed = e.target.closest("[data-band-ed]");
-      if (ed) bandModal(+ed.getAttribute("data-band-ed"));
-    });
-  }
-  // Confere as faixas: idade inteira, final >= inicial, sem sobrepor, só a última sem limite. "" = ok.
-  function bandsCheck(){
-    bandsSync();
-    var list = bands.map(function(b){ return {id: b.id, min: String(b.min).trim(), max: String(b.max == null ? "" : b.max).trim(), color: b.color}; });
-    for (var i = 0; i < list.length; i++){
-      if (!/^\d{1,3}$/.test(list[i].min)) return "informe a idade inicial de todas as faixas";
-      if (list[i].max !== "" && !/^\d{1,3}$/.test(list[i].max)) return "a idade final precisa ser um número (ou em branco = sem limite)";
-      list[i].min = +list[i].min; list[i].max = list[i].max === "" ? null : +list[i].max;
-      if (list[i].max != null && list[i].max < list[i].min) return "a idade final não pode ser menor que a inicial";
-    }
-    list.sort(function(a, b){ return a.min - b.min; });
-    for (var j = 0; j < list.length; j++){
-      if (list[j].max == null && j < list.length - 1) return "só a última faixa pode ficar sem idade final";
-      if (j && list[j].min <= list[j - 1].max) return "as faixas " + ageBandLabel(list[j - 1]) + " e " + ageBandLabel(list[j]) + " se sobrepõem";
-    }
-    bands.__ok = list;
-    return "";
-  }
   document.getElementById("clCancel").addEventListener("click", close);
   // Logo: a imagem escolhida vira um PNG quadrado de 128 px (fundo transparente preservado).
   var logo = (c.logo && /^data:image\//.test(c.logo)) ? c.logo : "";
@@ -4510,13 +4427,11 @@ function openClinicModal(){
   });
   counts();
   if (clCanEdit) document.getElementById("clSave").addEventListener("click", function(){
-    var abaCb = document.getElementById("clAba"), abaSim = abaCb ? abaCb.checked : c.aba !== "Não";
     var metaV = c.metaGrupo != null ? c.metaGrupo : "";
-    if (abaCb && abaSim){
+    if (document.getElementById("clMeta")){
       var mv = parseFloat(String(document.getElementById("clMeta").value).replace(",", "."));
       if (!(mv > 0 && mv <= 100)){ showToast("Meta % precisa ser um número de 1 a 100.", true); return; }
       metaV = mv;
-      if (bandsTouched){ var bw = bandsCheck(); if (bw){ showToast("Faixas Etárias: " + bw + ".", true); return; } }
     }
     socSync();
     var redes = [], badSoc = null;
@@ -4568,7 +4483,6 @@ function openClinicModal(){
       horarios: horarios,
       duracao: dur,
       seguidasMax: +document.getElementById("clSeg").value || 2,
-      aba: abaSim ? "" : "Não",
       metaGrupo: metaV,
       descontoMax: (function(){ var dv = parseFloat(String(document.getElementById("clDescMax").value).replace(",", ".")); return dv > 0 ? Math.min(100, dv) : ""; })(),
       margemDesconto: (function(){ var mv = parseFloat(String(document.getElementById("clMargem").value).replace(",", ".")); return isNaN(mv) ? 30 : Math.max(0, Math.min(100, mv)); })(),
@@ -4580,11 +4494,6 @@ function openClinicModal(){
     if (!db){ showToast("Sem conexão com o servidor.", true); return; }
     db.doc("config/clinic").set(rec).then(function(){
       state.clinic = rec; onClinicChange(); close(); showToast("Cadastro da clínica salvo.");
-      if (abaSim && bandsTouched && bands.__ok){
-        var fx = bands.__ok.map(function(b){ return {id: b.id, min: b.min, max: b.max, color: b.color}; });
-        db.doc("config/age_bands").set({faixas: fx}).then(function(){ state.ageBands = fx; ageBandsApply(fx); abaUiApply(true); })
-          .catch(function(err){ var m = (err && err.message) || ""; showToast(/check|path|violat/i.test(m) ? "Faixas Etárias não salvas: falta rodar a atualização do banco." : "Não foi possível salvar as Faixas Etárias.", true); });
-      }
       abaUiApply(true);
     }).catch(function(err){
       var m = (err && err.message) || "";
@@ -4868,6 +4777,80 @@ function ageBandsNorm(list){
     o.label = ageBandLabel(o); return o;
   }).filter(Boolean).sort(function(a, b){ return a.min - b.min; });
 }
+// Editor das faixas (quadros + janela). pre = prefixo dos ids. Devolve {touched, check, save}.
+function ageBandsEditorHtml(pre){
+  return '<div id="' + pre + 'BandsBox"><div class="tr-sec">Faixas Etárias</div><div class="pat-count">Valem para todas as unidades (mudar aqui muda em todas): cor das células por idade, legendas e faixas de Habilidades e Objetivos. Idade Final em branco = sem limite.</div>' +
+    '<div class="room-list tl-list" id="' + pre + 'Bands"></div><button type="button" class="btn add-row-btn" id="' + pre + 'BandAdd">+ Incluir Faixa</button></div>';
+}
+function ageBandsEditorWire(pre, canEdit){
+  var bands = AGE_BANDS.map(function(b){ return {id: b.id, min: b.min, max: b.max, color: b.color}; }), touched = false, ok = null;
+  var hb = document.getElementById(pre + "Bands"), add = document.getElementById(pre + "BandAdd");
+  function draw(){
+    if (!hb) return;
+    hb.innerHTML = bands.map(function(b, i){
+      var lim = (b.max === "" || b.max == null) ? "Sem limite" : String(b.max);
+      return '<div class="room-row tl-row cl-band" data-band="' + i + '"><span class="room-dot" style="background:' + esc(b.color) + '"></span>' +
+        '<div class="room-info"><div class="rn">' + esc(ageBandLabel({min: b.min, max: b.max === "" ? null : b.max})) + '</div><div class="rs">Idade Inicial ' + esc(String(b.min)) + ' · Idade Final ' + esc(lim) + '</div></div>' +
+        (canEdit ? '<button type="button" class="btn ghost" data-band-ed="' + i + '">Editar</button><button type="button" class="btn danger" data-band-rm="' + i + '">Remover</button>' : '') + '</div>';
+    }).join("") || '<div class="hours-empty">Nenhuma faixa: valem as faixas padrão.</div>';
+  }
+  function modal(i){
+    var isNew = i === null, last = bands[bands.length - 1];
+    var b = isNew ? {id: uid("fx"), min: last ? (last.max !== "" && last.max != null ? (+last.max || 0) + 1 : (+last.min || 0) + 1) : 0, max: "", color: "#C9B8E8"} : Object.assign({}, bands[i]);
+    var host = regQuickHost();
+    host.innerHTML = '<div class="overlay confirm-overlay" id="ovBand"><div class="modal" style="max-width:480px"><div class="modal-head"><div><h3>' + (isNew ? "Incluir Faixa Etária" : "Editar Faixa Etária") + '</h3></div>' +
+      '<button class="modal-close" data-bdclose aria-label="Fechar">✕</button></div><div class="modal-body">' +
+      '<div class="field-row"><div class="field"><label for="bdMin">Idade Inicial</label><input id="bdMin" type="text" inputmode="numeric" maxlength="3" value="' + esc(b.min == null ? "" : String(b.min)) + '"></div>' +
+      '<div class="field"><label for="bdMax">Idade Final</label><input id="bdMax" type="text" inputmode="numeric" maxlength="3" placeholder="Sem limite" value="' + esc(b.max == null ? "" : String(b.max)) + '"></div></div>' +
+      '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="bdColor" style="background:' + esc(b.color) + '" aria-label="Escolher cor"></button><span class="color-pick-code mono" id="bdColorCode">' + esc(b.color) + '</span><span class="color-hex-label">clique na bolinha para escolher</span></div></div>' +
+      '<div class="pat-count">Idade Final em branco = sem limite (só na última faixa).</div>' +
+      '</div><div class="modal-foot"><span class="spacer"></span><button class="btn ghost" data-bdclose>Cancelar</button><button class="btn primary" id="bdSave">Salvar</button></div></div></div>';
+    var ov = document.getElementById("ovBand");
+    function close(){ host.innerHTML = ""; }
+    ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+    Array.prototype.forEach.call(ov.querySelectorAll("[data-bdclose]"), function(x){ x.addEventListener("click", close); });
+    document.getElementById("bdColor").addEventListener("click", function(){
+      var btn = this;
+      openColorPicker(btn, b.color, function(col){ b.color = col; btn.style.background = col; document.getElementById("bdColorCode").textContent = col; });
+    });
+    document.getElementById("bdSave").addEventListener("click", function(){
+      var mn = document.getElementById("bdMin").value.trim(), mx = document.getElementById("bdMax").value.trim();
+      if (!/^[0-9]{1,3}$/.test(mn)){ showToast("Informe a idade inicial.", true); return; }
+      if (mx !== "" && !/^[0-9]{1,3}$/.test(mx)){ showToast("A idade final precisa ser um número (ou em branco = sem limite).", true); return; }
+      if (mx !== "" && +mx < +mn){ showToast("A idade final não pode ser menor que a inicial.", true); return; }
+      b.min = +mn; b.max = mx === "" ? "" : +mx;
+      if (isNew) bands.push(b); else bands[i] = b;
+      bands.sort(function(x, y){ return (+x.min) - (+y.min); });
+      touched = true; close(); draw();
+    });
+    setTimeout(function(){ var x = document.getElementById("bdMin"); if (x) x.focus(); }, 30);
+  }
+  draw();
+  if (add){ if (!canEdit) add.hidden = true; add.addEventListener("click", function(){ modal(null); }); }
+  if (hb) hb.addEventListener("click", function(e){
+    var rm = e.target.closest("[data-band-rm]");
+    if (rm){ touched = true; bands.splice(+rm.getAttribute("data-band-rm"), 1); draw(); return; }
+    var ed = e.target.closest("[data-band-ed]");
+    if (ed) modal(+ed.getAttribute("data-band-ed"));
+  });
+  // Confere: idade inteira, final >= inicial, sem sobrepor, só a última sem limite. "" = ok.
+  function check(){
+    var list = bands.map(function(b){ return {id: b.id, min: +b.min, max: b.max === "" || b.max == null ? null : +b.max, color: b.color}; });
+    list.sort(function(a, b){ return a.min - b.min; });
+    for (var j = 0; j < list.length; j++){
+      if (list[j].max == null && j < list.length - 1) return "só a última faixa pode ficar sem idade final";
+      if (j && list[j - 1].max != null && list[j].min <= list[j - 1].max) return "as faixas " + ageBandLabel(list[j - 1]) + " e " + ageBandLabel(list[j]) + " se sobrepõem";
+    }
+    ok = list; return "";
+  }
+  function save(){
+    if (check()) return Promise.resolve(false);
+    if (!db){ showToast("Sem conexão com o servidor.", true); return Promise.resolve(false); }
+    return db.doc("config/age_bands").set({faixas: ok}).then(function(){ state.ageBands = ok; ageBandsApply(ok); abaUiApply(true); return true; })
+      .catch(function(err){ var m = (err && err.message) || ""; showToast(/check|path|violat/i.test(m) ? "Faixas Etárias não salvas: falta rodar a atualização do banco." : "Não foi possível salvar as Faixas Etárias.", true); return false; });
+  }
+  return {touched: function(){ return touched; }, check: check, save: save};
+}
 function ageBandsApply(list){ var n = ageBandsNorm(list); AGE_BANDS = n.length ? n : AGE_BANDS_DEFAULT.slice(); }
 // Intervenção ABA (2026-10-21): a Unidade diz se tem (Acesso → Unidades) e a Clínica liga/desliga (Atendimento).
 // Desligada: nenhuma regra "não ABA", sem cor por idade/ABA, sem campos de ABA nas telas e sem Meta % na Conferência.
@@ -4877,7 +4860,7 @@ function unitAbaOn(){
   var u = id ? (state.units || []).filter(function(x){ return x.id === id; })[0] : null;
   return !u || u.aba !== "Não";
 }
-function abaOn(){ return unitAbaOn() && !(typeof state !== "undefined" && state && state.clinic && state.clinic.aba === "Não"); }
+function abaOn(){ return unitAbaOn(); }   // Intervenção ABA fica só no cadastro da Unidade (2026-10-21)
 function abaMeta(){ if (typeof state === "undefined" || !state) return 80; var m = parseFloat(String(state.clinic && state.clinic.metaGrupo != null ? state.clinic.metaGrupo : "").replace(",", ".")); return m > 0 && m <= 100 ? m : 80; }
 // Aplica a chave ABA na tela (classe no body, legendas) e redesenha o que usa as cores/regras.
 function abaUiApply(redraw){
@@ -28815,7 +28798,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Contratos</b> em Níveis de Permissão (ver, incluir, editar, excluir)."},
   {id: "unidades", group: "Acesso", title: "Unidades", mod: null, tab: "unidades",
     purpose: "A clínica pode ter várias unidades (filiais). Cada pessoa trabalha na sua unidade; o Gestor enxerga e cadastra todas, e o Supervisor enxerga todas. Os dados que existiam antes pertencem à Unidade 1.",
-    steps: ["<b>Intervenção ABA:</b> no cadastro da unidade, escolha se ela usa Intervenção ABA. Com <b>Não</b>, as opções de ABA, Meta % e Faixas Etárias somem do cadastro da Clínica dessa unidade e o sistema faz só os agendamentos normais.", "<b>Tela de login:</b> não há escolha de unidade: digite e-mail e senha e o sistema abre a unidade do seu cadastro.", "<b>Gestor e Supervisor:</b> depois de entrar, no topo, à direita, a lista de unidades troca a unidade que está aberta (o sistema lembra a última usada neste aparelho). No celular, a lista fica no menu ☰.", "<b>Acesso → Unidades</b> (só o Gestor) → <b>+ Incluir</b>: nome na tela de login, nome fantasia, CNPJ, telefone, e-mail, endereço e cidade.", "<b>Acesso → Usuários:</b> o Gestor escolhe a unidade de cada usuário; o Administrador cria usuários só na própria unidade (o Supervisor, na unidade aberta)."],
+    steps: ["<b>Intervenção ABA:</b> no cadastro da unidade, escolha se ela usa Intervenção ABA. <b>Sim</b> liga todas as regras e campos de ABA (paciente sem ABA ocupando a sala, salas ABA, grupos por faixa etária, cores por idade, Intervenção ABA no tratamento e nos quadros, Meta % na Clínica). Com <b>Não</b>, tudo isso some e a unidade faz só os agendamentos normais.", "<b>Faixas Etárias</b> (com Intervenção ABA = Sim): no cadastro da unidade, cada quadro tem Idade Inicial, Idade Final (em branco = sem limite, só na última) e a Cor das células do Planner e da Agenda. <b>Valem para todas as unidades</b>: mudar numa unidade muda em todas. Também aparecem em Habilidades e Objetivos e não podem se sobrepor.", "<b>Tela de login:</b> não há escolha de unidade: digite e-mail e senha e o sistema abre a unidade do seu cadastro.", "<b>Gestor e Supervisor:</b> depois de entrar, no topo, à direita, a lista de unidades troca a unidade que está aberta (o sistema lembra a última usada neste aparelho). No celular, a lista fica no menu ☰.", "<b>Acesso → Unidades</b> (só o Gestor) → <b>+ Incluir</b>: nome na tela de login, nome fantasia, CNPJ, telefone, e-mail, endereço e cidade.", "<b>Acesso → Usuários:</b> o Gestor escolhe a unidade de cada usuário; o Administrador cria usuários só na própria unidade (o Supervisor, na unidade aberta)."],
     rules: ["Duas unidades podem ter o mesmo nome fantasia com CNPJs diferentes; o CNPJ não se repete.", "O <b>Nome da Unidade</b> aparece só para quem já entrou; pode ser editado quando quiser.", "Ordem dos níveis: <b>Gestor</b>, <b>Supervisor</b>, <b>Administrador</b> e os demais. O <b>Gestor</b> tem acesso total a todas as unidades e é quem define a unidade de cada Administrador. O <b>Supervisor</b> acessa todas as unidades (troca no topo), com as permissões que o Gestor marcar no nível dele. O <b>Administrador</b> tem acesso total, mas só na própria unidade.", "Os Níveis de Permissão valem para todas as unidades: o Gestor e o Administrador editam (o Administrador não altera Gestor, Administrador nem níveis que acessam todas as unidades). O Sistema e a restauração do Backup são só do Gestor.", "Cada unidade tem a sua própria <b>Clínica</b> (nome, logo, cores, horários, redes sociais): o link de cadastro mostra a da unidade que o gerou. Salas, Planner e Agenda também são de cada unidade.", "A Unidade 1 não pode ser excluída. Unidade com usuários é <b>Inativada</b> em vez de excluída.", "A unidade escolhida define quais dados a pessoa enxerga. A separação já está pronta no banco; as telas passam a mostrar só os dados da unidade aos poucos, sem mudar o uso da Unidade 1."],
     who: "Cadastro de Unidades, Sistema e restauração do Backup: nível <b>Gestor</b>. Níveis de Permissão: Gestor e Administrador. Trocar de unidade: Gestor e níveis que acessam todas as unidades (Supervisor)."},
   {id: "catfornecedor", group: "Financeiro", title: "Categorias de Fornecedor", mod: "categorias_fornecedor", tab: "catfornecedor",
@@ -29476,7 +29459,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Status</b>."},
   {id: "clinica", group: "Acesso", title: "Cadastro da Clínica", mod: "clinica",
     purpose: "Dados da clínica (Razão Social, CNPJ, Nome da Clínica / Nome Fantasia e Descrição), redes sociais, dias e horários de funcionamento, duração do atendimento, cores e logo. O Nome Fantasia e a Descrição aparecem no topo, no login e nas impressões.",
-    steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve.", "Em <b>Atendimento</b>, <b>Sessões Seguidas (Máximo)</b> define até quantas sessões seguidas o quadro do tratamento pode pedir (a lista do quadro vai de 1 até esse número).", "Em <b>Atendimento</b>, a caixa <b>Intervenção ABA</b> (só aparece quando a unidade tem Intervenção ABA) liga todas as regras e campos de ABA do sistema: paciente sem ABA ocupando a sala, salas ABA, grupos ABA por faixa etária, cores por idade nas células, Intervenção ABA no tratamento e nos quadros. Desligada, o sistema faz só os agendamentos normais. Ao lado, <b>Meta %</b> é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner, quadro Meta %).", "<b>Faixas Etárias</b> (só com Intervenção ABA): cada quadro tem Idade Inicial, Idade Final (em branco = sem limite, só na última) e a Cor das células do Planner e da Agenda. As faixas valem para todas as unidades e também aparecem em Habilidades e Objetivos; não podem se sobrepor.",
+    steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve.", "Em <b>Atendimento</b>, <b>Sessões Seguidas (Máximo)</b> define até quantas sessões seguidas o quadro do tratamento pode pedir (a lista do quadro vai de 1 até esse número).", "Em <b>Atendimento</b>, <b>Meta %</b> (só aparece quando a unidade usa Intervenção ABA) é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner, quadro Meta %). A Intervenção ABA e as Faixas Etárias ficam no cadastro da Unidade.",
       "<b>Redes Sociais</b>: clique em <b>+ Inserir</b>, escolha a rede (Instagram, Facebook, YouTube, TikTok, WhatsApp, Google Maps, Site, LinkedIn, E-mail ou Outro) e cole o link. ▲▼ mudam a ordem e ✕ tira a linha. Em “Outro”, escreva também o nome (ex.: Blog)."],
     rules: [
       "As redes sociais aparecem, com a logo colorida de cada uma, na página do link de cadastro (só depois do envio, no agradecimento), no fim das mensagens com o link de cadastro (as impressões e os PDFs não levam as redes). Sem redes cadastradas, nada disso aparece.",
@@ -30351,6 +30334,19 @@ var REG_CFG = {
       {key: "telefone", label: "Telefone", phone: true}, {key: "email", label: "E-mail", ph: "contato@empresa.com.br"},
       {key: "endereco", label: "Endereço", ph: "Rua, número, bairro"}, {key: "cidade", label: "Cidade"},
       {key: "aba", label: "Intervenção ABA", select: [{v: "Não", l: "Não"}], empty: "Sim"}],
+    extraHtml: function(){ return ageBandsEditorHtml("un"); },
+    extraWire: function(item, canExtra){
+      var ed = ageBandsEditorWire("un", canExtra !== false), sel = document.getElementById("regf-aba"), box = document.getElementById("unBandsBox");
+      function sync(){ if (box) box.hidden = !!sel && sel.value === "Não"; }
+      if (sel) sel.addEventListener("change", sync); sync();
+      return {read: function(){
+          if (sel && sel.value === "Não") return {bands: false};
+          if (ed.touched()){ var w = ed.check(); if (w){ showToast("Faixas Etárias: " + w + ".", true); return null; } }
+          return {bands: ed.touched()};
+        },
+        apply: function(){},
+        after: function(rec, v){ return v && v.bands ? ed.save() : true; }};
+    },
     search: function(u){ return u.name + " " + (u.fantasia || "") + " " + (u.cnpj || "") + " " + supplierDocDigits(u.cnpj) + " " + (u.cidade || ""); },
     cols: ["Nome na Tela de Login", "Nome Fantasia", "CNPJ", "Cidade"],
     widths: [260, 240, 170, 180],

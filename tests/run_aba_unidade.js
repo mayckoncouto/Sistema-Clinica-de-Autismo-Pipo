@@ -24,42 +24,53 @@ const path = require('path');
   r = await ev(`(function(){ var o = window.pipoAuth; window.pipoAuth = {unit: function(){ return "u1"; }}; var bak = state.units; state.units = [{id: "u1", name: "U1", aba: "Não"}]; var a = unitAbaOn(); state.units = [{id: "u1", name: "U1"}]; var b = unitAbaOn(); state.units = bak; window.pipoAuth = o; return a + "," + b; })()`);
   check('Unidade com Intervenção ABA = Não desliga; sem o campo = Sim?', r === 'false,true', r);
 
-  // 3) Clínica com ABA desligada: sem cor, sem regra "não ABA", sem restrição de grupo, campos ABA escondidos
-  r = JSON.parse(await ev(`(function(){ state.clinic = Object.assign({}, state.clinic || {}, {aba: "Não"}); abaUiApply(true);
+  // 3) Unidade sem ABA: sem cor, sem regra "não ABA", sem restrição de grupo, campos ABA escondidos
+  r = JSON.parse(await ev(`(function(){ window.__unitAbaBak = unitAbaOn; unitAbaOn = function(){ return false; }; abaUiApply(true);
     var p = state.patients[0];
     return JSON.stringify({on: abaOn(), cor: patientColor({nome: "X", idade: 3, specHours: []}), nao: isNaoABABooking({patient: p ? p.nome : "X"}, "", 1), grp: sgGroupCheck({id: "x"}, {service: "sessao"}, "seg-1", "07:20", {therapists: []}, {}),
       noaba: document.body.classList.contains("no-aba"), legHidden: Array.prototype.every.call(document.querySelectorAll("[data-age-legend]"), function(e){ return e.hidden; }),
       abaLeg: Array.prototype.every.call(document.querySelectorAll(".color-legend .aba-only"), function(e){ return getComputedStyle(e).display === "none"; })}); })()`));
-  check('ABA desligada: sem cor por idade/ABA, regra "não ABA" e grupo não valem, legenda e campos ABA escondidos?', !r.on && r.cor === null && r.nao === false && r.grp === '' && r.noaba && r.legHidden && r.abaLeg, JSON.stringify(r));
-  await ev(`(function(){ state.clinic = Object.assign({}, state.clinic, {aba: ""}); abaUiApply(true); })()`);
-
-  // 4) Clínica → Atendimento: caixa, Meta % e faixas (quadros); salva aba, metaGrupo e config/age_bands
+  check('Unidade sem ABA: sem cor por idade/ABA, regra "não ABA" e grupo não valem, legenda e campos ABA escondidos?', !r.on && r.cor === null && r.nao === false && r.grp === '' && r.noaba && r.legHidden && r.abaLeg, JSON.stringify(r));
   await ev(`openClinicModal()`);
   await page.waitForSelector('#ovClinic');
-  r = JSON.parse(await ev(`JSON.stringify({cb: !!document.getElementById("clAba"), meta: (document.getElementById("clMeta") || {}).value, bands: document.querySelectorAll("#clBands .cl-band").length})`));
-  check('Atendimento mostra Intervenção ABA, Meta % (80) e as 3 faixas?', r.cb && r.meta === '80' && r.bands === 3, JSON.stringify(r));
+  check('Unidade sem ABA: Clínica sem Meta %?', !(await page.$('#clMeta')));
+  await page.click('#clClose');
+  await ev(`(function(){ unitAbaOn = window.__unitAbaBak; abaUiApply(true); })()`);
+
+  // 4) Clínica → Atendimento: só a Meta % (sem a caixa e sem as faixas)
+  await ev(`openClinicModal()`);
+  await page.waitForSelector('#ovClinic');
+  r = JSON.parse(await ev(`JSON.stringify({cb: !!document.getElementById("clAba"), meta: (document.getElementById("clMeta") || {}).value, bands: !!document.getElementById("clBands")})`));
+  check('Clínica mostra só Meta % (80), sem Intervenção ABA nem Faixas?', !r.cb && r.meta === '80' && !r.bands, JSON.stringify(r));
   await page.fill('#clMeta', '70');
-  check('Faixas no estilo dos quadros de Salas (bolinha, título, Editar e Remover)?', await ev(`(function(){ var r = document.querySelector("#clBands .cl-band"); return !!(r && r.querySelector(".room-dot") && r.querySelector(".rn").textContent === "0–4 anos" && r.querySelector("[data-band-ed]") && r.querySelector("[data-band-rm]") && !r.querySelector("input")); })()`));
-  await page.click('#clBandAdd');
-  await page.waitForSelector('#ovBand');
-  check('+ Incluir Faixa abre a janela já começando depois da última (11)?', await page.$eval('#bdMin', (e) => e.value) === '11');
-  await page.click('#bdSave'); await page.waitForTimeout(200);
-  r = JSON.parse(await ev(`JSON.stringify(Array.prototype.map.call(document.querySelectorAll("#clBands .cl-band .rn"), function(x){ return x.textContent; }))`));
-  check('4ª faixa no quadro?', r.length === 4 && r[3] === '11+ anos', JSON.stringify(r));
-  // 10+ sem limite e a nova 11+: o Salvar recusa
-  await page.click('#clSave'); await page.waitForTimeout(300);
-  let still = await page.$('#ovClinic');
-  check('Faixa sem limite antes de outra é recusada?', !!still);
-  await ev(`document.querySelectorAll("#clBands [data-band-ed]")[2].click()`);
-  await page.waitForSelector('#ovBand');
-  await page.fill('#bdMax', '10');
-  await page.click('#bdSave'); await page.waitForTimeout(200);
   await page.click('#clSave');
   await page.waitForTimeout(400);
   const ok = await page.$('.confirm-overlay button.primary'); if (ok){ await ok.click(); await page.waitForTimeout(400); }
   await page.waitForFunction(() => !document.getElementById('ovClinic'), null, {timeout: 5000}).catch(() => {});
-  r = JSON.parse(await ev(`JSON.stringify({meta: abaMeta(), clin: (window.__STORE__["config/clinic"] || {}).metaGrupo, fx: ((window.__STORE__["config/age_bands"] || {}).faixas || []).map(function(b){ return b.id + ":" + b.min + "-" + (b.max == null ? "" : b.max); }), bands: AGE_BANDS.length, last: AGE_BANDS[3] && AGE_BANDS[3].label})`));
-  check('Salvou Meta 70% e as 4 faixas (ids antigos mantidos)?', r.meta === 70 && r.clin === 70 && r.fx.length === 4 && r.fx[0] === '0-4:0-4' && r.fx[2] === '10+:10-10' && r.last === '11+ anos', JSON.stringify(r));
+  check('Meta % salva (70)?', await ev(`abaMeta()`) === 70 && await ev(`(window.__STORE__["config/clinic"] || {}).metaGrupo`) === 70);
+
+  // 5) Unidade: Intervenção ABA e Faixas Etárias (quadros) no cadastro da unidade
+  await ev(`(function(){ state.units = [{id: "u1", name: "Unidade Um"}]; openRegistryItem("unidades", state.units[0]); })()`);
+  await page.waitForSelector('#unBands');
+  check('Unidade mostra as 3 faixas no estilo dos quadros de Salas?', await ev(`(function(){ var rs = document.querySelectorAll("#unBands .cl-band"), r = rs[0]; return rs.length === 3 && !!(r.querySelector(".room-dot") && r.querySelector(".rn").textContent === "0–4 anos" && r.querySelector("[data-band-ed]") && r.querySelector("[data-band-rm]") && !r.querySelector("input")); })()`));
+  await page.click('#unBandAdd');
+  await page.waitForSelector('#ovBand');
+  check('+ Incluir Faixa abre a janela já começando depois da última (11)?', await page.$eval('#bdMin', (e) => e.value) === '11');
+  await page.click('#bdSave'); await page.waitForTimeout(200);
+  r = JSON.parse(await ev(`JSON.stringify(Array.prototype.map.call(document.querySelectorAll("#unBands .cl-band .rn"), function(x){ return x.textContent; }))`));
+  check('4ª faixa no quadro?', r.length === 4 && r[3] === '11+ anos', JSON.stringify(r));
+  await page.click('#regSave'); await page.waitForTimeout(300);
+  check('Faixa sem limite antes de outra é recusada?', !!(await page.$('#ovReg')));
+  await ev(`document.querySelectorAll("#unBands [data-band-ed]")[2].click()`);
+  await page.waitForSelector('#ovBand');
+  await page.fill('#bdMax', '10');
+  await page.click('#bdSave'); await page.waitForTimeout(200);
+  check('Intervenção ABA = Não esconde as faixas?', await ev(`(function(){ var s = document.getElementById("regf-aba"); s.value = "Não"; s.dispatchEvent(new Event("change")); var h = document.getElementById("unBandsBox").hidden; s.value = ""; s.dispatchEvent(new Event("change")); return h && !document.getElementById("unBandsBox").hidden; })()`));
+  await page.click('#regSave');
+  await page.waitForFunction(() => !document.getElementById('ovReg'), null, {timeout: 5000}).catch(() => {});
+  await page.waitForTimeout(300);
+  r = JSON.parse(await ev(`JSON.stringify({fx: ((window.__STORE__["config/age_bands"] || {}).faixas || []).map(function(b){ return b.id + ":" + b.min + "-" + (b.max == null ? "" : b.max); }), bands: AGE_BANDS.length, last: AGE_BANDS[3] && AGE_BANDS[3].label})`));
+  check('Salvou as 4 faixas pela Unidade (ids antigos mantidos)?', r.fx.length === 4 && r.fx[0] === '0-4:0-4' && r.fx[2] === '10+:10-10' && r.last === '11+ anos', JSON.stringify(r));
   const title = await ev(`(function(){ openPlConfModal(); return new Promise(function(res){ setTimeout(function(){ res(document.getElementById("apqOut") ? document.getElementById("apqOut").innerText : ""); }, 800); }); })()`);
   check('Conferência usa o título Meta % (70%) quando há paciente ABA?', !/Meta de Grupo/.test(title), title.slice(0, 200));
   check('no JS errors?', errors.length === 0, JSON.stringify(errors));
