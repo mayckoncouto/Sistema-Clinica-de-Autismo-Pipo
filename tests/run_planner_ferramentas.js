@@ -60,7 +60,7 @@ const path = require('path');
   await ev("(async function(){ var db = await window.claude.use('db'); await db.doc('schedule/qua-3').set({bookings: {'07:20|rA|a1': {patient: 'Paciente A', note: ''}}}); })()");
   await page.waitForFunction(() => !/Paciente A \S+ 4 3/.test(document.getElementById('apqOut').innerText.replace(/\s+/g, ' ')), null, {timeout: 5000}).catch(() => {});
   const live2 = await flat();
-  check('Conferência live: change from another person (other day) completes Paciente A?', !/Paciente A/.test(live2) && /completos/.test(live2), live2.slice(0, 200));
+  check('Conferência live: change from another person (other day) completes Paciente A?', !/Paciente A/.test(live2.split(/Pacientes Sem Intervenção em Duplas/i)[0]) && /completos/.test(live2), live2.slice(0, 200));
   // tratamento mudou (Contratadas): a janela aberta também se atualiza
   const trBak = await ev("JSON.stringify(state.treatments)");
   await ev("(async function(){ var pa = state.patients.filter(function(p){ return p.nome === 'Paciente A'; })[0]; var list = cloneJson(state.treatments); var t = list.filter(function(x){ return x.patientId === pa.id && x.status === 'ativo'; })[0]; t.specHours[0].hours = String((+t.specHours[0].hours || 0) + 2); var db = await window.claude.use('db'); await db.doc('treatments/all').set({list: list}); })()");
@@ -76,6 +76,8 @@ const path = require('path');
   check('Mesmo Horário Repetido column exists?', /HORÁRIO VAZIO MESMO HORÁRIO REPETIDO/i.test(live3), live3.slice(0, 300));
   const dupN = await ev("(async function(){ var db = await window.claude.use('db'); var pa = state.patients.filter(function(p){ return p.nome === 'Paciente A'; })[0]; var d = state.scheduleDocs['qua-3'] || {bookings: {}}; var bk = cloneJson(d.bookings); bk['07:20|rA|a2'] = {patient: 'Paciente A', note: ''}; bk['07:20|rA|a1'] = {patient: 'Paciente A', note: ''}; await db.doc('schedule/qua-3').set({bookings: bk}); await new Promise(function(r){ setTimeout(r, 300); }); var c = plQuality().contr.filter(function(x){ return x.p.nome === 'Paciente A'; })[0]; return c.dup; })()");
   check('Same patient twice in the same slot and service is reported?', +dupN >= 1, String(dupN));
+  const dp = await ev("(function(){ var o = isNaoABABooking; isNaoABABooking = function(b){ return b && b.patient === 'Paciente A'; }; var ob = abaOn; abaOn = function(){ return true; }; var q = plQuality(); isNaoABABooking = o; abaOn = ob; return JSON.stringify({n: q.duplasRows.length, has: q.duplasRows.every(function(x){ return x.items.length && x.items[0].others.length; })}); })()");
+  check('Sem Intervenção em Duplas lists ABA-Não patients sharing a room (shape ok)?', JSON.parse(dp).has === true, dp);
   const qb = await ev(`[quadroHoraBate({hora: "15:30", dia: "qua"}, "orientacao-familiar", "qua", "15:30"), quadroHoraBate({hora: "15:30", dia: "qua"}, "sessao", "qua", "15:30"), quadroHoraBate({hora: "15:30", dia: "qua"}, "orientacao-familiar", "ter", "15:30"), quadroHoraBate({hora: "15:30"}, "orientacao-familiar", "seg", "14:10")].join()`);
   check('Serviço no dia/horário do próprio quadro não conta como fora do horário (Sessão conta)?', qb === 'true,false,false,false', qb);
   await ev("(async function(){ var db = await window.claude.use('db'); await db.doc('treatments/all').set({list: " + trBak + "}); })()");
