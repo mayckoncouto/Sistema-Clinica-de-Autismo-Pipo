@@ -35,10 +35,10 @@ const path = require('path');
   const blocked = await ev('patBlocked(state.patients[0])');
   check('patient is saved as Bloqueado with motivo and date?', blocked && !!(await ev('state.patients[0].bloqueioDesde')));
 
-  // Planner: não agenda em célula nova
+  // Planner: paciente bloqueado pode ser movido/alterado (só o envio para a Agenda recusa)
   const room = await ev('(function(){ var r = state.rooms.filter(function(x){ return !isGroup(x) && (x.therapists||[]).length; })[0]; return {id: r.id, seat: r.therapists[0].id}; })()');
   const msg = await ev(`(function(){ var p = state.patients[0]; return plannerConflict("seg-1", "09:00|${room.id}|${room.seat}", {patient: p.nome, service: DEFAULT_SERVICE_ID}, [], {}); })()`);
-  check('Planner refuses a blocked patient in a new cell?', typeof msg === 'string' && /Bloqueado/.test(msg), msg);
+  check('Planner does NOT refuse a blocked patient in a new cell?', !(typeof msg === 'string' && /Bloqueado/.test(msg)), msg);
   const msg2 = await ev(`(function(){ var p = state.patients[1]; return plannerConflict("seg-1", "09:00|${room.id}|${room.seat}", {patient: p.nome, service: DEFAULT_SERVICE_ID}, [], {}); })()`);
   check('Planner does not refuse a patient that is not blocked (for this rule)?', !(typeof msg2 === 'string' && /Bloqueado/.test(msg2)), msg2);
   // Agenda

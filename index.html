@@ -6367,7 +6367,6 @@ var SYS_RULES = [
   {id: "pl_pac_servico", g: "planner", label: "Paciente com o Mesmo Serviço em Dois Lugares", desc: "O paciente não pode ter o mesmo serviço em dois lugares no mesmo horário.", def: "block", modes: BWO},
   {id: "pl_fora_prof", g: "planner", label: "Fora do Horário de Trabalho do Profissional", desc: "Célula fora do horário de trabalho do profissional da coluna fica cinza e não aceita agendamento.", def: "block", modes: ["block", "off"]},
   {id: "pl_sala_max", g: "planner", label: "Máximo de 4 Pacientes por Sala no Mesmo Horário", desc: "Agendar o 5º paciente numa sala no mesmo horário (Planner). Em Avisar, pede confirmação.", def: "warn", modes: BWO},
-  {id: "pl_paciente_bloqueado", g: "planner", label: "Paciente Bloqueado", desc: "Agendar um paciente com o cadastro Bloqueado. Quem já está na célula pode ser editado; mover ou colar em outra célula é recusado.", def: "block", modes: BWO},
   {id: "pl_nao_agrupar", g: "planner", label: "Paciente em “Não Agrupar com”", desc: "Agendar o paciente na mesma sala e horário de alguém marcado em “Não Agrupar com” no tratamento (vale nos dois sentidos).", def: "warn", modes: BWO},
   {id: "pl_rotina", g: "planner", label: "Rotina Atual do Paciente", desc: "Agendar num período em que a rotina atual do paciente tem Escola, Outra terapia, Atividade ou Outro.", def: "warn", modes: BWO},
   {id: "pl_fora_paciente", g: "planner", label: "Fora do Horário do Paciente", desc: "Agendar fora do horário de atendimento do tratamento do paciente.", def: "warn", modes: BWO},
@@ -11547,12 +11546,6 @@ function plannerConflict(docId, key, rec, ignoreKeys, extra){
     return msg;
   }
   var x;
-  // Paciente com cadastro Bloqueado: não entra em célula nova (a célula que já o tem continua editável).
-  var blkP = patientRule ? findPatientByName(rec) : null;
-  if (blkP && patBlocked(blkP)){
-    var cur = bookings[key], same = cur && typeof cur === "object" && cur.patient && samePatient(cur, rec);
-    if (!same){ x = hit("pl_paciente_bloqueado", "<b>" + esc(blkP.nome) + "</b> está com o cadastro <b>" + esc(patBlockText(blkP)) + "</b>. Não pode ser agendado."); if (x) return x; }
-  }
   // No máximo 4 pacientes por sala no mesmo horário (Acesso → Sistema: Avisar pede confirmação).
   if (!isGroup(room) && !bookingKind(rec)){
     var inRoom = 0;
@@ -14164,7 +14157,7 @@ function patValueEmpty(f, d){
   if (f.type === "check") return false;
   return v == null || String(v).trim() === "";
 }
-// Paciente bloqueado: não pode ser agendado (Planner e Agenda). Todos veem o motivo.
+// Paciente bloqueado: não pode ser agendado na Agenda nem enviado do Planner (o Planner não trava). Todos veem o motivo.
 // Tarja "Bloqueado" nas células do Planner e da Agenda (mesmo visual da etiqueta de status).
 function blockTagHtml(p, hasStatus){ return '<span class="agd-status" style="background:var(--danger)' + (hasStatus ? ';bottom:20px' : '') + '" title="' + esc(patBlockNote(p)) + '">Bloqueado</span>'; }
 function patBlocked(p){ return !!p && String(p.bloqueado) === "Sim"; }
@@ -14173,7 +14166,7 @@ function patBlockText(p){
   return "Bloqueado" + (m ? " — " + m : "") + (p && p.bloqueioObs ? " (" + p.bloqueioObs + ")" : "");
 }
 function patBlockNote(p){
-  if (!patBlocked(p)) return "Marque Bloqueado para impedir novos agendamentos deste paciente no Planner e na Agenda. Quem já está marcado continua.";
+  if (!patBlocked(p)) return "Marque Bloqueado para impedir novos agendamentos deste paciente na Agenda e no envio do Planner para a Agenda. No Planner ele continua podendo ser agendado, movido e alterado.";
   return patBlockText(p) + (p.bloqueioDesde ? ". Desde " + trBr(p.bloqueioDesde) : "") + (p.bloqueioPor ? " por " + p.bloqueioPor : "") + ".";
 }
 function patFieldInputHtml(f, v){
@@ -21047,7 +21040,6 @@ function pltTry(docId, key, rec, ignore){
   if (!seatAvailable(t, day, time)) return "Fora do horário do terapeuta";
   if (plLockInfo(cur, day, w, time, room, t)) return "Horário bloqueado";
   var rf = slotRefusal(room.id, rec); if (rf) return "Coluna de tipo diferente";
-  if (rec.patient && !bookingKind(rec)){ var pt = findPatientRef(rec); if (pt && patBlocked(pt)) return "Paciente bloqueado"; }
   var c = sysHard(plannerConflict(docId, key, rec, ignore || []));
   if (!c) return "";
   var rule = (SYS_RULES.filter(function(r){ return r.id === plannerConflict.lastRule; })[0] || {}).label;
@@ -28572,7 +28564,7 @@ var HELP_TOPICS = [
       "Diagnóstico, Médico, Escola e Como conheceu a clínica são escolhidos na lista do cadastro (digite para buscar). No fim da lista, <b>+ Incluir</b> cadastra um novo sem sair da janela (só para quem pode incluir naquele cadastro).",
       "O título de cada grupo mostra quantos campos obrigatórios ainda faltam (ex.: \"2 faltando\").",
       "Cada grupo do cadastro tem permissão própria para <b>ver</b> em Níveis de Permissão (<b>Pacientes – Identificação</b>, <b>Pacientes – Endereço</b>, <b>Pacientes – Filiação</b> e assim por diante; Saúde segue <b>Pacientes – Saúde</b>). Sem a permissão, o grupo não aparece na janela do cadastro nem na ficha impressa. O Nome sempre aparece.",
-      "<b>Bloqueio de Agendamento</b>: marque <b>Bloqueado</b> e escolha o <b>Motivo</b> (cadastro de Motivos de Bloqueio, com <b>+ Incluir</b> no fim da lista). Paciente bloqueado não pode ser agendado no Planner nem na Agenda (a regra <b>Paciente Bloqueado</b> fica em Acesso → Sistema), não é enviado do Planner para a Agenda e não entra no Horário Livre nem no Sugerir Agendamento. Os atendimentos que ele já tem continuam, com a tarja <b>Bloqueado</b>; ao bloquear, o sistema oferece remover os da Agenda a partir de uma data. Todos os usuários veem o bloqueio e o motivo. Desmarcar libera o paciente.",
+      "<b>Bloqueio de Agendamento</b>: marque <b>Bloqueado</b> e escolha o <b>Motivo</b> (cadastro de Motivos de Bloqueio, com <b>+ Incluir</b> no fim da lista). Paciente bloqueado não pode ser agendado na Agenda (a regra <b>Paciente Bloqueado</b> fica em Acesso → Sistema) nem enviado do Planner para a Agenda. No Planner ele continua podendo ser agendado, movido e alterado; só não entra no Horário Livre nem no Sugerir Agendamento. Os atendimentos que ele já tem continuam, com a tarja <b>Bloqueado</b>; ao bloquear, o sistema oferece remover os da Agenda a partir de uma data. Todos os usuários veem o bloqueio e o motivo. Desmarcar libera o paciente.",
       "A data de entrada começa com a data do cadastro e pode ser alterada.",
       "O grupo <b>Saúde</b> (médico, CID, data do diagnóstico, nível de suporte, comunicação, alergias, medicações, restrições e encaminhamento) só aparece para quem tem a permissão <b>Pacientes – Saúde</b>: com \"ver\" os campos aparecem travados; com \"editar\" dá para alterar. Sem a permissão, esses dados também não aparecem nos Detalhes do Agendamento, na ficha impressa nem no quadro clínico do Plano Terapêutico.",
       "Salve. Paciente novo: em seguida o sistema abre o tratamento dele. No resumo do tratamento aparece o horário de atendimento, só com os dias e períodos em que o paciente vem.",
