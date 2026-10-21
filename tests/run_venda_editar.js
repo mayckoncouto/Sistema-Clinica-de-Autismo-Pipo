@@ -53,6 +53,24 @@ const path = require('path');
   check('comissão recalculada para B: 10% = 300, mesma conta a pagar atualizada', st.c.length === 1 && st.c[0].valor === 300 && st.c[0].seller === B.id && st.fp.length === 1 && st.fp[0].valor === 300 && st.fp[0].staff === B.id && st.c[0].payable === st.fp[0].id, JSON.stringify(st));
   await page.click('#vnDOk');
 
+  // Convênio gravado na venda: ao registrar vem do tratamento; Editar troca; Painel usa o gravado
+  const cv = JSON.parse(await ev(`(function(){
+    state.convenios = [{id: "cvA", name: "Conv A"}, {id: "cvB", name: "Conv B"}];
+    state.treatments[0].convenioId = "cvA"; state.treatments[0].convenio = "";
+    return slInsert({treatment: "t1", patient: state.treatments[0].patientId, tipo: "aditivo", data: "2026-10-10", valorMensal: 10, meses: 1, total: 10, status: "ativa"}).then(function(n){
+      state.treatments[0].convenioId = "cvB";
+      return JSON.stringify({id: n.id, name: n.convName, painel: pvConvName(n)});
+    }); })()`));
+  check('venda registrada guarda o convênio do tratamento e o Painel usa o gravado', cv.name === 'Conv A' && cv.painel === 'Conv A', JSON.stringify(cv));
+  await ev(`openVendaDetalhe(${JSON.stringify(cv.id)})`);
+  await page.waitForSelector('#vnDEdit'); await page.click('#vnDEdit'); await page.waitForSelector('#vnEConv', {state: 'attached'});
+  await ev(`(function(){ var c = document.getElementById("vnEConv"); c.value = "cvB"; c.dispatchEvent(new Event("change")); })()`);
+  await page.click('#vnESave'); await page.waitForSelector('#ovVn'); await page.waitForTimeout(200);
+  const cv2 = await ev(`(SALES.rows.filter(function(s){ return s.id === ${JSON.stringify(cv.id)}; })[0] || {}).convName`);
+  check('Editar Venda troca o convênio gravado', cv2 === 'Conv B', cv2);
+  await page.click('#vnDOk');
+  await ev(`SALES.rows = SALES.rows.filter(function(s){ return s.id !== ${JSON.stringify(cv.id)}; }); 1`);
+
   // Sem vendedor: estorna; vendedor de volta: gera de novo
   await ev(`(function(){ var s = SALES.rows[0]; return slUpdate("s1", {data: s.data, seller: "", sellerName: "", forma: s.forma, obs: s.obs}).then(function(){ return comResync(SALES.rows[0]); }); })()`);
   st = JSON.parse(await ev(`JSON.stringify({c: COMM.rows, fp: FP.rows})`));

@@ -10241,7 +10241,9 @@ create table if not exists public.treatment_sales (
   created_at      timestamptz not null default now(),
   created_by      uuid references auth.users(id) on delete set null,
   created_by_name text,
-  unit_id         text not null default 'unidade-1'
+  unit_id         text not null default 'unidade-1',
+  convenio_id     text,   -- convênio gravado ao registrar a venda (2026-10-21)
+  convenio_name   text
 );
 create index if not exists treatment_sales_treatment_idx on public.treatment_sales (treatment_id, created_at);
 create index if not exists treatment_sales_patient_idx on public.treatment_sales (patient_id);

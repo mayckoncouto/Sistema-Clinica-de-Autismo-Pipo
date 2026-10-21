@@ -117,7 +117,7 @@ var TABLES = {
   treatment_sales: {
     key: "id",
     cols: ["unit_id", "id", "treatment_id", "patient_id", "tipo", "data", "seller_id", "seller_name", "valor_mensal", "meses", "total", "forma", "status",
-           "replaced_by", "obs", "created_at", "created_by", "created_by_name"],
+           "replaced_by", "obs", "created_at", "created_by", "created_by_name", "convenio_id", "convenio_name"],
     users: ["created_by"]
   },
   commission_rules: {

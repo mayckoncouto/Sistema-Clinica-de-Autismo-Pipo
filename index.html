@@ -26830,11 +26830,20 @@ function slCan(a){ return can("vendas", a); }
 function slFromDb(x){
   return {id: x.id, treatment: x.treatment_id, patient: x.patient_id, tipo: x.tipo, data: x.data, seller: x.seller_id || "", sellerName: x.seller_name || "",
     valorMensal: Number(x.valor_mensal) || 0, meses: x.meses || 1, total: Number(x.total) || 0, forma: x.forma || "", status: x.status || "ativa",
-    replacedBy: x.replaced_by || "", obs: x.obs || "", by: x.created_by_name || "", at: x.created_at || ""};
+    replacedBy: x.replaced_by || "", obs: x.obs || "", by: x.created_by_name || "", at: x.created_at || "", convId: x.convenio_id || "", convName: x.convenio_name || ""};
+}
+// Convênio da venda no momento do registro: o do tratamento; sem ele, o do cadastro do paciente.
+function slConvOf(treatmentId, patientId){
+  var t = (state.treatments || []).filter(function(x){ return x.id === treatmentId; })[0], id = (t && t.convenioId) || "", name = "";
+  if (!id && !(t && t.convenio)){ var p = rawPatient(patientId); id = (p && p.convenioPadrao) || ""; }
+  var c = id ? (state.convenios || []).filter(function(x){ return x.id === id; })[0] : null;
+  name = (c && c.name) || (t && t.convenio) || "";
+  return {id: id, name: name};
 }
 function slToDb(r){
   return {treatment_id: r.treatment, patient_id: r.patient, tipo: r.tipo, data: r.data, seller_id: r.seller || null, seller_name: r.sellerName || null,
-    valor_mensal: r.valorMensal, meses: r.meses, total: r.total, forma: r.forma || null, status: r.status || "ativa", replaced_by: r.replacedBy || null, obs: r.obs || null};
+    valor_mensal: r.valorMensal, meses: r.meses, total: r.total, forma: r.forma || null, status: r.status || "ativa", replaced_by: r.replacedBy || null, obs: r.obs || null,
+    convenio_id: r.convId || null, convenio_name: r.convName || null};
 }
 function slLoad(force){
   var c = agdClient();
@@ -26858,6 +26867,7 @@ function slOf(treatmentId){
 }
 function slInsert(rec){
   var c = agdClient();
+  if (!rec.convId && !rec.convName){ var cv = slConvOf(rec.treatment, rec.patient); rec = Object.assign({}, rec, {convId: cv.id, convName: cv.name}); }
   SALES.rows = SALES.rows || [];
   if (!c){ var n = Object.assign({}, rec, {id: rec.id || uid("sl"), status: rec.status || "ativa", by: trWho(), at: new Date().toISOString()}); SALES.rows.push(n); return Promise.resolve(n); }
   return c.from("treatment_sales").insert(slToDb(rec)).select().single().then(function(res){
@@ -27514,7 +27524,12 @@ function pvPrevRange(r){
   return {from: iso(from), to: iso(to)};
 }
 function pvTreat(s){ return (state.treatments || []).filter(function(x){ return x.id === s.treatment; })[0] || null; }
-function pvConvName(s){ var t = pvTreat(s); return (t && t.convenio) || "Sem Convênio"; }
+// Convênio gravado na venda (desde 2026-10-21); venda antiga sem ele usa o convênio atual do tratamento.
+function pvConvName(s){
+  if (s.convName) return s.convName;
+  var t = pvTreat(s), c = t && t.convenioId ? (state.convenios || []).filter(function(x){ return x.id === t.convenioId; })[0] : null;
+  return (c && c.name) || (t && t.convenio) || "Sem Convênio";
+}
 // A venda passa pelos filtros de vendedor, convênio e tipo?
 function pvMatch(s, seller, f){
   f = f || {};
@@ -27984,7 +27999,7 @@ function openVendaDetalhe(id){
   var parcs = i.parc.slice().sort(function(a, b){ return a.venc < b.venc ? -1 : 1; });
   host.innerHTML = '<div class="overlay" id="ovVn"><div class="modal" style="max-width:820px">' +
     '<div class="modal-head"><div><h3>Venda · ' + esc(vnPatName(s)) + '</h3><div class="modal-sub">' + esc(SALE_TIPOS[s.tipo] || s.tipo) + ' · ' + esc(trBr(s.data)) + ' · ' + esc(SALE_STATUS[s.status] || s.status) + '</div></div><button class="modal-close" id="vnDClose" aria-label="Fechar">✕</button></div>' +
-    '<div class="modal-body"><div class="tr-sec tr-sec-top">Venda</div><div class="field-row">' + row("Vendedor", esc(s.sellerName || "—")) + row("Forma de Pagamento", esc(s.forma || "—")) + row("Registrada por", esc(s.by || "—")) + '</div>' +
+    '<div class="modal-body"><div class="tr-sec tr-sec-top">Venda</div><div class="field-row">' + row("Vendedor", esc(s.sellerName || "—")) + row("Convênio", esc(pvConvName(s))) + row("Forma de Pagamento", esc(s.forma || "—")) + row("Registrada por", esc(s.by || "—")) + '</div>' +
       '<div class="field-row">' + row("Valor Mensal", esc(fmtMoney(s.valorMensal))) + row("Meses", String(s.meses)) + row("Total", '<b>' + esc(fmtMoney(s.total)) + '</b>') + '</div>' +
       (s.obs ? row("Observações", esc(s.obs)) : '') +
       '<div class="tr-sec">Pagamento</div><div class="field-row">' + row("Recebido", esc(fmtMoney(i.recebido))) + row("A Receber", esc(fmtMoney(i.aberto))) + row("Situação", vnPayChip(s, i)) + '</div>' +
@@ -28020,7 +28035,7 @@ function slUpdate(id, patch){
   var c = agdClient();
   var apply = function(){ SALES.rows = (SALES.rows || []).map(function(s){ return s.id === id ? Object.assign({}, s, patch) : s; }); return true; };
   if (!c) return Promise.resolve(apply());
-  return c.from("treatment_sales").update({data: patch.data, seller_id: patch.seller || null, seller_name: patch.sellerName || null, forma: patch.forma || null, obs: patch.obs || null})
+  return c.from("treatment_sales").update({data: patch.data, seller_id: patch.seller || null, seller_name: patch.sellerName || null, forma: patch.forma || null, obs: patch.obs || null, convenio_id: patch.convId || null, convenio_name: patch.convName || null})
     .eq("id", id).select().single().then(function(res){
       if (res.error || !res.data){ showToast("Não foi possível salvar a venda: " + ((res.error && res.error.message) || "sem permissão"), true); return false; }
       SALES.rows = (SALES.rows || []).map(function(s){ return s.id === id ? slFromDb(res.data) : s; }); return true;
@@ -28071,16 +28086,21 @@ function openVendaEditar(s){
   var host = regQuickHost(), staff = fpStaffList();
   if (s.seller && !staff.some(function(x){ return x.id === s.seller; })) staff = staff.concat([{id: s.seller, nome: s.sellerName || fpStaffName(s.seller)}]);
   var formas = SALE_FORMAS.slice(); if (s.forma && formas.indexOf(s.forma) === -1) formas.push(s.forma);
+  var cur0 = s.convId || (s.convName ? "" : slConvOf(s.treatment, s.patient).id), curConv = cur0;
+  var convs = (state.convenios || []).filter(function(x){ return isActive(x) || x.id === curConv; }).slice().sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
+  if (!curConv && s.convName){ curConv = "__old"; convs = [{id: "__old", name: s.convName}].concat(convs); }
   host.innerHTML = '<div class="overlay" id="ovVnEd"><div class="modal" style="max-width:560px">' +
     '<div class="modal-head"><div><h3>Editar Venda</h3><div class="modal-sub">' + esc(vnPatName(s)) + ' · ' + esc(SALE_TIPOS[s.tipo] || s.tipo) + ' · ' + esc(fmtMoney(s.total)) + '</div></div><button class="modal-close" id="vnEClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body"><div class="tr-sec tr-sec-top">Venda</div>' +
       '<div class="field-row"><div class="field"><label for="vnEData">Data da Venda</label><input type="date" id="vnEData" value="' + esc(s.data || "") + '"></div>' +
       '<div class="field"><label for="vnESeller">Vendedor</label><select id="vnESeller"><option value="">Sem vendedor</option>' +
         staff.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === s.seller ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="field-row"><div class="field"><label for="vnEConv">Convênio</label><select id="vnEConv" data-combo><option value="">Sem Convênio</option>' +
+        convs.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === curConv ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
       '<div class="field"><label for="vnEForma">Forma de Pagamento</label><select id="vnEForma"><option value="">Não informada</option>' +
-        formas.map(function(f){ return '<option value="' + esc(f) + '"' + (f === s.forma ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join("") + '</select></div>' +
+        formas.map(function(f){ return '<option value="' + esc(f) + '"' + (f === s.forma ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="field"><label for="vnEObs">Observações</label><textarea id="vnEObs" rows="3">' + esc(s.obs || "") + '</textarea></div>' +
-      '<div class="hint">Valor, meses e tipo não mudam aqui. Trocar o vendedor recalcula a comissão que ainda não foi paga.</div>' +
+      '<div class="hint">O convênio fica gravado na venda (é o que o Painel de Vendas usa). Valor, meses e tipo não mudam aqui. Trocar o vendedor recalcula a comissão que ainda não foi paga.</div>' +
     '</div><div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="vnECancel">Cancelar</button><button class="btn primary" id="vnESave">Salvar</button></div></div></div>';
   var $ = function(x){ return document.getElementById(x); }, ov = $("ovVnEd");
   var close = function(){ host.innerHTML = ""; };
@@ -28091,7 +28111,9 @@ function openVendaEditar(s){
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data)){ showToast("Informe a data da venda.", true); return; }
     var why = slEditBlocked(s); if (why){ showToast(why, true); return; }
     var sellerName = seller ? ((staff.filter(function(x){ return x.id === seller; })[0] || {}).nome || fpStaffName(seller)) : "";
-    var patch = {data: data, seller: seller, sellerName: sellerName, forma: $("vnEForma").value, obs: $("vnEObs").value.trim()};
+    var cvId = $("vnEConv").value, cvItem = convs.filter(function(x){ return x.id === cvId; })[0];
+    var patch = {data: data, seller: seller, sellerName: sellerName, forma: $("vnEForma").value, obs: $("vnEObs").value.trim(),
+      convId: cvId === "__old" ? "" : cvId, convName: cvItem ? cvItem.name : ""};
     var sellerChanged = seller !== (s.seller || "");
     $("vnESave").disabled = true;
     slUpdate(s.id, patch).then(function(ok){
@@ -29010,7 +29032,7 @@ var HELP_TOPICS = [
       "Informe a data, o vendedor, a forma de pagamento, o <b>valor mensal</b> e os <b>meses</b>; o total é calculado.",
       "Marque <b>Gerar parcelas no Contas a Receber</b> para criar as contas: entrada (opcional), número de parcelas, primeiro vencimento, intervalo em meses, conta bancária e subcategoria. A prévia mostra cada parcela antes de salvar.",
       "Na venda seguinte do mesmo tratamento, a anterior fica <b>Substituída</b>; se havia parcelas em aberto dela, você escolhe manter ou excluir.",
-      "Para corrigir uma venda, abra-a em <b>Financeiro ▾ → Vendas</b> e clique em <b>Editar</b>: dá para mudar a data, o vendedor, a forma de pagamento e as observações (valor, meses e tipo não mudam). Só a venda <b>Ativa</b> e sem parcela recebida pode ser editada. Trocar o vendedor recalcula a comissão que ainda não foi paga; se já foi paga, o sistema só avisa a diferença a acertar.",
+      "Para corrigir uma venda, abra-a em <b>Financeiro ▾ → Vendas</b> e clique em <b>Editar</b>: dá para mudar a data, o vendedor, o convênio, a forma de pagamento e as observações (valor, meses e tipo não mudam). A venda grava o convênio do tratamento no momento em que é registrada (sem convênio no tratamento, o do cadastro do paciente), e é esse convênio que o Painel de Vendas usa. Só a venda <b>Ativa</b> e sem parcela recebida pode ser editada. Trocar o vendedor recalcula a comissão que ainda não foi paga; se já foi paga, o sistema só avisa a diferença a acertar.",
       "Na mesma janela, <b>Excluir</b> apaga a venda junto com as parcelas em aberto no Contas a Receber e a comissão do vendedor (e a conta a pagar dela). Venda com parcela recebida ou com comissão já paga não pode ser excluída: cancele o tratamento. Excluir o <b>tratamento</b> exclui a venda dele do mesmo jeito (a confirmação mostra o que sai junto); se a venda estiver bloqueada, o tratamento também não é excluído.",
       "No grupo <b>Vendas</b> da janela do tratamento ficam todas as vendas, com situação e quantas parcelas estão em aberto.",
       "Ao <b>cancelar</b> o tratamento, o sistema pergunta se exclui as parcelas em aberto (todas, ou só as que vencem a partir de uma data; as já recebidas não mudam) e depois se remove as sessões do Planner e da Agenda a partir de uma data. A venda ativa fica <b>Cancelada</b>."
