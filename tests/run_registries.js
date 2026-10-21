@@ -35,7 +35,7 @@ const path = require('path');
   console.log('label "Sessão/Mês"?', (await page.locator('label[for="pPac"]').innerText()) === 'Sessão/Mês');
   console.log('treatment window has the general ABA checkbox?', (await page.$('#pAba')) !== null);
   console.log('group title "Especialidades e serviços"?', (await page.locator('#ovTreat .tr-sec.spec-sum-label').textContent()).toLowerCase().includes('especialidades e serviços'));
-  console.log('treatment window in groups like the patient form?', (await page.$$eval('#ovTreat .tr-sec', (a) => a.map((x) => x.textContent.split(' ')[0]))).slice(0, 5).join('|') === 'Tratamento|Convênio|Especialidades|Observações|Horário');
+  console.log('treatment window in groups like the patient form?', (await page.$$eval('#ovTreat .tr-sec', (a) => a.map((x) => x.textContent.split(' ')[0]))).slice(0, 5).join('|') === 'Tratamento|Convênio|Intervenção|Especialidades|Horário');
 
   // ---- TEST: legacy convenio text resolved against catalog (Unimed matches) ----
   const convVal = await page.locator('#pConv').inputValue();

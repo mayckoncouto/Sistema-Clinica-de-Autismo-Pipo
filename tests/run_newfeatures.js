@@ -85,10 +85,10 @@ const path = require('path');
   await page.waitForSelector('#ovTreat');
   console.log('new patient opens its treatment right away?', (await page.$eval('#trPat', s => s.options[s.selectedIndex].text)) === 'Novo Paciente Teste');
   console.log('treatment window has the general ABA checkbox?', (await page.$('#pAba')) !== null);
-  // dois quadros: o 1º com o ABA automático (6 anos = Sim), o 2º trocado à mão para Não
+  // tratamento novo do zero começa com Intervenção ABA desmarcada: o 1º quadro herda Não, o 2º é trocado à mão para Sim
   const TL = require('./tl-helper');
   await TL.addLine(page, {spec: 'Fonoaudiologia', hours: 3});
-  await TL.addLine(page, {spec: 'Psicologia', hours: 2, aba: 'Não'});
+  await TL.addLine(page, {spec: 'Psicologia', hours: 2, aba: 'Sim'});
   await page.click('#trSave');
   await page.waitForTimeout(200);
 
@@ -97,7 +97,7 @@ const path = require('path');
   console.log('=== novo paciente salvo ===', JSON.stringify(newPatient));
   const treat = (await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['treatments/all'])))).list.find(t => t.patientId === newPatient.id);
   console.log('=== tratamento do novo paciente ===', JSON.stringify(treat));
-  console.log('treatment saved without ABA field and 2 quadros (auto Sim + manual Não)?', !!treat && !('aba' in treat) && treat.specHours.length === 2 && treat.specHours.map(h => h.aba).join() === 'Sim,Não' && treat.specHours.every(h => h.service === 'sessao' && h.id));
+  console.log('treatment saved without ABA field and 2 quadros (padrão do tratamento novo = Não + 1 trocado à mão para Sim)?', !!treat && !('aba' in treat) && treat.specHours.length === 2 && treat.specHours.map(h => h.aba).join() === 'Não,Sim' && treat.specHours.every(h => h.service === 'sessao' && h.id));
   const specialtiesStore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__STORE__['config/specialties'])));
   console.log('=== catálogo de especialidades após criar "Equoterapia" ===', JSON.stringify(specialtiesStore));
 

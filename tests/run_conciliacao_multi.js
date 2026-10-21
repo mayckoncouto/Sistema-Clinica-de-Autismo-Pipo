@@ -54,7 +54,7 @@ const fs = require('fs');
   check('dividir: 2 lançamentos criados e ligados, linha conciliada?', (await ev('cnEntriesOf(CN.rows.filter(function(l){return l.id==="L2";})[0]).length')) === 2 && (await ev('cnState(CN.rows.filter(function(l){return l.id==="L2";})[0])')) === 'conc');
   // soma errada
   await ev('cnSplitDialog(CN.rows.filter(function(l){return l.id==="T1";})[0])'); await page.waitForSelector('#ovCnSplit');
-  await page.click('#cnsOk'); await page.waitForTimeout(200);
+  check('dividir sem valores: Criar fica desativado?', await page.$eval('#cnsOk', (b) => b.disabled));
   check('dividir sem valores não grava?', (await ev('cnEntriesOf(CN.rows.filter(function(l){return l.id==="T1";})[0]).length')) === 0);
   await page.click('#cnsCancel');
   // desfazer: apaga só o que a conciliação criou
