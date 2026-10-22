@@ -2542,11 +2542,11 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   :is(#tab-pacientes,#tab-profissionais,.reg-panel,#tab-prontuario) .pat-table :is(th,td){white-space:normal;overflow-wrap:anywhere}
   /* Prontuário: só Paciente e Registros */
   #prListHost .pat-table :is(col,th,td):nth-child(n+3){display:none}
-  #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(8)){display:none}
+  #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)):not(:nth-child(9)){display:none}
   /* Pacientes / Tratamentos: coluna do nome com todo o espaço que sobra; a da situação só do tamanho da etiqueta */
   #patListHost .pat-table col:first-child,#trHost .pat-table.tr-main col:first-child{width:auto!important}
-  #patListHost .pat-table col:nth-child(8),#trHost .pat-table.tr-main:not(.tr-fin) col:nth-child(10),#trHost .pat-table.tr-main.tr-fin col:nth-child(11){width:122px!important}
-  :is(#patListHost .pat-table :is(th,td):nth-child(8),#trHost .pat-table.tr-main:not(.tr-fin) :is(th,td):nth-child(10),#trHost .pat-table.tr-main.tr-fin :is(th,td):nth-child(11)){padding-left:6px;padding-right:10px;white-space:nowrap}
+  #patListHost .pat-table col:nth-child(9),#trHost .pat-table.tr-main:not(.tr-fin) col:nth-child(10),#trHost .pat-table.tr-main.tr-fin col:nth-child(11){width:122px!important}
+  :is(#patListHost .pat-table :is(th,td):nth-child(9),#trHost .pat-table.tr-main:not(.tr-fin) :is(th,td):nth-child(10),#trHost .pat-table.tr-main.tr-fin :is(th,td):nth-child(11)){padding-left:6px;padding-right:10px;white-space:nowrap}
   :is(#patListHost,#trHost) .pat-table .tr-chip{white-space:nowrap}
   #profList .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)){display:none}
   /* Rolagem como em Pacientes: a barra da tela fica parada e só a lista rola */
@@ -2571,7 +2571,7 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   :is(#tab-pacientes,#tab-tratamentos,#tab-colaboradores,.reg-panel) .pat-table :is(th,td){white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal!important}
   :is(#tab-pacientes,#tab-tratamentos,#tab-colaboradores,.reg-panel) .pat-table col:first-child{width:auto!important}
   :is(#tab-pacientes,#tab-tratamentos,#tab-colaboradores,.reg-panel) .pat-table :is(th,td){padding-left:8px;padding-right:8px}
-  #patListHost .pat-table col:nth-child(2){width:64px!important}
+  #patListHost .pat-table col:nth-child(3){width:64px!important}
   #trHost .pat-table.tr-main col:nth-child(2){width:84px!important}
   #staffListHost .pat-table col:nth-child(2){width:110px!important}
   #staffListHost .pat-table col:nth-child(6){width:84px!important}
@@ -12847,14 +12847,14 @@ function openPasteConfirmModal(toDocId, toKey, existing){
 // plano, sessões, ABA e especialidades ficam na tela de Tratamentos).
 var SORT_COLS = [
   {key:"nome", label:"Nome"},
+  {key:"vencimento", label:"Vencimento"},
   {key:"idade", label:"Idade"},
   {key:"telefone", label:"Telefone"},
   {key:"email", label:"E-mail"},
   {key:"escola", label:"Escola"},
   {key:"medico", label:"Médico"},
   {key:"status", label:"Status"},
-  {key:"tratamento", label:"Tratamento"},
-  {key:"vencimento", label:"Vencimento"}
+  {key:"tratamento", label:"Tratamento"}
 ];
 // Vencimento dos tratamentos ATIVOS do paciente (o de serviço, como Avaliação, vem primeiro).
 function patDueItems(pid){
@@ -12871,7 +12871,8 @@ function patDueCell(pid){
   var html = items.map(function(t){
     var txt = trDueText(t);
     if (txt === "…") PAT_DUE_WAIT = true;
-    var body = (txt ? esc(txt) : '<span class="pt-muted">Sem vencimento</span>') + ' ' + trDueChip(t);
+    var chip = trDueChip(t);
+    var body = (chip ? chip + ' ' : '') + (txt ? esc(txt) : '<span class="pt-muted">Sem vencimento</span>');
     return '<div class="pt-due">' + (items.length > 1 ? '<span class="pt-due-l">' + esc(patDueLabel(t)) + ':</span> ' : '') + body + '</div>';
   }).join("");
   return '<td class="pt-venc">' + html + '</td>';
@@ -13170,13 +13171,13 @@ function renderPatientsTab(){
     var dot = col ? '<span class="pcolor-dot" style="background:'+col+'" title="Cor por idade/ABA"></span>' : '';
     return '<tr data-id="'+esc(p.id)+'"'+(p.inativo ? ' class="is-inactive"' : '')+'>' +
       '<td class="pt-nome">'+dot+esc(p.nome)+(patHasProtetiva(p) ? ' '+protShieldHtml() : '')+patCardChip(p)+encChip(p)+'</td>' +
+      patDueCell(p.id) +
       '<td class="pt-muted">'+idadeTxt+'</td>' +
       cellTxt(patFirstPhone(p)) + cellTxt(patFirstEmail(p)) +
       cellTxt(p.escolaId ? patRegName("escolas", p.escolaId) : "") +
       cellTxt(p.medicoId ? patRegName("medicos", p.medicoId) : "") +
       '<td>'+(isActive(p) ? '<span class="tr-chip st-ativo">Ativo</span>' : '<span class="tr-chip st-inativo">Inativo</span>')+(patBlocked(p) ? ' <span class="tr-chip st-cancelado" title="' + esc(patBlockText(p)) + '">Bloqueado</span>' : '')+'</td>' +
       '<td class="pt-trat">'+trTxt+'</td>' +
-      patDueCell(p.id) +
     '</tr>';
   }).join("");
   // Vencimento por sessões precisa dos atendimentos: lê uma vez e redesenha.
