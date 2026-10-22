@@ -48,6 +48,23 @@ const path = require('path');
   check('funil: 3 pacientes com triagem, 1 com avaliação depois, 1 com contrato novo depois', fun.t === 3 && fun.a === 1 && fun.n === 1, JSON.stringify(fun));
   check('filtro de convênio sem resultado zera os contratos', (await ev(`(function(){ GC.conv = "naoexiste"; var n = gcCalc("2026-03").contr; GC.conv = ""; return n; })()`)) === 0);
 
+  // "Outros" da cascata: a lista explica a barra paciente por paciente (renegociado no meio do mês conta os dois tratamentos)
+  const outs = JSON.parse(await ev(`(function(){
+    var P = window.__P, tp = ["multidisciplinar"];
+    state.treatments = state.treatments.concat([
+      {id: "d1", patientId: P[4], inicio: "2026-01-10", status: "renegociado", statusEm: "2026-03-15", tipo: "novo", tipos: tp, convenio: "Particular", valor: 600, specHours: []},
+      {id: "d2", patientId: P[4], inicio: "2026-03-15", status: "ativo", tipo: "renegociado", tipos: tp, convenio: "Particular", valor: 900, specHours: []}]);
+    rebuildPatients();
+    var keep = state.treatments.slice(0, -2), out = JSON.stringify(["2026-02", "2026-03", "2026-04"].map(function(ym, i){
+      var pym = ["2026-01", "2026-02", "2026-03"][i], w = gcWaterfall(gcCalc(pym), gcCalc(ym), ym, pym), d = gcDrillData("out", ym);
+      var soma = Math.round(d.rows.reduce(function(a, r){ return a + r.dif; }, 0) * 100) / 100;
+      return {ym: ym, barra: w.outros, soma: soma, n: d.rows.length, txt: d.rows.map(function(r){ return r.plain[4]; }).join(" | ")};
+    })); state.treatments = keep; rebuildPatients(); return out;
+  })()`));
+  check('a soma da lista Outros é igual à barra em todos os meses', outs.every((o) => o.barra === o.soma), JSON.stringify(outs));
+  const mar2 = outs[1];
+  check('março: renegociado no meio do mês aparece em Outros com o motivo', mar2.barra !== 0 && mar2.n >= 1 && /ainda vale/.test(mar2.txt), JSON.stringify(mar2));
+
   // tela
   await ev(`openGerencial(); 1`);
   await page.waitForSelector('#tab-gerencial:not([hidden]) #gcBody .gc-card', { timeout: 4000 });
