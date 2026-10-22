@@ -1,4 +1,4 @@
-// Planner ▾ → Resumo do Planner: três visões (mapa de calor, por profissional, por paciente), filtros e quadro de detalhes.
+// Planner ▾ → Relatórios do Planner: três visões (mapa de calor, por profissional, por paciente), filtros e quadro de detalhes.
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -25,14 +25,22 @@ const path = require('path');
     state.reportDocs["seg-1"].bookings["09:20|" + r1.id + "|" + t1.id] = {patient: pats[0].nome, service: "sessao"};
     state.reportDocs["qua-3"].bookings["09:20|" + r1.id + "|" + t1.id] = {patient: pats[1].nome, service: "sessao"};
     state.reportDocs["qua-3"].bookings["10:00|" + r1.id + "|" + t1.id] = {patient: "", blocked: true};
+    var g = state.rooms.filter(function(r){ return r.group && r.therapists && r.therapists.length; })[0];
+    if (g) state.reportDocs["seg-1"].bookings["14:00|" + g.id + "|" + g.therapists[0].id] = {patient: r1.name};
+    state.reportDocs["seg-1"].bookings["15:00|" + r1.id + "|" + t1.id] = {patient: "Reunião Clínica"};
+    state.reportDocs["seg-1"].bookings["16:00|" + r1.id + "|" + t1.id] = {patient: "Reserva", reserva: true};
     return {n1: pats[0].nome};
   })()`);
   await ev(`document.querySelector('#mainTabs button[data-tab="resumoplanner"]').click()`);
   await page.waitForTimeout(500);
   check('abre a tela', (await ev(`state.tab`)) === 'resumoplanner');
-  check('título', /Resumo do Planner/.test(await page.textContent('#tab-resumoplanner .cad-title')));
-  check('cartão Atendimentos = 3', /3/.test(await page.textContent('#rspSum .fl-card:nth-child(3) b')));
-  check('mapa de calor com 2 pacientes', (await page.$$eval('#rspMain .rsp-tbl tbody tr:not(.rsp-tot)', (t) => t.length)) === 2);
+  check('título', /Relatórios do Planner/.test(await page.textContent('#tab-resumoplanner .cad-title')));
+  check('cartão Atendimentos de Pacientes = 3', /3/.test(await page.textContent('#rspSum .fl-card:nth-child(3) b')));
+  check('cartão Outros = 2', /2/.test(await page.textContent('#rspSum .fl-card:nth-child(5) b')));
+  check('blocos Pacientes e Outros no mapa', /PACIENTES/.test(await page.textContent('#rspMain')) && /OUTROS/.test(await page.textContent('#rspMain')) && !/\(por grupo\)/.test(await page.textContent('#rspMain')));
+  check('grupo de suporte aparece', !(await ev('state.rooms.some(function(r){return r.group && r.therapists && r.therapists.length})')) || /GRUPOS DE SUPORTE/.test(await page.textContent('#rspMain')));
+  check('linha Total (Soma)', /Total \(Soma\)/.test(await page.textContent('#rspMain')));
+  check('mapa de calor com 2 pacientes', (await page.$$eval('#rspMain .rsp-tbl tbody tr', (t) => t.filter((x) => !x.className).filter((x) => x.querySelector('[data-rsp-pc]')).length)) >= 1);
   check('célula do paciente 1 com 2', (await page.$$eval('#rspMain td[data-rsp-pc]', (t) => t.map((x) => x.textContent))).includes('2'));
   await page.click('#rspMain td[data-rsp-pc]');
   check('abre o quadro de detalhes', await page.isVisible('#rspDrawer') && (await page.$$eval('#rspDrawer li', (t) => t.length)) >= 1);

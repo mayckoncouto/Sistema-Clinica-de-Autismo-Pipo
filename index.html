@@ -2982,6 +2982,8 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
 .rsp-drawer h2{margin:0 0 2px;font-size:16px}.rsp-drawer .rsp-sub{color:var(--ink-2);font-size:12.5px;margin-bottom:10px}
 .rsp-drawer ul{list-style:none;margin:0;padding:0}.rsp-drawer li{padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
 .rsp-drawer li span:last-child{color:var(--ink-2);text-align:right}
+.rsp-tbl tr.rsp-sep td{background:var(--surface-2);font-weight:700;text-align:left;color:var(--accent);font-size:12px}
+.rsp-bars-st{align-items:stretch;gap:6px}.rsp-bars-st > div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;background:none;border-radius:0}.rsp-bars-st i{display:block;flex:none;min-height:2px}
 .rsp-x{float:right;border:0;background:none;font-size:18px;cursor:pointer;color:var(--ink)}
 </style>
 <!-- APP-HEAD:END -->
@@ -3077,7 +3079,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <button data-tab="visaogeral" hidden>Visão Geral</button>
       <button data-tab="agendamentos" hidden>Agendamentos</button>
       <button data-tab="plannerlist" hidden>Agendamentos Planner</button>
-      <button data-tab="resumoplanner" hidden>Resumo do Planner</button>
+      <button data-tab="resumoplanner" hidden>Relatórios do Planner</button>
       <div class="cad-wrap"><button type="button" class="cad-btn" id="prBtn" aria-haspopup="menu" aria-expanded="false">Prontuário <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu" id="prMenu" role="menu" hidden></div></div>
       <button data-tab="prontuario" hidden>Prontuário</button>
       <button data-tab="planos" hidden>Plano Terapêutico</button>
@@ -3312,6 +3314,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       </div>
       <select id="rspSem" aria-label="Semana"></select>
       <select id="rspDia" aria-label="Dia"></select>
+      <select id="rspTipo" aria-label="Tipo"></select>
       <div class="seg" id="rspSeg" role="group" aria-label="Visão">
         <button type="button" data-rsp-v="heat" class="active">Mapa de Calor</button>
         <button type="button" data-rsp-v="prof">Por Profissional</button>
@@ -5864,7 +5867,7 @@ function cadTitleText(k){
     medicos: "Médicos", escolas: "Escolas", diagnosticos: "Diagnósticos", origens: "Origens", motivosbloq: "Motivos de Bloqueio", tipostrat: "Tipos de Tratamento", colaboradores: "Colaboradores",
     tiposcolab: "Tipos de Colaborador", profissionais: "Profissionais", especialidades: "Especialidades", servicos: "Serviços",
     cbo: "CBO", conselhos: "Conselhos", fornecedores: "Fornecedores", catfornecedor: "Categorias de Fornecedor", unidades: "Unidades", contratos: "Contratos", contas: "Contas Bancárias", planocontas: "Plano de Contas", lancamentos: "Lançamentos", pagar: "Contas a Pagar", receber: "Contas a Receber", emptomados: "Empréstimos Tomados", empconcedidos: "Empréstimos Concedidos", conciliacao: "Conciliação", vendas: "Vendas", painelvendas: "Painel de Vendas", automacoes: "Automações", caixa: "Caixa de Entrada", demonstrativos: "Demonstrativos", agendamentos: "Agendamentos", plannerlist: "Agendamentos Planner", feriados: "Feriados e Recessos", status: "Status", objetivos: "Objetivos",
-    resumoplanner: "Resumo do Planner", atividades: "Atividades", anamneses: "Anamneses", prontuario: "Prontuário", planos: "Plano Terapêutico", tiposanam: "Modelos de Anamnese", escalas: "Escalas", habilidades: "Habilidades"})[k] || "";
+    resumoplanner: "Relatórios do Planner", atividades: "Atividades", anamneses: "Anamneses", prontuario: "Prontuário", planos: "Plano Terapêutico", tiposanam: "Modelos de Anamnese", escalas: "Escalas", habilidades: "Habilidades"})[k] || "";
 }
 function cadTitlesInit(){
   ["pacientes", "tratamentos", "tipostrat", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab",
@@ -7906,9 +7909,10 @@ function wireAgendamentos(){
  * profissional), Por Profissional (cartões) e Por Paciente. Lê os mesmos dados da Agendamentos Planner
  * (pllRows) e a permissão do Resumo (ver). Detalhes ao lado ao clicar. */
 var RSP = {v: "heat", hide: {}, sel: ""};
+var RSP_TIPOS = {pac: {n: "Pacientes", c: "var(--accent)"}, grp: {n: "Grupos de Suporte", c: "#c2410c"}, out: {n: "Outros", c: "#6d4cc2"}};
 function rspFilters(){
   function v(id){ var el = document.getElementById(id); return el ? el.value : ""; }
-  return {q: normText(v("rspQ")), sem: v("rspSem"), dia: v("rspDia")};
+  return {q: normText(v("rspQ")), sem: v("rspSem"), dia: v("rspDia"), tipo: v("rspTipo")};
 }
 function rspFillFilters(){
   function fill(id, first, opts){
@@ -7920,13 +7924,38 @@ function rspFillFilters(){
   var sm = isMobileView();
   fill("rspSem", sm ? "Semana" : "Todas as Semanas", [1, 2, 3, 4].map(function(w){ return [String(w), w + "ª Semana"]; }));
   fill("rspDia", sm ? "Dia" : "Todos os Dias", DAYS.map(function(d){ return [d.key, pllDayName(d.key)]; }));
+  fill("rspTipo", sm ? "Tipo" : "Pacientes e Equipe", [["pac", "Só Pacientes"], ["eq", "Só Equipe (Grupos e Outros)"]]);
+}
+// Todos os agendamentos do Planner que contam: paciente em coluna de sala (pac), grupo de suporte (grp) e
+// Reunião Clínica / Treinamento / Reserva (out). Bloqueado e horário bloqueado ficam de fora.
+function rspAllRows(){
+  var out = [];
+  DAYS.forEach(function(d){
+    for (var w = 1; w <= 4; w++){
+      var doc = state.reportDocs[docIdFor(d.key, w)], bk = doc && doc.bookings; if (!bk) continue;
+      Object.keys(bk).forEach(function(k){
+        var b = bkRec(bk[k]); if (!b || !b.patient || b.lock) return;
+        var kind = bookingKind(b); if (kind === "bloqueado") return;
+        var p = k.split("|"), room = findRoom(p[1]); if (!room) return;
+        var ther = findTherapist(room, p[2]), prof = ther ? ther.professionalId : "";
+        var base = {day: d.key, week: w, time: p[0], prof: prof, spec: prof ? (professionalSpecialtyId(prof) || "") : "", room: room.name};
+        if (kind){ base.t = "out"; base.who = roomMeetingLabel(kind); base.key = "o:" + kind; base.extra = room.name; }
+        else if (isGroup(room)){ base.t = "grp"; base.who = room.name; base.key = "g:" + room.id; base.extra = "→ " + b.patient; }
+        else { var pat = findPatientByName(b); base.t = "pac"; base.who = b.patient; base.pid = pat ? pat.id : (b.patientId || ""); base.key = "p:" + (base.pid || normText(b.patient)); base.extra = room.name; }
+        out.push(base);
+      });
+    }
+  });
+  return out;
 }
 function rspRows(withHidden){
   var f = rspFilters();
-  return pllRows().filter(function(r){
-    if (f.q && normText(r.patient || "").indexOf(f.q) === -1) return false;
+  return rspAllRows().filter(function(r){
+    if (f.q && normText(r.who || "").indexOf(f.q) === -1) return false;
     if (f.sem && String(r.week) !== f.sem) return false;
     if (f.dia && r.day !== f.dia) return false;
+    if (f.tipo === "pac" && r.t !== "pac") return false;
+    if (f.tipo === "eq" && r.t === "pac") return false;
     if (!withHidden && RSP.hide[r.spec || ""]) return false;
     return true;
   });
@@ -7936,7 +7965,6 @@ function rspSpecColor(specId){
   return swatchVar(sp ? (sp.color || "teal") : "slate");
 }
 function rspSpecName(specId){ return specId ? (specialtyName(specId) || "Sem Especialidade") : "Sem Especialidade"; }
-function rspPid(r){ return r.pid || ("n:" + normText(r.patient)); }
 function rspPad(h){ return h.length < 5 ? "0" + h : h; }
 function rspOnShow(){ rspFillFilters(); RSP.sel = ""; var d = document.getElementById("rspDrawer"); if (d) d.hidden = true; rspRender(); }
 function rspSpecOrder(){ var o = {}; (state.specialties || []).forEach(function(s, i){ o[s.id] = i; }); return o; }
@@ -7945,21 +7973,20 @@ function rspRender(){
   rspFillFilters();
   if (!Object.keys(state.reportDocs).length){ main.innerHTML = '<div class="empty-state"><b>Carregando…</b></div>'; return; }
   var all = rspRows(true), R = rspRows(false);
-  var pats = {}, profs = {};
-  R.forEach(function(r){ pats[rspPid(r)] = 1; if (r.prof) profs[r.prof] = 1; });
-  var np = Object.keys(pats).length;
+  var pats = {}, profs = {}, c = {pac: 0, grp: 0, out: 0};
+  R.forEach(function(r){ if (r.t === "pac") pats[r.key] = 1; if (r.prof) profs[r.prof] = 1; c[r.t]++; });
   var sum = document.getElementById("rspSum");
-  function card(label, val){ return '<div class="fl-card"><small>' + esc(label) + '</small><b>' + val + '</b></div>'; }
-  if (sum) sum.innerHTML = card("Pacientes", String(np)) + card("Profissionais", String(Object.keys(profs).length)) + card("Atendimentos", String(R.length)) +
-    card("Atendimentos por Paciente", np ? (R.length / np).toFixed(1).replace(".", ",") : "0");
-  var cnt = document.getElementById("rspCount"); if (cnt) cnt.textContent = R.length + (R.length === 1 ? " atendimento" : " atendimentos");
+  function card(label, val, col){ return '<div class="fl-card"' + (col ? ' style="border-top:4px solid ' + col + '"' : '') + '><small>' + esc(label) + '</small><b>' + val + '</b></div>'; }
+  if (sum) sum.innerHTML = card("Pacientes", String(Object.keys(pats).length)) + card("Profissionais", String(Object.keys(profs).length)) +
+    card("Atendimentos de Pacientes", String(c.pac), RSP_TIPOS.pac.c) + card("Grupos de Suporte", String(c.grp), RSP_TIPOS.grp.c) + card("Outros", String(c.out), RSP_TIPOS.out.c) + card("Total de Agendamentos", String(R.length));
+  var cnt = document.getElementById("rspCount"); if (cnt) cnt.textContent = R.length + (R.length === 1 ? " agendamento" : " agendamentos");
   var by = {}; all.forEach(function(r){ var k = r.spec || ""; by[k] = (by[k] || 0) + 1; });
   var ord = rspSpecOrder();
   var specs = Object.keys(by).sort(function(a, b){ return (ord[a] == null ? 999 : ord[a]) - (ord[b] == null ? 999 : ord[b]); });
   document.getElementById("rspChips").innerHTML = specs.map(function(k){
     return '<button type="button" class="rsp-chip' + (RSP.hide[k] ? " off" : "") + '" data-rsp-spec="' + esc(k) + '" aria-pressed="' + !RSP.hide[k] + '"><i style="background:' + rspSpecColor(k) + '"></i>' + esc(rspSpecName(k)) + " · " + by[k] + "</button>";
   }).join("");
-  if (!R.length){ main.innerHTML = '<div class="empty-state"><b>Nenhum atendimento' + (pllRows().length ? " com esses filtros" : " no Planner") + '.</b></div>'; return; }
+  if (!R.length){ main.innerHTML = '<div class="empty-state"><b>Nenhum agendamento' + (rspAllRows().length ? " com esses filtros" : " no Planner") + '.</b></div>'; return; }
   main.innerHTML = RSP.v === "prof" ? rspProfView(R) : RSP.v === "pac" ? rspPacView(R) : rspHeatView(R);
 }
 function rspProfCols(R){
@@ -7968,45 +7995,56 @@ function rspProfCols(R){
   return cols.sort(function(a, b){ return ((ord[a.spec] == null ? 999 : ord[a.spec]) - (ord[b.spec] == null ? 999 : ord[b.spec])) || a.name.localeCompare(b.name, "pt-BR"); });
 }
 function rspHeatView(R){
-  var pacs = {}; R.forEach(function(r){ pacs[rspPid(r)] = r.patient; });
-  var ids = Object.keys(pacs).sort(function(a, b){ return String(pacs[a]).localeCompare(String(pacs[b]), "pt-BR"); });
-  var cols = rspProfCols(R), cnt = {}, max = 1;
-  R.forEach(function(r){ var k = rspPid(r) + "|" + (r.prof || ""); cnt[k] = (cnt[k] || 0) + 1; if (cnt[k] > max) max = cnt[k]; });
-  var h1 = '<tr><th class="rsp-first" rowspan="2">Paciente</th>', groups = [];
+  var cols = rspProfCols(R), cnt = {}, max = 1, names = {}, order = {pac: [], grp: [], out: []};
+  R.forEach(function(r){
+    var k = r.key + "|" + (r.prof || ""); cnt[k] = (cnt[k] || 0) + 1; if (cnt[k] > max) max = cnt[k];
+    if (!names[r.key]){ names[r.key] = r.who; order[r.t].push(r.key); }
+  });
+  ["pac", "grp", "out"].forEach(function(t){ order[t].sort(function(a, b){ return String(names[a]).localeCompare(String(names[b]), "pt-BR"); }); });
+  var h1 = '<tr><th class="rsp-first" rowspan="2">Paciente / Equipe</th>', groups = [];
   cols.forEach(function(c){ var g = groups[groups.length - 1]; if (g && g.spec === c.spec) g.n++; else groups.push({spec: c.spec, n: 1}); });
   groups.forEach(function(g){ h1 += '<th colspan="' + g.n + '" style="background:' + rspSpecColor(g.spec) + ';color:#fff">' + esc(rspSpecName(g.spec)) + '</th>'; });
   h1 += '<th rowspan="2">Total</th></tr><tr>' + cols.map(function(c){ return '<th>' + esc(firstName(c.name)) + '</th>'; }).join("") + '</tr>';
-  var b = "";
-  ids.forEach(function(pid){
-    var t = 0; b += '<tr><td class="rsp-first">' + esc(pacs[pid]) + '</td>';
+  function line(t, key){
+    var tot = 0, x = '<tr><td class="rsp-first">' + esc(names[key]) + '</td>';
     cols.forEach(function(c){
-      var n = cnt[pid + "|" + c.id] || 0; t += n;
-      var st = n ? 'background:color-mix(in srgb,' + rspSpecColor(c.spec) + ' ' + Math.round(15 + 85 * n / max) + '%,var(--surface));' + (n / max > .55 ? 'color:#fff;' : "") : "";
-      b += '<td class="rsp-c' + (RSP.sel === "c|" + pid + "|" + c.id ? " sel" : "") + '"' + (n ? ' data-rsp-pc="' + esc(pid) + '" data-rsp-pr="' + esc(c.id) + '"' : "") + ' style="' + st + '">' + (n || "") + '</td>';
+      var n = cnt[key + "|" + c.id] || 0; tot += n;
+      var col = t === "pac" ? rspSpecColor(c.spec) : RSP_TIPOS[t].c;
+      var st = n ? 'background:color-mix(in srgb,' + col + ' ' + Math.round(15 + 85 * n / max) + '%,var(--surface));' + (n / max > .55 ? 'color:#fff;' : "") : "";
+      x += '<td class="rsp-c' + (RSP.sel === "c|" + key + "|" + c.id ? " sel" : "") + '"' + (n ? ' data-rsp-pc="' + esc(key) + '" data-rsp-pr="' + esc(c.id) + '"' : "") + ' style="' + st + '">' + (n || "") + '</td>';
     });
-    b += '<td><b>' + t + '</b></td></tr>';
+    return x + '<td><b>' + tot + '</b></td></tr>';
+  }
+  var b = "";
+  [["pac", "PACIENTES"], ["grp", "GRUPOS DE SUPORTE"], ["out", "OUTROS"]].forEach(function(s){
+    if (!order[s[0]].length) return;
+    b += '<tr class="rsp-sep"><td colspan="' + (cols.length + 2) + '">' + s[1] + '</td></tr>' + order[s[0]].map(function(k){ return line(s[0], k); }).join("");
   });
-  var tot = '<tr class="rsp-tot"><td class="rsp-first">Total</td>', g = 0;
+  var tot = '<tr class="rsp-tot"><td class="rsp-first">Total (Soma)</td>', g = 0;
   cols.forEach(function(c){ var n = R.filter(function(r){ return (r.prof || "") === c.id; }).length; g += n; tot += '<td>' + n + '</td>'; });
   tot += '<td>' + g + '</td></tr>';
   return '<div class="rsp-scroll"><table class="rsp-tbl"><thead>' + h1 + '</thead><tbody>' + b + tot + '</tbody></table></div>' +
-    '<div class="rsp-legend">Menos <span class="sw" style="opacity:.2"></span><span class="sw" style="opacity:.55"></span><span class="sw"></span> Mais atendimentos do paciente com o profissional</div>';
+    '<div class="rsp-legend">Mais escuro = mais agendamentos. Pacientes na cor da especialidade; grupos de suporte em laranja; outros em roxo.</div>';
 }
 function rspProfView(R){
   var cols = rspProfCols(R);
   return '<div class="rsp-grid">' + cols.map(function(c){
-    var mine = R.filter(function(r){ return (r.prof || "") === c.id; });
-    var byDay = DAYS.map(function(d){ return mine.filter(function(r){ return r.day === d.key; }).length; }), mx = Math.max.apply(null, byDay.concat([1]));
-    var np = {}; mine.forEach(function(r){ np[rspPid(r)] = 1; });
+    var mine = R.filter(function(r){ return (r.prof || "") === c.id; }), k = {pac: 0, grp: 0, out: 0};
+    mine.forEach(function(r){ k[r.t]++; });
+    var byDay = DAYS.map(function(d){ var x = {pac: 0, grp: 0, out: 0}; mine.filter(function(r){ return r.day === d.key; }).forEach(function(r){ x[r.t]++; }); return x; });
+    var mx = Math.max.apply(null, byDay.map(function(x){ return x.pac + x.grp + x.out; }).concat([1]));
     return '<div class="rsp-pc" tabindex="0" data-rsp-prf="' + esc(c.id) + '" style="--c:' + rspSpecColor(c.spec) + '"><h3>' + esc(c.name) + '</h3><small>' + esc(rspSpecName(c.spec)) + '</small>' +
-      '<div class="rsp-n">' + mine.length + ' <small>atendimentos</small></div><small>' + Object.keys(np).length + ' pacientes</small>' +
-      '<div class="rsp-bars">' + byDay.map(function(v){ return '<div style="height:' + Math.max(6, v / mx * 100) + '%" title="' + v + '"></div>'; }).join("") + '</div>' +
-      '<div class="rsp-days">' + DAYS.map(function(d, i){ return '<span>' + esc(pllDayName(d.key).slice(0, 3)) + '<br>' + byDay[i] + '</span>'; }).join("") + '</div></div>';
+      '<div class="rsp-n">' + mine.length + ' <small>agendamentos</small></div>' +
+      '<div>' + ["pac", "grp", "out"].map(function(t){ return '<span class="rsp-tag" style="background:' + RSP_TIPOS[t].c + '">' + RSP_TIPOS[t].n + " " + k[t] + '</span>'; }).join("") + '</div>' +
+      '<div class="rsp-bars rsp-bars-st">' + byDay.map(function(x){ var t = x.pac + x.grp + x.out;
+        return '<div title="' + t + '">' + ["out", "grp", "pac"].map(function(q){ return x[q] ? '<i style="height:' + (x[q] / mx * 100) + '%;background:' + RSP_TIPOS[q].c + '"></i>' : ""; }).join("") + '</div>'; }).join("") + '</div>' +
+      '<div class="rsp-days">' + DAYS.map(function(d, i){ return '<span>' + esc(pllDayName(d.key).slice(0, 3)) + '<br>' + (byDay[i].pac + byDay[i].grp + byDay[i].out) + '</span>'; }).join("") + '</div></div>';
   }).join("") + '</div>';
 }
 function rspPacView(R){
-  var pacs = {}; R.forEach(function(r){ (pacs[rspPid(r)] = pacs[rspPid(r)] || {name: r.patient, rows: []}).rows.push(r); });
+  var pacs = {}; R.forEach(function(r){ if (r.t === "pac") (pacs[r.key] = pacs[r.key] || {name: r.who, rows: []}).rows.push(r); });
   var ids = Object.keys(pacs).sort(function(a, b){ return pacs[a].name.localeCompare(pacs[b].name, "pt-BR"); });
+  if (!ids.length) return '<div class="empty-state"><b>Nenhum paciente com esses filtros.</b></div>';
   return '<div class="rsp-scroll"><table class="rsp-tbl rsp-pl" style="width:100%"><thead><tr><th class="rsp-first">Paciente</th><th style="text-align:left">Especialidades</th><th>Atend.</th><th>Dias</th></tr></thead><tbody>' +
     ids.map(function(id){
       var m = pacs[id], sp = {}, dd = {};
@@ -8020,13 +8058,14 @@ function rspDrawer(title, sub, list){
   var d = document.getElementById("rspDrawer"); if (!d) return;
   d.hidden = false;
   d.innerHTML = '<button type="button" class="rsp-x" data-rsp-close aria-label="Fechar">×</button><h2>' + esc(title) + '</h2><div class="rsp-sub">' + esc(sub) + '</div>' +
-    (list.length ? '<ul>' + list.map(function(x){ return '<li><span>' + esc(x.r.week + "ª sem · " + pllDayName(x.r.day).slice(0, 3) + " " + rspPad(x.r.time)) + '</span><span>' + esc(x.extra) + '</span></li>'; }).join("") + '</ul>' : '<div class="pat-count">Sem atendimentos.</div>');
+    (list.length ? '<ul>' + list.map(function(x){ return '<li><span>' + esc(x.r.week + "ª sem · " + pllDayName(x.r.day).slice(0, 3) + " " + rspPad(x.r.time)) + '</span><span>' + esc(x.extra) + '</span></li>'; }).join("") + '</ul>' : '<div class="pat-count">Sem agendamentos.</div>');
 }
-function rspSort(a, b){ return (a.week - b.week) || (DAYS.map(function(d){ return d.key; }).indexOf(a.day) - DAYS.map(function(d){ return d.key; }).indexOf(b.day)) || a.time.localeCompare(b.time); }
+function rspSort(a, b){ var dk = DAYS.map(function(d){ return d.key; }); return (a.week - b.week) || (dk.indexOf(a.day) - dk.indexOf(b.day)) || a.time.localeCompare(b.time); }
+function rspWho(r){ return r.t === "pac" ? (professionalName(r.prof) || "—") + " (" + rspSpecName(r.spec) + ")" : (r.t === "grp" ? r.extra : r.who + " · " + r.extra); }
 function wireResumoPlanner(){
   var sec = document.getElementById("tab-resumoplanner"); if (!sec) return;
   document.getElementById("rspQ").addEventListener("input", debounce150(rspRender));
-  ["rspSem", "rspDia"].forEach(function(id){ document.getElementById(id).addEventListener("change", rspRender); });
+  ["rspSem", "rspDia", "rspTipo"].forEach(function(id){ document.getElementById(id).addEventListener("change", rspRender); });
   sec.addEventListener("click", function(e){
     var v = e.target.closest("[data-rsp-v]");
     if (v){
@@ -8039,16 +8078,16 @@ function wireResumoPlanner(){
     if (e.target.closest("[data-rsp-close]")){ document.getElementById("rspDrawer").hidden = true; RSP.sel = ""; rspRender(); return; }
     var R = rspRows(false), c = e.target.closest("[data-rsp-pc]"), pf = e.target.closest("[data-rsp-prf]"), pc = e.target.closest("[data-rsp-pac]");
     if (c){
-      var pid = c.getAttribute("data-rsp-pc"), prf = c.getAttribute("data-rsp-pr");
-      var l = R.filter(function(r){ return rspPid(r) === pid && (r.prof || "") === prf; }).sort(rspSort);
-      RSP.sel = "c|" + pid + "|" + prf; rspRender();
-      rspDrawer(l[0].patient, "com " + (prf ? professionalName(prf) : "Sem Profissional") + " · " + rspSpecName(l[0].spec) + " · " + l.length + " atendimentos", l.map(function(r){ return {r: r, extra: r.room || ""}; }));
+      var key = c.getAttribute("data-rsp-pc"), prf = c.getAttribute("data-rsp-pr");
+      var l = R.filter(function(r){ return r.key === key && (r.prof || "") === prf; }).sort(rspSort);
+      RSP.sel = "c|" + key + "|" + prf; rspRender();
+      rspDrawer(l[0].who, "com " + (prf ? professionalName(prf) : "Sem Profissional") + " · " + RSP_TIPOS[l[0].t].n + " · " + l.length + " agendamentos", l.map(function(r){ return {r: r, extra: r.t === "pac" ? r.room : r.extra}; }));
     } else if (pf){
       var id = pf.getAttribute("data-rsp-prf"), l2 = R.filter(function(r){ return (r.prof || "") === id; }).sort(rspSort);
-      rspDrawer(id ? professionalName(id) : "Sem Profissional", rspSpecName(l2[0].spec) + " · " + l2.length + " atendimentos", l2.map(function(r){ return {r: r, extra: r.patient}; }));
+      rspDrawer(id ? professionalName(id) : "Sem Profissional", l2.length + " agendamentos (pacientes e equipe)", l2.map(function(r){ return {r: r, extra: r.t === "pac" ? r.who : r.t === "grp" ? r.who + " " + r.extra : r.who}; }));
     } else if (pc){
-      var id2 = pc.getAttribute("data-rsp-pac"), l3 = R.filter(function(r){ return rspPid(r) === id2; }).sort(rspSort);
-      rspDrawer(l3[0].patient, l3.length + " atendimentos", l3.map(function(r){ return {r: r, extra: (professionalName(r.prof) || "—") + " (" + rspSpecName(r.spec) + ")"}; }));
+      var id2 = pc.getAttribute("data-rsp-pac"), l3 = R.filter(function(r){ return r.t === "pac" && r.key === id2; }).sort(rspSort);
+      rspDrawer(l3[0].who, l3.length + " atendimentos", l3.map(function(r){ return {r: r, extra: rspWho(r)}; }));
     }
   });
   sec.addEventListener("keydown", function(e){ if (e.key === "Enter" && e.target.matches("[data-rsp-prf],[data-rsp-pac]")) e.target.click(); });
@@ -29552,15 +29591,15 @@ var HELP_TOPICS = [
       "No celular: busca em cima, filtros dois por linha, depois data, ‹ Hoje › e ?, e o total do dia (sem as etiquetas por especialidade). Toda escolha abre uma janela própria na parte de baixo da tela."
     ],
     who: "Permissão <b>Visão Geral</b> (ver). Cada usuário vê os atendimentos que a Agenda já mostra para ele."},
-  {id: "resumo-planner", group: "Planner", title: "Resumo do Planner", mod: "resumo", tab: "resumoplanner",
-    purpose: "Ver os atendimentos de pacientes do Planner (as 4 semanas) de três jeitos: paciente × profissional em mapa de calor, cartões por profissional e lista por paciente.",
+  {id: "resumo-planner", group: "Planner", title: "Relatórios do Planner", mod: "resumo", tab: "resumoplanner",
+    purpose: "Ver todos os agendamentos do Planner (as 4 semanas) — pacientes, grupos de suporte e outros da equipe — em mapa de calor, cartões por profissional ou lista por paciente.",
     steps: [
-      "Abra <b>Planner ▾ → Resumo do Planner</b>. Os cartões do alto mostram pacientes, profissionais, atendimentos e a média de atendimentos por paciente.",
-      "Troque a visão pelos botões <b>Mapa de Calor</b>, <b>Por Profissional</b> e <b>Por Paciente</b>. No mapa, quanto mais escura a célula, mais atendimentos o paciente tem com aquele profissional.",
-      "Busque o paciente pelo nome e filtre por <b>Semana</b> e <b>Dia</b>. Clicar numa especialidade (etiqueta colorida) liga ou desliga essa especialidade na tela.",
-      "Clique numa célula, cartão ou linha para ver ao lado a lista dos atendimentos (semana, dia, hora e sala ou paciente). O × fecha o quadro."
+      "Abra <b>Planner ▾ → Relatórios do Planner</b>. Os cartões do alto mostram pacientes, profissionais, atendimentos de pacientes, grupos de suporte, outros e o total de agendamentos.",
+      "Troque a visão pelos botões <b>Mapa de Calor</b>, <b>Por Profissional</b> e <b>Por Paciente</b>. No mapa, as linhas são separadas em <b>Pacientes</b>, <b>Grupos de Suporte</b> e <b>Outros</b>, e a última linha soma tudo por profissional.",
+      "Busque pelo nome e filtre por <b>Semana</b>, <b>Dia</b> e tipo (pacientes, só equipe ou os dois). Clicar numa especialidade (etiqueta colorida) liga ou desliga essa especialidade na tela.",
+      "Clique numa célula, cartão ou linha para ver ao lado a lista dos agendamentos (semana, dia, hora e sala; nos grupos, a sala atendida). O × fecha o quadro."
     ],
-    rules: ["Conta só atendimentos de pacientes em colunas de sala; Bloqueado, Reunião Clínica, Treinamento, Reserva e grupos de suporte ficam de fora.", "Atualiza sozinho quando o Planner muda."],
+    rules: ["Grupos de Suporte contam por grupo (Aplicador ABA, Coordenador…). Outros são Reunião Clínica, Treinamento e Reserva.", "Bloqueado e horário bloqueado não contam. A Reunião Clínica automática de segunda às 11:20, enquanto ninguém a grava, também não.", "O total do profissional é a soma de pacientes, grupos e outros.", "Atualiza sozinho quando o Planner muda."],
     who: "Permissão <b>Resumo</b> (ver), em Níveis de Permissão, grupo Planner."},
   {id: "planner-list", group: "Planner", title: "Agendamentos Planner", mod: "planner_list", tab: "plannerlist",
     purpose: "Ver em lista todos os atendimentos de pacientes que estão no Planner (as 4 semanas), por paciente, com busca e filtros.",
@@ -29597,7 +29636,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Disponibilidade</b> (ver)."},
   {id: "resumo", group: "Planner", title: "Resumo do Planner", mod: "resumo", tab: "resumo",
     purpose: "Total de sessões por paciente, profissional e especialidade, somando as 4 semanas do Planner.",
-    steps: ["Planner ▾ → <b>Resumo</b>. Busque o paciente; os cabeçalhos ficam fixos ao rolar."],
+    steps: ["Planner ▾ → <b>Relatórios do Planner</b>. Busque o paciente; os cabeçalhos ficam fixos ao rolar."],
     rules: ["Conta só o que está agendado no Planner (paciente sem agendamento não aparece)."],
     who: "Permissão <b>Resumo</b>."},
 
@@ -31246,8 +31285,7 @@ var CAD_TABS = ["pacientes", "tratamentos", "tipostrat", "convenios", "motivos",
 var PL_ITEMS = [
   {key: "planner", label: "Planner", tab: "planner", ok: function(){ return can("planner", "view"); }},
   {key: "plannerlist", label: "Agendamentos Planner", tab: "plannerlist", ok: function(){ return can("planner_list", "view"); }},
-  {key: "resumoplanner", label: "Resumo do Planner", tab: "resumoplanner", ok: function(){ return can("resumo", "view"); }},
-  {key: "resumo", label: "Resumo", tab: "resumo", ok: function(){ return can("resumo", "view"); }},
+  {key: "resumoplanner", label: "Relatórios do Planner", tab: "resumoplanner", ok: function(){ return can("resumo", "view"); }},
   {key: "disponibilidade", label: "Disponibilidade", tab: "disponibilidade", ok: function(){ return can("disponibilidade", "view"); }}
 ];
 var PL_TABS = ["planner", "plannerlist", "resumoplanner", "resumo", "disponibilidade"];
