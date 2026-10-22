@@ -3787,6 +3787,8 @@ table.pat-table.gm-tbl{width:100%;table-layout:fixed}.gm-tbl td,.gm-tbl th{paddi
       </div>
       <span class="pat-count" id="reg-unidades-count"></span>
       <div class="spacer"></div>
+      <div class="cad-wrap pl-tools-wrap" id="unMoreWrap"><button type="button" class="btn ghost" id="unMoreBtn" aria-haspopup="menu" aria-expanded="false"><span class="pm-lg">Outras Opções</span><span class="pm-sm">Opções</span> <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>
+      <div class="cad-menu pl-tools-menu" id="unMoreMenu" role="menu" hidden><button type="button" class="btn ghost" role="menuitem" id="unBandsBtn">Faixas Etárias</button></div></div>
       <button class="btn primary" id="reg-unidades-add">+ Incluir</button>
     </div>
     <div id="reg-unidades-host" class="reg-host"></div>
@@ -4434,7 +4436,7 @@ function openClinicModal(){
               [1, 2, 3, 4, 5, 6, 7, 8].map(function(n){ return '<option value="'+n+'"'+(n === clinicSeguidasMax() ? ' selected' : '')+'>'+n+(n === 1 ? ' Sessão' : ' Sessões')+'</option>'; }).join("") + '</select></div></div>' +
             '<div class="pat-count">Cada linha do Planner e da Agenda é um atendimento com esta duração. Sessões Seguidas é o máximo que o quadro do tratamento oferece (lista de 1 até esse número).</div>' +
             (unitAbaOn() ? '<div class="field-row" style="margin-top:10px"><div class="field" id="clMetaBox"><label for="clMeta">Meta %</label><input type="text" id="clMeta" inputmode="decimal" maxlength="5" placeholder="80" value="' + esc(c.metaGrupo != null && c.metaGrupo !== "" ? String(c.metaGrupo) : "80") + '"></div><div class="field"></div></div>' +
-              '<div class="pat-count">Meta % é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner). A Intervenção ABA e as Faixas Etárias ficam no cadastro da Unidade.</div>' : '') +
+              '<div class="pat-count">Meta % é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner). A Intervenção ABA fica no cadastro da Unidade e as Faixas Etárias em Unidades → Outras Opções.</div>' : '') +
           '</div>' +
         '</div>' +
         '<div class="prof-section"><div class="prof-section-head"><span class="tr-sec tr-sec-in">Horário de Atendimento</span>' +
@@ -4947,7 +4949,7 @@ function ageBandsNorm(list){
 }
 // Editor das faixas (quadros + janela). pre = prefixo dos ids. Devolve {touched, check, save}.
 function ageBandsEditorHtml(pre){
-  return '<div id="' + pre + 'BandsBox"><div class="tr-sec">Faixas Etárias</div><div class="pat-count">Valem para todas as unidades (mudar aqui muda em todas): cor das células por idade, legendas e faixas de Habilidades e Objetivos. Idade Final em branco = sem limite.</div>' +
+  return '<div id="' + pre + 'BandsBox"><div class="pat-count">Valem para todas as unidades da empresa: cor das células por idade, legendas e faixas de Habilidades e Objetivos. Idade Final em branco = sem limite.</div>' +
     '<div class="room-list tl-list" id="' + pre + 'Bands"></div><button type="button" class="btn add-row-btn" id="' + pre + 'BandAdd">+ Incluir Faixa</button></div>';
 }
 function ageBandsEditorWire(pre, canEdit){
@@ -5019,6 +5021,38 @@ function ageBandsEditorWire(pre, canEdit){
   }
   return {touched: function(){ return touched; }, check: check, save: save};
 }
+// Unidades → Outras Opções → Faixas Etárias (2026-10-22): valem para a empresa toda. Ver = unidades.view; alterar = unidades.edit.
+function openAgeBandsModal(){
+  if (!can("unidades", "view")){ showToast(permDeniedMsg("unidades", "view"), true); return; }
+  var canEd = can("unidades", "edit"), host = document.getElementById("modalHost");
+  host.innerHTML = '<div class="overlay" id="ovAgeBands" role="dialog" aria-modal="true" aria-labelledby="abTitle"><div class="modal" style="max-width:560px">' +
+    '<div class="modal-head"><div><h3 id="abTitle">Faixas Etárias</h3><div class="modal-sub">Opção da empresa: a mudança vale para todas as unidades.</div></div><button class="modal-close" id="abClose" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body"><div class="tr-sec tr-sec-top">Faixas</div>' + ageBandsEditorHtml("ab") + '</div>' +
+    '<div class="modal-foot"><span class="spacer"></span><button class="btn ghost" id="abCancel">' + (canEd ? "Cancelar" : "Fechar") + '</button>' + (canEd ? '<button class="btn primary" id="abSave">Salvar</button>' : '') + '</div></div></div>';
+  var ov = document.getElementById("ovAgeBands"), ed = ageBandsEditorWire("ab", canEd);
+  function close(){ host.innerHTML = ""; }
+  document.getElementById("abClose").addEventListener("click", close);
+  document.getElementById("abCancel").addEventListener("click", close);
+  ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  var sv = document.getElementById("abSave");
+  if (sv) sv.addEventListener("click", function(){
+    if (!ed.touched()){ close(); return; }
+    var w = ed.check(); if (w){ showToast("Faixas Etárias: " + w + ".", true); return; }
+    sv.disabled = true;
+    ed.save().then(function(ok){ sv.disabled = false; if (ok){ close(); showToast("Faixas Etárias salvas."); } });
+  });
+}
+(function(){
+  function wire(){
+    var tb = document.getElementById("unMoreBtn"), tm = document.getElementById("unMoreMenu"), it = document.getElementById("unBandsBtn"); if (!tb || !tm || tb.__w) return; tb.__w = 1;
+    function setOpen(o){ tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ placeToolsMenu(tb, tm); var f = tm.querySelector("button"); if (f) f.focus(); } }
+    tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
+    document.addEventListener("mousedown", function(e){ if (!e.target.closest("#unMoreWrap")) setOpen(false); });
+    document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !tm.hidden){ setOpen(false); tb.focus(); } });
+    if (it) it.addEventListener("click", function(){ setOpen(false); openAgeBandsModal(); });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire); else setTimeout(wire, 0);
+})();
 function ageBandsApply(list){ var n = ageBandsNorm(list); AGE_BANDS = n.length ? n : AGE_BANDS_DEFAULT.slice(); }
 // Intervenção ABA (2026-10-21): a Unidade diz se tem (Acesso → Unidades) e a Clínica liga/desliga (Atendimento).
 // Desligada: nenhuma regra "não ABA", sem cor por idade/ABA, sem campos de ABA nas telas e sem Meta % na Conferência.
@@ -6397,7 +6431,7 @@ function confirmDialog(opts){
  * Vale para as janelas listadas em GUARD_IDS. Campo mudado pela pessoa (evento de verdade) marca a janela;
  * ✕, Cancelar/Fechar, clique fora e Esc perguntam: Salvar | Sair sem Salvar | Continuar Editando.
  * "Salvar" aciona o botão Salvar da própria janela (se ela recusar, continua aberta). */
-var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf","ovRoom","ovScale","ovGoal","ovAct","ovAnTipo","ovAnam","ovAnNew","ovClinic","ovFl","ovFp","ovLn","ovCrm","ovCrmL","ovPlan","ovPr","ovTLine","ovEncLine","ovQuick","ovBook","ovAgd","ovServ","ovSpec","ovStatus","ovUser","ovRole","ovAnQ","ovAnCols","ovComRule","ovCt","ovMetas","ovSale","ovVnEd","ovPlb","ovPf","ovPwd","ovCrma","ovFpb","ovFpl","ovAtt","ovBand","ovNovaAval"];
+var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf","ovRoom","ovScale","ovGoal","ovAct","ovAnTipo","ovAnam","ovAnNew","ovClinic","ovFl","ovFp","ovLn","ovCrm","ovCrmL","ovPlan","ovPr","ovTLine","ovEncLine","ovQuick","ovBook","ovAgd","ovServ","ovSpec","ovStatus","ovUser","ovRole","ovAnQ","ovAnCols","ovComRule","ovCt","ovMetas","ovSale","ovVnEd","ovPlb","ovPf","ovPwd","ovCrma","ovFpb","ovFpl","ovAtt","ovBand","ovNovaAval","ovAgeBands"];
 (function(){
   var asking = false;
   function guardOv(el){
@@ -30142,7 +30176,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Contratos</b> em Níveis de Permissão (ver, incluir, editar, excluir)."},
   {id: "unidades", group: "Acesso", title: "Unidades", mod: null, tab: "unidades",
     purpose: "A clínica pode ter várias unidades (filiais). Cada pessoa trabalha na sua unidade; o Gestor enxerga e cadastra todas, e o Supervisor enxerga todas. Os dados que existiam antes pertencem à Unidade 1.",
-    steps: ["<b>Intervenção ABA:</b> no cadastro da unidade, escolha se ela usa Intervenção ABA. <b>Sim</b> liga todas as regras e campos de ABA (paciente sem ABA ocupando a sala, salas ABA, grupos por faixa etária, cores por idade, Intervenção ABA no tratamento e nos quadros, Meta % na Clínica). Com <b>Não</b>, tudo isso some e a unidade faz só os agendamentos normais.", "<b>Faixas Etárias</b> (com Intervenção ABA = Sim): no cadastro da unidade, cada quadro tem Idade Inicial, Idade Final (em branco = sem limite, só na última) e a Cor das células do Planner e da Agenda. <b>Valem para todas as unidades</b>: mudar numa unidade muda em todas. Também aparecem em Habilidades e Objetivos e não podem se sobrepor.", "<b>Tela de login:</b> não há escolha de unidade: digite e-mail e senha e o sistema abre a unidade do seu cadastro.", "<b>Gestor e Supervisor:</b> depois de entrar, no topo, à direita, a lista de unidades troca a unidade que está aberta (o sistema lembra a última usada neste aparelho). No celular, a lista fica no menu ☰.", "<b>Acesso → Unidades</b> (só o Gestor) → <b>+ Incluir</b>: nome na tela de login, nome fantasia, CNPJ, telefone, e-mail, endereço e cidade.", "<b>Acesso → Usuários:</b> o Gestor escolhe a unidade de cada usuário; o Administrador cria usuários só na própria unidade (o Supervisor, na unidade aberta)."],
+    steps: ["<b>Intervenção ABA:</b> no cadastro da unidade, escolha se ela usa Intervenção ABA. <b>Sim</b> liga todas as regras e campos de ABA (paciente sem ABA ocupando a sala, salas ABA, grupos por faixa etária, cores por idade, Intervenção ABA no tratamento e nos quadros, Meta % na Clínica). Com <b>Não</b>, tudo isso some e a unidade faz só os agendamentos normais.", "<b>Faixas Etárias</b>: Acesso → <b>Unidades</b> → <b>Outras Opções</b> → <b>Faixas Etárias</b>. Cada quadro tem Idade Inicial, Idade Final (em branco = sem limite, só na última) e a Cor das células do Planner e da Agenda. <b>São da empresa: valem para todas as unidades</b>. Também aparecem em Habilidades e Objetivos e não podem se sobrepor.", "<b>Tela de login:</b> não há escolha de unidade: digite e-mail e senha e o sistema abre a unidade do seu cadastro.", "<b>Gestor e Supervisor:</b> depois de entrar, no topo, à direita, a lista de unidades troca a unidade que está aberta (o sistema lembra a última usada neste aparelho). No celular, a lista fica no menu ☰.", "<b>Acesso → Unidades</b> (só o Gestor) → <b>+ Incluir</b>: nome na tela de login, nome fantasia, CNPJ, telefone, e-mail, endereço e cidade.", "<b>Acesso → Usuários:</b> o Gestor escolhe a unidade de cada usuário; o Administrador cria usuários só na própria unidade (o Supervisor, na unidade aberta)."],
     rules: ["Duas unidades podem ter o mesmo nome fantasia com CNPJs diferentes; o CNPJ não se repete.", "O <b>Nome da Unidade</b> aparece só para quem já entrou; pode ser editado quando quiser.", "Ordem dos níveis: <b>Gestor</b>, <b>Supervisor</b>, <b>Administrador</b> e os demais. O <b>Gestor</b> tem acesso total a todas as unidades e é quem define a unidade de cada Administrador. O <b>Supervisor</b> acessa todas as unidades (troca no topo), com as permissões que o Gestor marcar no nível dele. O <b>Administrador</b> tem acesso total, mas só na própria unidade.", "Os Níveis de Permissão valem para todas as unidades: o Gestor e o Administrador editam (o Administrador não altera Gestor, Administrador nem níveis que acessam todas as unidades). O Sistema e a restauração do Backup são só do Gestor.", "Cada unidade tem a sua própria <b>Clínica</b> (nome, logo, cores, horários, redes sociais): o link de cadastro mostra a da unidade que o gerou. Salas, Planner e Agenda também são de cada unidade.", "A Unidade 1 não pode ser excluída. Unidade com usuários é <b>Inativada</b> em vez de excluída.", "A unidade escolhida define quais dados a pessoa enxerga. A separação já está pronta no banco; as telas passam a mostrar só os dados da unidade aos poucos, sem mudar o uso da Unidade 1."],
     who: "Cadastro de Unidades, Sistema e restauração do Backup: nível <b>Gestor</b>. Níveis de Permissão: Gestor e Administrador. Trocar de unidade: Gestor e níveis que acessam todas as unidades (Supervisor)."},
   {id: "catfornecedor", group: "Financeiro", title: "Categorias de Fornecedor", mod: "categorias_fornecedor", tab: "catfornecedor",
@@ -30835,7 +30869,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Status</b>."},
   {id: "clinica", group: "Acesso", title: "Cadastro da Clínica", mod: "clinica",
     purpose: "Dados da clínica (Razão Social, CNPJ, Nome da Clínica / Nome Fantasia e Descrição), redes sociais, dias e horários de funcionamento, duração do atendimento, cores e logo. O Nome Fantasia e a Descrição aparecem no topo, no login e nas impressões.",
-    steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve.", "Em <b>Atendimento</b>, <b>Sessões Seguidas (Máximo)</b> define até quantas sessões seguidas o quadro do tratamento pode pedir (a lista do quadro vai de 1 até esse número).", "Em <b>Atendimento</b>, <b>Meta %</b> (só aparece quando a unidade usa Intervenção ABA) é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner, quadro Meta %). A Intervenção ABA e as Faixas Etárias ficam no cadastro da Unidade.",
+    steps: ["Acesso ▾ → <b>Clínica</b>. Ajuste e salve.", "Em <b>Atendimento</b>, <b>Sessões Seguidas (Máximo)</b> define até quantas sessões seguidas o quadro do tratamento pode pedir (a lista do quadro vai de 1 até esse número).", "Em <b>Atendimento</b>, <b>Meta %</b> (só aparece quando a unidade usa Intervenção ABA) é a parte das sessões do paciente ABA Sim que deve ser em grupo (Conferência do Planner, quadro Meta %). A Intervenção ABA fica no cadastro da Unidade e as Faixas Etárias em Unidades → Outras Opções.",
       "<b>Redes Sociais</b>: clique em <b>+ Inserir</b>, escolha a rede (Instagram, Facebook, YouTube, TikTok, WhatsApp, Google Maps, Site, LinkedIn, E-mail ou Outro) e cole o link. ▲▼ mudam a ordem e ✕ tira a linha. Em “Outro”, escreva também o nome (ex.: Blog)."],
     rules: [
       "As redes sociais aparecem, com a logo colorida de cada uma, na página do link de cadastro (só depois do envio, no agradecimento), no fim das mensagens com o link de cadastro (as impressões e os PDFs não levam as redes). Sem redes cadastradas, nada disso aparece.",
@@ -31710,19 +31744,6 @@ var REG_CFG = {
       {key: "telefone", label: "Telefone", phone: true}, {key: "email", label: "E-mail", ph: "contato@empresa.com.br"},
       {key: "endereco", label: "Endereço", ph: "Rua, número, bairro"}, {key: "cidade", label: "Cidade"},
       {key: "aba", label: "Intervenção ABA", select: [{v: "Não", l: "Não"}], empty: "Sim"}],
-    extraHtml: function(){ return ageBandsEditorHtml("un"); },
-    extraWire: function(item, canExtra){
-      var ed = ageBandsEditorWire("un", canExtra !== false), sel = document.getElementById("regf-aba"), box = document.getElementById("unBandsBox");
-      function sync(){ if (box) box.hidden = !!sel && sel.value === "Não"; }
-      if (sel) sel.addEventListener("change", sync); sync();
-      return {read: function(){
-          if (sel && sel.value === "Não") return {bands: false};
-          if (ed.touched()){ var w = ed.check(); if (w){ showToast("Faixas Etárias: " + w + ".", true); return null; } }
-          return {bands: ed.touched()};
-        },
-        apply: function(){},
-        after: function(rec, v){ return v && v.bands ? ed.save() : true; }};
-    },
     search: function(u){ return u.name + " " + (u.fantasia || "") + " " + (u.cnpj || "") + " " + supplierDocDigits(u.cnpj) + " " + (u.cidade || ""); },
     cols: ["Nome na Tela de Login", "Nome Fantasia", "CNPJ", "Cidade"],
     widths: [260, 240, 170, 180],
