@@ -58,6 +58,21 @@ const path = require('path');
   await page.click('#cfOk'); await page.waitForTimeout(500);
   check('avaliação anterior vira Finalizado?', (await ev('state.treatments.filter(function(x){ return x.id === "' + t.id + '"; })[0].status')) === 'finalizado');
 
+  // Filtros de Convênio e Intervenção ABA na barra de Tratamentos
+  await ev('renderTreatmentsTab()');
+  const setF = (id, v) => page.evaluate(([i, x]) => { const s = document.getElementById(i); s.value = x; s.dispatchEvent(new Event('change')); }, [id, v]);
+  await page.check('#trShowInact');
+  check('filtro de convênio tem Unimed e Sem Convênio?', await page.$eval('#trConvF', (s) => !!s.querySelector('option[value="unimed"]') && !!s.querySelector('option[value="__sem"]')));
+  await setF('trConvF', 'unimed');
+  const nU = await page.$$eval('#trHost tr[data-tr-id]', (r) => r.length);
+  const expU = await ev('state.treatments.filter(function(x){ return x.convenioId === "unimed"; }).length');
+  check('Convênio = Unimed mostra só os da Unimed?', nU === expU && nU > 0, [nU, expU]);
+  await setF('trConvF', '');
+  await setF('trAbaF', 'Não');
+  const nN = await page.$$eval('#trHost tr[data-tr-id]', (r) => r.length);
+  const expN = await ev('state.treatments.filter(function(x){ return trAbaText(x) === "Não"; }).length');
+  check('Intervenção ABA = Não mostra só os sem Intervenção ABA?', nN === expN, [nN, expN]);
+  await setF('trAbaF', '');
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
   fs.unlinkSync(evPage);

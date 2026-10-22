@@ -2637,13 +2637,18 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
   @media (max-width:1279px){#tab-tratamentos .pat-toolbar{flex-wrap:wrap}}
   #tab-tratamentos .pat-toolbar > *{flex-shrink:0}
   #tab-tratamentos .pat-toolbar .search-wrap{flex:0 1 220px;min-width:110px}
-  #tab-tratamentos .pat-toolbar > .dp-btn{flex:0 1 auto;min-width:96px;max-width:200px}
+  #tab-tratamentos .pat-toolbar > .dp-btn{flex:0 0 auto;min-width:96px;max-width:220px}
   #tab-tratamentos .pat-toolbar > .dp-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue){flex:0 1 auto;min-width:0;display:inline-flex;gap:6px}
+  #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue){flex:0 1 auto;min-width:0;display:inline-flex;gap:6px;overflow:hidden}
   #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue):empty{display:none}
   #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue) > *{flex:0 1 auto;min-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #tab-tratamentos .pat-toolbar :is(.pat-count,.inact-toggle){white-space:nowrap}
   #tab-tratamentos .pat-toolbar .spacer{flex:1 1 0;min-width:0}
+}
+/* Tratamentos com os filtros de Convênio e Intervenção ABA: até 1600px os botões usam o rótulo curto */
+@media (min-width:761px) and (max-width:1600px){
+  #tab-tratamentos :is(#trAddAval,#trAdd,.io-wrap) .pm-lg{display:none} #tab-tratamentos :is(#trAddAval,#trAdd,.io-wrap) .pm-sm{display:inline}
+  #tab-tratamentos .pat-toolbar .search-wrap{min-width:96px}
 }
 @media (max-width:760px){
   /* "Inativos" (e Cancelados/Renegociados) na linha do título, à direita */
@@ -2665,6 +2670,10 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
   #tab-tratamentos .pat-toolbar > [data-io-wrap] > .btn{padding-inline:6px}
   #tab-tratamentos .pat-toolbar:has(> #trAddAval:not([hidden])) > .pat-count{display:none!important}
   #tab-tratamentos .pat-toolbar > .help-q{margin-left:0!important}
+  /* busca na linha toda; Status, Convênio e Intervenção ABA lado a lado; os avisos ficam no filtro de status */
+  #tab-tratamentos .pat-toolbar .search-wrap{flex:1 1 100%!important}
+  #tab-tratamentos .pat-toolbar > :is(.dp-btn,select){flex:1 1 calc(33.33% - 6px)!important;min-width:0!important;max-width:none!important}
+  #tab-tratamentos .pat-toolbar :is(#trMissing,#trDue){display:none!important}
   /* Plano Terapêutico: busca / filtro, contador, Incluir, ? */
   #tab-planos .pat-toolbar > .dp-btn{flex:1 1 0;min-width:0}
   #tab-planos .pat-toolbar > .dp-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -3551,7 +3560,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <input id="trSearch" type="text" placeholder="Buscar paciente…">
       </div>
       <select id="trFilter" aria-label="Status">
-        <option value="">Todos os status</option>
+        <option value="">Status</option>
         <option value="ativo">Ativos</option>
         <option value="renegociado">Renegociados</option>
         <option value="cancelado">Cancelados</option>
@@ -3565,6 +3574,8 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <option value="diverg">Com divergências no mês atual</option>
         <option value="sem">Pacientes ativos sem tratamento</option>
       </select>
+      <select id="trConvF" aria-label="Convênio"><option value="">Convênio</option></select>
+      <select id="trAbaF" class="aba-only" aria-label="Intervenção ABA"><option value="">Intervenção ABA</option><option value="Sim">Com Intervenção ABA</option><option value="Não">Sem Intervenção ABA</option><option value="Misto">Misto</option></select>
       <span class="pat-count" id="trCount"></span>
       <label class="inact-toggle" title="Mostrar os tratamentos cancelados, renegociados e finalizados"><input type="checkbox" id="trShowInact"> Inativos</label>
       <span id="trMissing"></span>
@@ -26694,6 +26705,16 @@ function trEndAutoText(t){
   return e ? trBr(e) : "Sem atendimento";
 }
 
+// Filtro de convênio da barra de Tratamentos (2026-10-22): convênios cadastrados + os que aparecem nos tratamentos + "Sem convênio".
+function trFillConvFilter(){
+  var el = document.getElementById("trConvF"); if (!el) return "";
+  var cur = el.value, seen = {}, opts = [];
+  (state.convenios || []).forEach(function(c){ if (isActive(c) || (state.treatments || []).some(function(t){ return t.convenioId === c.id; })){ seen[c.id] = 1; opts.push([c.id, c.name]); } });
+  opts.sort(function(a, b){ return String(a[1]).localeCompare(String(b[1]), "pt-BR"); });
+  var html = '<option value="">Convênio</option>' + opts.map(function(o){ return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join("") + '<option value="__sem">Sem Convênio</option>';
+  if (el.__html !== html){ el.innerHTML = html; el.__html = html; el.value = (cur === "__sem" || seen[cur]) ? cur : ""; }
+  return el.value;
+}
 function renderTreatmentsTab(){
   var host = document.getElementById("trHost"); if (!host) return;
   trLoadLast(false);
@@ -26701,12 +26722,15 @@ function renderTreatmentsTab(){
   var addAv = document.getElementById("trAddAval"); if (addAv) addAv.hidden = !naCan();
   var q = normText((document.getElementById("trSearch") || {}).value || "");
   var filter = (document.getElementById("trFilter") || {}).value || "";
+  var abaSel = document.getElementById("trAbaF"), abaLbl = isMobileView() ? "ABA" : "Intervenção ABA";
+  if (abaSel && abaSel.options[0].text !== abaLbl){ abaSel.options[0].text = abaLbl; abaSel.value = abaSel.value; }
+  var convF = trFillConvFilter(), abaF = abaOn() ? ((document.getElementById("trAbaF") || {}).value || "") : "";
   var pats = state.patientsRaw || [];
   // Paciente inativo não entra em "sem tratamento ativo" (nem no aviso nem no filtro).
   var without = pats.filter(function(p){ return isActive(p) && !activeTreatment(p.id); });
   var miss = document.getElementById("trMissing");
   if (miss) miss.innerHTML = without.length
-    ? '<button type="button" class="btn ghost tr-missing-btn" id="trMissingBtn">' + without.length + (without.length === 1 ? ' paciente ativo' : ' pacientes ativos') + ' sem tratamento</button>'
+    ? '<button type="button" class="btn ghost tr-missing-btn" id="trMissingBtn" title="Pacientes ativos sem tratamento">' + without.length + (without.length === 1 ? ' paciente ativo' : ' pacientes ativos') + ' sem tratamento</button>'
     : '';
   var dueN = state.treatments.filter(function(t){ var d = trDue(t); return d && d.state === "vencendo"; }).length;
   var overN = state.treatments.filter(function(t){ var d = trDue(t); return d && d.state === "vencido"; }).length;
@@ -26764,6 +26788,8 @@ function renderTreatmentsTab(){
     else if (filter === "abavencendo" || filter === "abavencida"){ if (trAbaRevState(t) !== (filter === "abavencida" ? "vencida" : "vencendo")) return false; }
     else if (filter === "semmotivo"){ if (t.status !== "cancelado" || t.motivoCancel) return false; }
     else if (filter && t.status !== filter) return false;
+    if (convF && (convF === "__sem" ? !!t.convenioId : t.convenioId !== convF)) return false;
+    if (abaF && trAbaText(t) !== abaF) return false;
     if (!q) return true;
     var p = rawPatient(t.patientId);
     return normText(p ? p.nome : "").indexOf(q) !== -1;
@@ -26851,6 +26877,7 @@ function wireTreatmentsTab(){
   var av = document.getElementById("trAddAval"); if (av) av.addEventListener("click", function(){ openNovaAvaliacao(); });
   if (s) s.addEventListener("input", renderTreatmentsTab);
   if (f) f.addEventListener("change", renderTreatmentsTab);
+  ["trConvF", "trAbaF"].forEach(function(id){ var c = document.getElementById(id); if (c) c.addEventListener("change", renderTreatmentsTab); });
   ["trShowInact"].forEach(function(id){ var c = document.getElementById(id); if (c) c.addEventListener("change", renderTreatmentsTab); });
   if (a) a.addEventListener("click", function(){ openTreatmentModal(null, {}); });
   function open(e){
@@ -29791,6 +29818,7 @@ var HELP_TOPICS = [
     purpose: "O contrato de atendimento de cada paciente: convênio, Sessão/Mês, a caixa <b>Intervenção ABA</b> do tratamento (vale para o paciente todo e é o padrão dos quadros novos), as especialidades em quadros (cada um pode ter o seu ABA, que manda nos atendimentos dele) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras Opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
+      "Na barra da tela, além da busca, filtre por <b>Status</b>, <b>Convênio</b> (ou “Sem Convênio”) e <b>Intervenção ABA</b> (com, sem ou misto). Os filtros se somam.",
       "Logo depois do paciente, <b>Tipo de Tratamento</b> aceita escolher vários (Multidisciplinar, especialidades, serviços…). Os marcados como padrão em Cadastros → Tratamentos → Outras Opções → Tipos de Tratamento já vêm escolhidos no tratamento novo. Cada tipo (inclusive especialidade e serviço, no cadastro deles) tem <b>Vencimento no Tratamento</b> e <b>Total de Sessões</b>: ao marcar o tipo, o Vencimento do tratamento já vem preenchido (Avaliação: 2 sessões; Avaliação Neuropsicológica: 10), e o Sessão/Mês recebe o mesmo total; tudo pode ser editado. No tratamento novo o Convênio vem do cadastro do paciente e a Intervenção ABA começa desmarcada.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "O grupo <b>Convênio e Valores</b> traz, nesta ordem: Convênio, Sessão/Mês e Período, Valor, Descontos e Valor final. Logo depois vem o grupo <b>Intervenção ABA</b>: a caixa Intervenção ABA, a Data de Revisão e Não Agrupar com. Ao sair do campo de valor, o valor aparece no formato R$ 1.234,56.",
