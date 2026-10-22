@@ -1,4 +1,4 @@
-// Planner ▾ → Planner List: lista dos atendimentos de pacientes do Planner, filtros, alerta, Ver no Planner e Ctrl+clique.
+// Planner ▾ → Agendamentos Planner: lista dos atendimentos de pacientes do Planner, filtros, alerta, Ver no Planner e Ctrl+clique.
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -30,8 +30,8 @@ const path = require('path');
   })()`);
   await ev(`document.querySelector('#mainTabs button[data-tab="plannerlist"]').click()`);
   await page.waitForTimeout(500);
-  check('abre a tela Planner List', (await ev(`state.tab`)) === 'plannerlist');
-  check('título da tela', /Planner List/.test(await page.textContent('#tab-plannerlist .cad-title')));
+  check('abre a tela Agendamentos Planner', (await ev(`state.tab`)) === 'plannerlist');
+  check('título da tela', /Agendamentos Planner/.test(await page.textContent('#tab-plannerlist .cad-title')));
   const rows = await page.$$eval('#reg-plannerlist-host tr[data-pll-id]', (t) => t.length);
   check('2 atendimentos (bloqueado fora)', rows === 2, rows);
   check('cartão Pacientes = 2', /2/.test(await page.textContent('#pllSum .fl-card:first-child b')));

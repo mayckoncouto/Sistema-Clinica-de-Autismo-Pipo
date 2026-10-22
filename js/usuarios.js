@@ -55,7 +55,7 @@
     { key: "feriados", label: "Feriados e Recessos", hint: "feriados e recessos (Agenda fica cinza; o Gerar mês pula)" },
     { key: "cadastro_status", label: "Status (Cadastro)", hint: "criar e alterar os status dos atendimentos" },
     { key: "planner", label: "Planner", hint: "grade de 4 semanas", group: "Planner" },
-    { key: "planner_list", label: "Planner List", hint: "Planner ▾ → Planner List: lista dos atendimentos do Planner", actions: ["view"] },
+    { key: "planner_list", label: "Agendamentos Planner", hint: "Planner ▾ → Agendamentos Planner: lista dos atendimentos do Planner", actions: ["view"] },
     { key: "bloqueio_horario", label: "Bloqueio de Horário", hint: "Planner: bloquear (incluir) e liberar (excluir) horários — botões da grade e Outras Opções" },
     { key: "resumo", label: "Resumo", hint: "relatório de atendimentos do Planner", actions: ["view"] },
     { key: "disponibilidade", label: "Disponibilidade", hint: "relatório de atendidos e vagas livres do Planner por dia, horário e especialidade", actions: ["view"] },
