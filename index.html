@@ -6370,7 +6370,7 @@ function confirmDialog(opts){
  * Vale para as janelas listadas em GUARD_IDS. Campo mudado pela pessoa (evento de verdade) marca a janela;
  * ✕, Cancelar/Fechar, clique fora e Esc perguntam: Salvar | Sair sem Salvar | Continuar Editando.
  * "Salvar" aciona o botão Salvar da própria janela (se ela recusar, continua aberta). */
-var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf","ovRoom","ovScale","ovGoal","ovAct","ovAnTipo","ovAnam","ovAnNew","ovClinic","ovFl","ovFp","ovLn","ovCrm","ovCrmL","ovPlan","ovPr","ovTLine","ovEncLine","ovQuick","ovBook","ovAgd","ovServ","ovSpec","ovStatus","ovUser","ovRole","ovAnQ","ovAnCols","ovComRule","ovCt","ovMetas","ovSale","ovVnEd","ovPlb","ovPf","ovPwd","ovCrma","ovFpb","ovFpl","ovAtt","ovBand"];
+var GUARD_IDS = ["ovPat","ovTreat","ovReg","ovConv","ovHol","ovStItem","ovProf","ovRoom","ovScale","ovGoal","ovAct","ovAnTipo","ovAnam","ovAnNew","ovClinic","ovFl","ovFp","ovLn","ovCrm","ovCrmL","ovPlan","ovPr","ovTLine","ovEncLine","ovQuick","ovBook","ovAgd","ovServ","ovSpec","ovStatus","ovUser","ovRole","ovAnQ","ovAnCols","ovComRule","ovCt","ovMetas","ovSale","ovVnEd","ovPlb","ovPf","ovPwd","ovCrma","ovFpb","ovFpl","ovAtt","ovBand","ovNovaAval"];
 (function(){
   var asking = false;
   function guardOv(el){
@@ -14838,7 +14838,7 @@ function openPatientModal(p, opts){
   host.innerHTML =
     '<div class="overlay" id="ovPat"><div class="modal wide pm-modal">' +
       '<div class="modal-head"><div><h3>'+(isNew?"Novo Paciente":"Editar Paciente")+'</h3></div><div class="modal-head-acts">' +
-        (!isNew ? mmHtml("pMoreBtn", [!opts.intake && intakeCan() ? {id: "pAskUpd", label: "Pedir Atualização"} : null, (haCan("planner") || haCan("agenda")) ? {id: "pHist", label: "Histórico de Alterações"} : null, mmTaskItem()]) : "") +
+        (!isNew ? mmHtml("pMoreBtn", [!opts.intake && intakeCan() ? {id: "pAskUpd", label: "Pedir Atualização"} : null, naCan() ? {id: "pNovaAval", label: "Nova Avaliação"} : null, (haCan("planner") || haCan("agenda")) ? {id: "pHist", label: "Histórico de Alterações"} : null, mmTaskItem()]) : "") +
         (!isNew && !opts.intake && intakePendingFor(v.id) ? '<button type="button" class="btn primary" id="pReview" data-ro-ok>Revisar Cadastro</button>' : '') +
         '<button class="modal-close" id="closePat" aria-label="Fechar">✕</button></div></div>' +
       '<div class="modal-body">' + secs +
@@ -15218,6 +15218,7 @@ function openPatientModal(p, opts){
   }
   function focusSec(sec){ var s = overlay.querySelector('[data-pmsec="' + sec + '"]'); if (s){ s.scrollIntoView({block: "start", behavior: "smooth"}); s.classList.add("pm-sec-bad"); setTimeout(function(){ s.classList.remove("pm-sec-bad"); }, 2500); } }
   // Link de cadastro: Pedir atualização / Revisar cadastro (cabeçalho) e o modo revisão.
+  if ($("pNovaAval")) $("pNovaAval").addEventListener("click", function(){ openNovaAvaliacao({patientId: v.id}); });
   if ($("pHist")) $("pHist").addEventListener("click", function(){ openHistoricoAlteracoes("ambas", {paciente: String((($("pNome") || {}).value || v.nome || "")).trim()}); });
   if ($("pAskUpd")) $("pAskUpd").addEventListener("click", function(){ openIntakeLinkModal({kind: "atualizacao", patient: rawPatient(v.id) || v}); });
   if ($("pReview")) $("pReview").addEventListener("click", function(){ var sub = intakePendingFor(v.id); if (sub){ close(); intakeReview(sub); } });
@@ -27437,6 +27438,131 @@ var SALE_TIPOS = {nova: "Nova", renovacao: "Renovação", aditivo: "Aditivo"};  
 var SALE_TIPOS_NEW = {nova: "Nova", aditivo: "Aditivo"};   // o que dá para escolher ao registrar uma venda
 var SALE_STATUS = {ativa: "Ativa", substituida: "Substituída", cancelada: "Cancelada"};
 var SALE_FORMAS = ["PIX", "Cartão de Crédito", "Cartão de Débito", "Boleto", "Dinheiro", "Transferência", "Convênio"];
+// Nova Avaliação (2026-10-22): lança uma avaliação (serviço) num passo só. Cria o tratamento de serviço
+// (Ativo, vencimento por sessões, um quadro do serviço) com o valor padrão do convênio (valor por sessão × sessões, editável)
+// e oferece registrar a venda.
+function naServices(){
+  return activeOnly(servicesList(), "").filter(function(s){ return s.id !== DEFAULT_SERVICE_ID && ttOn(s); })
+    .sort(function(a, b){ return (/avalia/i.test(b.name) ? 1 : 0) - (/avalia/i.test(a.name) ? 1 : 0) || String(a.name).localeCompare(String(b.name), "pt-BR"); });
+}
+function naCan(){ return can("tratamentos", "create") && naServices().length > 0; }
+// Valor por sessão do serviço no convênio (null = sem valor cadastrado).
+function naSessValue(convId, svcId){
+  if (!convId) return null;
+  var k = SVC_PREFIX + svcId, v = convValor(convId, k);
+  if (v == null){
+    var m = CONV.fin ? CONV.fin[convId] : ((state.convenios.filter(function(c){ return c.id === convId; })[0] || {}).valores);
+    if (m && m[k] != null && m[k] !== "") v = parseMoney(m[k]);
+  }
+  return v != null && !isNaN(v) ? v : null;
+}
+function openNovaAvaliacao(pre){
+  pre = pre || {};
+  if (!can("tratamentos", "create")){ showToast("Seu nível não pode incluir tratamentos.", true); return; }
+  var svcs = naServices(); if (!svcs.length){ showToast("Nenhum serviço com Tratamento ligado (Cadastros → Serviços).", true); return; }
+  Promise.all([trLoadFinance(), convLoadFinance()]).then(function(){ naOpen(pre, svcs); }, function(){ naOpen(pre, svcs); });
+}
+function naOpen(pre, svcs){
+  var seeVal = trCanSeeVal(), editVal = trCanEditVal();
+  var pats = activeOnly(state.patientsRaw || [], "").slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), "pt-BR"); });
+  var convs = activeOnly(state.convenios || [], "").slice().sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "pt-BR"); });
+  var host = regQuickHost();
+  host.innerHTML = '<div class="overlay confirm-overlay" id="ovNovaAval" role="dialog" aria-modal="true" aria-labelledby="naTitle"><div class="modal" style="max-width:640px">' +
+    '<div class="modal-head"><div><h3 id="naTitle">Nova Avaliação</h3><div class="modal-sub">Cria o tratamento da avaliação já ativo; depois você pode registrar a venda.</div></div>' +
+      '<button class="modal-close" id="naX" aria-label="Fechar">✕</button></div>' +
+    '<div class="modal-body">' +
+      '<div class="tr-sec tr-sec-top">Avaliação</div>' +
+      '<div class="field"><label for="naPat">Paciente</label><select id="naPat" data-combo><option value="">Escolha o paciente…</option>' +
+        pats.map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === pre.patientId ? ' selected' : '') + '>' + esc(p.nome) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field-row"><div class="field"><label for="naSvc">Avaliação</label><select id="naSvc">' +
+        svcs.map(function(s, i){ return '<option value="' + esc(s.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field"><label for="naProf">Profissional</label><select id="naProf"></select></div></div>' +
+      '<div class="field-row"><div class="field"><label for="naIni">Data de Início</label><input type="date" id="naIni" value="' + trTodayIso() + '"></div>' +
+      '<div class="field"><label for="naN">Nº de Sessões</label><input type="text" id="naN" inputmode="numeric" maxlength="3"></div></div>' +
+      '<div class="tr-sec">Convênio e Valor</div>' +
+      '<div class="field-row"><div class="field"><label for="naConv">Convênio</label><select id="naConv" data-combo><option value="">Sem convênio</option>' +
+        convs.map(function(c){ return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>'; }).join("") + '</select></div>' +
+      (seeVal ? '<div class="field"><label for="naVal">Valor Total (R$)</label><input type="text" id="naVal" data-money inputmode="decimal"' + (editVal ? '' : ' disabled') + '></div>' : '') + '</div>' +
+      (seeVal ? '<div class="pat-count" id="naHint"></div>' : '') +
+      '<div class="field"><label for="naObs">Observações</label><textarea id="naObs" rows="3"></textarea></div>' +
+    '</div>' +
+    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="naCancel">Cancelar</button><button class="btn primary" id="naSave">Salvar Avaliação</button></div>' +
+  '</div></div>';
+  var $ = function(id){ return document.getElementById(id); };
+  var valTouched = false;
+  function close(){ host.innerHTML = ""; }
+  function fillProf(){
+    var list = specProfessionals(SVC_PREFIX + $("naSvc").value);
+    $("naProf").innerHTML = '<option value="">Todos os terapeutas</option>' + list.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(profNome(p)) + '</option>'; }).join("");
+    $("naProf").value = ""; $("naProf").dispatchEvent(new Event("change"));
+  }
+  function fillN(){ var v = ttVencOf(SVC_PREFIX + $("naSvc").value); $("naN").value = v.total > 0 ? v.total : 1; }
+  function fillConv(){
+    var p = rawPatient($("naPat").value); if (!p) return;
+    var d = patConvDefault(p), cur = activeTreatment(p.id), id = d.id || (cur && cur.convenioId) || "";
+    if (id && convs.some(function(c){ return c.id === id; })){ $("naConv").value = id; $("naConv").dispatchEvent(new Event("change")); }
+  }
+  function fillVal(force){
+    if (!$("naVal")) return;
+    var n = parseInt($("naN").value, 10) || 0, conv = $("naConv").value, ps = naSessValue(conv, $("naSvc").value);
+    var cv = convs.filter(function(c){ return c.id === conv; })[0];
+    if (ps != null){
+      $("naHint").textContent = "Valor padrão do convênio " + (cv ? cv.name : "") + ": " + fmtMoney(ps) + " por sessão × " + n + (n === 1 ? " sessão" : " sessões") + " = " + fmtMoney(ps * n) + ". Pode alterar.";
+      if (force || !valTouched) $("naVal").value = fmtMoney(Math.round(ps * n * 100) / 100).replace("R$ ", "");
+    } else {
+      $("naHint").textContent = conv ? "Este convênio não tem valor cadastrado para este serviço (Cadastros → Convênios). Digite o valor." : "Escolha o convênio para trazer o valor padrão, ou digite o valor.";
+      if (force && !valTouched) $("naVal").value = "";
+    }
+  }
+  $("naSvc").addEventListener("change", function(){ fillProf(); fillN(); fillVal(true); });
+  $("naN").addEventListener("input", function(){ fillVal(false); });
+  $("naConv").addEventListener("change", function(){ valTouched = false; fillVal(true); });
+  $("naPat").addEventListener("change", fillConv);
+  if ($("naVal")) $("naVal").addEventListener("input", function(){ valTouched = true; });
+  $("naX").addEventListener("click", close); $("naCancel").addEventListener("click", close);
+  fillProf(); fillN(); fillConv(); fillVal(true);
+  $("naSave").addEventListener("click", function(){
+    var patId = $("naPat").value, sid = $("naSvc").value, n = parseInt($("naN").value, 10), ini = $("naIni").value;
+    if (!patId){ showToast("Escolha o paciente.", true); return; }
+    if (!(n > 0)){ showToast("Informe o número de sessões.", true); $("naN").focus(); return; }
+    if (!ini){ showToast("Informe a data de início.", true); return; }
+    var valor = $("naVal") && editVal ? parseMoney($("naVal").value) : null;
+    var svc = svcs.filter(function(s){ return s.id === sid; })[0], profId = $("naProf").value, prof = profId ? findProfessional(profId) : null;
+    var conv = convs.filter(function(c){ return c.id === $("naConv").value; })[0] || null, now = new Date().toISOString();
+    var rec = {id: uid("tr"), patientId: patId, inicio: ini, status: "ativo", statusEm: trTodayIso(), obs: $("naObs").value.trim(), criadoEm: now, atualizadoEm: now,
+      tipos: [SVC_PREFIX + sid], convenioId: conv ? conv.id : "", convenio: conv ? conv.name : "", sessoesMes: n,
+      specHours: [{id: uid("l"), specId: (prof && prof.specialtyId) || (SVC_PREFIX + sid), hours: n, profId: profId, aba: "", service: sid}],
+      horarios: null, vencPor: "sessoes", totalSessoes: n, validoAte: ""};
+    trHistAdd(rec, {acao: "criado", para: "ativo"});
+    var finTable = !!(agdClient() && TR.fin);
+    if (!finTable && valor != null){ rec.valor = valor; rec.descontos = 0; }
+    var list = (state.treatments || []).concat([rec]);
+    var others = list.filter(function(x){ return x.patientId === patId && x.id !== rec.id && x.status === "ativo" && trIsService(x); });
+    var go = !others.length ? Promise.resolve(true) : confirmDialog({title: "Já Existe uma Avaliação Ativa", confirmLabel: "Continuar",
+      message: "Este paciente já tem um tratamento de serviço ativo desde <b>" + esc(trBr(others[0].inicio)) + "</b>. Ao salvar, ele passa para <b>Finalizado</b>."});
+    go.then(function(ok){
+      if (!ok) return;
+      list = list.map(function(x){ return others.indexOf(x) !== -1 ? trHistAdd(Object.assign({}, x, {status: "finalizado", statusEm: trTodayIso(), atualizadoEm: now}), {acao: "status", de: "ativo", para: "finalizado", auto: true}) : x; });
+      rec.tipo = trTipoFor(Object.assign({}, rec, {isNew: true}), list);
+      list = list.map(function(x){ return x.id === rec.id ? rec : x; });
+      $("naSave").disabled = true;
+      writeTreatments(list).then(function(res){
+        if (res === false){ $("naSave").disabled = false; return; }
+        return (finTable && valor != null ? trSaveFinance(rec.id, valor, 0) : Promise.resolve(true)).then(function(){
+          close(); if (state.tab === "tratamentos") renderTreatmentsTab();
+          showToast("Avaliação lançada: " + (svc ? svc.name : "") + ".");
+          trReactivatePatient(patId);
+          if (pre.onSaved) pre.onSaved(rec);
+          var total = valor != null ? valor : trMoney(rec).valor;
+          if ((agdClient() || window.__pipoSales) && slCan("create") && total > 0)
+            slLoad().then(function(){ return fpLoad(); }).then(function(){
+              if (!slHasSale(rec.id)) return slSaleDialog({t: null, rec: rec, isNew: true, opts: {}, st: "ativo", others: [], plan: {valorFinal: total, tipo: "nova"}, valorFinal: total});
+            });
+        });
+      }, function(){ $("naSave").disabled = false; });
+    });
+  });
+}
 function slCan(a){ return can("vendas", a); }
 function slFromDb(x){
   return {id: x.id, treatment: x.treatment_id, patient: x.patient_id, tipo: x.tipo, data: x.data, seller: x.seller_id || "", sellerName: x.seller_name || "",
@@ -29609,7 +29735,8 @@ var HELP_TOPICS = [
       "<b>Outras Opções ▾</b>, no topo da janela: <b>Cadastro do Paciente</b> abre o cadastro do paciente do tratamento; <b>Abrir Plano Terapêutico</b> abre o plano dele.",
       "Na tela, os tratamentos <b>Cancelados</b>, <b>Renegociados</b> e <b>Finalizados</b> ficam ocultos: marque <b>Inativos</b> ao lado do contador para mostrá-los. Ao pesquisar, o botão Inativos é ignorado e aparecem todos, mesmo os ocultos (vale também em Pacientes). A coluna Vencimento mostra \"Sem vencimento\" quando o tratamento não vence.",
       "Use também os filtros: status, Cancelados sem motivo, Vencendo, Vencidos, Abaixo do contratado e Pacientes ativos sem tratamento (pacientes inativos não entram no aviso nem no filtro).",
-      "<b>Outras Opções ▾</b>: <b>Exportar Planilha</b> e <b>Importar Planilha</b> (veja o tópico Planilhas)."
+      "<b>Outras Opções ▾</b>: <b>Exportar Planilha</b> e <b>Importar Planilha</b> (veja o tópico Planilhas).",
+      "<b>Nova Avaliação</b> (Outras Opções ▾ da tela Tratamentos, ou Outras Opções ▾ da janela do paciente) lança uma avaliação num passo só: escolha o paciente, a avaliação (serviços com Tratamento ligado, avaliações primeiro), o profissional, a data e o nº de sessões (vem do Tipo de Tratamento: Avaliação 2, Avaliação Neuropsicológica 10). O convênio vem do cadastro do paciente e o <b>valor</b> já vem calculado pelo valor por sessão do serviço nesse convênio (Cadastros → Convênios) × as sessões; dá para alterar. Ao salvar, o sistema cria o tratamento do serviço já <b>Ativo</b>, com vencimento por sessões, e oferece <b>Registrar Venda</b> (pode clicar em “Agora Não”). Se o paciente já tinha outra avaliação ativa, ela passa para Finalizado."
     ],
     rules: [
       "Cada paciente tem <b>só um tratamento Ativo</b>. Salvar outro como Ativo passa o anterior para Renegociado (o banco também confere).",
@@ -36188,19 +36315,20 @@ function ioRenderPlan(m, plan){
 // Menu "Outras Opções ▾" com Exportar / Importar numa barra (Tratamentos e cadastros do plano).
 function ioToolsMenuHtml(kind){
   return '<div class="cad-wrap pl-tools-wrap io-wrap" data-io-wrap="' + kind + '"><button type="button" class="btn ghost" data-io-btn aria-haspopup="menu" aria-expanded="false"><span class="pm-lg">Outras Opções</span><span class="pm-sm">Opções</span> <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
-    '<div class="cad-menu pl-tools-menu" role="menu" hidden><button class="btn ghost" data-io-act="export">Exportar Planilha</button><button class="btn ghost" data-io-act="import">Importar Planilha</button><div data-nav-sub-host="' + kind + '"></div></div></div>';
+    '<div class="cad-menu pl-tools-menu" role="menu" hidden>' + (kind === "tratamentos" ? '<button class="btn ghost" data-io-act="aval">Nova Avaliação</button>' : '') + '<button class="btn ghost" data-io-act="export">Exportar Planilha</button><button class="btn ghost" data-io-act="import">Importar Planilha</button><div data-nav-sub-host="' + kind + '"></div></div></div>';
 }
 function ioWireMenu(wrap){
   var kind = wrap.getAttribute("data-io-wrap"), tb = wrap.querySelector("[data-io-btn]"), tm = wrap.querySelector(".pl-tools-menu");
   function setOpen(o){
     tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false");
-    if (o){ tm.querySelector('[data-io-act="import"]').hidden = !ioCanImport(kind); navSubRefresh(); placeToolsMenu(tb, tm); var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); }
+    if (o){ tm.querySelector('[data-io-act="import"]').hidden = !ioCanImport(kind); var av = tm.querySelector('[data-io-act="aval"]'); if (av) av.hidden = !naCan(); navSubRefresh(); placeToolsMenu(tb, tm); var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); }
   }
   tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
   tm.addEventListener("click", function(e){
     var b = e.target.closest("[data-io-act]"); if (!b) return;
     setOpen(false);
-    if (b.getAttribute("data-io-act") === "export") ioExport(kind, false); else ioOpenImport(kind);
+    var act = b.getAttribute("data-io-act");
+    if (act === "aval") openNovaAvaliacao(); else if (act === "export") ioExport(kind, false); else ioOpenImport(kind);
   });
   document.addEventListener("mousedown", function(e){ if (!e.target.closest('[data-io-wrap="' + kind + '"]')) setOpen(false); });
   document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !tm.hidden){ setOpen(false); tb.focus(); } });
