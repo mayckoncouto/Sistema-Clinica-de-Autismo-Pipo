@@ -136,7 +136,7 @@ const path = require('path');
     const vals = [...document.querySelectorAll('#trHost table.tr-main tbody tr')].map((tr) => tr.cells[i] ? tr.cells[i].textContent.trim() : '?');
     return {i, ths, vals};
   });
-  console.log('treatments list columns in the requested order, ABA with Sim/Não?', abaCol.ths.slice(0, 11).map((t) => t.replace(/[⇅▲▼]/g, '').trim()).join('|') === 'Paciente|Início|Vencimento|Convênio|Intervenção ABA|Data de Revisão|Término|Tipo|Status|Mês (Realizado/Contratado)|Sessão/Mês' && abaCol.vals.some((v) => v === 'Sim' || v === 'Não'), JSON.stringify(abaCol.ths));
+  console.log('treatments list columns in the requested order, ABA with Sim/Não?', abaCol.ths.map((t) => t.replace(/[⇅▲▼]/g, '').trim()).join('|') === 'Paciente|Início|Término|Convênio|Vencimento|Sessão/Mês|Valor Final|Intervenção ABA|Data de Revisão|Tipo|Status|Mês (Realizado/Contratado)' && abaCol.vals.some((v) => v === 'Sim' || v === 'Não'), JSON.stringify(abaCol.ths));
 
   // Horário de atendimento: menu "Outras Opções" (limpar todos, limpar sem Disponível, copiar) + Desfazer.
   await openNew('ana-azul');

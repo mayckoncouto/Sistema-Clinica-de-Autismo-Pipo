@@ -2199,7 +2199,8 @@ input[readonly]:not(.dp-in):focus,textarea[readonly]:focus{outline:none;box-shad
 .cp-save{width:100%;padding:8px;border:0;border-radius:8px;background:var(--ink);color:var(--surface);font:inherit;font-weight:800;font-size:13px;cursor:pointer}
 .color-pick-row{display:flex;align-items:center;gap:9px}
 body.no-aba .aba-only{display:none!important}
-body.no-aba #trHost .pat-table.tr-main :is(col,th,td):is(:nth-child(5),:nth-child(6)){display:none}
+body.no-aba #trHost .pat-table.tr-main:not(.tr-fin) :is(col,th,td):is(:nth-child(7),:nth-child(8)){display:none}
+body.no-aba #trHost .pat-table.tr-main.tr-fin :is(col,th,td):is(:nth-child(8),:nth-child(9)){display:none}
 .age-legend{display:contents}
 .age-legend[hidden]{display:none}
 .color-trigger{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);cursor:pointer;padding:0;flex:none}
@@ -2542,8 +2543,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(8)){display:none}
   /* Pacientes / Tratamentos: coluna do nome com todo o espaço que sobra; a da situação só do tamanho da etiqueta */
   #patListHost .pat-table col:first-child,#trHost .pat-table.tr-main col:first-child{width:auto!important}
-  #patListHost .pat-table col:nth-child(8),#trHost .pat-table.tr-main col:nth-child(9){width:122px!important}
-  :is(#patListHost .pat-table :is(th,td):nth-child(8),#trHost .pat-table.tr-main :is(th,td):nth-child(9)){padding-left:6px;padding-right:10px;white-space:nowrap}
+  #patListHost .pat-table col:nth-child(8),#trHost .pat-table.tr-main:not(.tr-fin) col:nth-child(10),#trHost .pat-table.tr-main.tr-fin col:nth-child(11){width:122px!important}
+  :is(#patListHost .pat-table :is(th,td):nth-child(8),#trHost .pat-table.tr-main:not(.tr-fin) :is(th,td):nth-child(10),#trHost .pat-table.tr-main.tr-fin :is(th,td):nth-child(11)){padding-left:6px;padding-right:10px;white-space:nowrap}
   :is(#patListHost,#trHost) .pat-table .tr-chip{white-space:nowrap}
   #profList .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)){display:none}
   /* Rolagem como em Pacientes: a barra da tela fica parada e só a lista rola */
@@ -2561,7 +2562,8 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   #reg-anamneses-host .pat-table col:nth-child(5){width:112px!important}
   #reg-planocontas-host .pat-table :is(col,th,td):is(:nth-child(2),:nth-child(n+4)){display:none}
   #reg-medicos-host .pat-table :is(col,th,td):is(:nth-child(3),:nth-child(4)),#reg-escolas-host .pat-table :is(col,th,td):nth-child(3),#reg-diagnosticos-host .pat-table :is(col,th,td):nth-child(n+3),#reg-status-host .pat-table :is(col,th,td):nth-child(n+2){display:none}
-  #trHost .pat-table.tr-main :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(9)){display:none}
+  #trHost .pat-table.tr-main:not(.tr-fin) :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(10)){display:none}
+  #trHost .pat-table.tr-main.tr-fin :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(11)){display:none}
   /* Cadastros no celular: cada linha numa linha só (texto que não cabe termina em "…"); nome com o espaço que sobra,
      colunas curtas com largura fixa. Salas/Grupos (cartões) não entram. */
   :is(#tab-pacientes,#tab-tratamentos,#tab-colaboradores,.reg-panel) .pat-table :is(th,td){white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal!important}
@@ -26666,42 +26668,44 @@ function renderTreatmentsTab(){
   if (!all.length){ host.innerHTML = '<div class="empty-state"><b>Nenhum tratamento cadastrado</b>Use "+ Incluir".</div>'; return; }
   if (!shown.length){ host.innerHTML = '<div class="empty-state"><b>Nada encontrado</b>Ajuste a busca ou o filtro.</div>'; return; }
   var canFin = trCanSeeVal();
-  // Ordem das colunas (pedido do usuário): Paciente, Início, Vencimento, Convênio, ABA,
-  // Término, Tipo, Status, Mês; "Valor Final" no fim, só para quem vê valores.
+  // Ordem das colunas (pedido do usuário, 2026-10-22): Paciente, Início, Término, Convênio, Vencimento, Sessão/Mês,
+  // Valor Final (só para quem vê valores), Intervenção ABA, Data de Revisão, Tipo, Status, Mês.
   var trCols = [
     {key: "pac", label: "Paciente", width: 260, min: 140, cls: "pt-nome"},
     {key: "ini", label: "Início", width: 110, min: 80},
-    {key: "venc", label: "Vencimento", width: 190, min: 100},
-    {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"},
-    {key: "aba", label: "Intervenção ABA", width: 130, min: 90},
-    {key: "abarev", label: "Data de Revisão", width: 150, min: 90},
     {key: "fim", label: "Término", width: 200, min: 90, cls: "pt-muted"},
-    {key: "tipo", label: "Tipo", width: 120, min: 80},
-    {key: "st", label: "Status", width: 130, min: 90},
-    {key: "mes", label: "Mês (Realizado/Contratado)", width: 200, min: 110},
+    {key: "conv", label: "Convênio", width: 170, min: 90, cls: "pt-muted"},
+    {key: "venc", label: "Vencimento", width: 190, min: 100},
     {key: "sess", label: "Sessão/Mês", width: 110, min: 80}
   ];
   if (canFin) trCols.push({key: "val", label: "Valor Final", width: 130, min: 90});
+  trCols = trCols.concat([
+    {key: "aba", label: "Intervenção ABA", width: 130, min: 90},
+    {key: "abarev", label: "Data de Revisão", width: 150, min: 90},
+    {key: "tipo", label: "Tipo", width: 120, min: 80},
+    {key: "st", label: "Status", width: 130, min: 90},
+    {key: "mes", label: "Mês (Realizado/Contratado)", width: 200, min: 110}
+  ]);
   gtRender(host, "tratamentos", trCols, shown.map(function(t){
     var p = rawPatient(t.patientId);
     var conv = t.convenioId ? (state.convenios.filter(function(c){ return c.id === t.convenioId; })[0] || {}).name : t.convenio;
     var fin = trFinal(t);
-    var cells = [(function(){ var c = trColor(t); return c ? '<span class="pcolor-dot" style="background:' + c + '" title="Cor por idade/ABA"></span>' : ''; })() + esc(p ? p.nome : "(paciente excluído)"),
-      esc(trBr(t.inicio)),
-      '<span class="tr-venc-lead">' + trDueChip(t) + '</span>' + (trDueText(t) ? esc(trDueText(t)) : '<span class="pt-muted">Sem vencimento</span>'),
-      esc(conv || "—"),
-      trAbaCell(t),
-      trAbaRevCell(t),
-      esc(trEndText(t)),
-      esc(trLabel(TR_TIPOS, t.tipo)),
-      '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>' + (t.status === "cancelado" && !t.motivoCancel ? '<span class="tr-venc vencendo tr-nomot" title="Motivo do cancelamento pendente">sem motivo</span>' : ''),
-      trMonthCell(t),
-      esc(t.sessoesMes != null && t.sessoesMes !== "" ? String(t.sessoesMes) : "—")];
-    var vals = [p ? p.nome : "", t.inicio || "", t.vencPor === "sessoes" ? (trDue(t) ? trDue(t).rest : "") : (t.validoAte || ""), conv || "",
-      trAbaText(t), t.abaRevisao || "", trEnd(t), trLabel(TR_TIPOS, t.tipo), trLabel(TR_STATUS, t.status), (function(){ var ms = trMonthSummary(t); return ms ? ms.m.tot.diff : ""; })(), parseFloat(String(t.sessoesMes).replace(",", ".")) || ""];
-    if (canFin){ cells.push(esc(fmtMoney(fin))); vals.push(fin); }
-    return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"', cells: cells, vals: vals};
-  }), renderTreatmentsTab, "tr-main");
+    var C = {
+      pac: [(function(){ var c = trColor(t); return c ? '<span class="pcolor-dot" style="background:' + c + '" title="Cor por idade/ABA"></span>' : ''; })() + esc(p ? p.nome : "(paciente excluído)"), p ? p.nome : ""],
+      ini: [esc(trBr(t.inicio)), t.inicio || ""],
+      fim: [esc(trEndText(t)), trEnd(t)],
+      conv: [esc(conv || "—"), conv || ""],
+      venc: ['<span class="tr-venc-lead">' + trDueChip(t) + '</span>' + (trDueText(t) ? esc(trDueText(t)) : '<span class="pt-muted">Sem vencimento</span>'), t.vencPor === "sessoes" ? (trDue(t) ? trDue(t).rest : "") : (t.validoAte || "")],
+      sess: [esc(t.sessoesMes != null && t.sessoesMes !== "" ? String(t.sessoesMes) : "—"), parseFloat(String(t.sessoesMes).replace(",", ".")) || ""],
+      val: [esc(fmtMoney(fin)), fin],
+      aba: [trAbaCell(t), trAbaText(t)],
+      abarev: [trAbaRevCell(t), t.abaRevisao || ""],
+      tipo: [esc(trLabel(TR_TIPOS, t.tipo)), trLabel(TR_TIPOS, t.tipo)],
+      st: ['<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span>' + (t.status === "cancelado" && !t.motivoCancel ? '<span class="tr-venc vencendo tr-nomot" title="Motivo do cancelamento pendente">sem motivo</span>' : ''), trLabel(TR_STATUS, t.status)],
+      mes: [trMonthCell(t), (function(){ var ms = trMonthSummary(t); return ms ? ms.m.tot.diff : ""; })()]
+    };
+    return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"', cells: trCols.map(function(c){ return C[c.key][0]; }), vals: trCols.map(function(c){ return C[c.key][1]; })};
+  }), renderTreatmentsTab, "tr-main" + (canFin ? " tr-fin" : ""));
 }
 // Coluna ABA da lista de Tratamentos: o ABA dos quadros; se eles têm ABA diferentes entre si,
 // "Misto" (o detalhe de cada um no title). Sem quadros: o ABA antigo ou a regra automática.
