@@ -1871,6 +1871,8 @@ table.pat-table{border-collapse:collapse;table-layout:fixed;width:100%}
 .pat-table td{padding:9px 12px;border-bottom:1px solid var(--line);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
 .pat-table td.pt-nome{font-weight:700;color:var(--ink)}
 .pat-table td.pt-trat .pt-muted{color:var(--muted)}
+.pat-table td.pt-venc{white-space:nowrap}
+.pat-table td.pt-venc .pt-due-l{color:var(--muted)}
 .pat-table td.pt-especialidades{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--ink-2)}
 .pat-table td.pt-muted{color:var(--muted)}
 .sort-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0;margin-left:3px;border-radius:4px;vertical-align:middle}
@@ -12834,8 +12836,30 @@ var SORT_COLS = [
   {key:"escola", label:"Escola"},
   {key:"medico", label:"Médico"},
   {key:"status", label:"Status"},
-  {key:"tratamento", label:"Tratamento"}
+  {key:"tratamento", label:"Tratamento"},
+  {key:"vencimento", label:"Vencimento"}
 ];
+// Vencimento dos tratamentos ATIVOS do paciente (o de serviço, como Avaliação, vem primeiro).
+function patDueItems(pid){
+  var a = treatmentsOf(pid).filter(function(t){ return t.status === "ativo"; });
+  return a.filter(trIsService).concat(a.filter(function(t){ return !trIsService(t); }));
+}
+function patDueLabel(t){
+  if (!trIsService(t)) return "Especialidades";
+  return (t.tipos || []).map(function(x){ return trTypeName(x); }).filter(Boolean).join(" / ") || "Serviço";
+}
+function patDueCell(pid){
+  var items = patDueItems(pid);
+  if (!items.length) return '<td class="pt-muted">—</td>';
+  var html = items.map(function(t){
+    var txt = trDueText(t);
+    if (txt === "…") PAT_DUE_WAIT = true;
+    var body = (txt ? esc(txt) : '<span class="pt-muted">Sem vencimento</span>') + ' ' + trDueChip(t);
+    return '<div class="pt-due">' + (items.length > 1 ? '<span class="pt-due-l">' + esc(patDueLabel(t)) + ':</span> ' : '') + body + '</div>';
+  }).join("");
+  return '<td class="pt-venc">' + html + '</td>';
+}
+var PAT_DUE_WAIT = false;
 // Primeiro telefone / e-mail do cadastro (lista de Pacientes).
 function patFirstPhone(p){ var t = (patNormalize(p).telefones || []).filter(function(x){ return x && x.numero; })[0]; return t ? formatPhone(t.numero) : ""; }
 function patRegName(kind, id){ var it = (REG_CFG[kind] && REG_CFG[kind].list() || []).filter(function(x){ return x.id === id; })[0]; return it ? it.name : ""; }
@@ -12843,8 +12867,8 @@ function patFirstEmail(p){ var e = (patNormalize(p).emails || []).filter(functio
 
 // ---- patients-list column widths: user-resizable, persisted per browser ----
 var PAT_COL_KEYS = SORT_COLS.map(function(c){ return c.key; });
-var PAT_COL_DEFAULT_WIDTH = {nome:280, idade:90, telefone:150, email:220, escola:180, medico:180, status:100, tratamento:150};
-var PAT_COL_MIN_WIDTH = {nome:140, idade:70, telefone:110, email:120, escola:100, medico:100, status:80, tratamento:110};
+var PAT_COL_DEFAULT_WIDTH = {nome:280, idade:90, telefone:150, email:220, escola:180, medico:180, status:100, tratamento:150, vencimento:230};
+var PAT_COL_MIN_WIDTH = {nome:140, idade:70, telefone:110, email:120, escola:100, medico:100, status:80, tratamento:110, vencimento:140};
 var PAT_COL_WIDTHS_STORAGE_KEY = "agendaPipo:patColWidths";
 
 function loadPatColWidths(){
@@ -13062,6 +13086,7 @@ function patSortKey(p, col){
     case "status": return isActive(p) ? "Ativo" : "Inativo";
     case "idade": { var a = patientAgeYears(p); return (a==null) ? null : a; }
     case "tratamento": { var t = currentTreatment(p.id); return t ? trLabel(TR_STATUS, t.status) : ""; }
+    case "vencimento": { var d = patDueItems(p.id)[0]; return d ? (d.vencPor === "data" || !d.vencPor ? (d.validoAte || "") : trDueText(d)) : ""; }
     default: return "";
   }
 }
@@ -13134,8 +13159,15 @@ function renderPatientsTab(){
       cellTxt(p.medicoId ? patRegName("medicos", p.medicoId) : "") +
       '<td>'+(isActive(p) ? '<span class="tr-chip st-ativo">Ativo</span>' : '<span class="tr-chip st-inativo">Inativo</span>')+(patBlocked(p) ? ' <span class="tr-chip st-cancelado" title="' + esc(patBlockText(p)) + '">Bloqueado</span>' : '')+'</td>' +
       '<td class="pt-trat">'+trTxt+'</td>' +
+      patDueCell(p.id) +
     '</tr>';
   }).join("");
+  // Vencimento por sessões precisa dos atendimentos: lê uma vez e redesenha.
+  if (PAT_DUE_WAIT && agdClient() && !TR.last){
+    PAT_DUE_WAIT = false;
+    trLoadLast(false).then(function(){ if (state.tab === "pacientes") renderPatientsTab(); });
+  }
+  PAT_DUE_WAIT = false;
 
   function colResizer(key){
     return '<span class="pat-col-resizer" data-col="'+key+'" title="Arrastar para ajustar a largura" aria-hidden="true"></span>';
@@ -29719,6 +29751,7 @@ var HELP_TOPICS = [
       "No <b>Responsável Financeiro</b>, os botões <b>Copiar Telefone</b> e <b>Copiar E-mail</b> trazem um dos contatos já cadastrados (com mais de um, escolha na lista); <b>Copiar Endereço</b> traz o endereço do paciente. Se o campo já tiver outro valor, o sistema pergunta antes de trocar.",
       "Diagnóstico, Médico, Escola e Como conheceu a clínica são escolhidos na lista do cadastro (digite para buscar). No fim da lista, <b>+ Incluir</b> cadastra um novo sem sair da janela (só para quem pode incluir naquele cadastro).",
       "O título de cada grupo mostra quantos campos obrigatórios ainda faltam (ex.: \"2 faltando\").",
+      "Na lista, a coluna <b>Vencimento</b> mostra o vencimento dos tratamentos ativos do paciente (a data, ou as sessões usadas, com o aviso de vencido ou perto de vencer). Com dois tratamentos ativos, o de serviço (como a Avaliação) aparece primeiro, depois o de especialidades, cada um com o nome na frente. Ordenar pela coluna segue o primeiro. No celular a coluna fica oculta.",
       "Cada grupo do cadastro tem permissão própria para <b>ver</b> em Níveis de Permissão (<b>Pacientes – Identificação</b>, <b>Pacientes – Endereço</b>, <b>Pacientes – Filiação</b> e assim por diante; Saúde segue <b>Pacientes – Saúde</b>). Sem a permissão, o grupo não aparece na janela do cadastro nem na ficha impressa. O Nome sempre aparece.",
       "<b>Bloqueio de Agendamento</b>: marque <b>Bloqueado</b> e escolha o <b>Motivo</b> (cadastro de Motivos de Bloqueio, com <b>+ Incluir</b> no fim da lista). Paciente bloqueado não pode ser agendado na Agenda (a regra <b>Paciente Bloqueado</b> fica em Acesso → Sistema) nem enviado do Planner para a Agenda. No Planner ele continua podendo ser agendado, movido e alterado; só não entra no Horário Livre nem no Sugerir Agendamento. Os atendimentos que ele já tem continuam, com a tarja <b>Bloqueado</b>; ao bloquear, o sistema oferece remover os da Agenda a partir de uma data. Todos os usuários veem o bloqueio e o motivo. Desmarcar libera o paciente.",
       "A data de entrada começa com a data do cadastro e pode ser alterada.",

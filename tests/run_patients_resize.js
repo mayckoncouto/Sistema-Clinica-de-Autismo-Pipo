@@ -24,8 +24,9 @@ const path = require('path');
   await page.waitForTimeout(150);
 
   // ---- TEST: colgroup + resizer handles are present, one per column (7 columns) ----
-  console.log('colgroup has 8 <col> elements?', (await page.locator('#patListHost .pat-table colgroup col').count()) === 8);
-  console.log('8 resizer handles present (one per column)?', (await page.locator('#patListHost .pat-col-resizer').count()) === 8);
+  console.log('colgroup has 9 <col> elements?', (await page.locator('#patListHost .pat-table colgroup col').count()) === 9);
+  console.log('9 resizer handles present (one per column)?', (await page.locator('#patListHost .pat-col-resizer').count()) === 9);
+  console.log('Vencimento column present?', (await page.locator('#patListHost .pat-table th', {hasText: 'Vencimento'}).count()) === 1);
 
   const nomeCol = page.locator('#patListHost col[data-col="nome"]');
   const startWidth = await nomeCol.evaluate(el => parseInt(getComputedStyle(el).width, 10));
