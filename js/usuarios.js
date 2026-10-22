@@ -866,7 +866,7 @@
     return '<div class="perm-quad" data-q="' + esc(pn.id) + '">' +
       '<div class="perm-qrow">' +
         '<div class="room-info"><div class="rn">' + esc(title) + '</div><div class="rs perm-qsum"></div></div>' +
-        (locked ? "" : '<button type="button" class="btn ghost" data-qall="1">Ativar Tudo</button><button type="button" class="btn ghost" data-qall="0">Desativar Tudo</button>') +
+        (locked ? "" : '<button type="button" class="btn ghost" data-qview>Ver Tudo</button><button type="button" class="btn ghost" data-qall="1">Ativar Tudo</button><button type="button" class="btn ghost" data-qall="0">Desativar Tudo</button>') +
         '<button type="button" class="btn ghost" data-qedit aria-expanded="false">Editar</button></div>' +
       '<div class="perm-qbody" hidden>' + body + "</div></div>";
   }
@@ -879,7 +879,7 @@
     if (rest.length) lay.push({ title: "Outros", panels: [{ id: "outros", keys: rest, title: "Outras Telas" }] });
     return '<div id="rPermBox">' + lay.map(function (g) {
       return '<div class="perm-grp" data-g="' + esc(g.title) + '"><div class="perm-grp-head"><div class="tr-sec">' + esc(g.title) + "</div>" +
-        (locked ? "" : '<button type="button" class="btn ghost" data-gall="1">Ativar Tudo</button><button type="button" class="btn ghost" data-gall="0">Desativar Tudo</button>') + "</div>" +
+        (locked ? "" : '<button type="button" class="btn ghost" data-gview>Ver Tudo</button><button type="button" class="btn ghost" data-gall="1">Ativar Tudo</button><button type="button" class="btn ghost" data-gall="0">Desativar Tudo</button>') + "</div>" +
         g.panels.map(function (pn) { return panelHtml(pn, perms, locked, byKey, tools); }).join("") + "</div>";
     }).join("") + "</div>";
   }
@@ -904,6 +904,14 @@
     scope.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(function (x) { x.checked = on; });
     permSums(root);
   }
+  // Ver Tudo: marca só a ação "Ver" das telas (não mexe em incluir/editar/excluir nem nas ferramentas).
+  function permViewAll(root, scope) {
+    scope.querySelectorAll('input[type="checkbox"][data-a="view"]:not(:disabled)').forEach(function (x) {
+      if (/^ferr_/.test(x.getAttribute("data-m") || "")) return;
+      x.checked = true;
+    });
+    permSums(root);
+  }
   function wirePermBox(box) {
     permSums(box);
     box.addEventListener("change", function (e) {
@@ -916,6 +924,10 @@
         bd.hidden = !open; ed.textContent = open ? "Fechar" : "Editar"; ed.setAttribute("aria-expanded", open ? "true" : "false");
         return;
       }
+      var qv = e.target.closest("[data-qview]");
+      if (qv) { permViewAll(box, qv.closest(".perm-quad").querySelector(".perm-qbody")); return; }
+      var gv = e.target.closest("[data-gview]");
+      if (gv) { permViewAll(box, gv.closest(".perm-grp")); return; }
       var qa = e.target.closest("[data-qall]");
       if (qa) { permBulk(box, qa.closest(".perm-quad").querySelector(".perm-qbody"), qa.getAttribute("data-qall") === "1"); return; }
       var ga = e.target.closest("[data-gall]");

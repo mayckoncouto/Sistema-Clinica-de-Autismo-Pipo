@@ -53,6 +53,10 @@ const path = require('path');
   check('Desativar Tudo clears the quadro and the summary says 0?', (await page.$$eval(pl + ' input:checked', (e) => e.length)) === 0 && /^0 de/.test(await page.$eval(pl + ' .perm-qsum', (e) => e.textContent)));
   await page.click(pl + ' [data-qall="1"]');
   check('Ativar Tudo marks everything (actions and tools)?', (await page.$$eval(pl + ' input:not(:checked)', (e) => e.length)) === 0);
+  await page.click(pl + ' [data-qall="0"]');
+  await page.click(pl + ' [data-qview]');
+  const vt = await page.evaluate((sel) => { const q = document.querySelector(sel); return { view: [...q.querySelectorAll('input[data-a="view"]')].filter((c) => !/^ferr_/.test(c.dataset.m)).every((c) => c.checked), other: q.querySelectorAll('input:not([data-a="view"]):checked').length, tools: [...q.querySelectorAll('input[data-m^="ferr_"]:checked')].length }; }, pl);
+  check('Ver Tudo marks only Ver of the screens (no Incluir/Editar/Excluir, no tools)?', vt.view && vt.other === 0 && vt.tools === 0, JSON.stringify(vt));
   // ver/incluir/editar/excluir continuam ligados
   await page.click(pl + ' [data-qall="0"]');
   await page.click('input[data-m="planner"][data-a="edit"]');
