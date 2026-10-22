@@ -28,9 +28,11 @@ const path = require('path');
   const before = await ev('state.treatments.length');
 
   await page.$eval('#mainTabs button[data-tab=tratamentos]', (b) => b.click()); await page.waitForTimeout(300);
+  check('barra de Tratamentos tem + Incluir Avaliação e + Incluir Tratamento?', (await page.isVisible('#trAddAval')) && /Incluir Tratamento/.test(await page.textContent('#trAdd')));
   await page.click('[data-io-wrap="tratamentos"] [data-io-btn]');
-  check('Outras Opções de Tratamentos tem Nova Avaliação?', await page.isVisible('[data-io-act="aval"]'));
-  await page.click('[data-io-act="aval"]'); await page.waitForSelector('#ovNovaAval');
+  check('Outras Opções não tem mais Nova Avaliação?', !(await page.$('[data-io-act="aval"]')));
+  await page.keyboard.press('Escape');
+  await page.click('#trAddAval'); await page.waitForSelector('#ovNovaAval');
   const svcs = await page.$$eval('#naSvc option', (o) => o.map((x) => x.textContent));
   check('lista só serviços que não são Sessão, avaliações primeiro?', svcs[0].indexOf('Avalia') === 0 && svcs.indexOf('Sessão') === -1, svcs);
   await page.evaluate((p) => { const s = document.getElementById('naPat'); s.value = p; s.dispatchEvent(new Event('change')); }, pid);
