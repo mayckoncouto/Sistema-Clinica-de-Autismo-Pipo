@@ -38,7 +38,7 @@ const path = require('path');
   check('cartão Atendimentos de Pacientes = 3', /3/.test(await page.textContent('#rspSum .fl-card:nth-child(3) b')));
   check('cartão Outros = 2', /2/.test(await page.textContent('#rspSum .fl-card:nth-child(5) b')));
   check('blocos Pacientes e Outros no mapa', /PACIENTES/.test(await page.textContent('#rspMain')) && /OUTROS/.test(await page.textContent('#rspMain')) && !/\(por grupo\)/.test(await page.textContent('#rspMain')));
-  check('grupo de suporte aparece', !(await ev('state.rooms.some(function(r){return r.group && r.therapists && r.therapists.length})')) || /GRUPOS DE SUPORTE/.test(await page.textContent('#rspMain')));
+  check('grupo de suporte aparece', !(await ev('state.rooms.some(function(r){return r.group && r.therapists && r.therapists.length})')) || /GRUPOS/.test(await page.textContent('#rspMain')));
   check('linha Total (Soma)', /Total \(Soma\)/.test(await page.textContent('#rspMain')));
   check('mapa de calor com 2 pacientes', (await page.$$eval('#rspMain .rsp-tbl tbody tr', (t) => t.filter((x) => !x.className).filter((x) => x.querySelector('[data-rsp-pc]')).length)) >= 1);
   check('célula do paciente 1 com 2', (await page.$$eval('#rspMain td[data-rsp-pc]', (t) => t.map((x) => x.textContent))).includes('2'));

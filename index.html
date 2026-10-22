@@ -7909,7 +7909,7 @@ function wireAgendamentos(){
  * profissional), Por Profissional (cartões) e Por Paciente. Lê os mesmos dados da Agendamentos Planner
  * (pllRows) e a permissão do Resumo (ver). Detalhes ao lado ao clicar. */
 var RSP = {v: "heat", hide: {}, sel: ""};
-var RSP_TIPOS = {pac: {n: "Pacientes", c: "var(--accent)"}, grp: {n: "Grupos de Suporte", c: "#c2410c"}, out: {n: "Outros", c: "#6d4cc2"}};
+var RSP_TIPOS = {pac: {n: "Pacientes", c: "var(--accent)"}, grp: {n: "Grupos", c: "#c2410c"}, out: {n: "Outros", c: "#6d4cc2"}};
 function rspFilters(){
   function v(id){ var el = document.getElementById(id); return el ? el.value : ""; }
   return {q: normText(v("rspQ")), sem: v("rspSem"), dia: v("rspDia"), tipo: v("rspTipo")};
@@ -7940,7 +7940,7 @@ function rspAllRows(){
         var ther = findTherapist(room, p[2]), prof = ther ? ther.professionalId : "";
         var base = {day: d.key, week: w, time: p[0], prof: prof, spec: prof ? (professionalSpecialtyId(prof) || "") : "", room: room.name};
         if (kind){ base.t = "out"; base.who = roomMeetingLabel(kind); base.key = "o:" + kind; base.extra = room.name; }
-        else if (isGroup(room)){ base.t = "grp"; base.who = room.name; base.key = "g:" + room.id; base.extra = "→ " + b.patient; }
+        else if (isGroup(room)){ base.t = "grp"; base.who = room.name; base.col = swatchVar(room.color || "orange"); base.key = "g:" + room.id; base.extra = "→ " + b.patient; }
         else { var pat = findPatientByName(b); base.t = "pac"; base.who = b.patient; base.pid = pat ? pat.id : (b.patientId || ""); base.key = "p:" + (base.pid || normText(b.patient)); base.extra = room.name; }
         out.push(base);
       });
@@ -7978,7 +7978,7 @@ function rspRender(){
   var sum = document.getElementById("rspSum");
   function card(label, val, col){ return '<div class="fl-card"' + (col ? ' style="border-top:4px solid ' + col + '"' : '') + '><small>' + esc(label) + '</small><b>' + val + '</b></div>'; }
   if (sum) sum.innerHTML = card("Pacientes", String(Object.keys(pats).length)) + card("Profissionais", String(Object.keys(profs).length)) +
-    card("Atendimentos de Pacientes", String(c.pac), RSP_TIPOS.pac.c) + card("Grupos de Suporte", String(c.grp), RSP_TIPOS.grp.c) + card("Outros", String(c.out), RSP_TIPOS.out.c) + card("Total de Agendamentos", String(R.length));
+    card("Atendimentos de Pacientes", String(c.pac), RSP_TIPOS.pac.c) + card("Grupos", String(c.grp), RSP_TIPOS.grp.c) + card("Outros", String(c.out), RSP_TIPOS.out.c) + card("Total de Agendamentos", String(R.length));
   var cnt = document.getElementById("rspCount"); if (cnt) cnt.textContent = R.length + (R.length === 1 ? " agendamento" : " agendamentos");
   var by = {}; all.forEach(function(r){ var k = r.spec || ""; by[k] = (by[k] || 0) + 1; });
   var ord = rspSpecOrder();
@@ -8016,7 +8016,7 @@ function rspHeatView(R){
     return x + '<td><b>' + tot + '</b></td></tr>';
   }
   var b = "";
-  [["out", "OUTROS"], ["grp", "GRUPOS DE SUPORTE"], ["pac", "PACIENTES"]].forEach(function(s){
+  [["out", "OUTROS"], ["grp", "GRUPOS"], ["pac", "PACIENTES"]].forEach(function(s){
     if (!order[s[0]].length) return;
     b += '<tr class="rsp-sep"><td colspan="' + (cols.length + 2) + '">' + s[1] + '</td></tr>' + order[s[0]].map(function(k){ return line(s[0], k); }).join("");
   });
@@ -8024,21 +8024,26 @@ function rspHeatView(R){
   cols.forEach(function(c){ var n = R.filter(function(r){ return (r.prof || "") === c.id; }).length; g += n; tot += '<td>' + n + '</td>'; });
   tot += '<td>' + g + '</td></tr>';
   return '<div class="rsp-scroll"><table class="rsp-tbl"><thead>' + h1 + '</thead><tbody>' + b + tot + '</tbody></table></div>' +
-    '<div class="rsp-legend">Nos pacientes, quanto mais escuro, mais atendimentos. Outros e Grupos de Suporte mostram só o número, sem cor.</div>';
+    '<div class="rsp-legend">Nos pacientes, quanto mais escuro, mais atendimentos. Outros e Grupos mostram só o número, sem cor.</div>';
 }
+function rspSegCol(r, spec){ return r.t === "pac" ? rspSpecColor(spec) : r.t === "grp" ? (r.col || RSP_TIPOS.grp.c) : RSP_TIPOS.out.c; }
 function rspProfView(R){
   var cols = rspProfCols(R);
   return '<div class="rsp-grid">' + cols.map(function(c){
-    var mine = R.filter(function(r){ return (r.prof || "") === c.id; }), k = {pac: 0, grp: 0, out: 0};
-    mine.forEach(function(r){ k[r.t]++; });
-    var byDay = DAYS.map(function(d){ var x = {pac: 0, grp: 0, out: 0}; mine.filter(function(r){ return r.day === d.key; }).forEach(function(r){ x[r.t]++; }); return x; });
-    var mx = Math.max.apply(null, byDay.map(function(x){ return x.pac + x.grp + x.out; }).concat([1]));
+    var mine = R.filter(function(r){ return (r.prof || "") === c.id; }), k = {pac: 0, grp: 0, out: 0}, gcol = {};
+    mine.forEach(function(r){ k[r.t]++; if (r.t === "grp") gcol[r.col || ""] = 1; });
+    var gcols = Object.keys(gcol), tagCol = {pac: rspSpecColor(c.spec), grp: gcols.length === 1 ? gcols[0] : RSP_TIPOS.grp.c, out: RSP_TIPOS.out.c};
+    var byDay = DAYS.map(function(d){ return mine.filter(function(r){ return r.day === d.key; }); });
+    var mx = Math.max.apply(null, byDay.map(function(x){ return x.length; }).concat([1]));
     return '<div class="rsp-pc" tabindex="0" data-rsp-prf="' + esc(c.id) + '" style="--c:' + rspSpecColor(c.spec) + '"><h3>' + esc(c.name) + '</h3><small>' + esc(rspSpecName(c.spec)) + '</small>' +
       '<div class="rsp-n">' + mine.length + ' <small>agendamentos</small></div>' +
-      '<div>' + ["pac", "grp", "out"].map(function(t){ return '<span class="rsp-tag" style="background:' + RSP_TIPOS[t].c + '">' + RSP_TIPOS[t].n + " " + k[t] + '</span>'; }).join("") + '</div>' +
-      '<div class="rsp-bars rsp-bars-st">' + byDay.map(function(x){ var t = x.pac + x.grp + x.out;
-        return '<div title="' + t + '">' + ["out", "grp", "pac"].map(function(q){ return x[q] ? '<i style="height:' + (x[q] / mx * 100) + '%;background:' + RSP_TIPOS[q].c + '"></i>' : ""; }).join("") + '</div>'; }).join("") + '</div>' +
-      '<div class="rsp-days">' + DAYS.map(function(d, i){ return '<span>' + esc(pllDayName(d.key).slice(0, 3)) + '<br>' + (byDay[i].pac + byDay[i].grp + byDay[i].out) + '</span>'; }).join("") + '</div></div>';
+      '<div>' + ["pac", "grp", "out"].map(function(t){ return '<span class="rsp-tag" style="background:' + tagCol[t] + '">' + RSP_TIPOS[t].n + " " + k[t] + '</span>'; }).join("") + '</div>' +
+      '<div class="rsp-bars rsp-bars-st">' + byDay.map(function(x){
+        var seg = {}, order = [];
+        x.forEach(function(r){ var key = r.t + "|" + (r.t === "grp" ? (r.col || "") : ""); if (!seg[key]){ seg[key] = {n: 0, col: rspSegCol(r, c.spec), o: r.t === "out" ? 0 : r.t === "grp" ? 1 : 2}; order.push(key); } seg[key].n++; });
+        order.sort(function(a, b){ return seg[a].o - seg[b].o; });
+        return '<div title="' + x.length + '">' + order.map(function(key){ return '<i style="height:' + (seg[key].n / mx * 100) + '%;background:' + seg[key].col + '"></i>'; }).join("") + '</div>'; }).join("") + '</div>' +
+      '<div class="rsp-days">' + DAYS.map(function(d, i){ return '<span>' + esc(pllDayName(d.key).slice(0, 3)) + '<br>' + byDay[i].length + '</span>'; }).join("") + '</div></div>';
   }).join("") + '</div>';
 }
 function rspPacView(R){
@@ -29594,12 +29599,12 @@ var HELP_TOPICS = [
   {id: "resumo-planner", group: "Planner", title: "Relatórios do Planner", mod: "resumo", tab: "resumoplanner",
     purpose: "Ver todos os agendamentos do Planner (as 4 semanas) — pacientes, grupos de suporte e outros da equipe — em mapa de calor, cartões por profissional ou lista por paciente.",
     steps: [
-      "Abra <b>Planner ▾ → Relatórios do Planner</b>. Os cartões do alto mostram pacientes, profissionais, atendimentos de pacientes, grupos de suporte, outros e o total de agendamentos.",
-      "Troque a visão pelos botões <b>Mapa de Calor</b>, <b>Por Profissional</b> e <b>Por Paciente</b>. No mapa, as linhas são separadas em <b>Outros</b>, <b>Grupos de Suporte</b> e <b>Pacientes</b> (só os pacientes têm cor de mapa de calor), e a última linha soma tudo por profissional.",
+      "Abra <b>Planner ▾ → Relatórios do Planner</b>. Os cartões do alto mostram pacientes, profissionais, atendimentos de pacientes, grupos, outros e o total de agendamentos.",
+      "Troque a visão pelos botões <b>Mapa de Calor</b>, <b>Por Profissional</b> e <b>Por Paciente</b>. No mapa, as linhas são separadas em <b>Outros</b>, <b>Grupos</b> e <b>Pacientes</b> (só os pacientes têm cor de mapa de calor), e a última linha soma tudo por profissional.",
       "Busque pelo nome e filtre por <b>Semana</b>, <b>Dia</b> e tipo (pacientes, só equipe ou os dois). Clicar numa especialidade (etiqueta colorida) liga ou desliga essa especialidade na tela.",
       "Clique numa célula, cartão ou linha para ver ao lado a lista dos agendamentos (semana, dia, hora e sala; nos grupos, a sala atendida). O × fecha o quadro."
     ],
-    rules: ["Grupos de Suporte contam por grupo (Aplicador ABA, Coordenador…). Outros são Reunião Clínica, Treinamento e Reserva.", "Bloqueado e horário bloqueado não contam. A Reunião Clínica automática de segunda às 11:20, enquanto ninguém a grava, também não.", "O total do profissional é a soma de pacientes, grupos e outros.", "Atualiza sozinho quando o Planner muda."],
+    rules: ["Grupos (de suporte) contam por grupo (Aplicador ABA, Coordenador…). Outros são Reunião Clínica, Treinamento e Reserva.", "Bloqueado e horário bloqueado não contam. A Reunião Clínica automática de segunda às 11:20, enquanto ninguém a grava, também não.", "O total do profissional é a soma de pacientes, grupos e outros.", "Atualiza sozinho quando o Planner muda."],
     who: "Permissão <b>Resumo</b> (ver), em Níveis de Permissão, grupo Planner."},
   {id: "planner-list", group: "Planner", title: "Agendamentos Planner", mod: "planner_list", tab: "plannerlist",
     purpose: "Ver em lista todos os atendimentos de pacientes que estão no Planner (as 4 semanas), por paciente, com busca e filtros.",
