@@ -282,7 +282,8 @@ div.ag-obj-head{cursor:default}
 #tab-crm.crm-home :is(#crmTitle,#crmViewSeg [data-cv="quadro"],#crmAdd){display:none!important}
 .crm-home-top{flex:none;align-self:stretch;width:100%;box-sizing:border-box;border-bottom:1px solid var(--line)}
 .crm-home-top[hidden]{display:none}
-.crm-home-h{display:flex;align-items:center;padding:14px 18px 0}
+.crm-home-h{display:flex;align-items:center;gap:16px;padding:14px 18px 0}
+.crm-home-dayslot{flex:1;min-width:0}.crm-home-dayslot:empty{display:none}
 .crm-home-grid{display:flex;flex-wrap:wrap;gap:12px;padding:14px 18px 16px}
 .crm-home-grid .crm-home-card{flex:1 1 240px;min-width:0;container-type:inline-size}
 .crm-home-body{display:grid;grid-template-columns:1fr;gap:6px 22px}
@@ -3224,7 +3225,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
 
   <!-- AGENDA POR DATA (nova) — código em "nova Agenda por data" no script -->
   <section id="tab-crm" class="panel" hidden>
-    <div class="crm-home-top" id="crmHomeTop" hidden><div class="crm-home-h"><b class="crm-title">CRM</b></div><div class="crm-home-grid" id="crmHomeGrid"></div></div>
+    <div class="crm-home-top" id="crmHomeTop" hidden><div class="crm-home-h"><b class="crm-title">CRM</b><div class="crm-home-dayslot" id="crmHomeDay"></div></div><div class="crm-home-grid" id="crmHomeGrid"></div></div>
     <div class="pat-toolbar crm-toolbar">
       <b class="crm-title" id="crmTitle">CRM</b>
       <div class="seg" id="crmViewSeg" role="group" aria-label="Visualização"><button type="button" data-cv="lista">Lista</button><button type="button" data-cv="quadro">Quadro</button><button type="button" data-cv="calendario">Calendário</button></div>
@@ -8505,7 +8506,10 @@ function crmHomeRender(host){
     return '<button type="button" class="crm-home-card" data-crm-home="' + esc(id) + '"' + (color ? ' style="--lc:' + esc(swatchVar(color)) + '"' : '') + '><b>' + esc(name) + '</b><span class="crm-home-body"><span class="crm-home-l">' + h + '</span><span class="crm-home-r">' + r + '</span></span></button>';
   }
   var mineTasks = all.filter(function(x){ return crmCan(x.list_id, "view") && (x.assignees || []).indexOf(me) !== -1; });
-  host.innerHTML = crmDayHtml(all) + card("__mine", "Minhas Tarefas", "", mineTasks) +
+  // Computador: Resumo do Dia na linha do título "CRM"; celular: primeiro cartão da fileira.
+  var daySlot = document.getElementById("crmHomeDay"), mob = isMobileView();
+  if (daySlot) daySlot.innerHTML = mob ? "" : crmDayHtml(all);
+  host.innerHTML = (mob || !daySlot ? crmDayHtml(all) : "") + card("__mine", "Minhas Tarefas", "", mineTasks) +
     vis.map(function(l){ return card(l.id, l.name, l.color, all.filter(function(x){ return x.list_id === l.id; })); }).join("");
   // Celular: todos os cartões com a mesma altura fixa = a do cartão de conteúdo mais alto (sem sobra).
   host.style.removeProperty("--crm-card-h");
@@ -8513,7 +8517,7 @@ function crmHomeRender(host){
     var hmax = 0; Array.prototype.forEach.call(host.querySelectorAll(".crm-home-card"), function(b){ hmax = Math.max(hmax, b.scrollHeight); });
     if (hmax) host.style.setProperty("--crm-card-h", (hmax + 2) + "px");
   }
-  Array.prototype.forEach.call(host.querySelectorAll("[data-crm-day]"), function(b){
+  Array.prototype.forEach.call(document.querySelectorAll("#crmHomeTop [data-crm-day]"), function(b){
     b.addEventListener("click", function(){ crmDayOpen(b.getAttribute("data-crm-day"), all); });
   });
   Array.prototype.forEach.call(host.querySelectorAll("[data-crm-home]"), function(b){
