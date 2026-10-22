@@ -3432,6 +3432,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
         <button class="btn ghost" id="patPrintBtn">Imprimir Ficha Cadastral</button>
         <button class="btn ghost" id="patLinkBtn" hidden>Enviar Link de Cadastro</button>
         <button class="btn ghost" id="patLinksBtn" hidden>Links Enviados</button>
+        <div data-nav-sub-host="pacientes"></div>
       </div></div>
       <button class="btn primary" id="addPatientBtn">+ Incluir</button>
     </div>
@@ -3462,6 +3463,8 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
       <select id="staffTypeFilter" aria-label="Tipo"><option value="">Todos os tipos</option></select>
       <span class="pat-count" id="staffCount"></span>
       <div class="spacer"></div>
+      <div class="cad-wrap pl-tools-wrap" id="staffMoreWrap" hidden><button type="button" class="btn ghost" id="staffMoreBtn" aria-haspopup="menu" aria-expanded="false"><span class="pm-lg">Outras Opções</span><span class="pm-sm">Opções</span> <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>
+      <div class="cad-menu pl-tools-menu" id="staffMoreMenu" role="menu" hidden></div></div>
       <button class="btn primary" id="staffAddBtn">+ Incluir</button>
     </div>
     <div id="staffListHost" class="reg-host"></div>
@@ -10678,7 +10681,7 @@ function wireControls(){
   });
   (function(){
     var tb = document.getElementById("patMoreBtn"), tm = document.getElementById("patMoreMenu");
-    function setOpen(o){ if (o) plMenuSeps(tm); tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ var rc = tb.getBoundingClientRect(); placeToolsMenu(tb, tm); var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); } }
+    function setOpen(o){ if (o){ navSubRefresh(); plMenuSeps(tm); } tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ var rc = tb.getBoundingClientRect(); placeToolsMenu(tb, tm); var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); } }
     tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
     tm.addEventListener("click", function(e){ if (e.target.closest("button")) setOpen(false); });
     document.addEventListener("mousedown", function(e){ if (!e.target.closest(".pat-more-wrap")) setOpen(false); });
@@ -16362,6 +16365,14 @@ function wireStaffTab(){
   s.addEventListener("input", renderStaffTab);
   document.getElementById("staffTypeFilter").addEventListener("change", renderStaffTab);
   document.getElementById("staffAddBtn").addEventListener("click", function(){ openStaffModal(null); });
+  // Outras Opções: Tipos de Colaborador, CBO e Conselhos (cadastros de apoio, navSubRefresh).
+  (function(){
+    var tb = document.getElementById("staffMoreBtn"), tm = document.getElementById("staffMoreMenu"); if (!tb || !tm) return;
+    function setOpen(o){ if (o) navSubRefresh(); tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ placeToolsMenu(tb, tm); var f = tm.querySelector("button"); if (f) f.focus(); } }
+    tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
+    document.addEventListener("mousedown", function(e){ if (!e.target.closest("#staffMoreWrap")) setOpen(false); });
+    document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !tm.hidden){ setOpen(false); tb.focus(); } });
+  })();
   addInactiveToggle("tab-colaboradores", "colaboradores", renderStaffTab);
   var host = document.getElementById("staffListHost");
   function open(e){
@@ -25570,7 +25581,7 @@ function trStatusOpts(tipos, cur){
   return TR_STATUS.filter(function(x){ return ok.indexOf(x.id) !== -1 || x.id === cur; }).map(function(x){ return '<option value="' + x.id + '"' + (x.id === cur ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join("");
 }
 var TR_TIPOS = [{id: "novo", name: "Novo"}, {id: "renegociado", name: "Renegociado"}];
-// Motivos de Cancelamento (Cadastros → Motivos de Cancelamento, config/cancel_reasons).
+// Motivos de Cancelamento (Cadastros → Tratamentos → Outras Opções → Motivos de Cancelamento, config/cancel_reasons).
 // "Outro" é fixo e exige a observação do cancelamento. Sem cadastro no banco
 // (antes do ajuste 2026-10-03e, ou nos testes) valem os motivos iniciais.
 var CANCEL_OTHER_ID = "outro";
@@ -26953,7 +26964,7 @@ function openTreatmentModal(t, opts){
     var now = trTiposRead(), added = now.filter(function(id){ return tpPrev.indexOf(id) === -1; });
     tpPrev = now;
     if (added.length && ed && ed.addForTypes) ed.addForTypes(added);
-    // Pré-seleção do Vencimento conforme o cadastro do tipo (Cadastros → Tipos de Tratamento)
+    // Pré-seleção do Vencimento conforme o cadastro do tipo (Cadastros → Tratamentos → Outras Opções → Tipos de Tratamento)
     var pre = null;
     added.forEach(function(id){ var c = ttVencOf(id); if (c.vencPor === "sessoes" && c.total > 0 && (!pre || pre.vencPor !== "sessoes" || c.total > pre.total)) pre = c; else if (c.vencPor === "sem" && !pre) pre = c; });
     var vpEl = document.getElementById("trVencPor"), totEl = document.getElementById("trTotal");
@@ -28927,7 +28938,7 @@ var HELP_TOPICS = [
       "Ao salvar um paciente novo vindo do link, nasce um tratamento <b>Ativo</b> só com o convênio informado (o resto do tratamento é preenchido depois). Se veio do CRM, a tarefa fica ligada ao paciente e os dados do lead saem da tarefa.",
       "CPF enviado igual ao de um paciente já cadastrado: o sistema pergunta se é uma atualização do cadastro dele.",
       "No link não há um campo separado de “responsável”: os dados vão direto para os campos do cadastro. <b>De quem é este telefone?</b> (nome e parentesco) vira o nome do contato do telefone, como WhatsApp. Com a mãe ou o pai no link, <b>Quem é o responsável financeiro?</b> (Mãe, Pai ou Outra pessoa) liga o financeiro à Filiação; com Outra pessoa, a família informa nome, CPF/CNPJ, telefone e e-mail.",
-      "<b>Escola</b> e <b>Médico</b>: a família escolhe entre os cadastrados ou marca <b>Outra</b>/<b>Outro</b> e digita o nome. Na revisão, o nome digitado que não está no cadastro aparece nas observações do aviso; corrija o nome e inclua em Cadastros → Escolas ou Médicos.",
+      "<b>Escola</b> e <b>Médico</b>: a família escolhe entre os cadastrados ou marca <b>Outra</b>/<b>Outro</b> e digita o nome. Na revisão, o nome digitado que não está no cadastro aparece nas observações do aviso; corrija o nome e inclua em Cadastros → Pacientes → Outras Opções → Escolas ou Médicos.",
       "<b>Convênio</b>: a família escolhe um dos convênios cadastrados, Particular ou <b>Outro</b> (aparece “Qual convênio?”). O convênio informado vai para as Observações do cadastro; sendo um convênio cadastrado, passa a ser o convênio do paciente e também entra no tratamento criado. Plano, nº da carteirinha e validade da carteirinha também podem ser pedidos no link (Campos obrigatórios).",
       "Laudo, escola ou médico não cadastrados, convênio e observações da família vão para as Observações do cadastro novo. Na revisão de um paciente já cadastrado, pessoas novas da retirada e da medida protetiva entram na lista e a rotina atual só completa os períodos vazios.",
       "A medida protetiva não vai preenchida no link de “Pedir Atualização” (o link pode chegar a outra pessoa da família). Dados de saúde enviados pelo link ficam guardados no envio até a revisão: marque esses campos no link só se for preciso.",
@@ -28983,7 +28994,7 @@ var HELP_TOPICS = [
     purpose: "O contrato de atendimento de cada paciente: convênio, Sessão/Mês, a caixa <b>Intervenção ABA</b> do tratamento (vale para o paciente todo e é o padrão dos quadros novos), as especialidades em quadros (cada um pode ter o seu ABA, que manda nos atendimentos dele) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras Opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
-      "Logo depois do paciente, <b>Tipo de Tratamento</b> aceita escolher vários (Multidisciplinar, especialidades, serviços…). Os marcados como padrão em Cadastros → Tipos de Tratamento já vêm escolhidos no tratamento novo. Cada tipo (inclusive especialidade e serviço, no cadastro deles) tem <b>Vencimento no Tratamento</b> e <b>Total de Sessões</b>: ao marcar o tipo, o Vencimento do tratamento já vem preenchido (Avaliação: 2 sessões; Avaliação Neuropsicológica: 10), e o Sessão/Mês recebe o mesmo total; tudo pode ser editado. No tratamento novo o Convênio vem do cadastro do paciente e a Intervenção ABA começa desmarcada.",
+      "Logo depois do paciente, <b>Tipo de Tratamento</b> aceita escolher vários (Multidisciplinar, especialidades, serviços…). Os marcados como padrão em Cadastros → Tratamentos → Outras Opções → Tipos de Tratamento já vêm escolhidos no tratamento novo. Cada tipo (inclusive especialidade e serviço, no cadastro deles) tem <b>Vencimento no Tratamento</b> e <b>Total de Sessões</b>: ao marcar o tipo, o Vencimento do tratamento já vem preenchido (Avaliação: 2 sessões; Avaliação Neuropsicológica: 10), e o Sessão/Mês recebe o mesmo total; tudo pode ser editado. No tratamento novo o Convênio vem do cadastro do paciente e a Intervenção ABA começa desmarcada.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
       "O grupo <b>Convênio e Valores</b> traz, nesta ordem: Convênio, Sessão/Mês e Período, Valor, Descontos e Valor final. Logo depois vem o grupo <b>Intervenção ABA</b>: a caixa Intervenção ABA, a Data de Revisão e Não Agrupar com. Ao sair do campo de valor, o valor aparece no formato R$ 1.234,56.",
       "Nos campos de valor (no tratamento, Descontos, vendas, lançamentos e contas) dá para digitar uma conta começando com <b>=</b>, por exemplo <b>=1500-200</b>, <b>=3 x 450,50</b> ou <b>=(100+50)/2</b> (use + - x / e parênteses). Ao sair do campo, o resultado preenche o valor; se a conta estiver errada, o campo é limpo e aparece um aviso.",
@@ -29121,7 +29132,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Colaboradores</b> (valores: permissão <b>Colaboradores – Valores</b>)."},
   {id: "tiposcolab", group: "Cadastros", title: "Tipos de Colaborador", mod: "colaboradores", tab: "tiposcolab",
     purpose: "Lista dos tipos usados no cadastro de Colaboradores.",
-    steps: ["Cadastros → <b>Tipos de Colaborador</b> → <b>+ Incluir</b>, ou clique num tipo para renomear ou excluir."],
+    steps: ["Cadastros → Colaboradores → Outras Opções → <b>Tipos de Colaborador</b> → <b>+ Incluir</b>, ou clique num tipo para renomear ou excluir."],
     rules: ["\"Profissional\" é fixo: marca quem atende pacientes e não pode ser renomeado nem excluído.", "Tipo em uso não é excluído: fica inativo."],
     who: "Permissão <b>Colaboradores</b>."},
   {id: "convenios", group: "Cadastros", title: "Convênios", mod: "convenios", tab: "convenios",
@@ -29148,7 +29159,7 @@ var HELP_TOPICS = [
       "<b>Sessão</b> é o serviço padrão e não pode ser renomeado nem excluído.",
       "Atendimento com serviço diferente de Sessão aparece na cor escolhida no cadastro do serviço (ciano, a cor de Treinamento, quando nenhuma foi escolhida), sem usar a faixa etária nem a Intervenção ABA. A legenda de cores do Planner, da Agenda e da Agenda Planner mostra um item para cada serviço cadastrado, então serviço novo entra sozinho.",
       "Na janela do atendimento, o campo Serviço oferece só os serviços do profissional.",
-      "A caixa <b>Tratamento</b> (ligada nos serviços já cadastrados e nos novos) faz o serviço aparecer como tipo em Cadastros → Tipos de Tratamento."
+      "A caixa <b>Tratamento</b> (ligada nos serviços já cadastrados e nos novos) faz o serviço aparecer como tipo em Cadastros → Tratamentos → Outras Opções → Tipos de Tratamento."
     ],
     who: "Permissão <b>Serviços</b>."},
   {id: "especialidades", group: "Cadastros", title: "Especialidades", mod: "especialidades", tab: "especialidades",
@@ -29159,7 +29170,7 @@ var HELP_TOPICS = [
     ],
     rules: ["No tratamento (especialidades/serviços), no convênio (especialidades cobertas) e no colaborador (especialidade principal), <b>+ Incluir</b> no fim da lista cadastra uma especialidade nova sem sair da janela.", 
       "A cor da especialidade aparece nos agendamentos e nos cabeçalhos.",
-      "A caixa <b>Tratamento</b> (ligada nas especialidades já cadastradas e nas novas) faz a especialidade aparecer como tipo em Cadastros → Tipos de Tratamento.",
+      "A caixa <b>Tratamento</b> (ligada nas especialidades já cadastradas e nas novas) faz a especialidade aparecer como tipo em Cadastros → Tratamentos → Outras Opções → Tipos de Tratamento.",
       "As sessões do tratamento são contadas por especialidade.",
       "A liberação vale para todos os convênios: o convênio que cobre esta especialidade passa a cobrir também as liberadas, com o mesmo valor por sessão.",
       "Especialidade em uso (profissionais, áreas complementares, tratamentos, convênios, liberações, habilidades, Banco de objetivos ou objetivos de planos) não é excluída: é <b>Inativada</b>."
@@ -29167,12 +29178,12 @@ var HELP_TOPICS = [
     who: "Permissão <b>Especialidades</b>."},
   {id: "medicos", group: "Cadastros", title: "Médicos", mod: "medicos", tab: "medicos",
     purpose: "Médicos que acompanham os pacientes (neuropediatra, psiquiatra…), escolhidos no cadastro do paciente.",
-    steps: ["Cadastros → <b>Médicos</b> → <b>+ Incluir</b>: nome, especialidade, CRM e telefone.", "No cadastro do paciente, no fim da lista de Médico, <b>+ Incluir</b> também cadastra um médico novo."],
+    steps: ["Cadastros → Pacientes → Outras Opções → <b>Médicos</b> → <b>+ Incluir</b>: nome, especialidade, CRM e telefone.", "No cadastro do paciente, no fim da lista de Médico, <b>+ Incluir</b> também cadastra um médico novo."],
     rules: ["A lista mostra quantos pacientes têm cada médico.", "Médico ligado a paciente não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>Médicos</b>."},
   {id: "escolas", group: "Cadastros", title: "Escolas", mod: "escolas", tab: "escolas",
     purpose: "Escolas dos pacientes, escolhidas no cadastro do paciente (com série, turno, contato e mediador).",
-    steps: ["Cadastros → <b>Escolas</b> → <b>+ Incluir</b>: nome, telefone e contato na escola.", "No cadastro do paciente, no fim da lista de Escola, <b>+ Incluir</b> também cadastra uma escola nova."],
+    steps: ["Cadastros → Pacientes → Outras Opções → <b>Escolas</b> → <b>+ Incluir</b>: nome, telefone e contato na escola.", "No cadastro do paciente, no fim da lista de Escola, <b>+ Incluir</b> também cadastra uma escola nova."],
     rules: ["A lista mostra quantos pacientes estudam em cada escola.", "Escola ligada a paciente não é excluída: é <b>Inativada</b>."],
     who: "Permissão <b>Escolas</b>."},
   {id: "fornecedores", group: "Financeiro", title: "Fornecedores", mod: "fornecedores", tab: "fornecedores",
@@ -29232,22 +29243,22 @@ var HELP_TOPICS = [
     who: "Permissão <b>Financeiro</b> (ver, incluir, editar e excluir) em Níveis de Permissão; o saldo das contas, com <b>Financeiro – Valores</b>. <b>Fechamento de Mês</b> (ver = histórico, incluir = fechar, excluir = reabrir)."},
   {id: "diagnosticos", group: "Cadastros", title: "Diagnósticos", mod: "diagnosticos", tab: "diagnosticos",
     purpose: "Lista de diagnósticos escolhida no cadastro do paciente (grupo Saúde) e nos dados do lead do CRM. Cada diagnóstico tem o nome e, à parte, o código CID.",
-    steps: ["Cadastros → <b>Diagnósticos</b> → <b>+ Incluir</b>: o <b>nome</b> do diagnóstico e, em outro campo, o código CID (opcional).", "No paciente e no lead do CRM, o campo <b>Diagnóstico</b> lista este cadastro; no fim da lista, <b>+ Incluir</b> cadastra um diagnóstico novo sem sair da janela."],
+    steps: ["Cadastros → Pacientes → Outras Opções → <b>Diagnósticos</b> → <b>+ Incluir</b>: o <b>nome</b> do diagnóstico e, em outro campo, o código CID (opcional).", "No paciente e no lead do CRM, o campo <b>Diagnóstico</b> lista este cadastro; no fim da lista, <b>+ Incluir</b> cadastra um diagnóstico novo sem sair da janela."],
     rules: ["A lista mostra quantos pacientes têm cada diagnóstico.", "Diagnóstico usado por paciente não é excluído: é <b>Inativado</b>.", "As listas mostram só o nome do diagnóstico, em ordem alfabética; o código CID fica só no cadastro.", "Ao digitar no campo <b>Diagnóstico</b>, a busca encontra pelo nome ou pelo código CID.", "Corrigir o nome troca o texto também nos pacientes que usavam o nome anterior."],
     who: "Permissão <b>Diagnósticos</b>."},
   {id: "origens", group: "Cadastros", title: "Origens", mod: "origens", tab: "origens",
     purpose: "Como o paciente conheceu a clínica (Indicação médica, Escola, Internet…). Usada no cadastro do paciente.",
-    steps: ["Cadastros → <b>Origens</b> → <b>+ Incluir</b>: nome da origem.", "No paciente (Como conheceu a clínica), o <b>+ Incluir</b> no fim da lista cadastra uma origem nova sem sair da janela."],
+    steps: ["Cadastros → Pacientes → Outras Opções → <b>Origens</b> → <b>+ Incluir</b>: nome da origem.", "No paciente (Como conheceu a clínica), o <b>+ Incluir</b> no fim da lista cadastra uma origem nova sem sair da janela."],
     rules: ["A lista mostra quantos pacientes vieram de cada origem.", "Origem usada por paciente não é excluída: é <b>Inativada</b>.", "Corrigir o nome troca o texto também nos pacientes que usavam o nome anterior."],
     who: "Permissão <b>Origens</b>."},
   {id: "tipostrat", group: "Cadastros", title: "Tipos de Tratamento", mod: "tipos_tratamento", tab: "tipostrat",
     purpose: "Os tipos que o tratamento do paciente pode ter (Multidisciplinar, Fonoaudiologia, Psicologia…). Cada tratamento pode ter vários tipos.",
-    steps: ["Cadastros → <b>Tipos de Tratamento</b> → <b>+ Incluir</b>: nome do tipo (ex.: Multidisciplinar). A caixa <b>Padrão</b> faz o tipo já vir escolhido no tratamento novo.", "Todas as especialidades e serviços cadastrados aparecem na lista sozinhos: em Cadastros → Especialidades e Serviços há a caixa <b>Tratamento</b>; desligada, a especialidade ou o serviço deixa de ser tipo. Clicar numa especialidade ou serviço da lista abre o cadastro dele.", "No tratamento, o campo <b>Tipo de Tratamento</b> (logo depois do paciente) aceita escolher vários."],
+    steps: ["Cadastros → Tratamentos → Outras Opções → <b>Tipos de Tratamento</b> → <b>+ Incluir</b>: nome do tipo (ex.: Multidisciplinar). A caixa <b>Padrão</b> faz o tipo já vir escolhido no tratamento novo.", "Todas as especialidades e serviços cadastrados aparecem na lista sozinhos: em Cadastros → Especialidades e Serviços há a caixa <b>Tratamento</b>; desligada, a especialidade ou o serviço deixa de ser tipo. Clicar numa especialidade ou serviço da lista abre o cadastro dele.", "No tratamento, o campo <b>Tipo de Tratamento</b> (logo depois do paciente) aceita escolher vários."],
     rules: ["O <b>Status</b> do tratamento depende do tipo: tratamento de <b>serviço</b> fica <b>Ativo</b> ou <b>Finalizado</b>; tratamento de especialidade (ou Multidisciplinar) fica <b>Ativo</b>, <b>Renegociado</b> ou <b>Cancelado</b>.", "<b>Finalizado</b> age como Cancelado: o tratamento some da lista (marque a caixa <b>Finalizados</b> ou use o filtro de status para vê-lo) e o paciente é inativado, se não tiver outro tratamento ativo.", "Ao marcar um tipo no tratamento, os quadros entram sozinhos: <b>Multidisciplinar</b> traz todas as especialidades (menos Aplicador ABA) e uma especialidade traz o quadro dela; você remove o que não quiser.", "Ao agendar uma Sessão (Planner e Agenda) ou salvar um quadro de especialidade, o sistema avisa se a especialidade não está no tipo. Multidisciplinar libera todas, serviços são sempre livres e, num tratamento só de serviço, agendar uma Sessão de especialidade também avisa. O aviso dos quadros continua valendo como segunda regra; no <b>Sistema</b> o Administrador escolhe Bloquear, Avisar ou Desligado.", "A lista mostra a origem (Tipo de Tratamento, Especialidade ou Serviço) e quantos tratamentos usam cada tipo.", "Tipo usado em tratamento não é excluído: é <b>Inativado</b>.", "Especialidade e serviço novos já vêm com Tratamento ligado."],
     who: "Permissão <b>Tipos de Tratamento</b>."},
   {id: "motivosbloq", group: "Cadastros", title: "Motivos de Bloqueio", mod: "motivos_bloqueio", tab: "motivosbloq",
     purpose: "Motivos para bloquear um paciente (Financeiro, Documentação pendente, Aguardando laudo…). Usados no grupo <b>Bloqueio de Agendamento</b> do cadastro do paciente.",
-    steps: ["Cadastros → <b>Motivos de Bloqueio</b> → <b>+ Incluir</b>: nome do motivo.", "No paciente, o <b>+ Incluir</b> no fim da lista de motivos cadastra um motivo novo sem sair da janela."],
+    steps: ["Cadastros → Pacientes → Outras Opções → <b>Motivos de Bloqueio</b> → <b>+ Incluir</b>: nome do motivo.", "No paciente, o <b>+ Incluir</b> no fim da lista de motivos cadastra um motivo novo sem sair da janela."],
     rules: ["A lista mostra quantos pacientes estão bloqueados com cada motivo.", "Motivo usado por paciente não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>Motivos de Bloqueio</b>."},
   {id: "feriados", group: "Cadastros", title: "Feriados e Recessos", mod: "feriados", tab: "feriados",
@@ -29265,7 +29276,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Feriados e Recessos</b>."},
   {id: "conselhos", group: "Cadastros", title: "Conselhos", mod: "conselhos", tab: "conselhos",
     purpose: "Conselhos profissionais (CRP, CRFa, CREFITO, CRN…) usados no cadastro dos profissionais.",
-    steps: ["Cadastros → <b>Conselhos</b> → <b>+ Incluir</b>: sigla (ex.: CRP) e nome.", "No cadastro do colaborador com o tipo Profissional, o <b>+ Incluir</b> no fim da lista de Conselho também inclui um novo."],
+    steps: ["Cadastros → Colaboradores → Outras Opções → <b>Conselhos</b> → <b>+ Incluir</b>: sigla (ex.: CRP) e nome.", "No cadastro do colaborador com o tipo Profissional, o <b>+ Incluir</b> no fim da lista de Conselho também inclui um novo."],
     rules: ["Não pode haver dois conselhos com a mesma sigla.", "A coluna Profissionais mostra quantos usam cada conselho; conselho em uso não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>Conselhos</b>."},
   {id: "objetivos", group: "Prontuário", title: "Objetivos", mod: "objetivos", tab: "objetivos",
@@ -29317,12 +29328,12 @@ var HELP_TOPICS = [
     who: "Permissão <b>Habilidades</b>."},
   {id: "cbo", group: "Cadastros", title: "CBO", mod: "cbo", tab: "cbo",
     purpose: "Lista de CBO (Classificação Brasileira de Ocupações) usada no cadastro dos profissionais.",
-    steps: ["Cadastros → <b>CBO</b> → <b>+ Incluir</b>: código (ex.: 2515-10) e descrição.", "No cadastro do colaborador com o tipo Profissional, o <b>+ Incluir</b> no fim da lista de CBO também inclui um novo."],
+    steps: ["Cadastros → Colaboradores → Outras Opções → <b>CBO</b> → <b>+ Incluir</b>: código (ex.: 2515-10) e descrição.", "No cadastro do colaborador com o tipo Profissional, o <b>+ Incluir</b> no fim da lista de CBO também inclui um novo."],
     rules: ["Não pode haver dois CBO com o mesmo código.", "A coluna Profissionais mostra quantos usam cada CBO; CBO em uso não é excluído: é <b>Inativado</b>."],
     who: "Permissão <b>CBO</b>."},
   {id: "motivos", group: "Cadastros", title: "Motivos de Cancelamento", mod: "motivos_cancelamento", tab: "motivos",
     purpose: "Lista de motivos escolhida ao cancelar um tratamento.",
-    steps: ["Cadastros → <b>Motivos de Cancelamento</b> → <b>+ Incluir</b>."],
+    steps: ["Cadastros → Tratamentos → Outras Opções → <b>Motivos de Cancelamento</b> → <b>+ Incluir</b>."],
     rules: ["Ao cancelar um tratamento (ou ao inativar o paciente), <b>+ Incluir</b> no fim da lista de motivos cadastra um motivo novo sem sair da janela.", "\"Outro\" é fixo: não pode ser excluído e exige a observação do cancelamento.", "A coluna mostra quantos tratamentos foram cancelados por cada motivo."],
     who: "Permissão <b>Motivos de Cancelamento</b>."},
   {id: "salas", group: "Cadastros", title: "Salas", mod: "salas", tab: "salas",
@@ -29345,7 +29356,7 @@ var HELP_TOPICS = [
     who: "Permissão <b>Salas</b> (grupos: <b>Grupos de Suporte</b>)."},
   {id: "grupos", group: "Cadastros", title: "Grupos de Suporte", mod: "grupos", tab: "salas",
     purpose: "Colunas especiais do Planner (ex.: Coordenador, Aplicador ABA) em que se agenda uma <b>sala</b>, não um paciente.",
-    steps: ["Cadastros → <b>Grupos de Suporte</b> → <b>+ Incluir</b>."],
+    steps: ["Cadastros → Salas → <b>Grupos de Suporte</b> → <b>+ Incluir</b>."],
     rules: [
       "Trocar o nome do grupo troca também o nome nos atendimentos da Agenda em que o grupo está no lugar do paciente.",
       "Na célula de grupo só se agenda o nome de uma sala; na célula de sala, só paciente.",
@@ -30660,7 +30671,7 @@ var REG_CFG = {
     list: function(){ return servicesList(); },
     extraHtml: function(item, canSave){
       return '<div class="field"><label class="chk-line"><input type="checkbox" id="regTratamento"' + (ttOn(item) ? ' checked' : '') + (canSave ? '' : ' disabled') + '> <span>Tratamento</span></label>' +
-        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>' + ttVencHtml(item, item && item.id ? 'svc:' + item.id : '', canSave) +
+        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tratamentos → Outras Opções → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>' + ttVencHtml(item, item && item.id ? 'svc:' + item.id : '', canSave) +
         (item && item.id === DEFAULT_SERVICE_ID ? '' : '<div class="field"><label>Liberado pelas Especialidades</label>' + specCheckGridHtml("regSvcLib", (item && item.liberadoPor) || [], canSave) +
           '<div class="pat-count" style="margin-top:4px;font-weight:500">No tratamento, o serviço fica coberto pelo convênio quando a especialidade do quadro está coberta e libera o serviço. Nenhuma marcada = todas as especialidades liberam.</div></div>');
     },
@@ -30976,7 +30987,7 @@ var REG_CFG = {
     list: function(){ return state.specialties.slice(); },
     extraHtml: function(item, canSave){
       return '<div class="field"><label class="chk-line"><input type="checkbox" id="regTratamento"' + (ttOn(item) ? ' checked' : '') + (canSave ? '' : ' disabled') + '> <span>Tratamento</span></label>' +
-        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>' + ttVencHtml(item, item && item.id ? 'spec:' + item.id : '', canSave);
+        '<div class="pat-count" style="margin-top:4px;font-weight:500">Ligado, aparece como Tipo de Tratamento (Cadastros → Tratamentos → Outras Opções → Tipos de Tratamento) e pode ser escolhido no tratamento do paciente.</div></div>' + ttVencHtml(item, item && item.id ? 'spec:' + item.id : '', canSave);
     },
     extraWire: function(){
       var c = document.getElementById("regTratamento");
@@ -31326,27 +31337,55 @@ function regRenameEverywhere(kind, oldTxt, newTxt, id){
 var CAD_ITEMS = [
   {key: "pacientes", label: "Pacientes", tab: "pacientes", ok: function(){ return can("pacientes", "view"); }},
   {key: "tratamentos", label: "Tratamentos", tab: "tratamentos", ok: function(){ return can("tratamentos", "view"); }},
-  {key: "tipostrat", label: "Tipos de Tratamento", tab: "tipostrat", ok: function(){ return can("tipos_tratamento", "view"); }},
+  {key: "tipostrat", under: "tratamentos", label: "Tipos de Tratamento", tab: "tipostrat", ok: function(){ return can("tipos_tratamento", "view"); }},
   {key: "convenios", label: "Convênios", tab: "convenios", ok: function(){ return can("convenios", "view"); }},
-  {key: "motivos", label: "Motivos de Cancelamento", tab: "motivos", ok: function(){ return can("motivos_cancelamento", "view"); }},
-  {key: "medicos", label: "Médicos", tab: "medicos", ok: function(){ return can("medicos", "view"); }},
-  {key: "escolas", label: "Escolas", tab: "escolas", ok: function(){ return can("escolas", "view"); }},
-  {key: "diagnosticos", label: "Diagnósticos", tab: "diagnosticos", ok: function(){ return can("diagnosticos", "view"); }},
-  {key: "origens", label: "Origens", tab: "origens", ok: function(){ return can("origens", "view"); }},
-  {key: "motivosbloq", label: "Motivos de Bloqueio", tab: "motivosbloq", ok: function(){ return can("motivos_bloqueio", "view"); }},
+  {key: "motivos", under: "tratamentos", label: "Motivos de Cancelamento", tab: "motivos", ok: function(){ return can("motivos_cancelamento", "view"); }},
+  {key: "medicos", under: "pacientes", label: "Médicos", tab: "medicos", ok: function(){ return can("medicos", "view"); }},
+  {key: "escolas", under: "pacientes", label: "Escolas", tab: "escolas", ok: function(){ return can("escolas", "view"); }},
+  {key: "diagnosticos", under: "pacientes", label: "Diagnósticos", tab: "diagnosticos", ok: function(){ return can("diagnosticos", "view"); }},
+  {key: "origens", under: "pacientes", label: "Origens", tab: "origens", ok: function(){ return can("origens", "view"); }},
+  {key: "motivosbloq", under: "pacientes", label: "Motivos de Bloqueio", tab: "motivosbloq", ok: function(){ return can("motivos_bloqueio", "view"); }},
   {sep: true, key: "colaboradores", label: "Colaboradores", tab: "colaboradores", ok: function(){ return can("colaboradores", "view"); }},
-  {key: "tiposcolab", label: "Tipos de Colaborador", tab: "tiposcolab", ok: function(){ return can("colaboradores", "view"); }},
+  {key: "tiposcolab", under: "colaboradores", label: "Tipos de Colaborador", tab: "tiposcolab", ok: function(){ return can("colaboradores", "view"); }},
   {key: "especialidades", label: "Especialidades", tab: "especialidades", ok: function(){ return can("especialidades", "view"); }},
   {key: "servicos", label: "Serviços", tab: "servicos", ok: function(){ return can("servicos", "view"); }},
-  {key: "cbo", label: "CBO", tab: "cbo", ok: function(){ return can("cbo", "view"); }},
-  {key: "conselhos", label: "Conselhos", tab: "conselhos", ok: function(){ return can("conselhos", "view"); }},
+  {key: "cbo", under: "colaboradores", label: "CBO", tab: "cbo", ok: function(){ return can("cbo", "view"); }},
+  {key: "conselhos", under: "colaboradores", label: "Conselhos", tab: "conselhos", ok: function(){ return can("conselhos", "view"); }},
   {sep: true, key: "salas", label: "Salas", tab: "salas", view: "salas", ok: function(){ return can("salas", "view"); }},
-  {key: "grupos", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }},
+  {key: "grupos", under: "salas", label: "Grupos de Suporte", tab: "salas", view: "grupos", ok: function(){ return can("grupos", "view"); }},
   {key: "feriados", label: "Feriados e Recessos", tab: "feriados", ok: function(){ return can("feriados", "view"); }},
   // Status dos atendimentos: abre a janela de cadastro (sem tela própria).
   {key: "status", label: "Status", tab: "status", ok: function(){ return can("cadastro_status", "view"); }}
   // "Unidades" (só a Gestão) fica no menu Acesso (js/pipo-supabase.js); a tela é a aba oculta data-tab="unidades".
 ];
+/* Cadastros de apoio (2026-10-21): o item com "under" sai do menu Cadastros e vai para Outras Opções da tela principal
+ * (Pacientes, Tratamentos, Colaboradores, Salas). Quem não vê a tela principal continua achando o item no menu. */
+function navUnderOk(it){
+  if (!it.under || !window.pipoAuth) return false;
+  var p = CAD_ITEMS.filter(function(x){ return x.key === it.under; })[0];
+  if (!p || !p.ok()) return false;
+  if (it.under === "salas") return !!(document.getElementById("toggleGroupsBtn") && can("salas", "view") && can("grupos", "view"));
+  return true;
+}
+function navSubItems(parent){ return CAD_ITEMS.filter(function(i){ return i.under === parent && i.key !== "grupos" && (!window.pipoAuth || i.ok()); }); }
+function navSubHtml(parent){
+  var its = navSubItems(parent);
+  return its.length ? '<div class="cad-sep" role="separator"></div>' + its.map(function(i){ return '<button type="button" class="btn ghost" role="menuitem" data-nav-sub="' + i.key + '">' + esc(i.label) + '</button>'; }).join("") : "";
+}
+function navSubRefresh(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-nav-sub-host]"), function(h){ h.innerHTML = navSubHtml(h.getAttribute("data-nav-sub-host")); });
+  var cw = document.getElementById("staffMoreWrap"); if (cw){ var n = navSubItems("colaboradores").length; cw.hidden = !n; var cm = document.getElementById("staffMoreMenu"); if (cm) cm.innerHTML = navSubHtml("colaboradores").replace('<div class="cad-sep" role="separator"></div>', ""); }
+}
+// Clique num item de apoio dentro de Outras Opções: abre a tela; Ctrl+clique (ou botão do meio) abre em outra aba.
+function navSubClick(e){
+  var b = e.target.closest && e.target.closest("[data-nav-sub]"); if (!b) return;
+  var it = navItem(b.getAttribute("data-nav-sub")); if (!it) return;
+  e.preventDefault(); e.stopPropagation();
+  var menu = b.closest(".pl-tools-menu"); if (menu){ menu.hidden = true; var w = menu.parentNode, t = w && w.querySelector('[aria-haspopup="menu"]'); if (t) t.setAttribute("aria-expanded", "false"); }
+  if (e.ctrlKey || e.metaKey || e.button === 1) navOpenNewTab(it.key); else navActivate(it);
+}
+document.addEventListener("click", navSubClick, true);
+document.addEventListener("auxclick", function(e){ if (e.button === 1) navSubClick(e); }, true);
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.
 var CLINIC_NAV = {key: "clinica", label: "Clínica", ok: function(){ return can("clinica", "view"); }};
 var CAD_TABS = ["pacientes", "tratamentos", "tipostrat", "convenios", "motivos", "medicos", "escolas", "diagnosticos", "origens", "motivosbloq", "colaboradores", "tiposcolab", "profissionais", "especialidades", "servicos", "cbo", "conselhos", "salas", "feriados", "status", "unidades", "contratos"];
@@ -31416,7 +31455,7 @@ function renderNavMenus(){
   NAV_MENUS.forEach(function(m){
     var menu = document.getElementById(m.menu), btn = document.getElementById(m.btn);
     if (!menu || !btn) return;
-    var items = m.items.filter(function(i){ return !window.pipoAuth || i.ok(); });
+    var items = m.items.filter(function(i){ return (!window.pipoAuth || i.ok()) && !navUnderOk(i); });
     menu.innerHTML = items.map(function(i, n){ return (i.sep && n ? '<div class="cad-sep" role="separator"></div>' : "") + '<button type="button" role="menuitem" data-nav="' + i.key + '">' + i.label + '</button>'; }).join("");
     btn.hidden = !items.length;
     // Só UMA opção permitida no menu: o botão vira essa opção direto (sem menu suspenso).
@@ -31428,7 +31467,7 @@ function renderNavMenus(){
     btn.classList.toggle("active", m.single ? (!!m.single.tab && m.single.tab === state.tab && (!m.single.view || state.salasView === m.single.view)) : m.tabs.indexOf(state.tab) !== -1);
   });
 }
-function renderCadMenu(){ renderNavMenus(); }
+function renderCadMenu(){ renderNavMenus(); navSubRefresh(); }
 function setNavMenu(m, open){
   var menu = document.getElementById(m.menu), btn = document.getElementById(m.btn);
   if (!menu) return;
@@ -31537,7 +31576,7 @@ function mnavRender(){
     return '<button type="button" role="menuitem" class="' + (sub ? "sub" : "") + (on ? " on" : "") + '" data-mnav="' + it.key + '">' + esc(it.label) + '</button>';
   }
   function group(title, items){
-    items = items.filter(function(i){ return (!window.pipoAuth || i.ok()) && MOBILE_HIDDEN_TABS.indexOf(i.tab) === -1; });
+    items = items.filter(function(i){ return (!window.pipoAuth || i.ok()) && !navUnderOk(i) && MOBILE_HIDDEN_TABS.indexOf(i.tab) === -1; });
     if (!items.length) return "";
     // Só uma opção permitida: aparece direto, sem o grupo (mesma regra do topo).
     if (items.length === 1) return navBtn(items[0], false);
@@ -35521,13 +35560,13 @@ function ioRenderPlan(m, plan){
 // Menu "Outras Opções ▾" com Exportar / Importar numa barra (Tratamentos e cadastros do plano).
 function ioToolsMenuHtml(kind){
   return '<div class="cad-wrap pl-tools-wrap io-wrap" data-io-wrap="' + kind + '"><button type="button" class="btn ghost" data-io-btn aria-haspopup="menu" aria-expanded="false"><span class="pm-lg">Outras Opções</span><span class="pm-sm">Opções</span> <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button>' +
-    '<div class="cad-menu pl-tools-menu" role="menu" hidden><button class="btn ghost" data-io-act="export">Exportar Planilha</button><button class="btn ghost" data-io-act="import">Importar Planilha</button></div></div>';
+    '<div class="cad-menu pl-tools-menu" role="menu" hidden><button class="btn ghost" data-io-act="export">Exportar Planilha</button><button class="btn ghost" data-io-act="import">Importar Planilha</button><div data-nav-sub-host="' + kind + '"></div></div></div>';
 }
 function ioWireMenu(wrap){
   var kind = wrap.getAttribute("data-io-wrap"), tb = wrap.querySelector("[data-io-btn]"), tm = wrap.querySelector(".pl-tools-menu");
   function setOpen(o){
     tm.hidden = !o; tb.setAttribute("aria-expanded", o ? "true" : "false");
-    if (o){ tm.querySelector('[data-io-act="import"]').hidden = !ioCanImport(kind); placeToolsMenu(tb, tm); var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); }
+    if (o){ tm.querySelector('[data-io-act="import"]').hidden = !ioCanImport(kind); navSubRefresh(); placeToolsMenu(tb, tm); var f = tm.querySelector("button:not([hidden])"); if (f) f.focus(); }
   }
   tb.addEventListener("click", function(e){ e.stopPropagation(); setOpen(tm.hidden); });
   tm.addEventListener("click", function(e){
@@ -36366,7 +36405,7 @@ var IO_KINDS = {
     sub: "Paciente que já existe só tem os campos vazios completados.",
     help: ["Uma linha por paciente. Só o Nome é obrigatório; o CPF é pedido depois, ao editar o cadastro.",
       "Paciente que já existe (mesmo CPF; sem CPF, mesmo nome e data de nascimento): a planilha só completa os campos vazios, nunca troca o que já está preenchido.",
-      "Vários telefones ou e-mails: separe com ponto e vírgula. Datas no formato dd/mm/aaaa. Escola e Convênio: o nome precisa estar em Cadastros → Escolas / Convênios."],
+      "Vários telefones ou e-mails: separe com ponto e vírgula. Datas no formato dd/mm/aaaa. Escola e Convênio: o nome precisa estar em Cadastros → Pacientes → Outras Opções → Escolas / Convênios."],
     cols: [
       {k: "nome", h: "Nome", alias: ["paciente", "nome do paciente"], w: 36, req: true},
       {k: "nascimento", h: "Data de Nascimento", alias: ["nascimento", "data nascimento"], w: 14},
@@ -37207,11 +37246,11 @@ function intakeToPatient(d){
   }
   if (d.escola){
     var sc = (state.schools || []).filter(function(x){ return normText(x.name || x.nome || "") === normText(d.escola); })[0];
-    if (sc) o.escolaId = sc.id; else notes.push("Escola digitada pela família: " + d.escola + " (não está no cadastro — confira o nome e inclua em Cadastros → Escolas)");
+    if (sc) o.escolaId = sc.id; else notes.push("Escola digitada pela família: " + d.escola + " (não está no cadastro — confira o nome e inclua em Cadastros → Pacientes → Outras Opções → Escolas)");
   }
   if (d.medico){
     var md = (state.doctors || []).filter(function(x){ return normText(x.name || x.nome || "") === normText(d.medico); })[0];
-    if (md) o.medicoId = md.id; else notes.push("Médico digitado pela família: " + d.medico + " (não está no cadastro — confira o nome e inclua em Cadastros → Médicos)");
+    if (md) o.medicoId = md.id; else notes.push("Médico digitado pela família: " + d.medico + " (não está no cadastro — confira o nome e inclua em Cadastros → Pacientes → Outras Opções → Médicos)");
   }
   if (d.convenio && d.convenio !== "Outro" && d.convenio !== "Particular"){
     var cvm = (state.convenios || []).filter(function(x){ return normText(x.name) === normText(d.convenio); })[0];

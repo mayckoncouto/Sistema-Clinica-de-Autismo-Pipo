@@ -30,7 +30,16 @@ const path = require('path');
   const groups = await page.$$eval('#rPermBox .perm-grp > .perm-grp-head .tr-sec', (e) => e.map((x) => x.textContent));
   check('groups in menu order?', groups.join('|') === 'Cadastros|Planner|Agenda|Prontuário|CRM|Relatórios|Financeiro|Menu Acesso', groups.join('|'));
   const quads = await page.$$eval('#rPermBox .perm-quad', (e) => e.length);
-  check('many quadros (one per window)?', quads > 50, quads);
+  check('many quadros (one per window)?', quads > 40, quads);
+  // Cadastros de apoio ficam dentro do quadro da tela principal (Janelas em Outras Opções).
+  const wins = await page.evaluate(() => {
+    const q = (id) => document.querySelector('#rPermBox .perm-quad[data-q="' + id + '"]');
+    const has = (id, m) => !!(q(id) && q(id).querySelector('input[data-m="' + m + '"]'));
+    return { pac: ['medicos', 'escolas', 'diagnosticos', 'origens', 'motivos_bloqueio'].every((m) => has('pacientes', m)),
+      tr: ['tipos_tratamento', 'motivos_cancelamento'].every((m) => has('tratamentos', m)), col: ['cbo', 'conselhos'].every((m) => has('colaboradores', m)),
+      salas: has('salas', 'grupos'), sep: /Janelas em Outras Opções/.test(q('pacientes').textContent), noOwn: !q('medicos') && !q('cbo') && !q('tipos_tratamento') };
+  });
+  check('cadastros de apoio dentro do quadro da tela principal?', Object.values(wins).every(Boolean), JSON.stringify(wins));
   check('no module left in "Outros"?', !(await page.$('#rPermBox .perm-grp[data-g="Outros"]')));
   const pl = '#rPermBox .perm-quad[data-q="planner"]';
   check('Planner quadro: body starts closed, summary shown?', (await page.$eval(pl + ' .perm-qbody', (e) => e.hidden)) && /de \d+ ativas/.test(await page.$eval(pl + ' .perm-qsum', (e) => e.textContent)));
@@ -88,6 +97,8 @@ const path = require('path');
   check('history diff describes name and permission changes?', df.some((x) => /Nome: A → B/.test(x)) && df.some((x) => /^Planner: ligou Incluir/.test(x)) && df.some((x) => /^Pacientes: ligou Ver/.test(x)), JSON.stringify(df));
   await page.evaluate(() => window.__pipoRolesTest.openList());
   check('levels list has the Histórico button?', !!(await page.$('#rlHist')));
+  const hs = await page.$$eval('#rlList tr[data-role-id]', (e) => e.map((r) => Math.round(r.getBoundingClientRect().height)));
+  check('each level takes one line (row height <= 48px, Duplicar + Editar side by side)?', hs.every((h) => h <= 48), hs.join(','));
   check('no JS errors?', errors.length === 0, JSON.stringify(errors));
   await browser.close();
   process.exit(fails ? 1 : 0);

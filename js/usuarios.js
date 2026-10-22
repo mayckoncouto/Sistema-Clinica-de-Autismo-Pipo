@@ -202,6 +202,12 @@
       ".u-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end}" +
       ".u-kind{display:flex;flex-direction:column;gap:8px}.u-kind .btn{justify-content:center;padding:10px 12px}" +
       ".u-actions .field{flex:1;min-width:160px;margin:0}" +
+      // Níveis de Permissão: cada nível numa linha só (textos longos com "…"; o resumo inteiro aparece ao passar o mouse).
+      ".adm-roles{table-layout:fixed;width:100%}" +
+      ".adm-roles :is(th,td){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+      ".adm-roles :is(th,td):nth-child(1){width:150px}.adm-roles :is(th,td):nth-child(2){width:210px}.adm-roles :is(th,td):nth-child(3){width:80px}" +
+      ".adm-roles :is(th,td):nth-child(5){width:170px;text-align:right}" +
+      ".adm-roles td.rl-acts{overflow:visible}.adm-roles .rl-acts .btn{display:inline-flex;margin-left:4px}" +
       // Celular: lista de usuários só com Nome e Situação; busca na linha toda.
       "@media (max-width:760px){" +
         "#tab-usuarios .pat-toolbar{flex-wrap:wrap}" +
@@ -212,8 +218,8 @@
         ".adm-users :is(th,td):last-child{width:1%;white-space:nowrap}" +
         // Níveis de Permissão: só Nível e Usuários (o resumo das permissões aparece ao abrir o nível).
         ".adm-roles :is(th,td):nth-child(2),.adm-roles :is(th,td):nth-child(4){display:none}" +
-        ".adm-roles :is(th,td):first-child{width:auto!important;overflow-wrap:anywhere}" +
-        ".adm-roles :is(th,td):last-child{width:1%!important;white-space:nowrap}" +
+        ".adm-roles :is(th,td):first-child{width:auto!important}" +
+        ".adm-roles :is(th,td):last-child{width:150px!important;white-space:nowrap}" +
       "}";
     var st = document.createElement("style");
     st.textContent = css;
@@ -667,7 +673,7 @@
           var n = counts[r.id] || 0, lk = roleLockedFor(r);
           var sum = r.is_admin ? (r.is_manager ? "Acesso total a todas as telas e unidades. Cadastra unidades, níveis e regras do Sistema." : "Acesso total a todas as telas da própria unidade.") : roleShort(r);
           return '<tr data-role-id="' + esc(r.id) + '"><td class="u-name">' + esc(r.name) + "</td>" +
-            "<td>" + (roleBadges(r) || "—") + "</td><td>" + n + "</td><td>" + esc(sum) + "</td>" +
+            "<td>" + (roleBadges(r) || "—") + "</td><td>" + n + '</td><td title="' + esc(sum) + '">' + esc(sum) + "</td>" +
             '<td class="rl-acts">' + (!lk ? '<button type="button" class="btn ghost" data-rl-copy="' + esc(r.id) + '">Duplicar</button> ' : "") +
             '<button type="button" class="btn ghost" data-rl-edit="' + esc(r.id) + '">' + (lk ? "Ver" : "Editar") + "</button></td></tr>";
         }).join("") + "</tbody></table>" : '<div class="hours-empty">Nenhum nível encontrado.</div>';
@@ -799,12 +805,12 @@
     function one(key) { return { id: key, keys: [key] }; }
     return [
       { title: "Cadastros", panels: [
-        { id: "pacientes", keys: ["pacientes", "pgrp_ident", "pgrp_contato", "pgrp_endereco", "pgrp_filiacao", "pgrp_financeiro", "pgrp_rotina", "pgrp_protetiva", "pgrp_convenio", "pgrp_encaminhamento", "pgrp_tratamento", "saude_paciente", "pgrp_escola", "pgrp_rotinaatual", "pgrp_admin", "pgrp_bloqueio", "campos_paciente"] },
-        { id: "tratamentos", keys: ["tratamentos", "tratamentos_valores"] },
-        one("tipos_tratamento"), one("convenios"), one("motivos_cancelamento"), one("medicos"), one("escolas"), one("diagnosticos"), one("origens"), one("motivos_bloqueio"),
-        { id: "colaboradores", keys: ["colaboradores", "colaboradores_valores"] },
-        one("especialidades"), one("servicos"), one("cbo"), one("conselhos"),
-        { id: "salas", keys: ["salas", "grupos"] },
+        { id: "pacientes", keys: ["pacientes", "pgrp_ident", "pgrp_contato", "pgrp_endereco", "pgrp_filiacao", "pgrp_financeiro", "pgrp_rotina", "pgrp_protetiva", "pgrp_convenio", "pgrp_encaminhamento", "pgrp_tratamento", "saude_paciente", "pgrp_escola", "pgrp_rotinaatual", "pgrp_admin", "pgrp_bloqueio", "campos_paciente"], wins: ["medicos", "escolas", "diagnosticos", "origens", "motivos_bloqueio"] },
+        { id: "tratamentos", keys: ["tratamentos", "tratamentos_valores"], wins: ["tipos_tratamento", "motivos_cancelamento"] },
+        one("convenios"),
+        { id: "colaboradores", keys: ["colaboradores", "colaboradores_valores"], wins: ["cbo", "conselhos"] },
+        one("especialidades"), one("servicos"),
+        { id: "salas", keys: ["salas"], wins: ["grupos"] },
         one("feriados"), one("cadastro_status")
       ] },
       { title: "Planner", panels: [
@@ -843,12 +849,15 @@
   }
   function panelHtml(pn, perms, locked, byKey, tools) {
     var mods = pn.keys.map(function (k) { return byKey[k]; }).filter(Boolean);
+    // Janelas abertas pelas Outras Opções da tela (cadastros de apoio): ficam dentro do quadro dela.
+    var wins = (pn.wins || []).map(function (k) { return byKey[k]; }).filter(Boolean);
     var tls = tools.filter(function (t) { return t.panel === pn.id; });
     var title = pn.title || (mods[0] ? mods[0].label : pn.id);
     var body = "";
-    if (mods.length || tls.length) {
+    if (mods.length || tls.length || wins.length) {
       body += '<table class="perm-grid"><thead><tr><th>Item</th>' + ACTIONS.map(function (a) { return "<th>" + a.label + "</th>"; }).join("") + "</tr></thead><tbody>" +
         mods.map(function (m) { return permRowHtml(m, perms, locked); }).join("") +
+        (wins.length ? '<tr class="perm-group"><td colspan="' + (ACTIONS.length + 1) + '">Janelas em Outras Opções</td></tr>' + wins.map(function (m) { return permRowHtml(m, perms, locked); }).join("") : "") +
         (tls.length ? '<tr class="perm-group"><td colspan="' + (ACTIONS.length + 1) + '">Ferramentas e Janelas</td></tr>' + tls.map(function (m) { return permRowHtml(m, perms, locked); }).join("") : "") +
         "</tbody></table>";
     }
@@ -865,7 +874,7 @@
     var all = allModules(), byKey = {}, tools = all.filter(function (m) { return m.tool; });
     all.forEach(function (m) { if (!m.tool) byKey[m.key] = m; });
     var lay = layout(), used = {};
-    lay.forEach(function (g) { g.panels.forEach(function (pn) { pn.keys.forEach(function (k) { used[k] = true; }); }); });
+    lay.forEach(function (g) { g.panels.forEach(function (pn) { pn.keys.concat(pn.wins || []).forEach(function (k) { used[k] = true; }); }); });
     var rest = all.filter(function (m) { return !m.tool && !used[m.key]; }).map(function (m) { return m.key; });
     if (rest.length) lay.push({ title: "Outros", panels: [{ id: "outros", keys: rest, title: "Outras Telas" }] });
     return '<div id="rPermBox">' + lay.map(function (g) {
