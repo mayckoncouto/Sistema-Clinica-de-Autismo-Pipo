@@ -23,8 +23,8 @@ const path = require('path');
 
   // ---- TEST: 4 columns (only patient data + treatment status), all sortable ----
   const heads = await page.locator('#patListHost .pat-table thead th .th-label').allTextContents();
-  console.log('columns are Nome, Idade, Telefone, E-mail, Escola, Médico, Status, Tratamento?', JSON.stringify(heads) === '["Nome","Idade","Telefone","E-mail","Escola","Médico","Status","Tratamento"]', JSON.stringify(heads));
-  console.log('8 sort buttons present?', (await page.locator('#patListHost .pat-table .sort-btn').count()) === 8);
+  console.log('columns are Nome, Idade, Telefone, E-mail, Escola, Médico, Status, Tratamento?', JSON.stringify(heads) === '["Nome","Idade","Telefone","E-mail","Escola","Médico","Status","Tratamento","Vencimento"]', JSON.stringify(heads));
+  console.log('9 sort buttons present?', (await page.locator('#patListHost .pat-table .sort-btn').count()) === 9);
   console.log('treatment column shows "Sem tratamento" when the patient has none?', (await page.locator('#patListHost .pat-table tbody tr', { hasText: 'Ana Azul' }).locator('.pt-trat').innerText()).trim() === 'Sem tratamento');
   await page.fill('#patientListSearch', 'unimed'); await page.waitForTimeout(80);
   console.log('search is by name only (convênio does not match)?', (await page.locator('#patListHost .pat-table tbody tr').count()) === 0);

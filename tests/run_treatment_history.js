@@ -48,7 +48,7 @@ const path = require('path');
     var pk = RP_BUILDERS.pacote(appts, {from: "2026-01-01", to: "2026-04-30", pac: normText(name)}).sections[0].rows;
     out.pacote = pk.map(function(x){ return [x[1], x[3], x[4], x[5]].join("/"); }).join(" | ");
     var cv = RP_BUILDERS.convenios(appts, {conv: ""}).sections[0].rows;
-    out.conv = cv.map(function(x){ return x[0] + ":" + x[1] + ":" + x[3]; }).sort().join(" | ");
+    out.conv = cv.map(function(x){ return x[0] + ":" + x[2]; }).sort().join(" | ");
     var sa = RP_BUILDERS["sem-atendimento"]([], {from: "2026-01-01", to: "2026-04-30", conv: ""}).sections[0].rows;
     out.semHasCancelled = sa.some(function(x){ return x[0] === other.nome; });
     out.semConv = (sa.filter(function(x){ return x[0] === name; })[0] || [])[1];
@@ -61,7 +61,7 @@ const path = require('path');
   console.log('Agenda "não ABA" rule uses the treatment of the date (Planner keeps current)?', r.naoPast === true && r.naoPlanner === false);
   console.log('Agenda cell in the past uses the color of that time?', r.colorDiffers && r.cellPast);
   console.log('package report split by treatment (4/mês then 8/mês)?', /^01\/01\/2026 \(Renegociado\)\/4\/8\/1 \| 01\/03\/2026 \(Ativo\)\/8\/16\/2$/.test(r.pacote), r.pacote);
-  console.log('convênio report uses convênio of the date?', r.conv === 'Conv A:—:1 | Conv B:—:2', r.conv);
+  console.log('convênio report uses convênio of the date?', r.conv === 'Conv A:1 | Conv B:2', r.conv);
   console.log('no-appointment report skips treatment closed before the period?', r.semHasCancelled === false);
   console.log('no-appointment report shows convênio at the end of the period?', r.semConv === 'Conv B', r.semConv);
 
