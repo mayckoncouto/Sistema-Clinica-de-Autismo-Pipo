@@ -27022,7 +27022,12 @@ function openTreatmentModal(t, opts){
   }
   var genSaleBtn = document.getElementById("trGenSale");
   if (genSaleBtn){
-    Promise.all([slLoad(), fpLoad()]).then(function(){ if (slHasSale(t.id)) genSaleBtn.hidden = true; });
+    // Some quando já há venda ou quando o tratamento renegociado não vale mais que o anterior (não gera venda).
+    var genSaleSync = function(){
+      if (slHasSale(t.id)){ genSaleBtn.hidden = true; return; }
+      var m = trMoney(t); if (slPlan(t, m.valor, m.descontos, "", []).skip) genSaleBtn.hidden = true;
+    };
+    Promise.all([slLoad(), fpLoad(), typeof trLoadFinance === "function" ? trLoadFinance() : null]).then(genSaleSync, genSaleSync);
     genSaleBtn.addEventListener("click", function(){
       slManualSale(t, function(){
         if (slHasSale(t.id)) genSaleBtn.hidden = true;

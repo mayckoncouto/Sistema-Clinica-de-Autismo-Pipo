@@ -94,6 +94,13 @@ const path = require('path');
   await page.click('#slSave'); await page.waitForTimeout(300);
   check('depois de gerar, o botão some e não há segunda venda', await page.$eval('#trGenSale', (x) => x.hidden) && (await ev(`SALES.rows.filter(function(s){ return s.treatment === state.treatments.filter(function(x){ return x.status === "ativo"; })[0].id; }).length`)) === 1);
   await page.click('#trCancel'); await page.waitForTimeout(200);
+  // Renegociado com valor menor que o anterior: sem botão Gerar Venda
+  await ev(`(function(){ var t = state.treatments.filter(function(x){ return x.status === "ativo"; })[0]; window.__tv = t.valor; window.__sr = SALES.rows.slice(); SALES.rows = SALES.rows.filter(function(s){ return s.treatment !== t.id; }); t.valor = 10; })()`);
+  await ev(`openTreatmentModal(state.treatments.filter(function(x){ return x.status === "ativo"; })[0])`);
+  await page.waitForSelector('#ovTreat'); await page.waitForTimeout(300);
+  check('renegociado com valor menor que o anterior não mostra Gerar Venda', await page.$eval('#trGenSale', (x) => x.hidden));
+  await page.click('#trCancel'); await page.waitForTimeout(200);
+  await ev(`(function(){ var t = state.treatments.filter(function(x){ return x.status === "ativo"; })[0]; t.valor = window.__tv; SALES.rows = window.__sr; })()`);
 
   // Salvar sem mudança comercial não pergunta
   await ev(`openTreatmentModal(state.treatments.filter(function(x){ return x.status === "ativo"; })[0])`);
