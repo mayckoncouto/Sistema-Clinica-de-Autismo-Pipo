@@ -87,6 +87,8 @@
     { key: "vendas", label: "Vendas", hint: "vendas dos tratamentos (nova, renovação, aditivo), vendedor e parcelas no Contas a Receber" },
     { key: "comissoes", label: "Comissões", hint: "regras e comissões de venda (conta a pagar do vendedor, estorno ao cancelar)" },
     { key: "fechamento_mes", label: "Fechamento de Mês", hint: "incluir = fechar o mês; excluir = reabrir; ver = histórico dos fechamentos", actions: ["view", "create", "delete"] },
+    { key: "gerencial", label: "Gerencial", hint: "painel gerencial: contratos, avaliações e triagens; editar = definir as metas por mês", actions: ["view", "edit"] },
+    { key: "gerencial_fechamento", label: "Fechamento do Gerencial", hint: "ver = consultar os meses fechados; editar = fechar e reabrir meses do Gerencial", actions: ["view", "edit"] },
     { key: "clinica", label: "Clínica", hint: "dados, horários, cores e logo", actions: ["view", "edit"], group: "Menu Acesso" },
     { key: "usuarios", label: "Usuários", hint: "contas de acesso (Níveis de Permissão e administradores: só o Administrador)" },
     { key: "contratos", label: "Contratos", hint: "modelos de termo e contrato (empréstimo a colaborador e outros)" },
@@ -832,7 +834,7 @@
       { title: "Relatórios", panels: [ { id: "relatorios", keys: [], extra: "reports", title: "Relatórios" } ] },
       { title: "Financeiro", panels: [
         one("financeiro"), one("fornecedores"), one("categorias_fornecedor"), one("contas_bancarias"), one("plano_contas"), one("financeiro_valores"),
-        one("vendas"), one("comissoes"), one("fechamento_mes")
+        one("vendas"), one("comissoes"), one("fechamento_mes"), one("gerencial"), one("gerencial_fechamento")
       ] },
       { title: "Menu Acesso", panels: [ one("clinica"), one("usuarios"), one("contratos"), one("backup"), one("conector_claude"), one("senha"), one("ajuda") ] }
     ];
