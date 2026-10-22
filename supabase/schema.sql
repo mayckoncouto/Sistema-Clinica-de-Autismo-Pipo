@@ -10243,7 +10243,8 @@ create table if not exists public.treatment_sales (
   created_by_name text,
   unit_id         text not null default 'unidade-1',
   convenio_id     text,   -- convênio gravado ao registrar a venda (2026-10-21)
-  convenio_name   text
+  convenio_name   text,
+  partes          jsonb not null default '[]'::jsonb   -- outros vendedores: [{seller, sellerName, valor}] (2026-10-22b)
 );
 create index if not exists treatment_sales_treatment_idx on public.treatment_sales (treatment_id, created_at);
 create index if not exists treatment_sales_patient_idx on public.treatment_sales (patient_id);
@@ -10332,7 +10333,7 @@ create table if not exists public.commission_rules (
 );
 create table if not exists public.sale_commissions (
   id            uuid primary key default gen_random_uuid(),
-  sale_id       uuid not null unique,
+  sale_id       uuid not null,
   treatment_id  text not null,
   patient_id    text not null,
   seller_id     text,
@@ -10349,6 +10350,7 @@ create table if not exists public.sale_commissions (
   unit_id       text not null default 'unidade-1'
 );
 create index if not exists sale_commissions_seller_idx on public.sale_commissions (seller_id, created_at);
+create unique index if not exists sale_commissions_sale_seller_uq on public.sale_commissions (sale_id, coalesce(seller_id, ''));   -- uma comissão por venda e vendedor (2026-10-22b)
 create index if not exists sale_commissions_treatment_idx on public.sale_commissions (treatment_id);
 alter table public.commission_rules enable row level security;
 alter table public.sale_commissions enable row level security;

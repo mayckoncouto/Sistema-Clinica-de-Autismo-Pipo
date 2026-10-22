@@ -2220,6 +2220,9 @@ body.no-aba #trHost .pat-table.tr-main.tr-fin :is(col,th,td):is(:nth-child(8),:n
 /* therapist column editor (also reused for the specialties registry list) */
 .therapist-rows{display:flex;flex-direction:column;gap:6px;margin-top:2px}
 .therapist-row{display:flex;gap:6px;align-items:center}
+/* Outros Vendedores da venda: vendedor largo, valor estreito */
+.sp-row > :is(.dp-btn,select){flex:1 1 0;min-width:0}
+.sp-row > input.sp-val{flex:0 0 150px;width:150px;text-align:right}
 .therapist-row input{flex:1;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font:inherit;font-size:12.5px}
 .therapist-row input:focus{outline:none;box-shadow:var(--ring);border-color:var(--accent)}
 .therapist-row .rm{flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--danger);cursor:pointer;font-size:13px;line-height:1}
@@ -27648,7 +27651,76 @@ function slCan(a){ return can("vendas", a); }
 function slFromDb(x){
   return {id: x.id, treatment: x.treatment_id, patient: x.patient_id, tipo: x.tipo, data: x.data, seller: x.seller_id || "", sellerName: x.seller_name || "",
     valorMensal: Number(x.valor_mensal) || 0, meses: x.meses || 1, total: Number(x.total) || 0, forma: x.forma || "", status: x.status || "ativa",
-    replacedBy: x.replaced_by || "", obs: x.obs || "", by: x.created_by_name || "", at: x.created_at || "", convId: x.convenio_id || "", convName: x.convenio_name || ""};
+    replacedBy: x.replaced_by || "", obs: x.obs || "", by: x.created_by_name || "", at: x.created_at || "", convId: x.convenio_id || "", convName: x.convenio_name || "",
+    partes: slPartesNorm(x.partes)};
+}
+/* Venda com mais de um vendedor (2026-10-22): partes = outros vendedores [{seller, sellerName, valor}] (valor = parte do total).
+ * O vendedor principal fica com o total menos a soma das partes. Cada vendedor ganha a própria comissão (regra dele sobre a parte dele). */
+function slPartesNorm(l){
+  return (Array.isArray(l) ? l : []).map(function(p){ return {seller: String(p.seller || ""), sellerName: String(p.sellerName || ""), valor: Math.round((Number(p.valor) || 0) * 100) / 100}; })
+    .filter(function(p){ return p.seller && p.valor > 0; });
+}
+function slShares(s){
+  var others = slPartesNorm(s.partes), sum = 0; others.forEach(function(p){ sum += p.valor; });
+  var main = {seller: s.seller || "", sellerName: s.sellerName || "", valor: Math.round((Number(s.total) - sum) * 100) / 100, main: true};
+  return [main].concat(others);
+}
+function slShareOf(s, seller){ var t = 0; slShares(s).forEach(function(x){ if (x.seller === seller) t += x.valor; }); return Math.round(t * 100) / 100; }
+function slHasSeller(s, seller){ return slShares(s).some(function(x){ return x.seller === seller; }); }
+function slSellersText(s){
+  var sh = slShares(s).filter(function(x){ return x.seller; });
+  if (sh.length < 2) return s.sellerName || (s.seller ? fpStaffName(s.seller) : "");
+  return sh.map(function(x){ return (x.sellerName || fpStaffName(x.seller)) + " (" + fmtMoney(x.valor) + ")"; }).join(" · ");
+}
+// Campos "Outros Vendedores" da venda (Registrar Venda e Editar Venda).
+function spHtml(pre, partes, staff){
+  return '<div class="tr-sec">Outros Vendedores</div><div class="therapist-rows" id="' + pre + 'Rows"></div>' +
+    '<button type="button" class="btn ghost add-row-btn" id="' + pre + 'Add">+ Vendedor</button><div class="pat-count" id="' + pre + 'Hint"></div>';
+}
+function spWire(pre, partes, staff, getMain, getTotal, locked){
+  var rows = slPartesNorm(partes).map(function(p){ return {seller: p.seller, valor: p.valor}; }), host = document.getElementById(pre + "Rows");
+  function opts(cur){ var l = staff.slice(); if (cur && !l.some(function(x){ return x.id === cur; })) l.push({id: cur, nome: fpStaffName(cur)});
+    return '<option value="">Escolha o vendedor…</option>' + l.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === cur ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join(""); }
+  function sync(){ Array.prototype.forEach.call(host.querySelectorAll(".sp-row"), function(r, i){ if (!rows[i]) return; rows[i].seller = r.querySelector("select.sp-seller").value; rows[i].valor = parseMoney(r.querySelector("input.sp-val").value) || 0; }); }
+  function hint(){
+    var sum = 0; rows.forEach(function(r){ sum += r.valor || 0; });
+    var t = getTotal(), m = Math.round((t - sum) * 100) / 100, h = document.getElementById(pre + "Hint");
+    h.textContent = rows.length ? "Parte do vendedor principal: " + fmtMoney(m) + " de " + fmtMoney(t) + "." : "Para dividir a venda, inclua o outro vendedor e digite o valor da venda que é dele; o restante fica com o vendedor principal.";
+  }
+  function draw(){
+    host.innerHTML = rows.map(function(r, i){
+      return '<div class="therapist-row sp-row" data-i="' + i + '"><select class="sp-seller" aria-label="Vendedor"' + (locked ? ' disabled' : '') + '>' + opts(r.seller) + '</select>' +
+        '<input type="text" class="sp-val" data-money inputmode="decimal" placeholder="Valor (R$)" aria-label="Valor da venda deste vendedor" value="' + (r.valor ? esc(fmtMoney(r.valor).replace("R$ ", "")) : "") + '"' + (locked ? ' disabled' : '') + '>' +
+        (locked ? '' : '<button type="button" class="rm" title="Remover" aria-label="Remover">✕</button>') + '</div>';
+    }).join("");
+    hint();
+  }
+  host.addEventListener("input", function(){ sync(); hint(); });
+  host.addEventListener("change", function(){ sync(); hint(); });
+  host.addEventListener("click", function(e){ var b = e.target.closest(".rm"); if (!b) return; sync(); rows.splice(+b.closest(".sp-row").getAttribute("data-i"), 1); draw(); });
+  var add = document.getElementById(pre + "Add");
+  if (locked) add.hidden = true; else add.addEventListener("click", function(){ sync(); rows.push({seller: "", valor: 0}); draw(); });
+  draw();
+  return {
+    refresh: hint,
+    // devolve {partes} ou {err}
+    read: function(){
+      sync();
+      var main = getMain(), t = getTotal(), seen = {}, sum = 0, out = [];
+      for (var i = 0; i < rows.length; i++){
+        var r = rows[i];
+        if (!r.seller && !r.valor) continue;
+        if (!r.seller) return {err: "Escolha o outro vendedor (linha " + (i + 1) + ")."};
+        if (!(r.valor > 0)) return {err: "Digite o valor da venda de " + fpStaffName(r.seller) + "."};
+        if (r.seller === main) return {err: fpStaffName(r.seller) + " já é o vendedor principal."};
+        if (seen[r.seller]) return {err: fpStaffName(r.seller) + " aparece duas vezes."};
+        seen[r.seller] = 1; sum += r.valor; out.push({seller: r.seller, sellerName: fpStaffName(r.seller), valor: Math.round(r.valor * 100) / 100});
+      }
+      if (out.length && !main) return {err: "Escolha o vendedor principal para dividir a venda."};
+      if (out.length && Math.round(sum * 100) >= Math.round(t * 100)) return {err: "A soma dos outros vendedores (" + fmtMoney(sum) + ") precisa ser menor que o total da venda (" + fmtMoney(t) + ")."};
+      return {partes: out};
+    }
+  };
 }
 // Convênio da venda no momento do registro: o do tratamento; sem ele, o do cadastro do paciente.
 function slConvOf(treatmentId, patientId){
@@ -27659,9 +27731,11 @@ function slConvOf(treatmentId, patientId){
   return {id: id, name: name};
 }
 function slToDb(r){
-  return {treatment_id: r.treatment, patient_id: r.patient, tipo: r.tipo, data: r.data, seller_id: r.seller || null, seller_name: r.sellerName || null,
+  var o = {treatment_id: r.treatment, patient_id: r.patient, tipo: r.tipo, data: r.data, seller_id: r.seller || null, seller_name: r.sellerName || null,
     valor_mensal: r.valorMensal, meses: r.meses, total: r.total, forma: r.forma || null, status: r.status || "ativa", replaced_by: r.replacedBy || null, obs: r.obs || null,
     convenio_id: r.convId || null, convenio_name: r.convName || null};
+  if (r.partes && r.partes.length) o.partes = r.partes;
+  return o;
 }
 function slLoad(force){
   var c = agdClient();
@@ -27807,6 +27881,7 @@ function slSaleDialog(ctx){
         '<div class="field"><label for="slMeses">Meses</label><input type="text" id="slMeses" inputmode="numeric" value="' + meses + '"></div>' +
         '<div class="field"><label for="slTotal">Total da Venda</label><input type="text" id="slTotal" disabled></div></div>' +
         '<div class="field"><label for="slObs">Observações</label><textarea id="slObs" rows="3"></textarea></div>' +
+        spHtml("slSp") +
         (prevOpen.length ? '<div class="tr-sec">Parcelas da Venda Anterior</div><div class="field"><label for="slPrevOpen">' + prevOpen.length + (prevOpen.length === 1 ? ' parcela em aberto' : ' parcelas em aberto') + ' (' + esc(fmtMoney(slSum(prevOpen))) + ')</label>' +
           '<select id="slPrevOpen"><option value="keep">Manter as parcelas</option><option value="del">Excluir as parcelas em aberto</option></select></div>' : '') +
         (canFp ? '<div class="tr-sec">Contas a Receber</div>' +
@@ -27835,6 +27910,7 @@ function slSaleDialog(ctx){
     }
     function refresh(){
       var t = totals();
+      if (sp) sp.refresh();
       if (!$("slGen")) return;
       $("slGenBox").hidden = !$("slGen").checked;
       if (!$("slGen").checked) return;
@@ -27843,6 +27919,8 @@ function slSaleDialog(ctx){
     }
     ["slValor", "slMeses", "slEntrada", "slN", "slVenc1", "slStep"].forEach(function(id){ if ($(id)){ $(id).addEventListener("input", refresh); $(id).addEventListener("change", refresh); } });
     if ($("slGen")) $("slGen").addEventListener("change", refresh);
+    var sp = null; sp = spWire("slSp", [], staff, function(){ return $("slSeller").value; }, totals);
+    $("slSeller").addEventListener("change", function(){ sp.refresh(); });
     refresh();
     $("slSkip").addEventListener("click", close);
     $("slSave").addEventListener("click", function(){
@@ -27854,8 +27932,9 @@ function slSaleDialog(ctx){
         if (!list.length){ showToast("Informe o número de parcelas e o primeiro vencimento.", true); return; }
         if (Math.abs(slSum(list) - totals()) > 0.009){ showToast("A entrada não pode passar do total da venda.", true); return; }
       }
-      var sellerId = $("slSeller").value;
-      var sale = {treatment: rec.id, patient: rec.patientId, tipo: $("slTipo").value, data: $("slData").value || trTodayIso(), seller: sellerId,
+      var sellerId = $("slSeller").value, spr = sp.read();
+      if (spr.err){ showToast(spr.err, true); return; }
+      var sale = {partes: spr.partes, treatment: rec.id, patient: rec.patientId, tipo: $("slTipo").value, data: $("slData").value || trTodayIso(), seller: sellerId,
         sellerName: sellerId ? fpStaffName(sellerId) : "", valorMensal: num("slValor"), meses: meses2, total: totals(), forma: $("slForma").value, obs: $("slObs").value.trim()};
       $("slSave").disabled = true;
       slInsert(sale).then(function(n){
@@ -27982,7 +28061,11 @@ function comLoad(force){
   }, function(){ COMM.loading = null; COMM.rules = COMM.rules || []; COMM.rows = COMM.rows || []; });
   return COMM.loading;
 }
-function comOf(saleId){ return (COMM.rows || []).filter(function(c){ return c.sale === saleId; })[0] || null; }
+function comsOf(saleId){ return (COMM.rows || []).filter(function(c){ return c.sale === saleId; }); }
+// seller informado = a comissão daquele vendedor; sem seller = a primeira da venda
+function comOf(saleId, seller){ return comsOf(saleId).filter(function(c){ return seller === undefined || (c.seller || "") === (seller || ""); })[0] || null; }
+// Partes da venda (vendedor principal + outros) que ainda não têm comissão
+function comPendShares(s){ return s.status !== "ativa" ? [] : slShares(s).filter(function(x){ return x.seller && x.valor > 0 && !comOf(s.id, x.seller); }); }
 function comInsert(rec){
   var c = agdClient(); COMM.rows = COMM.rows || [];
   if (!c){ var n = Object.assign({}, rec, {id: uid("cm"), at: new Date().toISOString()}); COMM.rows.push(n); return Promise.resolve(n); }
@@ -28025,12 +28108,13 @@ function comRuleDelete(id){
   });
 }
 // A regra mais específica vence: vendedor + tipo, vendedor + todas, tipo, todas.
-function comRuleFor(sale){
+function comRuleFor(sale, seller){
+  if (seller === undefined) seller = sale.seller;
   var best = null, bestScore = -1;
   (COMM.rules || []).forEach(function(r){
     if (r.inativo) return;
     if (r.tipo !== "todas" && r.tipo !== sale.tipo) return;
-    if (r.seller && r.seller !== sale.seller) return;
+    if (r.seller && r.seller !== seller) return;
     var sc = (r.seller ? 2 : 0) + (r.tipo !== "todas" ? 1 : 0);
     if (sc > bestScore){ best = r; bestScore = sc; }
   });
@@ -28054,26 +28138,29 @@ function comApurar(silent){
   COMM.busy = true;
   var out = {made: 0, wait: 0, skip: []};
   return Promise.all([slLoad(), comLoad(), fpLoad()]).then(function(){
-    var pend = (SALES.rows || []).filter(function(s){ return s.status === "ativa" && s.seller && !comOf(s.id); });
+    var pend = []; (SALES.rows || []).forEach(function(s){ comPendShares(s).forEach(function(sh){ pend.push({s: s, sh: sh}); }); });
     if (!pend.length) return null;
     return trLoadLast(true).then(function(){ return pend; });
   }).then(function(pend){
     var chain = Promise.resolve();
-    (pend || []).forEach(function(s){
+    (pend || []).forEach(function(pe){
+      var s = pe.s, sh = pe.sh, split = slShares(s).filter(function(x){ return x.seller; }).length > 1;
       chain = chain.then(function(){
         var t = state.treatments.filter(function(x){ return x.id === s.treatment; })[0];
         if (!comSalePaid(s) && (!t || !trDoneCount(t))){ out.wait++; return; }
         var pat = rawPatient(s.patient) || {}, who = (pat.nome || "Paciente") + " (" + (COMM_TIPOS[s.tipo] || s.tipo) + ")";
-        var rule = comRuleFor(s);
-        if (!rule){ out.skip.push(who + ": nenhuma regra de comissão serve para esta venda"); return; }
+        var shName = sh.sellerName || fpStaffName(sh.seller);
+        var rule = comRuleFor(s, sh.seller);
+        if (!rule){ out.skip.push(who + ": nenhuma regra de comissão serve para " + shName); return; }
         var plan = flPlanById(rule.plan);
         if (!plan || (plan.tipo !== "Despesa" && plan.tipo !== "Saída")){ out.skip.push(who + ": a regra “" + rule.name + "” precisa de uma subcategoria de despesa"); return; }
-        var base = comBase(s), valor = Math.round(base * rule.pct) / 100;
+        var base = comBase(s); if (split) base = s.total > 0 ? Math.round(base * sh.valor / s.total * 100) / 100 : 0;
+        var valor = Math.round(base * rule.pct) / 100;
         if (!(valor > 0)){ out.skip.push(who + ": comissão zerada (base " + fmtMoney(base) + ", " + rule.pct + "%)"); return; }
-        return fpSave({venc: comDueDate(rule.day), desc: "Comissão — " + (s.sellerName || "Vendedor") + " — " + who, plan: rule.plan, acc: rule.acc || "", sup: "", valor: valor,
-          grupo: "", parcela: 0, parcelas: 0, obs: "", linhas: [], loan: "", staff: s.seller, abate: "", sale: ""}, true).then(function(pay){
+        return fpSave({venc: comDueDate(rule.day), desc: "Comissão — " + (shName || "Vendedor") + " — " + who, plan: rule.plan, acc: rule.acc || "", sup: "", valor: valor,
+          grupo: "", parcela: 0, parcelas: 0, obs: "", linhas: [], loan: "", staff: sh.seller, abate: "", sale: ""}, true).then(function(pay){
           if (!pay) return;
-          return comInsert({sale: s.id, treatment: s.treatment, patient: s.patient, seller: s.seller, sellerName: s.sellerName, rule: rule.id, base: base, pct: rule.pct, valor: valor,
+          return comInsert({sale: s.id, treatment: s.treatment, patient: s.patient, seller: sh.seller, sellerName: shName, rule: rule.id, base: base, pct: rule.pct, valor: valor,
             status: "gerada", payable: pay.id}).then(function(c){ if (c) out.made++; });
         });
       });
@@ -28089,7 +28176,7 @@ function comApurar(silent){
 }
 // Depois de finalizar um atendimento: se há venda com vendedor esperando comissão, apura em silêncio.
 function comApuraAuto(){
-  if (!comOnline() || !comCan("create") || !(SALES.rows || []).some(function(s){ return s.status === "ativa" && s.seller && !comOf(s.id); })) return;
+  if (!comOnline() || !comCan("create") || !(SALES.rows || []).some(function(s){ return comPendShares(s).length; })) return;
   comApurar(true);
 }
 // Venda cancelada: a comissão é estornada. Conta a pagar ainda em aberto é excluída; se já foi paga, avisa o valor a descontar do vendedor.
@@ -28111,6 +28198,7 @@ function comReverse(saleIds){
   });
 }
 function comStatusText(c){
+  if (c.list){ var st = c.list.map(comStatusText); return st.every(function(x){ return x === "Estornada"; }) ? "Estornada" : st.every(function(x){ return x !== "A Pagar"; }) ? "Paga" : "A Pagar"; }
   if (c.status === "estornada") return "Estornada";
   var pay = (FP.rows || []).filter(function(x){ return x.id === c.payable; })[0];
   return !pay ? "A Pagar" : fpDone(pay) ? "Paga" : "A Pagar";
@@ -28136,7 +28224,7 @@ function openComissoes(){
       .sort(function(a, b){ return String(b.at).localeCompare(String(a.at)); });
     var tot = {"A Pagar": 0, "Paga": 0, "Estornada": 0};
     list.forEach(function(c){ tot[comStatusText(c)] += c.valor; });
-    var aguardando = (SALES.rows || []).filter(function(s){ return s.status === "ativa" && s.seller && !comOf(s.id); }).length;
+    var aguardando = (SALES.rows || []).filter(function(s){ return comPendShares(s).length; }).length;
     $("cmSum").innerHTML = 'A pagar: <b>' + esc(fmtMoney(tot["A Pagar"])) + '</b> · Pagas: <b>' + esc(fmtMoney(tot["Paga"])) + '</b> · Estornadas: <b>' + esc(fmtMoney(tot["Estornada"])) + '</b>' +
       (aguardando ? ' · ' + aguardando + (aguardando === 1 ? ' venda aguarda' : ' vendas aguardam') + ' a 1ª parcela paga ou o 1º atendimento finalizado' : '');
     var cols = [{key: "data", label: "Gerada em", width: 110, min: 90}, {key: "vend", label: "Vendedor", width: 170, min: 100}, {key: "pac", label: "Paciente", width: 190, min: 100, cls: "pt-nome"},
@@ -28293,11 +28381,11 @@ function pvCompute(from, to, seller, f){
   var all = (SALES.rows || []).filter(function(s){ return pvMatch(s, seller, f); });
   var inPeriod = all.filter(function(s){ return pvInRange(s.data, from, to); });
   var valid = inPeriod.filter(function(s){ return s.status !== "cancelada"; }), canc = inPeriod.filter(function(s){ return s.status === "cancelada"; });
-  var sum = function(l){ var t = 0; l.forEach(function(s){ t += s.total; }); return Math.round(t * 100) / 100; };
+  var sum = function(l){ var t = 0; l.forEach(function(s){ t += seller ? slShareOf(s, seller) : s.total; }); return Math.round(t * 100) / 100; };
   var byTipo = {}; Object.keys(SALE_TIPOS).forEach(function(k){ var l = valid.filter(function(s){ return s.tipo === k; }); byTipo[k] = {n: l.length, total: sum(l)}; });
   var sellers = {};
-  valid.forEach(function(s){ var k = s.seller || ""; var o = sellers[k] = sellers[k] || {seller: k, name: s.sellerName || "Sem vendedor", n: 0, total: 0, com: 0}; o.n++; o.total += s.total; });
-  (COMM.rows || []).forEach(function(c){ if (c.status !== "gerada") return; var s = valid.filter(function(x){ return x.id === c.sale; })[0]; if (s) sellers[s.seller || ""].com += c.valor; });
+  valid.forEach(function(s){ slShares(s).forEach(function(sh){ if (seller && sh.seller !== seller) return; var k = sh.seller || ""; var o = sellers[k] = sellers[k] || {seller: k, name: sh.sellerName || (k ? fpStaffName(k) : "Sem vendedor"), n: 0, total: 0, com: 0}; o.n++; o.total += sh.valor; }); });
+  (COMM.rows || []).forEach(function(c){ if (c.status !== "gerada") return; var s = valid.filter(function(x){ return x.id === c.sale; })[0]; var o = s && sellers[c.seller || ""]; if (o) o.com += c.valor; });
   var months = pvMonthsBetween(from, to).map(function(ym){ var l = valid.filter(function(s){ return pvMonthOf(s.data) === ym; }); return {ym: ym, n: l.length, total: sum(l)}; });
   var overdue = pvOverdue(all.filter(function(s){ return s.status !== "cancelada"; }).map(function(s){ return s.id; }));
   // Leads do CRM (listas com funil de contatos) criados no período × vendas novas
@@ -28894,7 +28982,7 @@ function pvConvName(s){
 // A venda passa pelos filtros de vendedor, convênio e tipo?
 function pvMatch(s, seller, f){
   f = f || {};
-  if (seller && s.seller !== seller) return false;
+  if (seller && !slHasSeller(s, seller)) return false;
   if (f.conv && pvConvName(s) !== f.conv) return false;
   if (f.tipo && s.tipo !== f.tipo) return false;
   if (f.q){ var p = rawPatient(s.patient) || {}; if (normText((p.nome || "") + " " + (s.sellerName || "")).indexOf(normText(f.q)) === -1) return false; }
@@ -28957,7 +29045,7 @@ function pvFillFilters(){
     el.value = val;
   };
   sel("pvPer", null, PV_PERS, PV.per);
-  var seen = {}; (SALES.rows || []).forEach(function(s){ if (s.seller) seen[s.seller] = s.sellerName || fpStaffName(s.seller); });
+  var seen = {}; (SALES.rows || []).forEach(function(s){ slShares(s).forEach(function(x){ if (x.seller) seen[x.seller] = x.sellerName || fpStaffName(x.seller); }); });
   sel("pvSeller", mob ? "Vendedor" : "Todos os Vendedores", Object.keys(seen).sort(function(a, b){ return normText(seen[a]) < normText(seen[b]) ? -1 : 1; }).map(function(k){ return [k, seen[k]]; }), PV.seller);
   var cv = {}; (SALES.rows || []).forEach(function(s){ cv[pvConvName(s)] = 1; });
   sel("pvConv", mob ? "Convênio" : "Todos os Convênios", Object.keys(cv).sort().map(function(k){ return [k, k]; }), PV.conv);
@@ -28981,7 +29069,7 @@ function pvCardHtml(lbl, val, delta, cls, title){ return '<div class="fl-card' +
 function pvViewGeral(r){
   var pr = pvPrevRange(r), p = pvCompute(pr.from, pr.to, PV.seller, pvFilters());
   var goalYm = pvMonthOf(r.to), gv = pvGoalValue(goalYm, PV.seller);
-  var mTot = 0; (SALES.rows || []).forEach(function(s){ if (s.status !== "cancelada" && pvMonthOf(s.data) === goalYm && (!PV.seller || s.seller === PV.seller)) mTot += s.total; });
+  var mTot = 0; (SALES.rows || []).forEach(function(s){ if (s.status !== "cancelada" && pvMonthOf(s.data) === goalYm && (!PV.seller || slHasSeller(s, PV.seller))) mTot += PV.seller ? slShareOf(s, PV.seller) : s.total; });
   var cancRate = r.n + r.canc.length ? Math.round(r.canc.length / (r.n + r.canc.length) * 1000) / 10 : 0;
   var ids = r.valid.map(function(s){ return s.id; }), rec = 0; (FP.rows || []).forEach(function(x){ if (x.sale && ids.indexOf(x.sale) !== -1 && fpDone(x)) rec += x.valor; });
   var card = pvCardHtml;
@@ -29007,8 +29095,8 @@ function pvViewGeral(r){
   var convRows = Object.keys(conv).map(function(k){ return {label: k, v: conv[k].t, txt: fmtMoney(conv[k].t) + " · " + conv[k].n}; }).sort(function(a, b){ return b.v - a.v; }).slice(0, 10);
   var tipoRows = Object.keys(SALE_TIPOS).filter(function(k){ return r.byTipo[k].n; }).map(function(k, i){ return {label: SALE_TIPOS[k], v: r.byTipo[k].total, txt: fmtMoney(r.byTipo[k].total) + " · " + r.byTipo[k].n, color: "var(--viz-" + (i + 1) + ")"}; });
   var goalRows = pvGoalsOf(goalYm, PV.seller).map(function(g){
-    var l = (SALES.rows || []).filter(function(s){ return s.status !== "cancelada" && pvMonthOf(s.data) === g.ym && (!g.seller || s.seller === g.seller); });
-    var v = 0; l.forEach(function(s){ v += s.total; });
+    var l = (SALES.rows || []).filter(function(s){ return s.status !== "cancelada" && pvMonthOf(s.data) === g.ym && (!g.seller || slHasSeller(s, g.seller)); });
+    var v = 0; l.forEach(function(s){ v += g.seller ? slShareOf(s, g.seller) : s.total; });
     return [esc(g.seller ? fpStaffName(g.seller) : "Equipe Toda"), g.valor > 0 ? esc(fmtMoney(v)) + " de " + esc(fmtMoney(g.valor)) + " (<b>" + Math.round(v / g.valor * 100) + "%</b>)" : "—",
       g.qtd > 0 ? l.length + " de " + g.qtd + " (<b>" + Math.round(l.length / g.qtd * 100) + "%</b>)" : "—", g.valor > v ? esc(fmtMoney(g.valor - v)) : '<span class="fl-pos">Atingida</span>'];
   });
@@ -29036,7 +29124,7 @@ function pvViewSellers(r){
   var rows = r.sellers.map(function(o){ return {label: o.name, v: o.total, txt: fmtMoney(o.total) + " · " + o.n}; });
   var tbl = pvTable(["Posição", "Vendedor", "Vendas", "Total", "% do Total", "Ticket Médio", "Meta de " + pvMonthLabel(goalYm), "Canceladas", "Comissão Gerada"], r.sellers.map(function(o, i){
     var gv = o.seller ? pvGoalValue(goalYm, o.seller) : 0, mv = 0;
-    if (gv) (SALES.rows || []).forEach(function(s){ if (s.status !== "cancelada" && s.seller === o.seller && pvMonthOf(s.data) === goalYm) mv += s.total; });
+    if (gv) (SALES.rows || []).forEach(function(s){ if (s.status !== "cancelada" && pvMonthOf(s.data) === goalYm) mv += slShareOf(s, o.seller); });
     return [(i + 1) + "º", '<b>' + esc(o.name) + '</b>', String(o.n), esc(fmtMoney(o.total)), Math.round(o.total / tot * 100) + "%", esc(fmtMoney(o.n ? o.total / o.n : 0)),
       gv ? Math.round(mv / gv * 100) + "% de " + esc(fmtMoney(gv)) : "—", String(canc[o.seller] || 0), esc(fmtMoney(o.com))];
   }));
@@ -29270,7 +29358,9 @@ function vnInfo(s){
   var today = trTodayIso(), late = open.filter(function(x){ return x.venc < today; });
   var sum = function(l){ var t = 0; l.forEach(function(x){ t += x.valor; }); return Math.round(t * 100) / 100; };
   var pay = !parc.length ? "sem" : late.length ? "atraso" : !open.length ? "quitada" : "emdia";
-  return {parc: parc, paid: paid, open: open, late: late, recebido: sum(paid), aberto: sum(open), atraso: sum(late), pay: pay, com: comOf(s.id)};
+  var cs = comsOf(s.id), cv = 0; cs.forEach(function(c){ if (c.status !== "estornada") cv += c.valor; });
+  var com = cs.length < 2 ? (cs[0] || null) : {list: cs, valor: Math.round(cv * 100) / 100, status: cs.every(function(c){ return c.status === "estornada"; }) ? "estornada" : "gerada"};
+  return {parc: parc, paid: paid, open: open, late: late, recebido: sum(paid), aberto: sum(open), atraso: sum(late), pay: pay, com: com, pend: comPendShares(s).length};
 }
 function vnPatName(s){ var p = rawPatient(s.patient) || {}; return p.nome || "—"; }
 function vnShown(){
@@ -29279,14 +29369,14 @@ function vnShown(){
     if (VN.ym && String(s.data).slice(0, 7) !== VN.ym) return false;
     if (VN.tipo && s.tipo !== VN.tipo) return false;
     if (VN.st && s.status !== VN.st) return false;
-    if (VN.seller && (VN.seller === "__none" ? s.seller : s.seller !== VN.seller)) return false;
+    if (VN.seller && (VN.seller === "__none" ? s.seller : !slHasSeller(s, VN.seller))) return false;
     if (q && normText(vnPatName(s) + " " + (s.sellerName || "") + " " + (s.obs || "")).indexOf(q) === -1) return false;
     var i = vnInfo(s);
     if (VN.pay && i.pay !== VN.pay) return false;
     if (VN.alert === "semvend" && (s.seller || s.status === "cancelada")) return false;
     if (VN.alert === "atraso" && (!i.late.length || s.status === "cancelada")) return false;
     if (VN.alert === "semparc" && (i.parc.length || s.status !== "ativa")) return false;
-    if (VN.alert === "semcom" && (s.status !== "ativa" || !s.seller || i.com)) return false;
+    if (VN.alert === "semcom" && !i.pend) return false;
     return true;
   }).sort(function(a, b){ return String(b.data + b.at).localeCompare(String(a.data + a.at)); });
 }
@@ -29302,7 +29392,7 @@ function vnFillFilters(){
   if (VN.ym && ml.indexOf(VN.ym) === -1) VN.ym = "";
   sel("vnMonth", mob ? "Mês" : "Todos os Meses", ml.map(function(m){ return [m, flMonthLabel(m)]; }), VN.ym);
   sel("vnSt", mob ? "Situação" : "Todas as Situações", Object.keys(SALE_STATUS).map(function(k){ return [k, SALE_STATUS[k]]; }), VN.st);
-  var sellers = {}; rows.forEach(function(s){ if (s.seller) sellers[s.seller] = s.sellerName || fpStaffName(s.seller); });
+  var sellers = {}; rows.forEach(function(s){ slShares(s).forEach(function(x){ if (x.seller) sellers[x.seller] = x.sellerName || fpStaffName(x.seller); }); });
   var sl = Object.keys(sellers).sort(function(a, b){ return normText(sellers[a]) < normText(sellers[b]) ? -1 : 1; }).map(function(k){ return [k, sellers[k]]; });
   sl.push(["__none", "Sem Vendedor"]);
   sel("vnSeller", mob ? "Vendedor" : "Todos os Vendedores", sl, VN.seller);
@@ -29350,7 +29440,7 @@ function renderVendas(){
     {key: "total", label: "Total", width: 130}, {key: "rec", label: "Recebido", width: 130}, {key: "pay", label: "Pagamento", width: 190, min: 120}, {key: "com", label: "Comissão", width: 130}, {key: "st", label: "Situação", width: 120}];
   gtRender(host, "vendas", cols, list.map(function(s){
     var i = vnInfo(s), c = i.com;
-    return {attrs: 'class="pr-row" data-vn-id="' + esc(s.id) + '" tabindex="0"', cells: [esc(trBr(s.data)), '<b>' + esc(vnPatName(s)) + '</b>', esc(SALE_TIPOS[s.tipo] || s.tipo), esc(s.sellerName || (s.seller ? fpStaffName(s.seller) : "—")),
+    return {attrs: 'class="pr-row" data-vn-id="' + esc(s.id) + '" tabindex="0"', cells: [esc(trBr(s.data)), '<b>' + esc(vnPatName(s)) + '</b>', esc(SALE_TIPOS[s.tipo] || s.tipo), '<span title="' + esc(slSellersText(s)) + '">' + esc(slShares(s).filter(function(x){ return x.seller; }).map(function(x){ return x.sellerName || fpStaffName(x.seller); }).join(" + ") || "—") + '</span>',
       '<span title="' + esc(fmtMoney(s.valorMensal) + " × " + s.meses) + '">' + esc(fmtMoney(s.total)) + '</span>', esc(fmtMoney(i.recebido)), vnPayChip(s, i),
       c ? '<span class="tr-mchip ' + (c.status === "estornada" ? "tr-falta" : comStatusText(c) === "Paga" ? "tr-ok" : "") + '">' + esc(comStatusText(c)) + ' · ' + esc(fmtMoney(c.valor)) + '</span>' : '<span class="hint">—</span>',
       esc(SALE_STATUS[s.status] || s.status)],
@@ -29369,7 +29459,7 @@ function vnExport(){
   var list = vnShown();
   xlDownload("vendas-" + trTodayIso() + ".xlsx", [{name: "Vendas", rows: [["Data", "Paciente", "Tipo", "Vendedor", "Valor Mensal", "Meses", "Total", "Forma", "Recebido", "A Receber", "Em Atraso", "Pagamento", "Comissão", "Situação da Comissão", "Situação", "Observações"]].concat(list.map(function(s){
     var i = vnInfo(s), c = i.com;
-    return [trBr(s.data), vnPatName(s), SALE_TIPOS[s.tipo] || s.tipo, s.sellerName || "", s.valorMensal, s.meses, s.total, s.forma || "", i.recebido, i.aberto, i.atraso, VN_PAY[i.pay] || "", c ? c.valor : "", c ? comStatusText(c) : "", SALE_STATUS[s.status] || s.status, s.obs || ""];
+    return [trBr(s.data), vnPatName(s), SALE_TIPOS[s.tipo] || s.tipo, slSellersText(s), s.valorMensal, s.meses, s.total, s.forma || "", i.recebido, i.aberto, i.atraso, VN_PAY[i.pay] || "", c ? c.valor : "", c ? comStatusText(c) : "", SALE_STATUS[s.status] || s.status, s.obs || ""];
   })), widths: [12, 30, 12, 24, 14, 8, 14, 18, 14, 14, 14, 14, 14, 18, 14, 30]}]);
 }
 function openVendaDetalhe(id){
@@ -29379,13 +29469,14 @@ function openVendaDetalhe(id){
   var parcs = i.parc.slice().sort(function(a, b){ return a.venc < b.venc ? -1 : 1; });
   host.innerHTML = '<div class="overlay" id="ovVn"><div class="modal" style="max-width:820px">' +
     '<div class="modal-head"><div><h3>Venda · ' + esc(vnPatName(s)) + '</h3><div class="modal-sub">' + esc(SALE_TIPOS[s.tipo] || s.tipo) + ' · ' + esc(trBr(s.data)) + ' · ' + esc(SALE_STATUS[s.status] || s.status) + '</div></div><button class="modal-close" id="vnDClose" aria-label="Fechar">✕</button></div>' +
-    '<div class="modal-body"><div class="tr-sec tr-sec-top">Venda</div><div class="field-row">' + row("Vendedor", esc(s.sellerName || "—")) + row("Convênio", esc(pvConvName(s))) + row("Forma de Pagamento", esc(s.forma || "—")) + row("Registrada por", esc(s.by || "—")) + '</div>' +
+    '<div class="modal-body"><div class="tr-sec tr-sec-top">Venda</div><div class="field-row">' + row(slPartesNorm(s.partes).length ? "Vendedores" : "Vendedor", esc(slSellersText(s) || "—")) + row("Convênio", esc(pvConvName(s))) + row("Forma de Pagamento", esc(s.forma || "—")) + row("Registrada por", esc(s.by || "—")) + '</div>' +
       '<div class="field-row">' + row("Valor Mensal", esc(fmtMoney(s.valorMensal))) + row("Meses", String(s.meses)) + row("Total", '<b>' + esc(fmtMoney(s.total)) + '</b>') + '</div>' +
       (s.obs ? row("Observações", esc(s.obs)) : '') +
       '<div class="tr-sec">Pagamento</div><div class="field-row">' + row("Recebido", esc(fmtMoney(i.recebido))) + row("A Receber", esc(fmtMoney(i.aberto))) + row("Situação", vnPayChip(s, i)) + '</div>' +
       (parcs.length ? '<div class="ln-scroll"><table class="pat-table ln-plan"><thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Situação</th></tr></thead><tbody>' + parcs.map(function(x){
         return '<tr><td>' + esc(fpLabel(x)) + '</td><td>' + esc(trBr(x.venc)) + '</td><td>' + esc(fmtMoney(x.valor)) + '</td><td>' + fpStatusChip(x) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="hint">Nenhuma parcela gerada no Contas a Receber.</div>') +
-      (comCan("view") ? '<div class="tr-sec">Comissão</div>' + (c ? '<div class="field-row">' + row("Valor", esc(fmtMoney(c.valor)) + ' (' + String(c.pct).replace(".", ",") + '% de ' + esc(fmtMoney(c.base)) + ')') + row("Situação", esc(comStatusText(c))) + '</div>' :
+      (comCan("view") ? '<div class="tr-sec">Comissão</div>' + (c ? (c.list || [c]).map(function(x){ return '<div class="field-row">' + row("Vendedor", esc(x.sellerName || "—")) + row("Valor", esc(fmtMoney(x.valor)) + ' (' + String(x.pct).replace(".", ",") + '% de ' + esc(fmtMoney(x.base)) + ')') + row("Situação", esc(comStatusText(x))) + '</div>'; }).join("") +
+        (i.pend ? '<div class="hint">' + i.pend + (i.pend === 1 ? ' vendedor aguarda' : ' vendedores aguardam') + ' a comissão (1ª parcela paga ou 1º atendimento finalizado).</div>' : '') :
         '<div class="hint">' + (s.status !== "ativa" ? "Venda sem comissão." : !s.seller ? "Venda sem vendedor: não gera comissão." : "Aguardando a 1ª parcela paga ou o 1º atendimento finalizado.") + '</div>') : '') +
     '</div><div class="modal-foot">' + (slCan("delete") ? '<button class="btn danger" id="vnDDel">Excluir</button>' : '<span></span>') + '<div class="spacer"></div>' + (t && can("tratamentos", "view") ? '<button class="btn ghost" id="vnDTr">Abrir Tratamento</button>' : '') + '<button class="btn ghost" id="vnDCt">Contrato</button>' +
       (slCan("edit") ? '<button class="btn ghost" id="vnDEdit">Editar</button>' : '') + '<button class="btn primary" id="vnDOk">Fechar</button></div></div></div>';
@@ -29415,7 +29506,9 @@ function slUpdate(id, patch){
   var c = agdClient();
   var apply = function(){ SALES.rows = (SALES.rows || []).map(function(s){ return s.id === id ? Object.assign({}, s, patch) : s; }); return true; };
   if (!c) return Promise.resolve(apply());
-  return c.from("treatment_sales").update({data: patch.data, seller_id: patch.seller || null, seller_name: patch.sellerName || null, forma: patch.forma || null, obs: patch.obs || null, convenio_id: patch.convId || null, convenio_name: patch.convName || null})
+  var upd = {data: patch.data, seller_id: patch.seller || null, seller_name: patch.sellerName || null, forma: patch.forma || null, obs: patch.obs || null, convenio_id: patch.convId || null, convenio_name: patch.convName || null};
+  if (patch.partes) upd.partes = patch.partes;
+  return c.from("treatment_sales").update(upd)
     .eq("id", id).select().single().then(function(res){
       if (res.error || !res.data){ showToast("Não foi possível salvar a venda: " + ((res.error && res.error.message) || "sem permissão"), true); return false; }
       SALES.rows = (SALES.rows || []).map(function(s){ return s.id === id ? slFromDb(res.data) : s; }); return true;
@@ -29464,6 +29557,8 @@ function comResync(s){
 }
 function openVendaEditar(s){
   var host = regQuickHost(), staff = fpStaffList();
+  // com divisão (antes ou depois) e comissão já gerada, vendedor e divisão ficam travados
+  var spLock = comsOf(s.id).some(function(c){ return c.status === "gerada"; }) && (slPartesNorm(s.partes).length > 0);
   if (s.seller && !staff.some(function(x){ return x.id === s.seller; })) staff = staff.concat([{id: s.seller, nome: s.sellerName || fpStaffName(s.seller)}]);
   var formas = SALE_FORMAS.slice(); if (s.forma && formas.indexOf(s.forma) === -1) formas.push(s.forma);
   var cur0 = s.convId || (s.convName ? "" : slConvOf(s.treatment, s.patient).id), curConv = cur0;
@@ -29480,26 +29575,35 @@ function openVendaEditar(s){
       '<div class="field"><label for="vnEForma">Forma de Pagamento</label><select id="vnEForma"><option value="">Não informada</option>' +
         formas.map(function(f){ return '<option value="' + esc(f) + '"' + (f === s.forma ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="field"><label for="vnEObs">Observações</label><textarea id="vnEObs" rows="3">' + esc(s.obs || "") + '</textarea></div>' +
+      spHtml("vnESp") + (spLock ? '<div class="hint">A comissão desta venda já foi gerada: para mudar o vendedor ou a divisão, exclua a comissão em Comissões antes.</div>' : '') +
       '<div class="hint">O convênio fica gravado na venda (é o que o Painel de Vendas usa). Valor, meses e tipo não mudam aqui. Trocar o vendedor recalcula a comissão que ainda não foi paga.</div>' +
     '</div><div class="modal-foot"><span></span><div class="spacer"></div><button class="btn ghost" id="vnECancel">Cancelar</button><button class="btn primary" id="vnESave">Salvar</button></div></div></div>';
   var $ = function(x){ return document.getElementById(x); }, ov = $("ovVnEd");
   var close = function(){ host.innerHTML = ""; };
   $("vnEClose").addEventListener("click", close); $("vnECancel").addEventListener("click", close);
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+  if (spLock) $("vnESeller").disabled = true;
+  var sp = spWire("vnESp", s.partes, staff, function(){ return $("vnESeller").value; }, function(){ return s.total; }, spLock);
+  $("vnESeller").addEventListener("change", function(){ sp.refresh(); });
   $("vnESave").addEventListener("click", function(){
     var data = $("vnEData").value, seller = $("vnESeller").value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data)){ showToast("Informe a data da venda.", true); return; }
     var why = slEditBlocked(s); if (why){ showToast(why, true); return; }
     var sellerName = seller ? ((staff.filter(function(x){ return x.id === seller; })[0] || {}).nome || fpStaffName(seller)) : "";
     var cvId = $("vnEConv").value, cvItem = convs.filter(function(x){ return x.id === cvId; })[0];
+    var spr = sp.read(); if (spr.err){ showToast(spr.err, true); return; }
     var patch = {data: data, seller: seller, sellerName: sellerName, forma: $("vnEForma").value, obs: $("vnEObs").value.trim(),
-      convId: cvId === "__old" ? "" : cvId, convName: cvItem ? cvItem.name : ""};
+      convId: cvId === "__old" ? "" : cvId, convName: cvItem ? cvItem.name : "", partes: spr.partes};
+    var partesChanged = JSON.stringify(spr.partes) !== JSON.stringify(slPartesNorm(s.partes));
+    if (!spLock && (partesChanged || spr.partes.length) && comsOf(s.id).some(function(c){ return c.status === "gerada"; }) && (partesChanged || seller !== (s.seller || ""))){
+      showToast("A comissão desta venda já foi gerada: para dividir a venda, exclua a comissão em Comissões antes.", true); return;
+    }
     var sellerChanged = seller !== (s.seller || "");
     $("vnESave").disabled = true;
     slUpdate(s.id, patch).then(function(ok){
       if (!ok){ $("vnESave").disabled = false; return; }
       var now = (SALES.rows || []).filter(function(x){ return x.id === s.id; })[0] || Object.assign({}, s, patch);
-      return (sellerChanged ? comResync(now) : Promise.resolve("")).then(function(msg){
+      return (sellerChanged && !spr.partes.length ? comResync(now) : Promise.resolve((partesChanged && typeof comApuraAuto === "function" ? comApuraAuto() : null, ""))).then(function(msg){
         close(); showToast("Venda alterada." + (msg ? " " + msg : ""), /paga a|não foi/.test(msg || ""));
         if (state.tab === "vendas") renderVendas();
         openVendaDetalhe(s.id);
@@ -29518,11 +29622,12 @@ function slDeleteCheck(list){
     var parc = slParcels([s.id]);
     if (parc.some(fpDone)){ out.why = "A venda de " + trBr(s.data) + " tem parcela recebida no Contas a Receber e não pode ser excluída: use Cancelar."; return; }
     out.parc += parc.length;
-    var c = comOf(s.id);
-    if (!c) return;
-    var pay = c.payable ? (FP.rows || []).filter(function(x){ return x.id === c.payable; })[0] : null;
-    if (c.status === "gerada" && pay && fpDone(pay)){ out.why = "A comissão da venda de " + trBr(s.data) + " já foi paga a " + (c.sellerName || "o vendedor") + " e a venda não pode ser excluída: use Cancelar."; return; }
-    out.com++;
+    comsOf(s.id).forEach(function(c){
+      if (out.why) return;
+      var pay = c.payable ? (FP.rows || []).filter(function(x){ return x.id === c.payable; })[0] : null;
+      if (c.status === "gerada" && pay && fpDone(pay)){ out.why = "A comissão da venda de " + trBr(s.data) + " já foi paga a " + (c.sellerName || "o vendedor") + " e a venda não pode ser excluída: use Cancelar."; return; }
+      out.com++;
+    });
   });
   if (!out.why && out.parc && !fpCan("delete")) out.why = "Para excluir as parcelas em aberto da venda é preciso ter Financeiro (excluir).";
   if (!out.why && out.com && !comCan("delete")) out.why = "Para excluir a comissão da venda é preciso ter Comissões (excluir).";
@@ -29559,11 +29664,13 @@ function slDeleteSales(list){
     chain = chain.then(function(ok){
       if (!ok) return false;
       var open = slParcels([s.id]).filter(function(x){ return !fpDone(x); }).map(function(x){ return x.id; });
-      var c = comOf(s.id);
+      var cs = comsOf(s.id);
       return (open.length ? fpDelete(open) : Promise.resolve(true)).then(function(ok2){
         if (!ok2) return false;
-        if (!c) return true;
-        return (c.payable && (FP.rows || []).some(function(x){ return x.id === c.payable; }) ? fpDelete([c.payable]) : Promise.resolve(true)).then(function(ok3){ return ok3 && comDeleteRow(c.id); });
+        var ch = Promise.resolve(true);
+        cs.forEach(function(c){ ch = ch.then(function(okc){ if (!okc) return false;
+          return (c.payable && (FP.rows || []).some(function(x){ return x.id === c.payable; }) ? fpDelete([c.payable]) : Promise.resolve(true)).then(function(ok3){ return ok3 && comDeleteRow(c.id); }); }); });
+        return ch;
       }).then(function(ok4){
         if (!ok4) return false;
         // a venda que esta tinha substituído volta a valer
@@ -30427,7 +30534,8 @@ var HELP_TOPICS = [
     rules: [
       "Vale a regra mais específica: vendedor + tipo, depois vendedor, depois tipo, depois Todas. Regra inativa não vale.",
       "Aditivo é a venda da diferença do renegociado; Nova, o total da venda.",
-      "Cada venda tem no máximo uma comissão; apurar de novo não duplica.",
+      "Venda dividida: em <b>Outros Vendedores</b> (Registrar Venda ou Editar Venda) inclua o outro vendedor e digite o valor da venda que é dele; o vendedor principal fica com o restante. Cada vendedor ganha a própria comissão, pela regra dele, sobre a parte dele, e o Painel de Vendas conta a parte de cada um.",
+      "Cada vendedor tem no máximo uma comissão por venda; apurar de novo não duplica. Depois que a comissão de uma venda dividida é gerada, o vendedor e a divisão ficam travados (exclua a comissão antes para mudar).",
       "Sem vendedor na venda ou sem regra que sirva, nenhuma comissão é gerada (a janela avisa o motivo)."
     ],
     who: "Permissão Comissões (ver, incluir, editar, excluir); gerar a conta a pagar também exige incluir em Financeiro."},
