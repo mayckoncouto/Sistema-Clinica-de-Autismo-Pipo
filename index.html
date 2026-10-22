@@ -180,6 +180,9 @@ h1,h2,h3{font-family:"Manrope","Inter",sans-serif; text-wrap:balance; margin:0}
 #trPlBox{grid-template-columns:minmax(max-content,2fr) minmax(max-content,1fr) minmax(max-content,1fr) minmax(max-content,1fr);gap:6px 24px}
 #trPlBox .pl-clin-it b{white-space:nowrap}
 @media (max-width:760px){#trPlBox{grid-template-columns:repeat(2,minmax(0,1fr))}#trPlBox .pl-clin-it b{white-space:normal}}
+#plSummary{line-height:1.5;height:calc(6 * 1.5em + 18px);min-height:calc(6 * 1.5em + 18px)}
+.pl-clin-line{grid-template-columns:repeat(6,minmax(0,1fr))}.pl-clin-line .pl-clin-it b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){.pl-clin-line{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pl-clin-it > span{display:block;font-size:11px;color:var(--muted)}.pl-clin-it b{font-weight:600;font-size:13px;white-space:pre-line}
 .pl-hint{font-size:11.5px;color:var(--muted)}
 .pl-acts-link{cursor:pointer;text-decoration:underline dotted}.pl-acts-link:hover{color:var(--accent)}
@@ -32480,7 +32483,11 @@ function planObjCounts(plan){
   ((plan && plan.sections) || []).forEach(function(s){ (s.objectives || []).forEach(function(o){ n++; if (o.status === "atingido") at++; }); });
   return {n: n, at: at, ativos: n - at};
 }
-function planPatient(pid){ return state.patientsRaw.filter(function(p){ return p.id === pid; })[0] || state.patients.filter(function(p){ return p.id === pid; })[0] || null; }
+// Paciente com a saúde do cadastro somada (state.patients já soma; o cru recebe a tabela protegida de saúde).
+function planPatient(pid){
+  var p = state.patients.filter(function(x){ return x.id === pid; })[0] || state.patientsRaw.filter(function(x){ return x.id === pid; })[0] || null;
+  return p ? Object.assign({}, p, healthOf(p.id)) : null;
+}
 // Síntese do quadro clínico montada por regras (sem inventar nada): identificação, dados de saúde que o nível pode ver, escola,
 // especialidades do tratamento e, por especialidade, os objetivos do plano (ativos, atingidos e a situação atual de cada um).
 function planSynthesis(p, sections, treatSpecs){
@@ -32518,10 +32525,11 @@ function planSynthesis(p, sections, treatSpecs){
 function planClinicalHtml(p){
   if (!p) return '';
   if (!healthCanSee()) return '<div class="pat-count">Seu nível não tem permissão para ver os dados de saúde do paciente.</div>';
-  var items = [["Diagnóstico (CID)", Array.isArray(p.cid) ? p.cid.join(", ") : p.cid], ["Data do Diagnóstico", p.diagData ? trBr(p.diagData) : ""],
+  p = Object.assign({}, p, healthOf(p.id));
+  var items = [["Diagnóstico (CID)", Array.isArray(p.cid) ? p.cid.join(", ") : p.cid],
     ["Nível de Suporte", p.suporte], ["Comunicação", p.comunicacao], ["Alergias", p.alergias], ["Medicações em Uso", p.medicacoes], ["Restrições Alimentares", p.restricoes]];
-  return '<div class="pl-clin">' + items.map(function(it){
-    return '<div class="pl-clin-it"><span>' + esc(it[0]) + '</span><b>' + (it[1] ? esc(String(it[1])) : '<span class="pt-muted">—</span>') + '</b></div>';
+  return '<div class="pl-clin pl-clin-line">' + items.map(function(it){
+    return '<div class="pl-clin-it"' + (it[1] ? ' title="' + esc(String(it[1])) + '"' : '') + '><span>' + esc(it[0]) + '</span><b>' + (it[1] ? esc(String(it[1])) : '<span class="pt-muted">—</span>') + '</b></div>';
   }).join("") + '</div>';
 }
 
@@ -32744,7 +32752,7 @@ function openPlanModal(plan, opts){
         '<div class="field"><label>Situação da Revisão</label><div class="pl-rev-chip" id="plRevChip">' + planReviewChip({review_date: d.review_date}) + '</div></div>' +
       '</div>' +
       '<div class="tr-sec pl-sec-row pl-sec-inline"><span>Quadro Clínico</span><span class="pl-sec-note">Dados da seção Saúde do cadastro do paciente (atualizam sozinhos).</span></div>' + planClinicalHtml(p) +
-      '<div class="field"><div class="pl-sum-head"><label for="plSummary">Resumo do Quadro Clínico</label>' + (full && toolCan("ferr_plano_sintese") ? '<button type="button" class="btn ghost" id="plSynth" title="Monta o resumo a partir do cadastro, do tratamento e dos objetivos do plano">Gerar Síntese</button>' : '') + '</div><textarea id="plSummary" rows="3"' + (full ? '' : ' disabled') + ' placeholder="Resumo do quadro clínico do paciente">' + esc(d.summary) + '</textarea></div>' +
+      '<div class="field"><div class="pl-sum-head"><label for="plSummary">Resumo do Quadro Clínico</label>' + (full && toolCan("ferr_plano_sintese") ? '<button type="button" class="btn ghost" id="plSynth" title="Monta o resumo a partir do cadastro, do tratamento e dos objetivos do plano">Gerar Síntese</button>' : '') + '</div><textarea id="plSummary" rows="6"' + (full ? '' : ' disabled') + ' placeholder="Resumo do quadro clínico do paciente">' + esc(d.summary) + '</textarea></div>' +
       '<div class="tr-sec pl-sec-row pl-sec-inline"><span>Objetivos por habilidade</span><div id="plCover"></div>' +
         (meSpecs.main && !isNew ? '<label class="pl-mine"><input type="checkbox" id="plOnlyMine"> Só as minhas especialidades</label>' : '') + '</div>' +
       '<div id="plSecs"></div>' +
