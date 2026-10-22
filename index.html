@@ -7753,11 +7753,15 @@ function lgLoad(){
   if (!c){ LG.loaded = true; LG.error = "offline"; lgRender(); return Promise.resolve(); }
   agdEnsureChannel();
   var seq = ++LG.seq, from = LG.from, to = LG.to;
-  LG.loaded = false; lgRender();
-  return agdFetchRange(from, to).then(function(rows){
+  LG.loaded = false; LG.partial = null; lgRender();
+  function fill(rows){ LG.rows = {}; rows.forEach(function(r){ LG.rows[r.id] = r; }); }
+  return agdFetchRange(from, to, function(rows, total){   // período grande: a lista já aparece com o que chegou
     if (seq !== LG.seq) return;
-    LG.rows = {}; LG.error = ""; LG.loaded = true;
-    rows.forEach(function(r){ LG.rows[r.id] = r; });
+    fill(rows); LG.error = ""; LG.loaded = true; LG.partial = {n: rows.length, total: total};
+    lgSchedule();
+  }).then(function(rows){
+    if (seq !== LG.seq) return;
+    fill(rows); LG.error = ""; LG.loaded = true; LG.partial = null;
     lgRender();
   }, function(e){ if (seq !== LG.seq) return; LG.loaded = true; LG.error = (e && e.message) || "erro"; lgRender(); });
 }
@@ -7867,7 +7871,7 @@ function lgRender(){
   var shown = lgShown(), a = lgAnalyse(shown), today = vgToday();
   var list = LG.alert ? lgAlertRows(LG.alert, a, shown) : shown;
   LG.last = list;
-  if (cnt) cnt.textContent = list.length + (list.length === 1 ? " agendamento" : " agendamentos");
+  if (cnt) cnt.textContent = list.length + (list.length === 1 ? " agendamento" : " agendamentos") + (LG.partial ? " · carregando mais" + (LG.partial.total ? " (" + LG.partial.n + " de " + LG.partial.total + ")" : "") + "…" : "");
   function card(label, val, cls, title){ return '<div class="fl-card ' + (cls || "") + '"' + (title ? ' title="' + esc(title) + '"' : '') + '><small>' + esc(label) + '</small><b>' + val + '</b></div>'; }
   var one = a.pats === 1 ? a.byPat[Object.keys(a.byPat)[0]] : null;
   if (sum){
@@ -24018,7 +24022,7 @@ function agdTimesFor(iso, per){
   var o = agdDayObj(agdParse(iso)); if (!o) return [];
   return per === "manha" ? o.morning.slice() : per === "tarde" ? o.afternoon.slice() : o.morning.concat(o.afternoon);
 }
-function agdFetchRange(from, to){
+function agdFetchRange(from, to, onPart){
   var c = agdClient();
   function page(off, count){
     var q = c.from("appointments").select("*", count ? {count: "exact"} : undefined).gte("date", from).lte("date", to).order("id").range(off, off + 999);
@@ -24028,16 +24032,17 @@ function agdFetchRange(from, to){
   return page(0, true).then(function(first){
     var all = first.data || [], total = first.count;
     if (all.length < 1000) return all;
+    if (onPart) onPart(all.slice(), typeof total === "number" ? total : 0);
     if (typeof total !== "number"){
       var serial = function(off){ return page(off).then(function(r){ all = all.concat(r.data || []); return (r.data || []).length === 1000 ? serial(off + 1000) : all; }); };
       return serial(1000);
     }
     var offs = []; for (var o = 1000; o < total; o += 1000) offs.push(o);
     var chain = Promise.resolve();
-    for (var i = 0; i < offs.length; i += 6){
+    for (var i = 0; i < offs.length; i += 10){
       (function(part){
-        chain = chain.then(function(){ return Promise.all(part.map(function(off){ return page(off); })).then(function(rs){ rs.forEach(function(r){ all = all.concat(r.data || []); }); }); });
-      })(offs.slice(i, i + 6));
+        chain = chain.then(function(){ return Promise.all(part.map(function(off){ return page(off); })).then(function(rs){ rs.forEach(function(r){ all = all.concat(r.data || []); }); if (onPart) onPart(all.slice(), total); }); });
+      })(offs.slice(i, i + 10));
     }
     return chain.then(function(){ return all; });
   });
