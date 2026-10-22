@@ -2756,6 +2756,7 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
 .dem-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px;min-width:0}
 .dem-edit{margin-bottom:8px;flex:none}
 .dem-ch{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;align-items:baseline;margin-bottom:6px}
+.dem-ch > .gc-funper{flex:0 0 auto;width:96px;align-self:center}
 .dem-leg{display:flex;gap:14px;color:var(--ink-2);font-size:12.5px;flex-wrap:wrap}
 .dem-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .dem-leg i.ln{height:3px;border-radius:2px;vertical-align:3px;width:16px}
@@ -28447,7 +28448,7 @@ function pvCompute(from, to, seller, f){
 // Regras: ativo no mês = o tratamento valeu em algum dia do mês (trPeriodEnd); Novo/Negociado = tipo do tratamento com início
 // no mês; valor negociado = valor final − valor final do tratamento anterior do paciente; Cancelado = status cancelado com
 // término ou data da troca de status no mês. Triagem = atendimento da Agenda com serviço Triagem.
-var GC = {year: "", ym: "", cmp: "mes", tend: "lin", conv: "", per: {a: [0, 5], b: [6, 8]}, tri: null, triYears: {}, metas: {padrao: {}, meses: {}}, fech: {}, last: null, loading: false};
+var GC = {funPer: (function(){ try { return localStorage.getItem("agendaPipo:gcFunPer") === "ano" ? "ano" : "mes"; } catch (e){ return "mes"; } })(), year: "", ym: "", cmp: "mes", tend: "lin", conv: "", per: {a: [0, 5], b: [6, 8]}, tri: null, triYears: {}, metas: {padrao: {}, meses: {}}, fech: {}, last: null, loading: false};
 var GC_MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 var GC_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 var GC_SVC_AVAL = "avaliacao", GC_SVC_NEURO = "avaliacao-neuropsicologica", GC_SVC_TRIAGEM = "triagem";
@@ -28529,8 +28530,9 @@ function gcSeries(year, upTo){
 }
 function gcHasData(series){ return series.some(function(m){ return m && (m.contr || m.novos || m.negs || m.canc || m.aval || m.neuro || m.tri); }); }
 // Funil do ano: triagem → avaliação → contrato novo, pelo mesmo paciente (cada etapa só conta depois da anterior).
-function gcFunil(year){
-  var ini = year + "-01-01", fim = year + "-12-31", tri = {}, av = {}, nv = {};
+// Funil (2026-10-22): ym = só as triagens daquele mês (padrão); sem ym = o ano. Avaliação e contrato contam depois da triagem.
+function gcFunil(year, ym){
+  var ini = ym ? ym + "-01" : year + "-01-01", fim = ym ? pvYmEnd(ym) : year + "-12-31", tri = {}, av = {}, nv = {};
   (GC.tri || []).forEach(function(a){ if (a.patient_id && a.date >= ini && a.date <= fim && (!tri[a.patient_id] || a.date < tri[a.patient_id])) tri[a.patient_id] = a.date; });
   gcAvaliacoes(GC_SVC_AVAL).concat(gcAvaliacoes(GC_SVC_NEURO)).forEach(function(t){ if (t.inicio >= ini && (!av[t.patientId] || t.inicio < av[t.patientId])) av[t.patientId] = t.inicio; });
   gcContratos().forEach(function(t){ if (t.tipo === "novo" && t.inicio >= ini && (!nv[t.patientId] || t.inicio < nv[t.patientId])) nv[t.patientId] = t.inicio; });
@@ -28538,6 +28540,12 @@ function gcFunil(year){
   var n = a.filter(function(p){ return nv[p] && nv[p] >= av[p]; });
   return {tri: Object.keys(tri), aval: a, novo: n};
 }
+document.addEventListener("change", function(e){
+  if (!e.target || e.target.id !== "gcFunPer") return;
+  GC.funPer = e.target.value === "ano" ? "ano" : "mes";
+  try { localStorage.setItem("agendaPipo:gcFunPer", GC.funPer); } catch (x){}
+  if (typeof gcRender === "function") gcRender();
+});
 function gcLoadTri(){
   var c = agdClient();
   if (!c){ if (!GC.tri) GC.tri = window.__gcTriagens || []; return Promise.resolve(); }
@@ -28734,7 +28742,7 @@ function gcRender(){
     gcCardHtml("Cancelados", String(cm.canc), '<span class="dem-d dn">' + (val ? "−" + gcMoneyShort(cm.cancV) : "—") + '</span>', "--danger", "canc") +
     gcCardHtml("Avaliações", String(cm.aval), '<span class="dem-d">' + mon(cm.avalV) + " · " + cm.neuro + " neuropsic.</span>", "--viz-1", "aval") +
     gcCardHtml("Triagens", String(cm.tri), pm ? gcDelta(cm.tri, pm.tri) : "", "--viz-4", "tri") + '</div>';
-  var fun = gcFunil(y), tk = cm.contr ? cm.ativosV / cm.contr : 0, tn = cm.novos ? cm.novosV / cm.novos : 0, perm = gcPermanencia(GC.ym), taxa = cm.contr ? cm.canc / cm.contr * 100 : 0;
+  var fun = gcFunil(y, GC.funPer === "ano" ? "" : GC.ym), tk = cm.contr ? cm.ativosV / cm.contr : 0, tn = cm.novos ? cm.novosV / cm.novos : 0, perm = gcPermanencia(GC.ym), taxa = cm.contr ? cm.canc / cm.contr * 100 : 0;
   var convr = fun.tri.length ? Math.round(fun.aval.length / fun.tri.length * 100) : null;
   var kp = '<div class="gc-cards gc-kpis">' +
     gcCardHtml("Ticket Médio por Contrato", val ? esc(gcMoneyShort(tk)) : "—", '<span class="dem-d">valor mensal por contrato ativo</span>', "--accent") +
@@ -28764,7 +28772,7 @@ function gcRender(){
   var mot = {}, totM = 0; gcContratos().forEach(function(t){ if (t.status === "cancelado" && (gcCancelDate(t) || "").slice(0, 4) === GC.year){ var k = cancelReasonName(t) || (t.motivoPendente ? "Sem motivo" : "Sem motivo"); mot[k] = (mot[k] || 0) + 1; totM++; } });
   var rkMot = Object.keys(mot).map(function(k){ return {label: k, sub: mot[k] + (mot[k] === 1 ? " cancelamento" : " cancelamentos"), v: mot[k], txt: Math.round(mot[k] / totM * 100) + "%", key: "motivo", ym: GC.year + "|" + k, color: "var(--danger)"}; }).sort(function(a, b){ return b.v - a.v; }).slice(0, 6);
   var al = gcAlerts(cur, GC.ym), alH = '<div class="gc-alerts">' + al.map(function(a){ var p = a[3].split("|"); return '<div class="' + a[0] + '"' + (a[3] ? gcDrillAttr(p[0], p[1] || GC.ym, a[2].slice(0, 60)) : "") + '>' + a[1] + " " + esc(a[2]) + '</div>'; }).join("") + '</div>';
-  var g4 = '<div class="gc-g3"><div class="dem-card"><div class="dem-ch"><b>Funil: Triagem, Avaliação e Contrato</b></div><div class="dem-note">No ano, pelo mesmo paciente; cada etapa só conta depois da anterior. O % é sobre as triagens.</div>' + funH + '</div>' +
+  var g4 = '<div class="gc-g3"><div class="dem-card"><div class="dem-ch"><b>Funil: Triagem, Avaliação e Contrato</b><select id="gcFunPer" class="gc-funper" aria-label="Trocar Período"><option value="mes"' + (GC.funPer !== "ano" ? " selected" : "") + '>Mês</option><option value="ano"' + (GC.funPer === "ano" ? " selected" : "") + '>Ano</option></select></div><div class="dem-note">' + (GC.funPer === "ano" ? "Triagens de " + GC.year : "Triagens de " + gcLabel(GC.ym)) + ', pelo mesmo paciente; cada etapa só conta depois da anterior. O % é sobre as triagens.</div>' + funH + '</div>' +
     '<div class="dem-card"><div class="dem-ch"><b>Motivos de Cancelamento</b></div><div class="dem-note">Cancelamentos de ' + GC.year + ' por motivo.</div>' + gcRank(rkMot) + '</div>' +
     '<div class="dem-card"><div class="dem-ch"><b>Alertas</b></div><div class="dem-note">O que merece atenção agora.</div>' + alH + '</div></div>';
   var pr = GC.per, agg = function(r){ var l = cur.slice(r[0], r[1] + 1).filter(function(m){ return m; }); var s = function(k){ return l.reduce(function(a, m){ return a + (m[k] || 0); }, 0); }; return {n: l.length, ativos: l.length ? s("ativosV") / l.length : 0, novos: s("novos"), canc: s("canc"), aval: s("aval"), tri: s("tri")}; };
@@ -30533,7 +30541,7 @@ var HELP_TOPICS = [
       "<b>Cancelado</b> é o tratamento com status Cancelado cujo término (ou a data da troca de status) cai no mês.",
       "Na cascata, a barra <b>Outros</b> é a diferença que novos, negociados e cancelados não explicam (por exemplo, tratamento renegociado no meio do mês: o anterior ainda vale até a véspera do novo, então os dois contam na base daquele mês, e o anterior sai no mês seguinte). Clicar nela mostra os pacientes, o que houve e a diferença de cada um; a soma dá o valor da barra.",
       "<b>Avaliações</b> e <b>Avaliações Neuro</b> contam os tratamentos desses serviços iniciados no mês, com o valor lançado em cada um. <b>Triagens</b> vêm da Agenda (atendimentos com o serviço Triagem).",
-      "O <b>funil</b> liga triagem, avaliação e contrato novo pelo mesmo paciente, e cada etapa só conta depois da anterior.",
+      "O <b>funil</b> liga triagem, avaliação e contrato novo pelo mesmo paciente, e cada etapa só conta depois da anterior. Abre no <b>mês</b> escolhido no topo (triagens daquele mês); no canto do cartão, troque para <b>Ano</b> para ver as triagens do ano inteiro.",
       "Os valores em reais só aparecem para quem pode ver os valores dos tratamentos (“Tratamentos – Valores”).",
       "A tendência Sazonal usa o mesmo mês do ano anterior e só funciona quando esse ano tem dados.",
       "Mês <b>fechado</b> (🔒) guarda os números do dia do fechamento e não muda mais, mesmo que um tratamento antigo seja corrigido; quem tem “Fechamento do Gerencial” pode reabrir."

@@ -46,6 +46,8 @@ const path = require('path');
   check('tratamento de serviço (avaliação) não entra nos contratos', jan.contr === 1 && fev.contr === 2);
   const fun = JSON.parse(await ev(`JSON.stringify((function(){ var f = gcFunil(2026); return {t: f.tri.length, a: f.aval.length, n: f.novo.length}; })())`));
   check('funil: 3 pacientes com triagem, 1 com avaliação depois, 1 com contrato novo depois', fun.t === 3 && fun.a === 1 && fun.n === 1, JSON.stringify(fun));
+  const funM = JSON.parse(await ev(`JSON.stringify([gcFunil(2026, "2026-02"), gcFunil(2026, "2026-03")].map(function(f){ return [f.tri.length, f.aval.length, f.novo.length]; }))`));
+  check('funil mensal: fevereiro 1/1/1 (triagem, avaliação e contrato depois); março 2/0/0', funM[0].join() === "1,1,1" && funM[1].join() === "2,0,0", JSON.stringify(funM));
   check('filtro de convênio sem resultado zera os contratos', (await ev(`(function(){ GC.conv = "naoexiste"; var n = gcCalc("2026-03").contr; GC.conv = ""; return n; })()`)) === 0);
 
   // "Outros" da cascata: a lista explica a barra paciente por paciente (renegociado no meio do mês conta os dois tratamentos)
