@@ -28149,6 +28149,9 @@ function gcVal(t){ return gcCanVal() ? trFinal(t) : 0; }
 function gcFimOf(t){ return trPeriodEnd(t) || ""; }
 function gcCancelDate(t){ return t.status === "cancelado" ? (t.termino || t.statusEm || t.inicio) : ""; }
 function gcAtivoEm(t, ym){ var f = gcFimOf(t); return t.inicio <= gcMonthEnd(ym) && (!f || f >= ym + "-01"); }
+// Cancelados que saíram da base de ativos entre o mês anterior e este (a saída conta no mês em que o contrato deixa de valer,
+// mesmo que a data do cancelamento seja do mês anterior, ex.: término em 01/11 sai da base em dezembro).
+function gcCancSaiu(ym, pym){ return gcItems("ativos", pym).filter(function(t){ return t.status === "cancelado" && !gcAtivoEm(t, ym); }); }
 function gcPrev(t){
   var l = treatmentsOf(t.patientId).filter(function(x){ return x.id !== t.id && !trIsService(x) && x.inicio && x.inicio < t.inicio; }).sort(function(a, b){ return a.inicio < b.inicio ? 1 : -1; });
   return l[0] || null;
@@ -28307,8 +28310,9 @@ function gcChartAtivos(cur, ci){
 // Cascata do mês anterior para o mês em destaque.
 function gcWaterfall(a, b, ym, pym){
   if (!gcCanVal()) return '<div class="hint">Os valores só aparecem com a permissão “Tratamentos – Valores”.</div>';
-  var MOB = isMobileView(), W = MOB ? 640 : 520, H = MOB ? 300 : 220, L = 6, B = 36, T = 26, outros = Math.round((b.ativosV - a.ativosV - b.novosV - b.negsV + b.cancV) * 100) / 100;
-  var it = [[GC_MESES[+pym.slice(5, 7) - 1], a.ativosV, "t", "ativos", pym], ["Novos", b.novosV, "d", "novos", ym], ["Negociados", b.negsV, "d", "negs", ym], ["Cancelados", -b.cancV, "d", "canc", ym], ["Outros", outros, "d", "out", ym], [GC_MESES[+ym.slice(5, 7) - 1], b.ativosV, "t", "ativos", ym]];
+  var cancW = 0; gcCancSaiu(ym, pym).forEach(function(t){ cancW += gcVal(t); }); cancW = Math.round(cancW * 100) / 100;
+  var MOB = isMobileView(), W = MOB ? 640 : 520, H = MOB ? 300 : 220, L = 6, B = 36, T = 26, outros = Math.round((b.ativosV - a.ativosV - b.novosV - b.negsV + cancW) * 100) / 100;
+  var it = [[GC_MESES[+pym.slice(5, 7) - 1], a.ativosV, "t", "ativos", pym], ["Novos", b.novosV, "d", "novos", ym], ["Negociados", b.negsV, "d", "negs", ym], ["Cancelados", -cancW, "d", "cancsai", ym], ["Outros", outros, "d", "out", ym], [GC_MESES[+ym.slice(5, 7) - 1], b.ativosV, "t", "ativos", ym]];
   var all = [a.ativosV, b.ativosV], run = a.ativosV; it.forEach(function(q){ if (q[2] === "d"){ run += q[1]; all.push(run); } });
   var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all), pad = (hi - lo) * 0.25 || hi * 0.05, mn = Math.max(0, lo - pad), mx = hi + pad, bw = Math.min(54, (W - L) / it.length * 0.7), gw = (W - L) / it.length;
   var y = function(v){ return H - B - (H - B - T) * (v - mn) / (mx - mn); }, s = ""; run = 0;
@@ -28475,6 +28479,7 @@ function gcDrillData(kind, ym, extra){
   switch (kind){
     case "ativos": case "contratos": rows = gcItems("ativos", ym).map(function(t){ return tRow(t); }); break;
     case "novos": rows = gcItems("novos", ym).map(function(t){ return tRow(t); }); break;
+    case "cancsai": head.push("Motivo"); rows = gcCancSaiu(ym, gcMes(+ym.slice(0, 4) - (ym.slice(5) === "01" ? 1 : 0), ym.slice(5) === "01" ? 11 : +ym.slice(5, 7) - 2)).map(function(t){ return tRow(t, [esc(cancelReasonName(t) || "Sem motivo")]); }); note = "Cancelados que saíram da base de contratos ativos neste mês."; break;
     case "negs": head.push("Variação"); rows = gcItems("negs", ym).map(function(t){ return tRow(t, [val ? esc((gcNegVal(t) >= 0 ? "+" : "−") + gcMoneyShort(gcNegVal(t))) : "—"]); }); break;
     case "canc": head.push("Motivo"); rows = gcItems("canc", ym).map(function(t){ return tRow(t, [esc(cancelReasonName(t) || "Sem motivo")]); }); break;
     case "aval": case "neuro": rows = gcItems(kind, ym).map(function(t){ return tRow(t); }); break;
@@ -28488,7 +28493,7 @@ function gcDrillData(kind, ym, extra){
     case "out": {
       var pym = gcMes(+ym.slice(0, 4) - (ym.slice(5) === "01" ? 1 : 0), ym.slice(5) === "01" ? 11 : +ym.slice(5, 7) - 2), novos = gcItems("novos", ym), negs = gcItems("negs", ym), canc = gcItems("canc", ym);
       var inIds = function(l, t){ return l.some(function(x){ return x.id === t.id; }); }, pats = {}; novos.concat(negs).forEach(function(t){ pats[t.patientId] = 1; });
-      var saiu = gcItems("ativos", pym).filter(function(t){ return !gcAtivoEm(t, ym) && !inIds(canc, t) && !pats[t.patientId]; });
+      var saiu = gcItems("ativos", pym).filter(function(t){ return !gcAtivoEm(t, ym) && t.status !== "cancelado" && !pats[t.patientId]; });
       var entrou = gcItems("ativos", ym).filter(function(t){ return !gcAtivoEm(t, pym) && !inIds(novos, t) && !inIds(negs, t); });
       head.push("O que houve"); rows = saiu.map(function(t){ return tRow(t, ["Saiu sem cancelamento nem renegociação"]); }).concat(entrou.map(function(t){ return tRow(t, ["Entrou sem ser Novo nem Negociado"]); }));
       note = "Tratamentos que explicam a diferença entre o movimento do mês e a variação dos contratos ativos."; break;
