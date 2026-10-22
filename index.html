@@ -27553,7 +27553,7 @@ function naOpen(pre, svcs){
       '<div class="field-row"><div class="field"><label for="naIni">Data de Início</label><input type="date" id="naIni" value="' + trTodayIso() + '"></div>' +
       '<div class="field"><label for="naN">Nº de Sessões</label><input type="text" id="naN" inputmode="numeric" maxlength="3"></div></div>' +
       '<div class="tr-sec">Convênio e Valor</div>' +
-      '<div class="field-row"><div class="field"><label for="naConv">Convênio</label><select id="naConv" data-combo><option value="">Sem convênio</option>' +
+      '<div class="field-row"><div class="field"><label for="naConv">Convênio</label><select id="naConv" data-combo><option value="">Escolha o convênio…</option>' +
         convs.map(function(c){ return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>'; }).join("") + '</select></div>' +
       (seeVal ? '<div class="field"><label for="naVal">Valor Total (R$)</label><input type="text" id="naVal" data-money inputmode="decimal"' + (editVal ? '' : ' disabled') + '></div>' : '') + '</div>' +
       (seeVal ? '<div class="pat-count" id="naHint"></div>' : '') +
@@ -27566,7 +27566,7 @@ function naOpen(pre, svcs){
   function close(){ host.innerHTML = ""; }
   function fillProf(){
     var list = specProfessionals(SVC_PREFIX + $("naSvc").value);
-    $("naProf").innerHTML = '<option value="">Todos os terapeutas</option>' + list.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(profNome(p)) + '</option>'; }).join("");
+    $("naProf").innerHTML = '<option value="">Escolha o profissional…</option>' + list.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(profNome(p)) + '</option>'; }).join("");
     $("naProf").value = ""; $("naProf").dispatchEvent(new Event("change"));
   }
   function fillN(){ var v = ttVencOf(SVC_PREFIX + $("naSvc").value); $("naN").value = v.total > 0 ? v.total : 1; }
@@ -27596,9 +27596,14 @@ function naOpen(pre, svcs){
   fillProf(); fillN(); fillConv(); fillVal(true);
   $("naSave").addEventListener("click", function(){
     var patId = $("naPat").value, sid = $("naSvc").value, n = parseInt($("naN").value, 10), ini = $("naIni").value;
+    // Todos os campos são obrigatórios, menos Observações (pedido do usuário, 2026-10-22)
     if (!patId){ showToast("Escolha o paciente.", true); return; }
-    if (!(n > 0)){ showToast("Informe o número de sessões.", true); $("naN").focus(); return; }
+    if (!sid){ showToast("Escolha a avaliação.", true); return; }
+    if (!$("naProf").value){ showToast("Escolha o profissional.", true); return; }
     if (!ini){ showToast("Informe a data de início.", true); return; }
+    if (!(n > 0)){ showToast("Informe o número de sessões.", true); $("naN").focus(); return; }
+    if (!$("naConv").value){ showToast("Escolha o convênio.", true); return; }
+    if ($("naVal") && editVal && (!$("naVal").value.trim() || parseMoney($("naVal").value) == null || isNaN(parseMoney($("naVal").value)))){ showToast("Informe o valor total.", true); $("naVal").focus(); return; }
     var valor = $("naVal") && editVal ? parseMoney($("naVal").value) : null;
     var svc = svcs.filter(function(s){ return s.id === sid; })[0], profId = $("naProf").value, prof = profId ? findProfessional(profId) : null;
     var conv = convs.filter(function(c){ return c.id === $("naConv").value; })[0] || null, now = new Date().toISOString();
@@ -29833,7 +29838,7 @@ var HELP_TOPICS = [
       "Na tela, os tratamentos <b>Cancelados</b>, <b>Renegociados</b> e <b>Finalizados</b> ficam ocultos: marque <b>Inativos</b> ao lado do contador para mostrá-los. Ao pesquisar, o botão Inativos é ignorado e aparecem todos, mesmo os ocultos (vale também em Pacientes). A coluna Vencimento mostra \"Sem vencimento\" quando o tratamento não vence.",
       "Use também os filtros: status, Cancelados sem motivo, Vencendo, Vencidos, Abaixo do contratado e Pacientes ativos sem tratamento (pacientes inativos não entram no aviso nem no filtro).",
       "<b>Outras Opções ▾</b>: <b>Exportar Planilha</b> e <b>Importar Planilha</b> (veja o tópico Planilhas).",
-      "<b>+ Incluir Avaliação</b> (na barra da tela Tratamentos, ao lado de <b>+ Incluir Tratamento</b>; ou Nova Avaliação em Outras Opções ▾ da janela do paciente) lança uma avaliação num passo só: escolha o paciente, a avaliação (serviços com Tratamento ligado, avaliações primeiro), o profissional, a data e o nº de sessões (vem do Tipo de Tratamento: Avaliação 2, Avaliação Neuropsicológica 10). O convênio vem do cadastro do paciente e o <b>valor</b> já vem calculado pelo valor por sessão do serviço nesse convênio (Cadastros → Convênios) × as sessões; dá para alterar. Ao salvar, o sistema cria o tratamento do serviço já <b>Ativo</b>, com vencimento por sessões, e oferece <b>Registrar Venda</b> (pode clicar em “Agora Não”). Se o paciente já tinha outra avaliação ativa, ela passa para Finalizado."
+      "<b>+ Incluir Avaliação</b> (na barra da tela Tratamentos, ao lado de <b>+ Incluir Tratamento</b>; ou Nova Avaliação em Outras Opções ▾ da janela do paciente) lança uma avaliação num passo só (todos os campos são obrigatórios, menos Observações): escolha o paciente, a avaliação (serviços com Tratamento ligado, avaliações primeiro), o profissional, a data e o nº de sessões (vem do Tipo de Tratamento: Avaliação 2, Avaliação Neuropsicológica 10). O convênio vem do cadastro do paciente e o <b>valor</b> já vem calculado pelo valor por sessão do serviço nesse convênio (Cadastros → Convênios) × as sessões; dá para alterar. Ao salvar, o sistema cria o tratamento do serviço já <b>Ativo</b>, com vencimento por sessões, e oferece <b>Registrar Venda</b> (pode clicar em “Agora Não”). Se o paciente já tinha outra avaliação ativa, ela passa para Finalizado."
     ],
     rules: [
       "Cada paciente tem <b>só um tratamento Ativo</b>. Salvar outro como Ativo passa o anterior para Renegociado (o banco também confere).",

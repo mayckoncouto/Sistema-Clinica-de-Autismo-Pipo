@@ -45,6 +45,9 @@ const path = require('path');
   await page.fill('#naVal', '400,00');
   await page.fill('#naN', '4');
   check('valor digitado não é trocado ao mudar sessões?', /400,00/.test(await page.inputValue('#naVal')));
+  await page.click('#naSave'); await page.waitForTimeout(300);
+  check('sem profissional não salva?', !!(await page.$('#ovNovaAval')));
+  await page.evaluate(() => { const s = document.getElementById('naProf'); s.value = s.options[1].value; s.dispatchEvent(new Event('change')); });
   await page.click('#naSave'); await page.waitForTimeout(500);
   const t = JSON.parse(await ev('JSON.stringify(state.treatments[state.treatments.length - 1])'));
   check('cria um tratamento?', (await ev('state.treatments.length')) === before + 1);
@@ -54,6 +57,7 @@ const path = require('path');
 
   // Segunda avaliação: a anterior (serviço ativo) passa a Finalizado
   await ev('openNovaAvaliacao({patientId: "' + pid + '"})'); await page.waitForSelector('#ovNovaAval');
+  await page.evaluate(() => { const s = document.getElementById('naProf'); s.value = s.options[1].value; s.dispatchEvent(new Event('change')); });
   await page.click('#naSave'); await page.waitForSelector('#ovConfirm');
   await page.click('#cfOk'); await page.waitForTimeout(500);
   check('avaliação anterior vira Finalizado?', (await ev('state.treatments.filter(function(x){ return x.id === "' + t.id + '"; })[0].status')) === 'finalizado');
