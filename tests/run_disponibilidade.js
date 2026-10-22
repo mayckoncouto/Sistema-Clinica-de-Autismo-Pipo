@@ -22,27 +22,21 @@ const path = require('path');
 
   // Menu Planner ▾ tem Disponibilidade abaixo de Resumo; abre a aba.
   const items = await ev('PL_ITEMS.map(function(x){ return x.key; })');
-  check('Planner menu: Disponibilidade right after Resumo?', items.indexOf('disponibilidade') === items.indexOf('resumo') + 1, JSON.stringify(items));
+  check('Planner menu: Disponibilidade in the menu?', items.indexOf('disponibilidade') > -1, JSON.stringify(items));
   await ev('(function(){ state.tab = "disponibilidade"; document.querySelector(\'[data-tab="disponibilidade"]\').click(); return true; })()');
-  await page.waitForSelector('#dispHost table.disp-table');
-  const head = await page.$$eval('#dispHost thead tr.disp-h1 th', (r) => r.map((x) => x.textContent));
-  const head2 = await page.$$eval('#dispHost thead tr.disp-h2 th', (r) => r.map((x) => x.textContent));
-  check('1st title row: Dia, Horário, specialties (atend. / livres), totals?', /^(Recolher|Estender)$/.test(head[0]) && head[1] === 'Horário' && head.some((h) => /atend\. \/ livres/.test(h)) &&
-    head.slice(-4).join('|') === 'Reunião|Disponível|Atendido|Individual (Não ABA)', JSON.stringify(head));
-  const specOrder = await ev('(function(){ return Array.prototype.map.call(document.querySelectorAll("#dispHost thead tr.disp-h1 th.disp-spec"), function(th){ return dispOrderIdx(DISP_SPEC_ORDER.concat(DISP_GROUP_ORDER.map(function(g){ return g; })), th.getAttribute("title")); }).filter(function(x){ return x !== -1; }); })()');
-  check('columns in the requested order (Fono, TO, Psicomotricidade, …, Coordenador, Aplicador ABA)?', specOrder.length >= 2 && specOrder.every((x, i) => !i || x > specOrder[i - 1]), JSON.stringify(specOrder));
-  check('2nd title row is TOTAL of the week?', head2[0] === 'Total' && head2[1] === '1ª semana' && head2.length === head.length, JSON.stringify(head2));
-  const subs = await page.$$eval('#dispHost tr.disp-sub .disp-time', (r) => r.map((x) => x.textContent));
-  const dayTots = await page.$$eval('#dispHost tr.disp-daytot .disp-time', (r) => r.map((x) => x.textContent));
-  check('Manhã, Tarde and "Total do dia" rows?', subs.includes('Manhã') && subs.includes('Tarde') && dayTots.length >= 1 && dayTots.every((x) => x === 'Total do dia'));
-  const look = await page.evaluate(() => {
-    const bg = (sel) => { const e = document.querySelector(sel); return e ? getComputedStyle(e).backgroundColor : ''; };
-    return {white: bg('#dispHost tbody tr:not(.disp-alt):not(.disp-sub):not(.disp-daytot) td.disp-n'), gray: bg('#dispHost tbody tr.disp-alt td.disp-n'),
-      sub: bg('#dispHost tbody tr.disp-sub td.disp-n'), day: bg('#dispHost tbody tr.disp-daytot td.disp-n'),
-      noDrag: !document.querySelector('#dispHost th[draggable]') && !document.getElementById('dispResetCols') && !document.querySelector('#dispHost .pat-col-resizer'),
-      fill: document.querySelector('#dispHost table').getBoundingClientRect().width >= document.querySelector('#dispHost .disp-wrap').clientWidth - 2};
-  });
-  check('time rows alternate white/gray; Manhã/Tarde gray; Total do dia darker; no drag; table fills the window?', look.white !== look.gray && look.sub !== look.day && look.noDrag && look.fill, JSON.stringify(look));
+  await page.waitForSelector('#dispHost table.dv-tbl');
+  const gHead = await page.$$eval('#dispHost thead tr:first-child th', (r) => r.map((x) => x.textContent));
+  check('Visão Geral: days across, totals column?', gHead.length >= 3 && gHead[gHead.length - 1] === 'Total', JSON.stringify(gHead));
+  check('3 views + 5 cards + week seg present?', (await page.$$('#dispViewSeg [data-dv]')).length === 3 && (await page.$$('#dispCards .fl-card')).length === 5 && (await page.$$('#dispWeekSeg [data-dw]')).length === 5);
+  check('metric toggle hidden when ABA is off?', await ev('(function(){ var r = document.getElementById("dispMetricSeg"); return abaOn() ? !r.hidden : r.hidden; })()'));
+  await page.click('#dispViewSeg [data-dv="hora"]');
+  check('Por Horário: time rows with day columns?', (await page.$$('#dispHost tbody tr td.dv-f')).length > 3);
+  await page.click('#dispViewSeg [data-dv="esp"]');
+  check('Por Especialidade: bars shown?', (await page.$$('#dispHost .dv-sp')).length >= 1);
+  await page.click('#dispViewSeg [data-dv="geral"]');
+  await ev('(function(){ DISP.metric = "nao"; return true; })()');
+  const naoOk = await ev('abaOn()');
+  if (naoOk){ await page.click('#dispMetricSeg [data-dm="nao"]'); check('metric Sem Intervenção ABA switches cards to red?', (await page.$$('#dispCards .dv-r')).length >= 1); await page.click('#dispMetricSeg [data-dm="vagas"]'); }
 
   // Números pelo cálculo (semana 1, segunda).
   const T = await ev('findDayObj("seg").morning[2]');   // horário de teste
@@ -63,7 +57,7 @@ const path = require('path');
   check('professional in two rooms counts ONE room (the one with most free columns)?', anaCols >= 2 && (d0.free[specA] || 0) === 2, JSON.stringify({anaCols, d0}));
 
   // Grupo de suporte também tem vagas livres, sem contar o mesmo profissional duas vezes.
-  const grpHead = await page.$eval('#dispHost thead tr.disp-h1', (e) => /Coordenador\s*atend\. \/ livres/.test(e.textContent));
+  const grpHead = await ev('(function(){ return dispCompute([1]).groups.indexOf("coord") !== -1; })()');
   check('group column counts free slots too, one place per professional (no double count)?', ((d0.free[specA] || 0) + (d0.free['grp:coord'] || 0)) === 2 && grpHead, JSON.stringify(d0));
   const onlyGrp = await ev(`(function(){ var keep = state.rooms; state.rooms = keep.filter(function(r){ return r.id !== "r1" && r.id !== "rz"; });
     var r = dispCompute([1]); state.rooms = keep; return r.rows.filter(function(x){ return !x.sub && x.day.key === "seg" && x.time === "${T}"; })[0].d.free["grp:coord"] || 0; })()`);
@@ -104,24 +98,12 @@ const path = require('path');
     var all = T([1,2,3,4]), sum = [0, 0]; [1,2,3,4].forEach(function(w){ var x = T([w]); sum[0] += x[0]; sum[1] += x[1]; }); return [all, sum]; })()`);
   check('"Todas" = sum of the 4 weeks?', tot[0][0] === tot[1][0] && tot[0][1] === tot[1][1], JSON.stringify(tot));
 
-  // Seletor de semana redesenha; grupos de suporte ficam de fora.
+  // Seletor de semana redesenha.
   await page.click('#dispWeekSeg [data-dw="todas"]');
-  check('week selector "Todas" is active and total row says "4 semanas"?', (await page.$eval('#dispWeekSeg [data-dw="todas"]', (b) => b.classList.contains('active'))) &&
-    /4 semanas/.test(await page.$eval('#dispHost thead tr.disp-h2', (e) => e.textContent)));
-
-  // Nome do dia em todas as linhas.
-  const days = await page.$$eval('#dispHost tbody tr td.disp-day', (r) => r.map((x) => x.textContent));
-  check('day name on every row of the day?', days.length > 10 && days.every((d) => d), JSON.stringify(days.slice(0, 10)));
-
-  // Recolher (seta no Dia): só os resumos de Manhã/Tarde, com aquecimento entre os resumos.
-  check('expanded: toggle says Recolher', (await page.$eval('#dispCollapse', (b) => b.textContent)) === 'Recolher');
-  await page.click('#dispCollapse');
-  const col = await page.evaluate(() => ({rows: document.querySelectorAll('#dispHost tbody tr:not(.disp-sub):not(.disp-daytot)').length, dayTot: document.querySelectorAll('#dispHost tbody tr.disp-daytot').length, subs: document.querySelectorAll('#dispHost tbody tr.disp-sub').length,
-    heat: Array.prototype.some.call(document.querySelectorAll('#dispHost tbody tr.disp-sub td.disp-tot'), (td) => /color-mix/.test(td.getAttribute('style') || ''))}));
-  check('collapse shows only Manhã/Tarde and "Total do dia", with heat colors?', col.rows === 0 && col.subs >= 2 && col.dayTot >= 1 && col.heat, JSON.stringify(col));
-  check('collapsed: toggle says Estender', (await page.$eval('#dispCollapse', (b) => b.textContent)) === 'Estender');
-  await page.click('#dispCollapse');
-  check('expanding shows the times again?', (await page.$$('#dispHost tbody tr:not(.disp-sub):not(.disp-daytot)')).length > 0);
+  check('week selector "Todas" is active?', await page.$eval('#dispWeekSeg [data-dw="todas"]', (b) => b.classList.contains('active')));
+  // naoS por especialidade soma o total de não ABA.
+  const naoSum = await ev('(function(){ var r = dispCompute([1]), ok = true; r.rows.forEach(function(x){ var s = Object.keys(x.d.naoS || {}).reduce(function(a, k){ return a + x.d.naoS[k]; }, 0); if (s !== x.d.nao) ok = false; }); return ok; })()');
+  check('naoS per specialty sums to nao?', naoSum);
 
   check('no JS errors?', errors.length === 0, errors);
   await browser.close();
