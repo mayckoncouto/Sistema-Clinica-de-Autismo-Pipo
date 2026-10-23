@@ -2723,9 +2723,13 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
 .gc-rk .bar{display:block;height:10px;border-radius:5px;background:var(--surface-2);overflow:hidden}.gc-rk .bar i{display:block;height:100%;border-radius:5px}
 .gc-rk b{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .gc-rk:hover .l{color:var(--accent)}
-.gc-funnel div{display:flex;align-items:center;gap:10px;margin:8px 0;cursor:pointer}
-.gc-funnel .f1{height:34px;border-radius:6px;display:flex;align-items:center;padding:0 12px;color:#fff;font-weight:700;white-space:nowrap;flex:none}
+.gc-funnel .gc-fun-row{display:grid;grid-template-columns:118px 1fr 70px;align-items:center;gap:10px;margin:10px 0;cursor:pointer}
+.gc-funnel .gc-fun-lb{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gc-funnel .gc-fun-tr{height:22px;border-radius:6px;background:var(--surface-2);overflow:hidden;display:block}
+.gc-funnel .gc-fun-fill{display:block;height:100%;border-radius:6px}
+.gc-funnel .gc-fun-v{text-align:right;white-space:nowrap}.gc-funnel .gc-fun-v b{font-size:14px}
 .gc-funnel small{color:var(--muted)}
+.gc-funnel .gc-fun-row:hover .gc-fun-tr{box-shadow:0 0 0 1px var(--line)}
 .gc-alerts div{padding:8px 10px;border-radius:8px;margin:6px 0;font-size:12.5px;cursor:pointer}
 .gc-alerts .w{background:var(--warn-weak);color:var(--warn)}.gc-alerts .d{background:var(--danger-weak);color:var(--danger)}.gc-alerts .i{background:var(--accent-weak);color:var(--accent)}
 .gc-tbwrap{overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin-top:6px}
@@ -2756,7 +2760,8 @@ input:is([type=text],[type=email],[type=tel],[type=number],[type=password],[type
 .dem-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px;min-width:0}
 .dem-edit{margin-bottom:8px;flex:none}
 .dem-ch{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;align-items:baseline;margin-bottom:6px}
-.dem-ch > .gc-funper{flex:0 0 auto;width:96px;align-self:center}
+.dem-ch > .gc-funseg{flex:0 0 auto;align-self:center}
+.gc-funseg button{padding:4px 12px}
 .dem-leg{display:flex;gap:14px;color:var(--ink-2);font-size:12.5px;flex-wrap:wrap}
 .dem-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .dem-leg i.ln{height:3px;border-radius:2px;vertical-align:3px;width:16px}
@@ -28540,9 +28545,9 @@ function gcFunil(year, ym){
   var n = a.filter(function(p){ return nv[p] && nv[p] >= av[p]; });
   return {tri: Object.keys(tri), aval: a, novo: n};
 }
-document.addEventListener("change", function(e){
-  if (!e.target || e.target.id !== "gcFunPer") return;
-  GC.funPer = e.target.value === "ano" ? "ano" : "mes";
+document.addEventListener("click", function(e){
+  var b = e.target && e.target.closest && e.target.closest("[data-gcfun]"); if (!b) return;
+  GC.funPer = b.getAttribute("data-gcfun") === "ano" ? "ano" : "mes";
   try { localStorage.setItem("agendaPipo:gcFunPer", GC.funPer); } catch (x){}
   if (typeof gcRender === "function") gcRender();
 });
@@ -28768,11 +28773,16 @@ function gcRender(){
     '<div class="dem-card"><div class="dem-ch"><b>' + esc(wfTitle) + '</b></div><div class="dem-note">Onde o valor dos contratos ativos mudou.</div>' + wfh + '</div>' +
     '<div class="dem-card"><div class="dem-ch"><b>Contratos por Convênio</b></div><div class="dem-note">' + esc(GC_MESES[ci]) + '; clicar abre os pacientes.</div>' + gcRank(rkConv) + '</div></div>';
   var fr = [["Triagens", fun.tri.length, "--viz-4", "f1"], ["Avaliações", fun.aval.length, "--viz-1", "f2"], ["Contratos Novos", fun.novo.length, "--viz-6", "f3"]], f0 = fr[0][1] || 1;
-  var funH = '<div class="gc-funnel">' + fr.map(function(q, i){ return '<div' + gcDrillAttr(q[3], GC.year, q[0] + " (funil)") + '><span class="f1" style="width:' + Math.max(8, q[1] / f0 * 65) + '%;background:var(' + q[2] + ')">' + q[1] + '</span><small>' + esc(q[0]) + (i && fr[0][1] ? " · " + Math.round(q[1] / fr[0][1] * 100) + "% das triagens" : "") + '</small></div>'; }).join("") + '</div>';
+  var funH = '<div class="gc-funnel">' + fr.map(function(q, i){
+    var pct = fr[0][1] ? Math.round(q[1] / fr[0][1] * 100) : 0;
+    return '<div class="gc-fun-row"' + gcDrillAttr(q[3], GC.year, q[0] + " (funil)") + '><span class="gc-fun-lb">' + esc(q[0]) + '</span>' +
+      '<span class="gc-fun-tr"><span class="gc-fun-fill" style="width:' + (q[1] ? Math.max(3, q[1] / f0 * 100) : 0) + '%;background:var(' + q[2] + ')"></span></span>' +
+      '<span class="gc-fun-v"><b>' + q[1] + '</b>' + (i ? '<small> · ' + pct + '%</small>' : '') + '</span></div>';
+  }).join("") + '</div>';
   var mot = {}, totM = 0; gcContratos().forEach(function(t){ if (t.status === "cancelado" && (gcCancelDate(t) || "").slice(0, 4) === GC.year){ var k = cancelReasonName(t) || (t.motivoPendente ? "Sem motivo" : "Sem motivo"); mot[k] = (mot[k] || 0) + 1; totM++; } });
   var rkMot = Object.keys(mot).map(function(k){ return {label: k, sub: mot[k] + (mot[k] === 1 ? " cancelamento" : " cancelamentos"), v: mot[k], txt: Math.round(mot[k] / totM * 100) + "%", key: "motivo", ym: GC.year + "|" + k, color: "var(--danger)"}; }).sort(function(a, b){ return b.v - a.v; }).slice(0, 6);
   var al = gcAlerts(cur, GC.ym), alH = '<div class="gc-alerts">' + al.map(function(a){ var p = a[3].split("|"); return '<div class="' + a[0] + '"' + (a[3] ? gcDrillAttr(p[0], p[1] || GC.ym, a[2].slice(0, 60)) : "") + '>' + a[1] + " " + esc(a[2]) + '</div>'; }).join("") + '</div>';
-  var g4 = '<div class="gc-g3"><div class="dem-card"><div class="dem-ch"><b>Funil: Triagem, Avaliação e Contrato</b><select id="gcFunPer" class="gc-funper" aria-label="Trocar Período"><option value="mes"' + (GC.funPer !== "ano" ? " selected" : "") + '>Mês</option><option value="ano"' + (GC.funPer === "ano" ? " selected" : "") + '>Ano</option></select></div><div class="dem-note">' + (GC.funPer === "ano" ? "Triagens de " + GC.year : "Triagens de " + gcLabel(GC.ym)) + ', pelo mesmo paciente; cada etapa só conta depois da anterior. O % é sobre as triagens.</div>' + funH + '</div>' +
+  var g4 = '<div class="gc-g3"><div class="dem-card"><div class="dem-ch"><b>Funil: Triagem, Avaliação e Contrato</b><div class="seg gc-funseg" id="gcFunPer" role="group" aria-label="Trocar Período"><button type="button" data-gcfun="mes"' + (GC.funPer !== "ano" ? ' class="active"' : '') + '>Mês</button><button type="button" data-gcfun="ano"' + (GC.funPer === "ano" ? ' class="active"' : '') + '>Ano</button></div></div><div class="dem-note">' + (GC.funPer === "ano" ? "Triagens de " + GC.year : "Triagens de " + gcLabel(GC.ym)) + '; cada etapa só conta depois da anterior, pelo mesmo paciente. % sobre as triagens.</div>' + funH + '</div>' +
     '<div class="dem-card"><div class="dem-ch"><b>Motivos de Cancelamento</b></div><div class="dem-note">Cancelamentos de ' + GC.year + ' por motivo.</div>' + gcRank(rkMot) + '</div>' +
     '<div class="dem-card"><div class="dem-ch"><b>Alertas</b></div><div class="dem-note">O que merece atenção agora.</div>' + alH + '</div></div>';
   var pr = GC.per, agg = function(r){ var l = cur.slice(r[0], r[1] + 1).filter(function(m){ return m; }); var s = function(k){ return l.reduce(function(a, m){ return a + (m[k] || 0); }, 0); }; return {n: l.length, ativos: l.length ? s("ativosV") / l.length : 0, novos: s("novos"), canc: s("canc"), aval: s("aval"), tri: s("tri")}; };
