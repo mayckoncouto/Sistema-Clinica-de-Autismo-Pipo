@@ -148,7 +148,7 @@ const path = require('path');
   console.log('treatment card shows only the days/periods the patient comes?', ent === 'Seg 07:20–12:00 · Qua 13:30–17:30', ent);
   await page.click('#patListHost tbody tr:has-text("Ana Azul")'); await page.waitForTimeout(300);
   await page.click('#pmTabs [data-pmt="trat"]'); await page.waitForTimeout(400);
-  console.log('Tratamento tab opens the whole treatment form inside the patient window?', await page.isVisible('#ovPat #ovTreat #trSave') && !(await page.isVisible('#ovPat #pSave')));
+  console.log('Tratamento tab opens the whole treatment form inside the patient window?', await page.isVisible('#ovPat .modal-foot #trSave') && !(await page.isVisible('#ovPat #pSave')));
   await page.click('#pmTabs [data-pmt="cad"]');
   await setv('#pf-entrada', '2026-03-01'); await page.click('#pSave'); await page.waitForTimeout(200);
   console.log('entry date after the first treatment start is refused?', await page.isVisible('#ovPat'));

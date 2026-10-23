@@ -1383,6 +1383,10 @@ button.tr-sec-toggle[aria-expanded="false"] .tr-sec-arrow{transform:rotate(-90de
 .pm-tabs{padding:10px 20px 0;border-bottom:1px solid var(--line)}
 .pm-tabs .seg{margin-bottom:10px;max-width:100%;overflow-x:auto}
 #ovPat.pm-t-other #pSave,#ovPat.pm-t-other #pDelete{display:none}
+#ovPat .pm-trslot{display:none;gap:8px;align-items:center}
+#ovPat.pm-t-trat .pm-trslot{display:flex}
+#ovPat .pm-trslot:empty{display:none}
+#ovPat.pm-t-trat.pm-tr-new #pCancel{display:none}
 .pt-click{cursor:pointer}
 .pm-pane[hidden]{display:none}
 .pt-treat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
@@ -15234,8 +15238,26 @@ function ptAnexosTab(pane, v){
   });
 }
 // Aba Tratamento: o formulário inteiro do tratamento ativo, dentro da própria aba. Sem tratamento, só o botão + Incluir.
+// Botões do tratamento embutido (Excluir, Renegociar, Salvar…) vão para o rodapé da janela do paciente, ao lado do Cancelar.
+function trEmbedFoot(pane){
+  var ov = pane && pane.closest("#ovPat"); if (!ov) return;
+  var L = ov.querySelector("#pmTrL"), R = ov.querySelector("#pmTrR"); if (!L || !R) return;
+  L.innerHTML = ""; R.innerHTML = ""; ov.classList.remove("pm-tr-new");
+  var foot = pane.querySelector("#ovTreat .modal-foot"); if (!foot) return;
+  var right = false;
+  Array.prototype.slice.call(foot.children).forEach(function(el){
+    if (el.classList.contains("spacer")){ right = true; return; }
+    if (el.tagName === "SPAN" && !el.id && !el.textContent.trim()) return;
+    // Cancelar do tratamento só no tratamento novo (volta ao + Incluir); no resto vale o Cancelar da janela do paciente.
+    if (el.id === "trCancel" && !pane.querySelector(".tr-embed-new")) return;
+    (right ? R : L).appendChild(el);
+  });
+  if (R.querySelector("#trCancel")) ov.classList.add("pm-tr-new");
+  foot.remove();
+}
 function ptTratTab(pane, v){
   var tr = activeTreatment(v.id);
+  trEmbedFoot(pane);
   function again(){ ptTratTab(pane, v); }
   pane.classList.remove("pt-list");
   if (!tr){
@@ -15251,6 +15273,7 @@ function patientTabsWire(overlay, tabs, v, close){
   var loaded = {};
   function show(id){
     overlay.classList.toggle("pm-t-other", id !== "cad");
+    overlay.classList.toggle("pm-t-trat", id === "trat");
     [].forEach.call(overlay.querySelectorAll("#pmTabs button"), function(b){ b.classList.toggle("active", b.getAttribute("data-pmt") === id); });
     [].forEach.call(overlay.querySelectorAll(".pm-pane"), function(p){ p.hidden = p.getAttribute("data-pmp") !== id; });
     var tab = tabs.filter(function(t){ return t.id === id; })[0];
@@ -15378,8 +15401,10 @@ function openPatientModal(p, opts){
       '</div>' +
       '<div class="modal-foot">' +
         (isNew ? '<span></span>' : '<button class="btn danger" id="pDelete">Excluir</button>') +
+        '<span class="pm-trslot" id="pmTrL"></span>' +
         '<div class="spacer"></div>' +
         '<button class="btn ghost" id="pCancel">Cancelar</button>' +
+        '<span class="pm-trslot" id="pmTrR"></span>' +
         '<button class="btn primary" id="pSave">Salvar</button>' +
       '</div>' +
     '</div></div>';
@@ -27543,6 +27568,7 @@ function openTreatmentModal(t, opts){
     '</div></div>';
   ed.wire("ovTreat");
   var overlay = document.getElementById("ovTreat");
+  if (opts.embed) setTimeout(function(){ trEmbedFoot(opts.embed); }, 0);
   function close(){ host.innerHTML = ""; if (opts.onClose) opts.onClose(); }
   overlay.addEventListener("mousedown", function(e){ if (e.target === overlay && !opts.embed) close(); });
   document.getElementById("trClose").addEventListener("click", close);
