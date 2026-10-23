@@ -1336,6 +1336,11 @@ button.tr-sec-toggle[aria-expanded="false"] .tr-sec-arrow{transform:rotate(-90de
 .tr-month-nav .btn{padding:4px 10px}
 .tr-month-nav b{min-width:120px;text-align:center;font-size:13.5px}
 .tr-month td.tr-zero{color:#3d7a39;font-weight:700}
+.pm-tabs{padding:10px 20px 0;border-bottom:1px solid var(--line)}
+.pm-tabs .seg{margin-bottom:10px;max-width:100%;overflow-x:auto}
+#ovPat.pm-t-other #pSave,#ovPat.pm-t-other #pDelete{display:none}
+.pt-click{cursor:pointer}
+.pm-pane[hidden]{display:none}
 .pt-treat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
 .pt-treat-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .pt-treat-txt{font-size:12.5px;color:var(--ink-2);line-height:1.5}
@@ -14938,6 +14943,92 @@ function pmItemDialog(o){
   });
   setTimeout(function(){ var f = ov.querySelector(".modal-body input, .modal-body select"); if (f) f.focus(); }, 30);
 }
+// ===== Janela do paciente: abas (Cadastro, Tratamento, Agenda, Prontuário, Anamneses, Anexos) =====
+function patientTabsList(v, trBox){
+  var t = [{id: "cad", label: "Cadastro"}];
+  if (patSecCan("tratamento")) t.push({id: "trat", label: "Tratamento", html: trBox});
+  if (can("agenda", "view")) t.push({id: "agenda", label: "Agenda", lazy: true});
+  if (prCan("view")) t.push({id: "pront", label: "Prontuário", lazy: true});
+  if ((state.anamTypes || []).some(function(x){ return anCan(x.id, "view"); })) t.push({id: "anam", label: "Anamneses", lazy: true});
+  t.push({id: "anexos", label: "Anexos", lazy: true});
+  return t;
+}
+function patientTabsBarHtml(tabs){
+  return '<div class="pm-tabs"><div class="seg" id="pmTabs">' + tabs.map(function(t, i){
+    return '<button type="button" data-pmt="' + t.id + '"' + (i === 0 ? ' class="active"' : '') + ' data-ro-ok>' + t.label + '</button>';
+  }).join("") + '</div></div>';
+}
+function ptCardsHtml(items, empty){
+  if (!items.length) return '<div class="hours-empty">' + esc(empty) + '</div>';
+  return '<div class="room-list tl-list">' + items.map(function(it, i){
+    return '<div class="room-row tl-row pm-card pt-click" data-pti="' + i + '"><div class="room-info"><div class="rn">' + it.t + '</div><div class="rs">' + it.s + '</div></div>' +
+      '<div class="room-actions"><button type="button" class="btn ghost" data-ro-ok>' + esc(it.btn || "Abrir") + '</button></div></div>';
+  }).join("") + '</div>';
+}
+// Cada aba carrega só quando é aberta pela primeira vez. Devolve {items, empty} ou Promise disso.
+function patientTabData(kind, v, close){
+  var c = agdClient();
+  if (kind === "agenda"){
+    var pick = function(rows){
+      rows = rows.filter(function(r){ return r.patient_id === v.id || (!r.patient_id && !r.blocked && normText(r.patient || "") === normText(v.nome)); });
+      rows.sort(function(a, b){ return (b.date + " " + (b.time || "")) < (a.date + " " + (a.time || "")) ? -1 : 1; });
+      return {empty: "Nenhum agendamento na Agenda para este paciente.", items: rows.slice(0, 80).map(function(r){
+        var st = r.status ? statusById(r.status) : null, pr = findProfessional(r.professional_id);
+        return {t: esc(agdBrDate(r.date) + " · " + (r.time || "")), s: esc((pr ? profNome(pr) : "—") + " · " + bookingServiceName(r) + (st ? " · " + st.name : "")), go: function(){ agdOpenDetails(r); }};
+      })};
+    };
+    if (!c) return pick(Object.keys(AD.rows || {}).map(function(k){ return AD.rows[k]; }));
+    return c.from("appointments").select("*").eq("patient_id", v.id).order("date", {ascending: false}).limit(80).then(function(r){ return pick(r.data || []); });
+  }
+  if (kind === "pront"){
+    return (c ? c.from("clinical_records").select("id,appointment_date,appointment_time,author_name,created_at").eq("patient_id", v.id).limit(80) : Promise.resolve({data: []})).then(function(r){
+      var rows = (r.data || []).sort(function(a, b){ return String(b.appointment_date || b.created_at) < String(a.appointment_date || a.created_at) ? -1 : 1; });
+      return {empty: "Nenhuma evolução registrada para este paciente.", items: rows.map(function(x){
+        return {t: esc(agdBrDate(x.appointment_date || String(x.created_at).slice(0, 10)) + (x.appointment_time ? " · " + x.appointment_time : "")), s: esc(x.author_name || "—"), btn: "Ver no Prontuário",
+          go: function(){ close(); var b = document.querySelector('#mainTabs [data-tab="prontuario"]'); if (b) b.click(); prOpenPatient(v.id); }};
+      })};
+    });
+  }
+  if (kind === "anam"){
+    return anLoad().then(function(rows){
+      rows = rows.filter(function(r){ return r.patient === v.id && anCan(r.type, "view"); }).sort(function(a, b){ return String(b.updatedAt || "") < String(a.updatedAt || "") ? -1 : 1; });
+      return {empty: "Nenhuma anamnese para este paciente.", items: rows.map(function(r){
+        return {t: esc(r.typeName || "Anamnese") + ' ' + anStatusChip(r), s: esc("Versão " + (r.versao || 1) + (r.doneAt ? " · concluída em " + agdBrDate(String(r.doneAt).slice(0, 10)) : "") + (r.by ? " · " + r.by : "")), go: function(){ openAnamModal(r.id); }};
+      })};
+    });
+  }
+  // anexos (arquivos enviados pelas tarefas do CRM)
+  var rowsP = !c ? Promise.resolve((CRM.mem.att || []).filter(function(a){ return a.patient_id === v.id && (a.kind !== "documentos" || healthCanSee()); }))
+    : c.from("task_attachments").select("*").eq("patient_id", v.id).order("created_at", {ascending: false}).limit(200).then(function(r){ return r.data || []; });
+  return rowsP.then(function(rows){
+    return {empty: "Nenhum arquivo anexado. Os anexos entram pelas tarefas do CRM deste paciente.", items: rows.map(function(a){
+      return {t: esc(a.name), s: esc((a.kind === "documentos" ? "Documentos" : "Relatórios") + (a.created_by_name ? " · " + a.created_by_name : "") + (a.created_at ? " · " + agdBrDate(String(a.created_at).slice(0, 10)) : "")), go: function(){ crmAttOpen(a); }};
+    })};
+  });
+}
+function patientTabsWire(overlay, tabs, v, close){
+  var loaded = {};
+  function show(id){
+    overlay.classList.toggle("pm-t-other", id !== "cad");
+    [].forEach.call(overlay.querySelectorAll("#pmTabs button"), function(b){ b.classList.toggle("active", b.getAttribute("data-pmt") === id); });
+    [].forEach.call(overlay.querySelectorAll(".pm-pane"), function(p){ p.hidden = p.getAttribute("data-pmp") !== id; });
+    var tab = tabs.filter(function(t){ return t.id === id; })[0];
+    if (tab && tab.lazy && !loaded[id]){
+      loaded[id] = true;
+      var pane = overlay.querySelector('.pm-pane[data-pmp="' + id + '"]');
+      pane.innerHTML = '<div class="hours-empty">Carregando…</div>';
+      Promise.resolve(patientTabData(id, v, close)).then(function(d){
+        pane.innerHTML = ptCardsHtml(d.items, d.empty);
+        [].forEach.call(pane.querySelectorAll("[data-pti]"), function(el){
+          el.addEventListener("click", function(){ var it = d.items[+el.getAttribute("data-pti")]; if (it && it.go) it.go(); });
+        });
+      }, function(e){ loaded[id] = false; pane.innerHTML = '<div class="hours-empty">' + esc(netErrText((e && e.message) || "Não foi possível carregar.") || "Não foi possível carregar.") + '</div>'; });
+    }
+    var body = overlay.querySelector(".modal-body"); if (body) body.scrollTop = 0;
+  }
+  [].forEach.call(overlay.querySelectorAll("#pmTabs button"), function(b){ b.addEventListener("click", function(){ show(b.getAttribute("data-pmt")); }); });
+  overlay.__showTab = show;
+}
 function openPatientModal(p, opts){
   edKey(p && p.id ? "paciente:" + p.id : null);
   opts = opts || {};
@@ -15037,11 +15128,12 @@ function openPatientModal(p, opts){
     }
     return '<section class="pm-sec" data-pmsec="' + sec.id + '">' + secHead(sec) + html + '</section>';
   }
-  // Tratamento: logo depois de Convênio e Encaminhamento, antes de Saúde (só com "ver" em Pacientes – Tratamento).
-  var treatSecHtml = !patSecCan("tratamento") ? "" :
-    '<section class="pm-sec" data-pmsec="tratamento"><div class="pm-sec-head"><span class="tr-sec tr-sec-in">Tratamento</span></div>' + trBox +
-    (isNew && trCanCreate ? '<div class="pt-treat-txt">Depois de salvar, abre o cadastro do tratamento (convênio, sessões/mês, Intervenção ABA, especialidades e horários).</div>' : '') + '</section>';
+  // Tratamento fica na própria aba (patientTabsHtml); só o paciente novo mostra o aviso no cadastro.
+  var treatSecHtml = (isNew && patSecCan("tratamento") && trCanCreate) ?
+    '<section class="pm-sec" data-pmsec="tratamento"><div class="pm-sec-head"><span class="tr-sec tr-sec-in">Tratamento</span></div>' +
+    '<div class="pt-treat-txt">Depois de salvar, abre o cadastro do tratamento (convênio, sessões/mês, Intervenção ABA, especialidades e horários).</div></section>' : '';
   var secs = PAT_SECTIONS.map(function(sec){ return (sec.id === "saude" ? treatSecHtml : "") + secOne(sec); }).join("");
+  var ptTabs = isNew ? [] : patientTabsList(v, trBox);
 
   host.innerHTML =
     '<div class="overlay" id="ovPat"><div class="modal wide pm-modal">' +
@@ -15049,7 +15141,8 @@ function openPatientModal(p, opts){
         (!isNew ? mmHtml("pMoreBtn", [!opts.intake && intakeCan() ? {id: "pAskUpd", label: "Pedir Atualização"} : null, naCan() ? {id: "pNovaAval", label: "Nova Avaliação"} : null, (haCan("planner") || haCan("agenda")) ? {id: "pHist", label: "Histórico de Alterações"} : null, mmTaskItem()]) : "") +
         (!isNew && !opts.intake && intakePendingFor(v.id) ? '<button type="button" class="btn primary" id="pReview" data-ro-ok>Revisar Cadastro</button>' : '') +
         '<button class="modal-close" id="closePat" aria-label="Fechar">✕</button></div></div>' +
-      '<div class="modal-body">' + secs +
+      (ptTabs.length > 1 ? patientTabsBarHtml(ptTabs) : '') +
+      '<div class="modal-body">' + (ptTabs.length > 1 ? '<div class="pm-pane" data-pmp="cad">' + secs + '</div>' + ptTabs.filter(function(t){ return t.id !== "cad"; }).map(function(t){ return '<div class="pm-pane" data-pmp="' + t.id + '" hidden>' + (t.html || '') + '</div>'; }).join('') : secs) +
       '</div>' +
       '<div class="modal-foot">' +
         (isNew ? '<span></span>' : '<button class="btn danger" id="pDelete">Excluir</button>') +
@@ -15390,6 +15483,7 @@ function openPatientModal(p, opts){
   if (ot) deepClick(ot, function(){ var tt = activeTreatment(v.id) || tr; return {a: "tratamento", id: tt && tt.id}; }, function(){ openTreatmentModal(activeTreatment(v.id) || tr, {stack: true}); });
   var nt = $("pNewTreat");
   if (nt) nt.addEventListener("click", function(){ openTreatmentModal(null, {patientId: v.id, stack: true}); });
+  if (ptTabs.length > 1) patientTabsWire(overlay, ptTabs, v, close);
 
   // Idade: automática com a data de nascimento; sem ela, campo livre (cadastros antigos).
   var nascInput = $("pNasc");
@@ -30073,6 +30167,7 @@ var HELP_TOPICS = [
       "<b>Bloqueio de Agendamento</b>: marque <b>Bloqueado</b> e escolha o <b>Motivo</b> (cadastro de Motivos de Bloqueio, com <b>+ Incluir</b> no fim da lista). Paciente bloqueado não pode ser agendado na Agenda (a regra <b>Paciente Bloqueado</b> fica em Acesso → Sistema) nem enviado do Planner para a Agenda. No Planner ele continua podendo ser agendado, movido e alterado; só não entra no Horário Livre nem no Sugerir Agendamento. Os atendimentos que ele já tem continuam, com a tarja <b>Bloqueado</b>; ao bloquear, o sistema oferece remover os da Agenda a partir de uma data. Todos os usuários veem o bloqueio e o motivo. Desmarcar libera o paciente.",
       "A data de entrada começa com a data do cadastro e pode ser alterada.",
       "O grupo <b>Saúde</b> (médico, CID, data do diagnóstico, nível de suporte, comunicação, alergias, medicações, restrições e encaminhamento) só aparece para quem tem a permissão <b>Pacientes – Saúde</b>: com \"ver\" os campos aparecem travados; com \"editar\" dá para alterar. Sem a permissão, esses dados também não aparecem nos Detalhes do Agendamento, na ficha impressa nem no quadro clínico do Plano Terapêutico.",
+      "Em paciente já cadastrado, a janela tem abas no topo: <b>Cadastro</b> (os grupos acima), <b>Tratamento</b> (resumo do tratamento ativo, com <b>Abrir Tratamento</b> ou <b>+ Incluir</b>), <b>Agenda</b> (agendamentos do paciente; tocar abre os Detalhes do Agendamento), <b>Prontuário</b> (evoluções; <b>Ver no Prontuário</b> abre a tela do Prontuário), <b>Anamneses</b> (tocar abre a anamnese) e <b>Anexos</b> (arquivos anexados pelas tarefas do CRM; tocar abre o arquivo). Cada aba só aparece para quem tem permissão de ver a tela correspondente, e só <b>Cadastro</b> tem Salvar e Excluir.",
       "Salve. Paciente novo: em seguida o sistema abre o tratamento dele. No resumo do tratamento aparece o horário de atendimento, só com os dias e períodos em que o paciente vem.",
       "A lista mostra nome, idade, o primeiro telefone e o primeiro e-mail, escola, médico, a situação do paciente (Ativo ou Inativo) e a do tratamento. Ao lado da busca, escolha onde procurar: <b>Paciente</b>, <b>Mãe</b>, <b>Pai</b> ou <b>Responsável Financeiro</b> — pelo nome (sem acento/maiúscula) ou pelo CPF.",
       "<b>Outras Opções ▾</b>: <b>Campos Obrigatórios</b>, <b>Imprimir Ficha Cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica), <b>Mesclar Cadastros</b> (só Administrador) e <b>Exportar Planilha</b> / <b>Importar Planilha</b> (veja o tópico Planilhas)."

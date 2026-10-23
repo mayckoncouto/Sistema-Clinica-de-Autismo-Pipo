@@ -30,7 +30,7 @@ const path = require('path');
   // Convênio, plano, pacote, ABA e especialidades ficam no Tratamento (desde 2026-10-03):
   // paciente sem tratamento → "+ Novo Tratamento", que já vem com os dados antigos dele.
   console.log('patient modal no longer has the treatment fields?', (await page.$('#pAba')) === null);
-  await page.click('#pNewTreat');
+  await page.click('#pmTabs [data-pmt="trat"]'); await page.click('#pNewTreat');
   await page.waitForSelector('#ovTreat');
   console.log('label "Sessão/Mês"?', (await page.locator('label[for="pPac"]').innerText()) === 'Sessão/Mês');
   console.log('treatment window has the general ABA checkbox?', (await page.$('#pAba')) !== null);
@@ -49,7 +49,7 @@ const path = require('path');
   const rowAna = page.locator('#patListHost .pat-table tbody tr', { hasText: 'Ana Azul' });
   await rowAna.click();
   await page.waitForSelector('#ovPat');
-  await page.click('#pNewTreat');
+  await page.click('#pmTabs [data-pmt="trat"]'); await page.click('#pNewTreat');
   await page.waitForSelector('#ovTreat');
   const convValAna = await page.locator('#pConv').inputValue();
   console.log('unresolved legacy convenio text preserved verbatim?', convValAna === 'Convênio Antigo');
