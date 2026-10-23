@@ -59,7 +59,7 @@ const fs = require('fs');
   check('list shows Concluída and the validity "Até"?', await page.$eval('#reg-anamneses-host tbody tr:first-child', (r) => /Concluída/.test(r.textContent) && /Até/.test(r.textContent)));
   // concluída é só leitura
   await page.click('#reg-anamneses-host tbody tr'); await page.waitForSelector('#ovAnam');
-  check('concluded is read-only (no save buttons, fields disabled)?', !(await page.$('#amDone')) && !(await page.$('#amDraft')) && await page.$eval('#anq-q1', (e) => e.disabled));
+  check('concluded is read-only (no save buttons, no input fields, shows the answers as a document)?', !(await page.$('#amDone')) && !(await page.$('#amDraft')) && !(await page.$('#ovAnam .an-view input, #ovAnam .an-view select, #ovAnam .an-view textarea')) && /Concluída/.test(await page.textContent('#ovAnam .an-vmeta')) && !!(await page.$('#ovAnam .an-va .an-vv')));
   check('concluded offers Reavaliar and Imprimir?', !!(await page.$('#amRe')) && !!(await page.$('#amPrint')));
   // reavaliar
   await page.click('#amRe'); await page.waitForSelector('#ovAnam .modal-sub');

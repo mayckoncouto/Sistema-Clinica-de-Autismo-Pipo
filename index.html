@@ -3239,6 +3239,25 @@ table.pat-table.gm-tbl{width:100%;table-layout:fixed}.gm-tbl td,.gm-tbl th{paddi
   .pm-trmenu[hidden]{display:none}
   .pm-trmenu .btn{width:100%;justify-content:flex-start;text-align:left}
 }
+
+/* Anamnese preenchida (leitura): documento com pergunta pequena e resposta embaixo */
+.an-vmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--muted)}
+.an-view .an-vsec{margin-top:18px}
+.an-view .an-vsec:first-child{margin-top:0}
+.an-va{padding:9px 0;border-bottom:1px solid var(--line)}
+.an-vq{font-size:12px;font-weight:600;color:var(--muted)}
+.an-vv{font-size:14px;color:var(--ink);margin-top:2px;overflow-wrap:anywhere}
+.an-vv.empty{color:var(--muted);font-style:italic;font-size:13px}
+.an-vsign{display:block;max-width:260px;height:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.an-vnote{margin:8px 0;font-style:italic}
+.an-vhr{border:0;border-top:1px solid var(--line);margin:14px 0}
+.an-vcolt{margin:12px 0 2px}
+@media (max-width:760px){
+  #ovAnam .modal-foot{flex-wrap:wrap}
+  #ovAnam .modal-foot .btn{flex:1 1 40%}
+  #ovAnam .modal-foot .spacer{display:none}
+  #ovAnam #amCancel{order:9;flex-basis:100%}
+}
 </style>
 <!-- APP-HEAD:END -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -31007,7 +31026,7 @@ var HELP_TOPICS = [
       "<b>+ Incluir</b>: escolha o <b>Modelo</b> e o <b>Paciente</b> e clique em <b>Iniciar</b>. As perguntas ligadas ao cadastro (nome, nascimento, escola, diagnóstico, alergias…) já vêm preenchidas.",
       "Responda e use <b>Salvar Rascunho</b> para continuar depois, ou <b>Concluir</b> (as perguntas obrigatórias precisam estar respondidas). Perguntas com condição só aparecem quando a resposta anterior pede.",
       "Se você mudou, na anamnese, uma resposta de saúde que está diferente do cadastro (diagnóstico, nível de suporte, comunicação, alergias, medicações, restrições), o sistema pergunta se atualiza o cadastro do paciente.",
-      "Anamnese concluída fica travada. <b>Reavaliar</b> cria a próxima versão a partir da anterior, já com as respostas dela, usando a versão atual do modelo. <b>Reabrir</b> (só Administrador) devolve a concluída para rascunho.",
+      "Anamnese concluída fica travada e abre em formato de leitura: cada pergunta aparece pequena, com a resposta embaixo (as não respondidas ficam em cinza), os títulos das seções numerados e a assinatura como imagem, sem campos de edição; no alto aparecem a situação, a data e quem concluiu. <b>Reavaliar</b> cria a próxima versão a partir da anterior, já com as respostas dela, usando a versão atual do modelo. <b>Reabrir</b> (só Administrador) devolve a concluída para rascunho.",
       "<b>Outras Opções → Enviar Link de Anamnese</b>: escolha o modelo e o paciente e o link já é gerado (se o paciente tem um rascunho desse modelo, o link vai para ele; senão o rascunho é criado). O link é curto (vale 7 dias e uma vez só) para copiar, mandar por WhatsApp ou e-mail. A família responde pelo celular, sem login; as respostas entram no rascunho com a etiqueta <b>Respondida pela Família</b>. Revise, ajuste o que precisar e <b>Concluir</b>.",
       "<b>Imprimir / PDF</b> gera o documento com a logo da clínica. <b>Outras Opções ▾</b> abre os <b>Modelos</b> e atualiza a lista."],
     rules: ["Cada modelo de anamnese tem a sua permissão (ver, incluir, editar, excluir) em Níveis de Permissão, na linha <b>Anamnese – nome do modelo</b>; a tela em si usa a permissão <b>Anamneses</b>.", "A anamnese guarda uma cópia das perguntas do modelo: mudar o modelo depois não altera as já criadas.", "Quando o modelo tem <b>Validade</b>, a mais recente concluída de cada paciente aparece como em dia, perto de vencer (30 dias) ou vencida.", "O link da família não mostra as perguntas do tipo Arquivo (esses anexos são feitos na clínica) e não conclui a anamnese: quem revisa é a equipe.", "Com a automação <b>Reavaliação de Anamnese Vencendo</b> ligada (CRM ▾ Automações), a tarefa de reavaliar é criada quando a validade do tipo está perto de vencer.", "Anamnese concluída só é excluída pelo Administrador. Modelo com anamneses preenchidas não é excluído: é <b>Inativado</b>.", "Respostas do tipo Arquivo ainda não são guardadas."],
@@ -36868,6 +36887,29 @@ function anAnswerText(q, v){
   }
   return String(v);
 }
+// Anamnese concluída/travada: leitura em formato de documento (pergunta pequena em cima, resposta embaixo), sem campos de edição.
+function anamViewHtml(qs, ans){
+  ans = ans || {};
+  var byId = anamById(qs), secN = anamSecNums(qs), blocks = anamBlocksOf(qs);
+  function one(q){
+    if (anamIsQ(q) && !anamVisible(q, ans, byId)) return "";
+    switch (q.tipo){
+      case "secao": return '<div class="tr-sec an-vsec">' + anamEsc(anamSecTitle(q, secN)) + '</div>';
+      case "bloco": return '<div class="pat-count an-vnote">' + anamEsc(q.titulo) + '</div>';
+      case "separador": return '<hr class="an-vhr">';
+      case "pagina": case "arquivo": return "";
+      case "assinatura": return '<div class="an-va"><div class="an-vq">' + anamEsc(q.titulo) + '</div>' + (ans[q.id] ? '<img class="an-vsign" src="' + anamEsc(ans[q.id]) + '" alt="Assinatura">' : '<div class="an-vv empty">Não respondida</div>') + '</div>';
+    }
+    var t = anAnswerText(q, ans[q.id]);
+    return '<div class="an-va"><div class="an-vq">' + anamEsc(q.titulo) + '</div><div class="an-vv' + (t ? '' : ' empty') + '">' + (t ? anamEsc(t).replace(/\n/g, "<br>") : "Não respondida") + '</div></div>';
+  }
+  return '<div class="an-view">' + (qs || []).filter(function(q){ return !anamIsKid(q, blocks); }).map(function(q){
+    if (q.tipo !== "colunas") return one(q);
+    var n = Math.max(2, Math.min(4, +q.n || 2)), cols = "";
+    for (var c = 0; c < n; c++) cols += '<div class="an-col">' + (qs || []).filter(function(k){ return k.grupo === q.id && (+k.coluna || 0) === c; }).map(one).join("") + '</div>';
+    return (q.titulo ? '<div class="an-vq an-vcolt">' + anamEsc(q.titulo) + '</div>' : "") + '<div class="an-cols" style="--n:' + n + '">' + cols + '</div>';
+  }).join("") + '</div>';
+}
 function anPrint(rec){
   var logo = (document.querySelector(".brand-mark") || {}).src || "", byId = anamById(rec.perguntas), ans = rec.answers || {};
   var body = '<header><div class="brand">' + (logo ? '<img src="' + logo + '" alt="">' : "") + '<div><div class="clinic">' + esc(clinicName()) + '</div><div class="rname">' + esc(rec.typeName || "Anamnese") + '</div></div></div>' +
@@ -36994,10 +37036,11 @@ function openAnamModal(id){
     var canRe = done && isLatest && anCan(rec.type, "create");
     var host = document.getElementById("modalHost");
     host.innerHTML = '<div class="overlay" id="ovAnam"><div class="modal" style="max-width:820px"><div class="modal-head"><div><h3>' + esc(rec.typeName || "Anamnese") + '</h3>' +
-      '<div class="modal-sub">' + esc(rec.patientName || "") + ' · versão ' + (rec.versao || 1) + ' · ' + (done ? 'concluída' + (rec.doneBy ? ' por ' + esc(rec.doneBy) : '') : 'rascunho') + (canEdit ? '' : (done ? ' · travada' : ' · somente leitura')) + '</div></div>' +
+      '<div class="modal-sub">' + esc(rec.patientName || "") + ' · versão ' + (rec.versao || 1) + (done ? '' : ' · ' + (canEdit ? 'rascunho' : 'rascunho · somente leitura')) + '</div>' +
+      (done ? '<div class="an-vmeta"><span class="tr-chip st-ativo">Concluída</span><span>' + esc(trBr(String(rec.data).slice(0, 10))) + '</span>' + (rec.doneBy ? '<span>por ' + esc(rec.doneBy) + '</span>' : '') + '</div>' : '') + '</div>' +
       '<button class="modal-close" id="amClose" aria-label="Fechar">✕</button></div>' +
-      '<div class="modal-body">' + (rec.family && !done ? '<div class="ik-note"><b>Respondida pela família</b> em ' + esc(crmWhen(rec.family)) + '. Revise as respostas e conclua a anamnese.</div>' : '') + '<div class="field" style="max-width:240px"><label for="amData">Data da Anamnese</label><input type="date" id="amData" value="' + esc(String(rec.data).slice(0, 10)) + '"' + (canEdit ? "" : " disabled") + '></div>' +
-      '<div class="tr-sec">Formulário</div><div id="amForm"></div></div>' +
+      '<div class="modal-body">' + (rec.family && !done ? '<div class="ik-note"><b>Respondida pela família</b> em ' + esc(crmWhen(rec.family)) + '. Revise as respostas e conclua a anamnese.</div>' : '') + (canEdit ? '<div class="field" style="max-width:240px"><label for="amData">Data da Anamnese</label><input type="date" id="amData" value="' + esc(String(rec.data).slice(0, 10)) + '"></div>' : '') +
+      (canEdit ? '<div class="tr-sec">Formulário</div>' : '') + '<div id="amForm"></div></div>' +
       '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="amDel">Excluir</button>' : '') +
       '<button class="btn ghost" id="amPrint">Imprimir / PDF</button>' + (canRe ? '<button class="btn ghost" id="amRe">Reavaliar</button>' : '') +
       (done && isAdm ? '<button class="btn ghost" id="amReopen">Reabrir</button>' : '') +
@@ -37006,8 +37049,10 @@ function openAnamModal(id){
     var ov = document.getElementById("ovAnam"), form = document.getElementById("amForm");
     function $(i){ return document.getElementById(i); }
     function close(){ host.innerHTML = ""; }
-    form.innerHTML = anamFormHtml(rec.perguntas, rec.answers || {}, {readonly: !canEdit});
-    anamWire(form, rec.perguntas, rec.answers || {}, {readonly: !canEdit});
+    if (canEdit){
+      form.innerHTML = anamFormHtml(rec.perguntas, rec.answers || {}, {readonly: false});
+      anamWire(form, rec.perguntas, rec.answers || {}, {readonly: false});
+    } else form.innerHTML = anamViewHtml(rec.perguntas, rec.answers || {});
     if (typeof dpScan === "function") dpScan(ov);
     ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
     $("amClose").addEventListener("click", close); $("amCancel").addEventListener("click", close);
