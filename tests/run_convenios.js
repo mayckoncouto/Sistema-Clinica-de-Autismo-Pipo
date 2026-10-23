@@ -57,7 +57,7 @@ const path = require('path');
   await page.click('#cvAll'); await page.waitForTimeout(200);
   const rows = await page.$$eval('#cvRows .cv-row', (a) => a.length);
   console.log('"Inserir Todos" adds every specialty and service once (value kept)?', rows === expected && (await page.inputValue('#cvRows .cv-val')) === '120,50', rows, expected);
-  const svcOpt = await page.$$eval('#cvRows .cv-spec option', (a) => a.some((o) => o.value.indexOf('svc:') === 0));
+  const svcOpt = await page.$$eval('#cvRows .cv-row', (a) => a.some((o) => (o.getAttribute('data-spec') || '').indexOf('svc:') === 0));
   console.log('services are offered as options?', svcOpt);
   await page.click('#regCancel');
   console.log('service coverage: only checked when the convênio lists a service?',

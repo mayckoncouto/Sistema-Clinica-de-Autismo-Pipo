@@ -34,7 +34,7 @@ const fs = require('fs');
   await addCol(0, 'texto', 'Manhã'); await addCol(1, 'texto', 'Tarde');
   check('one question in each column?', (await page.$$('#anBuild .an-colbox:nth-child(1) .an-q')).length === 1 && (await page.$$('#anBuild .an-colbox:nth-child(2) .an-q')).length === 1);
   // arrastar "Tarde" para a coluna 1 (embaixo de "Manhã")
-  await page.dragAndDrop('#anBuild .an-colbox:nth-child(2) .an-q .rn', '#anBuild .an-colbox:nth-child(1)', {targetPosition: {x: 4, y: 3}});
+  await page.dragAndDrop('#anBuild .an-colbox:nth-child(2) .an-q .rn', '#anBuild .an-colbox:nth-child(1) .an-col-add', {targetPosition: {x: 4, y: 3}});
   await page.waitForTimeout(150);
   check('dragging into another column works?', (await page.$$('#anBuild .an-colbox:nth-child(1) .an-q')).length === 2);
   await (await page.$('#anBuild .an-colbox:nth-child(1) .an-q:nth-child(2) [data-mv="-1"]')).click(); await page.waitForTimeout(100);
