@@ -30414,7 +30414,7 @@ var HELP_TOPICS = [
       "Responda e use <b>Salvar Rascunho</b> para continuar depois, ou <b>Concluir</b> (as perguntas obrigatórias precisam estar respondidas). Perguntas com condição só aparecem quando a resposta anterior pede.",
       "Se você mudou, na anamnese, uma resposta de saúde que está diferente do cadastro (diagnóstico, nível de suporte, comunicação, alergias, medicações, restrições), o sistema pergunta se atualiza o cadastro do paciente.",
       "Anamnese concluída fica travada. <b>Reavaliar</b> cria a próxima versão a partir da anterior, já com as respostas dela, usando a versão atual do modelo. <b>Reabrir</b> (só Administrador) devolve a concluída para rascunho.",
-      "<b>Enviar Link para a Família</b> (anamnese em rascunho): gera um link curto (vale 7 dias e uma vez só) para copiar, mandar por WhatsApp ou e-mail. A família responde pelo celular, sem login; as respostas entram no rascunho com a etiqueta <b>Respondida pela Família</b>. Revise, ajuste o que precisar e <b>Concluir</b>.",
+      "<b>Outras Opções → Enviar Link de Anamnese</b>: escolha o modelo e o paciente e o link já é gerado (se o paciente tem um rascunho desse modelo, o link vai para ele; senão o rascunho é criado). O link é curto (vale 7 dias e uma vez só) para copiar, mandar por WhatsApp ou e-mail. A família responde pelo celular, sem login; as respostas entram no rascunho com a etiqueta <b>Respondida pela Família</b>. Revise, ajuste o que precisar e <b>Concluir</b>.",
       "<b>Imprimir / PDF</b> gera o documento com a logo da clínica. <b>Outras Opções ▾</b> abre os <b>Modelos</b> e atualiza a lista."],
     rules: ["Cada modelo de anamnese tem a sua permissão (ver, incluir, editar, excluir) em Níveis de Permissão, na linha <b>Anamnese – nome do modelo</b>; a tela em si usa a permissão <b>Anamneses</b>.", "A anamnese guarda uma cópia das perguntas do modelo: mudar o modelo depois não altera as já criadas.", "Quando o modelo tem <b>Validade</b>, a mais recente concluída de cada paciente aparece como em dia, perto de vencer (30 dias) ou vencida.", "O link da família não mostra as perguntas do tipo Arquivo (esses anexos são feitos na clínica) e não conclui a anamnese: quem revisa é a equipe.", "Com a automação <b>Reavaliação de Anamnese Vencendo</b> ligada (CRM ▾ Automações), a tarefa de reavaliar é criada quando a validade do tipo está perto de vencer.", "Anamnese concluída só é excluída pelo Administrador. Modelo com anamneses preenchidas não é excluído: é <b>Inativado</b>.", "Respostas do tipo Arquivo ainda não são guardadas."],
     who: "Permissão <b>Anamneses</b> (a tela) e a permissão de cada modelo."},
@@ -36072,30 +36072,38 @@ function wireAnamneses(){
   btn.addEventListener("click", function(e){
     e.stopPropagation();
     if (!menu.hidden){ menu.hidden = true; btn.setAttribute("aria-expanded", "false"); return; }
-    menu.innerHTML = (can("tipos_anamnese", "view") ? '<button type="button" class="cad-item" role="menuitem" data-am-act="tipos">Modelos</button>' : '') +
+    var canLink = anNewTypes().some(function(t){ return anCan(t.id, "edit"); });
+    menu.innerHTML = (canLink ? '<button type="button" class="cad-item" role="menuitem" data-am-act="link">Enviar Link de Anamnese</button>' : '') +
+      (can("tipos_anamnese", "view") ? '<button type="button" class="cad-item" role="menuitem" data-am-act="tipos">Modelos</button>' : '') +
       '<button type="button" class="cad-item" role="menuitem" data-am-act="reload">Atualizar a Lista</button>';
     menu.hidden = false; btn.setAttribute("aria-expanded", "true"); placeToolsMenu(btn, menu);
   });
   menu.addEventListener("click", function(e){
     var b = e.target.closest("[data-am-act]"); if (!b) return;
     menu.hidden = true; btn.setAttribute("aria-expanded", "false");
-    if (b.getAttribute("data-am-act") === "tipos") navOpenTab("tiposanam"); else anLoad(true).then(function(){ renderAnamneses(); });
+    var act = b.getAttribute("data-am-act");
+    if (act === "link") openAnamNew({link: true});
+    else if (act === "tipos") navOpenTab("tiposanam"); else anLoad(true).then(function(){ renderAnamneses(); });
   });
   document.addEventListener("click", function(){ if (!menu.hidden){ menu.hidden = true; btn.setAttribute("aria-expanded", "false"); } });
 }
 function navOpenTab(k){ var b = document.querySelector('#mainTabs button[data-tab="' + k + '"]'); if (b) b.click(); }
 
 // + Incluir: escolhe o tipo e o paciente; cria o rascunho e abre o formulário.
+// opts.link (Outras Opções → Enviar Link de Anamnese): usa o rascunho do mesmo modelo/paciente
+// (ou cria um) e abre a janela do link já gerando o link para a família.
 function openAnamNew(opts){
   opts = opts || {};
-  var types = anNewTypes();
+  var link = !!opts.link;
+  var types = anNewTypes().filter(function(t){ return !link || anCan(t.id, "edit"); });
   if (!types.length){ showToast("Nenhum modelo de anamnese disponível para você. Peça a liberação em Níveis de Permissão.", true); return; }
   var pats = activeOnly(state.patients).slice().sort(function(a, b){ return normText(a.nome) < normText(b.nome) ? -1 : 1; });
   var host = regQuickHost();
-  host.innerHTML = '<div class="overlay" id="ovAnNew"><div class="modal" style="max-width:520px"><div class="modal-head"><div><h3>Nova Anamnese</h3><div class="modal-sub">Escolha o modelo e o paciente; o formulário abre para preencher.</div></div><button class="modal-close" id="anwClose" aria-label="Fechar">✕</button></div>' +
+  host.innerHTML = '<div class="overlay" id="ovAnNew"><div class="modal" style="max-width:520px"><div class="modal-head"><div><h3>' + (link ? "Enviar Link de Anamnese" : "Nova Anamnese") + '</h3><div class="modal-sub">' +
+    (link ? "Escolha o modelo e o paciente; o link é gerado para a família responder pelo celular." : "Escolha o modelo e o paciente; o formulário abre para preencher.") + '</div></div><button class="modal-close" id="anwClose" aria-label="Fechar">✕</button></div>' +
     '<div class="modal-body"><div class="field"><label for="anwType">Modelo</label><select id="anwType" data-combo><option value="">Escolha…</option>' + types.map(function(t){ return '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>'; }).join("") + '</select></div>' +
     '<div class="field"><label for="anwPat">Paciente</label><select id="anwPat" data-combo><option value="">Escolha…</option>' + pats.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nome) + '</option>'; }).join("") + '</select></div></div>' +
-    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="anwCancel">Cancelar</button><button class="btn primary" id="anwGo">Iniciar</button></div></div></div>';
+    '<div class="modal-foot"><div class="spacer"></div><button class="btn ghost" id="anwCancel">Cancelar</button><button class="btn primary" id="anwGo">' + (link ? "Gerar Link" : "Iniciar") + '</button></div></div></div>';
   var ov = document.getElementById("ovAnNew");
   function $(i){ return document.getElementById(i); }
   function close(){ host.innerHTML = ""; }
@@ -36108,11 +36116,21 @@ function openAnamNew(opts){
     if (!tid){ showToast("Escolha o modelo de anamnese.", true); return; }
     if (!pid){ showToast("Escolha o paciente.", true); return; }
     var t = anamTypeById(tid), p = findPatientById(pid); if (!t || !p) return;
+    if (link){
+      // Já há rascunho deste modelo para o paciente: o link vai para ele (não cria outro).
+      var draft = (AN.rows || []).filter(function(r){ return r.patient === pid && r.type === tid && r.status !== "concluida"; })
+        .sort(function(a, b){ return (b.versao || 1) - (a.versao || 1); })[0];
+      if (draft){
+        anLoadFull(draft.id).then(function(rec){ if (!rec) return; close(); openAnamLinkModal(rec, {autoGen: true}); });
+        return;
+      }
+    }
     var perguntas = anamCopyQs(t.perguntas);
     anInsert({patient: pid, patientName: p.nome, type: t.id, typeName: t.name, typeVersion: t.versao || 1, perguntas: perguntas, answers: anPrefillAnswers(perguntas, p, {}), data: trTodayIso(), versao: 1}).then(function(row){
       if (!row) return;
       close(); if (state.tab === "anamneses") renderAnamneses();
-      openAnamModal(row.id);
+      if (link) anLoadFull(row.id).then(function(rec){ if (rec) openAnamLinkModal(rec, {autoGen: true}); });
+      else openAnamModal(row.id);
     });
   });
 }
@@ -36202,7 +36220,8 @@ function anLinkMessage(rec, url){
   var cl = clinicName(), soc = clinicSocialText(), m = "Olá! Para darmos continuidade ao atendimento de " + (rec.patientName || "seu filho(a)") + " na " + cl + ", preencha a " + (rec.typeName || "anamnese") + " por este link (vale 7 dias): " + url;
   return soc ? m + "\n\nConheça mais sobre nosso trabalho:\n" + soc : m;
 }
-function openAnamLinkModal(rec){
+function openAnamLinkModal(rec, lopts){
+  lopts = lopts || {};
   if (!anCan(rec.type, "edit")){ showToast("Sem permissão para enviar o link desta anamnese.", true); return; }
   var p = findPatientById(rec.patient) || {}, tel = digitsOnly(patFirstPhone(p) || ""), mail = patFirstEmail(p) || "", host = regQuickHost(), cur = null;
   host.innerHTML = '<div class="overlay" id="ovAnLink"><div class="modal" style="max-width:560px">' +
@@ -36246,7 +36265,10 @@ function openAnamLinkModal(rec){
       anLinkCancel(cur.token).then(function(){ showToast("Link cancelado."); close(); }, function(e){ showToast("Não foi possível cancelar: " + anErr(e), true); });
     });
   };
-  anLinkActive(rec).then(function(l){ if (l && document.getElementById("alBox")) show(l); });
+  anLinkActive(rec).then(function(l){
+    if (!document.getElementById("alBox")) return;
+    if (l) show(l); else if (lopts.autoGen) $("alGen").click();
+  });
 }
 
 function openAnamModal(id){
@@ -36266,7 +36288,7 @@ function openAnamModal(id){
       '<div class="modal-body">' + (rec.family && !done ? '<div class="ik-note"><b>Respondida pela família</b> em ' + esc(crmWhen(rec.family)) + '. Revise as respostas e conclua a anamnese.</div>' : '') + '<div class="field" style="max-width:240px"><label for="amData">Data da Anamnese</label><input type="date" id="amData" value="' + esc(String(rec.data).slice(0, 10)) + '"' + (canEdit ? "" : " disabled") + '></div>' +
       '<div class="tr-sec">Formulário</div><div id="amForm"></div></div>' +
       '<div class="modal-foot">' + (canDel ? '<button class="btn danger" id="amDel">Excluir</button>' : '') +
-      '<button class="btn ghost" id="amPrint">Imprimir / PDF</button>' + (canEdit ? '<button class="btn ghost" id="amLink">Enviar Link para a Família</button>' : '') + (canRe ? '<button class="btn ghost" id="amRe">Reavaliar</button>' : '') +
+      '<button class="btn ghost" id="amPrint">Imprimir / PDF</button>' + (canRe ? '<button class="btn ghost" id="amRe">Reavaliar</button>' : '') +
       (done && isAdm ? '<button class="btn ghost" id="amReopen">Reabrir</button>' : '') +
       '<div class="spacer"></div><button class="btn ghost" id="amCancel">' + (canEdit ? "Cancelar" : "Fechar") + '</button>' +
       (canEdit ? '<button class="btn" id="amDraft">Salvar Rascunho</button><button class="btn primary" id="amDone">Concluir</button>' : '') + '</div></div></div>';
@@ -36297,7 +36319,6 @@ function openAnamModal(id){
       var cur = Object.assign({}, rec, {answers: canEdit ? anamRead(form, rec.perguntas) : rec.answers, data: canEdit ? ($("amData").value || rec.data) : rec.data});
       anPrint(cur);
     });
-    if ($("amLink")) $("amLink").addEventListener("click", function(){ openAnamLinkModal(rec); });
     if ($("amRe")) $("amRe").addEventListener("click", function(){
       anReassess(rec).then(function(row){ if (!row) return; close(); after(); showToast("Nova versão criada a partir da anterior."); openAnamModal(row.id); });
     });
