@@ -1230,6 +1230,14 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .pat-table tbody tr.pr-row:hover td{background:var(--accent-weak)}
 .pr-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .pr-head h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
+.pr-list{background:var(--surface);border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.pr-mes{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;padding:10px 12px 4px;background:var(--surface-2)}
+.pr-row{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:var(--surface);padding:11px 12px;font:inherit;color:var(--ink)}
+.pr-row:last-child{border-bottom:0}.pr-row:active{background:var(--surface-2)}
+.pr-dt{width:44px;flex:none;text-align:center}.pr-dt b{display:block;font-size:19px;line-height:1}.pr-dt small{font-size:10.5px;color:var(--muted);text-transform:uppercase}
+.pr-bd{flex:1;min-width:0;display:block}.pr-t{display:block;font-weight:600;font-size:13.5px}
+.pr-hr{font-size:11px;font-weight:600;border-radius:99px;padding:2px 8px;background:var(--accent-weak);color:var(--accent);margin-left:4px}
+.pr-p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
 .pr-timeline{flex:1;min-height:0;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
 .pr-card{border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .pr-card-head{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--surface-2);border-radius:10px 10px 0 0}
@@ -25490,7 +25498,7 @@ function prRenderDetail(){
   var body;
   if (PR.detailLoading) body = '<div class="empty-state">Carregando…</div>';
   else if (!PR.records.length) body = '<div class="empty-state"><b>Nenhuma evolução registrada</b>Use "+ Incluir" ou o botão "Atendimento" na Agenda.</div>';
-  else body = PR.records.map(function(r){
+  var cardHtml = function(r){
     var mine = me && r.author_id === me.id;
     var canEdit = mine && prCan("edit");
     var canDel = (window.pipoAuth && window.pipoAuth.isAdmin()) || (mine && prCan("delete"));
@@ -25506,27 +25514,41 @@ function prRenderDetail(){
       '</div>' +
       '<div class="pr-card-body pr-content">' + prGoalsWorkedHtml(r) + prSanitize(r.content) + '</div>' +
     '</div>';
-  }).join("");
+  };
+  if (!PR.detailLoading && PR.records.length){
+    if (isMobileView()){
+      var lastM = "";
+      body = '<div class="pr-list">' + PR.records.map(function(r){
+        var iso = r.appointment_date || String(r.created_at).slice(0, 10), mo = ptMonthLabel(iso), g = "";
+        if (mo !== lastM){ lastM = mo; g = '<div class="pr-mes">' + esc(mo) + '</div>'; }
+        var pn = prRecordProfName(r) || r.author_name || "—", tx = prPlainText(r.content || "");
+        return g + '<button type="button" class="pr-row" data-pr-open="' + esc(r.id) + '"><span class="pr-dt">' + ptDateLead(iso, PT_MESES[+iso.split("-")[1] - 1].slice(0, 3)) + '</span>' +
+          '<span class="pr-bd"><span class="pr-t">' + esc(pn) + (r.appointment_time ? ' <span class="pr-hr">' + esc(r.appointment_time) + '</span>' : '') + '</span>' +
+          '<span class="pr-p">' + (esc(tx) || '<i>Sem texto</i>') + '</span></span></button>';
+      }).join("") + '</div>';
+    } else body = PR.records.map(cardHtml).join("");
+  }
   host.innerHTML = head + '<div class="pr-timeline">' + body + '</div>';
   if (!PLAN.rows && planCan("view") && PR.records.some(function(r){ return Array.isArray(r.plan_goals) && r.plan_goals.length; }))
     planLoadAll().then(function(){ if (document.getElementById("prDetailView") && PR.patientId) prRenderDetail(); });
   document.getElementById("prBack").addEventListener("click", function(){ PR.patientId = null; prLoadSummary(); renderProntuarioTab(); });
   var nb = document.getElementById("prNew");
   if (nb) nb.addEventListener("click", function(){ prOpenEditor({patient: p}); });
-  host.querySelectorAll("[data-pr-appt]").forEach(function(b){
+  var wire = function(root){
+  root.querySelectorAll("[data-pr-appt]").forEach(function(b){
     b.addEventListener("click", function(e){
       var rec = PR.records.filter(function(x){ return x.id === b.getAttribute("data-pr-appt"); })[0];
       if (rec && deepWant(e)){ deepOpen({a: "agenda", d: rec.appointment_date, prof: rec.professional_id, id: rec.appointment_id}); return; }
-      if (rec) prGoToAppointment(rec);
+      if (rec){ var ov = document.getElementById("ovPrRead"); if (ov) ov.remove(); prGoToAppointment(rec); }
     });
   });
-  host.querySelectorAll("[data-pr-edit]").forEach(function(b){
+  root.querySelectorAll("[data-pr-edit]").forEach(function(b){
     b.addEventListener("click", function(){
       var rec = PR.records.filter(function(x){ return x.id === b.getAttribute("data-pr-edit"); })[0];
-      if (rec) prOpenEditor({patient: p, record: rec});
+      if (rec){ var ov = document.getElementById("ovPrRead"); if (ov) ov.remove(); prOpenEditor({patient: p, record: rec}); }
     });
   });
-  host.querySelectorAll("[data-pr-del]").forEach(function(b){
+  root.querySelectorAll("[data-pr-del]").forEach(function(b){
     b.addEventListener("click", function(){
       var rec = PR.records.filter(function(x){ return x.id === b.getAttribute("data-pr-del"); })[0];
       if (!rec) return;
@@ -25542,10 +25564,28 @@ function prRenderDetail(){
           if (r.error){ showToast("Não foi possível excluir: " + prErrMsg(r.error), true); return; }
           showToast("Evolução excluída.");
           if (rec.plan_goals && rec.plan_goals.length) planLoadAll(true);
+          var ov = document.getElementById("ovPrRead"); if (ov) ov.remove();
           prOpenPatient(PR.patientId);
         });
       });
       });
+    });
+  });
+  };
+  wire(host);
+  host.querySelectorAll("[data-pr-open]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var rec = PR.records.filter(function(x){ return x.id === b.getAttribute("data-pr-open"); })[0];
+      if (!rec) return;
+      var old = document.getElementById("ovPrRead"); if (old) old.remove();
+      var ov = document.createElement("div"); ov.className = "overlay"; ov.id = "ovPrRead";
+      ov.innerHTML = '<div class="modal pr-read"><div class="modal-head"><h3>Evolução</h3><button type="button" class="modal-close" aria-label="Fechar">✕</button></div><div class="modal-body">' + cardHtml(rec) + '</div><div class="modal-foot"><div class="spacer"></div><button type="button" class="btn" data-pr-close>Fechar</button></div></div>';
+      document.body.appendChild(ov);
+      var close = function(){ ov.remove(); };
+      ov.querySelector(".modal-close").addEventListener("click", close);
+      ov.querySelector("[data-pr-close]").addEventListener("click", close);
+      ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
+      wire(ov);
     });
   });
 }
