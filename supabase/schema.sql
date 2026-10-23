@@ -9721,7 +9721,7 @@ grant execute on function public.push_follow_targets(uuid) to service_role;
 -- Arquivo no Google Drive (pasta por paciente: Documentos / Relatórios); aqui só nome, código do arquivo e autor.
 create table if not exists public.task_attachments (
   id              uuid primary key default gen_random_uuid(),
-  task_id         uuid not null references public.tasks(id) on delete cascade,
+  task_id         uuid references public.tasks(id) on delete cascade,
   patient_id      text,
   kind            text not null check (kind in ('documentos', 'relatorios')),
   drive_file_id   text not null,
@@ -9749,11 +9749,25 @@ alter table public.patient_drive_folders enable row level security;
 revoke all on public.patient_drive_folders from public, anon, authenticated;
 
 -- Pode ver / anexar? (view = ver e baixar; create, edit e delete = poder editar a lista da tarefa)
+create or replace function public.patient_attachment_can(p_kind text, p_action text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return false; end if;
+  if not public.has_perm('pacientes_anexos', case p_action when 'view' then 'view' when 'create' then 'create' when 'delete' then 'delete' else 'edit' end) then
+    return false;
+  end if;
+  if p_kind = 'documentos' and not public.has_perm('saude_paciente', 'view') then return false; end if;
+  return true;
+end $$;
+revoke execute on function public.patient_attachment_can(text, text) from public, anon;
+grant execute on function public.patient_attachment_can(text, text) to authenticated;
+
 create or replace function public.task_attachment_can(p_task uuid, p_kind text, p_action text)
 returns boolean language plpgsql stable security definer set search_path = public as $$
 declare t public.tasks%rowtype;
 begin
   if auth.uid() is null then return false; end if;
+  if p_task is null then return public.patient_attachment_can(p_kind, p_action); end if;
   select * into t from public.tasks where id = p_task;
   if not found or t.unit_id is distinct from public.active_unit() then return false; end if;
   if not public.has_perm('crm_' || t.list_id, case when p_action = 'view' then 'view' else 'edit' end) then
@@ -9788,10 +9802,26 @@ end $$;
 revoke execute on function public.task_attachment_ctx(uuid) from public, anon;
 grant execute on function public.task_attachment_ctx(uuid) to authenticated;
 
+create or replace function public.patient_attachment_ctx(p_patient text)
+returns table (patient_id text, patient_name text, unit_id text)
+language plpgsql stable security definer set search_path = public as $$
+declare v_name text;
+begin
+  if auth.uid() is null then raise exception 'Entre no sistema.' using errcode = '42501'; end if;
+  select btrim(p ->> 'nome') into v_name
+    from public.documents_u d, jsonb_array_elements(d.data -> 'list') p
+   where d.path = 'patients/all' and p ->> 'id' = p_patient
+   limit 1;
+  if v_name is null then raise exception 'Paciente não encontrado.' using errcode = '42501'; end if;
+  return query select p_patient, v_name, public.active_unit();
+end $$;
+revoke execute on function public.patient_attachment_ctx(text) from public, anon;
+grant execute on function public.patient_attachment_ctx(text) to authenticated;
+
 alter table public.task_attachments enable row level security;
 drop policy if exists task_attachments_select on public.task_attachments;
 create policy task_attachments_select on public.task_attachments for select to authenticated
-  using (public.task_attachment_can(task_id, kind, 'view'));
+  using (public.task_attachment_can(task_id, kind, 'view') or (task_id is not null and public.patient_attachment_can(kind, 'view')));
 drop policy if exists task_attachments_insert on public.task_attachments;
 create policy task_attachments_insert on public.task_attachments for insert to authenticated
   with check (public.task_attachment_can(task_id, kind, 'create'));

@@ -6,7 +6,8 @@
 //      guardar o arquivo em  <Drive compartilhado> / <Paciente> / Documentos | Relatórios;
 //   3. grava no banco só o nome e o código do arquivo (tabela task_attachments).
 //
-// POST /api/task-files?action=upload    corpo = o arquivo (bytes). Cabeçalhos: x-task-id, x-kind
+// POST /api/task-files?action=upload    corpo = o arquivo (bytes). Cabeçalhos: x-task-id (ou x-patient-id, para anexar direto no
+//                                       cadastro do paciente, sem tarefa), x-kind
 //                                       (documentos | relatorios), x-name (nome digitado, com encodeURIComponent),
 //                                       x-filename (nome original, com encodeURIComponent), x-mime.
 // POST /api/task-files?action=rename    JSON { id, name }
@@ -73,7 +74,7 @@ async function currentUser(token) {
 }
 async function can(token, task, kind, action) {
   var r = await sb("/rest/v1/rpc/task_attachment_can", {
-    method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_task: task, p_kind: kind, p_action: action })
+    method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_task: task || null, p_kind: kind, p_action: action })
   });
   return r.ok && r.body === true;
 }
@@ -207,6 +208,12 @@ function jsonBody(req) {
 function header(req, k) { var v = req.headers[k]; try { return decodeURIComponent(Array.isArray(v) ? v[0] : v || ""); } catch (e) { return String(v || ""); } }
 function fail(res, code, msg, extra) { res.status(code).json(Object.assign({ error: msg }, extra || {})); }
 
+// Paciente do anexo: pela tarefa, ou direto pelo código do paciente (anexo sem tarefa).
+function ctxCall(token, taskId, patientId) {
+  if (taskId) return sb("/rest/v1/rpc/task_attachment_ctx", { method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_task: taskId }) });
+  return sb("/rest/v1/rpc/patient_attachment_ctx", { method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_patient: patientId }) });
+}
+
 async function loadAttachment(token, id) {
   var r = await sb("/rest/v1/task_attachments?select=*&id=eq." + encodeURIComponent(id), { headers: userHeaders(token) });
   return r.ok && Array.isArray(r.body) && r.body[0] ? r.body[0] : null;
@@ -220,9 +227,10 @@ module.exports = async function handler(req, res) {
     if (!SUPABASE_URL || !ANON_KEY) { fail(res, 500, "O sistema não está configurado (Supabase)."); return; }
     // Upload: usuário, permissão, contexto da tarefa e token do Google saem juntos (cada ida ao banco custa tempo).
     var upKind = action === "upload" ? header(req, "x-kind") : "", upTask = action === "upload" ? header(req, "x-task-id") : "";
-    var pre = action === "upload" && KINDS[upKind] ? {
+    var upPat = action === "upload" ? header(req, "x-patient-id") : "";
+    var pre = action === "upload" && KINDS[upKind] && (upTask || upPat) ? {
       can: can(token, upTask, upKind, "create"),
-      ctx: sb("/rest/v1/rpc/task_attachment_ctx", { method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_task: upTask }) }),
+      ctx: ctxCall(token, upTask, upPat),
       google: googleToken().catch(function () {})
     } : null;
     if (pre) { pre.can.catch(function () {}); pre.ctx.catch(function () {}); }
@@ -244,10 +252,11 @@ module.exports = async function handler(req, res) {
     if (req.method !== "POST") { fail(res, 405, "Método não permitido."); return; }
 
     if (action === "upload") {
-      var taskId = header(req, "x-task-id"), kind = header(req, "x-kind");
+      var taskId = header(req, "x-task-id"), kind = header(req, "x-kind"), patId = header(req, "x-patient-id");
       if (!KINDS[kind]) { fail(res, 400, "Escolha Documentos ou Relatórios."); return; }
-      if (!(await (pre ? pre.can : can(token, taskId, kind, "create")))) { fail(res, 403, "Sem permissão para anexar nesta tarefa" + (kind === "documentos" ? " (Documentos exige ver a saúde do paciente)." : ".")); return; }
-      var ctx = await (pre ? pre.ctx : sb("/rest/v1/rpc/task_attachment_ctx", { method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_task: taskId }) }));
+      if (!taskId && !patId) { fail(res, 400, "Informe a tarefa ou o paciente."); return; }
+      if (!(await (pre ? pre.can : can(token, taskId, kind, "create")))) { fail(res, 403, "Sem permissão para anexar" + (taskId ? " nesta tarefa" : " neste paciente") + (kind === "documentos" ? " (Documentos exige ver a saúde do paciente)." : ".")); return; }
+      var ctx = await (pre ? pre.ctx : ctxCall(token, taskId, patId));
       var c = ctx.ok && Array.isArray(ctx.body) ? ctx.body[0] : (ctx.ok ? ctx.body : null);
       if (!c) { fail(res, 403, errMsg(ctx, "Sem acesso a esta tarefa.")); return; }
       if (!c.patient_id || !c.patient_name) { fail(res, 400, "Esta tarefa não tem paciente cadastrado. Cadastre o paciente antes de anexar."); return; }
@@ -264,7 +273,7 @@ module.exports = async function handler(req, res) {
       var file = await uploadFile(parent, name, mime, buf);
       var ins = await sb("/rest/v1/task_attachments", {
         method: "POST", headers: userHeaders(token, { Prefer: "return=representation" }),
-        body: JSON.stringify({ task_id: taskId, patient_id: c.patient_id, kind: kind, drive_file_id: file.id, name: name, mime: mime, size: buf.length })
+        body: JSON.stringify({ task_id: taskId || null, patient_id: c.patient_id, kind: kind, drive_file_id: file.id, name: name, mime: mime, size: buf.length })
       });
       if (!ins.ok) { await trash(file.id).catch(function () {}); fail(res, 400, errMsg(ins, "Não foi possível registrar o anexo.")); return; }
       res.status(200).json({ ok: true, attachment: Array.isArray(ins.body) ? ins.body[0] : ins.body });
@@ -277,7 +286,7 @@ module.exports = async function handler(req, res) {
       if (!a) { fail(res, 404, "Anexo não encontrado ou sem permissão."); return; }
       if (!(await can(token, a.task_id, a.kind, "edit"))) { fail(res, 403, "Sem permissão para renomear."); return; }
       if (!cleanName(body.name)) { fail(res, 400, "Informe o nome do arquivo."); return; }
-      var rc = await sb("/rest/v1/rpc/task_attachment_ctx", { method: "POST", headers: userHeaders(token), body: JSON.stringify({ p_task: a.task_id }) });
+      var rc = await ctxCall(token, a.task_id, a.patient_id);
       var cc = rc.ok && Array.isArray(rc.body) ? rc.body[0] : null;
       var newName = finalName(body.name, (cc && cc.patient_name) || "", a.name);
       if (newName === a.name) { res.status(200).json({ ok: true, attachment: a }); return; }

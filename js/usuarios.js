@@ -33,6 +33,10 @@
     { key: "pgrp_rotinaatual", label: "Pacientes – Rotina Atual", hint: "ver o grupo Rotina Atual na janela do cadastro, na ficha impressa e na revisão", actions: ["view"], dflt: true },
     { key: "pgrp_admin", label: "Pacientes – Administrativo", hint: "ver o grupo Administrativo na janela do cadastro, na ficha impressa e na revisão", actions: ["view"], dflt: true },
     { key: "pgrp_bloqueio", label: "Pacientes – Bloqueio de Agendamento", hint: "ver o grupo Bloqueio de Agendamento na janela do cadastro, na ficha impressa e na revisão", actions: ["view"], dflt: true },
+    { key: "pabas_agenda", label: "Pacientes – Aba Agenda", hint: "ver a aba Agenda na janela do paciente (também exige ver a Agenda)", actions: ["view"], dflt: true },
+    { key: "pabas_prontuario", label: "Pacientes – Aba Prontuário", hint: "ver a aba Prontuário na janela do paciente (também exige ver o Prontuário)", actions: ["view"], dflt: true },
+    { key: "pabas_anamneses", label: "Pacientes – Aba Anamneses", hint: "ver a aba Anamneses na janela do paciente (também exige ver algum modelo de anamnese)", actions: ["view"], dflt: true },
+    { key: "pacientes_anexos", label: "Pacientes – Anexos", hint: "aba Anexos da janela do paciente: ver e baixar, incluir arquivos, renomear e excluir (Documentos também exige Pacientes – Saúde)", dflt: true },
     { key: "campos_paciente", label: "Pacientes – Campos", hint: "botão Campos: quais campos aparecem e quais são obrigatórios", actions: ["view", "edit"] },
     { key: "tratamentos", label: "Tratamentos", hint: "convênio, pacote, Intervenção ABA, especialidades e horários" },
     { key: "tratamentos_valores", label: "Tratamentos – Valores", hint: "ver/editar valor, descontos e valor final", actions: ["view", "edit"] },
@@ -808,7 +812,7 @@
     function one(key) { return { id: key, keys: [key] }; }
     return [
       { title: "Cadastros", panels: [
-        { id: "pacientes", keys: ["pacientes", "pgrp_ident", "pgrp_contato", "pgrp_endereco", "pgrp_filiacao", "pgrp_financeiro", "pgrp_rotina", "pgrp_protetiva", "pgrp_convenio", "pgrp_encaminhamento", "pgrp_tratamento", "saude_paciente", "pgrp_escola", "pgrp_rotinaatual", "pgrp_admin", "pgrp_bloqueio", "campos_paciente"], wins: ["medicos", "escolas", "diagnosticos", "origens", "motivos_bloqueio"] },
+        { id: "pacientes", keys: ["pacientes", "pgrp_ident", "pgrp_contato", "pgrp_endereco", "pgrp_filiacao", "pgrp_financeiro", "pgrp_rotina", "pgrp_protetiva", "pgrp_convenio", "pgrp_encaminhamento", "pgrp_tratamento", "saude_paciente", "pgrp_escola", "pgrp_rotinaatual", "pgrp_admin", "pgrp_bloqueio", "pabas_agenda", "pabas_prontuario", "pabas_anamneses", "pacientes_anexos", "campos_paciente"], wins: ["medicos", "escolas", "diagnosticos", "origens", "motivos_bloqueio"] },
         { id: "tratamentos", keys: ["tratamentos", "tratamentos_valores"], wins: ["tipos_tratamento", "motivos_cancelamento"] },
         one("convenios"),
         { id: "colaboradores", keys: ["colaboradores", "colaboradores_valores"], wins: ["cbo", "conselhos"] },
