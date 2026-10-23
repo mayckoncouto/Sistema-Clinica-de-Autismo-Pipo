@@ -126,6 +126,7 @@ const TL = require('./tl-helper');
   await mob.goto('file://' + mPage); await mob.waitForTimeout(800);
   await mob.evaluate(() => window.__ev(`state.treatments = [{id: "tm", patientId: state.patientsRaw[0].id, inicio: "2026-01-01", status: "ativo", tipo: "novo", aba: "Sim", specHours: [{id: "a", specId: "psico", hours: 2, service: "sessao", dia: "seg", hora: "08:00"}]}]; rebuildPatients(); openTreatmentModal(state.treatments[0])`));
   await mob.waitForSelector('#ovTreat'); await mob.waitForTimeout(200);
+  await mob.evaluate(() => { document.querySelectorAll('#ovTreat .pm-collapsed').forEach((x) => x.classList.remove('pm-collapsed')); });
   await mob.click('[data-tl-edit="0"]'); await mob.waitForSelector('#ovTLine');
   check('mobile: card window fits the screen?', await mob.evaluate(() => document.documentElement.scrollWidth <= 390 && document.querySelector('#ovTLine .modal').getBoundingClientRect().width <= 390));
 
