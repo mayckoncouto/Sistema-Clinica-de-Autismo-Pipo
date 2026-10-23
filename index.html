@@ -1351,6 +1351,7 @@ table.agd-grid{border-collapse:separate;border-spacing:0;width:100%;table-layout
 .tr-chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:800;color:#fff;background:#6b7a77}
 .tr-chip.st-ativo{background:var(--accent);color:var(--accent-ink)}.tr-chip.st-renegociado{background:#b7791f}.tr-chip.st-cancelado{background:#b6403a}.tr-chip.st-finalizado{background:#5b6b80;color:#fff}.tr-chip.st-inativo{background:var(--muted);color:#fff}
 .pat-table td.pt-ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pat-table .pt-sub,.pat-table .pt-due-m{display:none}
 .tr-cancel{border:1px solid #f0c9c6;background:color-mix(in srgb,#b6403a 6%,var(--surface));border-radius:10px;padding:10px 12px 2px;margin-bottom:12px}
 .tr-cancel-note{font-size:12px;color:#9b3530;margin:0 0 8px}
 .tr-hist{list-style:none;margin:6px 0 10px;padding:0;font-size:12.5px}
@@ -2684,7 +2685,13 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   :is(#tab-pacientes,#tab-profissionais,.reg-panel,#tab-prontuario) .pat-table :is(th,td){white-space:normal;overflow-wrap:anywhere}
   /* Prontuário: só Paciente e Registros */
   #prListHost .pat-table :is(col,th,td):nth-child(n+3){display:none}
-  #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(3)):not(:nth-child(9)){display:none}
+  #patListHost .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(9)){display:none}
+  /* Pacientes no celular: nome inteiro (até 2 linhas), embaixo bolinha · idade · telefone; à direita situação e vencimento */
+  #patListHost .pat-table td.pt-nome{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere!important;line-height:1.25;padding-top:10px;padding-bottom:10px}
+  #patListHost .pat-table td.pt-nome .pt-sub,#patListHost .pat-table td.pt-trat .pt-due-m{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:3px;white-space:normal}
+  #patListHost .pat-table td.pt-trat{text-align:right;vertical-align:top;padding-top:10px}
+  #patListHost .pat-table td.pt-trat .pt-due-m{margin-top:4px}
+  #patListHost .pat-table td.pt-trat .pt-due-m .tr-chip{font-size:11px}
   /* Pacientes / Tratamentos: coluna do nome com todo o espaço que sobra; a da situação só do tamanho da etiqueta */
   #patListHost .pat-table col:first-child,#trHost .pat-table.tr-main col:first-child{width:auto!important}
   #patListHost .pat-table col:nth-child(9),#trHost .pat-table.tr-main:not(.tr-fin) col:nth-child(10),#trHost .pat-table.tr-main.tr-fin col:nth-child(11){width:122px!important}
@@ -13573,15 +13580,19 @@ function renderPatientsTab(){
     var hasTr = state.treatments.some(function(t){ return t.patientId === p.id; });
     var col = (!hasTr || activeTreatment(p.id)) ? patientColor(p) : null;
     var dot = col ? '<span class="pcolor-dot" style="background:'+col+'" title="Cor por idade/ABA"></span>' : '';
+    // Só no celular: 2ª linha do nome (idade · telefone) e aviso de vencimento sob a situação.
+    var subTxt = [idadeTxt !== "—" ? idadeTxt : "", patFirstPhone(p)].filter(Boolean).join(" · ");
+    var dueM = ""; var dueIt = patDueItems(p.id)[0];
+    if (dueIt){ var dueC = trDueChip(dueIt); if (dueC) dueM = '<span class="pt-due-m">' + dueC + '</span>'; }
     return '<tr data-id="'+esc(p.id)+'"'+(p.inativo ? ' class="is-inactive"' : '')+'>' +
-      '<td class="pt-nome">'+dot+esc(p.nome)+(patHasProtetiva(p) ? ' '+protShieldHtml() : '')+patCardChip(p)+encChip(p)+'</td>' +
+      '<td class="pt-nome">'+dot+esc(p.nome)+(patHasProtetiva(p) ? ' '+protShieldHtml() : '')+patCardChip(p)+encChip(p)+(subTxt ? '<span class="pt-sub">'+esc(subTxt)+'</span>' : '')+'</td>' +
       patDueCell(p.id) +
       '<td class="pt-muted">'+idadeTxt+'</td>' +
       cellTxt(patFirstPhone(p)) + cellTxt(patFirstEmail(p)) +
       cellTxt(p.escolaId ? patRegName("escolas", p.escolaId) : "") +
       cellTxt(p.medicoId ? patRegName("medicos", p.medicoId) : "") +
       '<td>'+(isActive(p) ? '<span class="tr-chip st-ativo">Ativo</span>' : '<span class="tr-chip st-inativo">Inativo</span>')+(patBlocked(p) ? ' <span class="tr-chip st-cancelado" title="' + esc(patBlockText(p)) + '">Bloqueado</span>' : '')+'</td>' +
-      '<td class="pt-trat">'+trTxt+'</td>' +
+      '<td class="pt-trat">'+trTxt+dueM+'</td>' +
     '</tr>';
   }).join("");
   // Vencimento por sessões precisa dos atendimentos: lê uma vez e redesenha.
