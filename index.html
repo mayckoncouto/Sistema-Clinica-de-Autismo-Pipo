@@ -4402,6 +4402,7 @@ function onClinicChange(){
   } catch(err){ reportAppError(err, "ao aplicar o horário da clínica"); }
 }
 function openClinicModal(){
+  edKey("clinica");
   if (!can("clinica", "view")){ showToast("Seu nível de permissão não dá acesso ao cadastro da clínica.", true); return; }
   var clCanEdit = can("clinica", "edit");
   var c = state.clinic || {};
@@ -6433,6 +6434,107 @@ function confirmDialog(opts){
     document.getElementById("cfCancel").focus();
   });
 }
+/* ---------------- Quem está editando (2026-10-22) ----------------
+ * Toda janela de GUARD_IDS com registro conhecido anuncia, pelo canal de presença do tempo real
+ * (nada é gravado no banco), qual registro está aberto. A chave vem da função que abre a janela
+ * (edKey("pat:" + id) logo no começo; vale para a próxima janela que aparecer em até 2 s) ou de
+ * EP_FIXED (janelas de registro único). Cadastro novo sem chave não anuncia. Se outra pessoa (ou
+ * outra aba) tem o MESMO registro aberto, a faixa .ik-note.ep-note aparece no alto da janela.
+ * Janela nova de edição: chamar edKey(...) no começo da função que a abre. */
+var EP = {tab: Math.random().toString(36).slice(2, 10), next: null, nextAt: 0, peers: {}, ch: null, ready: false, sent: ""};
+var EP_FIXED = {ovClinic: "clinica", ovPf: "campos-paciente", ovMetas: "metas-vendas", ovAgeBands: "faixas-etarias",
+  ovSpec: "especialidades", ovConv: "convenios", ovServ: "servicos", ovStatus: "status"};
+function edKey(k){ EP.next = k ? String(k) : null; EP.nextAt = Date.now(); }
+window.edKey = edKey;
+function epOpenOverlays(){
+  return Array.prototype.filter.call(document.querySelectorAll(".overlay"), function(o){ return o.__ek && o.isConnected && !o.hidden; });
+}
+function epKeys(){
+  var seen = {};
+  epOpenOverlays().forEach(function(o){ seen[o.__ek] = true; });
+  return Object.keys(seen).sort();
+}
+function epMine(){ var me = prMe(); return me ? {uid: me.id || "", name: me.full_name || me.email || "Outro usuário"} : {uid: "", name: "Outro usuário"}; }
+// Pessoas (fora desta aba) com a chave aberta: [{name, at, self}]
+function epOthers(k){
+  var out = [], my = epMine().uid;
+  Object.keys(EP.peers || {}).forEach(function(tab){
+    if (tab === EP.tab) return;
+    (EP.peers[tab] || []).forEach(function(m){
+      if (!m || !Array.isArray(m.keys) || m.keys.indexOf(k) === -1) return;
+      var at = m.at && m.at[k];
+      out.push({name: m.name || "Outro usuário", at: at, self: !!(my && m.uid === my)});
+    });
+  });
+  return out;
+}
+function epRender(){
+  epOpenOverlays().forEach(function(o){
+    var list = epOthers(o.__ek), note = o.querySelector(".ep-note");
+    if (!list.length){ if (note) note.remove(); return; }
+    var names = [], seen = {};
+    list.forEach(function(p){
+      var n = p.self ? "Você, em outra aba" : p.name;
+      if (seen[n]) return; seen[n] = true;
+      var h = p.at ? new Date(p.at) : null;
+      names.push("<b>" + esc(n) + "</b>" + (h && !isNaN(h) ? " (desde " + String(h.getHours()).padStart(2, "0") + ":" + String(h.getMinutes()).padStart(2, "0") + ")" : ""));
+    });
+    var html = '<div>' + names.join(", ") + (names.length === 1 ? " está" : " estão") + ' com este cadastro aberto agora.</div>' +
+      '<div class="pat-count">Se as duas pessoas salvarem, o sistema avisa e pergunta qual versão fica.</div>';
+    if (!note){
+      var body = o.querySelector(".modal-body") || o.querySelector(".modal");
+      if (!body) return;
+      note = document.createElement("div");
+      note.className = "ik-note ep-note";
+      note.setAttribute("role", "status");
+      body.insertBefore(note, body.firstChild);
+    }
+    if (note.innerHTML !== html) note.innerHTML = html;
+  });
+}
+function epTrack(){
+  var keys = epKeys(), sig = keys.join("|");
+  epRender();
+  if (!EP.ch || !EP.ready || sig === EP.sent) return;
+  EP.sent = sig;
+  var me = epMine(), at = {};
+  epOpenOverlays().forEach(function(o){ if (!at[o.__ek]) at[o.__ek] = o.__ekAt; });
+  EP.ch.track({keys: keys, at: at, name: me.name, uid: me.uid});
+}
+function epEnsureChannel(){
+  var c = agdClient();
+  if (EP.ch || !c || !c.channel) return;
+  var unit = (window.pipoAuth && window.pipoAuth.unit && window.pipoAuth.unit()) || "u";
+  EP.ch = c.channel("pipo-editando:" + unit, {config: {presence: {key: EP.tab}}});
+  EP.ch.on("presence", {event: "sync"}, function(){ EP.peers = EP.ch.presenceState() || {}; epRender(); })
+    .subscribe(function(status){
+      if (status === "SUBSCRIBED"){ EP.ready = true; EP.sent = null; epTrack(); }
+      else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"){ EP.ready = false; }
+    });
+}
+function epScan(){
+  var fresh = EP.next && Date.now() - EP.nextAt < 2000 ? EP.next : null;
+  document.querySelectorAll(".overlay").forEach(function(o){
+    if (o.__ekDone || GUARD_IDS.indexOf(o.id) === -1) return;
+    o.__ekDone = true;
+    var k = o.getAttribute("data-ek") || fresh || EP_FIXED[o.id] || "";
+    if (fresh && k === fresh){ EP.next = null; fresh = null; }
+    if (!k) return;
+    o.__ek = k; o.__ekAt = new Date().toISOString();
+    epEnsureChannel();
+  });
+  epTrack();
+}
+(function(){
+  var t = null;
+  new MutationObserver(function(){ clearTimeout(t); t = setTimeout(epScan, 60); })
+    .observe(document.documentElement, {childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"]});
+  // Ao voltar para a aba, reanuncia (o canal pode ter caído com a aba em segundo plano).
+  document.addEventListener("visibilitychange", function(){ if (!document.hidden){ EP.sent = null; epTrack(); } });
+})();
+// Testes (sem sistema online): simula o que as outras abas anunciam.
+window.__epSim = function(peers){ EP.peers = peers || {}; epRender(); };
+window.__epKeys = epKeys;
 /* ---------------- Aviso ao sair de janela de cadastro com campo alterado ----------------
  * Vale para as janelas listadas em GUARD_IDS. Campo mudado pela pessoa (evento de verdade) marca a janela;
  * ✕, Cancelar/Fechar, clique fora e Esc perguntam: Salvar | Sair sem Salvar | Continuar Editando.
@@ -9982,6 +10084,7 @@ function crmSetStatus(x, st){
 // ----- janela da tarefa -----
 // Layout da janela (como no ClickUp): Modal, Tela cheia ou Barra lateral; lembrado neste computador.
 function crmOpenTask(task, opts){
+  edKey(task && task.id ? "tarefa:" + task.id : null);
   opts = opts || {};
   var isNew = !task, listId = task ? task.list_id : opts.listId, list = crmListById(listId);
   if (!list){ showToast("Lista não encontrada.", true); return; }
@@ -10608,6 +10711,7 @@ function crmOpenListsModal(){
 }
 // Janela de uma lista (nova ou existente). Fechar/Salvar volta para Listas e Status.
 function crmOpenListEdit(list){
+  edKey(list && list.id ? "crm-lista:" + list.id : null);
   var isNew = !list, canE = isNew ? crmListsCan("create") : crmListsCan("edit"), canD = !isNew && crmListsCan("delete");
   var d = list ? JSON.parse(JSON.stringify(list)) : {id: "", name: "", color: "#64748b", statuses: crmBasicStatuses()};
   if (list) crmLoadUsage();
@@ -12088,6 +12192,7 @@ function bookingSuggestHtml(m){
 }
 
 function openBookingModal(ctx){
+  edKey(ctx && ctx.docId ? "planner:" + ctx.docId + "|" + ctx.key : null);
   var room = findRoom(ctx.roomId);
   var ther = findTherapist(room, ctx.therapistId);
   if (!room || !ther) return;
@@ -14834,6 +14939,7 @@ function pmItemDialog(o){
   setTimeout(function(){ var f = ov.querySelector(".modal-body input, .modal-body select"); if (f) f.focus(); }, 30);
 }
 function openPatientModal(p, opts){
+  edKey(p && p.id ? "paciente:" + p.id : null);
   opts = opts || {};
   var isNew = !p;
   var host = document.getElementById("modalHost");
@@ -16232,6 +16338,7 @@ function statusUseCount(id){
 }
 // Cadastros → Status: janela de um status (nome e cor), no padrão dos outros cadastros.
 function openStatusItem(item){
+  edKey(item && item.id ? "status:" + item.id : null);
   var isNew = !item, locked = !!(item && statusLocked(item.id));
   if (isNew && !can("cadastro_status", "create")){ showToast(permDeniedMsg("cadastro_status", "create"), true); return; }
   var canSave = isNew || can("cadastro_status", "edit"), canDel = !isNew && !locked && can("cadastro_status", "delete");
@@ -16600,6 +16707,7 @@ function staffDayInit(h, key, legacyProf){
 }
 
 function openStaffModal(entry, opts){
+  edKey(entry && (entry.row || entry.prof) ? "colaborador:" + ((entry.row && entry.row.id) || ("prof-" + entry.prof.id)) : null);
   opts = opts || {};
   entry = entry || {row: null, prof: null};
   var row = entry.row, prof = entry.prof;
@@ -17534,6 +17642,7 @@ function renderSalasTab(){
 }
 
 function openRoomModal(r, asGroup){
+  edKey(r && r.id ? "sala:" + r.id : null);
   var isNew = !r;
   var grp = r ? isGroup(r) : !!asGroup;
   var noun = grp ? "grupo" : "sala";
@@ -19012,6 +19121,7 @@ function agdWriteDenied(oldRow, newRec){
   return null;
 }
 function agdOpenModal(opts){
+  edKey(opts && opts.row ? "agenda:" + opts.row.id : opts && opts.date ? "agenda-novo:" + opts.date + "|" + (opts.time || "") + "|" + (opts.profId || opts.roomId || "") : null);
   // opts: {row} para editar; ou {date, time, profId, roomId} para novo
   var row = opts.row || null, isNew = !row;
   var rowKind = bookingKind(row);
@@ -22949,6 +23059,7 @@ function holSortKey(h){
   return h.anual ? (h.inicio || "").slice(5) : (h.inicio || "");
 }
 function openHolidayModal(item){
+  edKey(item && item.id ? "feriado:" + item.id : null);
   var isNew = !item;
   if (isNew && !can("feriados", "create")){ showToast(permDeniedMsg("feriados", "create"), true); return; }
   var canSave = isNew ? true : can("feriados", "edit");
@@ -23209,6 +23320,7 @@ function lnTermoDialog(loan){
   document.getElementById("tmPrint").addEventListener("click", function(){ contractPrint(cur, "Termo de Empréstimo — " + (ctx.tomador_nome || loan.desc)); });
 }
 function openContractModal(item){
+  edKey(item && item.id ? "contrato:" + item.id : null);
   var isNew = !item;
   if (isNew && !can("contratos", "create")){ showToast(permDeniedMsg("contratos", "create"), true); return; }
   var isDefault = item && item.id === CONTRACT_DEFAULT.id && !(state.contracts && state.contracts.length);
@@ -24862,6 +24974,7 @@ function prDelFinalCheck(rec){
 
 // Editor: opts {patient, record?, appointment?}
 function prOpenEditor(opts){
+  edKey(opts && opts.record && opts.record.id ? "evolucao:" + opts.record.id : opts && opts.appointment && opts.appointment.id ? "evolucao-atend:" + opts.appointment.id : null);
   var p = opts.patient, rec = opts.record || null, appt = opts.appointment || null;
   var savedOk = false;
   if (!p) return;
@@ -26943,6 +27056,7 @@ function wireTreatmentsTab(){
 
 // Janela do tratamento. opts: {patientId, copyFrom, renegotiateFrom}
 function openTreatmentModal(t, opts){
+  edKey(t && t.id && !(opts && (opts.copyFrom || opts.renegotiateFrom)) ? "tratamento:" + t.id : null);
   opts = opts || {};
   var isNew = !t;
   if (!can("tratamentos", "view")){ showToast(permDeniedMsg("tratamentos", "view"), true); return; }
@@ -29876,6 +29990,7 @@ var HELP_TOPICS = [
       "Ao sair de uma janela de cadastro depois de mudar algum campo (pelo ✕, Cancelar, Fechar, clique fora ou Esc), o sistema pergunta: <b>Salvar</b>, <b>Sair sem Salvar</b> ou <b>Continuar Editando</b>.",
       "Nas janelas de Paciente, Tratamento, Lançamento e Conta a Pagar ou a Receber já salvos, <b>Outras Opções ▾ → Criar Tarefa</b> escolhe a lista do CRM e abre a janela da tarefa já preenchida (título e paciente); ajuste e salve.",
       "Duas pessoas podem mexer nos cadastros ao mesmo tempo: cada uma grava só o que alterou. Se outra pessoa alterou o mesmo cadastro depois que você o abriu, ao salvar aparece o aviso “Alterado Enquanto Você Editava”, com quem alterou e a hora: <b>Salvar Assim Mesmo</b> grava a sua versão por cima; <b>Recarregar</b> descarta a sua e mostra a versão atual.",
+      "Ao abrir um cadastro que outra pessoa já está com a janela aberta (ou você mesmo, em outra aba), aparece no alto da janela o aviso “Fulana está com este cadastro aberto agora”, com a hora em que ela abriu. O aviso some sozinho quando a outra pessoa fecha a janela. Vale para todas as janelas de cadastro e edição (pacientes, tratamentos, agendamentos, tarefas, financeiro, prontuário e os demais).",
       "No celular, o menu fica no botão ☰ do canto superior. Planner e Resumo não aparecem no celular.",
       "A barra de cada tela (busca, filtros e botões) fica numa linha só no computador; quando falta espaço, a busca e os filtros encolhem e o texto termina em “…”. No celular ela ocupa no máximo 3 linhas abaixo do título, e a caixa “Inativos” fica ao lado do título."
     ],
@@ -32088,6 +32203,7 @@ function readRegFields(cfg, root){
   return out;
 }
 function openRegistryItem(kind, item){
+  edKey(item && item.id ? kind + ":" + item.id : null);
   var cfg = REG_CFG[kind], isNew = !item;
   if (cfg.open) return cfg.open(item);
   if (cfg.route && cfg.route(item)) return;
@@ -33643,6 +33759,7 @@ function openPlanPatientPick(){
 
 /* ---- janela do plano ---- */
 function openPlanModal(plan, opts){
+  edKey(plan && plan.id ? "plano:" + plan.id : null);
   opts = opts || {};
   var isNew = !plan, readOnlyVersion = !!(plan && plan.status !== "vigente");
   var pid = plan ? plan.patient_id : opts.patientId;
@@ -34645,6 +34762,7 @@ function planPrint(plan){
 /* ---- cadastro de Escalas (níveis com cor; o último é o nível final) ---- */
 // opts.stack: abre por cima de outra janela (o "+ Incluir" das listas de Escala); opts.onDone(rec|null).
 function openScaleModal(item, opts){
+  edKey(item && item.id ? "escala:" + item.id : null);
   opts = opts || {};
   var isNew = !item;
   if (isNew && !can("escalas", "create")){ showToast(permDeniedMsg("escalas", "create"), true); return; }
@@ -34791,6 +34909,7 @@ function specCheckGridWire(el){
   return function(){ return Array.prototype.map.call(el.querySelectorAll("input:checked"), function(c){ return c.value; }); };
 }
 function openGoalModal(item, opts){
+  edKey(item && item.id ? "objetivo:" + item.id : null);
   opts = opts || {};
   var isNew = !item;
   if (isNew && !can("objetivos", "create")){ showToast(permDeniedMsg("objetivos", "create"), true); return; }
@@ -34933,6 +35052,7 @@ function planActsModal(o, band, patientName){
 }
 function actDurText(a){ return a && a.duracao ? a.duracao + " min" : ""; }
 function openActivityModal(item, opts){
+  edKey(item && item.id ? "atividade:" + item.id : null);
   opts = opts || {};
   var isNew = !item;
   if (isNew && !can("atividades", "create")){ showToast(permDeniedMsg("atividades", "create"), true); return; }
@@ -35473,6 +35593,7 @@ function openAnamQuestionModal(ctx){
 }
 
 function openAnamTypeModal(item, opts){
+  edKey(item && item.id && !(opts && opts.copy) ? "modelo-anamnese:" + item.id : null);
   opts = opts || {};
   var isNew = !item || !!opts.copy;
   if (isNew && !can("tipos_anamnese", "create")){ showToast(permDeniedMsg("tipos_anamnese", "create"), true); return; }
@@ -36129,6 +36250,7 @@ function openAnamLinkModal(rec){
 }
 
 function openAnamModal(id){
+  edKey(id ? "anamnese:" + id : null);
   anLoadFull(id).then(function(rec){
     if (!rec){ showToast("Anamnese não encontrada.", true); return; }
     var done = rec.status === "concluida", canEdit = !done && anCan(rec.type, "edit");
@@ -38604,6 +38726,7 @@ function flDupOf(r, ignoreId){
   return (FL.rows || []).filter(function(x){ return x.id !== ignoreId && x.acc === r.acc && x.date === r.date && Math.abs(x.valor - r.valor) < 0.005 && normText(x.desc) === k; })[0] || null;
 }
 function openLancamento(row, opts){
+  edKey(row && row.id ? "lancamento:" + row.id : null);
   var isNew = !row;
   if (isNew && !flCan("create")){ showToast(permDeniedMsg("financeiro", "create"), true); return; }
   var r = row || Object.assign({acc: FL.acc || "", date: trTodayIso(), desc: "", plan: "", valor: null, extDate: "", extVal: null, obs: ""}, (opts && opts.pre) || {});
@@ -39209,6 +39332,7 @@ function openLinkPayable(e, after){
   });
 }
 function openConta(row, opts){
+  edKey(row && row.id ? "conta:" + row.id : null);
   var isNew = !row;
   if (isNew && !fpCan("create")){ showToast(permDeniedMsg("financeiro", "create"), true); return; }
   var r = row || Object.assign({venc: trTodayIso(), desc: "", plan: "", acc: "", sup: "", staff: "", valor: null, obs: "", entry: "", grupo: "", parcela: 0, parcelas: 0}, (opts && opts.pre) || {});
@@ -39914,6 +40038,7 @@ function lnRefazerDialog(l, done){
   });
 }
 function openEmprestimo(loan, k){
+  edKey(loan && loan.id ? "emprestimo:" + loan.id : null);
   k = (loan && loan.sentido) || k || lnK();
   var isNew = !loan, tom = k === "tomado", pl = LN_PLAN[k];
   if (isNew && !(lnCan("create") && fpCan("create"))){ showToast(permDeniedMsg("financeiro", "create"), true); return; }
@@ -42522,6 +42647,7 @@ function crmaRunNow(){
   });
 }
 function crmaOpen(id){
+  edKey(id ? "automacao:" + id : null);
   var r = crmaRule(id); if (!r) return;
   var cfg = JSON.parse(JSON.stringify(crmaCfg(id))), canEdit = crmaCan("edit");
   var host = document.getElementById("modalHost");

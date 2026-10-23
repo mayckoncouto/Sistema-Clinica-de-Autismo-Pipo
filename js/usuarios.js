@@ -426,6 +426,7 @@
   }
 
   function openUserModal(u) {
+    if (window.edKey) window.edKey(u && u.id ? "usuario:" + u.id : null);
     var isNew = !u;
     var me = auth.profile();
     var isMe = !!(u && me && u.id === me.id);
@@ -938,6 +939,7 @@
   }
 
   function openRoleModal(role, copyFrom) {
+    if (window.edKey) window.edKey(role && role.id && !copyFrom ? "nivel:" + role.id : null);
     var isNew = !role;
     var locked = roleLockedFor(role);
     var members = role ? users.filter(function (u) { return u.role_id === role.id; }) : [];
