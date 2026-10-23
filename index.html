@@ -1939,6 +1939,7 @@ table.pat-table{border-collapse:collapse;table-layout:fixed;width:100%}
 .pat-table td.pt-venc .pt-due-l{color:var(--muted)}
 .pat-table td.pt-especialidades{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--ink-2)}
 .pat-table td.pt-muted{color:var(--muted)}
+.pat-table td.pt-reg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
 .sort-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0;margin-left:3px;border-radius:4px;vertical-align:middle}
 .sort-btn svg{width:10px;height:10px;display:block}
 /* CRM: o botão de ordenar (crescente/decrescente) fica sempre visível em todas as colunas; se faltar espaço, o texto do título é que encurta */
@@ -15151,14 +15152,17 @@ function ptListRender(pane, cfg){
   draw();
 }
 GT_PAGED["pt-agenda"] = 1; GT_PAGED["pt-pront"] = 1; GT_PAGED["pt-anam"] = 1; GT_PAGED["pt-anexos"] = 1;
+// Larguras padrão das listas da janela do paciente (2026-10-23): começam nos tamanhos combinados com o usuário;
+// as larguras ajustadas antes desta data são esquecidas uma vez (depois, quem arrastar a borda mantém a sua).
+(function(){ try { if (!localStorage.getItem("agendaPipo:ptWidths2")){ ["pt-agenda", "pt-pront", "pt-anam"].forEach(function(k){ localStorage.removeItem("agendaPipo:colWidths:" + k); }); localStorage.setItem("agendaPipo:ptWidths2", "1"); } } catch (e) {} })();
 function ptAgendaTab(pane, v){
   var c = agdClient();
   var pick = function(rows){
     rows = rows.filter(function(r){ return !r.blocked && (r.patient_id === v.id || (!r.patient_id && normText(r.patient || "") === normText(v.nome))); });
     rows.sort(function(a, b){ return (b.date + " " + (b.time || "")) < (a.date + " " + (a.time || "")) ? -1 : 1; });
     ptListRender(pane, {id: "pt-agenda", empty: "Nenhum agendamento na Agenda para este paciente.", noun: ["agendamento", "agendamentos"],
-      cols: [{key: "data", label: "Data", width: 110}, {key: "hora", label: "Hora", width: 80}, {key: "prof", label: "Profissional", width: 220, min: 120, cls: "pt-nome"},
-        {key: "svc", label: "Serviço", width: 170, min: 100}, {key: "sala", label: "Sala", width: 160, min: 90}, {key: "st", label: "Status", width: 150, min: 100}],
+      cols: [{key: "data", label: "Data", width: 124}, {key: "hora", label: "Hora", width: 99}, {key: "prof", label: "Profissional", width: 247, min: 120, cls: "pt-nome"},
+        {key: "svc", label: "Serviço", width: 142, min: 90}, {key: "sala", label: "Sala", width: 200, min: 90}, {key: "st", label: "Status", width: 142, min: 100}],
       items: rows.map(function(r){
         var pr = findProfessional(r.professional_id), room = r.room_id ? findRoom(r.room_id) : null;
         return {cells: [esc(agdBrDate(r.date)), esc(r.time || ""), esc(pr ? profNome(pr) : "—"), esc(bookingServiceName(r) || "—"), esc(room ? room.name : "—"), lgStatusCell(r)],
@@ -15171,13 +15175,14 @@ function ptAgendaTab(pane, v){
 }
 function ptProntTab(pane, v, close){
   var c = agdClient();
-  return (c ? c.from("clinical_records").select("id,appointment_date,appointment_time,author_name,created_at").eq("patient_id", v.id).limit(1000) : Promise.resolve({data: []})).then(function(r){
+  return (c ? c.from("clinical_records").select("id,appointment_date,appointment_time,author_name,created_at,content").eq("patient_id", v.id).limit(1000) : Promise.resolve({data: ((PLAN && PLAN.evoMem) || []).filter(function(x){ return x.patient_id === v.id; })})).then(function(r){
     var rows = (r.data || []).sort(function(a, b){ return String(b.appointment_date || b.created_at) < String(a.appointment_date || a.created_at) ? -1 : 1; });
     ptListRender(pane, {id: "pt-pront", empty: "Nenhuma evolução registrada para este paciente.", noun: ["evolução", "evoluções"],
-      cols: [{key: "data", label: "Data", width: 120}, {key: "hora", label: "Hora", width: 90}, {key: "aut", label: "Autor", width: 260, min: 120, cls: "pt-nome"}],
+      cols: [{key: "data", label: "Data", width: 112}, {key: "hora", label: "Hora", width: 80}, {key: "aut", label: "Autor", width: 240, min: 120, cls: "pt-nome"},
+        {key: "reg", label: "Registro", width: 300, min: 160, cls: "pt-reg"}],
       items: rows.map(function(x){
-        var d = x.appointment_date || String(x.created_at).slice(0, 10);
-        return {cells: [esc(agdBrDate(d)), esc(x.appointment_time || "—"), esc(x.author_name || "—")], vals: [d, x.appointment_time || "", normText(x.author_name || "")],
+        var d = x.appointment_date || String(x.created_at).slice(0, 10), txt = prPlainText(x.content || "").slice(0, 300);
+        return {cells: [esc(agdBrDate(d)), esc(x.appointment_time || "—"), esc(x.author_name || "—"), '<span title="' + esc(txt.slice(0, 200)) + '">' + esc(txt || "—") + '</span>'], vals: [d, x.appointment_time || "", normText(x.author_name || ""), normText(txt)],
           go: function(){ close(); var b = document.querySelector('#mainTabs [data-tab="prontuario"]'); if (b) b.click(); prOpenPatient(v.id); }};
       })});
   });
@@ -15186,8 +15191,8 @@ function ptAnamTab(pane, v){
   return anLoad().then(function(rows){
     rows = rows.filter(function(r){ return r.patient === v.id && anCan(r.type, "view"); }).sort(function(a, b){ return String(b.updatedAt || "") < String(a.updatedAt || "") ? -1 : 1; });
     ptListRender(pane, {id: "pt-anam", empty: "Nenhuma anamnese para este paciente.", noun: ["anamnese", "anamneses"],
-      cols: [{key: "tipo", label: "Modelo", width: 240, min: 120, cls: "pt-nome"}, {key: "ver", label: "Versão", width: 90}, {key: "st", label: "Situação", width: 190, min: 110},
-        {key: "data", label: "Data", width: 120}, {key: "by", label: "Preenchida Por", width: 180, min: 100, cls: "pt-muted"}],
+      cols: [{key: "tipo", label: "Modelo", width: 281, min: 120, cls: "pt-nome"}, {key: "ver", label: "Versão", width: 117}, {key: "st", label: "Situação", width: 152, min: 100},
+        {key: "data", label: "Data", width: 138}, {key: "by", label: "Preenchida Por", width: 285, min: 100, cls: "pt-muted"}],
       items: rows.map(function(r){
         var d = String(r.data || r.doneAt || r.updatedAt || "").slice(0, 10);
         return {cells: [esc(r.typeName || "Anamnese"), "v" + (r.versao || 1), anStatusChip(r), d ? esc(agdBrDate(d)) : "—", esc((r.status === "concluida" ? r.doneBy : r.updatedBy) || r.by || "—")],
@@ -30455,7 +30460,7 @@ var HELP_TOPICS = [
       "<b>Bloqueio de Agendamento</b>: marque <b>Bloqueado</b> e escolha o <b>Motivo</b> (cadastro de Motivos de Bloqueio, com <b>+ Incluir</b> no fim da lista). Paciente bloqueado não pode ser agendado na Agenda (a regra <b>Paciente Bloqueado</b> fica em Acesso → Sistema) nem enviado do Planner para a Agenda. No Planner ele continua podendo ser agendado, movido e alterado; só não entra no Horário Livre nem no Sugerir Agendamento. Os atendimentos que ele já tem continuam, com a tarja <b>Bloqueado</b>; ao bloquear, o sistema oferece remover os da Agenda a partir de uma data. Todos os usuários veem o bloqueio e o motivo. Desmarcar libera o paciente.",
       "A data de entrada começa com a data do cadastro e pode ser alterada.",
       "O grupo <b>Saúde</b> (médico, CID, data do diagnóstico, nível de suporte, comunicação, alergias, medicações, restrições e encaminhamento) só aparece para quem tem a permissão <b>Pacientes – Saúde</b>: com \"ver\" os campos aparecem travados; com \"editar\" dá para alterar. Sem a permissão, esses dados também não aparecem nos Detalhes do Agendamento, na ficha impressa nem no quadro clínico do Plano Terapêutico.",
-      "Em paciente já cadastrado, a janela tem abas no topo, sempre com a mesma altura da aba <b>Cadastro</b>: <b>Cadastro</b> (os grupos acima), <b>Tratamento</b> (o formulário inteiro do tratamento ativo, para ver e salvar ali mesmo; sem tratamento aparece só o botão <b>+ Incluir</b> no topo), <b>Agenda</b> e <b>Prontuário</b> (listas em tabela, como a de Pacientes: busca, contagem, ordenar pelo título das colunas; clicar numa linha abre os Detalhes do Agendamento ou o Prontuário do paciente), <b>Anamneses</b> (clicar abre a anamnese) e <b>Anexos</b> (arquivos do paciente, os enviados aqui e os das tarefas do CRM). Em <b>Anexos</b>, <b>+ Incluir</b> (ou arrastar e soltar o arquivo sobre a aba) abre a janela de anexar, com a <b>Pasta</b> (<b>Documentos</b> exige também <b>Pacientes – Saúde</b>) e o <b>Nome do Arquivo</b>, que ganha o nome completo do paciente; <b>Renomear</b> e <b>Excluir</b> valem para os anexos do cadastro (os das tarefas se mudam na tarefa). Cada aba só aparece para quem tem a permissão da aba (Níveis de Permissão → Pacientes: <b>Aba Agenda</b>, <b>Aba Prontuário</b>, <b>Aba Anamneses</b>, <b>Anexos</b> com ver, incluir, editar e excluir) e também ver a tela correspondente; a aba Tratamento segue as permissões de Tratamentos. Só <b>Cadastro</b> tem Salvar e Excluir do paciente.",
+      "Em paciente já cadastrado, a janela tem abas no topo, sempre com a mesma altura da aba <b>Cadastro</b>: <b>Cadastro</b> (os grupos acima), <b>Tratamento</b> (o formulário inteiro do tratamento ativo, para ver e salvar ali mesmo; sem tratamento aparece só o botão <b>+ Incluir</b> no topo), <b>Agenda</b> e <b>Prontuário</b> (listas em tabela, como a de Pacientes: busca, contagem, ordenar pelo título das colunas e ajustar a largura arrastando a borda; no Prontuário, a coluna <b>Registro</b> mostra o começo do texto da evolução; clicar numa linha abre os Detalhes do Agendamento ou o Prontuário do paciente), <b>Anamneses</b> (clicar abre a anamnese) e <b>Anexos</b> (arquivos do paciente, os enviados aqui e os das tarefas do CRM). Em <b>Anexos</b>, <b>+ Incluir</b> (ou arrastar e soltar o arquivo sobre a aba) abre a janela de anexar, com a <b>Pasta</b> (<b>Documentos</b> exige também <b>Pacientes – Saúde</b>) e o <b>Nome do Arquivo</b>, que ganha o nome completo do paciente; <b>Renomear</b> e <b>Excluir</b> valem para os anexos do cadastro (os das tarefas se mudam na tarefa). Cada aba só aparece para quem tem a permissão da aba (Níveis de Permissão → Pacientes: <b>Aba Agenda</b>, <b>Aba Prontuário</b>, <b>Aba Anamneses</b>, <b>Anexos</b> com ver, incluir, editar e excluir) e também ver a tela correspondente; a aba Tratamento segue as permissões de Tratamentos. Só <b>Cadastro</b> tem Salvar e Excluir do paciente.",
       "Salve. Paciente novo: em seguida o sistema abre o tratamento dele. No resumo do tratamento aparece o horário de atendimento, só com os dias e períodos em que o paciente vem.",
       "A lista mostra nome, idade, o primeiro telefone e o primeiro e-mail, escola, médico, a situação do paciente (Ativo ou Inativo) e a do tratamento. Ao lado da busca, escolha onde procurar: <b>Paciente</b>, <b>Mãe</b>, <b>Pai</b> ou <b>Responsável Financeiro</b> — pelo nome (sem acento/maiúscula) ou pelo CPF.",
       "<b>Outras Opções ▾</b>: <b>Campos Obrigatórios</b>, <b>Imprimir Ficha Cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica), <b>Mesclar Cadastros</b> (só Administrador) e <b>Exportar Planilha</b> / <b>Importar Planilha</b> (veja o tópico Planilhas)."
