@@ -532,7 +532,7 @@ const path = require('path');
   await page.click('#atCancel'); await page.waitForTimeout(150);
   check('anexos: grupo começa recolhido e mostra a contagem?', await page.$eval('#crmAttList', (b) => b.hidden) && /\(2\)/.test(await page.textContent('#crmAttTog')));
   await page.click('#crmAttTog');
-  check('anexos: seta abre a lista e cada anexo tem 2 linhas (link+botões / descrição)?', !(await page.$eval('#crmAttList', (b) => b.hidden)) && !!(await page.$('#crmAttList .crm-att .crm-att-l1 [data-att-ren]')) && !!(await page.$('#crmAttList .crm-att > .crm-att-meta')));
+  check('anexos: seta abre a lista e cada anexo é um cartão (extensão, nome, descrição e botões)?', !(await page.$eval('#crmAttList', (b) => b.hidden)) && !!(await page.$('#crmAttList .pt-card .pt-file')) && !!(await page.$('#crmAttList .pt-card [data-att-ren]')));
   await page.click('#crmAttList .crm-att [data-att-ren]'); await page.waitForSelector('#ovAtt');
   check('anexos: renomear mostra o nome sem a extensão e sem o primeiro nome do paciente?', (await page.inputValue('#atName')) === 'Carteirinha');
   await page.fill('#atName', 'RG'); await page.click('#atOk'); await page.waitForTimeout(300);
