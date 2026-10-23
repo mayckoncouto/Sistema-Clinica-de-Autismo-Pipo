@@ -24490,6 +24490,7 @@ function agdCanStatusBatch(){ return statusesList().some(function(s){ return s.i
 var AGD_TOOLS = [
   {k: "limpar", label: "Limpar por Período", ok: function(){ return can("agenda", "delete"); }, run: function(){ agdOpenClearPeriod(); }},
   {k: "bloquear", label: "Bloquear Período", ok: function(){ return can("agenda", "create"); }, run: function(){ agdOpenBlockPeriod(); }},
+  {k: "falta", label: "Falta do Profissional", ok: function(){ return can("agenda", "create"); }, run: function(){ agdOpenAbsence(); }},
   {k: "trocar", label: "Trocar Profissional no Período", ok: function(){ return can("agenda", "edit"); }, run: function(){ agdOpenSwapPeriod(); }},
   {k: "copiar", label: "Copiar Dia ou Semana", ok: function(){ return can("agenda", "create"); }, run: function(){ agdOpenCopyPeriod(); }, sep: true},
   {k: "pendencias", label: "Pendências de Status", ok: function(){ return true; }, run: function(){ agdOpenStatusTool("pend"); }},
@@ -24789,6 +24790,72 @@ function agdOpenBlockPeriod(){
             m.close();
             agdToolDone(inserted.length + (inserted.length === 1 ? " horário bloqueado" : " horários bloqueados") + (p.del.length ? " e " + p.del.length + " atendimentos apagados" : "") + ".");
           }).catch(function(e){ showToast("Não foi possível bloquear: " + agdErr(e), true); go.disabled = false; agdLoadWeek(); });
+      });
+  });
+}
+
+/* ---- Falta do profissional ---- */
+// Por profissional e dia: com atendimento marcado, só avisa (a pessoa precisa remover ou remarcar);
+// sem atendimento, bloqueia os horários livres do dia (ou da manhã/tarde) com o motivo "Falta".
+function agdOpenAbsence(){
+  if (!agdToolNeedsOnline()) return;
+  if (!can("agenda", "create")){ showToast(permDeniedMsg("agenda", "create"), true); return; }
+  var today = agdTodayIso();
+  var m = agdToolModal("ovAgdAbsence", "Falta do Profissional",
+    "Registra a falta de quem tem agenda. Se o profissional já tem atendimentos marcados no dia, o sistema <b>avisa</b> e você precisa remover ou remarcar esses agendamentos. Se não tem nenhum, o sistema <b>bloqueia a agenda</b> do dia.",
+    '<div class="field-row">' + agdRangeHtml("afFrom", "afTo", today, today) + agdPerSelectHtml("afPer") + '</div>' +
+    '<div class="field"><label for="afNote">Motivo</label><input type="text" id="afNote" placeholder="Ex.: Atestado, Doença, Imprevisto"></div>' +
+    agdPickHtml("afProfs", "Profissionais", agdProfItems(), agdPreselProfs()) +
+    '<div class="agd-tool-prev" id="afPrev"></div>',
+    '<div class="spacer"></div><button class="btn ghost" data-tclose>Cancelar</button><button class="btn" id="afSee">Ver Prévia</button><button class="btn primary" id="afGo" disabled>Registrar Falta</button>');
+  agdPickWire(m.ov, "afProfs", "escolha ao menos um");
+  var plan = null, go = m.$("#afGo"), prev = m.$("#afPrev");
+  m.$(".modal-body").addEventListener("change", function(){ plan = null; go.disabled = true; go.textContent = "Registrar Falta"; prev.innerHTML = ""; });
+  m.$("#afSee").addEventListener("click", function(){
+    var f = {from: m.$("#afFrom").value, to: m.$("#afTo").value, per: m.$("#afPer").value, motivo: m.$("#afNote").value.trim(), profs: agdPickRead(m.ov, "afProfs")};
+    if (!agdRangeOk(f.from, f.to)) return;
+    if (!f.profs.length){ showToast("Escolha ao menos um profissional.", true); return; }
+    f.note = "Falta" + (f.motivo ? " — " + f.motivo : "");
+    prev.innerHTML = '<div class="pat-count">Calculando…</div>';
+    agdFetchRange(f.from, f.to).then(function(rows){
+      rows = rows.filter(function(r){ return f.profs.indexOf(r.professional_id) !== -1 && agdInPer(r.date, r.time, f.per); });
+      var taken = {}; rows.forEach(function(r){ taken[r.date + "|" + r.time + "|" + r.professional_id] = true; });
+      var pend = [], ins = [], days = [];
+      f.profs.forEach(function(pid){
+        var prof = findProfessional(pid), room = (agdProfRoom(pid) || {}).id || null;
+        agdDatesBetween(f.from, f.to).forEach(function(iso){
+          var appts = rows.filter(function(r){ return r.professional_id === pid && r.date === iso && !bookingKind(r); });
+          if (appts.length){ pend = pend.concat(appts); days.push({pid: pid, iso: iso, n: appts.length}); return; }
+          agdTimesFor(iso, f.per).forEach(function(t){
+            if (!prof || !agdInHours(prof, t, agdParse(iso)) || taken[iso + "|" + t + "|" + pid]) return;
+            ins.push({date: iso, time: t, professional_id: pid, room_id: room, patient: "Bloqueado", note: f.note, blocked: true, service: null});
+          });
+        });
+      });
+      plan = {f: f, ins: ins, pend: pend};
+      var daysBlocked = {}; ins.forEach(function(r){ daysBlocked[r.professional_id + "|" + r.date] = true; });
+      prev.innerHTML = '<div class="agd-day-chips"><span class="tr-mchip">Dias bloqueados: ' + Object.keys(daysBlocked).length + ' (' + ins.length + ' horários)</span>' +
+        (days.length ? '<span class="tr-mchip tr-falta">Dias com agendamentos para remover: ' + days.length + '</span>' : '') + '</div>' +
+        (days.length ? '<div class="field-hint" style="margin-top:8px"><b>Atenção:</b> estes profissionais têm atendimentos marcados nos dias da falta. Remova ou remarque os agendamentos abaixo; esses dias <b>não</b> foram bloqueados. Depois registre a falta de novo para bloquear.</div>' + agdListTable(pend, {title: "Status", val: function(r){ return r.status ? rpStatusName(r.status) : "Sem status"; }}) : '') +
+        (!ins.length && !days.length ? '<p class="hint">Nenhum horário livre para bloquear no horário de trabalho.</p>' : '');
+      go.disabled = !ins.length;
+      go.textContent = "Registrar Falta" + (ins.length ? " (" + Object.keys(daysBlocked).length + (Object.keys(daysBlocked).length === 1 ? " dia)" : " dias)") : "");
+    }).catch(function(e){ prev.innerHTML = ""; showToast("Não foi possível ler a Agenda: " + agdErr(e), true); });
+  });
+  go.addEventListener("click", function(){
+    if (!plan || !plan.ins.length) return;
+    var p = plan, period = agdBrDate(p.f.from) + " a " + agdBrDate(p.f.to);
+    confirmDialog({title: "Registrar Falta", message: "Bloquear <b>" + p.ins.length + "</b> horários de <b>" + esc(agdWho(p.f.profs)) + "</b> (" + esc(period) + ")?" +
+      (p.pend.length ? "<br>Os dias com atendimentos marcados (" + p.pend.length + ") ficam sem bloqueio até você remover os agendamentos." : ""), confirmLabel: "Registrar Falta"})
+      .then(function(ok){
+        if (!ok) return;
+        go.disabled = true;
+        agdInsertBatches(p.ins).then(function(inserted){
+          agdRecord("Falta " + agdWho(p.f.profs) + " · " + period, [], inserted);
+          m.close();
+          agdToolDone("Falta registrada: " + inserted.length + (inserted.length === 1 ? " horário bloqueado." : " horários bloqueados.") +
+            (p.pend.length ? " Há " + p.pend.length + " atendimentos marcados para remover." : ""), !!p.pend.length);
+        }).catch(function(e){ showToast("Não foi possível registrar: " + agdErr(e), true); go.disabled = false; agdLoadWeek(); });
       });
   });
 }
@@ -31257,7 +31324,7 @@ var HELP_TOPICS = [
       "Copiar, mover e arrastar funcionam como no Planner. Desfazer: Ctrl+Z / Ctrl+Y.",
       "Busca: destaca o paciente na tela e mostra quantos há na semana.",
       "Botão <b>Tela cheia</b> (quatro cantos, na barra): mostra só a grade, sem o topo, a barra, a lista lateral e a legenda. Para voltar: Esc ou <b>Sair da tela cheia</b> no canto.",
-      "Menu <b>Outras Opções ▾</b> (no celular, dentro do ☰): <b>Limpar por Período</b> (datas, manhã/tarde, profissionais, salas e o que apagar: tudo, só sem status, só bloqueios ou só os que vieram do Planner); <b>Bloquear Período</b> (férias, folga: bloqueia os horários livres dos profissionais, com motivo, e lista os atendimentos que continuam marcados); <b>Trocar Profissional no Período</b> (substituição: passa os atendimentos de um profissional para outro, conferindo horário de trabalho e conflitos); <b>Copiar Dia ou Semana</b> (para outra data, só onde estiver livre); <b>Pendências de Status</b> (atendimentos que já passaram sem status); <b>Status em Lote</b> (marca vários de uma vez) e <b>Exportar Excel</b>.",
+      "Menu <b>Outras Opções ▾</b> (no celular, dentro do ☰): <b>Limpar por Período</b> (datas, manhã/tarde, profissionais, salas e o que apagar: tudo, só sem status, só bloqueios ou só os que vieram do Planner); <b>Bloquear Período</b> (férias, folga: bloqueia os horários livres dos profissionais, com motivo, e lista os atendimentos que continuam marcados); <b>Falta do Profissional</b> (escolha as datas, manhã/tarde, o motivo e os profissionais: nos dias em que o profissional não tem atendimento o sistema bloqueia a agenda com o motivo “Falta”; nos dias em que ele tem atendimentos marcados o sistema avisa e lista os agendamentos, que você precisa remover ou remarcar, e esse dia não é bloqueado até a falta ser registrada de novo); <b>Trocar Profissional no Período</b> (substituição: passa os atendimentos de um profissional para outro, conferindo horário de trabalho e conflitos); <b>Copiar Dia ou Semana</b> (para outra data, só onde estiver livre); <b>Pendências de Status</b> (atendimentos que já passaram sem status); <b>Status em Lote</b> (marca vários de uma vez) e <b>Exportar Excel</b>.",
       "Toda ferramenta mostra uma <b>prévia</b> antes de gravar (o que vai mudar e o que fica de fora, com o motivo) e entra no desfazer (Ctrl+Z)."
     ],
     rules: [

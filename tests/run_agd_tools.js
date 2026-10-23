@@ -75,7 +75,7 @@ const path = require('path');
     var items = Array.prototype.map.call(document.querySelectorAll("#agdToolsMenu [data-agd-tool]"), function(b){ return b.textContent; });
     document.getElementById("agdToolsBtn").click();
     return {wrap: !document.getElementById("agdToolsWrap").hidden, old: !!document.getElementById("agdClearWeekBtn"), items: items}; })()`);
-  check('Agenda has "Outras Opções" with the tools (no Limpar Semana button)?', menu.wrap && !menu.old && menu.items.length === 8 && menu.items[0] === 'Limpar por Período', JSON.stringify(menu));
+  check('Agenda has "Outras Opções" with the tools (no Limpar Semana button)?', menu.wrap && !menu.old && menu.items.length === 9 && menu.items[0] === 'Limpar por Período', JSON.stringify(menu));
 
   // Limpar por Período: só Ana, tudo; protege status e evolução
   await ev(`agdOpenClearPeriod()`);
@@ -105,6 +105,20 @@ const path = require('path');
   const blk = await ev(`(function(){ var b = window.__fakeAgd.appointments.filter(function(r){ return r.blocked && r.professional_id === "bia-terapeuta"; });
     return {n: b.length, note: b[0] && b[0].note, morning: b.every(function(r){ return r.time < "12:00"; }), keepsAna: !b.some(function(r){ return r.time === "08:00"; })}; })()`);
   check('Bloquear: blocks free morning slots of Bia (not the 08:00 já marcado), with motivo?', blk.n > 3 && blk.note === 'Férias' && blk.morning && blk.keepsAna && /continuam marcados: 1/.test(bl.prev), JSON.stringify(blk) + ' ' + bl.prev.slice(0, 120));
+
+  // Falta do Profissional: Ana em 07/01 (tem atendimento: só avisa) e 08/01 (livre: bloqueia o dia)
+  await ev(`agdOpenAbsence()`);
+  await page.waitForTimeout(200);
+  await ev(`(function(){ document.getElementById("afFrom").value = "2030-01-07"; document.getElementById("afTo").value = "2030-01-08";
+    document.getElementById("afNote").value = "Atestado";
+    var a0 = document.querySelector('#afProfs input[value="ana-terapeuta"]'); a0.checked = true; a0.dispatchEvent(new Event("change", {bubbles: true}));
+    document.getElementById("afSee").click(); })()`);
+  await page.waitForTimeout(300);
+  const fl = await ev(`({prev: document.getElementById("afPrev").textContent, go: document.getElementById("afGo").textContent})`);
+  await page.click('#afGo'); await page.waitForTimeout(150); await page.click('#cfOk'); await page.waitForTimeout(400);
+  const fb = await ev(`(function(){ var b = window.__fakeAgd.appointments.filter(function(r){ return r.blocked && r.professional_id === "ana-terapeuta" && /^Falta/.test(r.note || ""); });
+    return {n: b.length, d8: b.every(function(r){ return r.date === "2030-01-08"; }), note: b[0] && b[0].note}; })()`);
+  check('Falta: 08/01 (sem atendimento) blocked as "Falta — Atestado"; 07/01 (tem atendimento) only warned?', fb.n > 3 && fb.d8 && fb.note === 'Falta — Atestado' && /para remover: 1/.test(fl.prev) && /Atenção/.test(fl.prev), JSON.stringify(fb) + ' ' + fl.prev.slice(0, 160));
 
   // Trocar Profissional: Ana → Bia em 07/01–09/01 (a2 tem status, fica)
   await ev(`window.__fakeAgd.appointments.push({id: "t1", date: "2030-01-10", time: "13:30", professional_id: "ana-terapeuta", room_id: "r1", patient: "Carla Laranja", note: "", blocked: false, service: "sessao", status: null})`);
@@ -165,7 +179,7 @@ const path = require('path');
 
   // Mobile ☰ has the same tools
   const mob = await ev(`(function(){ document.getElementById("agdMoreBtn").click(); var n = document.querySelectorAll("#agdMoreMenu [data-agd-tool]").length; document.getElementById("agdMoreBtn").click(); return n; })()`);
-  check('☰ (celular) has the same tools?', mob === 8, mob);
+  check('☰ (celular) has the same tools?', mob === 9, mob);
 
   check('no page errors?', errors.length === 0, errors.join(' | '));
   await browser.close();

@@ -335,6 +335,7 @@
     // Agenda (Outras Opções)
     {key: "ferr_ag_limpar", panel: "agenda", label: "Limpar por Período", hint: "Agenda → Outras Opções", from: [["agenda", "delete"]], agd: "limpar"},
     {key: "ferr_ag_bloquear", panel: "agenda", label: "Bloquear Período", hint: "Agenda → Outras Opções", from: [["agenda", "create"]], agd: "bloquear"},
+    {key: "ferr_ag_falta", panel: "agenda", label: "Falta do Profissional", hint: "Agenda → Outras Opções", from: [["agenda", "create"]], agd: "falta"},
     {key: "ferr_ag_trocar", panel: "agenda", label: "Trocar Profissional no Período", hint: "Agenda → Outras Opções", from: [["agenda", "edit"]], agd: "trocar"},
     {key: "ferr_ag_copiar", panel: "agenda", label: "Copiar Dia ou Semana", hint: "Agenda → Outras Opções", from: [["agenda", "create"]], agd: "copiar"},
     {key: "ferr_ag_pendencias", panel: "agenda", label: "Pendências de Status", hint: "Agenda → Outras Opções", from: [["agenda", "view"]], agd: "pendencias"},
