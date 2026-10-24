@@ -1040,6 +1040,13 @@ html{accent-color:var(--accent)}
 .inact-toggle input{width:15px;height:15px;margin:0}
 .inact-tag{display:inline-block;padding:0 6px;border-radius:999px;font-size:10.5px;font-weight:800;background:var(--surface-2);color:var(--muted);vertical-align:middle}
 tr.is-inactive td{color:var(--muted)}
+.modal-view .modal-body :is(input,textarea,select):not([type=checkbox]):not([type=radio]),.modal-view .modal-body .dp-btn,.modal-view .modal-body .ms-btn{background:transparent!important;border-color:transparent!important;box-shadow:none!important;padding-left:0!important;resize:none;pointer-events:none;color:var(--ink)}
+.modal-view .modal-body .dp-btn .dp-ico,.modal-view .modal-body .ms-btn svg,.modal-view .modal-body .ms-btn .ms-arr,.modal-view .modal-body .dp-btn svg:last-child{display:none}
+.modal-view .modal-body :is(input[type=checkbox],input[type=radio]){pointer-events:none}
+.modal-view .modal-body :is(.rm,.add-row-btn,.reg-pick-add,.dp-add){display:none!important}
+.modal-view .modal-body .field>label{color:var(--muted);font-size:11.5px}
+.modal-view .modal-body :is(input,textarea){cursor:default}
+.modal-view .modal-body :is(input,textarea)::placeholder{color:transparent}
 .modal-ro .modal-body .rm,.modal-ro .modal-body .add-row-btn,.modal-nodel .modal-body .rm{display:none!important}
 .modal-ro .modal-body :is(input,select,textarea,.dp-btn){pointer-events:none}
 #patListHost,#reportHost{flex:1;min-height:0;display:flex;flex-direction:column}
@@ -5680,6 +5687,12 @@ function canUseStatus(id){ return !id || (window.pipoAuth ? window.pipoAuth.can(
 var DEFAULT_SERVICE_ID = "sessao";
 // Atendimento de paciente com serviço que não é "Sessão" (Orientação Familiar, Avaliação...):
 // a célula usa a mesma cor de Treinamento (Planner e Agenda).
+// Serviços e tipos que o sistema usa por código (funil do Gerencial, vencimento da avaliação, divergências…):
+// não são renomeados nem excluídos; cor e demais campos seguem editáveis.
+var SVC_PROTECTED = {"triagem": "Triagem", "avaliacao": "Avaliação", "avaliacao-neuropsicologica": "Avaliação Neuropsicológica", "orientacao-familiar": "Acolhimento Familiar"};
+function svcProtected(s){ return !!(s && (SVC_PROTECTED[s.id] || normText(s.name || "") === "devolutiva")); }
+var GROUP_PROTECTED = ["coordenador", "aplicador aba"];
+function groupProtected(r){ return !!(r && r.group && GROUP_PROTECTED.indexOf(normText(r.name || "")) !== -1); }
 function otherService(b){ return !!(b && b.service && b.service !== DEFAULT_SERVICE_ID); }
 // Cor do atendimento de um serviço que não é Sessão: a cor escolhida no cadastro do serviço (Cadastros → Serviços);
 // sem cor escolhida vale o ciano de Treinamento. Ignora a faixa etária e a Intervenção ABA.
@@ -6460,6 +6473,38 @@ function modalApplyPerms(mod, isNew, ids){
     modalReadOnly(ids.ov);
   }
   return {save: canSave, del: canDel};
+}
+// ---- Janela que abre em leitura ----
+// Cadastro existente abre como documento (sem aparência de campo); o botão Editar libera os campos.
+// Quem não pode editar já cai em modalApplyPerms (leitura permanente). o = {save: [ids dos botões Salvar], scope: seletor}
+function viewMode(ovId, o){
+  o = o || {};
+  if (window.__noViewMode) return;   // os testes antigos preenchem os campos direto
+  var ov = document.getElementById(ovId); if (!ov) return;
+  var m = ov.querySelector(".modal") || ov; if (m.classList.contains("modal-ro") || m.classList.contains("modal-view")) return;
+  var saves = (o.save || []).map(function(id){ return document.getElementById(id); }).filter(function(b){ return b && !b.hidden; });
+  if (!saves.length) return;   // sem Salvar = já é leitura
+  var scope = ov.querySelector(o.scope || ".modal-body"); if (!scope) return;
+  var foot = ov.querySelector(".modal-foot"); if (!foot) return;
+  var allow = "[data-ro-ok],[data-view-ok],.pm-sec-head,.tr-sec-toggle,.modal-close,.seg button,.tab,[role=tab]";
+  var guard = function(e){
+    var t = e.target; if (!t || !t.closest || !t.closest("button,input,select,textarea,.dp-btn,.ms-btn,label,[contenteditable],.autolist")) return;
+    if (t.closest(allow)) return;
+    e.stopPropagation(); if (e.cancelable) e.preventDefault();
+  };
+  var evs = ["click", "keydown", "beforeinput", "change", "drop", "focusin"];
+  evs.forEach(function(n){ scope.addEventListener(n, guard, true); });
+  m.classList.add("modal-view");
+  saves.forEach(function(b){ b.hidden = true; });
+  var ed = document.createElement("button"); ed.type = "button"; ed.className = "btn primary"; ed.id = "viewEditBtn"; ed.setAttribute("data-ro-ok", ""); ed.textContent = "Editar";
+  saves[0].parentNode.insertBefore(ed, saves[0]);
+  ed.addEventListener("click", function(){
+    evs.forEach(function(n){ scope.removeEventListener(n, guard, true); });
+    m.classList.remove("modal-view");
+    saves.forEach(function(b){ b.hidden = false; });
+    ed.remove();
+    var f = scope.querySelector("input:not([type=hidden]):not([disabled]),textarea:not([disabled])"); if (f && !isMobileView()) f.focus();
+  });
 }
 function modalReadOnly(ovId){
   var ov = document.getElementById(ovId); if (!ov) return;
@@ -16079,6 +16124,7 @@ function openPatientModal(p, opts){
   }
 
   modalApplyPerms("pacientes", isNew, {ov: "ovPat", save: "pSave", del: "pDelete", cancel: "pCancel"});
+  if (!isNew && !opts.noView) viewMode("ovPat", {save: ["pSave"], scope: ptTabs.length > 1 ? '.pm-pane[data-pmp="cad"]' : ".modal-body"});
   function close(){ host.innerHTML = ""; }
   if (!isNew) setupInactivate({btn: "pDelete", mod: "pacientes", item: v, name: v.nome, usage: USAGE.pacientes, close: close,
     save: function(it){
@@ -17533,6 +17579,7 @@ function openStaffModal(entry, opts){
     '</div></div>';
 
   var overlay = document.getElementById("ovProf");
+  setTimeout(function(){ if (!isNew) viewMode("ovProf", {save: ["profSave"]}); }, 0);
   function $(id){ return document.getElementById(id); }
   function val(id){ var el = $(id); return el ? el.value.trim() : ""; }
   function close(){ host.innerHTML = ""; }
@@ -18386,7 +18433,9 @@ function openRoomModal(r, asGroup){
   setTimeout(function(){
     if (!document.getElementById("ovRoom")) return;
     modalApplyPerms(grp ? "grupos" : "salas", isNew, {ov: "ovRoom", save: "rmSave", del: "rmDelete", cancel: "rmCancel"});
-    if (!isNew) setupInactivate({btn: "rmDelete", mod: grp ? "grupos" : "salas", item: r, name: r.name, usage: USAGE.salas, close: close,
+    if (!isNew) viewMode("ovRoom", {save: ["rmSave"]});
+    if (!isNew && groupProtected(r)){ var gn = document.getElementById("rmName"), gd = document.getElementById("rmDelete"); if (gn) gn.disabled = true; if (gd) gd.hidden = true; }
+    if (!isNew && !groupProtected(r)) setupInactivate({btn: "rmDelete", mod: grp ? "grupos" : "salas", item: r, name: r.name, usage: USAGE.salas, close: close,
       inactivateFlow: function(uses){ return plannerRoomDeleteFlow(r, uses); },
       save: function(it){ return writeRooms(state.rooms.map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; })); }});
   }, 0);
@@ -24132,6 +24181,7 @@ function openContractModal(item){
       writeSimpleList("contratos", contractsList().filter(function(c){ return c.id !== v.id; })).then(function(done){ if (done){ close(); renderRegistryTab("contratos"); } });
     });
   });
+  if (item && item.id) viewMode("ovCt", {save: ["ctSave"]});
   var sv = $("ctSave");
   if (sv) sv.addEventListener("click", function(){
     var name = $("ctName").value.trim(), content = contractFromChips(ed).replace(/\u200b/g, "");
@@ -28082,6 +28132,7 @@ function openTreatmentModal(t, opts){
   ed.wire("ovTreat");
   mobileAccordion(document.querySelector("#ovTreat .modal-body"));
   var overlay = document.getElementById("ovTreat");
+  if (!isNew) viewMode("ovTreat", {save: ["trSave"]});
   if (opts.embed) setTimeout(function(){ trEmbedFoot(opts.embed); }, 0);
   function close(){ host.innerHTML = ""; if (opts.onClose) opts.onClose(); }
   overlay.addEventListener("mousedown", function(e){ if (e.target === overlay && !opts.embed) close(); });
@@ -30879,6 +30930,8 @@ var HELP_TOPICS = [
     rules: [
       "Você só vê as telas e os botões que o seu nível de permissão libera. Se faltar algo, fale com o Administrador.",
       "Toda exclusão pede confirmação.",
+      "Cadastros já existentes (Paciente, Tratamento, Colaborador, Convênio, Sala, Plano Terapêutico, Contrato, Lançamento, Conta a Pagar ou Receber e Empréstimo) abrem em <b>leitura</b>, como um documento. Para alterar, clique em <b>Editar</b> no rodapé; sem clicar, nada é alterado.",
+      "Serviços usados pelas regras do sistema (Triagem, Avaliação, Avaliação Neuropsicológica, Acolhimento Familiar e Devolutiva), o tipo Multidisciplinar e os grupos Coordenador e Aplicador ABA não podem ser renomeados nem excluídos; só a cor e os demais campos mudam. Se forem apagados por engano, o sistema os recria.",
       "<b>Ctrl+clique</b> (ou <b>Cmd+clique</b> no Mac, ou o botão do meio do mouse) em um botão que leva a outra tela — <b>Ver no Planner</b>, <b>Ver na Agenda</b>, <b>Ir até o horário</b>, <b>Abrir Tratamento</b>, <b>Cadastro do Paciente</b>, <b>Abrir Plano Terapêutico</b>, o ícone de agenda da evolução, o histórico de alterações, as linhas de relatório que abrem o Planner, as tarefas do CRM (listas, quadro e Caixa de Entrada) — abre essa tela em <b>outra aba do navegador</b> e mantém a janela atual aberta, para você conferir a informação e depois continuar ou salvar o que estava fazendo.",
       "<b>Ctrl+Enter</b> (ou <b>Cmd+Enter</b> no Mac) salva a janela aberta, como clicar no botão <b>Salvar</b> do rodapé (a de cima, quando há várias). Nos comentários do CRM, Ctrl+Enter envia o comentário.",
       "Nas telas de apoio que abrem por Outras Opções de outra tela (Médicos, Escolas, Diagnósticos, Origens e Motivos de Bloqueio em Pacientes; Tipos de Tratamento e Motivos de Cancelamento em Tratamentos; Tipos de Colaborador, CBO e Conselhos em Colaboradores; Modelos em Anamneses; Categorias de Fornecedor em Fornecedores), o menu <b>Outras Opções</b>, antes do <b>+ Incluir</b>, leva direto à tela principal (por exemplo, Pacientes) e às outras telas de apoio dela; Ctrl+clique abre em outra aba.",
@@ -32720,9 +32773,14 @@ var REG_CFG = {
       var sess = l.filter(function(s){ return s.id === DEFAULT_SERVICE_ID; })[0];
       l = l.filter(function(s){ return s.id !== DEFAULT_SERVICE_ID; });
       l.unshift(Object.assign({}, sess || {}, {id: DEFAULT_SERVICE_ID, name: "Sessão"}));
+      Object.keys(SVC_PROTECTED).forEach(function(id){
+        var f = l.filter(function(x){ return x.id === id; })[0];
+        if (f) f.name = SVC_PROTECTED[id]; else l.push({id: id, name: SVC_PROTECTED[id]});
+      });
       return writeServices(l);
     },
     locked: function(s){ return s.id === DEFAULT_SERVICE_ID; },
+    softLocked: function(s){ return svcProtected(s); },
     cols: ["Nome", "Sigla", "Profissionais que Atendem"],
     row: function(s){
       var n = state.professionals.filter(function(p){ return !Array.isArray(p.servicos) || !p.servicos.length || p.servicos.indexOf(s.id) !== -1; }).length;
@@ -32903,9 +32961,13 @@ var REG_CFG = {
   },
   tipostrat: {
     title: "tipo de tratamento", plural: "tipos de tratamento", module: "tipos_tratamento", newLabel: "+ Incluir",
+    softLocked: function(x){ return !!x && x.id === "multidisciplinar"; },
     list: function(){ return treatTypesAll(); },
     write: function(l){
-      return writeSimpleList("tipostrat", l.filter(function(x){ return !x._ref; }).map(function(x){ var o = Object.assign({}, x); delete o._src; return o; }));
+      var own = l.filter(function(x){ return !x._ref; }).map(function(x){ var o = Object.assign({}, x); delete o._src; return o; });
+      var md = own.filter(function(x){ return x.id === "multidisciplinar"; })[0];
+      if (md) md.name = "Multidisciplinar"; else own.unshift({id: "multidisciplinar", name: "Multidisciplinar", padrao: true});
+      return writeSimpleList("tipostrat", own);
     },
     // Especialidade e serviço aparecem na lista, mas se editam no cadastro deles (botão "Tratamento").
     route: function(item){
@@ -33112,19 +33174,20 @@ function openRegistryItem(kind, item){
   if (isNew && !can(cfg.module, "create")){ showToast(permDeniedMsg(cfg.module, "create"), true); return; }
   var locked = !!(item && cfg.locked && cfg.locked(item));
   var canSave = !locked && (isNew || can(cfg.module, "edit"));
-  var canDel = !isNew && !locked && can(cfg.module, "delete");
+  var soft = !!(item && cfg.softLocked && cfg.softLocked(item));   // nome fixo e sem excluir; o resto edita
+  var canDel = !isNew && !locked && !soft && can(cfg.module, "delete");
   var canExtra = canSave || (locked && !!cfg.extraHtml && can(cfg.module, "edit"));   // item travado: só os campos extras (ex.: Tratamento da Sessão)
   var color = item && item.color ? item.color : (kind === "servicos" ? TRAINING_COLOR : "teal");
   var host = document.getElementById("modalHost");
   host.innerHTML =
     '<div class="overlay" id="ovReg"><div class="modal" style="max-width:' + (kind === "convenios" ? 860 : kind === "especialidades" || kind === "habilidades" ? 520 : 440) + 'px">' +
       '<div class="modal-head"><div><h3>' + (isNew ? (cfg.fem ? "Nova " : "Novo ") + ttl(cfg.title) : (canSave ? "Editar " : "") + ttl(cfg.title)) + '</h3>' +
-        (locked ? '<div class="modal-sub">' + esc(cfg.lockedMsg || "Serviço padrão dos atendimentos: não pode ser renomeado nem excluído (só a caixa Tratamento pode ser alterada).") + '</div>' : '') + '</div>' +
+        (soft ? '<div class="modal-sub">Cadastro usado pelas regras do sistema: o nome não pode ser alterado nem o item excluído. Cor e demais campos podem ser editados.</div>' : '') + (locked ? '<div class="modal-sub">' + esc(cfg.lockedMsg || "Serviço padrão dos atendimentos: não pode ser renomeado nem excluído (só a caixa Tratamento pode ser alterada).") + '</div>' : '') + '</div>' +
         '<button class="modal-close" id="regClose" aria-label="Fechar">✕</button></div>' +
       '<div class="modal-body">' +
         (kind === "convenios" ? '<div class="tr-sec tr-sec-top">Convênio</div>' : '') +
         regFieldsHtml(cfg, item, canSave, true) +
-        '<div class="field"><label for="regName">' + esc(cfg.nameLabel || "Nome") + '</label><input id="regName" type="text" value="' + esc(item ? item.name : "") + '"' + (canSave ? '' : ' disabled') + '></div>' +
+        '<div class="field"><label for="regName">' + esc(cfg.nameLabel || "Nome") + '</label><input id="regName" type="text" value="' + esc(item ? item.name : "") + '"' + (canSave && !soft ? '' : ' disabled') + '></div>' +
         regFieldsHtml(cfg, item, canSave, false) +
         (cfg.extraHtml ? cfg.extraHtml(item, canExtra) : '') +
         (kind === "servicos" ?
@@ -33289,7 +33352,7 @@ function openRegistryItem(kind, item){
   var nameEl = document.getElementById("regName");
   wireRegFields(cfg);
   var exw = cfg.extraWire ? cfg.extraWire(item, canExtra) : null;
-  if (canSave) (document.querySelector("#ovReg [data-regf]") && cfg.fields && cfg.fields[0].first ? document.querySelector("#ovReg [data-regf]") : nameEl).focus();
+  if (canSave && !soft) (document.querySelector("#ovReg [data-regf]") && cfg.fields && cfg.fields[0].first ? document.querySelector("#ovReg [data-regf]") : nameEl).focus();
   var del = document.getElementById("regDel");
   if (del && USAGE[kind]) setupInactivate({btn: "regDel", mod: cfg.module, item: item, name: item.name, usage: USAGE[kind], close: close,
     save: function(it){ return Promise.resolve(cfg.write(cfg.list().map(function(x){ return x.id === it.id ? Object.assign({}, x, {inativo: it.inativo}) : x; }))).then(function(){ renderRegistryTab(kind); }); }});
@@ -33305,6 +33368,7 @@ function openRegistryItem(kind, item){
         });
       });
   });
+  if (!isNew && kind === "convenios") viewMode("ovReg", {save: ["regSave"]});
   var save = document.getElementById("regSave");
   if (save) save.addEventListener("click", function(){
     var name = nameEl.value.trim();
@@ -34875,6 +34939,7 @@ function openPlanModal(plan, opts){
       (canSave ? '<button class="btn primary" id="plSave">Salvar</button>' : '') +
     '</div></div></div>';
   var ov = document.getElementById("ovPlan");
+  if (plan && plan.id) setTimeout(function(){ viewMode("ovPlan", {save: ["plSave"]}); }, 0);
   function $(id){ return document.getElementById(id); }
   function close(){ host.innerHTML = ""; }
   ov.addEventListener("mousedown", function(e){ if (e.target === ov) close(); });
@@ -39856,6 +39921,7 @@ function openLancamento(row, opts){
   });
   document.getElementById("flCancel").addEventListener("click", close);
   modalApplyPerms("financeiro", isNew, {ov: "ovFl", save: "flSave", del: "flDel", cancel: "flCancel"});
+  if (!isNew) viewMode("ovFl", {save: ["flSave"]});
   if (!isNew && fcDateClosed(r.date)){
     modalReadOnly("ovFl");
     var sv0 = document.getElementById("flSave"), dl0 = document.getElementById("flDel"); if (sv0) sv0.hidden = true; if (dl0) dl0.hidden = true;
@@ -40474,6 +40540,7 @@ function openConta(row, opts){
   });
   document.getElementById("fpCancel").addEventListener("click", close);
   modalApplyPerms("financeiro", isNew, {ov: "ovFp", save: "fpSave", del: "fpDel", cancel: "fpCancel"});
+  if (!isNew) viewMode("ovFp", {save: ["fpSave"]});
   if (paid){
     modalReadOnly("ovFp");
     var e0 = (FL.rows || []).filter(function(x){ return x.id === r.entry; })[0];
@@ -41165,6 +41232,7 @@ function openEmprestimo(loan, k){
   document.getElementById("lnClose").addEventListener("click", close);
   document.getElementById("lnCancel").addEventListener("click", close);
   modalApplyPerms("financeiro", isNew, {ov: "ovLn", save: "lnSave", del: "lnDel", cancel: "lnCancel"});
+  if (!isNew) viewMode("ovLn", {save: ["lnSave"]});
   var staffId = l.staff || "", parteEl = document.getElementById("lnParte"), parteSug = document.getElementById("lnParteSug"), parteHint = document.getElementById("lnParteHint");
   function parteRefresh(){
     if (parteHint) parteHint.textContent = staffId ? "Colaborador cadastrado: as parcelas podem ser abatidas em contas a pagar dele." : "Escolha um colaborador da lista para poder abater as parcelas em conta a pagar, ou digite qualquer nome.";
