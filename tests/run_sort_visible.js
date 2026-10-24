@@ -20,7 +20,7 @@ const TABS = ['pacientes', 'tratamentos', 'convenios', 'motivos', 'medicos', 'es
       const sec = document.getElementById('tab-' + t); if (!sec || sec.hidden) return null;
       const out = [];
       sec.querySelectorAll('table.pat-table thead th').forEach((th) => {
-        if (getComputedStyle(th).display === 'none') return;
+        if (getComputedStyle(th).display === 'none' || !th.offsetParent) return;   // coluna ou tabela escondida (Pacientes no celular usa cartões)
         const b = th.querySelector('.sort-btn'); if (!b) { out.push('sem botão'); return; }
         const a = th.getBoundingClientRect(), c = b.getBoundingClientRect();
         if (c.width < 8 || c.left < a.left - 1 || c.right > a.right + 1) out.push((th.textContent || '').trim().slice(0, 14) + ' (' + Math.round(a.width) + 'px)');
