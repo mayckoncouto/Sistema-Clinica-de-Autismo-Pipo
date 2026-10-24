@@ -21,7 +21,7 @@ const fs = require('fs');
   const rows = (k) => page.$$eval('#reg-' + k + '-host tbody tr', (r) => r.map((x) => x.textContent));
 
   // ---- Categorias de Fornecedor ----
-  check('menu lists the 3 new registries?', await (async () => { await page.click('#finBtn'); const ok = !!(await page.$('#finMenu [data-nav="catfornecedor"]')) && !!(await page.$('#finMenu [data-nav="contas"]')) && !!(await page.$('#finMenu [data-nav="planocontas"]')); await page.click('#finBtn'); return ok; })());
+  check('menu lists the 3 new registries?', await (async () => { await page.click('#finBtn'); const ok = !(await page.$('#finMenu [data-nav="catfornecedor"]')) && !!(await page.$('#finMenu [data-nav="contas"]')) && !!(await page.$('#finMenu [data-nav="planocontas"]')); await page.click('#finBtn'); return ok; })());
   check('Categorias screen opens with title?', await open('catfornecedor', 'catfornecedor') && /Categorias de Fornecedor/.test(await page.$eval('#tab-catfornecedor .cad-title', (e) => e.textContent)));
   await page.click('#reg-catfornecedor-add'); await page.waitForSelector('#ovReg');
   await page.fill('#regName', 'Material'); await page.click('#regSave'); await page.waitForTimeout(300);

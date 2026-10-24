@@ -838,7 +838,7 @@
       { title: "CRM", panels: [ { id: "crm", keys: crmKeys() } ] },
       { title: "Relatórios", panels: [ { id: "relatorios", keys: [], extra: "reports", title: "Relatórios" } ] },
       { title: "Financeiro", panels: [
-        one("financeiro"), one("fornecedores"), one("categorias_fornecedor"), one("contas_bancarias"), one("plano_contas"), one("financeiro_valores"),
+        one("financeiro"), { id: "fornecedores", keys: ["fornecedores"], wins: ["categorias_fornecedor"] }, one("contas_bancarias"), one("plano_contas"), one("financeiro_valores"),
         one("vendas"), one("comissoes"), one("fechamento_mes"), one("gerencial"), one("gerencial_fechamento")
       ] },
       { title: "Menu Acesso", panels: [ one("clinica"), one("usuarios"), one("contratos"), one("backup"), one("conector_claude"), one("senha"), one("ajuda") ] }
