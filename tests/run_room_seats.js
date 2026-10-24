@@ -97,6 +97,8 @@ const path = require('path');
   check('changing the column professional asks (default: bookings stay with the new one)?', !!chg && chg.first === '' && /Ficam com/.test(chg.firstTxt) && /profissional trocado/.test(chg.txt) && /novo profissional/.test(chg.prev), JSON.stringify(chg));
 
   // 3) Excluir o grupo Coordenador (com agendamentos) apaga os agendamentos junto
+  // Coordenador é protegido (não exclui); o teste usa um grupo de nome comum.
+  await ev(`(function(){ state.rooms = state.rooms.map(function(r){ return r.id === "coord" ? Object.assign({}, r, {name: "Grupo Apoio"}) : r; }); })()`);
   await ev(`openRoomModal(findRoom("coord"))`);
   await page.waitForTimeout(500);
   await page.click('#rmDelete');
