@@ -3116,6 +3116,16 @@ table.pat-table.gm-tbl{width:100%;table-layout:fixed}.gm-tbl td,.gm-tbl th{paddi
   #tab-conciliacao .pat-toolbar > :is(#cnImport,#cnMenuWrap,.help-q){flex:none}
   #tab-conciliacao :is(#cnAuto,#cnImport){display:none!important}
   #reg-conciliacao-host .pat-table :is(col,th,td):is(:nth-child(6),:nth-child(7),:nth-child(10),:nth-child(11)){display:none}
+  #reg-conciliacao-host.has-cards .pat-table-wrap{display:none}
+  #reg-conciliacao-host .pat-cards{display:block;flex:1;min-height:0;overflow-y:auto;background:var(--surface-2);padding:10px 0 14px;-webkit-overflow-scrolling:touch}
+  #reg-conciliacao-host .pat-card{margin:0 10px 10px}
+  .cn-card .pc-nm{flex:1}
+  .cn-card .cn-amt{flex:none;font-weight:800;font-size:15px;white-space:nowrap}
+  .cn-card .pc-m{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .cn-card .cn-sg{font-size:13px;margin:0 0 10px;display:flex;gap:6px;align-items:baseline;min-width:0}
+  .cn-card .cn-sg .pt-ell{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cn-card .cn-sg > span:last-child:not(.pt-ell){flex:none;white-space:nowrap}
+  .cn-card .pc-ac .cn-main{color:var(--accent-ink);background:var(--accent)}
   :is(#tab-pagar,#tab-receber) .pat-toolbar > .pat-count{flex:1 1 90px!important;min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   :is(#tab-pagar,#tab-receber) .pat-toolbar > :is(#fpAdd,#frAdd,.help-q){flex:none}
   :is(#reg-pagar-host,#reg-receber-host) .pat-table :is(col,th,td):not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(5)):not(:nth-child(7)){display:none}
@@ -13747,7 +13757,8 @@ function renderPatientsTab(){
   // Vencimento por sessões precisa dos atendimentos: lê uma vez e redesenha.
   if (PAT_DUE_WAIT && agdClient() && !TR.last){
     PAT_DUE_WAIT = false;
-    trLoadLast(false).then(function(){ if (state.tab === "pacientes") renderPatientsTab(); });
+    trLoadLast(false).then(function(){ if (state.tab === "pacientes") renderPatientsTab();
+  if (state.tab === "conciliacao") renderConciliacao(); });
   }
   PAT_DUE_WAIT = false;
 
@@ -41526,6 +41537,7 @@ function cnShown(){
 function renderConciliacao(){
   var host = document.getElementById("reg-conciliacao-host"); if (!host) return;
   var imp = document.getElementById("cnImport"); if (imp) imp.hidden = !cnCan("create");
+  host.classList.remove("has-cards");
   if (!CN.rows || !FL.rows){
     host.innerHTML = '<div class="empty-state"><b>Carregando o extrato…</b></div>';
     Promise.all([cnLoad(), flLoad()]).then(function(){ if (state.tab === "conciliacao") renderConciliacao(); }); return; }
@@ -41567,6 +41579,7 @@ function renderConciliacao(){
   cols.unshift({key: "chk", label: canEdit && selAble.length ? '<input type="checkbox" id="cnChkAll"' + (allSel ? ' checked' : '') + ' aria-label="Marcar todas com sugestão">' : "", width: 40, noSort: true});
   Object.keys(CN.sel).forEach(function(id){ if (!selAble.some(function(l){ return l.id === id; })) delete CN.sel[id]; });
   cnSelSync();
+  var cnCards = [], mob = isMobileView();
   gtRender(host, "conciliacao", cols, rows.map(function(l){
     var sit, sug = "", vl = "", vlNum = null, vlDate = "", cOk = "", cPick = "", cNew = "", cSplit = "", sugTxt = "", st = cnState(l), ids = cnEntriesOf(l), e = ids.length ? cnEntryById(ids[0]) : null;
     if (st !== "pend"){
@@ -41599,10 +41612,22 @@ function renderConciliacao(){
       vl = '<span class="' + (same ? "cn-eq" : vlNum < 0 ? "fl-neg" : "fl-pos") + '"' + (same ? ' title="Mesma data e mesmo valor do extrato"' : '') + (dif ? ' title="Diferente do valor do extrato (' + esc(flMoneySigned(l.valor)) + ')"' : '') + '>' + esc(flMoneySigned(vlNum)) + '</span>' + (dif ? ' <span class="tr-mchip tr-falta" title="Valor diferente do extrato">≠</span>' : '');
     }
     var chk = canEdit && cnSelAction(l, by) ? '<input type="checkbox" data-cn-sel="' + esc(l.id) + '"' + (CN.sel[l.id] ? ' checked' : '') + ' aria-label="Selecionar">' : "";
+    if (mob){
+      var bt = "";
+      if (cOk) bt += st === "pend" ? '<button type="button" class="cn-main" data-cn-ok="' + esc(l.id) + '|' + esc(sg.e.id) + '">Confirmar</button>' : '<button type="button" data-cn-undo="' + esc(l.id) + '">Desfazer</button>';
+      if (cPick) bt += '<button type="button" data-cn-pick="' + esc(l.id) + '">' + (st === "parcial" ? "Completar" : "Escolher") + '</button>';
+      if (cNew) bt += '<button type="button" data-cn-new="' + esc(l.id) + '">Criar</button>';
+      if (cSplit) bt += '<button type="button" data-cn-split="' + esc(l.id) + '">Dividir</button>';
+      cnCards.push('<div class="pat-card cn-card"><div class="pc-n"><span class="pc-nm">' + esc(l.desc || "—") + '</span><span class="cn-amt ' + (l.valor < 0 ? "fl-neg" : "fl-pos") + '">' + esc(flMoneySigned(l.valor)) + '</span></div>' +
+        '<div class="pc-m"><span>' + esc(trBr(l.date)) + '</span>' + sit + '</div>' + (sug || vl ? '<div class="cn-sg">' + sug + (vl ? '<span>' + vl + '</span>' : '') + '</div>' : '') +
+        (bt ? '<div class="pc-ac">' + bt + '</div>' : '<div style="height:12px"></div>') + '</div>');
+    }
     return {attrs: 'class="pr-row" data-cn-line="' + esc(l.id) + '"', cells: [chk, esc(trBr(l.date)), '<b>' + esc(l.desc || "—") + '</b>',
       '<span class="' + (l.valor < 0 ? "fl-neg" : "fl-pos") + '">' + esc(flMoneySigned(l.valor)) + '</span>', sit, sug, vl, cOk, cPick, cNew, cSplit],
       vals: [CN.sel[l.id] ? 1 : 0, l.date, normText(l.desc), l.valor, st === "conc" ? 2 : st === "parcial" ? 1 : 0, normText(sugTxt), vlNum === null ? "" : vlNum, cOk ? 1 : 0, cPick ? 1 : 0, cNew ? 1 : 0, cSplit ? 1 : 0]};
   }), renderConciliacao, "reg-table");
+  host.classList.toggle("has-cards", mob);
+  if (mob) host.insertAdjacentHTML("beforeend", '<div class="pat-cards cn-cards">' + cnCards.join("") + '</div>');
 }
 // tempo real: mudança em linhas do extrato, ligações ou lançamentos (por esta ou por outra pessoa) relê e redesenha a tela
 function cnEnsureChannel(){
