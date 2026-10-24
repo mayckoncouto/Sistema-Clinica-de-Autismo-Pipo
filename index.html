@@ -18425,6 +18425,13 @@ function openRoomModal(r, asGroup){
         '<div class="field"><label for="rmName">Nome '+(grp ? "do grupo" : "da sala")+'</label><input id="rmName" type="text" placeholder="'+(grp ? "ex: Coordenador" : "ex: Fonoaudiologia")+'" value="'+esc(draftName)+'"></div>' +
         (grp ? '' : '<div class="field aba-only"><label class="chk-line"><input type="checkbox" id="rmAba"'+(draftAba ? ' checked' : '')+'> <span>Sala Intervenção ABA</span></label><div class="color-hex-label" style="margin-top:6px">Sala ABA recebe de 2 a 4 pacientes ABA Sim no mesmo horário e aparece com “ABA” no nome (ex.: Fonoaudiologia ABA).</div></div>') +
         '<div class="field"><label>Cor</label><div class="color-pick-row"><button type="button" class="color-trigger" id="rmColorBtn" title="Escolher cor" aria-label="Escolher cor"></button><span class="color-pick-code mono" id="rmColorCode"></span><span class="color-hex-label">clique na bolinha para escolher</span></div></div>' +
+        (grp ? '' : '<div class="field"><label id="rmRespLabel">Profissionais Responsáveis pela Sala</label><div class="ms" id="rmRespMs">' +
+          '<button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="rmRespLabel"><span class="ms-sum"></span><span class="ms-caret">▾</span></button>' +
+          '<div class="ms-panel" id="rmResp" hidden role="listbox" aria-multiselectable="true">' +
+            state.professionals.filter(function(p){ return isActive(p) || ((r && r.responsaveis) || []).indexOf(p.id) !== -1; })
+              .sort(function(a, b){ return String(profNome(a) || "").localeCompare(String(profNome(b) || ""), "pt-BR"); })
+              .map(function(p){ return '<label class="ms-opt"><input type="checkbox" value="' + esc(p.id) + '" data-n="' + esc(profNome(p)) + '"' + (((r && r.responsaveis) || []).indexOf(p.id) !== -1 ? ' checked' : '') + '><span>' + esc(profNome(p)) + '</span></label>'; }).join("") +
+          '</div></div><div class="color-hex-label" style="margin-top:6px">O responsável vê a agenda desta sala na Agenda (botão Sala), além da própria.</div></div>') +
         '<div class="tr-sec">Terapeutas (Colunas na Grade)</div>' +
         '<div class="field"><div class="therapist-rows" id="rmTherapists"></div>' +
           '<button type="button" class="btn ghost add-row-btn" id="rmAddTherapist">+ terapeuta</button>' +
@@ -18454,6 +18461,20 @@ function openRoomModal(r, asGroup){
   document.getElementById("closeRoom").addEventListener("click", close);
   document.getElementById("rmCancel").addEventListener("click", close);
 
+  (function(){
+    var ms = document.getElementById("rmRespMs"); if (!ms) return;
+    var btn = ms.querySelector(".ms-btn"), panel = document.getElementById("rmResp"), sum = ms.querySelector(".ms-sum");
+    function refresh(){
+      var n = Array.prototype.map.call(panel.querySelectorAll("input:checked"), function(c){ return c.getAttribute("data-n"); });
+      sum.textContent = n.length ? n.join(", ") : "Ninguém"; sum.classList.toggle("ms-placeholder", !n.length); btn.title = n.join(", ");
+    }
+    function open(o){ panel.hidden = !o; btn.setAttribute("aria-expanded", o ? "true" : "false"); if (o){ var f = panel.querySelector("input"); if (f) f.focus(); } }
+    btn.addEventListener("click", function(){ open(panel.hidden); });
+    panel.addEventListener("keydown", function(e){ if (e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); open(false); btn.focus(); } });
+    document.addEventListener("mousedown", function(e){ if (!ms.contains(e.target)) open(false); });
+    panel.addEventListener("change", refresh);
+    refresh();
+  })();
   var colorBtn = document.getElementById("rmColorBtn"), colorCode = document.getElementById("rmColorCode");
   function syncColor(){ colorBtn.style.background = swatchVar(draftColor); colorCode.textContent = cpToHex(draftColor).toUpperCase(); }
   syncColor();
@@ -18541,6 +18562,11 @@ function openRoomModal(r, asGroup){
     });
     var rec = {id: roomId, name: name, color: draftColor, therapists: cleanTherapists};
     if (grp) rec.group = true; else rec.aba = roomAbaOn;
+    if (!grp){
+      var respPn = document.getElementById("rmResp");
+      var respIds = respPn ? Array.prototype.map.call(respPn.querySelectorAll("input:checked"), function(c){ return c.value; }) : ((r && r.responsaveis) || []);
+      if (respIds.length) rec.responsaveis = respIds;
+    }
     var list = state.rooms.slice();
     if (isNew){ list.push(rec); }
     else { list = list.map(function(x){ return x.id===rec.id ? rec : x; }); }
@@ -19183,8 +19209,15 @@ function agdOwnProfId(){
   if (!me || !me.professional_id || a.isAdmin() || a.can("agenda", "edit")) return null;
   return me.professional_id;
 }
+// Salas em que o profissional da própria agenda é responsável (cadastro da sala):
+// ele ganha o botão Sala e vê a agenda delas.
+function agdOwnRooms(){
+  var own = agdOwnProfId(); if (!own) return [];
+  return physicalRooms().filter(function(r){ return (r.responsaveis || []).indexOf(own) !== -1; });
+}
 function agdResources(){
   var own = agdOwnProfId();
+  if (own && AD.mode === "sala"){ var mine = agdOwnRooms(); if (mine.length) return mine; }
   if (own) return state.professionals.filter(function(p){ return p.id === own; });
   // Inativo só aparece se tiver atendimento na semana carregada (histórico).
   if (AD.mode === "prof") return state.professionals.filter(function(p){
@@ -19487,9 +19520,13 @@ function agdRender(){
   var gridHost = document.getElementById("agdGrid");
   if (!gridHost) return;
   var ownProf = agdOwnProfId();
-  if (ownProf){ AD.mode = "prof"; AD.sel = ownProf; }
+  var ownRooms = ownProf ? agdOwnRooms() : [];
+  if (ownProf){
+    if (!ownRooms.length || AD.mode !== "sala"){ AD.mode = "prof"; AD.sel = ownProf; }
+    else if (!ownRooms.some(function(r){ return r.id === AD.sel; })) AD.sel = ownRooms[0].id;
+  }
   var panelEl = document.getElementById("tab-agenda");
-  if (panelEl) panelEl.classList.toggle("agd-solo", !!ownProf);
+  if (panelEl) panelEl.classList.toggle("agd-solo", !!ownProf && !ownRooms.length);
   var canCreate = can("agenda", "create"), canEdit = can("agenda", "edit");
   document.getElementById("agdNewBtn").hidden = !canCreate;
   document.getElementById("agdToolsWrap").hidden = !agdToolsVisible().length;
@@ -31417,7 +31454,8 @@ var HELP_TOPICS = [
     purpose: "Salas da clínica e as colunas (terapeutas) de cada uma no Planner.",
     steps: [
       "Cadastros → <b>Salas</b> → <b>+ Incluir</b>: nome, ABA (Sim/Não), cor e colunas (um profissional por coluna).",
-      "Use as setas ▲▼ para mudar a ordem das salas e das colunas."
+      "Use as setas ▲▼ para mudar a ordem das salas e das colunas.",
+      "<b>Profissionais Responsáveis pela Sala</b> (só em salas, vários): quem é responsável e só vê a própria agenda ganha, na Agenda, o botão <b>Salas</b> ao lado de <b>Profissionais</b> e passa a ver a agenda das salas pelas quais responde."
     ],
     rules: [
       "Trocar o nome da sala troca também o nome nas marcações das colunas dos grupos de suporte do Planner que apontam para ela.",
@@ -31823,6 +31861,7 @@ var HELP_TOPICS = [
     purpose: "Os atendimentos do dia a dia, em datas reais, por profissional ou por sala.",
     steps: [
       "Abra <b>Agenda</b>. Escolha <b>Dia</b> ou <b>Semana</b>, <b>Profissionais</b> ou <b>Salas</b>, e navegue com ‹ Hoje ›.",
+      "Profissional que só vê a própria agenda: se for <b>responsável por alguma sala</b> (cadastro da sala), aparecem os botões <b>Profissionais | Salas</b> no topo da lista lateral; em <b>Salas</b> ele escolhe só as salas dele e vê a agenda delas (todos os profissionais da sala).",
       "Clique no + de um horário para marcar: paciente (ou grupo de suporte), serviço, sala, observação; ou marque Bloqueado / Reunião Clínica / Treinamento / Reserva.",
       "Vários atendimentos no mesmo horário ficam lado a lado (botão + para mais um).",
       "Clicar num atendimento abre os <b>Detalhes do Agendamento</b>. Ao lado do nome, o seletor troca o quadro de informações: <b>Agendamento</b> (serviço, sala, data/hora, observação), <b>Saúde</b> (diagnóstico, alergias, medicações e restrições alimentares do cadastro do paciente) e <b>Tratamento</b> (plano, ABA e horários). Acima do nome aparece quem <b>pode retirar</b> o paciente; abaixo do quadro, quando há medida protetiva, um quadro vermelho com quem <b>não pode retirar</b>. Depois ficam os <b>Objetivos</b> e o <b>Status</b>. Quem tem permissão de editar a Agenda vê o botão <b>Editar Agendamento</b>.",
