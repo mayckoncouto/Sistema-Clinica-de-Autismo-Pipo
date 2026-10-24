@@ -30813,7 +30813,7 @@ var HELP_TOPICS = [
       "Toda exclusão pede confirmação.",
       "<b>Ctrl+clique</b> (ou <b>Cmd+clique</b> no Mac, ou o botão do meio do mouse) em um botão que leva a outra tela — <b>Ver no Planner</b>, <b>Ver na Agenda</b>, <b>Ir até o horário</b>, <b>Abrir Tratamento</b>, <b>Cadastro do Paciente</b>, <b>Abrir Plano Terapêutico</b>, o ícone de agenda da evolução, o histórico de alterações, as linhas de relatório que abrem o Planner, as tarefas do CRM (listas, quadro e Caixa de Entrada) — abre essa tela em <b>outra aba do navegador</b> e mantém a janela atual aberta, para você conferir a informação e depois continuar ou salvar o que estava fazendo.",
       "<b>Ctrl+Enter</b> (ou <b>Cmd+Enter</b> no Mac) salva a janela aberta, como clicar no botão <b>Salvar</b> do rodapé (a de cima, quando há várias). Nos comentários do CRM, Ctrl+Enter envia o comentário.",
-      "Nas telas de apoio que abrem por Outras Opções de outra tela (Médicos, Escolas, Diagnósticos, Origens e Motivos de Bloqueio em Pacientes; Tipos de Tratamento e Motivos de Cancelamento em Tratamentos; Tipos de Colaborador, CBO e Conselhos em Colaboradores; Modelos em Anamneses; Categorias de Fornecedor em Fornecedores), o botão com o nome da tela principal, antes do <b>+ Incluir</b>, volta para ela.",
+      "Nas telas de apoio que abrem por Outras Opções de outra tela (Médicos, Escolas, Diagnósticos, Origens e Motivos de Bloqueio em Pacientes; Tipos de Tratamento e Motivos de Cancelamento em Tratamentos; Tipos de Colaborador, CBO e Conselhos em Colaboradores; Modelos em Anamneses; Categorias de Fornecedor em Fornecedores), o menu <b>Outras Opções</b>, antes do <b>+ Incluir</b>, leva direto à tela principal (por exemplo, Pacientes) e às outras telas de apoio dela; Ctrl+clique abre em outra aba.",
       "A tecla <b>Esc</b> fecha a janela aberta (a de cima, quando há várias) do mesmo jeito que o ✕ ou o Cancelar: se a janela tem alterações, o sistema pergunta se deseja salvar. Com uma lista ou menu aberto, o Esc fecha primeiro a lista.",
       "Ao sair de uma janela de cadastro depois de mudar algum campo (pelo ✕, Cancelar, Fechar, clique fora ou Esc), o sistema pergunta: <b>Salvar</b>, <b>Sair sem Salvar</b> ou <b>Continuar Editando</b>.",
       "Nas janelas de Paciente, Tratamento, Lançamento e Conta a Pagar ou a Receber já salvos, <b>Outras Opções ▾ → Criar Tarefa</b> escolhe a lista do CRM e abre a janela da tarefa já preenchida (título e paciente); ajuste e salve.",
@@ -33378,22 +33378,47 @@ function navSubClick(e){
   if (e.ctrlKey || e.metaKey || e.button === 1) navOpenNewTab(it.key); else navActivate(it);
 }
 document.addEventListener("click", navSubClick, true);
-/* Botão de voltar (2026-10-22): nas telas de apoio que abrem por Outras Opções de uma tela principal, um botão só de
- * texto com o nome da tela principal, antes do "+ Incluir", volta para ela (Ctrl+clique abre em outra aba). */
+/* Outras Opções nas telas de apoio (2026-10-24): menu com a tela principal (ex.: Pacientes) e as outras telas de apoio da mesma
+ * tela principal, para ir direto de uma à outra (Ctrl+clique abre em outra aba). Fica antes do "+ Incluir". */
 var NAV_BACK = {medicos: "pacientes", escolas: "pacientes", diagnosticos: "pacientes", origens: "pacientes", motivosbloq: "pacientes",
   tipostrat: "tratamentos", motivos: "tratamentos", tiposcolab: "colaboradores", cbo: "colaboradores", conselhos: "colaboradores",
   tiposanam: "anamneses", catfornecedor: "fornecedores"};
+function navBackItems(k){
+  var p = navItem(NAV_BACK[k]); if (!p) return null;
+  var main = !window.pipoAuth || p.ok() ? [p] : [];
+  var sib = CAD_ITEMS.filter(function(i){ return i.under === NAV_BACK[k] && i.key !== "grupos" && i.key !== k && (!window.pipoAuth || i.ok()); });
+  return main.concat(sib);
+}
 function navBackRefresh(){
   Object.keys(NAV_BACK).forEach(function(k){
-    var p = navItem(NAV_BACK[k]), add = document.getElementById("reg-" + k + "-add"); if (!p || !add) return;
-    var b = document.getElementById("navBack-" + k);
-    if (!b){
-      add.insertAdjacentHTML("beforebegin", '<button type="button" class="btn ghost nav-back" id="navBack-' + k + '" data-nav-sub="' + p.key + '" title="Voltar para ' + esc(p.label) + '">' + esc(p.label) + '</button>');
-      b = document.getElementById("navBack-" + k);
+    var add = document.getElementById("reg-" + k + "-add"); if (!add || !navItem(NAV_BACK[k])) return;
+    var its = navBackItems(k) || [];
+    var w = document.getElementById("navBack-" + k);
+    if (!w){
+      add.insertAdjacentHTML("beforebegin", '<div class="cad-wrap pl-tools-wrap nav-back" id="navBack-' + k + '"><button type="button" class="btn ghost" data-nb-btn aria-haspopup="menu" aria-expanded="false"><span class="pm-lg">Outras Opções</span><span class="pm-sm">Opções</span> <svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M2 3.5h6L5 7z"/></svg></button><div class="cad-menu pl-tools-menu" role="menu" hidden></div></div>');
+      w = document.getElementById("navBack-" + k);
     }
-    b.hidden = !!(window.pipoAuth && !p.ok());
+    var m = w.querySelector(".pl-tools-menu");
+    m.innerHTML = its.map(function(i, n){ return (n === 1 ? '<div class="cad-sep" role="separator"></div>' : '') + '<button type="button" class="btn ghost" role="menuitem" data-nav-sub="' + i.key + '">' + esc(i.label) + '</button>'; }).join("");
+    w.hidden = !its.length;
   });
 }
+document.addEventListener("click", function(e){
+  var b = e.target.closest && e.target.closest("[data-nb-btn]"); if (!b) return;
+  var w = b.closest(".nav-back"), m = w.querySelector(".pl-tools-menu"), open = m.hidden;
+  document.querySelectorAll(".pl-tools-menu.tools-fixed:not([hidden])").forEach(function(x){ x.hidden = true; });
+  m.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open){ placeToolsMenu(b, m); var f = m.querySelector("button"); if (f) f.focus(); }
+  e.stopPropagation();
+}, true);
+document.addEventListener("mousedown", function(e){
+  if (e.target.closest && e.target.closest(".nav-back")) return;
+  document.querySelectorAll(".nav-back .pl-tools-menu:not([hidden])").forEach(function(m){ m.hidden = true; var bt = m.parentNode.querySelector("[data-nb-btn]"); if (bt) bt.setAttribute("aria-expanded", "false"); });
+});
+document.addEventListener("keydown", function(e){
+  if (e.key !== "Escape") return;
+  document.querySelectorAll(".nav-back .pl-tools-menu:not([hidden])").forEach(function(m){ m.hidden = true; var bt = m.parentNode.querySelector("[data-nb-btn]"); if (bt){ bt.setAttribute("aria-expanded", "false"); bt.focus(); } });
+});
 setTimeout(navBackRefresh, 0);
 document.addEventListener("auxclick", function(e){ if (e.button === 1) navSubClick(e); }, true);
 // "Clínica" fica no menu Acesso (js/pipo-supabase.js); só o endereço #clinica passa por aqui.

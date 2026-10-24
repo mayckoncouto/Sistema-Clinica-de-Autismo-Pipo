@@ -43,15 +43,25 @@ const fs = require('fs');
   check('abre CBO', !(await page.$eval('#tab-cbo', (s) => s.hidden)));
   // Botão de voltar nas telas de apoio
   await page.$eval("#mainTabs button[data-tab=escolas]", (b) => b.click()); await page.waitForTimeout(300);
-  check("Escolas tem o botão Pacientes antes do + Incluir?", await page.$eval("#navBack-escolas", (b) => !b.hidden && b.nextElementSibling && b.nextElementSibling.id === "reg-escolas-add" && b.textContent.trim() === "Pacientes"));
-  await page.click("#navBack-escolas"); await page.waitForTimeout(300);
-  check("clicar volta para Pacientes?", await page.$eval("#tab-pacientes", (s) => !s.hidden));
+  check("Escolas tem Outras Opções antes do + Incluir?", await page.$eval("#navBack-escolas", (w) => !w.hidden && w.nextElementSibling && w.nextElementSibling.id === "reg-escolas-add"));
+  await page.click("#navBack-escolas [data-nb-btn]");
+  const nbItems = await page.$$eval("#navBack-escolas [data-nav-sub]", (e) => e.map((x) => x.textContent));
+  check("menu lista Pacientes e as outras telas de apoio (sem Escolas)?", nbItems.join("|") === "Pacientes|Médicos|Diagnósticos|Origens|Motivos de Bloqueio", nbItems.join("|"));
+  await page.click("#navBack-escolas [data-nav-sub=\"medicos\"]"); await page.waitForTimeout(300);
+  check("ir direto para Médicos?", await page.$eval("#tab-medicos", (s) => !s.hidden));
+  await page.click("#navBack-medicos [data-nb-btn]");
+  await page.click("#navBack-medicos [data-nav-sub=\"pacientes\"]"); await page.waitForTimeout(300);
+  check("voltar para Pacientes?", await page.$eval("#tab-pacientes", (s) => !s.hidden));
+  await page.$eval("#mainTabs button[data-tab=cbo]", (b) => b.click()); await page.waitForTimeout(300);
+  await page.click("#navBack-cbo [data-nb-btn]");
+  const nbCbo = await page.$$eval("#navBack-cbo [data-nav-sub]", (e) => e.map((x) => x.textContent));
+  check("CBO lista Colaboradores, Tipos de Colaborador e Conselhos?", nbCbo.join("|") === "Colaboradores|Tipos de Colaborador|Conselhos", nbCbo.join("|"));
   // Sem acesso à tela principal: o cadastro de apoio volta para o menu.
   await page.evaluate(() => { window.pipoAuth.can = (m) => m !== 'pacientes'; }); await ev('renderCadMenu()');
   const menu2 = await page.$$eval('#cadMenu [data-nav]', (e) => e.map((x) => x.getAttribute('data-nav')));
   check('sem Pacientes, Médicos volta para o menu Cadastros', menu2.indexOf('medicos') !== -1 && menu2.indexOf('pacientes') === -1, menu2.join(','));
   await ev('navBackRefresh()');
-  check('sem acesso a Pacientes, o botão some?', await page.$eval('#navBack-escolas', (b) => b.hidden));
+  check('sem acesso a Pacientes, o menu não traz Pacientes?', await page.$$eval('#navBack-escolas [data-nav-sub]', (e) => e.map((x) => x.getAttribute('data-nav-sub')).indexOf('pacientes') === -1));
   check('no JS errors?', errors.length === 0, errors.join(' | '));
   await browser.close();
   try { fs.unlinkSync(pg); } catch (e) {}
