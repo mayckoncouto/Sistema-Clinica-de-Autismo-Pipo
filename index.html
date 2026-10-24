@@ -15381,6 +15381,7 @@ function patientTabsList(v){
   if (can("agenda", "view") && patTabCan("pabas_agenda")) t.push({id: "agenda", label: "Agenda", lazy: true});
   if (prCan("view") && patTabCan("pabas_prontuario")) t.push({id: "pront", label: "Prontuário", lazy: true});
   if (patTabCan("pabas_anamneses") && (state.anamTypes || []).some(function(x){ return anCan(x.id, "view"); })) t.push({id: "anam", label: "Anamneses", lazy: true});
+  if (crmMainCan() && crmVisibleLists().length) t.push({id: "tarefas", label: "Tarefas", lazy: true});
   if (can("pacientes_anexos", "view")) t.push({id: "anexos", label: "Anexos", lazy: true});
   return t;
 }
@@ -15447,7 +15448,7 @@ function ptListRender(pane, cfg){
   var add = pane.querySelector(".pt-add"); if (add) add.addEventListener("click", cfg.add.run);
   draw();
 }
-GT_PAGED["pt-agenda"] = 1; GT_PAGED["pt-pront"] = 1; GT_PAGED["pt-anam"] = 1; GT_PAGED["pt-anexos"] = 1;
+GT_PAGED["pt-agenda"] = 1; GT_PAGED["pt-pront"] = 1; GT_PAGED["pt-anam"] = 1; GT_PAGED["pt-anexos"] = 1; GT_PAGED["pt-tarefas"] = 1;
 // Larguras padrão das listas da janela do paciente (2026-10-23): começam nos tamanhos combinados com o usuário;
 // as larguras ajustadas antes desta data são esquecidas uma vez (depois, quem arrastar a borda mantém a sua).
 (function(){ try { if (!localStorage.getItem("agendaPipo:ptWidths2")){ ["pt-agenda", "pt-pront", "pt-anam"].forEach(function(k){ localStorage.removeItem("agendaPipo:colWidths:" + k); }); localStorage.setItem("agendaPipo:ptWidths2", "1"); } } catch (e) {} })();
@@ -15502,6 +15503,26 @@ function ptAnamTab(pane, v){
         return {cells: [esc(r.typeName || "Anamnese"), "v" + (r.versao || 1), anStatusChip(r), d ? esc(agdBrDate(d)) : "—", esc((r.status === "concluida" ? r.doneBy : r.updatedBy) || r.by || "—")],
           vals: [normText(r.typeName || ""), r.versao || 1, r.status, d, normText(r.by || "")], go: function(){ openAnamModal(r.id); },
           card: {title: r.typeName || "Anamnese", l2: (d ? agdBrDate(d) + " · " : "") + "versão " + (r.versao || 1), l3: (r.status === "concluida" ? r.doneBy : r.updatedBy) || r.by || "", right: anStatusChip(r)}};
+      })});
+  });
+}
+// Tarefas do CRM ligadas ao paciente (só das listas que a pessoa pode ver). Clicar abre a tarefa por cima.
+function ptTarefasTab(pane, v){
+  return (CRM.loaded ? Promise.resolve() : crmLoad()).then(function(){
+    var vis = {}; crmVisibleLists().forEach(function(l){ vis[l.id] = l; });
+    var rows = Object.keys(CRM.tasks || {}).map(function(k){ return CRM.tasks[k]; }).filter(function(t){ return t.patient_id === v.id && vis[t.list_id]; })
+      .sort(function(a, b){ var da = crmIsDone(a) ? 1 : 0, db = crmIsDone(b) ? 1 : 0; if (da !== db) return da - db; var xa = String(a.due_date || "9999"), xb = String(b.due_date || "9999"); return xa < xb ? -1 : xa > xb ? 1 : 0; });
+    var dests = crmGenDests();
+    ptListRender(pane, {id: "pt-tarefas", empty: "Nenhuma tarefa para este paciente.", noun: ["tarefa", "tarefas"],
+      cols: [{key: "st", label: "Status", width: 150, min: 100}, {key: "t", label: "Tarefa", width: 300, min: 140, cls: "pt-nome"}, {key: "l", label: "Lista", width: 140, cls: "pt-muted"},
+        {key: "r", label: "Responsáveis", width: 180, min: 100, cls: "pt-muted"}, {key: "d", label: "Vencimento", width: 120}, {key: "p", label: "Prioridade", width: 110}],
+      add: dests.length ? {label: "+ Incluir", run: function(){ crmCreateFrom({patient_id: v.id}); }} : null,
+      items: rows.map(function(t){
+        var l = vis[t.list_id], st = crmStatus(l, t.status), pr = crmPrio(t.priority), due = t.due_date ? agdBrDate(String(t.due_date).slice(0, 10)) : "—";
+        var who = (t.assignees || []).map(function(id){ var p = (CRM.people || []).filter(function(x){ return x.id === id; })[0]; return p ? firstName(p.full_name) : ""; }).filter(Boolean).join(", ");
+        return {cells: [crmStDot(st, t.status), '<b>' + esc(t.title || "—") + '</b>', esc(l.name), esc(who || "—"), esc(due), esc(pr.name || pr.label || "")],
+          vals: [normText(st ? st.name : t.status), normText(t.title || ""), normText(l.name), normText(who), t.due_date || "", pr.id], go: function(){ crmOpenTask(t, {stack: true}); },
+          card: {title: t.title || "—", l2: l.name + " · " + due, l3: who, right: crmStDot(st, t.status)}};
       })});
   });
 }
@@ -15609,7 +15630,7 @@ function patientTabsWire(overlay, tabs, v, close){
       if (id === "trat") ptTratTab(pane, v);
       else {
         pane.innerHTML = '<div class="hours-empty">Carregando…</div>';
-        var fn = {agenda: ptAgendaTab, pront: ptProntTab, anam: ptAnamTab, anexos: ptAnexosTab}[id];
+        var fn = {agenda: ptAgendaTab, pront: ptProntTab, anam: ptAnamTab, tarefas: ptTarefasTab, anexos: ptAnexosTab}[id];
         Promise.resolve(fn(pane, v, close)).then(null, function(e){ loaded[id] = false; pane.classList.remove("pt-list"); pane.innerHTML = '<div class="hours-empty">' + esc(netErrText((e && e.message) || "Não foi possível carregar.") || "Não foi possível carregar.") + '</div>'; });
       }
     }
@@ -30898,7 +30919,7 @@ var HELP_TOPICS = [
     steps: [
       "Cadastros → <b>Pacientes</b> → <b>+ Incluir</b>.",
       "A janela mostra os grupos um embaixo do outro, nesta ordem: <b>Identificação</b> (nome, nascimento, sexo, CPF, RG, Cartão SUS, data de entrada), <b>Contato</b>, <b>Endereço</b>, <b>Filiação</b>, <b>Responsável Financeiro</b>, <b>Responsáveis pela Retirada</b>, <b>Medida Protetiva</b>, <b>Convênio</b>, <b>Encaminhamento</b>, o resumo do <b>Tratamento</b>, <b>Saúde</b>, <b>Escola</b>, <b>Rotina Atual</b>, <b>Administrativo</b> e <b>Bloqueio de Agendamento</b>. Cada grupo tem permissão própria para ver em Níveis de Permissão (Pacientes – &lt;grupo&gt;); Saúde segue Pacientes – Saúde.",
-      "<b>No celular</b>, o nome, a idade e a situação do paciente ficam no alto da janela, com o menu <b>⋯</b> ao lado do ✕. As abas (Cadastro, Tratamento, Agenda, Prontuário, Anamneses, Anexos) deslizam para o lado, e os grupos do Cadastro ficam recolhidos: toque no título para abrir (o primeiro já vem aberto). Agenda, Prontuário, Anamneses e Anexos aparecem em cartões, com busca e, na Agenda, filtros rápidos. No Tratamento, o <b>⋯</b> do rodapé guarda Excluir, Renegociar, Gerar Venda e as outras opções, e os grupos do tratamento (Tratamento, Convênio e Valores, Intervenção ABA, Especialidades e Serviços, Observações…) ficam recolhidos: toque no título para abrir. A janela do tratamento aberta pela tela Tratamentos segue o mesmo padrão no celular.",
+      "<b>No celular</b>, o nome, a idade e a situação do paciente ficam no alto da janela, com o menu <b>⋯</b> ao lado do ✕. As abas (Cadastro, Tratamento, Agenda, Prontuário, Anamneses, Tarefas, Anexos) deslizam para o lado, e os grupos do Cadastro ficam recolhidos: toque no título para abrir (o primeiro já vem aberto). Agenda, Prontuário, Anamneses, Tarefas e Anexos aparecem em cartões, com busca e, na Agenda, filtros rápidos. No Tratamento, o <b>⋯</b> do rodapé guarda Excluir, Renegociar, Gerar Venda e as outras opções, e os grupos do tratamento (Tratamento, Convênio e Valores, Intervenção ABA, Especialidades e Serviços, Observações…) ficam recolhidos: toque no título para abrir. A janela do tratamento aberta pela tela Tratamentos segue o mesmo padrão no celular.",
       "No <b>Endereço</b>, digite o CEP: rua, bairro, cidade e UF são preenchidos sozinhos; complete o número.",
       "Em <b>Convênio</b> ficam o convênio do paciente (lista do cadastro de Convênios; <b>+ Incluir</b> no fim da lista), o plano, o nº da carteirinha e a validade da carteirinha. Todo tratamento novo do paciente já começa com esse convênio e esse plano.",
       "Em <b>Filiação</b> ficam Mãe e Pai (nome, CPF e profissão). O botão <b>Responsável</b> ao lado do nome faz da mãe ou do pai o responsável financeiro: nome e CPF passam para o grupo Responsável financeiro e acompanham as correções enquanto o botão estiver marcado. Desmarcado, o responsável financeiro é digitado à parte.",
@@ -30914,7 +30935,7 @@ var HELP_TOPICS = [
       "<b>Bloqueio de Agendamento</b>: marque <b>Bloqueado</b> e escolha o <b>Motivo</b> (cadastro de Motivos de Bloqueio, com <b>+ Incluir</b> no fim da lista). Paciente bloqueado não pode ser agendado na Agenda (a regra <b>Paciente Bloqueado</b> fica em Acesso → Sistema) nem enviado do Planner para a Agenda. No Planner ele continua podendo ser agendado, movido e alterado; só não entra no Horário Livre nem no Sugerir Agendamento. Os atendimentos que ele já tem continuam, com a tarja <b>Bloqueado</b>; ao bloquear, o sistema oferece remover os da Agenda a partir de uma data. Todos os usuários veem o bloqueio e o motivo. Desmarcar libera o paciente.",
       "A data de entrada começa com a data do cadastro e pode ser alterada.",
       "O grupo <b>Saúde</b> (médico, CID, data do diagnóstico, nível de suporte, comunicação, alergias, medicações, restrições e encaminhamento) só aparece para quem tem a permissão <b>Pacientes – Saúde</b>: com \"ver\" os campos aparecem travados; com \"editar\" dá para alterar. Sem a permissão, esses dados também não aparecem nos Detalhes do Agendamento, na ficha impressa nem no quadro clínico do Plano Terapêutico.",
-      "Em paciente já cadastrado, a janela tem abas no topo, sempre com a mesma altura da aba <b>Cadastro</b>: <b>Cadastro</b> (os grupos acima), <b>Tratamento</b> (o formulário inteiro do tratamento ativo, para ver e salvar ali mesmo; sem tratamento aparece só o botão <b>+ Incluir</b> no topo), <b>Agenda</b> e <b>Prontuário</b> (listas em tabela, como a de Pacientes: busca, contagem, ordenar pelo título das colunas e ajustar a largura arrastando a borda; no Prontuário, a coluna <b>Registro</b> mostra o começo do texto da evolução; clicar numa linha abre os Detalhes do Agendamento ou o Prontuário do paciente), <b>Anamneses</b> (clicar abre a anamnese) e <b>Anexos</b> (arquivos do paciente, os enviados aqui e os das tarefas do CRM). Em <b>Anexos</b>, <b>+ Incluir</b> (ou arrastar e soltar o arquivo sobre a aba) abre a janela de anexar, com a <b>Pasta</b> (<b>Documentos</b> exige também <b>Pacientes – Saúde</b>) e o <b>Nome do Arquivo</b>, que ganha o nome completo do paciente; <b>Renomear</b> e <b>Excluir</b> valem para os anexos do cadastro (os das tarefas se mudam na tarefa). Cada aba só aparece para quem tem a permissão da aba (Níveis de Permissão → Pacientes: <b>Aba Agenda</b>, <b>Aba Prontuário</b>, <b>Aba Anamneses</b>, <b>Anexos</b> com ver, incluir, editar e excluir) e também ver a tela correspondente; a aba Tratamento segue as permissões de Tratamentos. Só <b>Cadastro</b> tem Salvar e Excluir do paciente.",
+      "Em paciente já cadastrado, a janela tem abas no topo, sempre com a mesma altura da aba <b>Cadastro</b>: <b>Cadastro</b> (os grupos acima), <b>Tratamento</b> (o formulário inteiro do tratamento ativo, para ver e salvar ali mesmo; sem tratamento aparece só o botão <b>+ Incluir</b> no topo), <b>Agenda</b> e <b>Prontuário</b> (listas em tabela, como a de Pacientes: busca, contagem, ordenar pelo título das colunas e ajustar a largura arrastando a borda; no Prontuário, a coluna <b>Registro</b> mostra o começo do texto da evolução; clicar numa linha abre os Detalhes do Agendamento ou o Prontuário do paciente), <b>Anamneses</b> (clicar abre a anamnese), <b>Tarefas</b> (as tarefas do CRM ligadas ao paciente, das listas que você vê, com status, lista, responsáveis, vencimento e prioridade; clicar abre a tarefa por cima e <b>+ Incluir</b> cria uma já ligada a ele) e <b>Anexos</b> (arquivos do paciente, os enviados aqui e os das tarefas do CRM). Em <b>Anexos</b>, <b>+ Incluir</b> (ou arrastar e soltar o arquivo sobre a aba) abre a janela de anexar, com a <b>Pasta</b> (<b>Documentos</b> exige também <b>Pacientes – Saúde</b>) e o <b>Nome do Arquivo</b>, que ganha o nome completo do paciente; <b>Renomear</b> e <b>Excluir</b> valem para os anexos do cadastro (os das tarefas se mudam na tarefa). Cada aba só aparece para quem tem a permissão da aba (Níveis de Permissão → Pacientes: <b>Aba Agenda</b>, <b>Aba Prontuário</b>, <b>Aba Anamneses</b>, <b>Anexos</b> com ver, incluir, editar e excluir) e também ver a tela correspondente; a aba Tratamento segue as permissões de Tratamentos. Só <b>Cadastro</b> tem Salvar e Excluir do paciente.",
       "Salve. Paciente novo: em seguida o sistema abre o tratamento dele. No resumo do tratamento aparece o horário de atendimento, só com os dias e períodos em que o paciente vem.",
       "A lista mostra nome, idade, o primeiro telefone e o primeiro e-mail, escola, médico, a situação do paciente (Ativo ou Inativo) e a do tratamento. Ao lado da busca, escolha onde procurar: <b>Paciente</b>, <b>Mãe</b>, <b>Pai</b> ou <b>Responsável Financeiro</b> — pelo nome (sem acento/maiúscula) ou pelo CPF.",
       "<b>Outras Opções ▾</b>: <b>Campos Obrigatórios</b>, <b>Imprimir Ficha Cadastral</b> (escolha o paciente; sai com a logo e o nome da clínica), <b>Mesclar Cadastros</b> (só Administrador) e <b>Exportar Planilha</b> / <b>Importar Planilha</b> (veja o tópico Planilhas)."
