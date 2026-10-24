@@ -2702,9 +2702,9 @@ table.report-table{border-collapse:collapse;table-layout:fixed;width:100%}
   .pat-quick .pq i{font-style:normal;opacity:.65;margin-left:5px}
   .pat-quick .pq.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
   .pat-quick .pq.warn:not(.on){color:#a0710f;border-color:#e6c98c}
-  #patListHost.has-cards{position:relative}
-  #patListHost.has-cards .pat-table-wrap{display:none}
-  #patListHost .pat-cards{display:block;flex:1;min-height:0;overflow-y:auto;position:relative;background:var(--surface-2);padding:0 32px 14px 0;-webkit-overflow-scrolling:touch}
+  :is(#patListHost,#trHost).has-cards{position:relative}
+  :is(#patListHost,#trHost).has-cards .pat-table-wrap{display:none}
+  :is(#patListHost,#trHost) .pat-cards{display:block;flex:1;min-height:0;overflow-y:auto;position:relative;background:var(--surface-2);padding:0 32px 14px 0;-webkit-overflow-scrolling:touch}
   .pat-let{padding:10px 14px 5px;font-size:12px;font-weight:800;color:var(--accent)}
   .pat-card{margin:0 0 10px 10px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:12px 12px 0;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden}
   .pat-card.is-inactive .pc-nm{color:var(--muted)}
@@ -13631,12 +13631,13 @@ function patCardsHtml(list){
   var idx = letters.map(function(c){ return '<span data-let="' + c + '" class="' + (used[c] ? '' : 'off') + '">' + c + '</span>'; }).join("");
   return {cards: '<div class="pat-cards" id="patCards">' + html + '</div>', idx: '<div class="pat-idx" id="patIdx" aria-label="Índice de letras">' + idx + '</div><div class="pat-idx-bub" id="patIdxBub" hidden></div>'};
 }
-function patCardsWire(host){
-  var box = host.querySelector("#patCards"), idx = host.querySelector("#patIdx"), bub = host.querySelector("#patIdxBub");
-  if (!box) return;
+function patCardsWire(host, onOpen){
+  var box = host.querySelector(".pat-cards"), idx = host.querySelector(".pat-idx"), bub = host.querySelector(".pat-idx-bub");
+  if (!box || !idx) return;
   box.addEventListener("click", function(e){
     if (e.target.closest("a")) return;
     var c = e.target.closest(".pat-card"); if (!c) return;
+    if (onOpen){ onOpen(c, e); return; }
     var p = state.patients.find(function(x){ return x.id === c.getAttribute("data-id"); });
     if (p) openPatientModal(p);
   });
@@ -13758,6 +13759,7 @@ function renderPatientsTab(){
   if (PAT_DUE_WAIT && agdClient() && !TR.last){
     PAT_DUE_WAIT = false;
     trLoadLast(false).then(function(){ if (state.tab === "pacientes") renderPatientsTab();
+  if (state.tab === "tratamentos") renderTreatmentsTab();
   if (state.tab === "conciliacao") renderConciliacao(); });
   }
   PAT_DUE_WAIT = false;
@@ -27712,8 +27714,34 @@ function trFillConvFilter(){
   if (el.__html !== html){ el.innerHTML = html; el.__html = html; el.value = (cur === "__sem" || seen[cur]) ? cur : ""; }
   return el.value;
 }
+// Tratamentos no celular (2026-10-24): cartões como os de Pacientes (letra, índice A–Z), um por tratamento.
+function trCardsHtml(shown, canFin){
+  var used = {}, last = "", html = "";
+  shown.forEach(function(t){
+    var p = rawPatient(t.patientId), nome = p ? p.nome : "(paciente excluído)", L = patLetterOf(nome);
+    if (L !== last){ html += '<div class="pat-let" data-let="' + L + '">' + L + '</div>'; last = L; used[L] = true; }
+    var c = trColor(t), dot = c ? '<span class="pcolor-dot" style="background:' + c + '"></span>' : '';
+    var conv = t.convenioId ? (state.convenios.filter(function(x){ return x.id === t.convenioId; })[0] || {}).name : t.convenio;
+    var fim = trEnd(t), tags = [];
+    if (conv) tags.push('<span class="pc-tag">' + esc(conv) + '</span>');
+    if (t.sessoesMes != null && t.sessoesMes !== "") tags.push('<span class="pc-tag">' + esc(t.sessoesMes) + ' sessões/mês</span>');
+    if (abaOn()){ var ab = trAbaText(t); if (ab) tags.push('<span class="pc-tag">Intervenção ABA: ' + esc(ab) + '</span>'); }
+    var dc = trDueChip(t); if (dc) tags.push(dc);
+    if (canFin && trFinal(t) > 0) tags.push('<span class="pc-tag">' + esc(fmtMoney(trFinal(t))) + '</span>');
+    var mc = t.status === "ativo" ? trMonthCell(t) : ""; if (mc && mc.indexOf("tr-mchip") !== -1) tags.push(mc);
+    html += '<div class="pat-card" data-tr-id="' + esc(t.id) + '"><div class="pc-n"><span class="pc-nm">' + dot + '<span>' + esc(nome) + '</span></span>' +
+      '<span class="tr-chip st-' + esc(t.status) + '">' + esc(trLabel(TR_STATUS, t.status)) + '</span></div>' +
+      '<div class="pc-m">' + esc("Início " + trBr(t.inicio) + (fim ? " · Término " + trBr(fim) : "") + (trDueText(t) ? " · " + trDueText(t) : "")) + '</div>' +
+      (tags.length ? '<div class="pc-tg">' + tags.join("") + '</div>' : '') +
+      '<div class="pc-ac">' + (p && can("pacientes", "view") ? '<button type="button" class="pc-open" data-tr-pat="' + esc(p.id) + '">Paciente</button>' : '') + '<button type="button" class="pc-open">Abrir ›</button></div></div>';
+  });
+  var letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""); if (used["#"]) letters.push("#");
+  var idx = letters.map(function(c){ return '<span data-let="' + c + '" class="' + (used[c] ? '' : 'off') + '">' + c + '</span>'; }).join("");
+  return '<div class="pat-cards">' + html + '</div><div class="pat-idx" aria-label="Índice de letras">' + idx + '</div><div class="pat-idx-bub" hidden></div>';
+}
 function renderTreatmentsTab(){
   var host = document.getElementById("trHost"); if (!host) return;
+  host.classList.remove("has-cards");
   trLoadLast(false);
   var add = document.getElementById("trAdd"); if (add) add.hidden = !can("tratamentos", "create");
   var addAv = document.getElementById("trAddAval"); if (addAv) addAv.hidden = !naCan();
@@ -27836,6 +27864,14 @@ function renderTreatmentsTab(){
     };
     return {attrs: 'class="pr-row" data-tr-id="' + esc(t.id) + '" tabindex="0"', cells: trCols.map(function(c){ return C[c.key][0]; }), vals: trCols.map(function(c){ return C[c.key][1]; })};
   }), renderTreatmentsTab, "tr-main" + (canFin ? " tr-fin" : ""));
+  if (isMobileView()){
+    host.classList.add("has-cards"); host.insertAdjacentHTML("beforeend", trCardsHtml(shown, canFin));
+    patCardsWire(host, function(c, e){
+      var bp = e.target.closest("[data-tr-pat]"), pid = bp && bp.getAttribute("data-tr-pat");
+      if (pid){ var pp = state.patients.find(function(x){ return x.id === pid; }); if (pp) openPatientModal(pp); return; }
+      var t = state.treatments.filter(function(x){ return x.id === c.getAttribute("data-tr-id"); })[0]; if (t) openTreatmentModal(t);
+    });
+  }
 }
 // Coluna ABA da lista de Tratamentos: o ABA dos quadros; se eles têm ABA diferentes entre si,
 // "Misto" (o detalhe de cada um no title). Sem quadros: o ABA antigo ou a regra automática.
@@ -30966,6 +31002,7 @@ var HELP_TOPICS = [
     purpose: "O contrato de atendimento de cada paciente: convênio, Sessão/Mês, a caixa <b>Intervenção ABA</b> do tratamento (vale para o paciente todo e é o padrão dos quadros novos), as especialidades em quadros (cada um pode ter o seu ABA, que manda nos atendimentos dele) (um quadro para cada especialidade, serviço e terapeuta), horário de atendimento, vencimento e valores (Valor, Descontos e Valor final, em R$). <b>Outras Opções ▾</b>, no topo da janela, leva ao cadastro do paciente e ao plano terapêutico.",
     steps: [
       "Cadastros → <b>Tratamentos</b> → <b>+ Incluir</b> e escolha o paciente.",
+      "<b>No celular</b>, a lista aparece em cartões, como em Pacientes: nome com a bolinha de cor e a situação, início, término e vencimento, etiquetas de convênio, sessões por mês, Intervenção ABA, aviso de vencimento e andamento do mês, e os botões <b>Paciente</b> e <b>Abrir ›</b>. As letras na lateral levam direto ao grupo do nome; os filtros da barra valem do mesmo jeito.",
       "Na barra da tela, além da busca, filtre por <b>Status</b>, <b>Convênio</b> (ou “Sem Convênio”) e <b>Intervenção ABA</b> (com, sem ou misto). Os filtros se somam.",
       "Logo depois do paciente, <b>Tipo de Tratamento</b> aceita escolher vários (Multidisciplinar, especialidades, serviços…). Os marcados como padrão em Cadastros → Tratamentos → Outras Opções → Tipos de Tratamento já vêm escolhidos no tratamento novo. Cada tipo (inclusive especialidade e serviço, no cadastro deles) tem <b>Vencimento no Tratamento</b> e <b>Total de Sessões</b>: ao marcar o tipo, o Vencimento do tratamento já vem preenchido (Avaliação: 2 sessões; Avaliação Neuropsicológica: 10), e o Sessão/Mês recebe o mesmo total; tudo pode ser editado. No tratamento novo o Convênio vem do cadastro do paciente e a Intervenção ABA começa desmarcada.",
       "Preencha início, vencimento (sem vencimento, por data ou por quantidade de sessões), convênio, pacote e horário. O tratamento novo já vem com o convênio do cadastro do paciente (pode trocar); embaixo do Convênio aparece o que está no cadastro dele, com a carteirinha e o aviso de validade. Salve. O início não pode ser antes da data de entrada do paciente (aparece embaixo do campo: \"Cadastrado em …\").",
